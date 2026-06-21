@@ -1,0 +1,1654 @@
+import os
+import random
+import threading
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+from uuid import uuid4
+
+os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "16")
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
+
+import cv2
+import numpy as np
+
+from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
+from app.camera.stream_reader import (
+    build_ip_webcam_snapshot_url,
+    is_mjpeg_http_stream,
+    iter_mjpeg_frames,
+    open_capture,
+    read_http_jpeg_frame,
+    validate_http_jpeg_snapshot,
+    validate_stream,
+)
+from app.config.camera_config import CameraStartRequest, CameraType, RegionOfInterest, TripwireLine
+from app.counting.geometry import Centroid
+from app.counting.tripwire_counter import TripwireCounter
+from app.detection.yolo_detector import YoloPersonTracker
+from app.identity import UniqueVisitorRegistry, VisitorDecision
+from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
+from app.storage.session_store import SessionStore
+from app.tracking import ResolvedTrack, TrackIdentityResolver
+
+NormalizedLine = tuple[tuple[float, float], tuple[float, float]]
+
+
+@dataclass
+class RuntimeState:
+    running: bool = False
+    status: str = "stopped"
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class DisplayTrack:
+    track_id: int
+    source_track_id: int
+    bbox: tuple[int, int, int, int]
+    confidence: float
+    centroid: tuple[int, int]
+    direction: str | None = None
+    visitor_id: str | None = None
+    is_unique_entry: bool | None = None
+    reid_score: float | None = None
+    reid_decision: str | None = None
+    identity_confidence: str | None = None
+    inside_roi: bool | None = None
+    counting_eligible: bool | None = None
+    identity_state: str | None = None
+    identity_score: float | None = None
+    identity_source: str | None = None
+
+
+DisplayFrameSnapshot = tuple[
+    np.ndarray,
+    int,
+    list[DisplayTrack],
+    float,
+    NormalizedLine | None,
+    NormalizedLine | None,
+    RegionOfInterest,
+    bool,
+    int,
+    int,
+    int,
+]
+
+
+@dataclass(frozen=True)
+class ProcessingSession:
+    session_id: int
+    config: CameraStartRequest
+    stop_event: threading.Event
+
+
+class CameraProcessingManager:
+    def __init__(self, app_data_dir: str | None = None) -> None:
+        self._app_data_dir = app_data_dir
+        self._lock = threading.RLock()
+        self._active_session: ProcessingSession | None = None
+        self._next_session_id = 0
+        self._processing_thread: threading.Thread | None = None
+        self._reader_thread: threading.Thread | None = None
+        self._stream_thread: threading.Thread | None = None
+        self._raw_frame_condition = threading.Condition(self._lock)
+        self._latest_raw_frame: np.ndarray | None = None
+        self._latest_raw_frame_id = 0
+        self._latest_raw_frame_captured_at: float | None = None
+        self._latest_jpeg: bytes | None = None
+        self._latest_stream_jpeg: bytes | None = None
+        self._latest_stream_frame_id = 0
+        self._latest_tracks: list[DisplayTrack] = []
+        self._state = RuntimeState()
+        self._config: CameraStartRequest | None = None
+        self._counter = TripwireCounter()
+        self._tracker = YoloPersonTracker()
+        self._reidentifier = PersonReIdentifier()
+        self._reid_worker = AsyncReIdWorker(self._reidentifier)
+        self._quality_reidentifier = PersonReIdentifier(
+            model_path="person_reid.onnx",
+            model_name="torchreid_osnet_ain_x1_0_msmt17_onnx",
+        )
+        self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
+        self._appearance_buffer = TrackAppearanceBuffer()
+        self._quality_appearance_buffer = TrackAppearanceBuffer(
+            max_samples_per_track=2,
+            min_detection_confidence=0.60,
+            min_bbox_height_px=96,
+            max_edge_clip_fraction=0.25,
+            stop_when_full=True,
+        )
+        self._identity_resolver = TrackIdentityResolver()
+        self._session_store = SessionStore(app_data_dir)
+        self._visitor_registry = UniqueVisitorRegistry(
+            self._session_store,
+            model_name=self._reidentifier.model_name,
+            quality_model_name=self._quality_reidentifier.model_name,
+        )
+        self._session_updated_at: str | None = None
+        self._restoring_session = False
+        self._effective_profile = "cpu"
+        self._processing_frame_age_ms: float | None = None
+        self._processing_frames_skipped = 0
+        self._mock_thread: threading.Thread | None = None
+        self._mock_stop_event: threading.Event | None = None
+        self._mock_run_id: str | None = None
+        self._mock_events_generated = 0
+        self._mock_events_per_minute = 12
+        self._enterprise_id: str | None = None
+        self._enterprise_name: str | None = None
+
+    @property
+    def running(self) -> bool:
+        with self._lock:
+            return self._state.running
+
+    def test_connection(
+        self,
+        stream_url: str,
+        camera_type: CameraType = "IP_WEBCAM",
+        username: str | None = None,
+        password: str | None = None,
+    ) -> tuple[bool, str]:
+        try:
+            config = CameraStartRequest(
+                stream_url=stream_url,
+                camera_type=camera_type,
+                username=username,
+                password=password,
+            )
+        except Exception as exc:
+            return False, redact_stream_credentials(str(exc))
+
+        return self._validate_config_stream(config)
+
+    def bind_enterprise(self, enterprise_id: str, enterprise_name: str | None = None) -> dict:
+        normalized_id = enterprise_id.strip()
+        normalized_name = enterprise_name.strip() if enterprise_name else None
+        with self._lock:
+            if self._enterprise_id == normalized_id:
+                if normalized_name:
+                    self._enterprise_name = normalized_name
+                return {
+                    "enterprise_id": normalized_id,
+                    "enterprise_name": self._enterprise_name,
+                    "changed": False,
+                    "session_restored": False,
+                }
+
+        self.stop()
+        with self._lock:
+            self._enterprise_id = normalized_id
+            self._enterprise_name = normalized_name
+            self._session_store = SessionStore(self._app_data_dir, normalized_id)
+            self._visitor_registry = UniqueVisitorRegistry(
+                self._session_store,
+                model_name=self._reidentifier.model_name,
+                quality_model_name=self._quality_reidentifier.model_name,
+            )
+            self._state = RuntimeState()
+            self._config = None
+            self._session_updated_at = None
+        restored = self.restore_last_session()
+        return {
+            "enterprise_id": normalized_id,
+            "enterprise_name": normalized_name,
+            "changed": True,
+            "session_restored": restored,
+        }
+
+    def enterprise_context(self) -> dict:
+        with self._lock:
+            return {
+                "enterprise_id": self._enterprise_id,
+                "enterprise_name": self._enterprise_name,
+            }
+
+    def start(self, config: CameraStartRequest) -> None:
+        ok, message = self._validate_config_stream(config)
+        if not ok:
+            raise ValueError(message)
+
+        self.stop()
+
+        with self._lock:
+            self._effective_profile = self._tracker.configure(config.processing_profile)
+            self._configure_reid_locked()
+            processing_fps = self._processing_fps(config)
+            self._config = config
+            self._counter = TripwireCounter(
+                tripwire_position=config.tripwire_position,
+                entry_line=self._normalized_line(config.entry_line),
+                exit_line=self._normalized_line(config.exit_line),
+                reverse_direction=config.reverse_direction,
+                event_cooldown_frames=_seconds_to_frames(
+                    config.event_cooldown_seconds, processing_fps
+                ),
+                paired_line_max_gap_frames=_seconds_to_frames(
+                    config.paired_line_max_gap_seconds, processing_fps
+                ),
+                track_ttl_frames=_seconds_to_frames(config.track_ttl_seconds, processing_fps),
+                event_cooldown_seconds=config.event_cooldown_seconds,
+                paired_line_max_gap_seconds=config.paired_line_max_gap_seconds,
+                track_ttl_seconds=config.track_ttl_seconds,
+            )
+            self._counter.reset()
+            self._appearance_buffer = TrackAppearanceBuffer(
+                sample_interval_frames=max(1, int(round(processing_fps)))
+            )
+            self._quality_appearance_buffer = TrackAppearanceBuffer(
+                max_samples_per_track=2,
+                sample_interval_frames=max(1, int(round(processing_fps * 4.0))),
+                track_ttl_frames=max(1, int(round(processing_fps * 15.0))),
+                min_detection_confidence=0.60,
+                min_bbox_height_px=96,
+                max_edge_clip_fraction=0.25,
+                stop_when_full=True,
+            )
+            self._identity_resolver = TrackIdentityResolver(
+                lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0)
+            )
+            self._visitor_registry.prepare(config.camera_id)
+            self._visitor_registry.reset_session_tracks()
+            self._processing_frame_age_ms = None
+            self._processing_frames_skipped = 0
+            self._latest_jpeg = self._build_status_frame("Initializing ML model...")
+            self._latest_stream_jpeg = self._latest_jpeg
+            self._latest_stream_frame_id += 1
+            self._state = RuntimeState(running=False, status="starting", error=None)
+            self._persist_session_locked()
+
+        try:
+            self._tracker.warmup()
+            self._reidentifier.warmup()
+            self._quality_reidentifier.warmup()
+        except Exception as exc:
+            safe_message = redact_stream_credentials(f"Unable to initialize ML model: {exc}")
+            with self._raw_frame_condition:
+                self._state = RuntimeState(running=False, status="error", error=safe_message)
+                self._latest_jpeg = self._build_status_frame(safe_message)
+                self._latest_stream_jpeg = self._latest_jpeg
+                self._latest_stream_frame_id += 1
+                self._persist_session_locked()
+                self._raw_frame_condition.notify_all()
+            raise RuntimeError(safe_message) from exc
+
+        with self._lock:
+            self._next_session_id += 1
+            session = ProcessingSession(
+                session_id=self._next_session_id, config=config, stop_event=threading.Event()
+            )
+            self._reid_worker.begin_session(session.session_id)
+            self._quality_reid_worker.begin_session(session.session_id)
+            self._tracker.reset_tracking()
+            self._identity_resolver.reset()
+            self._active_session = session
+            self._config = config
+            self._latest_jpeg = self._build_status_frame("Starting camera processing...")
+            self._latest_stream_jpeg = self._latest_jpeg
+            self._latest_stream_frame_id = 0
+            self._state = RuntimeState(running=True, status="running", error=None)
+            self._latest_raw_frame = None
+            self._latest_raw_frame_id = 0
+            self._latest_raw_frame_captured_at = None
+            self._latest_tracks = []
+            self._reader_thread = threading.Thread(
+                target=self._capture_loop, args=(session,), name="tanaw-camera-reader", daemon=True
+            )
+            self._processing_thread = threading.Thread(
+                target=self._processing_loop,
+                args=(session,),
+                name="tanaw-camera-processing",
+                daemon=True,
+            )
+            self._stream_thread = threading.Thread(
+                target=self._stream_encoding_loop,
+                args=(session,),
+                name="tanaw-camera-stream-encoder",
+                daemon=True,
+            )
+            self._reader_thread.start()
+            self._processing_thread.start()
+            self._stream_thread.start()
+            self._persist_session_locked()
+
+    def stop(self) -> None:
+        self.stop_mock_mode()
+        threads: list[threading.Thread]
+        with self._lock:
+            session = self._active_session
+            threads = [
+                thread
+                for thread in (self._reader_thread, self._processing_thread, self._stream_thread)
+                if thread is not None
+            ]
+            if session is not None:
+                session.stop_event.set()
+            self._active_session = None
+            self._raw_frame_condition.notify_all()
+
+        for thread in threads:
+            if thread.is_alive():
+                thread.join(timeout=5)
+
+        with self._lock:
+            self._reader_thread = None
+            self._processing_thread = None
+            self._stream_thread = None
+            self._latest_raw_frame = None
+            self._latest_raw_frame_captured_at = None
+            self._latest_tracks = []
+            self._state.running = False
+            if self._state.status != "error":
+                self._state.status = "stopped"
+            self._persist_session_locked()
+
+    def counts(self) -> dict[str, int | str | bool | None]:
+        with self._lock:
+            snapshot = self._counter.counts.as_dict()
+            return {
+                **snapshot,
+                "running": self._state.running,
+                "status": self._state.status,
+                "error": redact_stream_credentials(self._state.error)
+                if self._state.error
+                else None,
+            }
+
+    def detections(
+        self,
+    ) -> dict[
+        str,
+        int
+        | str
+        | bool
+        | None
+        | list[dict[str, int | float | str | tuple[int, int] | tuple[int, int, int, int] | None]],
+    ]:
+        with self._lock:
+            frame_height = None
+            frame_width = None
+            if self._latest_raw_frame is not None:
+                frame_height, frame_width = self._latest_raw_frame.shape[:2]
+
+            return {
+                "running": self._state.running,
+                "status": self._state.status,
+                "error": redact_stream_credentials(self._state.error)
+                if self._state.error
+                else None,
+                "frame_width": frame_width,
+                "frame_height": frame_height,
+                "tracks": [
+                    {
+                        "track_id": track.track_id,
+                        "source_track_id": track.source_track_id,
+                        "bbox": track.bbox,
+                        "confidence": track.confidence,
+                        "centroid": track.centroid,
+                        "direction": track.direction,
+                        "visitor_id": track.visitor_id,
+                        "is_unique_entry": track.is_unique_entry,
+                        "reid_score": track.reid_score,
+                        "reid_decision": track.reid_decision,
+                        "identity_confidence": track.identity_confidence,
+                        "inside_roi": track.inside_roi,
+                        "counting_eligible": track.counting_eligible,
+                        "identity_state": track.identity_state,
+                        "identity_score": track.identity_score,
+                        "identity_source": track.identity_source,
+                    }
+                    for track in self._latest_tracks
+                ],
+            }
+
+    def session(self) -> dict:
+        with self._lock:
+            counts = self.counts()
+            return {
+                "running": self._state.running,
+                "status": self._state.status,
+                "error": redact_stream_credentials(self._state.error)
+                if self._state.error
+                else None,
+                "camera_id": self._config.camera_id if self._config else None,
+                "camera_name": self._config.camera_name if self._config else None,
+                "camera_config": self._public_config_dump() if self._config else None,
+                "counts": counts,
+                "updated_at": self._session_updated_at,
+            }
+
+    def metrics_summary(self, include_submitted: bool = False) -> dict:
+        return self._session_store.metrics_summary(include_submitted=include_submitted)
+
+    def metrics_history(self, include_submitted: bool = False) -> dict:
+        return self._session_store.metrics_history(include_submitted=include_submitted)
+
+    def model_status(self) -> dict:
+        with self._lock:
+            runtime_status = {
+                "processing_frame_age_ms": self._processing_frame_age_ms,
+                "processing_frames_skipped": self._processing_frames_skipped,
+            }
+        summary = self._session_store.metrics_summary(include_submitted=False)
+        quality_status = self._quality_reidentifier.status()
+        quality_worker_status = self._quality_reid_worker.status()
+        return {
+            **self._tracker.status(),
+            **self._reidentifier.status(),
+            **self._reid_worker.status(),
+            "quality_reid_model_loaded": quality_status["reid_model_loaded"],
+            "quality_reid_model_ready": quality_status["reid_model_ready"],
+            "quality_reid_model_loading": quality_status["reid_model_loading"],
+            "quality_reid_status": quality_status["reid_status"],
+            "quality_reid_model_path": quality_status["reid_model_path"],
+            "quality_reid_error": quality_status["reid_error"],
+            "quality_reid_average_inference_ms": quality_status["reid_average_inference_ms"],
+            "quality_reid_providers": quality_status["reid_providers"],
+            "quality_reid_queue_depth": quality_worker_status["reid_queue_depth"],
+            "quality_reid_tasks_pending": quality_worker_status["reid_tasks_pending"],
+            "quality_reid_tasks_dropped": quality_worker_status["reid_tasks_dropped"],
+            "quality_reid_tasks_completed": quality_worker_status["reid_tasks_completed"],
+            "quality_reid_worker_p50_ms": quality_worker_status["reid_worker_p50_ms"],
+            "quality_reid_worker_p95_ms": quality_worker_status["reid_worker_p95_ms"],
+            **self._identity_resolver.status(),
+            **self._visitor_registry.status(),
+            **runtime_status,
+            "confirmed_unique_count": summary["confirmed_unique_count"],
+            "degraded_unique_count": summary["degraded_unique_count"],
+        }
+
+    def record_report_submission(
+        self,
+        report_id: str,
+        period: str,
+        notes: str | None = None,
+        payload: dict | None = None,
+        source_kind: str | None = None,
+        mock_run_id: str | None = None,
+    ) -> dict:
+        submission = self._session_store.record_report_submission(
+            report_id=report_id,
+            period=period,
+            notes=notes,
+            payload=payload,
+            source_kind=source_kind,
+            mock_run_id=mock_run_id,
+        )
+        self._visitor_registry.cleanup_expired()
+        return submission
+
+    def list_report_submissions(self, limit: int = 100) -> list[dict]:
+        return self._session_store.list_report_submissions(limit=limit)
+
+    def mark_report_synced(self, report_id: str) -> bool:
+        return self._session_store.mark_report_synced(report_id)
+
+    def mark_events_synced(self) -> int:
+        return self._session_store.mark_events_synced()
+
+    def prepare_mock_counts(
+        self,
+        *,
+        mock_run_id: str,
+        enterprise_id: str,
+        enterprise_name: str | None,
+        entries: int,
+        exits: int,
+        unique_count: int,
+        peak_occupancy: int,
+        period: str,
+    ) -> dict:
+        with self._lock:
+            if self._enterprise_id != enterprise_id:
+                raise ValueError(
+                    f"Desktop is bound to {self._enterprise_id or 'no enterprise'}. "
+                    f"Log into {enterprise_name or enterprise_id} before preparing counts."
+                )
+            camera_id = self._config.camera_id if self._config else None
+            camera_name = self._config.camera_name if self._config else None
+
+        summary = self._session_store.prepare_mock_counts(
+            mock_run_id=mock_run_id,
+            entries=entries,
+            exits=exits,
+            unique_count=unique_count,
+            peak_occupancy=peak_occupancy,
+            camera_id=camera_id,
+            camera_name=camera_name,
+            period=period,
+        )
+        return {
+            **summary,
+            "enterprise_id": enterprise_id,
+            "enterprise_name": enterprise_name,
+            "period": period,
+            "prepared": bool(summary.get("prepared")),
+        }
+
+    def start_mock_mode(self, mock_run_id: str, events_per_minute: int = 12) -> dict:
+        with self._lock:
+            if not self._state.running or self._config is None:
+                raise ValueError("Hybrid mock mode requires an active real camera session.")
+
+        self.stop_mock_mode()
+        stop_event = threading.Event()
+        with self._lock:
+            self._mock_stop_event = stop_event
+            self._mock_run_id = mock_run_id
+            self._mock_events_per_minute = max(1, min(events_per_minute, 120))
+            self._mock_events_generated = 0
+            self._mock_thread = threading.Thread(
+                target=self._mock_event_loop,
+                args=(stop_event, mock_run_id),
+                name="tanaw-hybrid-mock-events",
+                daemon=True,
+            )
+            self._mock_thread.start()
+        return self.mock_status()
+
+    def stop_mock_mode(self) -> dict:
+        with self._lock:
+            thread = self._mock_thread
+            stop_event = self._mock_stop_event
+            if stop_event is not None:
+                stop_event.set()
+
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=2)
+
+        with self._lock:
+            self._mock_thread = None
+            self._mock_stop_event = None
+            self._mock_run_id = None
+        return self.mock_status()
+
+    def reset_mock_data(self, mock_run_id: str | None = None) -> dict:
+        self.stop_mock_mode()
+        return self._session_store.remove_mock_data(mock_run_id)
+
+    def mock_status(self) -> dict:
+        summary = self._session_store.metrics_summary(include_submitted=False)
+        with self._lock:
+            running = self._mock_thread is not None and self._mock_thread.is_alive()
+            prepared_run_id = (
+                summary["mock_run_id"] if summary["source_kind"] in {"mock", "hybrid"} else None
+            )
+            return {
+                "running": running,
+                "mode": "hybrid" if running else ("prepared" if prepared_run_id else None),
+                "mock_run_id": self._mock_run_id or prepared_run_id,
+                "events_generated": self._mock_events_generated
+                if running
+                else summary["total_events"],
+                "requires_real_camera": running,
+                "enterprise_id": self._enterprise_id,
+                "enterprise_name": self._enterprise_name,
+                "entries": summary["entries"],
+                "exits": summary["exits"],
+                "unique_count": summary["unique_count"],
+                "unsubmitted_events": summary["unsubmitted_events"],
+            }
+
+    def generate_mock_report(
+        self,
+        report_id: str | None,
+        period: str,
+        notes: str | None = None,
+        payload: dict | None = None,
+    ) -> dict:
+        with self._lock:
+            mock_run_id = self._mock_run_id
+        if not mock_run_id:
+            raise ValueError("Hybrid mock mode is not running.")
+
+        resolved_report_id = report_id or f"REP-{int(time.time()) % 1_000_000:06d}"
+        report_payload = {
+            "status": "Submitted",
+            "sourceKind": "hybrid",
+            "mockRunId": mock_run_id,
+            **(payload or {}),
+        }
+        return self.record_report_submission(
+            resolved_report_id,
+            period,
+            notes or "Monthly camera analytics submitted for LGU review.",
+            report_payload,
+            source_kind="hybrid",
+            mock_run_id=mock_run_id,
+        )
+
+    def restore_last_session(self) -> bool:
+        if self.running or self._restoring_session:
+            return False
+
+        payload = self._session_store.load_session()
+        if not payload or not payload.get("running"):
+            self._restore_saved_snapshot(payload)
+            return False
+
+        camera_config = payload.get("camera_config")
+        if not isinstance(camera_config, dict):
+            self._restore_saved_snapshot(payload)
+            return False
+
+        try:
+            config = CameraStartRequest(**camera_config)
+        except Exception:
+            self._restore_saved_snapshot(payload)
+            return False
+
+        self._restore_saved_snapshot(payload)
+        self._restoring_session = True
+        try:
+            try:
+                self.start(config)
+                self._restore_saved_snapshot(payload)
+                return True
+            except Exception as exc:
+                with self._raw_frame_condition:
+                    self._state = RuntimeState(
+                        running=False,
+                        status="error",
+                        error=redact_stream_credentials(
+                            f"Unable to restore monitoring session: {exc}"
+                        ),
+                    )
+                    self._config = config
+                    self._persist_session_locked()
+                    self._raw_frame_condition.notify_all()
+                return False
+        finally:
+            self._restoring_session = False
+
+    def _mock_event_loop(self, stop_event: threading.Event, mock_run_id: str) -> None:
+        rng = random.Random(mock_run_id)
+        while not stop_event.is_set():
+            with self._lock:
+                if not self._state.running or self._config is None:
+                    break
+                camera_id = self._config.camera_id
+                camera_name = self._config.camera_name
+                events_per_minute = self._mock_events_per_minute
+                event_index = self._mock_events_generated + 1
+
+            summary = self._session_store.metrics_summary(include_submitted=True)
+            entries = int(summary["entries"] or 0)
+            exits = int(summary["exits"] or 0)
+            direction = "exit" if entries > exits and rng.random() < 0.38 else "entry"
+            next_entries = entries + (1 if direction == "entry" else 0)
+            next_exits = exits + (1 if direction == "exit" else 0)
+            visitor_id = str(uuid4()) if direction == "entry" and rng.random() < 0.88 else None
+            payload = {
+                "camera_id": camera_id,
+                "camera_name": camera_name,
+                "direction": direction,
+                "track_id": 100_000 + event_index,
+                "source_track_id": 100_000 + event_index,
+                "visitor_id": visitor_id,
+                "is_unique_entry": direction == "entry",
+                "reid_score": round(rng.uniform(0.72, 0.96), 3) if visitor_id else None,
+                "reid_decision": "new" if visitor_id else "degraded_no_embedding",
+                "identity_confidence": "high" if visitor_id else "degraded",
+                "identity_state": "confirmed" if visitor_id else "unconfirmed",
+                "identity_score": round(rng.uniform(0.7, 0.98), 3),
+                "identity_source": "appearance" if visitor_id else "detector",
+                "source_kind": "hybrid",
+                "mock_run_id": mock_run_id,
+                "counts": {
+                    "entry": next_entries,
+                    "exit": next_exits,
+                    "occupancy": max(0, next_entries - next_exits),
+                },
+            }
+            try:
+                self._session_store.append_event(payload)
+            except OSError:
+                pass
+
+            with self._lock:
+                self._mock_events_generated += 1
+            stop_event.wait(max(0.5, 60.0 / events_per_minute))
+
+    def latest_frame(self) -> bytes:
+        with self._lock:
+            if self._latest_stream_jpeg is not None:
+                return self._latest_stream_jpeg
+            if self._latest_jpeg is not None:
+                return self._latest_jpeg
+            else:
+                return self._build_status_frame("No camera stream available.")
+
+    def wait_for_stream_frame(self, last_frame_id: int, timeout: float = 1.0) -> tuple[bytes, int]:
+        with self._raw_frame_condition:
+            self._raw_frame_condition.wait_for(
+                lambda: self._latest_stream_frame_id > last_frame_id,
+                timeout=timeout,
+            )
+
+            if self._latest_stream_jpeg is not None:
+                return self._latest_stream_jpeg, self._latest_stream_frame_id
+
+            if self._latest_jpeg is not None:
+                return self._latest_jpeg, last_frame_id
+
+        return self._build_status_frame("No camera stream available."), last_frame_id
+
+    def _capture_loop(self, session: ProcessingSession) -> None:
+        config = session.config
+        if not self._is_current_session(session):
+            return
+
+        runtime_stream_url = self._runtime_stream_url(config)
+        snapshot_url = (
+            build_ip_webcam_snapshot_url(runtime_stream_url)
+            if config.camera_type == "IP_WEBCAM"
+            else None
+        )
+        if snapshot_url is not None:
+            self._ip_webcam_snapshot_capture_loop(session, snapshot_url)
+            return
+
+        if is_mjpeg_http_stream(runtime_stream_url):
+            self._mjpeg_capture_loop(session, runtime_stream_url)
+        else:
+            self._opencv_capture_loop(session, runtime_stream_url)
+
+    def _validate_config_stream(self, config: CameraStartRequest) -> tuple[bool, str]:
+        runtime_stream_url = self._runtime_stream_url(config)
+        snapshot_url = (
+            build_ip_webcam_snapshot_url(runtime_stream_url)
+            if config.camera_type == "IP_WEBCAM"
+            else None
+        )
+        if snapshot_url is not None:
+            ok, message = validate_http_jpeg_snapshot(snapshot_url)
+            return ok, redact_stream_credentials(message)
+
+        ok, message = validate_stream(runtime_stream_url)
+        return ok, redact_stream_credentials(message)
+
+    def _runtime_stream_url(self, config: CameraStartRequest) -> str:
+        return build_authenticated_stream_url(config.stream_url, config.username, config.password)
+
+    def _ip_webcam_snapshot_capture_loop(
+        self, session: ProcessingSession, snapshot_url: str
+    ) -> None:
+        config = session.config
+        failed_reads = 0
+        last_error = "Camera snapshot endpoint stopped returning frames."
+        frame_interval = 1.0 / self._processing_fps(config)
+
+        try:
+            while not session.stop_event.is_set() and self._is_current_session(session):
+                started_at = time.monotonic()
+
+                try:
+                    frame = read_http_jpeg_frame(snapshot_url)
+                except Exception as exc:
+                    frame = None
+                    last_error = str(exc)
+
+                if frame is None:
+                    failed_reads += 1
+                    if failed_reads >= 30:
+                        self._set_session_error(
+                            session,
+                            redact_stream_credentials(
+                                f"Camera snapshot endpoint stopped returning frames: {last_error}"
+                            ),
+                        )
+                        return
+                else:
+                    failed_reads = 0
+                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
+                    self._publish_raw_frame(session, frame)
+
+                elapsed = time.monotonic() - started_at
+                remaining = frame_interval - elapsed
+                if remaining > 0:
+                    session.stop_event.wait(remaining)
+        except Exception as exc:
+            self._set_session_error(session, redact_stream_credentials(str(exc)))
+        finally:
+            with self._lock:
+                if (
+                    self._is_current_session_locked(session)
+                    and not session.stop_event.is_set()
+                    and self._state.status != "error"
+                ):
+                    self._state.status = "stopped"
+
+    def _mjpeg_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
+        config = session.config
+        try:
+            for frame in iter_mjpeg_frames(stream_url, session.stop_event):
+                if session.stop_event.is_set() or not self._is_current_session(session):
+                    break
+
+                frame = self._resize_for_processing(frame, self._max_frame_width(config))
+                self._publish_raw_frame(session, frame)
+
+            if not session.stop_event.is_set() and self._is_current_session(session):
+                self._set_session_error(session, "Camera stream stopped returning MJPEG frames.")
+        except Exception as exc:
+            self._set_session_error(session, redact_stream_credentials(str(exc)))
+        finally:
+            with self._lock:
+                if self._is_current_session_locked(session) and self._state.status != "error":
+                    self._state.status = "stopped"
+
+    def _opencv_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
+        config = session.config
+        capture = open_capture(stream_url)
+        failed_reads = 0
+
+        try:
+            if not capture.isOpened():
+                self._set_session_error(session, "Camera stream could not be opened.")
+                return
+
+            while not session.stop_event.is_set() and self._is_current_session(session):
+                ok, frame = capture.read()
+                if not ok or frame is None:
+                    failed_reads += 1
+                    if failed_reads >= 90:
+                        self._set_session_error(session, "Camera stream stopped returning frames.")
+                        return
+                    session.stop_event.wait(0.05)
+                    continue
+
+                failed_reads = 0
+                frame = self._resize_for_processing(frame, self._max_frame_width(config))
+                self._publish_raw_frame(session, frame)
+        except Exception as exc:
+            self._set_session_error(session, redact_stream_credentials(str(exc)))
+        finally:
+            capture.release()
+            with self._lock:
+                if self._is_current_session_locked(session) and self._state.status != "error":
+                    self._state.status = "stopped"
+
+    def _publish_raw_frame(
+        self, session: ProcessingSession, frame: np.ndarray, captured_at: float | None = None
+    ) -> None:
+        with self._raw_frame_condition:
+            if not self._is_current_session_locked(session):
+                return
+            self._latest_raw_frame = frame
+            self._latest_raw_frame_id += 1
+            self._latest_raw_frame_captured_at = (
+                captured_at if captured_at is not None else time.monotonic()
+            )
+            self._state.status = "running"
+            self._state.error = None
+            self._raw_frame_condition.notify_all()
+
+    def _processing_loop(self, session: ProcessingSession) -> None:
+        config = session.config
+        if not self._is_current_session(session):
+            return
+
+        last_processed_frame_id = 0
+        frame_interval = 1.0 / self._processing_fps(config)
+        last_cleanup_at = time.monotonic()
+
+        try:
+            self._tracker.warmup()
+            while not session.stop_event.is_set() and self._is_current_session(session):
+                if time.monotonic() - last_cleanup_at >= 3600:
+                    self._visitor_registry.cleanup_expired()
+                    last_cleanup_at = time.monotonic()
+
+                frame, frame_id, captured_at = self._wait_for_latest_frame(
+                    session, last_processed_frame_id
+                )
+                if frame is None:
+                    continue
+
+                started_at = time.monotonic()
+                tracks = self._detect_and_count(session, frame, config.confidence)
+                skipped_frames = max(0, frame_id - last_processed_frame_id - 1)
+                last_processed_frame_id = frame_id
+
+                with self._lock:
+                    if not self._is_current_session_locked(session):
+                        return
+                    self._latest_tracks = tracks
+                    self._state.status = "running"
+                    self._state.error = None
+                    self._processing_frames_skipped += skipped_frames
+                    if captured_at is not None:
+                        self._processing_frame_age_ms = max(
+                            0.0, (started_at - captured_at) * 1000.0
+                        )
+
+                elapsed = time.monotonic() - started_at
+                remaining = frame_interval - elapsed
+                if remaining > 0:
+                    session.stop_event.wait(remaining)
+        except Exception as exc:
+            self._set_session_error(session, str(exc))
+        finally:
+            with self._lock:
+                if self._is_current_session_locked(session):
+                    self._state.running = False
+                if self._is_current_session_locked(session) and self._state.status != "error":
+                    self._state.status = "stopped"
+
+    def _stream_encoding_loop(self, session: ProcessingSession) -> None:
+        config = session.config
+        if not self._is_current_session(session):
+            return
+
+        last_encoded_raw_frame_id = 0
+        frame_interval = 1.0 / max(config.stream_fps, 1.0)
+
+        try:
+            while not session.stop_event.is_set() and self._is_current_session(session):
+                frame_snapshot = self._next_display_frame_snapshot(
+                    session, last_encoded_raw_frame_id, timeout=1.0
+                )
+                if frame_snapshot is None:
+                    continue
+
+                (
+                    frame,
+                    raw_frame_id,
+                    tracks,
+                    tripwire_position,
+                    entry_line,
+                    exit_line,
+                    roi,
+                    reverse_direction,
+                    entry_count,
+                    exit_count,
+                    occupancy_count,
+                ) = frame_snapshot
+
+                started_at = time.monotonic()
+                display_frame = self._render_display_frame(
+                    frame, tracks, tripwire_position, entry_line, exit_line, roi, reverse_direction
+                )
+                encoded = self._encode_frame(display_frame)
+
+                with self._raw_frame_condition:
+                    if not self._is_current_session_locked(session):
+                        return
+                    self._latest_stream_jpeg = encoded
+                    self._latest_stream_frame_id += 1
+                    last_encoded_raw_frame_id = raw_frame_id
+                    self._raw_frame_condition.notify_all()
+
+                elapsed = time.monotonic() - started_at
+                remaining = frame_interval - elapsed
+                if remaining > 0:
+                    session.stop_event.wait(remaining)
+        except Exception as exc:
+            self._set_session_error(session, str(exc))
+
+    def _next_display_frame_snapshot(
+        self, session: ProcessingSession, last_encoded_raw_frame_id: int, timeout: float
+    ) -> DisplayFrameSnapshot | None:
+        with self._raw_frame_condition:
+            self._raw_frame_condition.wait_for(
+                lambda: (
+                    session.stop_event.is_set()
+                    or not self._is_current_session_locked(session)
+                    or self._latest_raw_frame_id > last_encoded_raw_frame_id
+                ),
+                timeout=timeout,
+            )
+
+            if (
+                session.stop_event.is_set()
+                or not self._is_current_session_locked(session)
+                or self._latest_raw_frame is None
+                or self._latest_raw_frame_id <= last_encoded_raw_frame_id
+            ):
+                return None
+
+            counts = self._counter.counts
+            return (
+                self._latest_raw_frame.copy(),
+                self._latest_raw_frame_id,
+                list(self._latest_tracks),
+                self._counter.tripwire_position,
+                self._counter.entry_line,
+                self._counter.exit_line,
+                session.config.roi,
+                self._counter.reverse_direction,
+                counts.entry,
+                counts.exit,
+                counts.occupancy,
+            )
+
+    def _wait_for_latest_frame(
+        self, session: ProcessingSession, last_processed_frame_id: int
+    ) -> tuple[np.ndarray | None, int, float | None]:
+        with self._raw_frame_condition:
+            self._raw_frame_condition.wait_for(
+                lambda: (
+                    session.stop_event.is_set()
+                    or not self._is_current_session_locked(session)
+                    or self._latest_raw_frame_id > last_processed_frame_id
+                ),
+                timeout=1.0,
+            )
+
+            if (
+                session.stop_event.is_set()
+                or not self._is_current_session_locked(session)
+                or self._latest_raw_frame is None
+            ):
+                return None, last_processed_frame_id, None
+
+            return (
+                self._latest_raw_frame.copy(),
+                self._latest_raw_frame_id,
+                self._latest_raw_frame_captured_at,
+            )
+
+    def _detect_and_count(
+        self, session: ProcessingSession, frame: np.ndarray, confidence: float
+    ) -> list[DisplayTrack]:
+        frame_height, frame_width = frame.shape[:2]
+        now = time.monotonic()
+        self._apply_reid_results(session, now)
+        source_tracks = self._tracker.track_people(frame, confidence)
+        if not self._is_current_session(session):
+            return []
+        tracks = self._identity_resolver.resolve(source_tracks, now, frame_width, frame_height)
+
+        display_tracks: list[DisplayTrack] = []
+        self._counter.begin_frame(now)
+        self._appearance_buffer.begin_frame(self._counter.frame_index)
+        self._quality_appearance_buffer.begin_frame(self._counter.frame_index)
+
+        for track in tracks:
+            if not self._is_current_session(session):
+                return []
+            if track.confidence < confidence:
+                continue
+
+            inside_roi = self._point_inside_roi(
+                track.counting_point, frame_width, frame_height, session.config
+            )
+            counting_eligible = inside_roi
+            if counting_eligible:
+                self._schedule_track_embedding(
+                    session, frame, track, frame_width, frame_height, now
+                )
+            direction = (
+                self._counter.update(
+                    track.track_id, track.counting_point, frame_width, frame_height
+                )
+                if counting_eligible
+                else None
+            )
+            visitor_decision = None
+            visitor_id = self._visitor_registry.visitor_id_for_track(track.track_id)
+            if direction is not None:
+                if direction == "entry":
+                    visitor_decision = self._resolve_unique_entry(session, track)
+                    visitor_id = visitor_decision.visitor_id
+                self._persist_count_event(session, track, direction, visitor_decision)
+            display_tracks.append(
+                DisplayTrack(
+                    track_id=track.track_id,
+                    source_track_id=track.source_track_id,
+                    bbox=track.bbox,
+                    confidence=track.confidence,
+                    centroid=(int(track.centroid.x), int(track.centroid.y)),
+                    direction=direction,
+                    visitor_id=visitor_id,
+                    is_unique_entry=visitor_decision.is_unique_entry if visitor_decision else None,
+                    reid_score=visitor_decision.reid_score if visitor_decision else None,
+                    reid_decision=visitor_decision.reid_decision if visitor_decision else None,
+                    identity_confidence=visitor_decision.identity_confidence
+                    if visitor_decision
+                    else None,
+                    inside_roi=inside_roi,
+                    counting_eligible=counting_eligible,
+                    identity_state=track.identity_state,
+                    identity_score=track.identity_score,
+                    identity_source=track.identity_source,
+                )
+            )
+
+        for source_track in source_tracks:
+            if source_track.track_id > 0 or source_track.confidence < confidence:
+                continue
+            inside_roi = self._point_inside_roi(
+                source_track.counting_point, frame_width, frame_height, session.config
+            )
+            display_tracks.append(
+                DisplayTrack(
+                    track_id=source_track.track_id,
+                    source_track_id=source_track.track_id,
+                    bbox=source_track.bbox,
+                    confidence=source_track.confidence,
+                    centroid=(int(source_track.centroid.x), int(source_track.centroid.y)),
+                    inside_roi=inside_roi,
+                    counting_eligible=False,
+                    identity_state="unconfirmed",
+                    identity_source="detector",
+                )
+            )
+
+        return display_tracks
+
+    def _point_inside_roi(
+        self, point: Centroid, frame_width: int, frame_height: int, config: CameraStartRequest
+    ) -> bool:
+        roi = config.roi
+        x = point.x / max(frame_width, 1)
+        y = point.y / max(frame_height, 1)
+        return roi.left <= x <= roi.left + roi.width and roi.top <= y <= roi.top + roi.height
+
+    def _schedule_track_embedding(
+        self,
+        session: ProcessingSession,
+        frame: np.ndarray,
+        track: ResolvedTrack,
+        frame_width: int,
+        frame_height: int,
+        now: float,
+    ) -> None:
+        frame_index = self._counter.frame_index
+        sample_fast = self._appearance_buffer.should_sample(
+            track, frame_width, frame_height, frame_index
+        )
+        sample_quality = self._quality_appearance_buffer.should_sample(
+            track, frame_width, frame_height, frame_index
+        )
+        if not sample_fast and not sample_quality:
+            return
+
+        crop = self._crop_track(frame, track.bbox)
+        if crop is None:
+            return
+
+        quality = self._appearance_buffer.quality_score(track, frame_width, frame_height)
+        if sample_fast:
+            submitted = self._reid_worker.submit(
+                session_id=session.session_id,
+                track_id=track.track_id,
+                source_track_id=track.source_track_id,
+                crop=crop,
+                quality=quality,
+                requested_at=now,
+            )
+            if submitted:
+                self._appearance_buffer.mark_sample_requested(track.track_id, frame_index)
+
+        if sample_quality:
+            quality_submitted = self._quality_reid_worker.submit(
+                session_id=session.session_id,
+                track_id=track.track_id,
+                source_track_id=track.source_track_id,
+                crop=crop,
+                quality=self._quality_appearance_buffer.quality_score(
+                    track, frame_width, frame_height
+                ),
+                requested_at=now,
+            )
+            if quality_submitted:
+                self._quality_appearance_buffer.mark_sample_requested(track.track_id, frame_index)
+
+    def _resolve_unique_entry(
+        self, session: ProcessingSession, track: ResolvedTrack
+    ) -> VisitorDecision:
+        embedding = self._appearance_buffer.embedding_for_track(track.track_id)
+        quality_embedding = self._quality_appearance_buffer.embedding_for_track(track.track_id)
+
+        with self._lock:
+            camera_id = self._config.camera_id if self._config else None
+
+        if not self._is_current_session(session):
+            return VisitorDecision(
+                visitor_id=None,
+                is_unique_entry=True,
+                reid_score=None,
+                reid_decision="stale_session",
+                identity_confidence="degraded",
+                business_date=self._visitor_registry.business_date_for(datetime.now(UTC)),
+            )
+
+        return self._visitor_registry.resolve_entry(
+            track_id=track.track_id,
+            camera_id=camera_id,
+            embedding=embedding,
+            quality_embedding=quality_embedding,
+            detection_confidence=track.confidence,
+            bbox=track.bbox,
+        )
+
+    def _apply_reid_results(self, session: ProcessingSession, now: float) -> None:
+        for result in self._reid_worker.poll(session.session_id):
+            if result.embedding is None:
+                continue
+            canonical_track_id = self._identity_resolver.canonical_track_id(result.track_id)
+            resolution = self._identity_resolver.record_embedding(
+                result.source_track_id,
+                canonical_track_id,
+                result.embedding,
+                now,
+            )
+            if resolution is None:
+                continue
+            self._appearance_buffer.record_sample(
+                resolution.track_id,
+                result.embedding,
+                result.quality,
+                self._counter.frame_index,
+            )
+            if resolution.remap_from is None or resolution.remap_to is None:
+                continue
+            self._counter.remap_track(resolution.remap_from, resolution.remap_to)
+            self._appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+            self._quality_appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+            self._visitor_registry.remap_session_track(resolution.remap_from, resolution.remap_to)
+
+        for result in self._quality_reid_worker.poll(session.session_id):
+            if result.embedding is None:
+                continue
+            track_id = self._identity_resolver.canonical_track_id(result.track_id)
+            self._quality_appearance_buffer.record_sample(
+                track_id,
+                result.embedding,
+                result.quality,
+                self._counter.frame_index,
+            )
+            self._visitor_registry.record_quality_embedding_for_track(track_id, result.embedding)
+
+    def _crop_track(self, frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:
+        frame_height, frame_width = frame.shape[:2]
+        x1, y1, x2, y2 = bbox
+        x1 = max(0, min(frame_width - 1, x1))
+        y1 = max(0, min(frame_height - 1, y1))
+        x2 = max(0, min(frame_width, x2))
+        y2 = max(0, min(frame_height, y2))
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return frame[y1:y2, x1:x2].copy()
+
+    def _render_display_frame(
+        self,
+        frame: np.ndarray,
+        tracks: list[DisplayTrack],
+        tripwire_position: float,
+        entry_line: NormalizedLine | None,
+        exit_line: NormalizedLine | None,
+        roi: RegionOfInterest,
+        reverse_direction: bool,
+    ) -> np.ndarray:
+        height, width = frame.shape[:2]
+        self._draw_roi(frame, roi, width, height)
+        if entry_line is not None or exit_line is not None:
+            self._draw_tripwire_line(frame, entry_line, width, height, "ENTRY", (74, 222, 128))
+            self._draw_tripwire_line(frame, exit_line, width, height, "EXIT", (248, 113, 113))
+        else:
+            line_x = int(width * tripwire_position)
+
+            cv2.line(frame, (line_x, 0), (line_x, height), (59, 130, 246), 2)
+            if reverse_direction:
+                cv2.putText(
+                    frame,
+                    "ENTRY",
+                    (max(8, line_x - 70), 22),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.48,
+                    (74, 222, 128),
+                    1,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    frame,
+                    "EXIT",
+                    (line_x + 10, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.48,
+                    (248, 113, 113),
+                    1,
+                    cv2.LINE_AA,
+                )
+            else:
+                cv2.putText(
+                    frame,
+                    "EXIT",
+                    (max(8, line_x - 54), 22),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.48,
+                    (248, 113, 113),
+                    1,
+                    cv2.LINE_AA,
+                )
+                cv2.putText(
+                    frame,
+                    "ENTRY",
+                    (line_x + 10, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.48,
+                    (74, 222, 128),
+                    1,
+                    cv2.LINE_AA,
+                )
+
+        for track in tracks:
+            x1, y1, x2, y2 = track.bbox
+            color = (
+                (74, 222, 128)
+                if track.direction == "entry"
+                else (248, 113, 113)
+                if track.direction == "exit"
+                else (34, 197, 94)
+            )
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.circle(frame, track.centroid, 4, (250, 204, 21), -1)
+            if track.track_id > 0:
+                source_suffix = (
+                    f"/{track.source_track_id}" if track.source_track_id != track.track_id else ""
+                )
+                label = f"#{track.track_id}{source_suffix}"
+            else:
+                label = "PERSON"
+            self._draw_track_label(frame, x1, y1, f"{label} - {track.confidence * 100:.0f}%", color)
+
+        return frame
+
+    def _draw_track_label(
+        self, frame: np.ndarray, x: int, y: int, label: str, color: tuple[int, int, int]
+    ) -> None:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.38
+        thickness = 1
+        padding_x = 5
+        padding_y = 3
+        text_size, baseline = cv2.getTextSize(label, font, font_scale, thickness)
+        text_width, text_height = text_size
+        label_width = text_width + padding_x * 2
+        label_height = text_height + padding_y * 2 + baseline
+
+        frame_height, frame_width = frame.shape[:2]
+        left = max(0, min(x, frame_width - label_width - 1))
+        top = y - label_height - 3
+        if top < 0:
+            top = min(frame_height - label_height - 1, y + 3)
+        top = max(0, top)
+        right = min(frame_width - 1, left + label_width)
+        bottom = min(frame_height - 1, top + label_height)
+
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (left, top), (right, bottom), color, -1)
+        cv2.addWeighted(overlay, 0.58, frame, 0.42, 0, frame)
+        cv2.rectangle(frame, (left, top), (right, bottom), color, 1)
+        cv2.putText(
+            frame,
+            label,
+            (left + padding_x, bottom - padding_y - baseline),
+            font,
+            font_scale,
+            (255, 255, 255),
+            thickness,
+            cv2.LINE_AA,
+        )
+
+    def _draw_roi(
+        self, frame: np.ndarray, roi: RegionOfInterest, frame_width: int, frame_height: int
+    ) -> None:
+        x1 = int(roi.left * frame_width)
+        y1 = int(roi.top * frame_height)
+        x2 = int((roi.left + roi.width) * frame_width)
+        y2 = int((roi.top + roi.height) * frame_height)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (59, 130, 246), 2)
+        cv2.putText(
+            frame,
+            "ROI",
+            (x1 + 6, max(18, y1 - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (59, 130, 246),
+            1,
+            cv2.LINE_AA,
+        )
+
+    def _draw_tripwire_line(
+        self,
+        frame: np.ndarray,
+        line: NormalizedLine | None,
+        frame_width: int,
+        frame_height: int,
+        label: str,
+        color: tuple[int, int, int],
+    ) -> None:
+        if line is None:
+            return
+
+        (x1, y1), (x2, y2) = line
+        start = (int(x1 * frame_width), int(y1 * frame_height))
+        end = (int(x2 * frame_width), int(y2 * frame_height))
+        cv2.line(frame, start, end, color, 2)
+        cv2.circle(frame, start, 4, color, -1)
+        cv2.circle(frame, end, 4, color, -1)
+        cv2.putText(
+            frame,
+            label,
+            (start[0] + 6, max(18, start[1] - 6)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    def _normalized_line(self, line: TripwireLine | None) -> NormalizedLine | None:
+        if line is None:
+            return None
+
+        return ((line.start.x, line.start.y), (line.end.x, line.end.y))
+
+    def _resize_for_processing(self, frame: np.ndarray, max_width: int) -> np.ndarray:
+        height, width = frame.shape[:2]
+        if width <= max_width:
+            return frame
+
+        scale = max_width / width
+        return cv2.resize(frame, (max_width, int(height * scale)), interpolation=cv2.INTER_AREA)
+
+    def _encode_frame(self, frame: np.ndarray) -> bytes:
+        ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+        if not ok:
+            raise RuntimeError("Failed to encode processed frame.")
+        return buffer.tobytes()
+
+    def _is_current_session(self, session: ProcessingSession) -> bool:
+        with self._lock:
+            return self._is_current_session_locked(session)
+
+    def _is_current_session_locked(self, session: ProcessingSession) -> bool:
+        return self._active_session is session
+
+    def _set_session_error(self, session: ProcessingSession, message: str) -> None:
+        with self._raw_frame_condition:
+            if not self._is_current_session_locked(session):
+                return
+
+            safe_message = redact_stream_credentials(message)
+            self._state = RuntimeState(running=False, status="error", error=safe_message)
+            self._latest_jpeg = self._build_status_frame(safe_message)
+            self._latest_stream_jpeg = self._latest_jpeg
+            self._latest_stream_frame_id += 1
+            session.stop_event.set()
+            self._active_session = None
+            self._persist_session_locked()
+            self._raw_frame_condition.notify_all()
+
+    def _build_status_frame(self, message: str) -> bytes:
+        frame = np.zeros((540, 960, 3), dtype=np.uint8)
+        frame[:] = (17, 24, 39)
+        cv2.line(frame, (480, 0), (480, 540), (59, 130, 246), 2)
+        cv2.putText(
+            frame,
+            "TANAW ML Camera Service",
+            (270, 236),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.85,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame,
+            message[:72],
+            (90, 288),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (203, 213, 225),
+            2,
+            cv2.LINE_AA,
+        )
+        return self._encode_frame(frame)
+
+    def _persist_count_event(
+        self,
+        session: ProcessingSession,
+        track: ResolvedTrack,
+        direction: str,
+        visitor_decision: VisitorDecision | None = None,
+    ) -> None:
+        with self._lock:
+            if not self._is_current_session_locked(session):
+                return
+
+            counts = self._counter.counts.as_dict()
+            visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
+            try:
+                self._session_store.append_event(
+                    {
+                        "camera_id": self._config.camera_id if self._config else None,
+                        "camera_name": self._config.camera_name if self._config else None,
+                        "direction": direction,
+                        "track_id": track.track_id,
+                        "source_track_id": track.source_track_id,
+                        "identity_state": track.identity_state,
+                        "identity_score": track.identity_score,
+                        "identity_source": track.identity_source,
+                        **visitor_fields,
+                        "counts": counts,
+                    }
+                )
+            except OSError:
+                pass
+            self._persist_session_locked()
+
+    def _persist_session_locked(self) -> None:
+        counts = self._counter.counts.as_dict()
+        payload = {
+            "running": self._state.running,
+            "status": self._state.status,
+            "error": redact_stream_credentials(self._state.error) if self._state.error else None,
+            "camera_id": self._config.camera_id if self._config else None,
+            "camera_name": self._config.camera_name if self._config else None,
+            "camera_config": self._config.model_dump(mode="json") if self._config else None,
+            "counts": {
+                **counts,
+                "running": self._state.running,
+                "status": self._state.status,
+                "error": redact_stream_credentials(self._state.error)
+                if self._state.error
+                else None,
+            },
+        }
+        try:
+            self._session_store.save_session(payload)
+            saved_payload = self._session_store.load_session()
+            self._session_updated_at = saved_payload.get("updated_at") if saved_payload else None
+        except OSError:
+            return
+
+    def _public_config_dump(self) -> dict:
+        if self._config is None:
+            return {}
+
+        payload = self._config.model_dump(mode="json")
+        if payload.get("password"):
+            payload["password"] = None
+        payload["stream_url"] = redact_stream_credentials(str(payload.get("stream_url", "")))
+        return payload
+
+    def _restore_saved_snapshot(self, payload: dict | None) -> None:
+        if not payload:
+            return
+
+        counts_payload = payload.get("counts")
+        if not isinstance(counts_payload, dict):
+            return
+
+        with self._lock:
+            self._session_updated_at = (
+                payload.get("updated_at") if isinstance(payload.get("updated_at"), str) else None
+            )
+            self._counter.counts.entry = _safe_int(counts_payload.get("entry"))
+            self._counter.counts.exit = _safe_int(counts_payload.get("exit"))
+            self._counter.counts.occupancy = _safe_int(counts_payload.get("occupancy"))
+            started_at = counts_payload.get("started_at")
+            if isinstance(started_at, str):
+                try:
+                    self._counter.counts.started_at = datetime.fromisoformat(started_at)
+                except ValueError:
+                    self._counter.counts.started_at = None
+            if isinstance(payload.get("status"), str):
+                self._state.status = payload["status"]
+            if isinstance(payload.get("error"), str) or payload.get("error") is None:
+                self._state.error = payload.get("error")
+
+    def _processing_fps(self, config: CameraStartRequest) -> float:
+        if config.processing_fps is not None:
+            return max(config.processing_fps, 1.0)
+        return 15.0 if self._effective_profile == "accelerated" else 8.0
+
+    def _max_frame_width(self, config: CameraStartRequest) -> int:
+        if config.max_frame_width is not None:
+            return config.max_frame_width
+        return 960 if self._effective_profile == "accelerated" else 640
+
+    def _configure_reid_locked(self) -> None:
+        fast_model_path = "person_reid_cpu.onnx"
+        fast_model_name = "torchreid_osnet_x0_25_msmt17_onnx"
+        quality_model_path = "person_reid.onnx"
+        quality_model_name = "torchreid_osnet_ain_x1_0_msmt17_onnx"
+        if (
+            self._reidentifier.model_path == fast_model_path
+            and self._quality_reidentifier.model_path == quality_model_path
+        ):
+            return
+
+        self._reid_worker.close()
+        self._quality_reid_worker.close()
+        self._reidentifier = PersonReIdentifier(
+            model_path=fast_model_path,
+            model_name=fast_model_name,
+        )
+        self._quality_reidentifier = PersonReIdentifier(
+            model_path=quality_model_path,
+            model_name=quality_model_name,
+        )
+        self._reid_worker = AsyncReIdWorker(self._reidentifier)
+        self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
+        self._visitor_registry = UniqueVisitorRegistry(
+            self._session_store,
+            model_name=self._reidentifier.model_name,
+            quality_model_name=self._quality_reidentifier.model_name,
+        )
+
+
+def _safe_int(value: Any) -> int:
+    return value if isinstance(value, int) else 0
+
+
+def _seconds_to_frames(seconds: float, processing_fps: float) -> int:
+    return max(1, int(round(seconds * max(processing_fps, 1.0))))

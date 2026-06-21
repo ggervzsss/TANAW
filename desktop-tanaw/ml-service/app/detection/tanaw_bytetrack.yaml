@@ -1,0 +1,9 @@
+# TANAW ByteTrack settings. Detection confidence is intentionally lower than
+# counting confidence so low-score detections can preserve an existing track.
+tracker_type: bytetrack
+track_high_thresh: 0.35
+track_low_thresh: 0.10
+new_track_thresh: 0.45
+track_buffer: 12
+match_thresh: 0.75
+fuse_score: true

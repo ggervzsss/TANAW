@@ -1,0 +1,161 @@
+import { Activity, Bell, Building2, Users, Wifi } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { routes } from "@/app/routers/routes";
+import { AlertDetailsModal, PriorityAlertListItem } from "@/features/alerts-monitor/components";
+import { MetricCard } from "@/shared/components/cards";
+import { PageHeader } from "@/shared/components/layout";
+import { DetailField, EmptyState, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
+import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
+import { useAlerts } from "@/shared/hooks/useAlerts";
+import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
+import { listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
+import type { PriorityAlert, SystemLog } from "@/shared/types";
+
+export function ITDashboardPage() {
+  const { logs, isLoading: logsLoading } = useActivityLogs();
+  const operationalSummaryQuery = useOperationalSummary();
+  const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
+  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
+  const [selectedActivity, setSelectedActivity] = useState<SystemLog | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<PriorityAlert | null>(null);
+  const { alerts } = useAlerts();
+  const priorityAlerts = alerts.filter((alert) => alert.owner === "IT");
+  const activeAlertsCount = priorityAlerts.filter((alert) => alert.status !== "Resolved").length;
+  const lguAccounts = lguAccountsQuery.data ?? [];
+  const enterpriseAccounts = enterpriseAccountsQuery.data ?? [];
+  const operationalSummary = operationalSummaryQuery.data;
+  const activeLguAccounts = lguAccounts.filter((account) => account.status === "active").length;
+  const activeEnterprises = enterpriseAccounts.filter((enterprise) => enterprise.status === "active").length;
+  const gatewaysOnline = operationalSummary?.onlineGateways ?? enterpriseAccounts.filter((enterprise) => enterprise.gatewayStatus?.toLowerCase() === "connected").length;
+  const recentActivities = logs.slice(0, 7);
+
+  const actionableAlerts = priorityAlerts.filter((alert) => alert.status !== "Resolved").slice(0, 4);
+
+  return (
+    <PageMotion>
+      <PageHeader title="Dashboard" description="Operational overview for accounts, enterprise connectivity, camera health, and recent system activity." />
+
+      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5" variants={stagger}>
+        <MetricCard label="LGU Accounts" value={lguAccountsQuery.isLoading ? "..." : activeLguAccounts} foot="Active account registry" color="#065f46" icon={Users} />
+        <MetricCard label="Active Enterprises" value={enterpriseAccountsQuery.isLoading ? "..." : activeEnterprises} foot="Can access TANAW" color="#2563eb" icon={Building2} />
+        <MetricCard
+          label="Gateways Online"
+          value={operationalSummaryQuery.isLoading && !operationalSummary ? "..." : gatewaysOnline}
+          foot={operationalSummary ? `${operationalSummary.delayedGateways} delayed / ${operationalSummary.offlineGateways} offline` : "Connected edge gateways"}
+          color="#10b981"
+          icon={Wifi}
+        />
+        <MetricCard label="Priority Alerts" value={activeAlertsCount} foot="Requires IT action" color="#dc2626" footClassName="text-red-600" icon={Bell} />
+      </motion.section>
+      {(lguAccountsQuery.isError || enterpriseAccountsQuery.isError || operationalSummaryQuery.isError) && (
+        <p className="mt-4 text-sm font-semibold text-red-600">Some dashboard metrics could not be loaded from the database. Refresh or check the API connection.</p>
+      )}
+
+      <div className="mt-7 grid grid-cols-[minmax(0,2fr)_minmax(360px,1fr)] gap-6 max-xl:grid-cols-1">
+        <section className="shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-7 py-6 max-sm:flex-col max-sm:items-start max-sm:px-5">
+            <div>
+              <h3 className="text-charcoal-800 m-0 text-lg font-bold">Recent System Activity</h3>
+              <p className="mt-1.5 mb-0 text-sm text-gray-500">Latest IT-visible user, enterprise, configuration, and SYSTEM actions.</p>
+            </div>
+          </div>
+          <div className="divide-y divide-gray-100">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-160 table-fixed text-left">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[52%]" />
+                  <col className="w-[30%]" />
+                </colgroup>
+                <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
+                  <tr>
+                    <th className="py-3.5 pr-2 pl-4 whitespace-nowrap lg:pr-3 lg:pl-5">Timestamp</th>
+                    {["Summary", "Name"].map((heading) => (
+                      <th key={heading} className="px-4 py-3.5 whitespace-nowrap lg:px-5">
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {recentActivities.map((activity) => {
+                    return (
+                      <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
+                        <td className="py-4 pr-2 pl-4 font-mono text-xs leading-snug text-gray-500 lg:pr-3 lg:pl-5">{formatCompactTimestamp(activity.timestamp)}</td>
+                        <td className="text-charcoal-800 px-4 py-4 text-sm leading-snug font-semibold lg:px-5">
+                          <span className="line-clamp-3">{activity.summary}</span>
+                        </td>
+                        <td className="px-4 py-4 text-xs leading-snug font-semibold wrap-break-word text-gray-600 lg:px-5">
+                          <span className="line-clamp-3">{activity.actor}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {recentActivities.length === 0 && (
+              <EmptyState
+                icon={Activity}
+                title={logsLoading ? "Loading recent activity" : "No recent activity"}
+                description={logsLoading ? "Fetching live activity records." : "System activity records will appear here once the logging source is connected."}
+              />
+            )}
+          </div>
+        </section>
+
+        <aside className="grid gap-6">
+          <section className="shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="border-b border-gray-100 px-7 py-6 max-sm:px-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-charcoal-800 m-0 text-lg font-bold">Priority Alerts</h3>
+                  <p className="mt-1.5 mb-0 text-sm text-gray-500">Actionable tasks requiring IT intervention or approval.</p>
+                </div>
+                <Link to={routes.it.alerts} className="shrink-0 text-sm font-semibold text-emerald-600 transition hover:text-emerald-700">
+                  View All Alerts
+                </Link>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {actionableAlerts.map((alert) => (
+                <PriorityAlertListItem key={alert.id} alert={alert} onOpen={setSelectedAlert} />
+              ))}
+              {actionableAlerts.length === 0 && <EmptyState icon={Bell} title="No priority alerts" description="There are no unresolved IT alerts." />}
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <AnimatePresence>
+        {selectedActivity && <ActivityDetailsModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}
+        {selectedAlert && <AlertDetailsModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />}
+      </AnimatePresence>
+    </PageMotion>
+  );
+}
+
+function formatCompactTimestamp(timestamp: string) {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? timestamp.replace("2026-", "") : date.toLocaleString();
+}
+
+function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onClose: () => void }) {
+  return (
+    <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <DetailField label="Type" value={activity.category} />
+        <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
+        <DetailField label="Timestamp" value={formatCompactTimestamp(activity.timestamp)} />
+        <DetailField label="Target" value={activity.target} />
+        <DetailField label="Action" value={activity.action} />
+        <div className="md:col-span-2">
+          <DetailField label="Summary" value={activity.summary} />
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}

@@ -1,0 +1,1 @@
+export { ITLguAccountsPage } from "./pages";

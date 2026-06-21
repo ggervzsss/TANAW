@@ -1,0 +1,533 @@
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, Tray } from "electron";
+import { existsSync } from "node:fs";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// The built directory structure:
+// dist/index.html
+// dist-electron/main.js
+// dist-electron/preload.mjs
+process.env.APP_ROOT = path.join(__dirname, "..");
+
+// Use ['ENV_NAME'] to avoid the vite:define plugin.
+export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
+export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
+
+let win: BrowserWindow | null;
+let tray: Tray | null = null;
+let mlServiceProcess: ChildProcess | null = null;
+let mlServiceError: string | null = null;
+let mlServiceConnectedExternally = false;
+let isQuitting = false;
+
+const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
+const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
+const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
+const execFileAsync = promisify(execFile);
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+function getMlServiceDir() {
+  const developmentPath = path.join(process.env.APP_ROOT, "ml-service");
+  if (existsSync(developmentPath)) {
+    return developmentPath;
+  }
+
+  return path.join(process.resourcesPath, "ml-service");
+}
+
+function getMlServiceCommand(serviceDir: string) {
+  const venvPython = process.platform === "win32" ? path.join(serviceDir, ".venv", "Scripts", "python.exe") : path.join(serviceDir, ".venv", "bin", "python");
+
+  if (existsSync(venvPython)) {
+    return { command: venvPython, args: ["main.py"] };
+  }
+
+  return { command: "uv", args: ["run", "python", "main.py"] };
+}
+
+async function startMlService() {
+  if (isMlServiceRunning()) {
+    return;
+  }
+
+  if (await isMlServiceReachable()) {
+    mlServiceConnectedExternally = true;
+    mlServiceError = null;
+    updateTrayMenu();
+    return;
+  }
+
+  const serviceDir = getMlServiceDir();
+  if (!existsSync(serviceDir)) {
+    mlServiceError = `ML service directory was not found at ${serviceDir}.`;
+    return;
+  }
+
+  const { command, args } = getMlServiceCommand(serviceDir);
+  mlServiceError = null;
+  mlServiceConnectedExternally = false;
+
+  const child = spawn(command, args, {
+    cwd: serviceDir,
+    env: {
+      ...process.env,
+      PYTHONUNBUFFERED: "1",
+      TANAW_APP_DATA_DIR: app.getPath("userData"),
+      TANAW_ML_SERVICE_HOST: process.env["TANAW_ML_SERVICE_HOST"] ?? "127.0.0.1",
+      TANAW_ML_SERVICE_PORT: String(mlServicePort),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  mlServiceProcess = child;
+  updateTrayMenu();
+
+  child.stdout?.on("data", (chunk) => {
+    console.info(`[tanaw-ml] ${String(chunk).trim()}`);
+  });
+
+  child.stderr?.on("data", (chunk) => {
+    console.error(`[tanaw-ml] ${String(chunk).trim()}`);
+  });
+
+  child.on("error", (error) => {
+    if (mlServiceProcess !== child) {
+      return;
+    }
+
+    mlServiceError = error.message;
+    mlServiceProcess = null;
+    mlServiceConnectedExternally = false;
+    updateTrayMenu();
+  });
+
+  child.on("exit", (code, signal) => {
+    if (mlServiceProcess !== child) {
+      return;
+    }
+
+    if (code && code !== 0) {
+      mlServiceError = `ML service exited with code ${code}${signal ? ` (${signal})` : ""}.`;
+    }
+    mlServiceProcess = null;
+    mlServiceConnectedExternally = false;
+    updateTrayMenu();
+  });
+}
+
+async function stopMlService(waitMs = 0) {
+  mlServiceConnectedExternally = false;
+  if (!mlServiceProcess) {
+    updateTrayMenu();
+    return;
+  }
+
+  const serviceProcess = mlServiceProcess;
+  mlServiceProcess = null;
+  serviceProcess.kill();
+
+  if (waitMs > 0) {
+    const exited = await waitForProcessExit(serviceProcess, waitMs);
+    if (!exited) {
+      serviceProcess.kill("SIGKILL");
+      await waitForProcessExit(serviceProcess, 1500);
+    }
+  }
+
+  updateTrayMenu();
+}
+
+function isMlServiceRunning() {
+  return Boolean(mlServiceProcess) || mlServiceConnectedExternally;
+}
+
+async function getMlServiceStatusPayload() {
+  return {
+    baseUrl: mlServiceUrl,
+    error: mlServiceError,
+    pid: mlServiceProcess?.pid ?? (mlServiceConnectedExternally ? await findMlServiceListenerPid() : null),
+    running: isMlServiceRunning(),
+  };
+}
+
+async function isMlServiceReachable(timeoutMs = 750) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${mlServiceUrl}/health`, { method: "GET", signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function stopCameraProcessingFromTray() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    await fetch(`${mlServiceUrl}/camera/stop`, { method: "POST", signal: controller.signal });
+    mlServiceError = null;
+  } catch (error) {
+    mlServiceError = error instanceof Error ? error.message : "Unable to stop camera processing.";
+  } finally {
+    clearTimeout(timeout);
+    updateTrayMenu();
+  }
+}
+
+async function restartMlService() {
+  if (mlServiceConnectedExternally && !mlServiceProcess) {
+    await stopExternalMlService(3000);
+  } else {
+    await stopMlService(3000);
+  }
+
+  await startMlService();
+}
+
+async function stopExternalMlService(waitMs = 0) {
+  const pid = await findMlServiceListenerPid();
+  mlServiceConnectedExternally = false;
+
+  if (!pid) {
+    updateTrayMenu();
+    return;
+  }
+
+  if (!(await isLocalMlServiceProcess(pid))) {
+    mlServiceError = `A service is already listening on port ${mlServicePort}, but it was not started from this TANAW workspace.`;
+    updateTrayMenu();
+    return;
+  }
+
+  await terminateProcessId(pid, waitMs);
+  updateTrayMenu();
+}
+
+async function findMlServiceListenerPid() {
+  try {
+    if (process.platform === "win32") {
+      const script = [
+        `$conn = Get-NetTCPConnection -LocalPort ${mlServicePort} -State Listen -ErrorAction SilentlyContinue`,
+        "| Where-Object { $_.LocalAddress -eq '127.0.0.1' -or $_.LocalAddress -eq '0.0.0.0' -or $_.LocalAddress -eq '::1' }",
+        "| Select-Object -First 1",
+        "if ($conn) { $conn.OwningProcess }",
+      ].join(" ");
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { timeout: 3000, windowsHide: true });
+      return parseProcessId(stdout);
+    }
+
+    const { stdout } = await execFileAsync("lsof", ["-nP", `-iTCP:${mlServicePort}`, "-sTCP:LISTEN", "-t"], { timeout: 3000 });
+    return parseProcessId(stdout);
+  } catch {
+    return null;
+  }
+}
+
+function parseProcessId(output: string) {
+  const pid = Number(output.trim().split(/\s+/)[0]);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+async function isLocalMlServiceProcess(pid: number) {
+  const commandLine = await getProcessCommandLine(pid);
+  if (!commandLine) {
+    return false;
+  }
+
+  const serviceDir = normalizeProcessPath(getMlServiceDir());
+  return normalizeProcessPath(commandLine).includes(serviceDir);
+}
+
+async function getProcessCommandLine(pid: number) {
+  try {
+    if (process.platform === "win32") {
+      const script = `$proc = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" -ErrorAction SilentlyContinue; if ($proc) { $proc.CommandLine }`;
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { timeout: 3000, windowsHide: true });
+      return stdout.trim() || null;
+    }
+
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { timeout: 3000 });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeProcessPath(value: string) {
+  return path.normalize(value).toLowerCase();
+}
+
+async function terminateProcessId(pid: number, waitMs: number) {
+  try {
+    if (process.platform === "win32") {
+      await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T"], { timeout: Math.max(waitMs, 1500), windowsHide: true });
+    } else {
+      process.kill(pid);
+    }
+  } catch (error) {
+    mlServiceError = error instanceof Error ? error.message : `Unable to stop ML service process ${pid}.`;
+  }
+
+  if (waitMs <= 0 || (await waitForMlServicePortRelease(waitMs))) {
+    return;
+  }
+
+  try {
+    if (process.platform === "win32") {
+      await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { timeout: 1500, windowsHide: true });
+    } else {
+      process.kill(pid, "SIGKILL");
+    }
+    await waitForMlServicePortRelease(1500);
+  } catch (error) {
+    mlServiceError = error instanceof Error ? error.message : `Unable to force stop ML service process ${pid}.`;
+  }
+}
+
+async function waitForMlServicePortRelease(timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (!(await isMlServiceReachable(250))) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  return false;
+}
+
+function waitForProcessExit(process: ChildProcess, timeoutMs: number) {
+  if (process.exitCode !== null || process.signalCode !== null) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      process.off("exit", handleExit);
+      process.off("error", handleError);
+    };
+
+    const handleExit = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    const handleError = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    process.once("exit", handleExit);
+    process.once("error", handleError);
+  });
+}
+
+function registerMlServiceIpc() {
+  ipcMain.handle("ml-service:get-status", () => getMlServiceStatusPayload());
+
+  ipcMain.handle("ml-service:restart", async () => {
+    await restartMlService();
+    return getMlServiceStatusPayload();
+  });
+}
+
+function registerAppLifecycleIpc() {
+  ipcMain.handle("app-lifecycle:get-background-status", () => getBackgroundStatus());
+  ipcMain.handle("app-lifecycle:show-window", () => {
+    showMainWindow();
+    return getBackgroundStatus();
+  });
+  ipcMain.handle("app-lifecycle:quit", () => quitApplication());
+  ipcMain.handle("app-lifecycle:get-startup-settings", () => getStartupSettings());
+  ipcMain.handle("app-lifecycle:update-startup-settings", (_event, openAtLogin: boolean) => {
+    setStartupSettings(Boolean(openAtLogin));
+    return getStartupSettings();
+  });
+}
+
+function getBackgroundStatus() {
+  return {
+    background: Boolean(win && !win.isVisible()),
+    mlServiceRunning: isMlServiceRunning(),
+    mlServiceError,
+    trayAvailable: Boolean(tray),
+  };
+}
+
+function getStartupSettings() {
+  const settings = app.getLoginItemSettings();
+  return { openAtLogin: settings.openAtLogin };
+}
+
+function setStartupSettings(openAtLogin: boolean) {
+  app.setLoginItemSettings({
+    openAtLogin,
+    openAsHidden: true,
+    args: openAtLogin ? ["--background"] : [],
+  });
+}
+
+function createTray() {
+  if (tray) return;
+
+  try {
+    const icon = getTrayIcon();
+    if (icon.isEmpty()) {
+      console.warn("[tanaw] Tray icon could not be loaded; continuing without a tray.");
+      return;
+    }
+
+    tray = new Tray(icon);
+    tray.setToolTip("TANAW Enterprise Desktop");
+    tray.on("double-click", showMainWindow);
+    updateTrayMenu();
+  } catch (error) {
+    console.error("[tanaw] Tray could not be created.", error);
+    tray = null;
+  }
+}
+
+function getTrayIcon() {
+  const fallbackIcon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_PNG_BASE64, "base64")).resize({ width: 16, height: 16 });
+  if (!fallbackIcon.isEmpty()) {
+    return fallbackIcon;
+  }
+
+  return nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, "electron-vite.svg"));
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+
+  const monitoringLabel = isMlServiceRunning() ? "ML Service: Running" : mlServiceError ? "ML Service: Error" : "ML Service: Stopped";
+  const contextMenu = Menu.buildFromTemplate([
+    { label: "Open TANAW", click: showMainWindow },
+    { label: monitoringLabel, enabled: false },
+    { type: "separator" },
+    { label: "Stop Monitoring", enabled: isMlServiceRunning(), click: () => void stopCameraProcessingFromTray() },
+    { label: "Restart ML Service", click: () => void restartMlService() },
+    { type: "separator" },
+    { label: "Quit TANAW", click: () => void quitApplication() },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+}
+
+function showMainWindow() {
+  if (!win || win.isDestroyed()) {
+    createWindow();
+    return;
+  }
+
+  win.show();
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.focus();
+}
+
+function createWindow() {
+  if (win && !win.isDestroyed()) {
+    showMainWindow();
+    return;
+  }
+
+  win = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 720,
+    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    title: "TANAW Enterprise Desktop",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.mjs"),
+    },
+  });
+  win.maximize();
+
+  win.on("close", (event) => {
+    if (isQuitting) return;
+
+    event.preventDefault();
+    win?.hide();
+    updateTrayMenu();
+  });
+
+  win.on("closed", () => {
+    win = null;
+  });
+
+  win.webContents.on("did-finish-load", () => {
+    win?.webContents.send("main-process-message", new Date().toLocaleString());
+  });
+
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(RENDERER_DIST, "index.html"));
+  }
+}
+
+async function quitApplication() {
+  isQuitting = true;
+  if (isMlServiceRunning()) {
+    await stopCameraProcessingFromTray();
+  }
+  stopMlService();
+  if (win && !win.isDestroyed()) {
+    win.destroy();
+  }
+  app.quit();
+}
+
+if (gotSingleInstanceLock) {
+  app.on("window-all-closed", () => {
+    updateTrayMenu();
+  });
+
+  app.on("before-quit", () => {
+    isQuitting = true;
+    void stopMlService();
+  });
+
+  app.on("activate", () => {
+    showMainWindow();
+  });
+
+  app.on("second-instance", () => {
+    showMainWindow();
+  });
+
+  app.whenReady().then(async () => {
+    registerMlServiceIpc();
+    registerAppLifecycleIpc();
+    createTray();
+    await startMlService();
+    if (!process.argv.includes("--background")) {
+      createWindow();
+    }
+  });
+}

@@ -1,0 +1,361 @@
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import { routes } from "@/app/routers/routes";
+import { useAuthStore, useReportStore, useSystemLogStore } from "@/app/store";
+import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
+import { listDevDeliveries } from "@/shared/services/accountManagement";
+import { listFinalReports, listIntakeReports, listReportEnterprises } from "@/shared/services/reporting";
+import type { DevDelivery } from "@/shared/services/accountManagement";
+import type { FinalReport, IntakeReport, LogSeverity, PriorityAlert, ReportEnterprise, ReportStatus, SystemLog } from "@/shared/types";
+import type { UserRole } from "@/shared/types/role.types";
+import { useActivityLogs } from "./useActivityLogs";
+import { useAlerts } from "./useAlerts";
+
+export type PortalNotificationTone = "critical" | "warning" | "success" | "info";
+
+export type PortalNotification = {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  source: string;
+  statusLabel?: string;
+  tone: PortalNotificationTone;
+  targetPath?: string;
+  read: boolean;
+  sortTime: number;
+};
+
+type DraftNotification = Omit<PortalNotification, "read">;
+
+const MAX_VISIBLE_NOTIFICATIONS = 18;
+const READ_STORAGE_LIMIT = 500;
+const SUPPORT_SUBJECT = "tanaw login support request";
+const PASSWORD_RESET_SUBJECT = "tanaw password reset verification code";
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const EMPTY_DEV_DELIVERIES: DevDelivery[] = [];
+const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
+
+const viewAllPathByRole: Record<UserRole, string | undefined> = {
+  admin: routes.admin.alertsMonitor,
+  it: routes.it.alerts,
+  staff: routes.staff.batchReports,
+  enterprise: undefined,
+};
+
+export function usePortalNotifications(role: UserRole) {
+  const authUser = useAuthStore((state) => state.user);
+  const shouldLoadAlerts = role === "admin" || role === "it";
+  const { alerts, isLoading: alertsLoading } = useAlerts(shouldLoadAlerts);
+  const localLogs = useSystemLogStore((state) => state.logs);
+  const localReports = useReportStore((state) => state.reports);
+  const finalReports = useReportStore((state) => state.finalReports);
+  const { logs: activityLogs } = useActivityLogs();
+  const reportsQuery = useQuery({
+    queryKey: operationalReportsQueryKey,
+    queryFn: listIntakeReports,
+    enabled: role === "staff",
+    refetchInterval: role === "staff" ? 30_000 : false,
+  });
+  const finalReportsQuery = useQuery({
+    queryKey: operationalFinalReportsQueryKey,
+    queryFn: listFinalReports,
+    enabled: role === "staff",
+    refetchInterval: role === "staff" ? 30_000 : false,
+  });
+  const devDeliveriesQuery = useQuery({
+    queryKey: ["dev-deliveries"],
+    queryFn: listDevDeliveries,
+    enabled: role === "it",
+    refetchInterval: role === "it" ? 10_000 : false,
+  });
+  const reportEnterprisesQuery = useQuery({
+    queryKey: ["report-enterprises"],
+    queryFn: listReportEnterprises,
+    enabled: role === "staff",
+    refetchInterval: role === "staff" ? 30_000 : false,
+  });
+
+  const storageKey = useMemo(() => `tanaw-notifications-read:${role}:${authUser?.id ?? "anonymous"}`, [authUser?.id, role]);
+  const [readState, setReadState] = useState(() => ({
+    storageKey,
+    ids: readStoredNotificationIds(storageKey),
+  }));
+  const readIds = readState.storageKey === storageKey ? readState.ids : readStoredNotificationIds(storageKey);
+
+  const mergedLogs = useMemo(() => mergeLogs(activityLogs, localLogs), [activityLogs, localLogs]);
+  const devDeliveries = devDeliveriesQuery.data ?? EMPTY_DEV_DELIVERIES;
+  const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
+  const reports = reportsQuery.data ?? localReports;
+  const effectiveFinalReports = finalReportsQuery.data ?? finalReports;
+
+  const drafts = useMemo(() => {
+    if (role === "admin") {
+      return [...buildAlertNotifications(alerts, "admin"), ...buildLogNotifications(mergedLogs, "admin")];
+    }
+
+    if (role === "it") {
+      return [...buildAlertNotifications(alerts, "it"), ...buildDevDeliveryNotifications(devDeliveries), ...buildLogNotifications(mergedLogs, "it")];
+    }
+
+    if (role === "staff") {
+      return [...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises), ...buildLogNotifications(mergedLogs, "staff")];
+    }
+
+    return [];
+  }, [alerts, devDeliveries, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
+
+  const notifications = useMemo(
+    () =>
+      drafts
+        .sort((left, right) => right.sortTime - left.sortTime)
+        .slice(0, MAX_VISIBLE_NOTIFICATIONS)
+        .map((notification) => ({
+          ...notification,
+          read: readIds.has(notification.id),
+        })),
+    [drafts, readIds],
+  );
+
+  const persistReadIds = useCallback(
+    (nextIds: Set<string>) => {
+      const limitedIds = Array.from(nextIds).slice(-READ_STORAGE_LIMIT);
+      const limitedSet = new Set(limitedIds);
+      setReadState({ storageKey, ids: limitedSet });
+      writeStoredNotificationIds(storageKey, limitedIds);
+    },
+    [storageKey],
+  );
+
+  const markAsRead = useCallback(
+    (notificationId: string) => {
+      persistReadIds(new Set(readIds).add(notificationId));
+    },
+    [persistReadIds, readIds],
+  );
+
+  const markAllAsRead = useCallback(() => {
+    persistReadIds(new Set([...readIds, ...notifications.map((notification) => notification.id)]));
+  }, [notifications, persistReadIds, readIds]);
+
+  return {
+    notifications,
+    unreadCount: notifications.filter((notification) => !notification.read).length,
+    isLoading: alertsLoading || devDeliveriesQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
+    viewAllPath: viewAllPathByRole[role],
+    markAsRead,
+    markAllAsRead,
+  };
+}
+
+function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"): DraftNotification[] {
+  return alerts
+    .filter((alert) => alert.status !== "Resolved")
+    .filter((alert) => (role === "admin" ? alert.owner === "Admin" || alert.owner === "System" || alert.severity === "Critical" : alert.owner === "IT"))
+    .map((alert) => ({
+      id: `alert:${alert.id}:${alert.status}`,
+      title: `${alert.severity} ${alert.type}`,
+      message: `${alert.enterprise ?? alert.requester}: ${alert.summary}`,
+      time: alert.time,
+      source: "Alerts",
+      statusLabel: alert.status,
+      tone: toneFromSeverity(alert.severity),
+      targetPath: role === "admin" ? routes.admin.alertsMonitor : routes.it.alerts,
+      sortTime: toSortTime(alert.time),
+    }));
+}
+
+function buildDevDeliveryNotifications(deliveries: DevDelivery[]): DraftNotification[] {
+  return deliveries
+    .filter((delivery) => {
+      const subject = delivery.subject.toLowerCase();
+      return subject.includes(SUPPORT_SUBJECT) || subject.includes(PASSWORD_RESET_SUBJECT);
+    })
+    .map((delivery) => {
+      const isSupportRequest = delivery.subject.toLowerCase().includes(SUPPORT_SUBJECT);
+      return {
+        id: `dev-delivery:${delivery.id}:${delivery.status}`,
+        title: isSupportRequest ? "Login Support Request" : "Password Reset Code Recorded",
+        message: `${delivery.channel.toUpperCase()} to ${delivery.recipient}: ${delivery.subject}`,
+        time: formatTimestamp(delivery.createdAt),
+        source: "Dev Log",
+        statusLabel: delivery.status,
+        tone: isSupportRequest ? "warning" : "info",
+        targetPath: routes.it.devLog,
+        sortTime: toSortTime(delivery.createdAt),
+      };
+    });
+}
+
+function buildLogNotifications(logs: SystemLog[], role: "admin" | "it" | "staff"): DraftNotification[] {
+  return logs
+    .filter((log) => isRoleRelevantLog(log, role))
+    .map((log) => ({
+      id: `activity-log:${log.id}:${log.severity}`,
+      title: `${log.severity} ${log.action}`,
+      message: log.summary,
+      time: formatTimestamp(log.timestamp),
+      source: log.category,
+      statusLabel: log.actorRole,
+      tone: toneFromSeverity(log.severity),
+      targetPath: getLogTargetPath(role),
+      sortTime: toSortTime(log.timestamp),
+    }));
+}
+
+function buildStaffReportNotifications(reports: IntakeReport[], finalReports: FinalReport[], enterprises: ReportEnterprise[]): DraftNotification[] {
+  const currentPeriod = getCurrentSubmissionPeriod();
+  const currentReports = reports.filter((report) => report.month === currentPeriod.month && getReportYear(report) === currentPeriod.year);
+  const enterpriseMissingNotifications = enterprises
+    .filter((enterprise) => !currentReports.some((report) => report.enterpriseId === enterprise.id))
+    .map<DraftNotification>((enterprise) => ({
+      id: `report-missing:${enterprise.id}:${currentPeriod.month}:${currentPeriod.year}`,
+      title: "Missing Enterprise Submission",
+      message: `${enterprise.name} has no report for ${currentPeriod.month} ${currentPeriod.year}.`,
+      time: `${currentPeriod.month} ${currentPeriod.year}`,
+      source: "Batch Reports",
+      statusLabel: "Missing",
+      tone: "warning",
+      targetPath: routes.staff.batchReports,
+      sortTime: 0,
+    }));
+
+  const reportNotifications = reports
+    .filter((report) => shouldNotifyStaffAboutReport(report))
+    .map<DraftNotification>((report) => ({
+      id: `report:${report.id}:${report.status}`,
+      title: getReportNotificationTitle(report.status),
+      message: `${report.enterprise} submitted ${report.code} for ${report.period}. Status: ${report.status}.`,
+      time: report.submitted,
+      source: "Batch Reports",
+      statusLabel: report.status,
+      tone: toneFromReportStatus(report.status),
+      targetPath: routes.staff.batchReports,
+      sortTime: toSortTime(report.submitted),
+    }));
+
+  const finalReportNotifications = finalReports
+    .filter((report) => report.status === "Draft")
+    .map<DraftNotification>((report) => ({
+      id: `final-report:${report.id}:${report.status}`,
+      title: "Final Report Ready for Audit",
+      message: `${report.title} ${report.id} is a draft for ${report.period}.`,
+      time: formatTimestamp(report.generatedOn),
+      source: "Final Reports Audit",
+      statusLabel: report.status,
+      tone: "info",
+      targetPath: routes.staff.finalReportsAudit,
+      sortTime: toSortTime(report.generatedOn),
+    }));
+
+  return [...reportNotifications, ...enterpriseMissingNotifications, ...finalReportNotifications];
+}
+
+function isRoleRelevantLog(log: SystemLog, role: "admin" | "it" | "staff") {
+  if (role === "admin") {
+    return log.severity === "Critical" || (log.severity === "Warning" && (log.category === "System" || log.action.toLowerCase().includes("alert")));
+  }
+
+  if (role === "it") {
+    return (
+      (log.severity === "Critical" || log.severity === "Warning") &&
+      (log.category === "System" || log.category === "IT Activity" || log.category === "Enterprise Activity" || log.action.toLowerCase().includes("alert"))
+    );
+  }
+
+  return (log.category === "Staff Submission" || log.category === "Staff Operation") && (log.action.toLowerCase().includes("report") || log.severity === "Warning");
+}
+
+function shouldNotifyStaffAboutReport(report: IntakeReport) {
+  return report.status === "Pending Review" || report.status === "Ready to Consolidate" || report.status === "Returned" || report.status === "Missing";
+}
+
+function getReportNotificationTitle(status: ReportStatus) {
+  if (status === "Pending Review") return "Report Awaiting Review";
+  if (status === "Ready to Consolidate") return "Report Ready to Consolidate";
+  if (status === "Returned") return "Report Returned for Revision";
+  if (status === "Missing") return "Missing Enterprise Submission";
+  return "Report Workflow Update";
+}
+
+function toneFromReportStatus(status: ReportStatus): PortalNotificationTone {
+  if (status === "Missing" || status === "Returned") return "warning";
+  if (status === "Ready to Consolidate") return "success";
+  return "info";
+}
+
+function toneFromSeverity(severity: LogSeverity): PortalNotificationTone {
+  if (severity === "Critical") return "critical";
+  if (severity === "Warning") return "warning";
+  if (severity === "Success") return "success";
+  return "info";
+}
+
+function getLogTargetPath(role: "admin" | "it" | "staff") {
+  if (role === "admin") return routes.admin.systemLogs;
+  if (role === "it") return routes.it.systemLogs;
+  return routes.staff.systemLogs;
+}
+
+function mergeLogs(primaryLogs: SystemLog[], secondaryLogs: SystemLog[]) {
+  const merged = new Map<string, SystemLog>();
+  [...primaryLogs, ...secondaryLogs].forEach((log) => merged.set(log.id, log));
+  return Array.from(merged.values());
+}
+
+function getCurrentSubmissionPeriod(date = new Date()) {
+  return {
+    month: MONTHS[date.getMonth()],
+    year: String(date.getFullYear()),
+  };
+}
+
+function getReportYear(report: IntakeReport) {
+  const periodYear = report.period.match(/\d{4}/)?.[0];
+  if (periodYear) return periodYear;
+
+  const submittedAtYear = getDateYear(report.submittedAt);
+  if (submittedAtYear) return submittedAtYear;
+
+  return getDateYear(report.submitted);
+}
+
+function getDateYear(value: string | undefined) {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? String(new Date(timestamp).getFullYear()) : null;
+}
+
+function toSortTime(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function formatTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function readStoredNotificationIds(key: string) {
+  if (typeof window === "undefined") return new Set<string>();
+
+  try {
+    const stored = window.localStorage.getItem(key);
+    const parsed = stored ? (JSON.parse(stored) as unknown) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeStoredNotificationIds(key: string, ids: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(ids));
+}

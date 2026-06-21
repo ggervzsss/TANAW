@@ -1,0 +1,1 @@
+export { settingSections } from "./settingSections";
