@@ -59,7 +59,7 @@ For the deterministic target-enterprise acceptance workflow, use:
 ```bash
 TANAW_ALLOW_MOCK_DATA=true uv run mock-data reset \
   --range 6m \
-  --target-enterprise "enterprise_001@tanaw.sanpedro"
+  --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 See [MOCK_DATA_TARGET_ACCOUNT_GUIDE.md](./MOCK_DATA_TARGET_ACCOUNT_GUIDE.md) for the complete desktop-to-Staff testing manual.
@@ -85,7 +85,7 @@ If the target enterprise is logged into the desktop, the desktop automatically r
 ```bash
 TANAW_ALLOW_MOCK_DATA=true uv run mock-data reset \
   --range 6m \
-  --target-enterprise "enterprise_001@tanaw.sanpedro"
+  --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 From Docker Compose:
@@ -94,7 +94,7 @@ From Docker Compose:
 docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend \
   uv run mock-data reset \
   --range 6m \
-  --target-enterprise "enterprise_001@tanaw.sanpedro"
+  --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 The prepared count package does not create a report automatically. The enterprise tester creates and submits that report manually. If a real camera is running, subsequent camera events continue accumulating in the same draft. Docker does not need direct access to the local ML service.

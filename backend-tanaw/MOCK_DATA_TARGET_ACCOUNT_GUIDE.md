@@ -2,6 +2,18 @@
 
 This guide explains how to prepare TANAW for a focused end-to-end reporting test using one enterprise account as the final expected submitter.
 
+The standard TANAW acceptance target is the persistent, manually created
+enterprise:
+
+```text
+Enterprise:    Archie's Event Place
+Login email:   archies@email.com
+Enterprise ID: archies_001@tanaw.sanpedro
+```
+
+Archie's uses the password selected during its temporary-password onboarding.
+It is not one of the generated accounts and does not use `TanawTest123`.
+
 ## What The Scenario Creates
 
 For the selected reporting range, TANAW includes every active enterprise account in the test scenario.

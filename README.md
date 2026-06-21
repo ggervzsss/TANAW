@@ -382,10 +382,29 @@ it can be audited and removed safely.
 
 ### Create the default six-month workflow
 
-With the Docker services running, execute this from the repository root:
+Before generating the scenario, create and activate the persistent target
+account through **IT Portal > Enterprise Accounts**:
+
+```text
+Enterprise:    Archie's Event Place
+Category:      Events Venue
+Manager:       Gervy Masbate
+Barangay:      San Antonio
+Address:       Narra Road, San Pedro, Laguna 4023
+Email:         archies@email.com
+Contact:       +639123456789
+Enterprise ID: archies_001@tanaw.sanpedro
+```
+
+The system normally generates `archies_001@tanaw.sanpedro` from the enterprise
+name in a clean database. Confirm the actual Enterprise ID in the account
+details or desktop Profile before running the command.
+
+With the account active and Docker services running, execute this from the
+repository root:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "pacita.convention@tanaw.test"
+docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 This creates:
@@ -397,9 +416,13 @@ This creates:
 - current-period submissions ready for consolidation from supporting
   enterprises;
 - activity/audit logs;
-- prepared current-period counts for the selected target enterprise;
-- no current-period submission for that target, leaving the last step for a
-  real desktop submission.
+- prepared current-period counts for Archie's Event Place;
+- no current-period submission for Archie's, leaving the last step for a real
+  desktop submission.
+
+Archie's remains a normal, persistent account and is not deleted by
+`mock-data off`. The five generated enterprises act as supporting participants
+in the reporting scenario.
 
 A camera does not need to be running. The authenticated target desktop polls
 the backend and loads the finite prepared count package into its enterprise
@@ -424,18 +447,22 @@ LGU accounts:
 
 Enterprise accounts:
 
-| Enterprise                 | Username                         |
-| -------------------------- | -------------------------------- |
-| Pacita Convention Hall     | `pacita.convention@tanaw.test`   |
-| Sampaguita Garden Resort   | `sampaguita.resort@tanaw.test`   |
-| Poblacion Heritage Center  | `poblacion.heritage@tanaw.test`  |
-| Langgam Trade Arcade       | `langgam.arcade@tanaw.test`      |
-| San Antonio Event Pavilion | `sanantonio.pavilion@tanaw.test` |
+| Enterprise                       | Username                       |
+| -------------------------------- | ------------------------------ |
+| Balon ni Lolo Uweng              | `balon.lolo.uweng@tanaw.test`  |
+| San Pedro Apostol Parish         | `sanpedro.apostol@tanaw.test`  |
+| Lolo Uweng Pilgrim Church        | `lolo.uweng.church@tanaw.test` |
+| Tricia's Bar & Lounge            | `tricias.bar@tanaw.test`       |
+| Hallow Ridge Filipinas Golf Inc. | `hallowridge.golf@tanaw.test`  |
+
+Archie's Event Place is not a generated account. Sign in with
+`archies@email.com` and the password selected during its account onboarding,
+not `TanawTest123`.
 
 ### Complete the end-to-end report simulation
 
-1. Start the desktop application and sign in as the same target enterprise used
-   in the seed command, for example `pacita.convention@tanaw.test`.
+1. Start the desktop application and sign in to Archie's Event Place using
+   `archies@email.com` and its configured password.
 2. Wait for the prepared counts to appear on the desktop Dashboard.
 3. Open **Reports & Submissions**, create a **New Draft**, review the locked
    system metrics, complete any supplementary fields, and submit it.
@@ -460,7 +487,7 @@ docker compose exec backend uv run mock-data status
 Replace the active run with a fresh deterministic dataset:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "pacita.convention@tanaw.test"
+docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 Supported ranges:
@@ -647,13 +674,13 @@ npm run local-data -- inspect
 Inspect one enterprise:
 
 ```shell
-npm run local-data -- inspect --enterprise "pacita_convention_hall_001@tanaw.sanpedro"
+npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
 ```
 
 Clear one enterprise ledger:
 
 ```shell
-npm run local-data -- clear --enterprise "pacita_convention_hall_001@tanaw.sanpedro" --yes
+npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
 The local-data CLI expects the Enterprise ID shown in the desktop Profile, not

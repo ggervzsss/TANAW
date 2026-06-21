@@ -116,14 +116,32 @@ Role: IT Personnel
 Sign in at <http://localhost:5173>. Change this password before any non-local
 use.
 
+Create the persistent target account under **Enterprise Accounts** before
+loading mock data:
+
+```text
+Enterprise:    Archie's Event Place
+Category:      Events Venue
+Manager:       Gervy Masbate
+Barangay:      San Antonio
+Address:       Narra Road, San Pedro, Laguna 4023
+Email:         archies@email.com
+Contact:       +639123456789
+Enterprise ID: archies_001@tanaw.sanpedro
+```
+
+Complete its temporary-password onboarding and remember the password selected
+for desktop login. Confirm the generated Enterprise ID; use the actual value if
+it is not `archies_001@tanaw.sanpedro`.
+
 ## 6. Load the report simulation
 
 This command creates LGU accounts, enterprise accounts, six months of
 telemetry, historical submissions, final reports, activity logs, and prepared
-current-month desktop counts:
+current-month desktop counts for Archie's Event Place:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "pacita.convention@tanaw.test"
+docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 All generated accounts use:
@@ -134,12 +152,18 @@ Password: TanawTest123
 
 Useful generated accounts:
 
-| Purpose                   | Username                       |
-| ------------------------- | ------------------------------ |
-| Target enterprise desktop | `pacita.convention@tanaw.test` |
-| LGU Staff report review   | `reports.staff@tanaw.test`     |
-| Admin portal              | `system.admin@tanaw.test`      |
-| IT portal                 | `it.operations@tanaw.test`     |
+| Purpose                 | Username                   |
+| ----------------------- | -------------------------- |
+| LGU Staff report review | `reports.staff@tanaw.test` |
+| Admin portal            | `system.admin@tanaw.test`  |
+| IT portal               | `it.operations@tanaw.test` |
+
+Archie's is user-created, not generated:
+
+```text
+Desktop username: archies@email.com
+Desktop password: the password selected during Archie's onboarding
+```
 
 Check the simulation:
 
@@ -150,7 +174,7 @@ docker compose exec backend uv run mock-data status
 If a simulation already exists or needs fresh dates, replace it:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "pacita.convention@tanaw.test"
+docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
 Other ranges are `30d` and `12m`. Other scenarios are `peak-traffic` and
@@ -181,8 +205,8 @@ npm.cmd run dev
 Sign in to the desktop:
 
 ```text
-Username: pacita.convention@tanaw.test
-Password: TanawTest123
+Username: archies@email.com
+Password: the password selected during Archie's onboarding
 ```
 
 A camera is not required for this test. The desktop downloads the target
@@ -233,7 +257,7 @@ npm run local-data -- inspect
 Inspect one enterprise by its Enterprise ID:
 
 ```shell
-npm run local-data -- inspect --enterprise "pacita_convention_hall_001@tanaw.sanpedro"
+npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
 ```
 
 The Enterprise ID is shown in the desktop Profile and by the unfiltered
@@ -242,7 +266,7 @@ The Enterprise ID is shown in the desktop Profile and by the unfiltered
 Clear only one enterprise's local ledger:
 
 ```shell
-npm run local-data -- clear --enterprise "pacita_convention_hall_001@tanaw.sanpedro" --yes
+npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
 Clear every enterprise ledger but preserve camera definitions and Electron
@@ -314,16 +338,16 @@ completely empty local database is intended.
 
 ## Everyday command cheat sheet
 
-| Goal                   | Command                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Start containers       | `docker compose up -d`                                                                                                                           |
-| Rebuild and start      | `docker compose up --build -d`                                                                                                                   |
-| Show containers        | `docker compose ps`                                                                                                                              |
-| Follow logs            | `docker compose logs -f backend frontend`                                                                                                        |
-| Start desktop          | `cd desktop-tanaw`, then `npm run dev`                                                                                                           |
-| Show mock status       | `docker compose exec backend uv run mock-data status`                                                                                            |
-| Refresh mock data      | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --target-enterprise "pacita.convention@tanaw.test"` |
-| Remove mock data       | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off`                                                                 |
-| Inspect desktop data   | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                            |
-| Stop containers        | `docker compose down`                                                                                                                            |
-| Delete Docker database | `docker compose down -v`                                                                                                                         |
+| Goal                   | Command                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Start containers       | `docker compose up -d`                                                                                                                         |
+| Rebuild and start      | `docker compose up --build -d`                                                                                                                 |
+| Show containers        | `docker compose ps`                                                                                                                            |
+| Follow logs            | `docker compose logs -f backend frontend`                                                                                                      |
+| Start desktop          | `cd desktop-tanaw`, then `npm run dev`                                                                                                         |
+| Show mock status       | `docker compose exec backend uv run mock-data status`                                                                                          |
+| Refresh mock data      | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --target-enterprise "archies_001@tanaw.sanpedro"` |
+| Remove mock data       | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off`                                                               |
+| Inspect desktop data   | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                          |
+| Stop containers        | `docker compose down`                                                                                                                          |
+| Delete Docker database | `docker compose down -v`                                                                                                                       |
