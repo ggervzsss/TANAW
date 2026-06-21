@@ -10,7 +10,7 @@ type SubmitReportDialogProps = {
 export function SubmitReportDialog({ isSubmitting, onCancel, onConfirm }: SubmitReportDialogProps) {
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-[#111827]/70 p-4 backdrop-blur-md" onPointerDown={onCancel}>
+      <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/70 p-4 backdrop-blur-md" onPointerDown={onCancel}>
         <div className="animate-in fade-in w-full max-w-md rounded-2xl border-t-4 border-[#065f46] bg-white p-6 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
           <div className="mb-2 flex items-start justify-between gap-4">
             <h3 className="flex items-center gap-2 text-lg font-bold text-[#111827]">
