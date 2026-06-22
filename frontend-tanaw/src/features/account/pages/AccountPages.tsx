@@ -8,6 +8,7 @@ import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { changePassword, getAccountPreferences, requestDataArchive, updateAccountPreferences, updateCurrentProfile } from "@/shared/services/accountManagement";
 import type { UserRole } from "@/shared/types/role.types";
+import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
 
 type AccountPageProps = {
@@ -218,8 +219,9 @@ export function AccountSecurityPage() {
       toast.error("New passwords do not match.");
       return;
     }
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$/.test(newPassword)) {
-      toast.error("Use 6+ characters with uppercase, lowercase, number, and special character.");
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
 
@@ -264,8 +266,8 @@ export function AccountSecurityPage() {
             <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
               <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={6} />
-                <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={6} />
+                <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
+                <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
               </div>
               <div className="flex justify-end pt-2">
                 <button

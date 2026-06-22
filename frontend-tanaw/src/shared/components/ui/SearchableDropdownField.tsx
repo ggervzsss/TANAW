@@ -149,7 +149,7 @@ export function SearchableDropdownField({ name, label, options, value, onChange,
         {isOpen && menuStyle && (
           <ModalPortal>
             <div
-              className="fixed inset-0 z-[1390]"
+              className="fixed inset-0 z-1390"
               onMouseDown={() => {
                 setIsOpen(false);
                 setSearch("");
@@ -162,7 +162,7 @@ export function SearchableDropdownField({ name, label, options, value, onChange,
               exit={{ opacity: 0, y: -6, scale: 0.98 }}
               transition={{ duration: 0.14, ease: "easeOut" }}
               style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width, maxHeight: menuStyle.maxHeight }}
-              className="fixed z-[1401] flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+              className="fixed z-1401 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
               onMouseDown={(event) => event.stopPropagation()}
             >
               <div className="shrink-0 border-b border-gray-100 p-2">

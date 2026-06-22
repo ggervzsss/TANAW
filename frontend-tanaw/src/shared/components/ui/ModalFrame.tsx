@@ -25,7 +25,7 @@ export function ModalFrame({ title, children, onClose, maxWidthClassName = "max-
   return (
     <ModalPortal>
       <motion.div
-        className="fixed inset-0 z-[1300] flex min-h-dvh items-center justify-center overflow-y-auto bg-[rgba(3,20,12,0.64)] p-4 backdrop-blur-[6px]"
+        className="fixed inset-0 z-1300 flex min-h-dvh items-center justify-center overflow-y-auto bg-[rgba(3,20,12,0.64)] p-4 backdrop-blur-[6px]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -35,14 +35,14 @@ export function ModalFrame({ title, children, onClose, maxWidthClassName = "max-
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className={`relative z-[1301] my-auto max-h-[calc(100dvh-2rem)] w-full overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/[0.04] ${maxWidthClassName}`}
+          className={`relative z-1301 my-auto max-h-[calc(100dvh-2rem)] w-full overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 ${maxWidthClassName}`}
           initial={{ opacity: 0, y: 12, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.98 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="from-tanaw-green to-tanaw-lime h-1.5 bg-gradient-to-r via-[#d9b44a]" />
+          <div className="from-tanaw-green to-tanaw-lime h-1.5 bg-linear-to-r via-[#d9b44a]" />
           <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] px-6 py-5 max-sm:px-5">
             <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
             <div className="min-w-0">

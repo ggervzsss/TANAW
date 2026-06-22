@@ -1,0 +1,16 @@
+{
+  "include": ["app", "alembic", "tests", "main.py"],
+  "exclude": ["**/__pycache__", ".venv", ".pytest_cache"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none",
+  "reportMissingTypeStubs": "none",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["."]
+    }
+  ]
+}

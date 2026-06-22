@@ -51,7 +51,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
         aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/[0.08] text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.15] hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
       >
         <Bell size={18} />
         {unreadCount > 0 && (
@@ -68,9 +68,9 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="absolute top-full right-0 z-[1002] mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white text-slate-800 shadow-[0_24px_68px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/[0.06]"
+            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white text-slate-800 shadow-[0_24px_68px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
           >
-            <div className="border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-amber-50/80 px-5 py-4">
+            <div className="border-b border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-amber-50/80 px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-black text-slate-950">Notifications</p>
@@ -88,13 +88,13 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
               </div>
             </div>
 
-            <div className="max-h-[28rem] overflow-y-auto bg-white">
+            <div className="max-h-112 overflow-y-auto bg-white">
               {notifications.map((notification) => (
                 <button
                   key={notification.id}
                   type="button"
                   onClick={() => onSelectNotification(notification)}
-                  className={`group flex w-full gap-3 border-b border-slate-100 bg-gradient-to-r ${toneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 ${
+                  className={`group flex w-full gap-3 border-b border-slate-100 bg-linear-to-r ${toneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 ${
                     notification.read ? "opacity-75" : ""
                   }`}
                 >
@@ -125,7 +125,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
                     {isLoading ? <Clock3 size={20} /> : <Inbox size={20} />}
                   </div>
                   <p className="mt-4 text-sm font-black text-slate-900">{isLoading ? "Loading notifications" : "No notifications"}</p>
-                  <p className="mt-1 max-w-[17rem] text-xs leading-relaxed text-slate-500">
+                  <p className="mt-1 max-w-68 text-xs leading-relaxed text-slate-500">
                     {isLoading ? "Checking TANAW activity sources." : "Role-specific alerts, logs, support requests, and report workflow items will appear here."}
                   </p>
                 </div>

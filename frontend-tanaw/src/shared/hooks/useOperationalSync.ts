@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import toast from "react-hot-toast";
 import { useAuthStore } from "@/app/store/authStore";
 import {
   createWebSocketAuthMessage,
@@ -11,13 +12,14 @@ import {
   listOperationalMapEnterprises,
   type OperationalWebSocketEnvelope,
 } from "../services/operationalSync";
-import type { FinalReport, IntakeReport, MapEnterprise, OperationalSummary, TelemetrySnapshot } from "../types";
+import type { FinalReport, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
 
 export const operationalSummaryQueryKey = ["operational", "summary"];
 export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest"];
 export const operationalReportsQueryKey = ["operational", "reports", "intake"];
 export const operationalFinalReportsQueryKey = ["operational", "reports", "final"];
 export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"];
+const operationalAlertsQueryKey = ["operational-alerts"];
 
 export function useOperationalSummary() {
   const token = useAuthStore((state) => state.token);
@@ -156,6 +158,15 @@ function handleOperationalEnvelope(queryClient: ReturnType<typeof useQueryClient
   if (envelope.type === "final_report.generated" || envelope.type === "final_report.updated") {
     const report = envelope.data;
     queryClient.setQueryData<FinalReport[]>(operationalFinalReportsQueryKey, (current = []) => sortFinalReports(upsertById(current, report)));
+    return;
+  }
+
+  if (envelope.type === "alert.created" || envelope.type === "alert.updated" || envelope.type === "alert.resolved") {
+    const alert = envelope.data;
+    queryClient.setQueryData<PriorityAlert[]>(operationalAlertsQueryKey, (current = []) => sortAlerts(upsertById(current, alert)));
+    if (envelope.type === "alert.created") {
+      toast.error(`${alert.enterprise ?? alert.requester}: ${alert.summary}`, { id: alert.id, duration: 8000 });
+    }
   }
 }
 
@@ -171,6 +182,10 @@ function sortReports(reports: IntakeReport[]) {
 
 function sortFinalReports(reports: FinalReport[]) {
   return [...reports].sort((left, right) => Date.parse(right.generatedOn) - Date.parse(left.generatedOn));
+}
+
+function sortAlerts(alerts: PriorityAlert[]) {
+  return [...alerts].sort((left, right) => Date.parse(right.time) - Date.parse(left.time));
 }
 
 function getReportTime(report: IntakeReport) {
@@ -189,6 +204,8 @@ function updateMapEnterpriseTelemetry(current: MapEnterprise[] | undefined, snap
       estimatedUniqueCount: snapshot.uniqueCount,
       lastSync: snapshot.receivedAt,
       gatewayStatus: snapshot.gatewayStatus,
+      sourceKind: snapshot.sourceKind,
+      mockRunId: snapshot.mockRunId,
       status: getMapStatus(snapshot),
     };
   });

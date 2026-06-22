@@ -1,6 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
-import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, TelemetrySnapshot } from "../types";
+import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, ReportStatus, TelemetrySnapshot } from "../types";
 
 export type OperationalWebSocketEnvelope =
   | { type: "telemetry.snapshot"; data: TelemetrySnapshot }
@@ -8,7 +8,10 @@ export type OperationalWebSocketEnvelope =
   | { type: "report.updated"; data: IntakeReport }
   | { type: "final_report.generated"; data: FinalReport }
   | { type: "final_report.updated"; data: FinalReport }
-  | { type: "summary.updated"; data: OperationalSummary };
+  | { type: "summary.updated"; data: OperationalSummary }
+  | { type: "alert.created"; data: PriorityAlert }
+  | { type: "alert.updated"; data: PriorityAlert }
+  | { type: "alert.resolved"; data: PriorityAlert };
 
 type MapEnterpriseResponse = Omit<MapEnterprise, "lat" | "lng" | "lastSync" | "gatewayStatus"> & {
   lat: number | null;

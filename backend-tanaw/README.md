@@ -13,12 +13,12 @@ FastAPI backend for TANAW authentication, account management, operational sync, 
 uvicorn main:app --reload
 ```
 
-On startup, the API creates current tables when needed and seeds the default IT account if it does not already exist:
+On startup, the API creates current tables when needed and synchronizes the protected default IT account with the configured environment credentials:
 
-- Username: `default@email.tanaw`
-- Password: `default`
+- Username: `DEFAULT_IT_USERNAME`
+- Password: `DEFAULT_IT_PASSWORD`
 
-Change the default password before using the system beyond local bootstrap.
+The default IT account is a bootstrap exception: its configured password is accepted as-is, and it is not required to change that password after signing in. Changing either environment value takes effect after the backend restarts.
 
 ## Mock Data Support
 
@@ -106,7 +106,7 @@ Generated accounts, enterprise identifiers, gateway identifiers, reports, activi
 Generated email addresses use the reserved `.test` domain so they look natural inside TANAW without risking delivery to real recipients. All generated testing accounts use this local-only password:
 
 ```text
-TanawTest123
+TanawTest123!
 ```
 
 Internal provenance is intentionally unchanged. Database fields such as `source_kind` and `mock_run_id`, the guarded terminal command, and internal cleanup APIs must continue to identify generated records. This distinction gives QA an authentic user experience while keeping generated records auditable and safely removable.

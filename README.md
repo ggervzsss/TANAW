@@ -268,7 +268,7 @@ JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=480
 
-DEFAULT_IT_USERNAME=default@email.tanaw
+DEFAULT_IT_USERNAME=default@email.com
 DEFAULT_IT_PASSWORD=default
 
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
@@ -359,16 +359,17 @@ The backend automatically creates this bootstrap account on first startup:
 
 ```text
 Role:     IT Personnel
-Username: default@email.tanaw
+Username: default@email.com
 Password: default
 ```
 
 Use it to sign in to the web portal and create or manage LGU and enterprise
-accounts. Change the password before using TANAW outside local development.
+accounts. This protected bootstrap account accepts the configured password as-is
+and does not require a first-login password change.
 
-The values come from `DEFAULT_IT_USERNAME` and `DEFAULT_IT_PASSWORD`. Changing
-them after the account has already been seeded does not rename or reset the
-existing database account.
+The values come from `DEFAULT_IT_USERNAME` and `DEFAULT_IT_PASSWORD`. The backend
+synchronizes the protected default account to those values on every startup, so
+changing either value takes effect after restarting the backend.
 
 ## Seed and simulate reports
 
@@ -645,8 +646,8 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `JWT_SECRET_KEY`              | Token-signing secret                                   |
 | `JWT_ALGORITHM`               | JWT algorithm, normally `HS256`                        |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime                                  |
-| `DEFAULT_IT_USERNAME`         | First-start bootstrap IT username                      |
-| `DEFAULT_IT_PASSWORD`         | First-start bootstrap IT password                      |
+| `DEFAULT_IT_USERNAME`         | Startup-synchronized protected IT username             |
+| `DEFAULT_IT_PASSWORD`         | Startup-synchronized protected IT password             |
 | `CORS_ORIGINS`                | Comma-separated web/desktop origins allowed by the API |
 | `VITE_API_BASE_URL`           | API URL compiled into or used by frontend clients      |
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |

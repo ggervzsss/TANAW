@@ -6,11 +6,7 @@ type PanelProps = PropsWithChildren<{
 }>;
 
 export function Panel({ children, className = "" }: PanelProps) {
-  return (
-    <section className={["rounded-2xl border border-white/80 bg-white/[0.96] shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-slate-900/4 backdrop-blur-sm", className].join(" ")}>
-      {children}
-    </section>
-  );
+  return <section className={["shadow-panel rounded-2xl border border-white/80 bg-white/96 ring-1 ring-slate-900/4 backdrop-blur-sm", className].join(" ")}>{children}</section>;
 }
 
 type PanelHeaderProps = {

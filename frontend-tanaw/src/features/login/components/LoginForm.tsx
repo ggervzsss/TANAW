@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, Check, Clipboard, ExternalLink, Eye, EyeOff, H
 import { motion } from "motion/react";
 import { isAxiosError } from "axios";
 import { apiClient } from "@/shared/lib/apiClient";
+import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 
 type LoginFormProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
@@ -57,9 +58,8 @@ const validateVerificationCode = (value: string) => {
 
 const validateNewPassword = (passwordValue: string, confirmPasswordValue: string) => {
   if (!passwordValue.trim()) return "Please enter a new password.";
-  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$/.test(passwordValue)) {
-    return "Use 6+ characters with uppercase, lowercase, number, and special character.";
-  }
+  const policyError = validatePasswordPolicy(passwordValue);
+  if (policyError) return policyError;
   if (passwordValue !== confirmPasswordValue) return "Passwords do not match.";
   return "";
 };
@@ -311,14 +311,14 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
 
   const identifierShellClass = `relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
     identifierError
-      ? "border-[var(--tanaw-error)] shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
-      : "border-[var(--tanaw-border)] shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-[var(--tanaw-green)] focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+      ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
+      : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
   }`;
 
   const passwordShellClass = `relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
     passwordError
-      ? "border-[var(--tanaw-error)] shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
-      : "border-[var(--tanaw-border)] shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-[var(--tanaw-green)] focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+      ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
+      : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
   }`;
 
   return (
@@ -396,14 +396,14 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
               type="checkbox"
               checked={rememberMe}
               onChange={(event) => setRememberMe(event.target.checked)}
-              className="h-5 w-5 rounded border-[var(--tanaw-border)] text-[var(--tanaw-green)] accent-[var(--tanaw-green)] focus:ring-[var(--tanaw-green)]"
+              className="h-5 w-5 rounded border-(--tanaw-border) text-(--tanaw-green) accent-(--tanaw-green) focus:ring-(--tanaw-green)"
             />
             Remember me
           </label>
           <button
             type="button"
             onClick={() => openDialog("forgot")}
-            className="tanaw-soft-link -mr-2 rounded-full px-3 py-1.5 text-sm font-semibold text-[var(--tanaw-green)] transition hover:text-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none"
+            className="tanaw-soft-link -mr-2 rounded-full px-3 py-1.5 text-sm font-semibold text-(--tanaw-green) transition hover:text-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none"
           >
             Forgot password?
           </button>
@@ -421,26 +421,26 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
           <ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </motion.button>
 
-        <div className="my-8 flex items-center gap-4 text-sm font-semibold text-[var(--tanaw-muted)]">
-          <span className="h-px flex-1 bg-[var(--tanaw-border)]" />
+        <div className="my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
+          <span className="h-px flex-1 bg-(--tanaw-border)" />
           <span>OR</span>
-          <span className="h-px flex-1 bg-[var(--tanaw-border)]" />
+          <span className="h-px flex-1 bg-(--tanaw-border)" />
         </div>
 
         <div className="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-start">
           <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-[var(--tanaw-border)] bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-(--tanaw-border) bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
               <Headphones className="h-6 w-6" strokeWidth={1.9} aria-hidden="true" />
             </span>
             <span>
               <span className="block text-sm font-semibold text-(--tanaw-text)">Need help signing in?</span>
-              <span className="block text-sm text-[var(--tanaw-muted)]">Contact our support team.</span>
+              <span className="block text-sm text-(--tanaw-muted)">Contact our support team.</span>
             </span>
           </div>
           <button
             type="button"
             onClick={() => openDialog("support")}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--tanaw-green)] transition hover:text-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-(--tanaw-green) transition hover:text-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none"
           >
             Contact support
             <ExternalLink className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
@@ -460,7 +460,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={activeDialog === "forgot" ? "forgot-password-title" : "contact-support-title"}
-                className="w-full max-w-md rounded-[36px] border border-white/80 bg-white p-8 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/[0.03]"
+                className="w-full max-w-md rounded-[36px] border border-white/80 bg-white p-8 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3"
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
@@ -468,7 +468,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
               >
                 <div className="mb-5 flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-bold tracking-[0.24em] text-[var(--tanaw-gold)] uppercase">{activeDialog === "forgot" ? "Account Recovery" : "Support Desk"}</p>
+                    <p className="text-xs font-bold tracking-[0.24em] text-(--tanaw-gold) uppercase">{activeDialog === "forgot" ? "Account Recovery" : "Support Desk"}</p>
                     <h2 id={activeDialog === "forgot" ? "forgot-password-title" : "contact-support-title"} className="mt-2 text-xl font-bold text-(--tanaw-text)">
                       {activeDialog === "forgot" ? "Forgot password" : "Contact support"}
                     </h2>
@@ -476,7 +476,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
                   <button
                     type="button"
                     onClick={closeDialog}
-                    className="rounded-full p-2 text-[var(--tanaw-muted)] transition hover:bg-emerald-50 hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+                    className="rounded-full p-2 text-(--tanaw-muted) transition hover:bg-emerald-50 hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
                     aria-label="Close dialog"
                   >
                     <X className="h-5 w-5" />
@@ -588,7 +588,7 @@ function RecoveryDialogContent({
     return (
       <RecoveryStepFrame key="success" title="Password Updated">
         <div className="rounded-[40px] border border-emerald-100 bg-emerald-50 p-5 text-sm leading-6 text-emerald-950">
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[var(--tanaw-green)] shadow-sm">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-(--tanaw-green) shadow-sm">
             <Check className="h-5 w-5" />
           </div>
           <p className="font-semibold">Password updated.</p>
@@ -596,7 +596,7 @@ function RecoveryDialogContent({
           <button
             type="button"
             onClick={onClose}
-            className="mt-5 w-full rounded-[24px] bg-[var(--tanaw-green)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+            className="mt-5 w-full rounded-3xl bg-(--tanaw-green) px-4 py-3 font-semibold text-white transition hover:bg-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
           >
             Return to login
           </button>
@@ -609,7 +609,7 @@ function RecoveryDialogContent({
     return (
       <RecoveryStepFrame key="code" title="Verification Code">
         <form onSubmit={onVerify}>
-          <p className="mb-5 text-sm leading-6 text-[var(--tanaw-muted)]">Enter the 6-digit verification code recorded in Dev Log. The code expires in {expiresIn} minutes and can be used once.</p>
+          <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter the 6-digit verification code recorded in Dev Log. The code expires in {expiresIn} minutes and can be used once.</p>
           <label htmlFor="recovery-code" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
             Verification code
           </label>
@@ -619,8 +619,8 @@ function RecoveryDialogContent({
             inputMode="numeric"
             value={code}
             onChange={(event) => onCodeChange(event.target.value)}
-            className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm tracking-[0.3em] transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
-              error ? "border-[var(--tanaw-error)]" : "border-[var(--tanaw-border)]"
+            className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm tracking-[0.3em] transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
+              error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
             }`}
             placeholder="000000"
             aria-invalid={Boolean(error)}
@@ -630,7 +630,7 @@ function RecoveryDialogContent({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-4 w-full rounded-[24px] bg-[var(--tanaw-green)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-4 w-full rounded-3xl bg-(--tanaw-green) px-4 py-3 font-semibold text-white transition hover:bg-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Verifying..." : "Verify code"}
           </button>
@@ -643,7 +643,7 @@ function RecoveryDialogContent({
     return (
       <RecoveryStepFrame key="password" title="Set New Password">
         <form onSubmit={onReset}>
-          <p className="mb-5 text-sm leading-6 text-[var(--tanaw-muted)]">Create a new private password for {email}.</p>
+          <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Create a new private password for {email}.</p>
           <div className="space-y-4">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">New password</span>
@@ -651,11 +651,13 @@ function RecoveryDialogContent({
                 type="password"
                 value={password}
                 onChange={(event) => onPasswordChange(event.target.value)}
-                className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
-                  error ? "border-[var(--tanaw-error)]" : "border-[var(--tanaw-border)]"
+                className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
+                  error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
                 }`}
                 placeholder="Enter new password"
                 autoComplete="new-password"
+                minLength={PASSWORD_MIN_LENGTH}
+                required
               />
             </label>
             <label className="block">
@@ -664,11 +666,13 @@ function RecoveryDialogContent({
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => onConfirmPasswordChange(event.target.value)}
-                className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
-                  error ? "border-[var(--tanaw-error)]" : "border-[var(--tanaw-border)]"
+                className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
+                  error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
                 }`}
                 placeholder="Confirm new password"
                 autoComplete="new-password"
+                minLength={PASSWORD_MIN_LENGTH}
+                required
               />
             </label>
           </div>
@@ -676,7 +680,7 @@ function RecoveryDialogContent({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-4 w-full rounded-[24px] bg-[var(--tanaw-green)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-4 w-full rounded-3xl bg-(--tanaw-green) px-4 py-3 font-semibold text-white transition hover:bg-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Updating..." : "Reset password"}
           </button>
@@ -688,7 +692,7 @@ function RecoveryDialogContent({
   return (
     <RecoveryStepFrame key="email" title="Account Recovery">
       <form onSubmit={onRequest}>
-        <p className="mb-5 text-sm leading-6 text-[var(--tanaw-muted)]">Enter your registered email. If an account matches, a verification code is recorded in Dev Log for secure recovery.</p>
+        <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter your registered email. If an account matches, a verification code is recorded in Dev Log for secure recovery.</p>
         <label htmlFor="recovery-target" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
           Registered email
         </label>
@@ -697,8 +701,8 @@ function RecoveryDialogContent({
           type="email"
           value={email}
           onChange={(event) => onEmailChange(event.target.value)}
-          className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
-            error ? "border-[var(--tanaw-error)]" : "border-[var(--tanaw-border)]"
+          className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
+            error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
           }`}
           placeholder="Enter registered email"
           aria-invalid={Boolean(error)}
@@ -708,7 +712,7 @@ function RecoveryDialogContent({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="mt-4 w-full rounded-[24px] bg-[var(--tanaw-green)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-4 w-full rounded-3xl bg-(--tanaw-green) px-4 py-3 font-semibold text-white transition hover:bg-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isSubmitting ? "Preparing..." : "Continue"}
         </button>
@@ -722,7 +726,7 @@ function RecoveryStepFrame({ title, children }: { title: string; children: React
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, ease: "easeOut" }}>
       <div className="mb-5">
         <p className="text-sm font-bold text-(--tanaw-text)">{title}</p>
-        <span className="mt-2 block h-1 w-12 rounded-full bg-[var(--tanaw-gold)]/75" aria-hidden="true" />
+        <span className="mt-2 block h-1 w-12 rounded-full bg-(--tanaw-gold)/75" aria-hidden="true" />
       </div>
       {children}
     </motion.div>
@@ -731,7 +735,7 @@ function RecoveryStepFrame({ title, children }: { title: string; children: React
 
 function RecoveryError({ message }: { message: string }) {
   return (
-    <div id="recovery-error" className="mt-2 min-h-[20px]" aria-live="polite">
+    <div id="recovery-error" className="mt-2 min-h-5" aria-live="polite">
       {message ? <p className="text-sm font-medium text-(--tanaw-error)">{message}</p> : null}
     </div>
   );
@@ -772,17 +776,17 @@ function SupportDialogContent({
 
   return (
     <div>
-      <div className="rounded-[40px] border border-[var(--tanaw-border)] bg-[#f8faf8] p-5">
-        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[22px] border border-[var(--tanaw-border)] bg-white text-[var(--tanaw-green)]">
+      <div className="rounded-[40px] border border-(--tanaw-border) bg-[#f8faf8] p-5">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[22px] border border-(--tanaw-border) bg-white text-(--tanaw-green)">
           <Headphones className="h-6 w-6" />
         </div>
         <p className="text-sm font-semibold text-(--tanaw-text)">{info?.message ?? "Checking support contact..."}</p>
-        {info?.supportEmail ? <p className="mt-2 text-sm text-[var(--tanaw-muted)]">Email: {info.supportEmail}</p> : null}
-        {info?.supportPhone ? <p className="mt-1 text-sm text-[var(--tanaw-muted)]">Phone: {info.supportPhone}</p> : null}
+        {info?.supportEmail ? <p className="mt-2 text-sm text-(--tanaw-muted)">Email: {info.supportEmail}</p> : null}
+        {info?.supportPhone ? <p className="mt-1 text-sm text-(--tanaw-muted)">Phone: {info.supportPhone}</p> : null}
         {mailtoHref ? (
           <a
             href={mailtoHref}
-            className="mt-4 inline-flex items-center gap-2 rounded-[20px] bg-white px-4 py-2 text-sm font-semibold text-[var(--tanaw-green)] shadow-sm ring-1 ring-[var(--tanaw-border)] transition hover:ring-[var(--tanaw-green)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+            className="mt-4 inline-flex items-center gap-2 rounded-[20px] bg-white px-4 py-2 text-sm font-semibold text-(--tanaw-green) shadow-sm ring-1 ring-(--tanaw-border) transition hover:ring-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
           >
             Email support
             <ExternalLink className="h-4 w-4" />
@@ -798,27 +802,27 @@ function SupportDialogContent({
             type="text"
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
-            className="h-11 w-full rounded-[20px] border border-[var(--tanaw-border)] bg-white px-4 text-sm transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+            className="h-11 w-full rounded-[20px] border border-(--tanaw-border) bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
             placeholder="Your name"
           />
           <input
             type="email"
             value={email}
             onChange={(event) => onEmailChange(event.target.value)}
-            className="h-11 w-full rounded-[20px] border border-[var(--tanaw-border)] bg-white px-4 text-sm transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+            className="h-11 w-full rounded-[20px] border border-(--tanaw-border) bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
             placeholder="Your email"
           />
           <textarea
             value={message}
             onChange={(event) => onMessageChange(event.target.value)}
-            className="min-h-24 w-full resize-none rounded-[22px] border border-[var(--tanaw-border)] bg-white px-4 py-3 text-sm transition outline-none focus:border-[var(--tanaw-green)] focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+            className="min-h-24 w-full resize-none rounded-[22px] border border-(--tanaw-border) bg-white px-4 py-3 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
             placeholder="Describe the sign-in issue"
           />
           {error ? <p className="text-sm font-medium text-(--tanaw-error)">{error}</p> : null}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-[24px] bg-[var(--tanaw-green)] px-4 py-3 font-semibold text-white transition hover:bg-[var(--tanaw-green-dark)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-3xl bg-(--tanaw-green) px-4 py-3 font-semibold text-white transition hover:bg-(--tanaw-green-dark) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Recording..." : "Record support request"}
           </button>
@@ -829,7 +833,7 @@ function SupportDialogContent({
         <button
           type="button"
           onClick={onCopy}
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[24px] border border-[var(--tanaw-border)] bg-white px-4 py-3 font-semibold text-[var(--tanaw-green)] transition hover:border-[var(--tanaw-green)] hover:shadow-[0_12px_26px_rgba(6,78,47,0.12)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-3xl border border-(--tanaw-border) bg-white px-4 py-3 font-semibold text-(--tanaw-green) transition hover:border-(--tanaw-green) hover:shadow-[0_12px_26px_rgba(6,78,47,0.12)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           {copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
           {copied ? "Copied" : "Copy support contact"}

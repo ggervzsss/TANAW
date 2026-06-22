@@ -13,13 +13,18 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
   return (
     <ModalFrame title={enterprise.name} eyebrow="Enterprise Details" onClose={onClose} maxWidthClassName="max-w-5xl">
       <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
-        <section className="rounded-[24px] border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm">
+        <section className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm">
           <div className="flex items-start gap-3">
             <span className="text-tanaw-green flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-emerald-100">
               <Building2 size={22} />
             </span>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
+                {enterprise.sourceKind && enterprise.sourceKind !== "real" && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black tracking-[0.14em] text-amber-800 uppercase">Simulated Telemetry</span>
+                )}
+              </div>
               <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
                 {enterprise.category} - Barangay {enterprise.barangay}
               </p>

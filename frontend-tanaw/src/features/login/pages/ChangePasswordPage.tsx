@@ -7,6 +7,7 @@ import { motion } from "motion/react";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { changePassword } from "@/shared/services/accountManagement";
+import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
 import { logoutService } from "../services";
 import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_SEAL } from "../utils";
@@ -118,7 +119,7 @@ export function ChangePasswordPage() {
   return (
     <section
       ref={stageRef}
-      className="tanaw-login-stage relative min-h-screen w-full overflow-hidden bg-[var(--tanaw-bg)] font-['Bai_Jamjuree'] text-(--tanaw-text)"
+      className="tanaw-login-stage relative min-h-screen w-full overflow-hidden bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
       onPointerMove={handleStagePointerMove}
       style={
         {
@@ -151,13 +152,13 @@ export function ChangePasswordPage() {
       </div>
 
       <div className="relative z-10 grid min-h-screen items-center gap-10 px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(520px,0.82fr)] lg:px-12 xl:px-20">
-        <section className="relative hidden min-h-[calc(100vh-4rem)] items-end overflow-visible px-2 pb-14 text-white lg:flex xl:pb-[4.5rem]">
+        <section className="relative hidden min-h-[calc(100vh-4rem)] items-end overflow-visible px-2 pb-14 text-white lg:flex xl:pb-18">
           <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
-            <div className="tanaw-sampaguita-glow mb-5 inline-flex text-[var(--tanaw-gold)]">
+            <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
               <SampaguitaIcon className="h-8 w-8" />
             </div>
             <h2 className="font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">Welcome to San Pedro</h2>
-            <div className="tanaw-gold-shimmer mt-5 h-[3px] w-28 rounded-full bg-[var(--tanaw-gold)]" />
+            <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
             <p className="mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
               Your gateway to manage tourism, empower enterprises, and build a thriving community.
             </p>
@@ -172,7 +173,7 @@ export function ChangePasswordPage() {
           <motion.form
             onSubmit={handleSubmit}
             noValidate
-            className="relative z-10 w-full max-w-[580px] rounded-[30px] border border-white/80 bg-[var(--tanaw-card)]/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/[0.03] backdrop-blur-xl sm:px-10 sm:py-11 xl:px-12"
+            className="relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-10 sm:py-11 xl:px-12"
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.55, ease: "easeOut" }}
@@ -181,7 +182,7 @@ export function ChangePasswordPage() {
             <button
               type="button"
               onClick={handleReturnToLogin}
-              className="absolute top-5 left-5 rounded-full p-2 text-[var(--tanaw-muted)] transition hover:bg-emerald-50 hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+              className="absolute top-5 left-5 rounded-full p-2 text-(--tanaw-muted) transition hover:bg-emerald-50 hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
               aria-label="Return to login"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -189,26 +190,26 @@ export function ChangePasswordPage() {
 
             <header className="mb-7 pt-5">
               <div className="flex items-center gap-5 sm:gap-7">
-                <img src={SAN_PEDRO_SEAL} alt="City of San Pedro seal" className="h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-[86px] sm:w-[86px]" />
+                <img src={SAN_PEDRO_SEAL} alt="City of San Pedro seal" className="h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5" />
                 <div className="min-w-0">
-                  <h1 className="font-['Montserrat'] text-2xl leading-tight font-extrabold tracking-normal text-[var(--tanaw-green)] sm:text-[2.35rem]">TANAW PORTAL</h1>
-                  <p className="mt-2 text-sm leading-6 font-medium text-[var(--tanaw-muted)] sm:text-lg">San Pedro Tourism Management</p>
+                  <h1 className="font-['Montserrat'] text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
+                  <p className="mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">San Pedro Tourism Management</p>
                 </div>
               </div>
-              <div className="mt-8 flex items-center gap-3 text-[var(--tanaw-gold)]">
+              <div className="mt-8 flex items-center gap-3 text-(--tanaw-gold)">
                 <SampaguitaIcon className="h-4 w-4 flex-none" />
-                <span className="tanaw-gold-shimmer h-px flex-1 bg-[var(--tanaw-gold)]/75" />
+                <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
               </div>
             </header>
 
-            <div className="mb-6 rounded-[24px] border border-amber-100 bg-amber-50 p-4">
+            <div className="mb-6 rounded-3xl border border-amber-100 bg-amber-50 p-4">
               <div className="flex items-start gap-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
                   <KeyRound size={18} />
                 </span>
                 <div>
                   <p className="text-sm font-bold text-(--tanaw-text)">Temporary password verified</p>
-                  <h2 className="mt-1 font-['Montserrat'] text-xl font-extrabold text-[var(--tanaw-green)]">Set your new password</h2>
+                  <h2 className="mt-1 font-['Montserrat'] text-xl font-extrabold text-(--tanaw-green)">Set your new password</h2>
                   <p className="mt-1 text-sm leading-6 font-medium text-amber-800">Create a private password before entering the TANAW portal.</p>
                 </div>
               </div>
@@ -272,8 +273,8 @@ function PasswordField({
   const errorId = `${name}-error`;
   const shellClass = `relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
     error
-      ? "border-[var(--tanaw-error)] shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
-      : "border-[var(--tanaw-border)] shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-[var(--tanaw-green)] focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
+      ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
+      : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
   }`;
 
   return (
@@ -284,7 +285,7 @@ function PasswordField({
         <input
           name={name}
           type={showPassword ? "text" : "password"}
-          minLength={autoComplete === "new-password" ? 6 : undefined}
+          minLength={autoComplete === "new-password" ? PASSWORD_MIN_LENGTH : undefined}
           required
           value={value}
           onChange={onChange}
@@ -317,9 +318,8 @@ function validatePasswordValues(values: PasswordValues) {
   if (!values.currentPassword.trim()) {
     nextErrors.currentPassword = "Current temporary password is required.";
   }
-  if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$/.test(values.newPassword)) {
-    nextErrors.newPassword = "Use 6+ characters with uppercase, lowercase, number, and special character.";
-  }
+  const policyError = validatePasswordPolicy(values.newPassword);
+  if (policyError) nextErrors.newPassword = policyError;
   if (values.confirmPassword !== values.newPassword) {
     nextErrors.confirmPassword = "Passwords do not match.";
   }

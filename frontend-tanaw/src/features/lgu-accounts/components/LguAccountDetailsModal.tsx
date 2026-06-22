@@ -253,7 +253,7 @@ function DetailCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
       <p className="text-[11px] font-black tracking-wide text-slate-500 uppercase">{label}</p>
-      <p className="mt-1 text-sm font-bold break-words text-slate-900">{value}</p>
+      <p className="mt-1 text-sm font-bold wrap-break-word text-slate-900">{value}</p>
     </div>
   );
 }

@@ -2,6 +2,21 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Tailwind canonical-class linting
+
+The normal frontend lint command also scans all files under `src` plus `index.html` for Tailwind classes that VS Code would report as “can be written as”:
+
+```bash
+npm run lint
+```
+
+To run only the Tailwind scan or automatically apply its compiler-verified canonical replacements:
+
+```bash
+npm run lint:tailwind
+npm run lint:tailwind:fix
+```
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
