@@ -1,4 +1,3 @@
-import { Shield } from "lucide-react";
 import type { LocalMetricsSummary } from "../../camera/services/ml-service";
 
 type DashboardHeaderProps = {
@@ -16,10 +15,6 @@ export function DashboardHeader({ error, summary }: DashboardHeaderProps) {
           {summary?.last_event_at && <span className="ml-2 font-semibold text-[#065f46]">Last event {formatMetricTime(summary.last_event_at)}</span>}
         </p>
         {error && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {error}</p>}
-      </div>
-      <div className="flex items-center gap-2 rounded-sm border border-gray-200 bg-gray-100 px-3 py-1.5">
-        <Shield size={14} className="text-[#065f46]" />
-        <span className="text-xs font-bold tracking-wider text-[#111827] uppercase">Read-Only View</span>
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ from app.features.accounts.service import (
     get_account_by_email,
     get_account_by_id,
     get_dev_delivery_by_id,
-    is_protected_default_it_account,
+    is_protected_startup_account,
     list_accounts_by_roles,
     list_dev_deliveries,
     reset_account_password,
@@ -128,10 +128,10 @@ async def update_lgu_account(
     account = await get_account_by_id(db, account_id)
     if account is None or account.role == AccountRole.ENTERPRISE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="LGU account not found.")
-    if is_protected_default_it_account(account):
+    if is_protected_startup_account(account):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Default IT Personnel is a protected system account.",
+            detail="Startup-seeded system accounts are protected.",
         )
 
     next_role = account_role_from_value(payload.role)
@@ -389,10 +389,10 @@ async def reset_password(
     account = await get_account_by_id(db, account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
-    if is_protected_default_it_account(account):
+    if is_protected_startup_account(account):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Default IT Personnel is a protected system account.",
+            detail="Startup-seeded system accounts are protected.",
         )
     await ensure_credential_reset_keeps_it_access(db, account, actor)
     updated_account = await reset_account_password(db, account)
@@ -433,10 +433,10 @@ async def update_account_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
 
     next_status = AccountStatus(payload.status)
-    if is_protected_default_it_account(account) and next_status != account.status:
+    if is_protected_startup_account(account) and next_status != account.status:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Default IT Personnel is a protected system account.",
+            detail="Startup-seeded system accounts are protected.",
         )
     await ensure_privileged_account_remains_available(db, account, next_status)
 

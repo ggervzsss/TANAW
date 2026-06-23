@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
@@ -6,7 +6,8 @@ import { motion } from "motion/react";
 import { routePaths } from "../../../app/router/routePaths";
 import { cn } from "../../../utils/cn";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "../../../utils/password-policy";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
+import { notifySuccess } from "../../toasts/services/toast-service";
 import { changePassword, logout as logoutRequest } from "../api/login";
 import { useAuthStore } from "../stores/auth-store";
 
@@ -29,17 +30,11 @@ const initialValues: PasswordValues = {
 
 const particles = [
   { left: "7%", top: "58%", size: 3, delay: "0s", duration: "12s" },
-  { left: "12%", top: "66%", size: 4, delay: "1.1s", duration: "13.5s" },
   { left: "18%", top: "51%", size: 2, delay: "2.6s", duration: "11s" },
   { left: "23%", top: "74%", size: 3, delay: "0.4s", duration: "14s" },
   { left: "31%", top: "61%", size: 4, delay: "3.2s", duration: "12.5s" },
-  { left: "38%", top: "80%", size: 2, delay: "1.8s", duration: "15s" },
   { left: "44%", top: "55%", size: 3, delay: "4.1s", duration: "13s" },
-  { left: "52%", top: "70%", size: 2, delay: "2.2s", duration: "12s" },
-  { left: "58%", top: "48%", size: 3, delay: "5s", duration: "14.5s" },
   { left: "15%", top: "84%", size: 2, delay: "5.8s", duration: "16s" },
-  { left: "68%", top: "62%", size: 2, delay: "3.8s", duration: "15.5s" },
-  { left: "78%", top: "26%", size: 3, delay: "6.4s", duration: "17s" },
   { left: "88%", top: "78%", size: 2, delay: "7.1s", duration: "14s" },
 ];
 
@@ -51,9 +46,9 @@ export function ChangePasswordPage() {
   const logout = useAuthStore((state) => state.logout);
   const [values, setValues] = useState<PasswordValues>(initialValues);
   const [errors, setErrors] = useState<PasswordErrors>({});
+  const [formMessage, setFormMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [heroGlow, setHeroGlow] = useState({ x: 28, y: 72 });
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLDivElement>();
   const renderedParticles = useMemo(() => particles, []);
 
   if (!user) {
@@ -66,6 +61,7 @@ export function ChangePasswordPage() {
 
   const updateField = (field: keyof PasswordValues) => (event: ChangeEvent<HTMLInputElement>) => {
     setValues((current) => ({ ...current, [field]: event.target.value }));
+    if (formMessage) setFormMessage("");
     if (errors[field]) {
       setErrors((current) => ({ ...current, [field]: undefined }));
     }
@@ -84,21 +80,15 @@ export function ChangePasswordPage() {
     }
 
     setErrors(nextErrors);
+    setFormMessage("");
     return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleStagePointerMove = (event: PointerEvent<HTMLElement>) => {
-    const bounds = stageRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
-    setHeroGlow({
-      x: clampPercent(((event.clientX - bounds.left) / bounds.width) * 100),
-      y: clampPercent(((event.clientY - bounds.top) / bounds.height) * 100),
-    });
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!validate()) {
+      setFormMessage("Review the password fields and try again.");
       return;
     }
 
@@ -110,7 +100,7 @@ export function ChangePasswordPage() {
       notifySuccess("Password updated.");
       navigate(routePaths.enterpriseCameras, { replace: true });
     } catch {
-      notifyError("Unable to update password. Check the temporary password and try again.");
+      setFormMessage("Unable to update password. Check the temporary password and try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -128,14 +118,8 @@ export function ChangePasswordPage() {
   return (
     <div
       ref={stageRef}
-      className="tanaw-login-stage relative grid min-h-screen grid-cols-[minmax(0,1.04fr)_minmax(460px,0.72fr)] items-center gap-10 overflow-hidden bg-(--tanaw-bg) px-10 py-8 text-(--tanaw-text)"
-      onPointerMove={handleStagePointerMove}
-      style={
-        {
-          "--hero-glow-x": `${heroGlow.x}%`,
-          "--hero-glow-y": `${heroGlow.y}%`,
-        } as CSSProperties
-      }
+      className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid h-svh min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
+      style={stageGlowStyle}
     >
       <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={{ backgroundImage: `url("${cityHallImage}")` }} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
@@ -160,17 +144,17 @@ export function ChangePasswordPage() {
         ))}
       </div>
 
-      <section className="relative z-10 flex min-h-[calc(100vh-4rem)] items-end overflow-visible px-2 pb-14 text-white">
+      <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
         <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
           <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
             <SampaguitaIcon className="h-8 w-8" />
           </div>
-          <h1 className="font-display text-5xl leading-tight font-bold text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)]">Enterprise Portal</h1>
+          <h1 className="tanaw-auth-hero-title font-display text-5xl leading-tight font-bold text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)]">Enterprise Portal</h1>
           <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
-          <p className="mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
+          <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
             Secure access for tourism enterprise reporting, camera monitoring, and operational compliance.
           </p>
-          <div className="mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
+          <div className="tanaw-auth-hero-location mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
             <MapPin className="h-5 w-5 flex-none text-white" strokeWidth={2} />
             <span>San Pedro, Laguna, Philippines</span>
           </div>
@@ -183,7 +167,7 @@ export function ChangePasswordPage() {
         transition={{ duration: 0.45, ease: "easeOut" }}
         onSubmit={handleSubmit}
         noValidate
-        className="relative z-10 ml-auto w-full max-w-135 rounded-[30px] border border-white/80 bg-white/96 p-10 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl"
+        className="tanaw-auth-card relative z-10 ml-auto w-full max-w-135 rounded-[30px] border border-white/80 bg-white/96 p-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl xl:p-10"
         onPointerMove={(event) => event.stopPropagation()}
       >
         <button
@@ -195,21 +179,21 @@ export function ChangePasswordPage() {
           <ArrowLeft className="h-5 w-5" />
         </button>
 
-        <div className="mb-7 pt-4">
+        <div className="tanaw-auth-reset-header mb-7 pt-4">
           <div className="flex items-center gap-6">
-            <img src={citySeal} alt="City of San Pedro seal" className="h-20 w-20 object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)]" />
+            <img src={citySeal} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-20 w-20 object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)]" />
             <div>
-              <h2 className="font-display text-[2rem] leading-tight font-extrabold text-(--tanaw-green)">TANAW PORTAL</h2>
-              <p className="mt-2 text-base font-medium text-(--tanaw-muted)">Enterprise Tourism Management</p>
+              <h2 className="tanaw-auth-brand-title font-display text-[2rem] leading-tight font-extrabold text-(--tanaw-green)">TANAW PORTAL</h2>
+              <p className="tanaw-auth-brand-subtitle mt-2 text-base font-medium text-(--tanaw-muted)">Enterprise Tourism Management</p>
             </div>
           </div>
-          <div className="mt-8 flex items-center gap-3 text-(--tanaw-gold)">
+          <div className="tanaw-auth-divider mt-8 flex items-center gap-3 text-(--tanaw-gold)">
             <SampaguitaIcon className="h-4 w-4 flex-none" />
             <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
           </div>
         </div>
 
-        <div className="mb-6 rounded-3xl border border-amber-100 bg-amber-50 p-4">
+        <div className="tanaw-auth-reset-callout mb-6 rounded-3xl border border-amber-100 bg-amber-50 p-4">
           <div className="flex items-start gap-4">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm">
               <KeyRound size={18} />
@@ -241,10 +225,17 @@ export function ChangePasswordPage() {
             value={values.confirmPassword}
           />
 
+          {formMessage ? (
+            <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-none" strokeWidth={2.2} aria-hidden="true" />
+              <span>{formMessage}</span>
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-3 flex h-15 w-full items-center justify-center gap-4 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-75"
+            className="tanaw-auth-primary-action mt-3 flex h-15 w-full items-center justify-center gap-4 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-75"
           >
             <ShieldCheck className="h-5 w-5" strokeWidth={2} />
             {isSubmitting ? "Updating..." : "Update Password"}
@@ -279,7 +270,7 @@ function PasswordField({
       <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">{label}</span>
       <div
         className={cn(
-          "relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
+          "tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
           error ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
         )}
       >
@@ -327,6 +318,3 @@ function SampaguitaIcon({ className = "" }: { className?: string }) {
   );
 }
 
-function clampPercent(value: number) {
-  return Math.min(100, Math.max(0, value));
-}

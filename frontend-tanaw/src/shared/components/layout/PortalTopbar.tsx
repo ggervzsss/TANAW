@@ -39,6 +39,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     name: authUser?.displayName ?? "TANAW User",
     email: authUser?.email ?? "",
     department: authUser?.title ?? "City Tourism Operations",
+    displayImageDataUrl: authUser?.displayImageDataUrl ?? null,
   };
 
   const initials = useMemo(
@@ -345,8 +346,8 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                 }}
                 className="flex min-w-60.5 items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:min-w-56 max-sm:min-w-0 max-sm:pr-2.5"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
-                  {initials}
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
+                  {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
                 </div>
                 <div className="hidden min-w-0 flex-1 text-left lg:block">
                   <p className="truncate text-sm leading-tight font-bold text-white drop-shadow-sm">{profile.name}</p>

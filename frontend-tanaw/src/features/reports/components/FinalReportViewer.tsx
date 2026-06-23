@@ -8,6 +8,7 @@ import { operationalFinalReportsQueryKey } from "@/shared/hooks/useOperationalSy
 import { updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportStatus } from "@/shared/types";
 import { DotFinalReportTable } from "./DotReportTable";
+import { downloadFinalReportPdf } from "../utils/pdf";
 
 type FinalReportViewerProps = {
   report: FinalReport;
@@ -23,15 +24,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
     },
   });
-  const downloadReport = () => {
-    const html = `<!doctype html><html><head><title>${report.id}</title></head><body><h1>${report.title}</h1><p>${report.period}</p><p>Total Unique: ${report.totalUnique.toLocaleString()}</p></body></html>`;
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${report.id}.html`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const downloadReport = () => downloadFinalReportPdf(report);
 
   const handleArchive = () => {
     statusMutation.mutate("Archived", {
@@ -53,7 +46,8 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     });
   };
 
-  const handleUnarchive = () => {
+  // TEMP TESTING ONLY: Restore button for final report archive test case. Remove after testing.
+  const handleRestore = () => {
     statusMutation.mutate("Draft", {
       onSuccess: () => {
         toast.success(`${report.id} has been restored to Drafts.`);
@@ -88,10 +82,10 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               {report.status === "Archived" ? (
                 <button
                   type="button"
-                  onClick={handleUnarchive}
+                  onClick={handleRestore}
                   className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
                 >
-                  <ArchiveRestore size={15} /> Unarchive
+                  <ArchiveRestore size={15} /> Restore
                 </button>
               ) : (
                 <>
@@ -118,7 +112,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 onClick={downloadReport}
                 className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
               >
-                <Download size={15} /> Download
+                <Download size={15} /> Download PDF
               </button>
               <button
                 type="button"
@@ -171,11 +165,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
             <div className="mt-auto pt-10">
               <div className="mb-8 flex items-end justify-between">
                 <Signature label="Prepared By" sub={report.preparedRole} />
-                <div className="flex h-24 w-48 -rotate-12 items-center justify-center rounded-lg border-4 border-gray-100 p-2 text-center text-xl leading-snug font-bold tracking-widest text-gray-200 uppercase select-none">
-                  Verified By
-                  <br />
-                  TANAW AI
-                </div>
+                <div className="h-24 w-48" aria-hidden="true" />
               </div>
               <div className="flex items-end justify-between">
                 <Signature label="Checked By" sub="Tourism Audit Officer" />

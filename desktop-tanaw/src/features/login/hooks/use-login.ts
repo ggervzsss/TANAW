@@ -3,7 +3,7 @@ import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { routePaths } from "../../../app/router/routePaths";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { notifySuccess } from "../../toasts/services/toast-service";
 import { login } from "../api/login";
 import type { LoginFormValues } from "../schemas/login-schema";
 import { useAuthStore } from "../stores/auth-store";
@@ -11,7 +11,15 @@ import type { AuthRole } from "../types";
 
 const getLandingRoute = (role: AuthRole) => (role === "enterprise" ? routePaths.enterpriseCameras : routePaths.enterpriseCameras);
 
-export function useLogin(redirectTo?: string) {
+type LoginMutationValues = LoginFormValues & {
+  rememberMe?: boolean;
+};
+
+type UseLoginOptions = {
+  onAuthMessage: (message: string) => void;
+};
+
+export function useLogin(redirectTo?: string, options?: UseLoginOptions) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setSession = useAuthStore((state) => state.setSession);
@@ -24,10 +32,11 @@ export function useLogin(redirectTo?: string) {
   }, [lockoutSeconds]);
 
   const mutation = useMutation({
-    mutationFn: (values: LoginFormValues) => login(values),
-    onSuccess: (session) => {
+    mutationFn: (values: LoginMutationValues) =>
+      login({ username: values.username, password: values.password }),
+    onSuccess: (session, values) => {
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
-      setSession(session);
+      setSession(session, values.rememberMe ?? false);
       if (session.user.mustChangePassword) {
         notifySuccess("Temporary credentials verified.");
         navigate(routePaths.changePassword, { replace: true });
@@ -40,10 +49,10 @@ export function useLogin(redirectTo?: string) {
       if (isAxiosError(error) && error.response?.status === 429) {
         const detail = error.response.data?.detail as { message?: string; retryAfterSeconds?: number } | undefined;
         setLockoutSeconds(detail?.retryAfterSeconds ?? 300);
-        notifyError(detail?.message ?? "Account temporarily locked.");
+        options?.onAuthMessage(detail?.message ?? "Account temporarily locked.");
         return;
       }
-      notifyError("Login failed. Please check your credentials.");
+      options?.onAuthMessage("Login failed. Please check your credentials.");
     },
   });
 

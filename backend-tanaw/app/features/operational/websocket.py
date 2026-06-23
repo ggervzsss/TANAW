@@ -48,10 +48,14 @@ class OperationalConnectionManager:
     def _is_enterprise_event_recipient(
         self, socket: WebSocket, envelope: OperationalWebSocketEnvelope
     ) -> bool:
-        if envelope.type != "report.updated":
-            return False
         enterprise_id = self._enterprise_ids.get(socket)
-        return bool(enterprise_id and envelope.data.get("enterpriseId") == enterprise_id)
+        if not enterprise_id:
+            return False
+        if envelope.type == "report.updated":
+            return envelope.data.get("enterpriseId") == enterprise_id
+        if envelope.type in {"notification.created", "notification.updated"}:
+            return envelope.data.get("recipientEnterpriseId") == enterprise_id
+        return False
 
 
 operational_ws_manager = OperationalConnectionManager()

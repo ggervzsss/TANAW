@@ -20,7 +20,7 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
       <Card className="group relative overflow-hidden border-l-4 border-l-[#065f46] p-5">
         <div className="relative z-10 flex items-start justify-between">
           <div>
-            <p className="text-xs font-bold tracking-wider text-gray-500 uppercase">Net Occupancy</p>
+            <p className="text-xs font-bold tracking-wider text-gray-500 uppercase">Live Occupancy</p>
             <h3 className="mt-1 text-3xl font-bold tracking-tight text-[#111827]">{currentOccupancy.toLocaleString()}</h3>
             <p className="mt-1 text-xs font-medium text-gray-500">Currently Inside</p>
           </div>

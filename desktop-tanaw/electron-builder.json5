@@ -3,6 +3,7 @@
   $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   appId: "ph.gov.sanpedro.tanaw.enterprise",
   asar: true,
+  icon: "public/favicon.ico",
   productName: "TANAW Enterprise Desktop",
   directories: {
     output: "release/${version}",

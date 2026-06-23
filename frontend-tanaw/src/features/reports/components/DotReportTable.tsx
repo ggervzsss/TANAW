@@ -1,21 +1,8 @@
 import type { FinalReport, IntakeReport } from "@/shared/types";
-
-type Demographics = {
-  provMale: number;
-  provFemale: number;
-  provTotal: number;
-  otherMale: number;
-  otherFemale: number;
-  otherTotal: number;
-  foreignMale: number;
-  foreignFemale: number;
-  foreignTotal: number;
-  grandMale: number;
-  grandFemale: number;
-};
+import { getDotDemographics } from "../utils/dotDemographics";
 
 export function DotSingleReportTable({ report }: { report: IntakeReport }) {
-  const d = getDemographics(report.metrics.unique);
+  const d = getDotDemographics(report.metrics.unique);
 
   return (
     <div className="w-full">
@@ -51,7 +38,7 @@ export function DotSingleReportTable({ report }: { report: IntakeReport }) {
 }
 
 export function DotFinalReportTable({ report }: { report: FinalReport }) {
-  const rows = report.sources.map((source) => ({ source, demographics: getDemographics(source.unique) }));
+  const rows = report.sources.map((source) => ({ source, demographics: getDotDemographics(source.unique) }));
   const totals = rows.reduce(
     (next, { source, demographics }) => ({
       provMale: next.provMale + demographics.provMale,
@@ -169,30 +156,4 @@ function DotTableHeader() {
       </tr>
     </thead>
   );
-}
-
-function getDemographics(total: number): Demographics {
-  const provMale = Math.floor(total * 0.65 * 0.48);
-  const provFemale = Math.floor(total * 0.65 * 0.52);
-  const provTotal = provMale + provFemale;
-  const otherMale = Math.floor(total * 0.25 * 0.5);
-  const otherFemale = Math.floor(total * 0.25 * 0.5);
-  const otherTotal = otherMale + otherFemale;
-  const foreignMale = Math.floor(total * 0.1 * 0.55);
-  const foreignFemale = total - provTotal - otherTotal - foreignMale;
-  const foreignTotal = foreignMale + foreignFemale;
-
-  return {
-    provMale,
-    provFemale,
-    provTotal,
-    otherMale,
-    otherFemale,
-    otherTotal,
-    foreignMale,
-    foreignFemale,
-    foreignTotal,
-    grandMale: provMale + otherMale + foreignMale,
-    grandFemale: provFemale + otherFemale + foreignFemale,
-  };
 }

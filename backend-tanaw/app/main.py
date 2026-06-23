@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.http_security import apply_security_headers
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
-from app.features.accounts.seed import seed_default_it_account
+from app.features.accounts.seed import seed_default_accounts
 
 
 async def ensure_account_onboarding_schema(connection: Any) -> None:
@@ -188,15 +188,60 @@ async def ensure_mock_reporting_schema(connection: Any) -> None:
     )
 
 
+async def ensure_notifications_schema(connection: Any) -> None:
+    await connection.exec_driver_sql(
+        """
+        CREATE TABLE IF NOT EXISTS user_notifications (
+            id VARCHAR(36) PRIMARY KEY,
+            recipient_account_id VARCHAR(36) NOT NULL,
+            recipient_role VARCHAR(40) NOT NULL,
+            recipient_enterprise_id VARCHAR(120),
+            title VARCHAR(160) NOT NULL,
+            message TEXT NOT NULL,
+            notification_type VARCHAR(60) NOT NULL,
+            severity VARCHAR(20) NOT NULL DEFAULT 'Info',
+            source_type VARCHAR(80),
+            source_id VARCHAR(120),
+            created_by_account_id VARCHAR(36),
+            created_by_name VARCHAR(120),
+            read_at TIMESTAMP WITH TIME ZONE,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+        )
+        """,
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_recipient_account_id ON user_notifications (recipient_account_id)"
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_recipient_role ON user_notifications (recipient_role)"
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_recipient_enterprise_id ON user_notifications (recipient_enterprise_id)"
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_notification_type ON user_notifications (notification_type)"
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_severity ON user_notifications (severity)"
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_source_id ON user_notifications (source_id)"
+    )
+    await connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_user_notifications_created_at ON user_notifications (created_at)"
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await ensure_account_onboarding_schema(connection)
         await ensure_mock_reporting_schema(connection)
+        await ensure_notifications_schema(connection)
 
     async with AsyncSessionLocal() as session:
-        await seed_default_it_account(session)
+        await seed_default_accounts(session)
 
     yield
 

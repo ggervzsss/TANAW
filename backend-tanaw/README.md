@@ -13,12 +13,14 @@ FastAPI backend for TANAW authentication, account management, operational sync, 
 uvicorn main:app --reload
 ```
 
-On startup, the API creates current tables when needed and synchronizes the protected default IT account with the configured environment credentials:
+On startup, the API creates current tables when needed and synchronizes the protected original default IT account plus the temporary LGU accounts with the configured environment credentials:
 
-- Username: `DEFAULT_IT_USERNAME`
-- Password: `DEFAULT_IT_PASSWORD`
+- Default IT: `DEFAULT_IT_USERNAME` / `DEFAULT_IT_PASSWORD`
+- Temporary Admin: `TEMPORARY_ADMIN_USERNAME` / `TEMPORARY_ADMIN_PASSWORD`
+- Temporary Staff: `TEMPORARY_STAFF_USERNAME` / `TEMPORARY_STAFF_PASSWORD`
+- Temporary IT: `TEMPORARY_IT_USERNAME` / `TEMPORARY_IT_PASSWORD`
 
-The default IT account is a bootstrap exception: its configured password is accepted as-is, and it is not required to change that password after signing in. Changing either environment value takes effect after the backend restarts.
+Startup-seeded accounts are bootstrap exceptions: configured passwords are accepted as-is, and the accounts are not required to change passwords after signing in. Changing any default or temporary account environment value takes effect after the backend restarts.
 
 ## Mock Data Support
 
@@ -222,14 +224,15 @@ Set these environment variables on the Render web service before deploying:
 - `TANAW_ENV`: set to `production` on Render.
 - `DATABASE_URL`: PostgreSQL internal database URL for the Render database.
 - `JWT_SECRET_KEY`: a long random secret.
-- `DEFAULT_IT_USERNAME` and `DEFAULT_IT_PASSWORD`: bootstrap credentials.
+- `DEFAULT_IT_USERNAME` / `DEFAULT_IT_PASSWORD`: original bootstrap credentials.
+- `TEMPORARY_ADMIN_USERNAME` / `TEMPORARY_ADMIN_PASSWORD`, `TEMPORARY_STAFF_USERNAME` / `TEMPORARY_STAFF_PASSWORD`, and `TEMPORARY_IT_USERNAME` / `TEMPORARY_IT_PASSWORD`: temporary startup credentials.
 - `CORS_ORIGINS`: comma-separated frontend origins allowed to call the API. Production should be `https://tanaw-sanpedro.vercel.app` only unless another TANAW-owned frontend origin is intentionally deployed.
 - `TANAW_ALLOW_MOCK_DATA`: omit or set to `false` for production.
 
 Wildcard CORS origins are rejected in production. Keep localhost origins in local `.env` files only.
 Localhost and private-network CORS origins are also rejected in production, and browser WebSocket connections are checked against the same allowed origin list.
 
-The backend opens the database connection during FastAPI startup to create tables and seed the default IT account. If `DATABASE_URL` is missing or points to `localhost`, Render will deploy the image but the service will fail at startup because there is no PostgreSQL server inside the web container.
+The backend opens the database connection during FastAPI startup to create tables and seed the default and temporary LGU accounts. If `DATABASE_URL` is missing or points to `localhost`, Render will deploy the image but the service will fail at startup because there is no PostgreSQL server inside the web container.
 
 ## Backend Structure
 

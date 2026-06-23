@@ -17,7 +17,7 @@ type TypeFilter = "All Types" | PriorityAlertType;
 
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info"];
 const statusFilters: StatusFilter[] = ["All Statuses", "New", "In Review", "Resolved"];
-const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request"];
+const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Failed Login Threshold"];
 
 export function ITAlertsPage() {
   const queryClient = useQueryClient();

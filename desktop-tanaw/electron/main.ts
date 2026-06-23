@@ -30,6 +30,7 @@ let isQuitting = false;
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
+const SPLASH_MIN_DISPLAY_MS = 1400;
 const execFileAsync = promisify(execFile);
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -411,12 +412,34 @@ function createTray() {
 }
 
 function getTrayIcon() {
-  const fallbackIcon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_PNG_BASE64, "base64")).resize({ width: 16, height: 16 });
-  if (!fallbackIcon.isEmpty()) {
-    return fallbackIcon;
+  const tanawIcon = nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, "favicon.png")).resize({ width: 16, height: 16 });
+  if (!tanawIcon.isEmpty()) {
+    return tanawIcon;
   }
 
-  return nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, "electron-vite.svg"));
+  const icoIcon = nativeImage.createFromPath(path.join(process.env.VITE_PUBLIC, "favicon.ico")).resize({ width: 16, height: 16 });
+  if (!icoIcon.isEmpty()) {
+    return icoIcon;
+  }
+
+  const fallbackIcon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_PNG_BASE64, "base64")).resize({ width: 16, height: 16 });
+  return fallbackIcon;
+}
+
+function getWindowIconPath() {
+  const pngIconPath = path.join(process.env.VITE_PUBLIC, "favicon.png");
+  const tanawIcon = nativeImage.createFromPath(pngIconPath);
+  if (!tanawIcon.isEmpty()) {
+    return pngIconPath;
+  }
+
+  const icoIconPath = path.join(process.env.VITE_PUBLIC, "favicon.ico");
+  const icoIcon = nativeImage.createFromPath(icoIconPath);
+  if (!icoIcon.isEmpty()) {
+    return icoIconPath;
+  }
+
+  return icoIconPath;
 }
 
 function updateTrayMenu() {
@@ -449,7 +472,53 @@ function showMainWindow() {
   win.focus();
 }
 
-function createWindow() {
+function loadSplashScreen() {
+  if (!win || win.isDestroyed()) {
+    return false;
+  }
+  const splashPath = path.join(process.env.VITE_PUBLIC, "splash.html");
+  if (!existsSync(splashPath)) {
+    return false;
+  }
+
+  void win.loadFile(splashPath).catch((error) => {
+    console.error("[tanaw] Splash screen could not be loaded.", error);
+    loadMainWindowContent();
+  });
+  return true;
+}
+
+async function waitForSplashMinimumDisplay(startedAt: number | null) {
+  if (!startedAt) {
+    return;
+  }
+
+  const remainingMs = SPLASH_MIN_DISPLAY_MS - (Date.now() - startedAt);
+  if (remainingMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remainingMs));
+  }
+}
+
+function loadMainWindowContent() {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  const loadPromise = VITE_DEV_SERVER_URL ? win.loadURL(VITE_DEV_SERVER_URL) : win.loadFile(path.join(RENDERER_DIST, "index.html"));
+  void loadPromise.catch((error) => {
+    console.error("[tanaw] Main window could not be loaded.", error);
+  });
+}
+
+function showWindowWhenReady() {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  win.show();
+}
+
+function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
   if (win && !win.isDestroyed()) {
     showMainWindow();
     return;
@@ -460,13 +529,16 @@ function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 720,
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: getWindowIconPath(),
+    show: false,
     title: "TANAW Enterprise Desktop",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
   win.maximize();
+
+  win.once("ready-to-show", showWindowWhenReady);
 
   win.on("close", (event) => {
     if (isQuitting) return;
@@ -484,11 +556,10 @@ function createWindow() {
     win?.webContents.send("main-process-message", new Date().toLocaleString());
   });
 
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(RENDERER_DIST, "index.html"));
+  if (showSplash && loadSplashScreen()) {
+    return;
   }
+  loadMainWindowContent();
 }
 
 async function quitApplication() {
@@ -522,12 +593,24 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
+    const shouldStartInBackground = process.argv.includes("--background");
+    let splashStartedAt: number | null = null;
+
     registerMlServiceIpc();
     registerAppLifecycleIpc();
     createTray();
+    if (!shouldStartInBackground) {
+      createWindow({ showSplash: true });
+      splashStartedAt = Date.now();
+    }
     await startMlService();
-    if (!process.argv.includes("--background")) {
-      createWindow();
+    if (!shouldStartInBackground) {
+      await waitForSplashMinimumDisplay(splashStartedAt);
+      if (!win || win.isDestroyed()) {
+        createWindow();
+      } else {
+        loadMainWindowContent();
+      }
     }
   });
 }

@@ -12,7 +12,14 @@ type EnterpriseAccountsTableProps = {
 export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoading, onSelectEnterprise }: EnterpriseAccountsTableProps) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-190 table-fixed text-left text-sm">
+      <table className="w-full min-w-220 table-fixed text-left text-sm">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[15%]" />
+          <col className="w-[28%]" />
+          <col className="w-[12%]" />
+          <col className="w-[23%]" />
+        </colgroup>
         <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
           <tr>
             {["Enterprise", "Barangay", "Enterprise ID", "Status", "Contact / Created"].map((heading) => (
@@ -50,13 +57,17 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
               </td>
               <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-600">{enterprise.barangay ?? "N/A"}</td>
               <td className="px-4 py-4 whitespace-nowrap">
-                <span className="font-mono text-sm font-semibold text-gray-600">{enterprise.enterpriseId ?? "Pending"}</span>
+                <span title={enterprise.enterpriseId ?? "Pending"} className="block max-w-full truncate font-mono text-sm font-semibold text-gray-600">
+                  {enterprise.enterpriseId ?? "Pending"}
+                </span>
               </td>
               <td className="px-4 py-4 whitespace-nowrap">
                 <StatusBadge tone={enterprise.status === "active" ? "green" : "slate"}>{enterprise.status}</StatusBadge>
               </td>
-              <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-500">
-                <span className="block truncate">{enterprise.email}</span>
+              <td className="px-4 py-4 text-sm whitespace-nowrap text-gray-500">
+                <span title={enterprise.email} className="block max-w-full truncate">
+                  {enterprise.email}
+                </span>
                 <span className="block text-xs text-gray-400">{new Date(enterprise.createdAt).toLocaleDateString()}</span>
               </td>
             </tr>

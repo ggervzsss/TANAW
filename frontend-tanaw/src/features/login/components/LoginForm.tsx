@@ -8,7 +8,9 @@ import { apiClient } from "@/shared/lib/apiClient";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 
 type LoginFormProps = {
+  authMessage: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  onAuthMessageClear: () => void;
   lockoutSeconds: number;
 };
 
@@ -69,7 +71,7 @@ const formatLockout = (seconds: number) => {
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
-export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
+export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSeconds }: LoginFormProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [identifierError, setIdentifierError] = useState("");
@@ -100,12 +102,14 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
   const handleIdentifierChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     setIdentifier(value);
+    if (authMessage) onAuthMessageClear();
     if (identifierError) setIdentifierError(value.trim() ? validateIdentifier(value) : "");
   };
 
   const handlePasswordChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     setPassword(value);
+    if (authMessage) onAuthMessageClear();
     if (passwordError) setPasswordError(value.trim() ? validatePassword(value) : "");
   };
 
@@ -122,6 +126,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (authMessage) onAuthMessageClear();
     if (isSubmitting || lockoutSeconds > 0 || !validateForm()) return;
 
     setIsSubmitting(true);
@@ -309,13 +314,13 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
     }
   }
 
-  const identifierShellClass = `relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
+  const identifierShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
     identifierError
       ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
       : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
   }`;
 
-  const passwordShellClass = `relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
+  const passwordShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
     passwordError
       ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
       : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
@@ -388,7 +393,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
           </div>
         </div>
 
-        <div className="mb-7 flex items-center justify-between gap-4">
+        <div className="tanaw-auth-control-gap mb-7 flex items-center justify-between gap-4">
           <label htmlFor="remember-me" className="flex cursor-pointer items-center gap-3 text-sm font-medium text-(--tanaw-text)">
             <input
               id="remember-me"
@@ -409,10 +414,17 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
           </button>
         </div>
 
+        {authMessage ? (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" strokeWidth={2.2} aria-hidden="true" />
+            <span>{authMessage}</span>
+          </div>
+        ) : null}
+
         <motion.button
           type="submit"
           disabled={isSubmitting || lockoutSeconds > 0}
-          className="flex h-15 w-full items-center justify-center gap-7 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-75"
+          className="tanaw-auth-primary-action flex h-15 w-full items-center justify-center gap-7 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-4 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-75"
           whileHover={{ y: -1 }}
           whileTap={{ scale: 0.99 }}
           transition={{ duration: 0.2 }}
@@ -421,7 +433,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
           <ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </motion.button>
 
-        <div className="my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
+        <div className="tanaw-auth-divider-row my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
           <span className="h-px flex-1 bg-(--tanaw-border)" />
           <span>OR</span>
           <span className="h-px flex-1 bg-(--tanaw-border)" />
@@ -429,7 +441,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
 
         <div className="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-start">
           <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-(--tanaw-border) bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+            <span className="tanaw-auth-support-icon flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-(--tanaw-border) bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
               <Headphones className="h-6 w-6" strokeWidth={1.9} aria-hidden="true" />
             </span>
             <span>
@@ -451,7 +463,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
       {activeDialog
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,20,12,0.54)] px-5 py-8 backdrop-blur-md"
+              className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(3,20,12,0.54)] px-5 py-6 backdrop-blur-md sm:items-center sm:py-8"
               role="presentation"
               onMouseDown={closeDialog}
               onPointerMove={(event) => event.stopPropagation()}
@@ -460,7 +472,7 @@ export function LoginForm({ onSubmit, lockoutSeconds }: LoginFormProps) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={activeDialog === "forgot" ? "forgot-password-title" : "contact-support-title"}
-                className="w-full max-w-md rounded-[36px] border border-white/80 bg-white p-8 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3"
+                className="my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
@@ -645,36 +657,15 @@ function RecoveryDialogContent({
         <form onSubmit={onReset}>
           <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Create a new private password for {email}.</p>
           <div className="space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">New password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => onPasswordChange(event.target.value)}
-                className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
-                  error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
-                }`}
-                placeholder="Enter new password"
-                autoComplete="new-password"
-                minLength={PASSWORD_MIN_LENGTH}
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Confirm password</span>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => onConfirmPasswordChange(event.target.value)}
-                className={`h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
-                  error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
-                }`}
-                placeholder="Confirm new password"
-                autoComplete="new-password"
-                minLength={PASSWORD_MIN_LENGTH}
-                required
-              />
-            </label>
+            <RecoveryPasswordInput id="recovery-new-password" label="New password" value={password} onChange={onPasswordChange} placeholder="Enter new password" error={error} />
+            <RecoveryPasswordInput
+              id="recovery-confirm-password"
+              label="Confirm password"
+              value={confirmPassword}
+              onChange={onConfirmPasswordChange}
+              placeholder="Confirm new password"
+              error={error}
+            />
           </div>
           <RecoveryError message={error} />
           <button
@@ -718,6 +709,57 @@ function RecoveryDialogContent({
         </button>
       </form>
     </RecoveryStepFrame>
+  );
+}
+
+function RecoveryPasswordInput({
+  error,
+  id,
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  error: string;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  return (
+    <div>
+      <label htmlFor={id} className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={isPasswordVisible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={`h-12 w-full rounded-[22px] border bg-white px-4 pr-12 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)] ${
+            error ? "border-(--tanaw-error)" : "border-(--tanaw-border)"
+          }`}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          minLength={PASSWORD_MIN_LENGTH}
+          required
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "recovery-error" : undefined}
+        />
+        <button
+          type="button"
+          onClick={() => setIsPasswordVisible((current) => !current)}
+          className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+          aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        >
+          {isPasswordVisible ? <EyeOff className="h-5 w-5" strokeWidth={1.9} /> : <Eye className="h-5 w-5" strokeWidth={1.9} />}
+        </button>
+      </div>
+    </div>
   );
 }
 

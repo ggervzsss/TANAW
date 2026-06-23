@@ -5,57 +5,73 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import hash_password, verify_password
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.defaults import (
+    StartupAccountSpec,
+    get_startup_account_specs,
+)
+from app.features.accounts.models import Account, AccountStatus
 from app.features.accounts.service import get_account_by_email
 
-DEFAULT_IT_DISPLAY_NAME = "Default IT Personnel"
 
-
-async def get_default_it_account(db: AsyncSession) -> Account | None:
+async def get_seeded_account(db: AsyncSession, spec: StartupAccountSpec) -> Account | None:
     result = await db.scalars(
         select(Account).where(
-            Account.role == AccountRole.IT,
-            Account.display_name == DEFAULT_IT_DISPLAY_NAME,
+            Account.role == spec.role,
+            Account.display_name == spec.display_name,
         )
     )
     return result.first()
 
 
-async def seed_default_it_account(db: AsyncSession) -> None:
-    settings = get_settings()
-    configured_username = settings.default_it_username.strip().lower()
-    account = await get_default_it_account(db)
-    configured_account = await get_account_by_email(db, configured_username)
+async def seed_default_accounts(db: AsyncSession) -> None:
+    specs = get_startup_account_specs(get_settings())
+    configured_emails = {spec.email for spec in specs}
+    if len(configured_emails) != len(specs):
+        raise RuntimeError("Startup-seeded account usernames must be unique.")
+
+    for spec in specs:
+        await seed_startup_account(db, spec)
+
+    await db.commit()
+
+
+async def seed_startup_account(db: AsyncSession, spec: StartupAccountSpec) -> None:
+    account = await get_seeded_account(db, spec)
+    configured_account = await get_account_by_email(db, spec.email)
 
     if (
         account is not None
         and configured_account is not None
         and account.id != configured_account.id
     ):
-        raise RuntimeError("DEFAULT_IT_USERNAME is already assigned to a different account.")
+        raise RuntimeError(f"{spec.username_setting} is already assigned to a different account.")
 
     if account is None:
         account = configured_account
 
     if account is None:
         account = Account(
-            email=configured_username,
-            password_hash=hash_password(settings.default_it_password),
-            role=AccountRole.IT,
-            display_name=DEFAULT_IT_DISPLAY_NAME,
-            title="IT Personnel",
+            email=spec.email,
+            password_hash=hash_password(spec.password),
+            role=spec.role,
+            display_name=spec.display_name,
+            title=spec.title,
+            first_name=spec.first_name,
+            last_name=spec.last_name,
             status=AccountStatus.ACTIVE,
         )
         db.add(account)
     else:
-        if not verify_password(settings.default_it_password, account.password_hash):
-            account.password_hash = hash_password(settings.default_it_password)
+        if not verify_password(spec.password, account.password_hash):
+            account.password_hash = hash_password(spec.password)
             account.token_invalid_before = datetime.now(UTC)
 
-        account.email = configured_username
-        account.role = AccountRole.IT
-        account.display_name = DEFAULT_IT_DISPLAY_NAME
-        account.title = "IT Personnel"
+        account.email = spec.email
+        account.role = spec.role
+        account.display_name = spec.display_name
+        account.title = spec.title
+        account.first_name = spec.first_name
+        account.last_name = spec.last_name
         account.status = AccountStatus.ACTIVE
 
     account.must_change_password = False
@@ -63,4 +79,3 @@ async def seed_default_it_account(db: AsyncSession) -> None:
     account.temporary_password_expires_at = None
     account.failed_login_attempts = 0
     account.locked_until = None
-    await db.commit()

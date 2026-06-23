@@ -2,6 +2,7 @@ import { Bell, FileText } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { DetailField, EmptyState, ModalFrame } from "@/shared/components/ui";
+import { notifyEnterprise } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
 import { ReportStatusBadge } from "./ReportStatusBadge";
 
@@ -14,13 +15,30 @@ type EnterpriseReportsModalProps = {
 
 export function EnterpriseReportsModal({ enterprise, reports, onClose, onOpenReport }: EnterpriseReportsModalProps) {
   const [notified, setNotified] = useState(false);
+  const [isNotifying, setIsNotifying] = useState(false);
   const activeReports = reports.filter((report) => report.status !== "Consolidated");
   const archivedReports = reports.filter((report) => report.status === "Consolidated");
   const needsNotification = !activeReports.some((report) => report.status === "Ready to Consolidate");
 
-  const handleNotify = () => {
-    setNotified(true);
-    toast.success(`${enterprise.name} has been notified to submit their compliance report.`);
+  const handleNotify = async () => {
+    setIsNotifying(true);
+    try {
+      await notifyEnterprise({
+        enterpriseId: enterprise.id,
+        title: "Compliance Report Follow-up",
+        message: `${enterprise.name} has no report ready for consolidation. Please submit or revise the required compliance report.`,
+        type: "Staff Follow-up",
+        severity: "Warning",
+        sourceType: "Batch Reports",
+        sourceId: enterprise.id,
+      });
+      setNotified(true);
+      toast.success(`${enterprise.name} has been notified to submit their compliance report.`);
+    } catch {
+      toast.error("Unable to notify enterprise. Check the API connection and try again.");
+    } finally {
+      setIsNotifying(false);
+    }
   };
 
   return (
@@ -39,13 +57,13 @@ export function EnterpriseReportsModal({ enterprise, reports, onClose, onOpenRep
             <button
               type="button"
               onClick={handleNotify}
-              disabled={notified}
+              disabled={notified || isNotifying}
               className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                notified ? "cursor-default bg-white/70 text-amber-500" : "bg-amber-600 text-white shadow-sm hover:bg-amber-700"
+                notified ? "cursor-default bg-white/70 text-amber-500" : "bg-amber-600 text-white shadow-sm hover:bg-amber-700 disabled:cursor-wait disabled:bg-amber-500"
               }`}
             >
               <Bell size={15} />
-              {notified ? "Notified" : "Notify enterprise"}
+              {notified ? "Notified" : isNotifying ? "Notifying..." : "Notify enterprise"}
             </button>
           </div>
         ) : null}

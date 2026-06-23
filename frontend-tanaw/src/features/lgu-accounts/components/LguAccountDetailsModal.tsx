@@ -121,7 +121,7 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
           {isProtected && (
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-white/80 p-3 text-sm font-semibold text-emerald-900">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-              <span>Default IT Personnel is a protected system account.</span>
+              <span>Startup-seeded system account is protected.</span>
             </div>
           )}
         </section>

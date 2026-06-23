@@ -1,10 +1,11 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { Check, RefreshCw, Save, Shield, Upload } from "lucide-react";
 import { Card } from "../../../components/Card";
 import { ContactNumberInput } from "../../../components/ContactNumberInput";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { updateCurrentProfile } from "../../login/api/login";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { readProfileImageFile } from "../../../utils/image-upload";
 import { normalizeEmail, normalizeName, toPhilippineLocalDigits, validateEmail, validateName, validatePhilippineContactNumber, validateRequiredText } from "../../../utils/form-validation";
 
 type ProfileFormState = {
@@ -25,6 +26,8 @@ export function ProfileView() {
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? user?.name ?? "Enterprise Account";
   const managerName = user?.managerName ?? user?.name ?? user?.displayName ?? "Not provided";
   const initials = getInitials(enterpriseName);
+  const [displayImageDataUrl, setDisplayImageDataUrl] = useState<string | null>(() => user?.displayImageDataUrl ?? null);
+  const [displayImageFileName, setDisplayImageFileName] = useState("");
   const [form, setForm] = useState<ProfileFormState>(() => ({
     managerName,
     email: user?.email ?? "",
@@ -42,8 +45,10 @@ export function ProfileView() {
       enterpriseName,
       address: user?.address ?? "",
     });
+    setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
+    setDisplayImageFileName("");
     setErrors({});
-  }, [enterpriseName, managerName, user?.address, user?.email, user?.phone]);
+  }, [enterpriseName, managerName, user?.address, user?.displayImageDataUrl, user?.email, user?.phone]);
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -59,6 +64,7 @@ export function ProfileView() {
         phone: form.phoneLocal ? `+63${form.phoneLocal}` : undefined,
         enterpriseName: form.enterpriseName.trim(),
         address: form.address.trim() || undefined,
+        displayImageDataUrl,
       });
       updateUser(updated);
       setForm((current) => ({
@@ -75,6 +81,22 @@ export function ProfileView() {
     } catch {
       setIsLoading(false);
       notifyError("Unable to update profile.");
+    }
+  };
+
+  const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const upload = await readProfileImageFile(file);
+      setDisplayImageDataUrl(upload.dataUrl);
+      setDisplayImageFileName(upload.fileName);
+      notifySuccess("Logo ready to save.");
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Unable to load image.");
+    } finally {
+      event.target.value = "";
     }
   };
 
@@ -95,12 +117,17 @@ export function ProfileView() {
         <div className="p-6 md:p-8">
           {/* Avatar Area */}
           <div className="mb-8 flex flex-col items-start gap-6 rounded-3xl border border-emerald-100 bg-linear-to-r from-emerald-50/80 via-white to-amber-50/60 p-5 sm:flex-row sm:items-center">
-            <div className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-emerald-200 bg-white shadow-sm">
+            <label htmlFor="enterprise-logo-upload" className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-emerald-200 bg-white shadow-sm">
+              {displayImageDataUrl ? (
+                <img src={displayImageDataUrl} alt="Enterprise logo preview" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-tanaw-navy font-['Bai_Jamjuree'] text-2xl font-bold transition-opacity group-hover:opacity-0">{initials}</span>
+              )}
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                 <Upload size={20} className="text-white" />
               </div>
-              <span className="text-tanaw-navy font-['Bai_Jamjuree'] text-2xl font-bold transition-opacity group-hover:opacity-0">{initials}</span>
-            </div>
+              <input id="enterprise-logo-upload" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageChange} className="sr-only" />
+            </label>
             <div className="min-w-0">
               <h3 className="text-lg font-bold text-[#111827]">Establishment Logo</h3>
               <p className="mt-1 max-w-xl text-xs leading-relaxed text-gray-500">
@@ -108,6 +135,19 @@ export function ProfileView() {
                 <br />
                 Recommended format: 256x256px PNG or JPG.
               </p>
+              {displayImageFileName && <p className="mt-2 text-xs font-semibold text-emerald-700">{displayImageFileName}</p>}
+              {displayImageDataUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDisplayImageDataUrl(null);
+                    setDisplayImageFileName("");
+                  }}
+                  className="mt-3 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                >
+                  Remove logo
+                </button>
+              )}
             </div>
           </div>
 

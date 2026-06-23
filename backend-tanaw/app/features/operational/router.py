@@ -25,6 +25,7 @@ from app.features.operational.models import MockDataRun, OperationalAlert
 from app.features.operational.schemas import (
     DesktopReportSubmissionIngest,
     DesktopTelemetryIngest,
+    EnterpriseNotificationCreate,
     FinalReportCreate,
     FinalReportStatusUpdate,
     FinalReportSummary,
@@ -34,21 +35,28 @@ from app.features.operational.schemas import (
     IntakeReportSummary,
     MockPreparationCounts,
     MockPreparationSummary,
+    NotificationReadUpdate,
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
     OperationalSummary,
     OperationalWebSocketEnvelope,
     ReportStatusUpdate,
     TelemetrySnapshotSummary,
+    UserNotificationSummary,
 )
 from app.features.operational.service import (
+    NOTIFY_CAMERA_OFFLINE_KEY,
+    NOTIFY_GATEWAY_OFFLINE_KEY,
+    NOTIFY_SYNC_FAILED_KEY,
     DuplicateReportPeriodError,
     build_fleet_simulation_telemetry_payload,
     create_final_report,
     create_operational_alert,
+    create_user_notification,
     enterprise_accounts_by_identifier,
     enterprise_identifier,
     evaluate_telemetry_alerts,
+    get_enterprise_notification_recipient,
     get_operational_summary,
     ingest_report_submission,
     ingest_telemetry,
@@ -56,6 +64,9 @@ from app.features.operational.service import (
     list_intake_reports,
     list_latest_telemetry,
     list_operational_alerts,
+    list_user_notifications,
+    set_user_notification_read,
+    system_setting_enabled,
     to_operational_alert_summary,
     update_final_report_status,
     update_report_status,
@@ -101,7 +112,37 @@ async def ingest_desktop_telemetry(
             )
         )
 
-    if payload.session.error:
+    if payload.metrics.unsyncedEvents > 0 and await system_setting_enabled(
+        db, NOTIFY_SYNC_FAILED_KEY
+    ):
+        sync_alert = await create_operational_alert(
+            db,
+            alert_type="Maintenance Request",
+            severity="Warning",
+            requester=account.display_name,
+            enterprise=account.enterprise_name or account.display_name,
+            summary=(
+                f"{payload.metrics.unsyncedEvents} telemetry event"
+                f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} remain unsynced."
+            ),
+            required_action="Review cloud synchronization and retry failed telemetry sync.",
+            resolution_mode="Remote Review",
+            owner="IT",
+            source_id=f"sync-failed:{account.id}",
+        )
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="alert.updated",
+                data=to_operational_alert_summary(sync_alert).model_dump(mode="json"),
+            )
+        )
+
+    session_error_setting_key = (
+        NOTIFY_CAMERA_OFFLINE_KEY
+        if payload.session.cameraId is not None or payload.session.cameraName
+        else NOTIFY_GATEWAY_OFFLINE_KEY
+    )
+    if payload.session.error and await system_setting_enabled(db, session_error_setting_key):
         maintenance_alert = await create_operational_alert(
             db,
             alert_type="Maintenance Request",
@@ -442,6 +483,86 @@ async def list_report_enterprises(
         }
         for account in result
     ]
+
+
+@router.get("/notifications", response_model=list[UserNotificationSummary])
+async def list_notifications(
+    account: OperationalReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[UserNotificationSummary]:
+    return await list_user_notifications(db, account)
+
+
+@router.patch("/notifications/{notification_id}", response_model=UserNotificationSummary)
+async def update_notification_read_status(
+    notification_id: str,
+    payload: NotificationReadUpdate,
+    account: OperationalReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserNotificationSummary:
+    notification = await set_user_notification_read(db, account, notification_id, read=payload.read)
+    if notification is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found.")
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="notification.updated",
+            data=notification.model_dump(mode="json"),
+        )
+    )
+    return notification
+
+
+@router.post(
+    "/notifications/enterprise",
+    response_model=UserNotificationSummary,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_enterprise_notification(
+    payload: EnterpriseNotificationCreate,
+    actor: StaffWorkflowAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserNotificationSummary:
+    recipient = await get_enterprise_notification_recipient(db, payload.enterpriseId)
+    if recipient is None or recipient.status != AccountStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Active enterprise account not found."
+        )
+
+    notification = await create_user_notification(
+        db,
+        recipient=recipient,
+        title=payload.title,
+        message=payload.message,
+        notification_type=payload.type,
+        severity=payload.severity,
+        actor=actor,
+        source_type=payload.sourceType,
+        source_id=payload.sourceId,
+    )
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="notification.created",
+            data=notification.model_dump(mode="json"),
+        )
+    )
+    log = await create_activity_log(
+        db,
+        ActivityLogCreate(
+            category="Staff Operation",
+            severity="Success",
+            actor=actor.display_name,
+            actorRole="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
+            action="Notify Enterprise",
+            target=recipient.enterprise_name or recipient.display_name,
+            summary=(
+                f"{actor.display_name} notified "
+                f"{recipient.enterprise_name or recipient.display_name}: {payload.message}"
+            ),
+            sourceId=notification.id,
+        ),
+    )
+    await activity_log_manager.broadcast(log)
+    return notification
 
 
 @router.get("/map-enterprises")

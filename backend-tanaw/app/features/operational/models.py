@@ -174,3 +174,26 @@ class OperationalAlert(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class UserNotification(Base):
+    __tablename__ = "user_notifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    recipient_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    recipient_role: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    recipient_enterprise_id: Mapped[str | None] = mapped_column(
+        String(120), index=True, nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="Info")
+    source_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
+    created_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True, nullable=False
+    )

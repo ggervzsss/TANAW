@@ -16,6 +16,7 @@ from app.features.operational.models import (
     FinalReportSource,
     MockDataRun,
     OperationalAlert,
+    UserNotification,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "MockDataRun",
     "OperationalAlert",
     "SystemConfiguration",
+    "UserNotification",
 ]

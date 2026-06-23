@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 8
     default_it_username: str = "default@email.com"
     default_it_password: str = "default"
+    temporary_admin_username: str = "admin@email.com"
+    temporary_admin_password: str = "admin123"
+    temporary_staff_username: str = "staff@email.com"
+    temporary_staff_password: str = "staffstaff"
+    temporary_it_username: str = "it@email.com"
+    temporary_it_password: str = "it123456"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
     geocoder_provider: str = "nominatim"
     geocoder_api_key: str | None = None

@@ -178,6 +178,7 @@ export type ProfileUpdatePayload = {
   phone?: string;
   enterpriseName?: string;
   address?: string;
+  displayImageDataUrl?: string | null;
 };
 
 export async function updateCurrentProfile(payload: ProfileUpdatePayload) {

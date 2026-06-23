@@ -16,6 +16,7 @@ export type AuthUser = {
   managerName?: string | null;
   barangay?: string | null;
   address?: string | null;
+  displayImageDataUrl?: string | null;
   mustChangePassword?: boolean;
 };
 

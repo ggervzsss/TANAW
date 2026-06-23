@@ -120,7 +120,7 @@ export function CameraMonitoringPanel({
             disabled={isStarting || isProcessingThisCamera}
             className="flex items-center justify-center gap-1.5 rounded-sm bg-[#065f46] px-2 py-2 text-[11px] font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
           >
-            <Play size={14} /> {isStarting ? "Starting..." : "Start"}
+            <Play size={14} /> {isStarting ? "Starting..." : "Star Processing"}
           </button>
           <button
             type="button"

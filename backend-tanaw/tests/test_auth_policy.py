@@ -58,14 +58,22 @@ def test_generated_passwords_follow_policy() -> None:
         assert validate_password_policy(temporary_password) == temporary_password
 
 
-def test_default_it_credentials_are_not_subject_to_the_user_password_policy() -> None:
+def test_default_account_credentials_are_not_subject_to_the_user_password_policy() -> None:
     settings = Settings(
         default_it_username="default@email.com",
         default_it_password="default",
+        temporary_admin_username="admin@email.com",
+        temporary_admin_password="admin123",
+        temporary_staff_username="staff@email.com",
+        temporary_staff_password="staffstaff",
+        temporary_it_username="it@email.com",
+        temporary_it_password="it123456",
     )
 
-    assert settings.default_it_username == "default@email.com"
     assert settings.default_it_password == "default"
+    assert settings.temporary_admin_password == "admin123"
+    assert settings.temporary_staff_password == "staffstaff"
+    assert settings.temporary_it_password == "it123456"
 
 
 def test_third_failed_login_locks_account_for_five_minutes() -> None:

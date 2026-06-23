@@ -24,8 +24,11 @@ from app.features.accounts.service import (
     change_account_password,
     get_account_by_email,
     get_account_by_login_identifier,
+    get_account_preferences,
     invalidate_account_tokens,
     record_login,
+    set_account_preferences,
+    set_display_image_data_url,
     to_auth_user,
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
@@ -58,7 +61,14 @@ from app.features.auth.service import (
     lockout_seconds_remaining,
     register_failed_login,
 )
-from app.features.operational.service import create_operational_alert
+from app.features.operational.schemas import OperationalWebSocketEnvelope
+from app.features.operational.service import (
+    NOTIFY_FAILED_LOGIN_THRESHOLD_KEY,
+    create_operational_alert,
+    system_setting_enabled,
+    to_operational_alert_summary,
+)
+from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -79,6 +89,33 @@ def get_auth_log_category(account: Account) -> str:
     if account.role == AccountRole.STAFF:
         return "Staff Operation"
     return "Enterprise Activity"
+
+
+async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> None:
+    if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_THRESHOLD_KEY):
+        return
+
+    alert = await create_operational_alert(
+        db,
+        alert_type="Failed Login Threshold",
+        severity="Warning",
+        requester=account.display_name,
+        summary=(
+            f"{account.display_name} reached the failed sign-in threshold and was "
+            "temporarily locked."
+        ),
+        required_action="Review account activity and contact the user if the lockout is suspicious.",
+        resolution_mode="Remote Review",
+        owner="IT",
+        enterprise=account.enterprise_name if account.role == AccountRole.ENTERPRISE else None,
+        source_id=f"failed-login-threshold:{account.id}",
+    )
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="alert.created",
+            data=to_operational_alert_summary(alert).model_dump(mode="json"),
+        )
+    )
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -108,6 +145,7 @@ async def login(
             remaining = register_failed_login(candidate)
             await db.commit()
             if remaining > 0:
+                await notify_failed_login_threshold(db, candidate)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
@@ -327,6 +365,8 @@ async def update_profile(
         account.first_name = payload.firstName
         account.last_name = payload.lastName
         account.display_name = f"{payload.firstName} {payload.lastName}"
+    if "displayImageDataUrl" in payload.model_fields_set:
+        set_display_image_data_url(account, payload.displayImageDataUrl)
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -347,7 +387,7 @@ async def update_profile(
 async def get_preferences(
     account: Annotated[Account, Depends(get_current_account)],
 ) -> AccountPreferences:
-    values = json.loads(account.preferences_json or "{}")
+    values = get_account_preferences(account)
     return AccountPreferences.model_validate(values)
 
 
@@ -357,7 +397,9 @@ async def update_preferences(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountPreferences:
-    account.preferences_json = payload.model_dump_json()
+    values = get_account_preferences(account)
+    values.update(payload.model_dump(mode="json"))
+    set_account_preferences(account, values)
     await db.commit()
     return payload
 

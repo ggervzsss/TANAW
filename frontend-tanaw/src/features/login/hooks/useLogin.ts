@@ -13,6 +13,7 @@ export function useLogin() {
   const queryClient = useQueryClient();
   const setSession = useAuthStore((state) => state.setSession);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [loginMessage, setLoginMessage] = useState("");
 
   useEffect(() => {
     if (lockoutSeconds <= 0) return undefined;
@@ -26,6 +27,7 @@ export function useLogin() {
     const clientId = String(formData.get("clientId") ?? "");
     const encryptionKey = String(formData.get("encryptionKey") ?? "");
     const rememberMe = formData.get("rememberMe") === "on";
+    setLoginMessage("");
 
     try {
       const session = await loginService({ clientId, encryptionKey });
@@ -42,16 +44,18 @@ export function useLogin() {
       if (isAxiosError(error) && error.response?.status === 429) {
         const detail = error.response.data?.detail as { message?: string; retryAfterSeconds?: number } | undefined;
         setLockoutSeconds(detail?.retryAfterSeconds ?? 300);
-        toast.error(detail?.message ?? "Account temporarily locked.");
+        setLoginMessage(detail?.message ?? "Account temporarily locked.");
         return;
       }
-      toast.error("Invalid email or password");
+      setLoginMessage("Invalid email or password");
       return;
     }
   };
 
   return {
     handleLoginSubmit,
+    loginMessage,
     lockoutSeconds,
+    clearLoginMessage: () => setLoginMessage(""),
   };
 }

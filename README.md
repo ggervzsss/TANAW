@@ -26,7 +26,7 @@ Want only the commands needed to test the system? Use the
 - [Prerequisites](#prerequisites)
 - [Terminal compatibility](#terminal-compatibility)
 - [Quick start](#quick-start)
-- [Default account](#default-account)
+- [Default and temporary accounts](#default-and-temporary-accounts)
 - [Seed and simulate reports](#seed-and-simulate-reports)
 - [Remove simulated data](#remove-simulated-data)
 - [Run services without Docker](#run-services-without-docker)
@@ -270,6 +270,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 DEFAULT_IT_USERNAME=default@email.com
 DEFAULT_IT_PASSWORD=default
+TEMPORARY_ADMIN_USERNAME=admin@email.com
+TEMPORARY_ADMIN_PASSWORD=admin123
+TEMPORARY_STAFF_USERNAME=staff@email.com
+TEMPORARY_STAFF_PASSWORD=staffstaff
+TEMPORARY_IT_USERNAME=it@email.com
+TEMPORARY_IT_PASSWORD=it123456
 
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
 VITE_API_BASE_URL=http://localhost:8000
@@ -309,8 +315,8 @@ Stop the services without deleting database data:
 docker compose down
 ```
 
-The first backend startup creates the current schema and seeds the default IT
-account if it does not already exist.
+The first backend startup creates the current schema and seeds the protected
+default IT account plus the temporary LGU accounts if they do not already exist.
 
 ### 4. Install and start the enterprise desktop
 
@@ -353,23 +359,40 @@ Python packages. A machine running that development installer still needs
 Python 3.14 and uv available. Group members cloning the repository should use
 `npm run dev`, which uses the `.venv` created by `uv sync --frozen`.
 
-## Default account
+## Default and temporary accounts
 
-The backend automatically creates this bootstrap account on first startup:
+The backend automatically creates the protected bootstrap IT account on startup:
 
 ```text
-Role:     IT Personnel
+Role: IT Personnel
 Username: default@email.com
 Password: default
 ```
 
-Use it to sign in to the web portal and create or manage LGU and enterprise
-accounts. This protected bootstrap account accepts the configured password as-is
-and does not require a first-login password change.
+For now, the backend also creates these protected temporary accounts:
 
-The values come from `DEFAULT_IT_USERNAME` and `DEFAULT_IT_PASSWORD`. The backend
-synchronizes the protected default account to those values on every startup, so
-changing either value takes effect after restarting the backend.
+```text
+Role: Admin
+Username: admin@email.com
+Password: admin123
+
+Role: LGU Staff
+Username: staff@email.com
+Password: staffstaff
+
+Role: IT Personnel
+Username: it@email.com
+Password: it123456
+```
+
+Use the default IT account or temporary IT account to create or manage LGU and
+enterprise accounts. All startup-seeded accounts accept the configured passwords
+as-is and do not require a first-login password change.
+
+The original bootstrap account comes from `DEFAULT_IT_*`. The temporary accounts
+come from `TEMPORARY_ADMIN_*`, `TEMPORARY_STAFF_*`, and `TEMPORARY_IT_*`. The
+backend synchronizes these startup-seeded accounts on every startup, so changing
+them takes effect after restarting the backend.
 
 ## Seed and simulate reports
 
@@ -543,7 +566,7 @@ docker compose exec backend uv run mock-data status
 ### Destructive full database reset
 
 To delete the complete PostgreSQL Docker volume—including real accounts,
-reports, and the bootstrap account—run:
+reports, and the bootstrap accounts—run:
 
 ```shell
 docker compose down -v
@@ -646,8 +669,14 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `JWT_SECRET_KEY`              | Token-signing secret                                   |
 | `JWT_ALGORITHM`               | JWT algorithm, normally `HS256`                        |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime                                  |
-| `DEFAULT_IT_USERNAME`         | Startup-synchronized protected IT username             |
-| `DEFAULT_IT_PASSWORD`         | Startup-synchronized protected IT password             |
+| `DEFAULT_IT_USERNAME`         | Startup-synchronized original default IT username      |
+| `DEFAULT_IT_PASSWORD`         | Startup-synchronized original default IT password      |
+| `TEMPORARY_ADMIN_USERNAME`    | Startup-synchronized temporary Admin username          |
+| `TEMPORARY_ADMIN_PASSWORD`    | Startup-synchronized temporary Admin password          |
+| `TEMPORARY_STAFF_USERNAME`    | Startup-synchronized temporary Staff username          |
+| `TEMPORARY_STAFF_PASSWORD`    | Startup-synchronized temporary Staff password          |
+| `TEMPORARY_IT_USERNAME`       | Startup-synchronized temporary IT username             |
+| `TEMPORARY_IT_PASSWORD`       | Startup-synchronized temporary IT password             |
 | `CORS_ORIGINS`                | Comma-separated web/desktop origins allowed by the API |
 | `VITE_API_BASE_URL`           | API URL compiled into or used by frontend clients      |
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |

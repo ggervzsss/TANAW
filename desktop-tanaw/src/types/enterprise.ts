@@ -82,6 +82,7 @@ export type EnterpriseView = "dashboard" | "cameras" | "reports" | "simulation" 
 
 export type EnterpriseNotification = {
   id: number;
+  backendId?: string;
   type: string;
   message: string;
   time: string;

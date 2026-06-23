@@ -1,10 +1,11 @@
-import { Printer, X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
 import type { IntakeReport } from "@/shared/types";
 import { DotSingleReportTable } from "./DotReportTable";
 import { ReportStatusBadge } from "./ReportStatusBadge";
+import { downloadIntakeReportPdf } from "../utils/pdf";
 
 type ReportReviewModalProps = {
   report: IntakeReport;
@@ -49,10 +50,10 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => downloadIntakeReportPdf(report)}
                 className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
               >
-                <Printer size={15} /> Print PDF
+                <Download size={15} /> Download PDF
               </button>
               <button
                 type="button"

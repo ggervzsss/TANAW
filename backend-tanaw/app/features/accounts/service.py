@@ -1,3 +1,4 @@
+import json
 import re
 import secrets
 import string
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password, verify_password
+from app.features.accounts.defaults import get_startup_account_specs
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -20,8 +22,32 @@ from app.features.accounts.models import (
 from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.schemas import AccountSummary, AuthUser, DeliverySummary
 
+DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
+
+
+def get_account_preferences(account: Account) -> dict[str, object]:
+    try:
+        values = json.loads(account.preferences_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return values if isinstance(values, dict) else {}
+
+
+def set_account_preferences(account: Account, values: dict[str, object]) -> None:
+    account.preferences_json = json.dumps(values) if values else None
+
+
+def set_display_image_data_url(account: Account, data_url: str | None) -> None:
+    values = get_account_preferences(account)
+    if data_url:
+        values[DISPLAY_IMAGE_DATA_URL_KEY] = data_url
+    else:
+        values.pop(DISPLAY_IMAGE_DATA_URL_KEY, None)
+    set_account_preferences(account, values)
+
 
 def to_auth_user(account: Account) -> AuthUser:
+    display_image_data_url = get_account_preferences(account).get(DISPLAY_IMAGE_DATA_URL_KEY)
     return AuthUser(
         id=account.id,
         email=account.email,
@@ -38,6 +64,9 @@ def to_auth_user(account: Account) -> AuthUser:
         managerName=account.manager_name,
         barangay=account.barangay,
         address=account.address,
+        displayImageDataUrl=display_image_data_url
+        if isinstance(display_image_data_url, str)
+        else None,
     )
 
 
@@ -66,7 +95,7 @@ def to_account_summary(account: Account) -> AccountSummary:
         title=account.title,
         status=account.status.value,
         mustChangePassword=account.must_change_password,
-        isProtectedDefault=is_protected_default_it_account(account),
+        isProtectedDefault=is_protected_startup_account(account),
         createdAt=account.created_at,
         lastLoginAt=account.last_login_at,
     )
@@ -95,11 +124,11 @@ def is_temporary_password_expired(account: Account) -> bool:
     return expires_at <= datetime.now(UTC)
 
 
-def is_protected_default_it_account(account: Account) -> bool:
+def is_protected_startup_account(account: Account) -> bool:
     settings = get_settings()
-    return (
-        account.role == AccountRole.IT
-        and account.email.lower() == settings.default_it_username.lower()
+    return any(
+        account.role == spec.role and account.email.lower() == spec.email
+        for spec in get_startup_account_specs(settings)
     )
 
 

@@ -29,6 +29,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
     name: authUser?.displayName ?? "TANAW User",
     email: authUser?.email ?? "",
     department: authUser?.title ?? "City Tourism Operations",
+    displayImageDataUrl: authUser?.displayImageDataUrl ?? null,
   };
 
   const initials = useMemo(
@@ -105,7 +106,9 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
             onClick={() => setShowProfileMenu((current) => !current)}
             className="flex items-center gap-3 rounded-full border border-white/80 bg-white py-1 pr-3 pl-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md active:translate-y-0"
           >
-            <div className="bg-tanaw-green flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white">{initials}</div>
+            <div className="bg-tanaw-green flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white">
+              {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
+            </div>
             <div className="hidden text-left md:block">
               <p className="text-tanaw-navy text-sm leading-none font-bold">{profile.name}</p>
               <p className="text-[10px] text-gray-500">{roleAccessLabel[role]}</p>

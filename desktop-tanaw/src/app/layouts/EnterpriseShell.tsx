@@ -8,6 +8,7 @@ import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, s
 import { DashboardView } from "../../features/dashboard/components/DashboardView";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
+import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listNotifications, updateNotificationRead, type BackendNotification, type OperationalNotificationEnvelope } from "../../features/notifications/services/notifications";
 import { ProfileView } from "../../features/profile/components/ProfileView";
 import { ReportsView } from "../../features/reports/components/ReportsView";
 import { SecurityView } from "../../features/security/components/SecurityView";
@@ -57,6 +58,7 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
   const [simulationNotification, setSimulationNotification] = useState<EnterpriseNotification | null>(null);
+  const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
@@ -148,7 +150,86 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
   useEffect(() => {
     setCameras(EMPTY_CAMERAS);
     setReportsHistory(EMPTY_REPORTS);
+    setBackendNotifications([]);
   }, [enterpriseCameraStorageKey]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    let heartbeatTimer: number | undefined;
+    let reconnectAttempt = 0;
+
+    const clearHeartbeat = () => {
+      if (heartbeatTimer !== undefined) {
+        window.clearInterval(heartbeatTimer);
+        heartbeatTimer = undefined;
+      }
+    };
+
+    const refreshNotifications = async () => {
+      try {
+        const nextNotifications = await listNotifications();
+        if (!disposed) setBackendNotifications(nextNotifications);
+      } catch {
+        if (!disposed) setBackendNotifications([]);
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (disposed) return;
+      const delay = Math.min(1000 * 2 ** reconnectAttempt, 10000);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(connect, delay);
+    };
+
+    const connect = () => {
+      clearHeartbeat();
+      if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+      }
+
+      socket = new WebSocket(getOperationalWebSocketUrl());
+
+      socket.onopen = () => {
+        reconnectAttempt = 0;
+        const authMessage = createWebSocketAuthMessage();
+        if (authMessage) socket?.send(authMessage);
+        heartbeatTimer = window.setInterval(() => {
+          if (socket?.readyState === WebSocket.OPEN) socket.send("ping");
+        }, 25000);
+      };
+
+      socket.onmessage = (event) => {
+        if (event.data === "pong") return;
+        const envelope = parseNotificationEnvelope(event.data);
+        if (!envelope) return;
+        setBackendNotifications((current) => upsertBackendNotification(current, envelope.data));
+      };
+
+      socket.onerror = () => socket?.close();
+      socket.onclose = () => {
+        clearHeartbeat();
+        scheduleReconnect();
+      };
+    };
+
+    void refreshNotifications();
+    connect();
+    const refreshIntervalId = window.setInterval(() => void refreshNotifications(), 30000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(refreshIntervalId);
+      clearHeartbeat();
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, [token]);
 
   useEffect(() => {
     const enterpriseId = user?.enterpriseId || user?.id;
@@ -239,7 +320,10 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
     navigate(viewRouteById[view]);
   };
 
-  const notifications = useMemo(() => buildEnterpriseNotifications(reportsHistory, readNotificationIds, simulationNotification), [readNotificationIds, reportsHistory, simulationNotification]);
+  const notifications = useMemo(
+    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, simulationNotification, backendNotifications),
+    [backendNotifications, readNotificationIds, reportsHistory, simulationNotification],
+  );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
   useEffect(() => {
@@ -253,9 +337,15 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
     });
   }, [notifications]);
 
-  const markNotificationsRead = (notificationIds: number[]) => {
+  const markNotificationsRead = (notificationsToMark: EnterpriseNotification[]) => {
+    notificationsToMark.forEach((notification) => {
+      if (!notification.backendId) return;
+      void updateNotificationRead(notification.backendId, true)
+        .then((updated) => setBackendNotifications((current) => upsertBackendNotification(current, updated)))
+        .catch(() => undefined);
+    });
     setReadNotificationIds((currentIds) => {
-      const nextIds = new Set([...currentIds, ...notificationIds]);
+      const nextIds = new Set([...currentIds, ...notificationsToMark.map((notification) => notification.id)]);
       writeStoredNotificationIds(notificationStorageKey, nextIds);
       return nextIds;
     });
@@ -275,10 +365,10 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
         unreadCount={unreadCount}
         user={user}
         onLogout={handleLogout}
-        onMarkAllRead={() => markNotificationsRead(notifications.map((notification) => notification.id))}
+        onMarkAllRead={() => markNotificationsRead(notifications)}
         onNavigate={navigateToView}
         onNotificationSelect={(notification) => {
-          markNotificationsRead([notification.id]);
+          markNotificationsRead([notification]);
           navigateToView(notification.target);
         }}
         onNotificationsClose={() => setIsNotificationsOpen(false)}
@@ -308,7 +398,7 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
         onReview={(toast) => {
           navigateToView(toast.target);
           setToasts(toasts.filter((current) => current.id !== toast.id));
-          markNotificationsRead([toast.id]);
+          markNotificationsRead([toast]);
         }}
         onDismiss={(toastId) => setToasts(toasts.filter((toast) => toast.id !== toastId))}
       />
@@ -360,13 +450,32 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
   );
 }
 
-function buildEnterpriseNotifications(reportsHistory: ReportRecord[], readNotificationIds: Set<number>, simulationNotification: EnterpriseNotification | null) {
-  return [...reportsHistory.flatMap((report) => buildReportNotifications(report)), ...(simulationNotification ? [simulationNotification] : [])]
+function buildEnterpriseNotifications(
+  reportsHistory: ReportRecord[],
+  readNotificationIds: Set<number>,
+  simulationNotification: EnterpriseNotification | null,
+  backendNotifications: BackendNotification[],
+) {
+  const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds));
+  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report)), ...(simulationNotification ? [simulationNotification] : [])]
     .sort((left, right) => getNotificationSortValue(right) - getNotificationSortValue(left))
     .map((notification) => ({
       ...notification,
-      read: readNotificationIds.has(notification.id),
+      read: notification.read || readNotificationIds.has(notification.id),
     }));
+}
+
+function backendNotificationToEnterpriseNotification(notification: BackendNotification, readNotificationIds: Set<number>): EnterpriseNotification {
+  const id = stableNotificationId(`backend-notification:${notification.id}`);
+  return {
+    id,
+    backendId: notification.id,
+    type: notificationTypeFromSeverity(notification.severity),
+    message: `${notification.title}: ${notification.message}`,
+    time: formatNotificationDate(notification.createdAt),
+    read: Boolean(notification.readAt) || readNotificationIds.has(id),
+    target: notificationTarget(notification),
+  };
 }
 
 function buildReportNotifications(report: ReportRecord): EnterpriseNotification[] {
@@ -415,6 +524,21 @@ function createReportNotification(report: ReportRecord, type: EnterpriseNotifica
   };
 }
 
+function notificationTypeFromSeverity(severity: BackendNotification["severity"]) {
+  if (severity === "Critical") return "critical";
+  if (severity === "Warning") return "warning";
+  if (severity === "Success") return "success";
+  return "info";
+}
+
+function notificationTarget(notification: BackendNotification): EnterpriseView {
+  const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
+  if (text.includes("camera") || text.includes("gateway") || text.includes("sync") || text.includes("threshold")) {
+    return "cameras";
+  }
+  return "reports";
+}
+
 function getReportDeadline(report: ReportRecord) {
   return report.submissionDeadline ?? report.deadline ?? report.dueDate ?? null;
 }
@@ -448,6 +572,25 @@ function stableNotificationId(value: string) {
     hash |= 0;
   }
   return Math.abs(hash);
+}
+
+function parseNotificationEnvelope(value: string): OperationalNotificationEnvelope | null {
+  try {
+    const parsed = JSON.parse(value) as OperationalNotificationEnvelope;
+    if (parsed.type === "notification.created" || parsed.type === "notification.updated") {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function upsertBackendNotification(notifications: BackendNotification[], nextNotification: BackendNotification) {
+  if (notifications.some((notification) => notification.id === nextNotification.id)) {
+    return notifications.map((notification) => (notification.id === nextNotification.id ? nextNotification : notification));
+  }
+  return [nextNotification, ...notifications].slice(0, 100);
 }
 
 function readStoredNotificationIds(key: string) {

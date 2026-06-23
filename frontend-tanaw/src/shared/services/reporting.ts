@@ -20,4 +20,19 @@ export async function listIntakeReports(): Promise<IntakeReport[]> {
   return listOperationalIntakeReports();
 }
 
+export type EnterpriseNotificationPayload = {
+  enterpriseId: string;
+  title: string;
+  message: string;
+  type?: string;
+  severity?: "Info" | "Warning" | "Critical" | "Success";
+  sourceType?: string;
+  sourceId?: string;
+};
+
+export async function notifyEnterprise(payload: EnterpriseNotificationPayload) {
+  const response = await apiClient.post("/operational/notifications/enterprise", payload);
+  return response.data;
+}
+
 export { createFinalReport, listFinalReports, updateFinalReportStatus, updateIntakeReportStatus, type FinalReportCreatePayload, type FinalReportStatusPayload, type UpdateReportStatusPayload };

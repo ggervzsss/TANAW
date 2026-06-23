@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
@@ -8,9 +8,10 @@ import { routePaths } from "../../../app/router/routePaths";
 import { staffApi } from "../../../lib/axios";
 import { cn } from "../../../utils/cn";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "../../../utils/password-policy";
+import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { useLogin } from "../hooks/use-login";
 import { loginSchema, type LoginFormValues } from "../schemas/login-schema";
-import { useAuthStore } from "../stores/auth-store";
+import { isRememberEnabled, useAuthStore } from "../stores/auth-store";
 
 const cityHallImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
 
@@ -139,38 +140,15 @@ function RecoveryDialogContent({
         <form onSubmit={onReset}>
           <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Create a new private password for {email}.</p>
           <div className="space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">New password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => onPasswordChange(event.target.value)}
-                className={cn(
-                  "h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
-                  error ? "border-(--tanaw-error)" : "border-(--tanaw-border)",
-                )}
-                placeholder="Enter new password"
-                autoComplete="new-password"
-                minLength={PASSWORD_MIN_LENGTH}
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Confirm password</span>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => onConfirmPasswordChange(event.target.value)}
-                className={cn(
-                  "h-12 w-full rounded-[22px] border bg-white px-4 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
-                  error ? "border-(--tanaw-error)" : "border-(--tanaw-border)",
-                )}
-                placeholder="Confirm new password"
-                autoComplete="new-password"
-                minLength={PASSWORD_MIN_LENGTH}
-                required
-              />
-            </label>
+            <RecoveryPasswordInput id="desktop-recovery-new-password" label="New password" value={password} onChange={onPasswordChange} placeholder="Enter new password" error={error} />
+            <RecoveryPasswordInput
+              id="desktop-recovery-confirm-password"
+              label="Confirm password"
+              value={confirmPassword}
+              onChange={onConfirmPasswordChange}
+              placeholder="Confirm new password"
+              error={error}
+            />
           </div>
           <RecoveryError message={error} />
           <button
@@ -213,6 +191,56 @@ function RecoveryDialogContent({
         </button>
       </form>
     </RecoveryStepFrame>
+  );
+}
+
+function RecoveryPasswordInput({
+  error,
+  id,
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  error: string;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  return (
+    <div>
+      <label htmlFor={id} className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={isPasswordVisible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={cn(
+            "h-12 w-full rounded-[22px] border bg-white px-4 pr-12 text-sm transition outline-none focus:border-(--tanaw-green) focus:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
+            error ? "border-(--tanaw-error)" : "border-(--tanaw-border)",
+          )}
+          placeholder={placeholder}
+          autoComplete="new-password"
+          minLength={PASSWORD_MIN_LENGTH}
+          required
+        />
+        <button
+          type="button"
+          onClick={() => setIsPasswordVisible((current) => !current)}
+          className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+          aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        >
+          {isPasswordVisible ? <EyeOff className="h-5 w-5" strokeWidth={1.9} /> : <Eye className="h-5 w-5" strokeWidth={1.9} />}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -347,7 +375,6 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
 const formatLockout = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 const validateRecoveryTarget = (value: string) => {
@@ -382,21 +409,16 @@ export function LoginPage() {
   const location = useLocation();
   const locationState = location.state as LoginLocationState | null;
   const redirectTo = locationState?.from?.pathname ? `${locationState.from.pathname}${locationState.from.search ?? ""}` : undefined;
-  const loginMutation = useLogin(redirectTo);
+  const [authMessage, setAuthMessage] = useState("");
+  const loginMutation = useLogin(redirectTo, { onAuthMessage: setAuthMessage });
   const particles = useMemo(
     () => [
       { left: "7%", top: "58%", size: 3, delay: "0s", duration: "12s" },
-      { left: "12%", top: "66%", size: 4, delay: "1.1s", duration: "13.5s" },
       { left: "18%", top: "51%", size: 2, delay: "2.6s", duration: "11s" },
       { left: "23%", top: "74%", size: 3, delay: "0.4s", duration: "14s" },
       { left: "31%", top: "61%", size: 4, delay: "3.2s", duration: "12.5s" },
-      { left: "38%", top: "80%", size: 2, delay: "1.8s", duration: "15s" },
       { left: "44%", top: "55%", size: 3, delay: "4.1s", duration: "13s" },
-      { left: "52%", top: "70%", size: 2, delay: "2.2s", duration: "12s" },
-      { left: "58%", top: "48%", size: 3, delay: "5s", duration: "14.5s" },
       { left: "15%", top: "84%", size: 2, delay: "5.8s", duration: "16s" },
-      { left: "68%", top: "62%", size: 2, delay: "3.8s", duration: "15.5s" },
-      { left: "78%", top: "26%", size: 3, delay: "6.4s", duration: "17s" },
       { left: "88%", top: "78%", size: 2, delay: "7.1s", duration: "14s" },
     ],
     [],
@@ -406,6 +428,7 @@ export function LoginPage() {
     username: "",
     password: "",
   });
+  const [rememberMe, setRememberMe] = useState(() => isRememberEnabled());
   const [errors, setErrors] = useState<FormErrors>({});
   const [activeDialog, setActiveDialog] = useState<DialogMode>(null);
   const [recoveryStep, setRecoveryStep] = useState<RecoveryStep>("email");
@@ -426,8 +449,7 @@ export function LoginPage() {
   const [supportSubmitted, setSupportSubmitted] = useState(false);
   const [isSupportSubmitting, setIsSupportSubmitting] = useState(false);
   const [supportCopied, setSupportCopied] = useState(false);
-  const [heroGlow, setHeroGlow] = useState({ x: 28, y: 72 });
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLDivElement>();
 
   if (isAuthenticated) {
     return <Navigate to={getAuthenticatedRoute(user?.mustChangePassword)} replace />;
@@ -438,21 +460,15 @@ export function LoginPage() {
       ...current,
       [field]: event.target.value,
     }));
+    if (authMessage) setAuthMessage("");
     if (errors[field]) {
       setErrors((current) => ({ ...current, [field]: undefined }));
     }
   };
 
-  const handleStagePointerMove = (event: PointerEvent<HTMLElement>) => {
-    const bounds = stageRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
-    setHeroGlow({
-      x: clampPercent(((event.clientX - bounds.left) / bounds.width) * 100),
-      y: clampPercent(((event.clientY - bounds.top) / bounds.height) * 100),
-    });
-  };
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setAuthMessage("");
     const parsed = loginSchema.safeParse(values);
 
     if (!parsed.success) {
@@ -466,7 +482,7 @@ export function LoginPage() {
     }
 
     setErrors({});
-    if (loginMutation.lockoutSeconds <= 0) loginMutation.mutate(parsed.data);
+    if (loginMutation.lockoutSeconds <= 0) loginMutation.mutate({ ...parsed.data, rememberMe });
   };
 
   const openDialog = (dialog: Exclude<DialogMode, null>) => {
@@ -646,14 +662,8 @@ export function LoginPage() {
   return (
     <div
       ref={stageRef}
-      className="tanaw-login-stage relative grid min-h-screen grid-cols-[minmax(0,1.04fr)_minmax(460px,0.72fr)] items-center gap-10 overflow-hidden bg-(--tanaw-bg) px-10 py-8 text-(--tanaw-text)"
-      onPointerMove={handleStagePointerMove}
-      style={
-        {
-          "--hero-glow-x": `${heroGlow.x}%`,
-          "--hero-glow-y": `${heroGlow.y}%`,
-        } as CSSProperties
-      }
+      className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid h-svh min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
+      style={stageGlowStyle}
     >
       <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={{ backgroundImage: `url("${cityHallImage}")` }} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
@@ -678,17 +688,17 @@ export function LoginPage() {
         ))}
       </div>
 
-      <section className="relative z-10 flex min-h-[calc(100vh-4rem)] items-end overflow-visible px-2 pb-14 text-white">
+      <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
         <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
           <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
             <SampaguitaIcon className="h-8 w-8" />
           </div>
-          <h1 className="font-display text-5xl leading-tight font-bold text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)]">Enterprise Portal</h1>
+          <h1 className="tanaw-auth-hero-title font-display text-5xl leading-tight font-bold text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)]">Enterprise Portal</h1>
           <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
-          <p className="mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
+          <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
             Secure access for tourism enterprise reporting, camera monitoring, and operational compliance.
           </p>
-          <div className="mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
+          <div className="tanaw-auth-hero-location mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
             <MapPin className="h-5 w-5 flex-none text-white" strokeWidth={2} />
             <span>San Pedro, Laguna, Philippines</span>
           </div>
@@ -701,18 +711,18 @@ export function LoginPage() {
         transition={{ duration: 0.45, ease: "easeOut" }}
         onSubmit={handleSubmit}
         noValidate
-        className="relative z-10 ml-auto w-full max-w-135 rounded-[30px] border border-white/80 bg-white/96 p-10 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl"
+        className="tanaw-auth-card relative z-10 ml-auto w-full max-w-135 rounded-[30px] border border-white/80 bg-white/96 p-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl xl:p-10"
         onPointerMove={(event) => event.stopPropagation()}
       >
-        <div className="mb-8">
+        <div className="tanaw-auth-card-header mb-8">
           <div className="flex items-center gap-6">
-            <img src={citySeal} alt="City of San Pedro seal" className="h-20 w-20 object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)]" />
+            <img src={citySeal} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-20 w-20 object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)]" />
             <div>
-              <h2 className="font-display text-[2rem] leading-tight font-extrabold text-(--tanaw-green)">TANAW PORTAL</h2>
-              <p className="mt-2 text-base font-medium text-(--tanaw-muted)">Enterprise Tourism Management</p>
+              <h2 className="tanaw-auth-brand-title font-display text-[2rem] leading-tight font-extrabold text-(--tanaw-green)">TANAW PORTAL</h2>
+              <p className="tanaw-auth-brand-subtitle mt-2 text-base font-medium text-(--tanaw-muted)">Enterprise Tourism Management</p>
             </div>
           </div>
-          <div className="mt-8 flex items-center gap-3 text-(--tanaw-gold)">
+          <div className="tanaw-auth-divider mt-8 flex items-center gap-3 text-(--tanaw-gold)">
             <SampaguitaIcon className="h-4 w-4 flex-none" />
             <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
           </div>
@@ -723,7 +733,7 @@ export function LoginPage() {
             <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Username</span>
             <div
               className={cn(
-                "relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
+                "tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
                 errors.username ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
               )}
             >
@@ -744,7 +754,7 @@ export function LoginPage() {
             <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Password</span>
             <div
               className={cn(
-                "relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
+                "tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
                 errors.password ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
               )}
             >
@@ -771,9 +781,14 @@ export function LoginPage() {
           </label>
         </div>
 
-        <div className="mt-1 mb-7 flex items-center justify-between gap-4">
+        <div className="tanaw-auth-control-gap mt-1 mb-7 flex items-center justify-between gap-4">
           <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-(--tanaw-text)">
-            <input type="checkbox" className="h-5 w-5 rounded border-(--tanaw-border) accent-(--tanaw-green)" />
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+              className="h-5 w-5 rounded border-(--tanaw-border) accent-(--tanaw-green)"
+            />
             Remember me
           </label>
           <button
@@ -785,16 +800,23 @@ export function LoginPage() {
           </button>
         </div>
 
+        {authMessage ? (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" strokeWidth={2.2} aria-hidden="true" />
+            <span>{authMessage}</span>
+          </div>
+        ) : null}
+
         <button
           type="submit"
           disabled={loginMutation.isPending || loginMutation.lockoutSeconds > 0}
-          className="flex h-15 w-full items-center justify-center gap-7 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] disabled:cursor-not-allowed disabled:opacity-75"
+          className="tanaw-auth-primary-action flex h-15 w-full items-center justify-center gap-7 rounded-xl bg-[linear-gradient(135deg,var(--tanaw-green)_0%,var(--tanaw-green-dark)_100%)] px-6 text-base font-semibold text-white shadow-[0_16px_30px_rgba(6,78,47,0.22)] transition hover:-translate-y-px hover:shadow-[0_18px_36px_rgba(6,78,47,0.28)] disabled:cursor-not-allowed disabled:opacity-75"
         >
           {loginMutation.lockoutSeconds > 0 ? `Try again in ${formatLockout(loginMutation.lockoutSeconds)}` : loginMutation.isPending ? "Signing in..." : "Sign in"}
           <ArrowRight className="h-5 w-5" strokeWidth={2} />
         </button>
 
-        <div className="my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
+        <div className="tanaw-auth-divider-row my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
           <span className="h-px flex-1 bg-(--tanaw-border)" />
           <span>OR</span>
           <span className="h-px flex-1 bg-(--tanaw-border)" />
@@ -802,7 +824,7 @@ export function LoginPage() {
 
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-(--tanaw-border) bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+            <span className="tanaw-auth-support-icon flex h-12 w-12 flex-none items-center justify-center rounded-lg border border-(--tanaw-border) bg-white text-[#6f7785] shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
               <Headphones className="h-6 w-6" strokeWidth={1.9} />
             </span>
             <span>
@@ -820,7 +842,7 @@ export function LoginPage() {
       {activeDialog
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,20,12,0.54)] px-5 py-8 backdrop-blur-md"
+              className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(3,20,12,0.54)] px-5 py-6 backdrop-blur-md sm:items-center sm:py-8"
               role="presentation"
               onMouseDown={closeDialog}
               onPointerMove={(event) => event.stopPropagation()}
@@ -829,7 +851,7 @@ export function LoginPage() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={activeDialog === "forgot" ? "desktop-forgot-password-title" : "desktop-contact-support-title"}
-                className="w-full max-w-md rounded-[36px] border border-white/80 bg-white p-8 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3"
+                className="my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}

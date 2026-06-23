@@ -185,22 +185,177 @@
     radial-gradient(circle at 28% 52%, transparent 34%, rgb(3 20 12 / 0.24) 74%, rgb(3 20 12 / 0.36) 100%),
     linear-gradient(90deg, rgb(3 61 36 / 0.34) 0%, transparent 28%, rgb(247 247 243 / 0.08) 54%, rgb(247 247 243 / 0.76) 100%);
   box-shadow: inset 0 0 110px rgb(0 0 0 / 0.28);
-  backdrop-filter: blur(0.25px);
+}
+
+.tanaw-auth-stage {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tanaw-auth-shell {
+  align-items: safe center;
+  gap: clamp(1.5rem, 3svh, 2.5rem);
+  padding-block: clamp(1rem, 2.4svh, 2rem);
+}
+
+.tanaw-auth-hero {
+  min-height: min(42rem, calc(100svh - 2rem));
+  padding-bottom: clamp(1.75rem, 5svh, 3.5rem);
+}
+
+.tanaw-auth-hero-title {
+  font-size: clamp(2.75rem, 4vw, 3.75rem);
+}
+
+.tanaw-auth-hero-copy {
+  margin-top: clamp(1rem, 2.6svh, 1.5rem);
+}
+
+.tanaw-auth-hero-location {
+  margin-top: clamp(1.5rem, 4svh, 2.5rem);
+}
+
+.tanaw-auth-card {
+  padding: clamp(1.5rem, 4svh, 2.5rem);
+}
+
+.tanaw-auth-card-header {
+  margin-bottom: clamp(1.15rem, 3.2svh, 2rem);
+}
+
+.tanaw-auth-reset-header {
+  margin-bottom: clamp(1rem, 3svh, 1.75rem);
+  padding-top: clamp(1rem, 2.3svh, 1.25rem);
+}
+
+.tanaw-auth-brand-seal {
+  width: clamp(4rem, 9svh, 5.375rem);
+  height: clamp(4rem, 9svh, 5.375rem);
+}
+
+.tanaw-auth-brand-title {
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+}
+
+.tanaw-auth-brand-subtitle {
+  margin-top: clamp(0.35rem, 1svh, 0.5rem);
+  font-size: clamp(0.9rem, 1.5vw, 1.125rem);
+  line-height: 1.45;
+}
+
+.tanaw-auth-divider {
+  margin-top: clamp(1rem, 3.2svh, 2rem);
+}
+
+.tanaw-auth-field {
+  height: clamp(3rem, 6.2svh, 3.5rem);
+}
+
+.tanaw-auth-control-gap {
+  margin-bottom: clamp(1rem, 3.1svh, 1.75rem);
+}
+
+.tanaw-auth-primary-action {
+  height: clamp(3.25rem, 6.7svh, 3.75rem);
+}
+
+.tanaw-auth-divider-row {
+  margin-block: clamp(1rem, 3.2svh, 2rem);
+}
+
+.tanaw-auth-support-icon {
+  width: clamp(2.5rem, 5.4svh, 3rem);
+  height: clamp(2.5rem, 5.4svh, 3rem);
+}
+
+.tanaw-auth-reset-callout {
+  margin-bottom: clamp(1rem, 2.8svh, 1.5rem);
+  padding: clamp(0.9rem, 2.3svh, 1rem);
+}
+
+@media (max-height: 760px) {
+  .tanaw-auth-shell {
+    align-items: safe start;
+  }
+
+  .tanaw-auth-hero {
+    min-height: min(34rem, calc(100svh - 2rem));
+  }
+
+  .tanaw-auth-hero-title {
+    font-size: clamp(2.4rem, 3.6vw, 3.25rem);
+  }
+
+  .tanaw-auth-card {
+    border-radius: 1.5rem;
+  }
+}
+
+@media (max-height: 640px) {
+  .tanaw-auth-shell {
+    gap: 1rem;
+    padding-block: 0.75rem;
+  }
+
+  .tanaw-auth-card {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .tanaw-auth-card-header,
+  .tanaw-auth-reset-header {
+    margin-bottom: 0.9rem;
+  }
+
+  .tanaw-auth-reset-header {
+    padding-top: 0.75rem;
+  }
+
+  .tanaw-auth-brand-seal {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
+  .tanaw-auth-divider {
+    margin-top: 0.85rem;
+  }
+
+  .tanaw-auth-field {
+    height: 2.85rem;
+  }
+
+  .tanaw-auth-control-gap {
+    margin-bottom: 0.85rem;
+  }
+
+  .tanaw-auth-primary-action {
+    height: 3rem;
+  }
+
+  .tanaw-auth-divider-row {
+    margin-block: 0.75rem;
+  }
+
+  .tanaw-auth-support-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .tanaw-auth-reset-callout {
+    margin-bottom: 0.85rem;
+    padding: 0.85rem;
+  }
 }
 
 .tanaw-stage-glow {
   pointer-events: none;
+  contain: paint;
   isolation: isolate;
   overflow: hidden;
   background:
-    radial-gradient(circle at var(--hero-glow-x, 28%) var(--hero-glow-y, 72%), rgb(255 231 153 / 0.54) 0, rgb(255 231 153 / 0.26) 4.5rem, rgb(15 107 67 / 0.18) 10rem, transparent 17rem),
-    radial-gradient(circle at calc(var(--hero-glow-x, 28%) + 3%) calc(var(--hero-glow-y, 72%) + 2%), rgb(15 107 67 / 0.24), transparent 21rem),
-    radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.68), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.3), transparent 21rem);
-  opacity: 0.96;
-  filter: blur(0.2px);
+    radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
+  opacity: 0.94;
   mix-blend-mode: screen;
   transition: opacity 180ms ease;
-  will-change: background, opacity;
   animation: tanaw-stage-aura 7.5s ease-in-out infinite;
 }
 
@@ -219,12 +374,17 @@
 .tanaw-stage-glow::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at var(--hero-glow-x, 28%) var(--hero-glow-y, 72%), transparent 0 3.8rem, rgb(255 231 153 / 0.22) 5.4rem, transparent 9.8rem),
-    radial-gradient(circle at var(--hero-glow-x, 28%) var(--hero-glow-y, 72%), rgb(255 255 255 / 0.2), transparent 4.4rem);
-  opacity: 0.68;
-  animation: tanaw-cursor-ripple 3.8s ease-in-out infinite;
+  top: 0;
+  left: 0;
+  width: clamp(22rem, 44vw, 48rem);
+  height: clamp(22rem, 44vw, 48rem);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(255 242 185 / 0.8) 0, rgb(255 231 153 / 0.42) 5.5rem, rgb(15 107 67 / 0.22) 14rem, transparent 68%);
+  opacity: 0.9;
+  transform: translate3d(calc(var(--hero-glow-x, 28vw) - 50%), calc(var(--hero-glow-y, 72vh) - 50%), 0);
+  transform-origin: center;
+  animation: tanaw-cursor-ripple 4.8s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .tanaw-stage-particles {
@@ -237,10 +397,8 @@
   border-radius: 999px;
   background: rgb(255 224 142 / 0.92);
   box-shadow:
-    0 0 12px rgb(255 224 142 / 0.58),
-    0 0 30px rgb(215 179 90 / 0.36),
-    0 0 52px rgb(15 107 67 / 0.28);
-  filter: blur(0.1px);
+    0 0 10px rgb(255 224 142 / 0.5),
+    0 0 24px rgb(215 179 90 / 0.28);
   animation: tanaw-particle-drift var(--particle-duration, 11s) ease-in-out var(--particle-delay, 0s) infinite;
   will-change: transform, opacity;
 }
@@ -343,12 +501,12 @@
   0%,
   100% {
     opacity: 0.38;
-    transform: scale(0.995);
+    transform: translate3d(calc(var(--hero-glow-x, 28vw) - 50%), calc(var(--hero-glow-y, 72vh) - 50%), 0) scale(0.995);
   }
 
   50% {
     opacity: 0.78;
-    transform: scale(1.01);
+    transform: translate3d(calc(var(--hero-glow-x, 28vw) - 50%), calc(var(--hero-glow-y, 72vh) - 50%), 0) scale(1.01);
   }
 }
 
@@ -389,6 +547,17 @@
 
   .tanaw-stage-glow {
     transition: none;
+  }
+}
+
+@media (max-width: 767px), (max-height: 720px) {
+  .tanaw-stage-particles {
+    display: none;
+  }
+
+  .tanaw-stage-glow::before {
+    opacity: 0.42;
+    animation: none;
   }
 }
 

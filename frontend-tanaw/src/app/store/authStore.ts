@@ -5,7 +5,9 @@ import type { AuthUser, UserRole } from "@/shared/types/role.types";
 const AUTH_STORAGE_KEY = "tanaw-auth";
 const REMEMBER_STORAGE_KEY = "tanaw-auth-remember";
 
-const getPreferredStorage = () => (localStorage.getItem(REMEMBER_STORAGE_KEY) === "true" ? localStorage : sessionStorage);
+const isRememberEnabled = () => localStorage.getItem(REMEMBER_STORAGE_KEY) === "true";
+
+const getPreferredStorage = () => (isRememberEnabled() ? localStorage : sessionStorage);
 
 const authStorage: StateStorage = {
   getItem: (name) => getPreferredStorage().getItem(name),
@@ -30,7 +32,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       token: null,
       user: null,
-      setSession: (session, remember = false) => {
+      setSession: (session, remember = isRememberEnabled()) => {
         if (remember) {
           localStorage.setItem(REMEMBER_STORAGE_KEY, "true");
           sessionStorage.removeItem(AUTH_STORAGE_KEY);

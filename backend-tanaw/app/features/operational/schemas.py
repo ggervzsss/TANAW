@@ -247,6 +247,7 @@ class OperationalAlertSummary(BaseModel):
         "Threshold Breach",
         "Foot Traffic Alert",
         "Occupancy Spike",
+        "Failed Login Threshold",
     ]
     severity: Literal["Info", "Warning", "Critical"]
     enterprise: str | None = None
@@ -269,6 +270,38 @@ class OperationalAlertStatusUpdate(BaseModel):
     status: Literal["New", "In Review", "Resolved"]
 
 
+NotificationSeverity = Literal["Info", "Warning", "Critical", "Success"]
+
+
+class UserNotificationSummary(BaseModel):
+    id: str
+    title: str
+    message: str
+    type: str
+    severity: NotificationSeverity
+    sourceType: str | None = None
+    sourceId: str | None = None
+    createdBy: str | None = None
+    recipientRole: str
+    recipientEnterpriseId: str | None = None
+    createdAt: str
+    readAt: str | None = None
+
+
+class EnterpriseNotificationCreate(BaseModel):
+    enterpriseId: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=160)
+    message: str = Field(min_length=1, max_length=2000)
+    type: str = Field(default="Staff Follow-up", min_length=1, max_length=60)
+    severity: NotificationSeverity = "Warning"
+    sourceType: str | None = Field(default=None, max_length=80)
+    sourceId: str | None = Field(default=None, max_length=120)
+
+
+class NotificationReadUpdate(BaseModel):
+    read: bool = True
+
+
 class FinalReportCreate(BaseModel):
     reportIds: list[str] = Field(min_length=1, max_length=500)
     preparedBy: str = Field(min_length=1, max_length=120)
@@ -289,5 +322,7 @@ class OperationalWebSocketEnvelope(BaseModel):
         "alert.created",
         "alert.updated",
         "alert.resolved",
+        "notification.created",
+        "notification.updated",
     ]
     data: dict

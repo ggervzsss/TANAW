@@ -105,16 +105,32 @@ Press `Ctrl+C` to stop following logs. The containers continue running.
 
 ## 5. Test the web portal
 
-The backend creates this account on first startup:
+The backend creates the original protected default account on startup:
 
 ```text
-Username: default@email.tanaw
-Password: default
 Role: IT Personnel
+Username: default@email.com
+Password: default
 ```
 
-Sign in at <http://localhost:5173>. Change this password before any non-local
-use.
+For now, it also creates these protected temporary accounts:
+
+```text
+Role: IT Personnel
+Username: it@email.com
+Password: it123456
+
+Role: Admin
+Username: admin@email.com
+Password: admin123
+
+Role: LGU Staff
+Username: staff@email.com
+Password: staffstaff
+```
+
+Sign in at <http://localhost:5173>. These startup-seeded passwords bypass
+first-login password-change onboarding.
 
 Create the persistent target account under **Enterprise Accounts** before
 loading mock data:
@@ -327,7 +343,7 @@ The database and simulation remain available after the next
 ### Delete the entire Docker database
 
 This deletes every PostgreSQL account and report, including real local records
-and the default account:
+and the default/temporary accounts:
 
 ```shell
 docker compose down -v
