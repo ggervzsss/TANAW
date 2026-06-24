@@ -2,6 +2,7 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from app.core.config import get_settings
+from app.core.http_security import websocket_security_headers
 
 
 async def receive_websocket_bearer_token(
@@ -14,7 +15,7 @@ async def receive_websocket_bearer_token(
         await websocket.close(code=1008)
         return None
 
-    await websocket.accept()
+    await websocket.accept(headers=websocket_security_headers(websocket))
 
     if query_token:
         return query_token
