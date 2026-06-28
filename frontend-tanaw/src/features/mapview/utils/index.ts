@@ -13,6 +13,7 @@ export {
   getGeoJsonColor,
   hoverBoundaryStyle,
   getBarangayFeatureForPoint,
+  getBarangayPointResolution,
   getBarangayForPoint,
   isBoundaryPolygonFeature,
   isPointInsideRelaxedSanPedroBounds,
@@ -25,4 +26,4 @@ export {
   toMapEnterprise,
 } from "./enterpriseMapUtils";
 export { getDarkStatusBadgeClass } from "./mapStatusStyles";
-export type { GeoJsonFeatureCollection } from "./enterpriseMapUtils";
+export type { BarangayPointResolution, GeoJsonFeatureCollection } from "./enterpriseMapUtils";

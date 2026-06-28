@@ -8,6 +8,7 @@ import { CameraList } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
+import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   EMPTY_ML_COUNTS,
@@ -530,7 +531,12 @@ function normalizeCamera(camera: Camera): Camera {
     config: {
       ...camera.config,
       tripwire,
-      tripwires: camera.config?.tripwires ?? getDefaultTripwires(tripwire),
+      tripwires: camera.config?.tripwires
+        ? {
+            entry: normalizeTripwireLine(camera.config.tripwires.entry),
+            exit: normalizeTripwireLine(camera.config.tripwires.exit),
+          }
+        : getDefaultTripwires(tripwire),
       roi: camera.config?.roi ?? { top: 10, left: 10, width: 80, height: 80 },
       reverse: camera.config?.reverse ?? false,
     },
@@ -539,14 +545,14 @@ function normalizeCamera(camera: Camera): Camera {
 
 function getDefaultTripwires(centerX: number) {
   return {
-    entry: {
-      start: { x: Math.max(5, centerX - 8), y: 12 },
-      end: { x: Math.max(5, centerX - 8), y: 88 },
-    },
-    exit: {
-      start: { x: Math.min(95, centerX + 8), y: 12 },
-      end: { x: Math.min(95, centerX + 8), y: 88 },
-    },
+    entry: createTripwireLine([
+      { x: Math.max(5, centerX - 8), y: 12 },
+      { x: Math.max(5, centerX - 8), y: 88 },
+    ]),
+    exit: createTripwireLine([
+      { x: Math.min(95, centerX + 8), y: 12 },
+      { x: Math.min(95, centerX + 8), y: 88 },
+    ]),
   };
 }
 

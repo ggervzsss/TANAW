@@ -1,6 +1,12 @@
 import { staffApi } from "../../../lib/axios";
 import type { LoginFormValues } from "../schemas/login-schema";
 import type { LoginResponse } from "../types";
+import type { ThemePreference } from "../../../types/enterprise";
+
+export type AccountPreferences = {
+  theme: ThemePreference;
+  openAtLogin: boolean;
+};
 
 function normalizeSession(response: LoginResponse): LoginResponse {
   return {
@@ -36,6 +42,36 @@ export async function getCurrentUser() {
 export async function updateCurrentProfile(payload: { managerName: string; email: string; phone?: string; enterpriseName: string; address?: string; displayImageDataUrl?: string | null }) {
   const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile", payload);
   return normalizeSession({ token: "", user: response.data }).user;
+}
+
+export async function updateProfileImage(displayImageDataUrl: string | null) {
+  const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile/display-image", { displayImageDataUrl });
+  return normalizeSession({ token: "", user: response.data }).user;
+}
+
+export async function updateLeadAdminName(managerName: string) {
+  const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile/lead-admin", { managerName });
+  return normalizeSession({ token: "", user: response.data }).user;
+}
+
+export async function requestBusinessEmailChange(email: string) {
+  const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/business-email-change", { email });
+  return response.data;
+}
+
+export async function requestContactNumberChange(phone: string) {
+  const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/contact-number-change", { phone });
+  return response.data;
+}
+
+export async function getAccountPreferences() {
+  const response = await staffApi.get<AccountPreferences>("/auth/preferences");
+  return response.data;
+}
+
+export async function updateAccountPreferences(payload: Partial<AccountPreferences>) {
+  const response = await staffApi.patch<AccountPreferences>("/auth/preferences", payload);
+  return response.data;
 }
 
 export async function requestDataArchive() {

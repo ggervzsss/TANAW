@@ -511,6 +511,18 @@ textarea,
 
 /* Enterprise shell overrides */
 .enterprise-shell {
+  --enterprise-app-bg: #f4f8f5;
+  --enterprise-card-bg: #ffffff;
+  --enterprise-card-elevated-bg: #ffffff;
+  --enterprise-panel-bg: #f0f5f1;
+  --enterprise-input-bg: #ffffff;
+  --enterprise-border: #c6d6cb;
+  --enterprise-border-soft: #d6e2d9;
+  --enterprise-text: #111827;
+  --enterprise-muted: #475569;
+  --enterprise-muted-soft: #64748b;
+  --enterprise-green-accent: #065f46;
+  --enterprise-gold-accent: #b7952b;
   min-height: 100vh;
   color: #0f172a;
   background: #eef5f0;
@@ -744,6 +756,20 @@ textarea,
   color: #065f46 !important;
 }
 
+.enterprise-shell .tanaw-switch {
+  background-color: #cbd5e1 !important;
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.12);
+}
+
+.enterprise-shell .tanaw-switch--on {
+  background-color: #065f46 !important;
+}
+
+.enterprise-shell .tanaw-switch-thumb {
+  background-color: #ffffff !important;
+  box-shadow: 0 4px 10px rgb(15 23 42 / 0.18);
+}
+
 .enterprise-shell .recharts-cartesian-axis-tick-value {
   fill: #475569 !important;
 }
@@ -763,7 +789,23 @@ textarea,
   color: #334155 !important;
 }
 
+.enterprise-shell .enterprise-ticket-panel-header {
+  background: linear-gradient(90deg, rgb(236 253 245 / 0.95) 0%, rgb(255 255 255 / 0.98) 52%, rgb(255 251 235 / 0.86) 100%);
+}
+
 html.dark .enterprise-shell {
+  --enterprise-app-bg: #0d1424;
+  --enterprise-card-bg: #162033;
+  --enterprise-card-elevated-bg: #1b283d;
+  --enterprise-panel-bg: #101a2d;
+  --enterprise-input-bg: #0f1728;
+  --enterprise-border: rgb(148 163 184 / 0.28);
+  --enterprise-border-soft: rgb(148 163 184 / 0.18);
+  --enterprise-text: #f8fafc;
+  --enterprise-muted: #cbd5e1;
+  --enterprise-muted-soft: #94a3b8;
+  --enterprise-green-accent: #6ee7b7;
+  --enterprise-gold-accent: #f3c96b;
   color: #f8fafc;
   background: #0b1120;
 }
@@ -781,22 +823,42 @@ html.dark .enterprise-shell header.dark\:bg-\[\#111827\]\/90 {
 }
 
 html.dark .enterprise-shell .bg-white {
-  background-color: #1e293b !important;
+  background-color: #172033 !important;
 }
 
 html.dark .enterprise-shell .bg-white\/50,
 html.dark .enterprise-shell .bg-white\/80 {
-  background-color: rgb(17 24 39 / 0.9) !important;
+  background-color: rgb(15 23 42 / 0.92) !important;
 }
 
 html.dark .enterprise-shell .bg-gray-50,
+html.dark .enterprise-shell .bg-gray-50\/80,
 html.dark .enterprise-shell .bg-\[\#f4f8f5\],
 html.dark .enterprise-shell .bg-\[\#f8f9fa\] {
   background-color: #0f172a !important;
 }
 
 html.dark .enterprise-shell .bg-gray-100 {
-  background-color: #334155 !important;
+  background-color: #273449 !important;
+}
+
+html.dark .enterprise-shell .bg-gray-300 {
+  background-color: #475569 !important;
+}
+
+html.dark .enterprise-shell .bg-green-50,
+html.dark .enterprise-shell .bg-emerald-50,
+html.dark .enterprise-shell .bg-emerald-50\/70,
+html.dark .enterprise-shell .bg-emerald-50\/80,
+html.dark .enterprise-shell .bg-emerald-50\/90 {
+  background-color: rgb(6 78 59 / 0.28) !important;
+}
+
+html.dark .enterprise-shell .bg-amber-50,
+html.dark .enterprise-shell .bg-amber-50\/60,
+html.dark .enterprise-shell .bg-amber-50\/70,
+html.dark .enterprise-shell .bg-amber-100 {
+  background-color: rgb(120 53 15 / 0.28) !important;
 }
 
 html.dark .enterprise-shell .bg-red-50 {
@@ -820,14 +882,18 @@ html.dark .enterprise-shell .bg-\[\#ffd200\]\/20 {
 
 html.dark .enterprise-shell .text-\[\#111827\],
 html.dark .enterprise-shell .text-\[\#2a3063\],
+html.dark .enterprise-shell .text-tanaw-navy,
+html.dark .enterprise-shell .text-slate-700,
 html.dark .enterprise-shell .text-gray-800 {
   color: #f8fafc !important;
 }
 
+html.dark .enterprise-shell .text-slate-600,
 html.dark .enterprise-shell .text-gray-700 {
   color: #e2e8f0 !important;
 }
 
+html.dark .enterprise-shell .text-slate-500,
 html.dark .enterprise-shell .text-gray-600 {
   color: #cbd5e1 !important;
 }
@@ -847,14 +913,26 @@ html.dark .enterprise-shell .text-\[\#a40e0e\] {
 }
 
 html.dark .enterprise-shell .text-blue-800,
+html.dark .enterprise-shell .text-blue-700,
 html.dark .enterprise-shell .text-\[\#2d5eff\] {
   color: #93c5fd !important;
 }
 
+html.dark .enterprise-shell .text-emerald-700,
+html.dark .enterprise-shell .text-emerald-900,
 html.dark .enterprise-shell .text-green-600,
 html.dark .enterprise-shell .text-\[\#065f46\],
 html.dark .enterprise-shell .text-\[\#055b25\] {
   color: #6ee7b7 !important;
+}
+
+html.dark .enterprise-shell .text-red-700,
+html.dark .enterprise-shell .text-red-800 {
+  color: #fca5a5 !important;
+}
+
+html.dark .enterprise-shell .text-amber-800 {
+  color: #fcd34d !important;
 }
 
 html.dark .enterprise-shell .border-gray-50,
@@ -865,17 +943,93 @@ html.dark .enterprise-shell .border-gray-200\/70 {
   border-color: #334155 !important;
 }
 
+html.dark .enterprise-shell .border-emerald-100,
+html.dark .enterprise-shell .border-emerald-100\/80,
+html.dark .enterprise-shell .border-emerald-200,
+html.dark .enterprise-shell .border-green-200,
+html.dark .enterprise-shell .border-blue-200,
+html.dark .enterprise-shell .border-amber-200,
+html.dark .enterprise-shell .border-red-200 {
+  border-color: rgb(148 163 184 / 0.28) !important;
+}
+
 html.dark .enterprise-shell input,
 html.dark .enterprise-shell select,
 html.dark .enterprise-shell textarea {
-  background-color: #0f172a;
-  border-color: #475569;
-  color: #f8fafc;
+  background-color: #111827 !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
 }
 
 html.dark .enterprise-shell input::placeholder,
 html.dark .enterprise-shell textarea::placeholder {
   color: #94a3b8;
+}
+
+html.dark .enterprise-shell input:disabled,
+html.dark .enterprise-shell select:disabled,
+html.dark .enterprise-shell textarea:disabled {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+html.dark .enterprise-shell .disabled\:bg-gray-100:disabled,
+html.dark .enterprise-shell .disabled\:bg-gray-400:disabled {
+  background-color: #475569 !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .enterprise-shell .disabled\:text-gray-400:disabled {
+  color: #94a3b8 !important;
+}
+
+html.dark .enterprise-shell .tanaw-switch {
+  background-color: #475569 !important;
+}
+
+html.dark .enterprise-shell .tanaw-switch--on {
+  background-color: #059669 !important;
+}
+
+html.dark .enterprise-shell .tanaw-switch-thumb {
+  background-color: #f8fafc !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.34);
+}
+
+html.dark .enterprise-shell .enterprise-profile-menu {
+  background: #172033 !important;
+  border-color: rgb(148 163 184 / 0.36) !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.52) !important;
+}
+
+html.dark .enterprise-shell .enterprise-profile-menu__header {
+  background: linear-gradient(135deg, rgb(6 78 59 / 0.34), rgb(15 23 42 / 0.98), rgb(120 53 15 / 0.2)) !important;
+  border-color: #334155 !important;
+}
+
+html.dark .enterprise-shell .enterprise-ticket-panel-header {
+  background: linear-gradient(115deg, rgb(6 78 59 / 0.22) 0%, var(--enterprise-card-elevated-bg) 48%, rgb(120 53 15 / 0.22) 100%) !important;
+  border-color: var(--enterprise-border) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+html.dark .enterprise-shell .enterprise-profile-menu button {
+  color: #e2e8f0 !important;
+}
+
+html.dark .enterprise-shell .enterprise-profile-menu button:hover {
+  background-color: rgb(16 185 129 / 0.12) !important;
+  color: #a7f3d0 !important;
+}
+
+html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red {
+  color: #f87171 !important;
+}
+
+html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red:hover {
+  background-color: rgb(127 29 29 / 0.34) !important;
+  color: #fecaca !important;
 }
 
 html.dark .enterprise-shell table thead {
@@ -921,4 +1075,149 @@ html.dark .enterprise-shell .recharts-tooltip-wrapper .recharts-default-tooltip 
 
 html.dark .enterprise-shell .recharts-legend-item-text {
   color: #cbd5e1 !important;
+}
+
+html.dark body {
+  background: var(--enterprise-app-bg);
+}
+
+html.dark .enterprise-shell .bg-\[\#0f172a\],
+html.dark .enterprise-shell .dark\:bg-\[\#0f172a\] {
+  background-color: var(--enterprise-app-bg) !important;
+}
+
+html.dark .enterprise-shell .bg-white,
+html.dark .enterprise-shell .bg-white\/85 {
+  background-color: var(--enterprise-card-bg) !important;
+}
+
+html.dark .enterprise-shell .bg-gray-50,
+html.dark .enterprise-shell .bg-gray-50\/80 {
+  background-color: var(--enterprise-panel-bg) !important;
+}
+
+html.dark .enterprise-shell .enterprise-profile-logo-panel,
+html.dark .enterprise-shell .enterprise-profile-identity-panel {
+  background: linear-gradient(135deg, rgb(16 185 129 / 0.12), var(--enterprise-card-elevated-bg) 48%, rgb(215 179 90 / 0.08)) !important;
+  border-color: var(--enterprise-border) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+html.dark .enterprise-shell .enterprise-profile-logo-panel label,
+html.dark .enterprise-shell .enterprise-profile-identity-panel .bg-white {
+  background-color: var(--enterprise-input-bg) !important;
+  border-color: var(--enterprise-border) !important;
+  color: var(--enterprise-text) !important;
+}
+
+html.dark .enterprise-shell input[readonly],
+html.dark .enterprise-shell textarea[readonly] {
+  background-color: var(--enterprise-input-bg) !important;
+  color: var(--enterprise-text) !important;
+}
+
+html.dark .enterprise-shell input[readonly]:focus,
+html.dark .enterprise-shell textarea[readonly]:focus {
+  border-color: #475569 !important;
+  box-shadow: none !important;
+}
+
+html.dark .enterprise-shell .enterprise-notification-menu,
+html.dark .enterprise-shell .enterprise-notifications-view {
+  background: var(--enterprise-card-bg) !important;
+  border-color: var(--enterprise-border) !important;
+  color: var(--enterprise-text) !important;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.54) !important;
+}
+
+html.dark .enterprise-shell .enterprise-notification-menu__header {
+  background: linear-gradient(135deg, rgb(16 185 129 / 0.14), var(--enterprise-card-elevated-bg), rgb(215 179 90 / 0.08)) !important;
+  border-color: var(--enterprise-border) !important;
+}
+
+html.dark .enterprise-shell .enterprise-notification-menu__body,
+html.dark .enterprise-shell .enterprise-notification-menu__footer {
+  background-color: var(--enterprise-card-bg) !important;
+  border-color: var(--enterprise-border-soft) !important;
+}
+
+html.dark .enterprise-shell .enterprise-notification-menu .bg-linear-to-r,
+html.dark .enterprise-shell .enterprise-notifications-view .bg-blue-50\/20 {
+  background-image: none !important;
+}
+
+html.dark .enterprise-shell .enterprise-notification-menu button:hover,
+html.dark .enterprise-shell .enterprise-notifications-view button:hover {
+  background-color: rgb(16 185 129 / 0.1) !important;
+}
+
+html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-white,
+html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-white\/85,
+html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-gray-50,
+html.dark .enterprise-shell .rounded-xl.border.bg-white {
+  background-color: var(--enterprise-card-bg) !important;
+  border-color: var(--enterprise-border) !important;
+}
+
+html.dark .enterprise-shell .rounded-sm.border.border-gray-200.bg-gray-50,
+html.dark .enterprise-shell .rounded-sm.border.border-gray-300.bg-gray-50,
+html.dark .enterprise-shell .rounded-sm.bg-gray-50 {
+  background-color: var(--enterprise-input-bg) !important;
+}
+
+html.dark .enterprise-shell .bg-emerald-50,
+html.dark .enterprise-shell .bg-emerald-50\/70,
+html.dark .enterprise-shell .bg-emerald-50\/80,
+html.dark .enterprise-shell .bg-green-50 {
+  background-color: rgb(16 185 129 / 0.13) !important;
+}
+
+html.dark .enterprise-shell .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.35) !important;
+}
+
+html.dark .enterprise-shell .bg-amber-50,
+html.dark .enterprise-shell .bg-amber-100 {
+  background-color: rgb(146 64 14 / 0.28) !important;
+}
+
+html.dark .enterprise-shell .bg-blue-50 {
+  background-color: rgb(37 99 235 / 0.16) !important;
+}
+
+html.dark .enterprise-shell .text-gray-400,
+html.dark .enterprise-shell .text-gray-500,
+html.dark .enterprise-shell .text-slate-500 {
+  color: var(--enterprise-muted-soft) !important;
+}
+
+html.dark .enterprise-shell .text-gray-600,
+html.dark .enterprise-shell .text-gray-700,
+html.dark .enterprise-shell .text-gray-800,
+html.dark .enterprise-shell .text-slate-600,
+html.dark .enterprise-shell .text-slate-700 {
+  color: var(--enterprise-muted) !important;
+}
+
+html.dark .enterprise-shell .disabled\:opacity-60:disabled,
+html.dark .enterprise-shell .disabled\:opacity-55:disabled,
+html.dark .enterprise-shell .disabled\:opacity-50:disabled,
+html.dark .enterprise-shell .disabled\:opacity-40:disabled {
+  opacity: 0.7 !important;
+}
+
+html.dark .enterprise-shell button:disabled {
+  color: #94a3b8 !important;
+}
+
+html.dark .enterprise-shell table,
+html.dark .enterprise-shell table tbody,
+html.dark .enterprise-shell table .bg-white {
+  background-color: var(--enterprise-card-bg) !important;
+}
+
+html.dark .enterprise-shell table thead,
+html.dark .enterprise-shell .sticky.top-0.bg-gray-50 {
+  background-color: var(--enterprise-input-bg) !important;
+  color: var(--enterprise-muted) !important;
 }

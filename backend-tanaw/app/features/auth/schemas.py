@@ -64,6 +64,7 @@ class StatusResponse(BaseModel):
 
 class AccountPreferences(BaseModel):
     theme: Literal["light", "dark", "system"] = "system"
+    openAtLogin: bool = False
 
 
 class SystemSettingsPayload(BaseModel):

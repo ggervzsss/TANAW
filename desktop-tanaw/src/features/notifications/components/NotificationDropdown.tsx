@@ -58,8 +58,8 @@ export function NotificationDropdown({
       </button>
 
       {isOpen && (
-        <div className="animate-in slide-in-from-top-2 absolute top-full right-0 z-1003 mt-4 flex max-h-136 w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6 duration-200">
-          <div className="flex shrink-0 items-center justify-between border-b border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 p-4">
+        <div className="enterprise-notification-menu animate-in slide-in-from-top-2 absolute top-full right-0 z-1003 mt-4 flex max-h-136 w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6 duration-200">
+          <div className="enterprise-notification-menu__header flex shrink-0 items-center justify-between border-b border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-amber-50/70 p-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-[#111827]">
               Notifications
               {unreadCount > 0 && <span className="bg-tanaw-red rounded-sm px-1.5 py-0.5 text-[10px] leading-none text-white shadow-sm">{unreadCount}</span>}
@@ -96,7 +96,7 @@ export function NotificationDropdown({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto bg-white">
+          <div className="enterprise-notification-menu__body flex-1 overflow-y-auto bg-white">
             {notifications.map((notification) => (
               <div
                 key={notification.id}
@@ -123,9 +123,9 @@ export function NotificationDropdown({
               </div>
             )}
           </div>
-          <div className="shrink-0 border-t border-gray-100 bg-gray-50 p-2.5 text-center">
+          <div className="enterprise-notification-menu__footer shrink-0 border-t border-gray-100 bg-gray-50 p-2.5 text-center">
             <button onClick={onViewAll} className="text-[10px] font-bold tracking-wider text-gray-500 uppercase hover:text-[#065f46]">
-              View Reports & Subs
+              VIEW ALL NOTIFICATIONS
             </button>
           </div>
         </div>

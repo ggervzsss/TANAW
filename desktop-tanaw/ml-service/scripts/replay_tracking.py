@@ -46,7 +46,6 @@ def main() -> None:
         exit_line=_normalized_line(config.exit_line),
         reverse_direction=config.reverse_direction,
         event_cooldown_seconds=config.event_cooldown_seconds,
-        paired_line_max_gap_seconds=config.paired_line_max_gap_seconds,
         track_ttl_seconds=config.track_ttl_seconds,
     )
     counter.reset()

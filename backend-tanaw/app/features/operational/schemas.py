@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 SourceKind = Literal["real", "mock", "hybrid"]
 FleetSimulationLane = Literal["normal", "warning", "one-minute-breach"]
@@ -117,10 +117,6 @@ class DesktopReportSubmissionIngest(BaseModel):
     def validate_report_metrics(self) -> DesktopReportSubmissionIngest:
         if self.exits > self.entries:
             raise ValueError("Total exits cannot exceed total entries.")
-        if self.peakOccupancy > self.entries:
-            raise ValueError("Peak occupancy cannot exceed total entries.")
-        if self.uniqueCount > self.entries:
-            raise ValueError("Estimated unique count cannot exceed total entries.")
         demo = (self.payload or {}).get("demo")
         required_demo_fields = {
             "thisProvMale",
@@ -130,15 +126,22 @@ class DesktopReportSubmissionIngest(BaseModel):
             "foreignMale",
             "foreignFemale",
         }
-        if not isinstance(demo, dict) or any(
-            str(demo.get(field, "")).strip() == "" for field in required_demo_fields
-        ):
-            raise ValueError("All demographics fields are required.")
-        if any(
-            not str(demo[field]).strip().isdigit() or int(str(demo[field]).strip()) < 0
-            for field in required_demo_fields
-        ):
-            raise ValueError("Demographics values must be non-negative whole numbers.")
+        if not isinstance(demo, dict):
+            raise ValueError("Demographics are required.")
+        demographic_total = 0
+        for field in required_demo_fields:
+            raw_value = str(demo.get(field, "")).strip()
+            if raw_value == "":
+                continue
+            if not raw_value.isdigit():
+                raise ValueError("Demographics values must be non-negative whole numbers.")
+            demographic_total += int(raw_value)
+        if demographic_total > self.uniqueCount:
+            raise ValueError("Demographic totals cannot exceed the unique visitor count.")
+        if demographic_total < self.uniqueCount:
+            raise ValueError(
+                "Demographic totals must match the unique visitor count before submission."
+            )
         return self
 
 
@@ -275,6 +278,7 @@ NotificationSeverity = Literal["Info", "Warning", "Critical", "Success"]
 
 class UserNotificationSummary(BaseModel):
     id: str
+    recipientAccountId: str
     title: str
     message: str
     type: str
@@ -300,6 +304,120 @@ class EnterpriseNotificationCreate(BaseModel):
 
 class NotificationReadUpdate(BaseModel):
     read: bool = True
+
+
+SupportTicketCategory = Literal[
+    "Camera Issue",
+    "Report Concern",
+    "Maintenance",
+    "Account & Security",
+    "Other",
+]
+SupportTicketPriority = Literal["Low", "Normal", "High", "Urgent"]
+SupportTicketStatus = Literal["Open", "In Review", "Resolved"]
+SupportTicketAttachmentType = Literal["image/png", "image/jpeg", "image/webp"]
+
+
+class SupportTicketAttachment(BaseModel):
+    id: str | None = None
+    fileName: str = Field(min_length=1, max_length=160)
+    mediaType: SupportTicketAttachmentType
+    sizeBytes: int = Field(ge=1, le=5 * 1024 * 1024)
+    dataUrl: str = Field(min_length=1, max_length=7_200_000)
+    url: str | None = None
+
+    @field_validator("fileName")
+    @classmethod
+    def validate_file_name(cls, value: str) -> str:
+        file_name = value.strip().replace("\\", "/").split("/")[-1]
+        if not file_name:
+            raise ValueError("Photo file name is required.")
+        lowered = file_name.lower()
+        if not lowered.endswith((".png", ".jpg", ".jpeg", ".webp")):
+            raise ValueError("Only image files are allowed.")
+        return file_name
+
+    @field_validator("dataUrl")
+    @classmethod
+    def validate_data_url(cls, value: str) -> str:
+        if not value.startswith("data:image/"):
+            raise ValueError("Only image files are allowed.")
+        if ";base64," not in value:
+            raise ValueError("Upload a valid image file.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_media_type_matches_data(self) -> SupportTicketAttachment:
+        expected_prefix = f"data:{self.mediaType};base64,"
+        if not self.dataUrl.startswith(expected_prefix):
+            raise ValueError("Upload a valid image file.")
+        return self
+
+
+class SupportTicketCreate(BaseModel):
+    category: SupportTicketCategory
+    priority: SupportTicketPriority = "Normal"
+    subject: str = Field(min_length=3, max_length=160)
+    description: str = Field(min_length=10, max_length=4000)
+    affectedArea: str | None = Field(default=None, max_length=120)
+    cameraNode: str | None = Field(default=None, max_length=120)
+    attachments: list[SupportTicketAttachment] = Field(default_factory=list, max_length=5)
+
+    @field_validator("subject", "description", "affectedArea", "cameraNode", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = " ".join(value.strip().split())
+        return normalized or None
+
+
+class SupportTicketSummary(BaseModel):
+    id: str
+    code: str
+    enterpriseId: str
+    enterpriseName: str
+    submittedBy: str
+    category: str
+    priority: str
+    subject: str
+    description: str
+    affectedArea: str | None = None
+    cameraNode: str | None = None
+    attachments: list[SupportTicketAttachment] = Field(default_factory=list)
+    status: SupportTicketStatus
+    createdAt: datetime
+    updatedAt: datetime
+
+
+class SupportTicketMessageCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def normalize_message(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = " ".join(value.strip().split())
+        return normalized
+
+
+class SupportTicketMessageSummary(BaseModel):
+    id: str
+    ticketId: str
+    authorId: str
+    authorName: str
+    authorRole: str
+    message: str
+    createdAt: datetime
+
+
+class SupportTicketStatusUpdate(BaseModel):
+    status: SupportTicketStatus
+
+
+class SupportTicketDetail(SupportTicketSummary):
+    messages: list[SupportTicketMessageSummary] = Field(default_factory=list)
 
 
 class FinalReportCreate(BaseModel):

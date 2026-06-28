@@ -14,7 +14,6 @@ type ReportDraftPanelProps = {
   activeReport: ReportRecord | null;
   activeReportId: string | null;
   demo: DemoBreakdown;
-  isError: boolean;
   isReadOnly: boolean;
   metricsError: string | null;
   metrics: Metrics;
@@ -34,7 +33,6 @@ export function ReportDraftPanel({
   activeReport,
   activeReportId,
   demo,
-  isError,
   isReadOnly,
   metricsError,
   metrics,
@@ -54,22 +52,14 @@ export function ReportDraftPanel({
       className={`h-fit rounded-sm border-t-4 p-6 shadow-md transition-colors lg:col-span-1 ${isReadOnly ? "border-t-gray-400" : activeReport?.status === "Returned for Revision" ? "border-t-[#ffd200]" : "border-t-[#065f46]"}`}
     >
       <ReportDraftHeader activeReport={activeReport} activeReportId={activeReportId} isReadOnly={isReadOnly} />
-      <ReportDraftAlerts activeReport={activeReport} isError={isError} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} />
+      <ReportDraftAlerts activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} />
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodSelect isReadOnly={isReadOnly} period={period} setPeriod={setPeriod} />
-        <SystemLockedMetrics metrics={metrics} prevMetrics={prevMetrics} uniqueTrend={uniqueTrend} />
-        <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} setDemo={setDemo} />
+        <SystemLockedMetrics demo={demo} metrics={metrics} prevMetrics={prevMetrics} uniqueTrend={uniqueTrend} />
+        <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} setDemo={setDemo} uniqueCap={metrics.unique} />
         <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
-        <ReportDraftActions
-          activeReport={activeReport}
-          isError={isError}
-          isReadOnly={isReadOnly}
-          metricsError={metricsError}
-          validationError={validationError}
-          onPreview={onPreview}
-          onSubmitPrompt={onSubmitPrompt}
-        />
+        <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onPreview={onPreview} onSubmitPrompt={onSubmitPrompt} />
         <ReportAuditTrail activeReport={activeReport} />
       </div>
     </Card>

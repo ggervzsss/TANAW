@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, LogOut, Menu, Settings, Shield, User, Users, X } from "lucide-react";
+import { Activity, ChevronDown, LogOut, Menu, Settings, Shield, TicketCheck, User, Users, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -76,6 +76,13 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const openSystemSettings = () => {
     setShowProfileMenu(false);
     navigate(routes.it.systemSettings);
+  };
+
+  const openSupportTickets = () => {
+    const supportTicketsPath = getRoleSupportTicketsPath(role);
+    if (!supportTicketsPath) return;
+    setShowProfileMenu(false);
+    navigate(supportTicketsPath);
   };
 
   const handleNotificationSelect = (notificationId: string, targetPath?: string) => {
@@ -211,6 +218,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const navPillInactive = "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
   const profilePath = getRoleProfilePath(role);
   const securityPath = getRoleSecurityPath(role);
+  const supportTicketsPath = getRoleSupportTicketsPath(role);
   const accountMenuButtonClass = (targetPath: string) => ["profile-menu-button", pathname === targetPath ? "bg-tanaw-green/10 text-tanaw-green" : ""].filter(Boolean).join(" ");
 
   return (
@@ -375,6 +383,11 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                     <button type="button" onClick={() => openAccountPage("security")} className={accountMenuButtonClass(securityPath)}>
                       <Shield size={14} /> Security & Data Control
                     </button>
+                    {supportTicketsPath && (
+                      <button type="button" onClick={openSupportTickets} className={accountMenuButtonClass(supportTicketsPath)}>
+                        <TicketCheck size={14} /> Support Tickets
+                      </button>
+                    )}
                     {role === "it" && (
                       <button type="button" onClick={openSystemSettings} className={accountMenuButtonClass(routes.it.systemSettings)}>
                         <Settings size={14} /> System Settings
@@ -459,4 +472,10 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       </AnimatePresence>
     </div>
   );
+}
+
+function getRoleSupportTicketsPath(role: UserRole) {
+  if (role === "admin") return routes.admin.supportTickets;
+  if (role === "it") return routes.it.supportTickets;
+  return null;
 }

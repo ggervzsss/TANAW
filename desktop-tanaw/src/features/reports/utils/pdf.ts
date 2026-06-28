@@ -1,4 +1,5 @@
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
+import { demographicCount, getDemographicTotals } from "./demographics";
 
 type DotReportPdf = {
   reportId: string;
@@ -8,31 +9,135 @@ type DotReportPdf = {
   notes: string;
 };
 
+type TextOptions = {
+  align?: "center" | "left";
+  bold?: boolean;
+  size?: number;
+};
+
 export function downloadDotReportPdf(report: DotReportPdf) {
-  const lines = [
-    "TANAW - DOT Visitor Attraction Report",
-    `Report ID: ${report.reportId}`,
-    `Reporting Period: ${report.period}`,
-    "",
-    `Total Entries: ${report.metrics.entries}`,
-    `Total Exits: ${report.metrics.exits}`,
-    `Peak Occupancy: ${report.metrics.peak}`,
-    `Estimated Unique Visitors: ${report.metrics.unique}`,
-    "",
-    "Demographics",
-    `This Province - Male: ${report.demo.thisProvMale}, Female: ${report.demo.thisProvFemale}`,
-    `Other Province - Male: ${report.demo.otherProvMale}, Female: ${report.demo.otherProvFemale}`,
-    `Foreign - Male: ${report.demo.foreignMale}, Female: ${report.demo.foreignFemale}`,
-    "",
-    `Supplementary Notes: ${report.notes || "None"}`,
-  ];
-  const content = lines.map((line, index) => `BT /F1 11 Tf 50 ${760 - index * 24} Td (${escapePdf(line)}) Tj ET`).join("\n");
+  const pdf = createDotReportPdf(report);
+  const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${safeFileName(report.reportId)}-DOT-Visitor-Attraction.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function createDotReportPdf(report: DotReportPdf) {
+  const tpm = demographicCount(report.demo.thisProvMale);
+  const tpf = demographicCount(report.demo.thisProvFemale);
+  const opm = demographicCount(report.demo.otherProvMale);
+  const opf = demographicCount(report.demo.otherProvFemale);
+  const fm = demographicCount(report.demo.foreignMale);
+  const ff = demographicCount(report.demo.foreignFemale);
+  const totals = getDemographicTotals(report.demo);
+  const content: string[] = [];
+
+  drawText(content, "TANAW - DOT Visitor Attraction Report", 50, 550, { bold: true, size: 12 });
+  drawText(content, `Report ID: ${report.reportId}`, 50, 528, { size: 10 });
+  drawText(content, `Reporting Period: ${report.period}`, 50, 512, { size: 10 });
+  drawText(content, `Unique Count Cap: ${report.metrics.unique.toLocaleString()}`, 50, 496, { size: 10 });
+  drawText(content, "VISITOR ATTRACTION", 50, 462, { bold: true, size: 15 });
+
+  const table = {
+    x: 50,
+    top: 430,
+    code: 72,
+    name: 154,
+    demo: 42,
+    grand: 90,
+  };
+  const demoX = table.x + table.code + table.name;
+  const grandX = demoX + table.demo * 9;
+  let top = table.top;
+
+  drawCell(content, table.x, top, table.code, 112, ["Attraction", "Code"], { bold: true });
+  drawCell(content, table.x + table.code, top, table.name, 112, ["Name/ Month"], { bold: true });
+  drawCell(content, grandX, top, table.grand, 112, ["Grand Total", "Number of", "Visitors"], { bold: true });
+  drawCell(content, demoX, top, table.demo * 9, 36, ["***Place of Residence"], { bold: true });
+
+  top -= 36;
+  drawCell(content, demoX, top, table.demo * 6, 24, ["Philippines"], { bold: true });
+  drawCell(content, demoX + table.demo * 6, top, table.demo * 3, 24, ["Foreign Country Residence"], { bold: true, size: 7 });
+
+  top -= 24;
+  drawCell(content, demoX, top, table.demo * 3, 24, ["This Province"], { bold: true, size: 7 });
+  drawCell(content, demoX + table.demo * 3, top, table.demo * 3, 24, ["Other Province"], { bold: true, size: 7 });
+  drawCell(content, demoX + table.demo * 6, top, table.demo * 3, 24, [""], { bold: true, size: 7 });
+
+  top -= 24;
+  ["Male", "Female", "Total", "Male", "Female", "Total", "Male", "Female", "Total"].forEach((label, index) => {
+    drawCell(content, demoX + table.demo * index, top, table.demo, 28, [label], { bold: true, size: 7 });
+  });
+
+  top -= 28;
+  drawCell(content, table.x, top, table.code, 40, ["SPL-MKT-01"], { bold: true, size: 8 });
+  drawCell(content, table.x + table.code, top, table.name, 40, ["Enterprise Node", report.period], { align: "left", bold: true, size: 8 });
+  [tpm, tpf, tpm + tpf, opm, opf, opm + opf, fm, ff, fm + ff].forEach((value, index) => {
+    drawCell(content, demoX + table.demo * index, top, table.demo, 40, [value ? String(value) : ""], { bold: value > 0, size: 8 });
+  });
+  drawCell(content, grandX, top, table.grand, 40, [totals.grandTotal ? String(totals.grandTotal) : ""], { bold: true, size: 10 });
+
+  top -= 40;
+  for (let row = 0; row < 5; row += 1) {
+    drawCell(content, table.x, top, table.code, 28, [""]);
+    drawCell(content, table.x + table.code, top, table.name, 28, [""]);
+    for (let column = 0; column < 9; column += 1) {
+      drawCell(content, demoX + table.demo * column, top, table.demo, 28, [""]);
+    }
+    drawCell(content, grandX, top, table.grand, 28, [""]);
+    top -= 28;
+  }
+
+  if (report.notes.trim()) {
+    drawText(content, "Supplementary Notes", 50, 106, { bold: true, size: 10 });
+    wrapText(report.notes.trim(), 112).slice(0, 4).forEach((line, index) => {
+      drawText(content, line, 50, 90 - index * 13, { size: 9 });
+    });
+  }
+
+  return buildPdf(content.join("\n"));
+}
+
+function drawCell(content: string[], x: number, top: number, width: number, height: number, lines: string[], options: TextOptions = {}) {
+  const y = top - height;
+  content.push(`0.72 0.72 0.72 RG ${formatNumber(x)} ${formatNumber(y)} ${formatNumber(width)} ${formatNumber(height)} re S`);
+  const size = options.size ?? 8;
+  const lineHeight = size + 3;
+  const totalTextHeight = lines.length * lineHeight;
+  const startY = y + height / 2 + totalTextHeight / 2 - size;
+
+  lines.forEach((line, index) => {
+    const textY = startY - index * lineHeight;
+    const textX = options.align === "left" ? x + 8 : x + width / 2;
+    drawText(content, line, textX, textY, {
+      align: options.align ?? "center",
+      bold: options.bold,
+      size,
+    });
+  });
+}
+
+function drawText(content: string[], value: string, x: number, y: number, options: TextOptions = {}) {
+  const size = options.size ?? 10;
+  const escaped = escapePdf(value);
+  const font = options.bold ? "F2" : "F1";
+  const alignTransform = options.align === "center" ? `(${escaped}) stringwidth pop 2 div neg 0 rmoveto ` : "";
+  content.push(`BT /${font} ${size} Tf ${formatNumber(x)} ${formatNumber(y)} Td ${alignTransform}(${escaped}) Tj ET`);
+}
+
+function buildPdf(content: string) {
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>",
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
   ];
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
@@ -47,15 +152,29 @@ export function downloadDotReportPdf(report: DotReportPdf) {
     .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
     .join("");
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+}
 
-  const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${safeFileName(report.reportId)}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+function wrapText(value: string, maxLength: number) {
+  const words = value.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxLength && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function escapePdf(value: string) {

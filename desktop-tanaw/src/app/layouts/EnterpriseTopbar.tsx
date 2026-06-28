@@ -1,4 +1,4 @@
-import { Activity, Camera, ChevronDown, FileText, LayoutDashboard, LogOut, Menu, Shield, User, X } from "lucide-react";
+import { Activity, Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, Sun, User, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
@@ -12,6 +12,7 @@ type EnterpriseTopbarProps = {
   isNotificationsOpen: boolean;
   notifications: EnterpriseNotification[];
   occupancyThreshold: number;
+  resolvedTheme: "light" | "dark";
   showNotificationSettings: boolean;
   showSimulation: boolean;
   unreadCount: number;
@@ -23,13 +24,14 @@ type EnterpriseTopbarProps = {
   onNotificationsClose: () => void;
   onNotificationsToggle: () => void;
   onSetOccupancyThreshold: (threshold: number) => void;
+  onToggleTheme: () => void;
   onToggleNotificationSettings: () => void;
 };
 
 const enterpriseNavigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "cameras", label: "Camera Setup", icon: Camera },
-  { id: "reports", label: "Reports & Subs", icon: FileText },
+  { id: "reports", label: "Reports", icon: FileText },
   { id: "simulation", label: "Simulation Lab", icon: Activity },
 ] as const satisfies { id: EnterpriseView; label: string; icon: typeof LayoutDashboard }[];
 
@@ -40,6 +42,7 @@ export function EnterpriseTopbar({
   isNotificationsOpen,
   notifications,
   occupancyThreshold,
+  resolvedTheme,
   showNotificationSettings,
   showSimulation,
   unreadCount,
@@ -51,6 +54,7 @@ export function EnterpriseTopbar({
   onNotificationsClose,
   onNotificationsToggle,
   onSetOccupancyThreshold,
+  onToggleTheme,
   onToggleNotificationSettings,
 }: EnterpriseTopbarProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -152,6 +156,20 @@ export function EnterpriseTopbar({
               {showMobileNav ? <X size={18} /> : <Menu size={18} />}
             </button>
 
+            <button
+              type="button"
+              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => {
+                setShowProfileMenu(false);
+                onNotificationsClose();
+                onToggleTheme();
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.14] hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+            >
+              {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+
             <div ref={notificationMenuRef} className="relative z-1002">
               <NotificationDropdown
                 isOpen={isNotificationsOpen}
@@ -168,7 +186,7 @@ export function EnterpriseTopbar({
                 onMarkAllRead={onMarkAllRead}
                 onSelectNotification={onNotificationSelect}
                 onSetOccupancyThreshold={onSetOccupancyThreshold}
-                onViewAll={() => onNavigate("reports")}
+                onViewAll={() => onNavigate("notifications")}
               />
             </div>
 
@@ -199,9 +217,9 @@ export function EnterpriseTopbar({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute top-full right-0 z-1003 mt-3 w-72 overflow-hidden rounded-3xl border border-white/85 bg-white py-2 text-slate-700 shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
+                    className="enterprise-profile-menu absolute top-full right-0 z-1003 mt-3 w-72 overflow-hidden rounded-3xl border border-white/85 bg-white py-2 text-slate-700 shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
                   >
-                    <div className="mb-1 border-b border-emerald-100 bg-linear-to-r from-emerald-50/90 via-white to-amber-50/70 px-4 py-3.5">
+                    <div className="enterprise-profile-menu__header mb-1 border-b border-emerald-100 bg-linear-to-r from-emerald-50/90 via-white to-amber-50/70 px-4 py-3.5">
                       <p className="text-tanaw-navy text-sm font-bold">{displayName}</p>
                       <p className="truncate text-xs text-gray-500">{profileEmail}</p>
                     </div>
@@ -218,6 +236,13 @@ export function EnterpriseTopbar({
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
                     >
                       <Shield size={14} /> Security & Data Control
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateFromMenu("tickets")}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                    >
+                      <LifeBuoy size={14} /> Support Tickets
                     </button>
                     <button type="button" onClick={onLogout} className="text-tanaw-red flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-red-50">
                       <LogOut size={14} /> Sign Out

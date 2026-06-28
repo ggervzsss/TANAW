@@ -9,6 +9,8 @@ export const routePaths = {
   enterpriseSimulation: "/enterprise/simulation",
   enterpriseProfile: "/enterprise/profile",
   enterpriseSecurity: "/enterprise/security",
+  enterpriseNotifications: "/enterprise/notifications",
+  enterpriseTickets: "/enterprise/tickets",
 } as const;
 
 export type AppRoute = (typeof routePaths)[keyof typeof routePaths];

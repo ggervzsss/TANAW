@@ -1,24 +1,19 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ThemePreference } from "../../../types/enterprise";
 import { getStartupSettings, updateStartupSettings } from "../../../lib/appLifecycle";
 import { validatePasswordPolicy } from "../../../utils/password-policy";
-import { changePassword, requestDataArchive } from "../../login/api/login";
+import { changePassword, getAccountPreferences, requestDataArchive, updateAccountPreferences } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { readLocalStartupPreference, writeLocalStartupPreference } from "../utils/startupPreference";
 import { ActiveSessionsPanel } from "./ActiveSessionsPanel";
-import { BackgroundMonitoringPanel } from "./BackgroundMonitoringPanel";
+import { BackgroundMonitoringPanel, type StartupFeedback } from "./BackgroundMonitoringPanel";
 import { CredentialControl } from "./CredentialControl";
 import { DataArchivePanel } from "./DataArchivePanel";
-import { EnhancedProtectionPanel } from "./EnhancedProtectionPanel";
-import { ThemePreferencePanel } from "./ThemePreferencePanel";
 
-type SecurityViewProps = {
-  theme: ThemePreference;
-  setTheme: React.Dispatch<React.SetStateAction<ThemePreference>>;
-};
+const STARTUP_UNAVAILABLE_MESSAGE = "Startup at sign-in is not available in this environment.";
 
-export function SecurityView({ theme, setTheme }: SecurityViewProps) {
+export function SecurityView() {
   const queryClient = useQueryClient();
   const setSession = useAuthStore((state) => state.setSession);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
@@ -26,15 +21,25 @@ export function SecurityView({ theme, setTheme }: SecurityViewProps) {
   const [isArchiveLoading, setIsArchiveLoading] = useState(false);
   const [isArchiveSuccess, setIsArchiveSuccess] = useState(false);
   const [isStartupLoading, setIsStartupLoading] = useState(false);
+  const [isStartupAvailable, setIsStartupAvailable] = useState(() => Boolean(window.tanawAppLifecycle));
   const [openAtLogin, setOpenAtLogin] = useState(false);
+  const [startupFeedback, setStartupFeedback] = useState<StartupFeedback | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    void getStartupSettings().then((settings) => {
-      if (isMounted) {
-        setOpenAtLogin(settings.openAtLogin);
-      }
-    });
+    void loadStartupPreference()
+      .then(({ feedback, isAvailable, openAtLogin }) => {
+        if (!isMounted) return;
+        setOpenAtLogin(openAtLogin);
+        setIsStartupAvailable(isAvailable);
+        setStartupFeedback(feedback);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setOpenAtLogin(false);
+        setIsStartupAvailable(false);
+        setStartupFeedback({ message: STARTUP_UNAVAILABLE_MESSAGE, tone: "warning" });
+      });
 
     return () => {
       isMounted = false;
@@ -91,12 +96,31 @@ export function SecurityView({ theme, setTheme }: SecurityViewProps) {
 
   const handleStartupToggle = async (enabled: boolean) => {
     setIsStartupLoading(true);
+    const previousValue = openAtLogin;
+    setOpenAtLogin(enabled);
+    setStartupFeedback(null);
     try {
       const settings = await updateStartupSettings(enabled);
-      setOpenAtLogin(settings.openAtLogin);
-      notifySuccess(settings.openAtLogin ? "TANAW will start at sign-in." : "TANAW startup at sign-in disabled.");
+      const persistedValue = settings.isAvailable ? settings.openAtLogin : false;
+      setOpenAtLogin(persistedValue);
+      setIsStartupAvailable(settings.isAvailable);
+      writeLocalStartupPreference(persistedValue);
+      try {
+        await updateAccountPreferences({ openAtLogin: persistedValue });
+      } catch {
+        writeLocalStartupPreference(persistedValue);
+      }
+      setStartupFeedback(
+        settings.isAvailable
+          ? {
+              message: settings.openAtLogin ? "TANAW startup at sign-in enabled." : "TANAW startup at sign-in disabled.",
+              tone: "success",
+            }
+          : { message: settings.message ?? STARTUP_UNAVAILABLE_MESSAGE, tone: "warning" },
+      );
     } catch {
-      notifyError("Unable to update background startup setting.");
+      setOpenAtLogin(previousValue);
+      setStartupFeedback({ message: "Unable to update startup setting. Please try again.", tone: "error" });
     } finally {
       setIsStartupLoading(false);
     }
@@ -117,12 +141,57 @@ export function SecurityView({ theme, setTheme }: SecurityViewProps) {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
-          <EnhancedProtectionPanel />
-          <BackgroundMonitoringPanel isElectron={Boolean(window.tanawAppLifecycle)} isLoading={isStartupLoading} openAtLogin={openAtLogin} onToggleStartup={handleStartupToggle} />
-          <ThemePreferencePanel theme={theme} setTheme={setTheme} />
+          <BackgroundMonitoringPanel feedback={startupFeedback} isAvailable={isStartupAvailable} isLoading={isStartupLoading} openAtLogin={openAtLogin} onToggleStartup={handleStartupToggle} />
           <DataArchivePanel isLoading={isArchiveLoading} isSuccess={isArchiveSuccess} onRequestArchive={handleDataArchive} />
         </div>
       </div>
     </div>
   );
+}
+
+async function loadStartupPreference() {
+  const startupSettings = await getStartupSettings();
+  let preferredOpenAtLogin: boolean | null = null;
+
+  try {
+    const preferences = await getAccountPreferences();
+    preferredOpenAtLogin = preferences.openAtLogin;
+    writeLocalStartupPreference(preferences.openAtLogin);
+  } catch {
+    preferredOpenAtLogin = readLocalStartupPreference();
+  }
+
+  if (!startupSettings.isAvailable) {
+    const feedback: StartupFeedback = { message: startupSettings.message ?? STARTUP_UNAVAILABLE_MESSAGE, tone: "warning" };
+    return {
+      feedback,
+      isAvailable: false,
+      openAtLogin: false,
+    };
+  }
+
+  const desiredOpenAtLogin = preferredOpenAtLogin ?? startupSettings.openAtLogin;
+  if (desiredOpenAtLogin !== startupSettings.openAtLogin) {
+    try {
+      const appliedSettings = await updateStartupSettings(desiredOpenAtLogin);
+      return {
+        feedback: null,
+        isAvailable: appliedSettings.isAvailable,
+        openAtLogin: appliedSettings.openAtLogin,
+      };
+    } catch {
+      const feedback: StartupFeedback = { message: "Unable to update startup setting. Please try again.", tone: "error" };
+      return {
+        feedback,
+        isAvailable: true,
+        openAtLogin: startupSettings.openAtLogin,
+      };
+    }
+  }
+
+  return {
+    feedback: null,
+    isAvailable: true,
+    openAtLogin: startupSettings.openAtLogin,
+  };
 }

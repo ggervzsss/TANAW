@@ -46,7 +46,14 @@ export type CameraType = "IP_WEBCAM" | "RTSP_CCTV" | "USB_WEBCAM" | "ONVIF_CCTV"
 export type ProcessingProfile = "auto" | "cpu" | "accelerated";
 export type CameraStatus = "untested" | "online" | "offline" | "running" | "stopped" | "error";
 export type TripwirePoint = { x: number; y: number };
-export type TripwireLine = { start: TripwirePoint; end: TripwirePoint };
+export type TripwireCurveMode = "linear" | "smooth";
+export type TripwireLine = {
+  start: TripwirePoint;
+  end: TripwirePoint;
+  points?: TripwirePoint[];
+  curve?: TripwireCurveMode;
+  sampledPoints?: TripwirePoint[];
+};
 
 export type Camera = {
   id: number;
@@ -78,7 +85,7 @@ export type Camera = {
   };
 };
 export type ThemePreference = "light" | "dark" | "system";
-export type EnterpriseView = "dashboard" | "cameras" | "reports" | "simulation" | "profile" | "security";
+export type EnterpriseView = "dashboard" | "cameras" | "reports" | "simulation" | "profile" | "security" | "notifications" | "tickets";
 
 export type EnterpriseNotification = {
   id: number;

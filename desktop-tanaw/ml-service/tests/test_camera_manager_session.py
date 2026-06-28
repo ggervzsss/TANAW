@@ -210,6 +210,142 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(summary["entries"], 1)
             self.assertEqual(summary["unique_count"], 1)
 
+    def test_slow_entry_crossing_is_counted_through_detection_pipeline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track_with_center(1, 80)],
+                        [_track_with_center(1, 90)],
+                        [_track_with_center(1, 96)],
+                        [_track_with_center(1, 102)],
+                        [_track_with_center(1, 108)],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            for _ in range(4):
+                self.assertEqual(manager._detect_and_count(session, frame, 0.35)[0].direction, None)
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual(entry_track.direction, "entry")
+            self.assertEqual(manager.metrics_summary()["entries"], 1)
+
+    def test_configured_entry_line_counts_without_waiting_for_exit_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track_with_center(1, 50)],
+                        [_track_with_center(1, 90)],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._counter = _counter_for_config(session.config)
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual(entry_track.direction, "entry")
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["entries"], 1)
+            self.assertEqual(summary["exits"], 0)
+
+    def test_configured_entry_line_counts_when_bbox_crosses_visible_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (20, 20, 60, 180))],
+                        [_track(1, (30, 20, 90, 180))],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._counter = _counter_for_config(session.config)
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual(entry_track.direction, "entry")
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["entries"], 1)
+            self.assertEqual(summary["exits"], 0)
+
+    def test_configured_exit_line_counts_without_waiting_for_entry_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track_with_center(1, 110)],
+                        [_track_with_center(1, 150)],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._counter = _counter_for_config(session.config)
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            exit_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual(exit_track.direction, "exit")
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["entries"], 0)
+            self.assertEqual(summary["exits"], 1)
+
+    def test_track_with_bottom_point_outside_roi_can_count_when_centroid_is_inside(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (50, 120, 90, 198))],
+                        [_track(1, (96, 120, 136, 198))],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertEqual(manager._detect_and_count(session, frame, 0.35)[0].direction, None)
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertTrue(entry_track.inside_roi)
+            self.assertEqual(entry_track.direction, "entry")
+            self.assertEqual(manager.metrics_summary()["entries"], 1)
+
     def test_exit_event_skips_unique_visitor_decision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
@@ -350,6 +486,35 @@ def _session(session_id: int, **config_values: Any) -> ProcessingSession:
     )
 
 
+def _custom_tripwire_session(session_id: int) -> ProcessingSession:
+    return _session(
+        session_id,
+        entry_line={"start": {"x": 0.35, "y": 0.0}, "end": {"x": 0.35, "y": 1.0}},
+        exit_line={"start": {"x": 0.65, "y": 0.0}, "end": {"x": 0.65, "y": 1.0}},
+    )
+
+
+def _counter_for_config(config: CameraStartRequest) -> TripwireCounter:
+    counter = TripwireCounter(
+        tripwire_position=config.tripwire_position,
+        entry_line=(
+            (config.entry_line.start.x, config.entry_line.start.y),
+            (config.entry_line.end.x, config.entry_line.end.y),
+        )
+        if config.entry_line
+        else None,
+        exit_line=(
+            (config.exit_line.start.x, config.exit_line.start.y),
+            (config.exit_line.end.x, config.exit_line.end.y),
+        )
+        if config.exit_line
+        else None,
+        reverse_direction=config.reverse_direction,
+    )
+    counter.reset()
+    return counter
+
+
 def _manager_with_store(directory: str) -> CameraProcessingManager:
     manager = CameraProcessingManager(directory)
     manager._session_store = SessionStore(str(Path(directory)))
@@ -370,6 +535,10 @@ def _track(track_id: int, bbox: tuple[int, int, int, int], confidence: float = 0
         centroid=Centroid((x1 + x2) / 2, (y1 + y2) / 2),
         counting_point=Centroid((x1 + x2) / 2, y2),
     )
+
+
+def _track_with_center(track_id: int, center_x: int, confidence: float = 0.9) -> TrackResult:
+    return _track(track_id, (center_x - 20, 20, center_x + 20, 180), confidence)
 
 
 class _FakeTracker:

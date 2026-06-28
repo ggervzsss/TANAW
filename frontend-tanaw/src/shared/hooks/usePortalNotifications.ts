@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore, useReportStore, useSystemLogStore } from "@/app/store";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
+import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
 import { listDevDeliveries } from "@/shared/services/accountManagement";
 import { listFinalReports, listIntakeReports, listReportEnterprises } from "@/shared/services/reporting";
+import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
 import type { DevDelivery } from "@/shared/services/accountManagement";
 import type { FinalReport, IntakeReport, LogSeverity, PriorityAlert, ReportEnterprise, ReportStatus, SystemLog } from "@/shared/types";
 import type { UserRole } from "@/shared/types/role.types";
@@ -15,6 +16,7 @@ export type PortalNotificationTone = "critical" | "warning" | "success" | "info"
 
 export type PortalNotification = {
   id: string;
+  backendId?: string;
   title: string;
   message: string;
   time: string;
@@ -26,7 +28,7 @@ export type PortalNotification = {
   sortTime: number;
 };
 
-type DraftNotification = Omit<PortalNotification, "read">;
+type DraftNotification = Omit<PortalNotification, "read"> & { read?: boolean };
 
 const MAX_VISIBLE_NOTIFICATIONS = 18;
 const READ_STORAGE_LIMIT = 500;
@@ -35,6 +37,7 @@ const PASSWORD_RESET_SUBJECT = "tanaw password reset verification code";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const EMPTY_DEV_DELIVERIES: DevDelivery[] = [];
 const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
+const EMPTY_BACKEND_NOTIFICATIONS: BackendNotification[] = [];
 
 const viewAllPathByRole: Record<UserRole, string | undefined> = {
   admin: routes.admin.alertsMonitor,
@@ -75,6 +78,7 @@ export function usePortalNotifications(role: UserRole) {
     enabled: role === "staff",
     refetchInterval: role === "staff" ? 30_000 : false,
   });
+  const backendNotificationsQuery = useOperationalNotifications();
 
   const storageKey = useMemo(() => `tanaw-notifications-read:${role}:${authUser?.id ?? "anonymous"}`, [authUser?.id, role]);
   const [readState, setReadState] = useState(() => ({
@@ -88,22 +92,25 @@ export function usePortalNotifications(role: UserRole) {
   const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
   const reports = reportsQuery.data ?? localReports;
   const effectiveFinalReports = finalReportsQuery.data ?? finalReports;
+  const backendNotifications = backendNotificationsQuery.data ?? EMPTY_BACKEND_NOTIFICATIONS;
 
   const drafts = useMemo(() => {
+    const persistedNotifications = buildBackendNotifications(backendNotifications, role);
+
     if (role === "admin") {
-      return [...buildAlertNotifications(alerts, "admin"), ...buildLogNotifications(mergedLogs, "admin")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin"), ...buildLogNotifications(mergedLogs, "admin")];
     }
 
     if (role === "it") {
-      return [...buildAlertNotifications(alerts, "it"), ...buildDevDeliveryNotifications(devDeliveries), ...buildLogNotifications(mergedLogs, "it")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it"), ...buildDevDeliveryNotifications(devDeliveries), ...buildLogNotifications(mergedLogs, "it")];
     }
 
     if (role === "staff") {
-      return [...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises), ...buildLogNotifications(mergedLogs, "staff")];
+      return [...persistedNotifications, ...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises), ...buildLogNotifications(mergedLogs, "staff")];
     }
 
-    return [];
-  }, [alerts, devDeliveries, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
+    return persistedNotifications;
+  }, [alerts, backendNotifications, devDeliveries, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
 
   const notifications = useMemo(
     () =>
@@ -112,7 +119,7 @@ export function usePortalNotifications(role: UserRole) {
         .slice(0, MAX_VISIBLE_NOTIFICATIONS)
         .map((notification) => ({
           ...notification,
-          read: readIds.has(notification.id),
+          read: Boolean(notification.read) || readIds.has(notification.id),
         })),
     [drafts, readIds],
   );
@@ -129,23 +136,71 @@ export function usePortalNotifications(role: UserRole) {
 
   const markAsRead = useCallback(
     (notificationId: string) => {
+      const backendId = notifications.find((notification) => notification.id === notificationId)?.backendId;
+      if (backendId) {
+        void updateUserNotificationRead(backendId, true);
+      }
       persistReadIds(new Set(readIds).add(notificationId));
     },
-    [persistReadIds, readIds],
+    [notifications, persistReadIds, readIds],
   );
 
   const markAllAsRead = useCallback(() => {
+    notifications
+      .filter((notification): notification is PortalNotification & { backendId: string } => Boolean(notification.backendId) && !notification.read)
+      .forEach((notification) => {
+        void updateUserNotificationRead(notification.backendId, true);
+      });
     persistReadIds(new Set([...readIds, ...notifications.map((notification) => notification.id)]));
   }, [notifications, persistReadIds, readIds]);
 
   return {
     notifications,
     unreadCount: notifications.filter((notification) => !notification.read).length,
-    isLoading: alertsLoading || devDeliveriesQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
+    isLoading: alertsLoading || backendNotificationsQuery.isLoading || devDeliveriesQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
     viewAllPath: viewAllPathByRole[role],
     markAsRead,
     markAllAsRead,
   };
+}
+
+function buildBackendNotifications(notifications: BackendNotification[], role: UserRole): DraftNotification[] {
+  return notifications.map((notification) => ({
+    id: `backend-notification:${notification.id}`,
+    backendId: notification.id,
+    title: notification.title,
+    message: notification.message,
+    time: formatTimestamp(notification.createdAt),
+    source: notification.type,
+    statusLabel: notification.severity,
+    tone: toneFromNotificationSeverity(notification.severity),
+    targetPath: getBackendNotificationTargetPath(role, notification),
+    read: Boolean(notification.readAt),
+    sortTime: toSortTime(notification.createdAt),
+  }));
+}
+
+function toneFromNotificationSeverity(severity: BackendNotificationSeverity): PortalNotificationTone {
+  if (severity === "Critical") return "critical";
+  if (severity === "Warning") return "warning";
+  if (severity === "Success") return "success";
+  return "info";
+}
+
+function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
+  const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
+  if (role === "admin") {
+    if (text.includes("support") || text.includes("ticket")) return routes.admin.supportTickets;
+    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.systemLogs : routes.admin.alertsMonitor;
+  }
+  if (role === "it") {
+    if (text.includes("support") || text.includes("ticket")) return routes.it.supportTickets;
+    return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : routes.it.alerts;
+  }
+  if (role === "staff") {
+    return routes.staff.systemLogs;
+  }
+  return undefined;
 }
 
 function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"): DraftNotification[] {

@@ -11,10 +11,20 @@ import type { LocalReportSubmission, LocalReportSubmissionRecord } from "../../c
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
 import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
+import { getDemographicAllocationStatus } from "../utils/demographics";
+import { notifyError } from "../../toasts/services/toast-service";
 
 type ReportsViewProps = {
   reportsHistory: ReportRecord[];
   setReportsHistory: React.Dispatch<React.SetStateAction<ReportRecord[]>>;
+};
+
+type DotPreviewState = {
+  demo: DemoBreakdown;
+  metrics: Metrics;
+  notes: string;
+  period: SystemLogPeriod;
+  reportId: string;
 };
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
@@ -23,7 +33,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
 
-  const [showPreview, setShowPreview] = useState(false);
+  const [previewReport, setPreviewReport] = useState<DotPreviewState | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [liveMetrics, setLiveMetrics] = useState<Metrics>(EMPTY_METRICS);
   const [metricsError, setMetricsError] = useState<string | null>(null);
@@ -40,9 +50,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
   const uniqueTrend = prevMetrics && prevMetrics.unique > 0 ? Math.round(((displayedMetrics.unique - prevMetrics.unique) / prevMetrics.unique) * 100) : 0;
 
-  const isError = displayedMetrics.peak > displayedMetrics.entries;
   const blockingMetricsError = activeReport ? null : metricsError;
-  const validationError = activeReport && isReadOnly ? null : validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId);
+  const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
+    checkDuplicatePeriod: !(activeReport && isReadOnly),
+  });
 
   const refreshLocalMetrics = useCallback(async () => {
     try {
@@ -90,6 +101,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setPeriod("Current Period");
     setNotes("");
     setDemo(emptyDemo());
+    setPreviewReport(null);
   };
 
   const handleViewReport = (report: ReportRecord) => {
@@ -99,8 +111,47 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setDemo(report.demo || emptyDemo());
   };
 
+  const handlePreviewReport = (report: ReportRecord) => {
+    handleViewReport(report);
+    setPreviewReport({
+      demo: report.demo ?? emptyDemo(),
+      metrics: metricsFromReport(report),
+      notes: report.notes ?? "",
+      period: report.period ?? report.date,
+      reportId: report.id,
+    });
+  };
+
+  const handleDownloadReport = (report: ReportRecord) => {
+    const reportDemo = report.demo ?? emptyDemo();
+    const reportMetrics = metricsFromReport(report);
+    const exportError = validateDemographicAllocation(reportMetrics, reportDemo);
+    if (exportError) {
+      notifyError(exportError);
+      handlePreviewReport(report);
+      return;
+    }
+
+    downloadDotReportPdf({
+      reportId: report.id,
+      period: report.period ?? report.date,
+      metrics: reportMetrics,
+      demo: reportDemo,
+      notes: report.notes ?? "",
+    });
+  };
+
   const executeSubmit = async () => {
     setIsSubmitting(true);
+    const submitValidationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
+      checkDuplicatePeriod: true,
+    });
+    if (submitValidationError) {
+      notifyError(submitValidationError);
+      setIsSubmitting(false);
+      return;
+    }
+
     const now = new Date().toLocaleString("en-US", {
       hour12: true,
       hour: "numeric",
@@ -219,13 +270,23 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   return (
     <div className="animate-in fade-in space-y-6 font-['Inter'] duration-500">
-      {showPreview && <DotFormModal onClose={() => setShowPreview(false)} period={period} metrics={displayedMetrics} demo={demo} notes={notes} reportId={activeReportId ?? "TANAW-DRAFT"} />}
+      {previewReport && (
+        <DotFormModal
+          demo={previewReport.demo}
+          metrics={previewReport.metrics}
+          notes={previewReport.notes}
+          period={previewReport.period}
+          reportId={previewReport.reportId}
+          validationMessage={validateDemographicAllocation(previewReport.metrics, previewReport.demo)}
+          onClose={() => setPreviewReport(null)}
+        />
+      )}
 
       {showConfirm && <SubmitReportDialog isSubmitting={isSubmitting} onCancel={() => setShowConfirm(false)} onConfirm={executeSubmit} />}
 
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Report Generation & Submission</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
           <p className="mt-1 text-sm text-gray-500">Generate LGU-required DOT reports using system-verified metrics.</p>
           {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
           {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report ledger unavailable: {ledgerError}</p>}
@@ -243,7 +304,6 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           activeReport={activeReport}
           activeReportId={activeReportId}
           demo={demo}
-          isError={isError}
           isReadOnly={isReadOnly}
           metrics={displayedMetrics}
           metricsError={blockingMetricsError}
@@ -252,7 +312,15 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           prevMetrics={prevMetrics}
           uniqueTrend={uniqueTrend}
           validationError={validationError}
-          onPreview={() => setShowPreview(true)}
+          onPreview={() =>
+            setPreviewReport({
+              demo,
+              metrics: displayedMetrics,
+              notes,
+              period,
+              reportId: activeReportId ?? "TANAW-DRAFT",
+            })
+          }
           onSubmitPrompt={() => setShowConfirm(true)}
           setDemo={setDemo}
           setNotes={setNotes}
@@ -263,33 +331,32 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           activeReportId={activeReportId}
           reportsHistory={reportsHistory}
           onViewReport={handleViewReport}
-          onPrintReport={(report) => {
-            downloadDotReportPdf({
-              reportId: report.id,
-              period: report.period ?? report.date,
-              metrics: metricsFromReport(report),
-              demo: report.demo ?? emptyDemo(),
-              notes: report.notes ?? "",
-            });
-          }}
+          onPreviewReport={handlePreviewReport}
+          onPrintReport={handleDownloadReport}
         />
       </div>
     </div>
   );
 }
 
-function validateReportDraft(metrics: Metrics, demo: DemoBreakdown, period: string, reports: ReportRecord[], activeReportId: string | null) {
-  if (metrics.entries <= 0) return "No local visitor metrics are available for submission.";
-  if (metrics.exits > metrics.entries) return "Total exits cannot exceed total entries.";
-  if (metrics.peak > metrics.entries) return "Peak occupancy cannot exceed total entries.";
-  if (metrics.unique > metrics.entries) return "Estimated unique count cannot exceed total entries.";
-  const values = Object.values(demo);
-  if (values.some((value) => value.trim() === "")) return "Complete every demographics field.";
-  if (values.some((value) => !/^\d+$/.test(value.trim()))) return "Demographics values must be non-negative whole numbers.";
-  if (reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
+function validateReportDraft(
+  metrics: Metrics,
+  demo: DemoBreakdown,
+  period: string,
+  reports: ReportRecord[],
+  activeReportId: string | null,
+  options: { checkDuplicatePeriod: boolean },
+) {
+  const allocationError = validateDemographicAllocation(metrics, demo);
+  if (allocationError) return allocationError;
+  if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
     return `A report for ${period} has already been submitted.`;
   }
   return null;
+}
+
+function validateDemographicAllocation(metrics: Metrics, demo: DemoBreakdown) {
+  return getDemographicAllocationStatus(demo, metrics.unique).validationMessage;
 }
 
 function metricsFromReport(report: ReportRecord): Metrics {
@@ -463,5 +530,5 @@ function emptyDemo(): DemoBreakdown {
 }
 
 function stringValue(value: unknown) {
-  return typeof value === "string" ? value : "";
+  return typeof value === "string" ? value : typeof value === "number" && Number.isInteger(value) && value >= 0 ? String(value) : "";
 }

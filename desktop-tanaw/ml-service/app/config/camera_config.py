@@ -21,9 +21,15 @@ class TripwirePoint(BaseModel):
     y: float = Field(..., ge=0.0, le=1.0)
 
 
+TripwireCurveMode = Literal["linear", "smooth"]
+
+
 class TripwireLine(BaseModel):
     start: TripwirePoint
     end: TripwirePoint
+    points: list[TripwirePoint] | None = Field(default=None, min_length=2, max_length=80)
+    curve: TripwireCurveMode = "linear"
+    sampled_points: list[TripwirePoint] | None = Field(default=None, min_length=2, max_length=320)
 
 
 class RegionOfInterest(BaseModel):
@@ -89,13 +95,13 @@ class CameraStartRequest(BaseModel):
                 "Both entry_line and exit_line are required when using custom tripwire lines."
             )
 
-        entry_length = _line_length(self.entry_line)
-        exit_length = _line_length(self.exit_line)
+        entry_length = _path_length(self.entry_line)
+        exit_length = _path_length(self.exit_line)
         if entry_length < 0.10 or exit_length < 0.10:
-            raise ValueError("Tripwire lines must be at least 0.10 normalized units long.")
+            raise ValueError("Tripwire paths must be at least 0.10 normalized units long.")
 
-        if _lines_overlap(self.entry_line, self.exit_line, tolerance=0.03):
-            raise ValueError("Entry and exit tripwire lines must not overlap.")
+        if _paths_overlap(self.entry_line, self.exit_line, tolerance=0.03):
+            raise ValueError("Entry and exit tripwire paths must not overlap.")
 
         return self
 
@@ -404,20 +410,35 @@ class SyncMarkResponse(BaseModel):
     updated: int
 
 
-def _line_length(line: TripwireLine) -> float:
-    return hypot(line.end.x - line.start.x, line.end.y - line.start.y)
+def _path_points(line: TripwireLine) -> list[TripwirePoint]:
+    if line.sampled_points and len(line.sampled_points) >= 2:
+        return line.sampled_points
+    if line.points and len(line.points) >= 2:
+        return line.points
+    return [line.start, line.end]
 
 
-def _lines_overlap(first: TripwireLine, second: TripwireLine, tolerance: float) -> bool:
-    same_direction = (
-        _point_distance(first.start, second.start) < tolerance
-        and _point_distance(first.end, second.end) < tolerance
+def _path_length(line: TripwireLine) -> float:
+    points = _path_points(line)
+    return sum(
+        _point_distance(points[index - 1], point) for index, point in enumerate(points) if index > 0
     )
-    reverse_direction = (
-        _point_distance(first.start, second.end) < tolerance
-        and _point_distance(first.end, second.start) < tolerance
-    )
-    return same_direction or reverse_direction
+
+
+def _paths_overlap(first: TripwireLine, second: TripwireLine, tolerance: float) -> bool:
+    first_points = _path_points(first)
+    second_points = _path_points(second)
+    comparable_points = min(len(first_points), len(second_points), 24)
+    if comparable_points < 2:
+        return False
+
+    total_distance = 0.0
+    for index in range(comparable_points):
+        first_index = round((index / max(1, comparable_points - 1)) * (len(first_points) - 1))
+        second_index = round((index / max(1, comparable_points - 1)) * (len(second_points) - 1))
+        total_distance += _point_distance(first_points[first_index], second_points[second_index])
+
+    return total_distance / comparable_points < tolerance
 
 
 def _point_distance(first: TripwirePoint, second: TripwirePoint) -> float:

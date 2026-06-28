@@ -4,6 +4,19 @@ import type { EnterpriseStatus, GatewayStatus, MapEnterprise } from "@/shared/ty
 
 export type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
 
+export type BarangayPointResolution = {
+  barangayName: string | null;
+  isAmbiguous: boolean;
+  matchCount: number;
+};
+
+type BarangayPointMatch = {
+  area: number;
+  featureItem: GeoJSON.Feature;
+  index: number;
+  label: string;
+};
+
 export const SAN_PEDRO_BARANGAYS_URL = "/data/san_pedro_barangays_clean_v4.geojson";
 
 export const sanPedroFallbackCenter: L.LatLngTuple = [14.3413, 121.0446];
@@ -166,14 +179,20 @@ export function isPointInsideRelaxedSanPedroBounds(latitude: number, longitude: 
 }
 
 export function getBarangayFeatureForPoint(boundary: GeoJsonFeatureCollection | null | undefined, latitude: number, longitude: number) {
-  if (!boundary || !isPointInsideRelaxedSanPedroBounds(latitude, longitude)) return null;
-
-  return boundary.features.find((featureItem) => isBoundaryPolygonFeature(featureItem) && featureContainsPoint(featureItem, latitude, longitude)) ?? null;
+  return getBarangayMatchesForPoint(boundary, latitude, longitude)[0]?.featureItem ?? null;
 }
 
 export function getBarangayForPoint(boundary: GeoJsonFeatureCollection | null | undefined, latitude: number, longitude: number) {
-  const featureItem = getBarangayFeatureForPoint(boundary, latitude, longitude);
-  return featureItem ? getFeatureValue(featureItem, ["official_barangay", "name", "display_name", "alt_name"], getBarangayLabel(featureItem)) : null;
+  return getBarangayPointResolution(boundary, latitude, longitude).barangayName;
+}
+
+export function getBarangayPointResolution(boundary: GeoJsonFeatureCollection | null | undefined, latitude: number, longitude: number): BarangayPointResolution {
+  const matches = getBarangayMatchesForPoint(boundary, latitude, longitude);
+  return {
+    barangayName: matches[0]?.label ?? null,
+    isAmbiguous: matches.length > 1,
+    matchCount: matches.length,
+  };
 }
 
 export function isPointInsideSanPedro(boundary: GeoJsonFeatureCollection | null | undefined, latitude: number, longitude: number) {
@@ -197,6 +216,59 @@ function featureContainsPoint(featureItem: GeoJSON.Feature, latitude: number, lo
   }
 
   return false;
+}
+
+function getBarangayMatchesForPoint(boundary: GeoJsonFeatureCollection | null | undefined, latitude: number, longitude: number) {
+  if (!boundary || !isPointInsideRelaxedSanPedroBounds(latitude, longitude)) return [];
+
+  return boundary.features
+    .map((featureItem, index): BarangayPointMatch | null => {
+      if (!isBoundaryPolygonFeature(featureItem) || !featureContainsPoint(featureItem, latitude, longitude)) return null;
+      return {
+        area: featureArea(featureItem),
+        featureItem,
+        index,
+        label: getFeatureValue(featureItem, ["display_name", "name", "official_barangay", "alt_name"], getBarangayLabel(featureItem)),
+      };
+    })
+    .filter((match): match is BarangayPointMatch => match !== null)
+    .sort((left, right) => left.area - right.area || left.label.localeCompare(right.label) || left.index - right.index);
+}
+
+function featureArea(featureItem: GeoJSON.Feature) {
+  const geometry = featureItem.geometry;
+  if (!geometry) return Number.POSITIVE_INFINITY;
+
+  if (geometry.type === "Polygon") {
+    return polygonArea(geometry.coordinates);
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.reduce((total, polygon) => total + polygonArea(polygon), 0);
+  }
+
+  return Number.POSITIVE_INFINITY;
+}
+
+function polygonArea(polygon: GeoJSON.Position[][]) {
+  const [outerRing, ...holes] = polygon;
+  if (!outerRing) return Number.POSITIVE_INFINITY;
+  const holeArea = holes.reduce((total, hole) => total + ringArea(hole), 0);
+  return Math.max(0, ringArea(outerRing) - holeArea);
+}
+
+function ringArea(ring: GeoJSON.Position[]) {
+  let area = 0;
+
+  for (let index = 0, previousIndex = ring.length - 1; index < ring.length; previousIndex = index, index += 1) {
+    const current = ring[index];
+    const previous = ring[previousIndex];
+    if (!isPosition(current) || !isPosition(previous)) continue;
+
+    area += previous[0] * current[1] - current[0] * previous[1];
+  }
+
+  return Math.abs(area) / 2;
 }
 
 function polygonContainsPoint(polygon: GeoJSON.Position[][], point: [number, number]) {

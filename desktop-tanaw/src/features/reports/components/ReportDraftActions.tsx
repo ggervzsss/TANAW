@@ -3,7 +3,6 @@ import type { ReportRecord } from "../../../types/enterprise";
 
 type ReportDraftActionsProps = {
   activeReport: ReportRecord | null;
-  isError: boolean;
   isReadOnly: boolean;
   metricsError: string | null;
   validationError: string | null;
@@ -11,8 +10,8 @@ type ReportDraftActionsProps = {
   onSubmitPrompt: () => void;
 };
 
-export function ReportDraftActions({ activeReport, isError, isReadOnly, metricsError, validationError, onPreview, onSubmitPrompt }: ReportDraftActionsProps) {
-  const isSubmitDisabled = isError || Boolean(metricsError) || Boolean(validationError);
+export function ReportDraftActions({ activeReport, isReadOnly, metricsError, validationError, onPreview, onSubmitPrompt }: ReportDraftActionsProps) {
+  const isSubmitDisabled = Boolean(metricsError) || Boolean(validationError);
 
   return (
     <div className="flex gap-3 pt-2">

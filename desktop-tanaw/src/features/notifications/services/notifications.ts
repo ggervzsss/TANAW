@@ -5,6 +5,7 @@ export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Suc
 
 export type BackendNotification = {
   id: string;
+  recipientAccountId: string;
   title: string;
   message: string;
   type: string;

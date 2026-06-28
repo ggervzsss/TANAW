@@ -10,6 +10,8 @@ import {
   listIntakeReports,
   listLatestTelemetry,
   listOperationalMapEnterprises,
+  listUserNotifications,
+  type BackendNotification,
   type OperationalWebSocketEnvelope,
 } from "../services/operationalSync";
 import type { FinalReport, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
@@ -19,6 +21,7 @@ export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest
 export const operationalReportsQueryKey = ["operational", "reports", "intake"];
 export const operationalFinalReportsQueryKey = ["operational", "reports", "final"];
 export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"];
+export const operationalNotificationsQueryKey = ["operational", "notifications"];
 const operationalAlertsQueryKey = ["operational-alerts"];
 
 export function useOperationalSummary() {
@@ -44,6 +47,11 @@ export function useOperationalFinalReports() {
 export function useOperationalMapEnterprises() {
   const token = useAuthStore((state) => state.token);
   return useQuery({ queryKey: operationalMapEnterprisesQueryKey, queryFn: listOperationalMapEnterprises, enabled: Boolean(token) });
+}
+
+export function useOperationalNotifications() {
+  const token = useAuthStore((state) => state.token);
+  return useQuery({ queryKey: operationalNotificationsQueryKey, queryFn: listUserNotifications, enabled: Boolean(token), refetchInterval: 30_000 });
 }
 
 export function OperationalSyncBridge() {
@@ -168,6 +176,10 @@ function handleOperationalEnvelope(queryClient: ReturnType<typeof useQueryClient
       toast.error(`${alert.enterprise ?? alert.requester}: ${alert.summary}`, { id: alert.id, duration: 8000 });
     }
   }
+
+  if (envelope.type === "notification.created" || envelope.type === "notification.updated") {
+    queryClient.setQueryData<BackendNotification[]>(operationalNotificationsQueryKey, (current = []) => sortNotifications(upsertById(current, envelope.data)));
+  }
 }
 
 function upsertById<TItem extends { id: string }>(items: TItem[], nextItem: TItem) {
@@ -186,6 +198,10 @@ function sortFinalReports(reports: FinalReport[]) {
 
 function sortAlerts(alerts: PriorityAlert[]) {
   return [...alerts].sort((left, right) => Date.parse(right.time) - Date.parse(left.time));
+}
+
+function sortNotifications(notifications: BackendNotification[]) {
+  return [...notifications].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
 function getReportTime(report: IntakeReport) {

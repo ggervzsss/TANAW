@@ -139,7 +139,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
                 onClick={onViewAll}
                 className="text-[10px] font-black tracking-wider text-slate-500 uppercase transition hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-slate-300"
               >
-                View all
+                VIEW ALL NOTIFICATIONS
               </button>
             </div>
           </motion.div>

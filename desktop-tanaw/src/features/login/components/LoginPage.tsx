@@ -27,7 +27,7 @@ type SupportInfo = {
 };
 type ApiErrorPayload = { detail?: string | { msg?: string }[] };
 
-const getAuthenticatedRoute = (mustChangePassword?: boolean) => (mustChangePassword ? routePaths.changePassword : routePaths.enterpriseCameras);
+const getAuthenticatedRoute = (mustChangePassword?: boolean) => (mustChangePassword ? routePaths.changePassword : routePaths.enterpriseDashboard);
 
 type LoginLocationState = {
   from?: {

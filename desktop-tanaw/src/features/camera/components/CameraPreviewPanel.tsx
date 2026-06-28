@@ -126,7 +126,6 @@ export function CameraPreviewPanel({
           <CameraMonitoringPanel
             activeCam={activeCam}
             counts={counts}
-            detections={detections}
             error={error}
             health={health}
             isRestartingService={isRestartingService}

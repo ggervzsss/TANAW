@@ -1,6 +1,8 @@
-import { Activity, AlertTriangle, Search, ShieldCheck, Users } from "lucide-react";
+import { Activity, AlertTriangle, Search, ShieldCheck, TicketCheck, Users } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { routes } from "@/app/routers/routes";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
@@ -163,6 +165,15 @@ function SeverityBadge({ severity }: { severity: LogSeverity }) {
 }
 
 function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void }) {
+  const navigate = useNavigate();
+  const supportTicketId = getSupportTicketIdFromLog(log);
+
+  const openTicket = () => {
+    if (!supportTicketId) return;
+    onClose();
+    navigate(`${routes.admin.supportTickets}?ticket=${encodeURIComponent(supportTicketId)}`);
+  };
+
   return (
     <ModalFrame title="Log Details" eyebrow={log.id} onClose={onClose} maxWidthClassName="max-w-4xl">
       <div className="grid gap-4 md:grid-cols-2">
@@ -183,6 +194,19 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
           </section>
         )}
       </div>
+      {supportTicketId && (
+        <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
+          <p className="text-sm font-semibold text-slate-700">This activity is tied to an enterprise support ticket. Open the supervision view to inspect the full ticket, photos, status, and IT conversation.</p>
+          <button
+            type="button"
+            onClick={openTicket}
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+          >
+            <TicketCheck size={14} />
+            Open Ticket
+          </button>
+        </div>
+      )}
     </ModalFrame>
   );
 }
@@ -195,4 +219,11 @@ function getTimestampValue(timestamp: string) {
 function formatLogTimestamp(timestamp: string) {
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
+}
+
+function getSupportTicketIdFromLog(log: SystemLog) {
+  if (!log.sourceId) return null;
+
+  const text = [log.action, log.target, log.summary, log.sourceId].join(" ").toLowerCase();
+  return text.includes("ticket") || text.includes("tck-") ? log.sourceId : null;
 }

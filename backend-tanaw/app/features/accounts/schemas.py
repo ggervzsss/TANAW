@@ -364,6 +364,56 @@ class ProfileUpdate(BaseModel):
         return value
 
 
+class ProfileDisplayImageUpdate(BaseModel):
+    displayImageDataUrl: str | None = Field(default=None, max_length=2_800_000)
+
+    @field_validator("displayImageDataUrl")
+    @classmethod
+    def validate_display_image_data_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if re.fullmatch(r"data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+", value) is None:
+            raise ValueError("Upload a PNG, JPG, or WebP image.")
+        return value
+
+
+class LeadAdminNameUpdate(BaseModel):
+    managerName: str = Field(min_length=2, max_length=120)
+
+    @field_validator("managerName")
+    @classmethod
+    def validate_manager_name(cls, value: str) -> str:
+        return normalize_person_name(value)
+
+
+class BusinessEmailChangeRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return normalize_email_value(value)
+        return value
+
+
+class ContactNumberChangeRequest(BaseModel):
+    phone: str = Field(min_length=1, max_length=40)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, value: object) -> str:
+        normalized = normalize_optional_contact_number(value)
+        if normalized is None:
+            raise ValueError(PHILIPPINE_MOBILE_ERROR)
+        return normalized
+
+
+class AccountChangeRequestResponse(BaseModel):
+    status: str
+    message: str
+
+
 class EnterpriseGeocodeRequest(BaseModel):
     address: str = Field(min_length=1, max_length=255)
     barangay: str = Field(min_length=1, max_length=120)

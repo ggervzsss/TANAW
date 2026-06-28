@@ -6,11 +6,12 @@ import type { ReportRecord } from "../../../types/enterprise";
 type ReportLedgerTableProps = {
   activeReportId: string | null;
   reportsHistory: ReportRecord[];
+  onPreviewReport: (report: ReportRecord) => void;
   onViewReport: (report: ReportRecord) => void;
   onPrintReport: (report: ReportRecord) => void;
 };
 
-export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport, onPrintReport }: ReportLedgerTableProps) {
+export function ReportLedgerTable({ activeReportId, reportsHistory, onPreviewReport, onViewReport, onPrintReport }: ReportLedgerTableProps) {
   return (
     <Card className="flex flex-col overflow-hidden rounded-sm border border-gray-200 shadow-sm lg:col-span-2">
       <div className="flex items-center justify-between border-b border-gray-200 bg-white p-5">
@@ -55,6 +56,7 @@ export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport
                 <td className="px-5 py-4 text-right">
                   <div className="flex justify-end gap-3 opacity-60 transition-opacity group-hover:opacity-100">
                     <button
+                      type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         onPrintReport(report);
@@ -65,6 +67,15 @@ export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport
                       <Download size={16} />
                     </button>
                     <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (report.status === "Draft" || report.status === "Returned for Revision") {
+                          onViewReport(report);
+                        } else {
+                          onPreviewReport(report);
+                        }
+                      }}
                       className={`flex items-center gap-1 text-xs font-semibold tracking-wider uppercase ${report.status === "Draft" || report.status === "Returned for Revision" ? "text-[#065f46] hover:text-[#044a36]" : "text-gray-400 hover:text-[#111827]"}`}
                     >
                       {report.status === "Draft" || report.status === "Returned for Revision" ? <Edit2 size={14} /> : <FileText size={14} />}

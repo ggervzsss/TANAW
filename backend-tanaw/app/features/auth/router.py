@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
@@ -19,7 +20,16 @@ from app.features.accounts.models import (
     DevDelivery,
     SystemConfiguration,
 )
-from app.features.accounts.schemas import AuthUser, PasswordChangeRequest, ProfileUpdate
+from app.features.accounts.schemas import (
+    AccountChangeRequestResponse,
+    AuthUser,
+    BusinessEmailChangeRequest,
+    ContactNumberChangeRequest,
+    LeadAdminNameUpdate,
+    PasswordChangeRequest,
+    ProfileDisplayImageUpdate,
+    ProfileUpdate,
+)
 from app.features.accounts.service import (
     change_account_password,
     get_account_by_email,
@@ -65,6 +75,7 @@ from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_THRESHOLD_KEY,
     create_operational_alert,
+    create_role_notifications,
     system_setting_enabled,
     to_operational_alert_summary,
 )
@@ -72,6 +83,13 @@ from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
+    AccountRole.ADMIN,
+    AccountRole.IT,
+    AccountRole.STAFF,
+)
+PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
+PENDING_CONTACT_NUMBER_CHANGE_KEY = "pendingContactNumberChange"
 
 
 def is_login_scope_allowed(account: Account, login_scope: str) -> bool:
@@ -116,6 +134,62 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
             data=to_operational_alert_summary(alert).model_dump(mode="json"),
         )
     )
+
+
+async def notify_enterprise_account_change(
+    db: AsyncSession,
+    account: Account,
+    *,
+    title: str,
+    message: str,
+    notification_type: str,
+    source_type: str,
+) -> None:
+    if account.role != AccountRole.ENTERPRISE:
+        return
+
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=ENTERPRISE_CHANGE_NOTIFICATION_ROLES,
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        severity="Info",
+        actor=account,
+        source_type=source_type,
+        source_id=account.id,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+
+
+def join_changed_fields(fields: list[str]) -> str:
+    if len(fields) <= 1:
+        return fields[0] if fields else "profile details"
+    return f"{', '.join(fields[:-1])}, and {fields[-1]}"
+
+
+def require_enterprise_account(account: Account) -> None:
+    if account.role != AccountRole.ENTERPRISE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Enterprise account access required.",
+        )
+
+
+def enterprise_label(account: Account) -> str:
+    return account.enterprise_name or account.display_name
+
+
+def set_pending_account_change(account: Account, key: str, value: dict[str, str]) -> None:
+    preferences = get_account_preferences(account)
+    preferences[key] = value
+    set_account_preferences(account, preferences)
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -227,6 +301,15 @@ async def change_password(
         target=account.email,
         summary=f"{account.display_name} changed their account password.",
         source_id=account.id,
+    )
+    enterprise = account.enterprise_name or account.display_name
+    await notify_enterprise_account_change(
+        db,
+        account,
+        title=f"{enterprise} changed account password.",
+        message=f"{enterprise} changed account password.",
+        notification_type="Enterprise Security Updated",
+        source_type="enterprise.password",
     )
     token = create_access_token(
         account.id, {"role": account.role.value, "must_change_password": False}
@@ -343,6 +426,9 @@ async def update_profile(
     if existing is not None and existing.id != account.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
 
+    previous_manager_name = account.manager_name
+    previous_email = account.email
+    previous_phone = account.phone
     account.email = str(payload.email)
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
@@ -350,6 +436,11 @@ async def update_profile(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Manager and enterprise names are required.",
+            )
+        if payload.phone is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Contact number is required.",
             )
         account.manager_name = payload.managerName
         enterprise_name = payload.enterpriseName.strip()
@@ -380,7 +471,207 @@ async def update_profile(
         summary=f"{account.display_name} updated their profile information.",
         source_id=account.id,
     )
+    if account.role == AccountRole.ENTERPRISE:
+        changed_fields: list[str] = []
+        if account.manager_name != previous_manager_name:
+            changed_fields.append("lead admin")
+        if account.email != previous_email:
+            changed_fields.append("business email")
+        if account.phone != previous_phone:
+            changed_fields.append("contact number")
+
+        if changed_fields:
+            enterprise = account.enterprise_name or account.display_name
+            changed_field_text = join_changed_fields(changed_fields)
+            await notify_enterprise_account_change(
+                db,
+                account,
+                title=f"{enterprise} updated enterprise profile details.",
+                message=f"{enterprise} updated enterprise profile details: {changed_field_text}.",
+                notification_type="Enterprise Profile Updated",
+                source_type="enterprise.profile",
+            )
     return to_auth_user(account)
+
+
+@router.patch("/profile/display-image", response_model=AuthUser)
+async def update_profile_display_image(
+    payload: ProfileDisplayImageUpdate,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthUser:
+    set_display_image_data_url(account, payload.displayImageDataUrl)
+    await db.commit()
+    await db.refresh(account)
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Update Profile Logo",
+        target=account.email,
+        summary=f"{account.display_name} updated their profile logo.",
+        source_id=account.id,
+    )
+    return to_auth_user(account)
+
+
+@router.patch("/profile/lead-admin", response_model=AuthUser)
+async def update_lead_admin_name(
+    payload: LeadAdminNameUpdate,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthUser:
+    require_enterprise_account(account)
+    previous_manager_name = account.manager_name
+    account.manager_name = payload.managerName
+    await db.commit()
+    await db.refresh(account)
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Update Lead Admin",
+        target=account.email,
+        summary=f"{account.display_name} updated the lead admin name.",
+        source_id=account.id,
+    )
+    if account.manager_name != previous_manager_name:
+        enterprise = enterprise_label(account)
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} updated lead admin name.",
+            message=f"{enterprise} updated lead admin name.",
+            notification_type="Enterprise Profile Updated",
+            source_type="enterprise.profile",
+        )
+    return to_auth_user(account)
+
+
+@router.post("/profile/business-email-change", response_model=AccountChangeRequestResponse)
+async def request_business_email_change(
+    payload: BusinessEmailChangeRequest,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountChangeRequestResponse:
+    require_enterprise_account(account)
+    new_email = str(payload.email)
+    if new_email == account.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This business email is already active.",
+        )
+    existing = await get_account_by_email(db, new_email)
+    if existing is not None and existing.id != account.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
+
+    set_pending_account_change(
+        account,
+        PENDING_BUSINESS_EMAIL_CHANGE_KEY,
+        {"email": new_email, "requestedAt": datetime.now(UTC).isoformat()},
+    )
+    db.add(
+        DevDelivery(
+            account_id=account.id,
+            channel=DeliveryChannel.EMAIL,
+            recipient=new_email,
+            subject="TANAW business email change request",
+            body=(
+                f"{enterprise_label(account)} requested a business email change.\n\n"
+                "Email verification is not configured in this environment. "
+                "No verification token was generated or sent."
+            ),
+            status=DeliveryStatus.RECORDED,
+        )
+    )
+    await db.commit()
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Info",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Request Business Email Change",
+        target=account.email,
+        summary=f"{account.display_name} requested a business email change.",
+        source_id=account.id,
+    )
+    enterprise = enterprise_label(account)
+    await notify_enterprise_account_change(
+        db,
+        account,
+        title=f"{enterprise} requested a business email change.",
+        message=f"{enterprise} requested a business email change.",
+        notification_type="Enterprise Profile Updated",
+        source_type="enterprise.profile.email",
+    )
+    return AccountChangeRequestResponse(
+        status="pending",
+        message="Email verification is not configured in this environment.",
+    )
+
+
+@router.post("/profile/contact-number-change", response_model=AccountChangeRequestResponse)
+async def request_contact_number_change(
+    payload: ContactNumberChangeRequest,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountChangeRequestResponse:
+    require_enterprise_account(account)
+    if payload.phone == account.phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This contact number is already active.",
+        )
+
+    set_pending_account_change(
+        account,
+        PENDING_CONTACT_NUMBER_CHANGE_KEY,
+        {"phone": payload.phone, "requestedAt": datetime.now(UTC).isoformat()},
+    )
+    db.add(
+        DevDelivery(
+            account_id=account.id,
+            channel=DeliveryChannel.SMS,
+            recipient=payload.phone,
+            subject="TANAW contact number change request",
+            body=(
+                f"{enterprise_label(account)} requested a contact number change.\n\n"
+                "Contact verification is not configured in this environment. "
+                "No OTP code was generated or sent."
+            ),
+            status=DeliveryStatus.RECORDED,
+        )
+    )
+    await db.commit()
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Info",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Request Contact Number Change",
+        target=account.email,
+        summary=f"{account.display_name} requested a contact number change.",
+        source_id=account.id,
+    )
+    enterprise = enterprise_label(account)
+    await notify_enterprise_account_change(
+        db,
+        account,
+        title=f"{enterprise} requested a contact number change.",
+        message=f"{enterprise} requested a contact number change.",
+        notification_type="Enterprise Profile Updated",
+        source_type="enterprise.profile.contact",
+    )
+    return AccountChangeRequestResponse(
+        status="pending",
+        message="Contact verification is not configured in this environment.",
+    )
 
 
 @router.get("/preferences", response_model=AccountPreferences)
@@ -398,10 +689,30 @@ async def update_preferences(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountPreferences:
     values = get_account_preferences(account)
-    values.update(payload.model_dump(mode="json"))
+    previous_open_at_login = bool(values.get("openAtLogin", False))
+    patch_values = payload.model_dump(mode="json", exclude_unset=True)
+    values.update(patch_values)
     set_account_preferences(account, values)
     await db.commit()
-    return payload
+    response = AccountPreferences.model_validate(values)
+
+    if (
+        account.role == AccountRole.ENTERPRISE
+        and "openAtLogin" in patch_values
+        and bool(patch_values["openAtLogin"]) != previous_open_at_login
+    ):
+        enterprise = account.enterprise_name or account.display_name
+        state = "enabled" if response.openAtLogin else "disabled"
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} updated startup/background monitoring preference.",
+            message=f"{enterprise} {state} startup at sign-in.",
+            notification_type="Enterprise Security Updated",
+            source_type="enterprise.preferences",
+        )
+
+    return response
 
 
 @router.post("/data-archive", response_model=StatusResponse)

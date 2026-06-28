@@ -46,6 +46,8 @@ interface Window {
       trayAvailable: boolean;
     }>;
     getStartupSettings: () => Promise<{
+      isAvailable: boolean;
+      message: string | null;
       openAtLogin: boolean;
     }>;
     quit: () => Promise<void>;
@@ -56,6 +58,8 @@ interface Window {
       trayAvailable: boolean;
     }>;
     updateStartupSettings: (openAtLogin: boolean) => Promise<{
+      isAvailable: boolean;
+      message: string | null;
       openAtLogin: boolean;
     }>;
   };

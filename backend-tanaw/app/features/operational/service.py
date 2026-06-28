@@ -17,6 +17,8 @@ from app.features.operational.models import (
     FinalReport,
     FinalReportSource,
     OperationalAlert,
+    SupportTicket,
+    SupportTicketMessage,
     UserNotification,
 )
 from app.features.operational.schemas import (
@@ -35,6 +37,13 @@ from app.features.operational.schemas import (
     OperationalAlertSummary,
     OperationalSummary,
     ReportStatusUpdate,
+    SupportTicketAttachment,
+    SupportTicketCreate,
+    SupportTicketDetail,
+    SupportTicketMessageCreate,
+    SupportTicketMessageSummary,
+    SupportTicketStatusUpdate,
+    SupportTicketSummary,
     TelemetrySnapshotSummary,
     UserNotificationSummary,
 )
@@ -88,6 +97,7 @@ def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSum
 def to_user_notification_summary(notification: UserNotification) -> UserNotificationSummary:
     return UserNotificationSummary(
         id=notification.id,
+        recipientAccountId=notification.recipient_account_id,
         title=notification.title,
         message=notification.message,
         type=notification.notification_type,
@@ -161,6 +171,56 @@ async def create_user_notification(
     return to_user_notification_summary(notification)
 
 
+async def create_role_notifications(
+    db: AsyncSession,
+    *,
+    recipient_roles: Sequence[AccountRole],
+    title: str,
+    message: str,
+    notification_type: str,
+    severity: str,
+    actor: Account | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
+) -> list[UserNotificationSummary]:
+    recipients = (
+        await db.scalars(
+            select(Account)
+            .where(
+                Account.role.in_(recipient_roles),
+                Account.status == AccountStatus.ACTIVE,
+            )
+            .order_by(Account.role.asc(), Account.display_name.asc())
+        )
+    ).all()
+    notifications: list[UserNotification] = []
+
+    for recipient in recipients:
+        notification = UserNotification(
+            recipient_account_id=recipient.id,
+            recipient_role=recipient.role.value,
+            recipient_enterprise_id=None,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            severity=severity,
+            source_type=source_type,
+            source_id=source_id,
+            created_by_account_id=actor.id if actor else None,
+            created_by_name=actor.display_name if actor else None,
+        )
+        db.add(notification)
+        notifications.append(notification)
+
+    if not notifications:
+        return []
+
+    await db.commit()
+    for notification in notifications:
+        await db.refresh(notification)
+    return [to_user_notification_summary(notification) for notification in notifications]
+
+
 async def get_user_notification(
     db: AsyncSession, account: Account, notification_id: str
 ) -> UserNotification | None:
@@ -185,6 +245,183 @@ async def set_user_notification_read(
     await db.commit()
     await db.refresh(notification)
     return to_user_notification_summary(notification)
+
+
+def to_support_ticket_summary(ticket: SupportTicket) -> SupportTicketSummary:
+    return SupportTicketSummary(
+        id=ticket.id,
+        code=ticket.ticket_code,
+        enterpriseId=ticket.enterprise_id,
+        enterpriseName=ticket.enterprise_name,
+        submittedBy=ticket.enterprise_name,
+        category=ticket.category,
+        priority=ticket.priority,
+        subject=ticket.subject,
+        description=ticket.description,
+        affectedArea=ticket.affected_area,
+        cameraNode=ticket.camera_node,
+        attachments=ticket_attachment_summaries(ticket),
+        status=ticket.status,  # type: ignore[arg-type]
+        createdAt=ticket.created_at,
+        updatedAt=ticket.updated_at,
+    )
+
+
+def ticket_attachment_summaries(ticket: SupportTicket) -> list[SupportTicketAttachment]:
+    attachments = parse_ticket_attachments(ticket.attachments_json)
+    return [
+        attachment.model_copy(
+            update={
+                "id": f"{ticket.id}:{index}",
+                "url": f"/operational/tickets/{ticket.id}/attachments/{index}",
+            }
+        )
+        for index, attachment in enumerate(attachments)
+    ]
+
+
+def parse_ticket_attachments(value: str | None) -> list[SupportTicketAttachment]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    attachments: list[SupportTicketAttachment] = []
+    for item in parsed:
+        try:
+            attachments.append(SupportTicketAttachment.model_validate(item))
+        except ValueError:
+            continue
+    return attachments
+
+
+def to_support_ticket_message_summary(message: SupportTicketMessage) -> SupportTicketMessageSummary:
+    return SupportTicketMessageSummary(
+        id=message.id,
+        ticketId=message.ticket_id,
+        authorId=message.author_account_id,
+        authorName=message.author_name,
+        authorRole=message.author_role,
+        message=message.message,
+        createdAt=message.created_at,
+    )
+
+
+async def list_support_tickets(
+    db: AsyncSession, account: Account, limit: int = 100
+) -> list[SupportTicketSummary]:
+    statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
+    if account.role == AccountRole.ENTERPRISE:
+        statement = statement.where(SupportTicket.enterprise_id == enterprise_identifier(account))
+    tickets = (await db.scalars(statement)).all()
+    return [to_support_ticket_summary(ticket) for ticket in tickets]
+
+
+async def get_support_ticket_for_account(
+    db: AsyncSession, account: Account, ticket_id: str
+) -> SupportTicket | None:
+    ticket = cast(
+        SupportTicket | None,
+        await db.scalar(select(SupportTicket).where(SupportTicket.id == ticket_id)),
+    )
+    if ticket is None:
+        return None
+    if account.role == AccountRole.ENTERPRISE and ticket.enterprise_id != enterprise_identifier(
+        account
+    ):
+        return None
+    return ticket
+
+
+async def get_support_ticket_detail(
+    db: AsyncSession, account: Account, ticket_id: str
+) -> SupportTicketDetail | None:
+    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    if ticket is None:
+        return None
+    message_rows = (
+        await db.scalars(
+            select(SupportTicketMessage)
+            .where(SupportTicketMessage.ticket_id == ticket.id)
+            .order_by(SupportTicketMessage.created_at.asc())
+        )
+    ).all()
+    summary = to_support_ticket_summary(ticket)
+    return SupportTicketDetail(
+        **summary.model_dump(),
+        messages=[to_support_ticket_message_summary(message) for message in message_rows],
+    )
+
+
+async def create_support_ticket(
+    db: AsyncSession, account: Account, payload: SupportTicketCreate
+) -> SupportTicketSummary:
+    ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
+    ticket = SupportTicket(
+        ticket_code=f"TCK-{int(ticket_count or 0) + 1:06d}",
+        enterprise_account_id=account.id,
+        enterprise_id=enterprise_identifier(account),
+        enterprise_name=enterprise_name(account),
+        category=payload.category,
+        priority=payload.priority,
+        subject=payload.subject,
+        description=payload.description,
+        affected_area=payload.affectedArea,
+        camera_node=payload.cameraNode,
+        attachments_json=json.dumps(
+            [attachment.model_dump(mode="json") for attachment in payload.attachments],
+            sort_keys=True,
+        )
+        if payload.attachments
+        else None,
+    )
+    db.add(ticket)
+    await db.commit()
+    await db.refresh(ticket)
+    return to_support_ticket_summary(ticket)
+
+
+async def create_support_ticket_message(
+    db: AsyncSession,
+    ticket: SupportTicket,
+    author: Account,
+    payload: SupportTicketMessageCreate,
+) -> SupportTicketDetail:
+    message = SupportTicketMessage(
+        ticket_id=ticket.id,
+        author_account_id=author.id,
+        author_name=author.display_name,
+        author_role=author.role.value,
+        message=payload.message,
+    )
+    db.add(message)
+    if ticket.status == "Open":
+        ticket.status = "In Review"
+    await db.commit()
+    await db.refresh(ticket)
+    await db.refresh(message)
+    detail = await get_support_ticket_detail(db, author, ticket.id)
+    if detail is None:
+        raise RuntimeError("Support ticket detail disappeared after reply creation.")
+    return detail
+
+
+async def update_support_ticket_status(
+    db: AsyncSession,
+    ticket: SupportTicket,
+    actor: Account,
+    payload: SupportTicketStatusUpdate,
+) -> SupportTicketDetail:
+    ticket.status = payload.status
+    await db.commit()
+    await db.refresh(ticket)
+    detail = await get_support_ticket_detail(db, actor, ticket.id)
+    if detail is None:
+        raise RuntimeError("Support ticket detail disappeared after status update.")
+    return detail
 
 
 async def get_enterprise_notification_recipient(
@@ -255,24 +492,33 @@ async def list_operational_alerts(db: AsyncSession) -> list[OperationalAlertSumm
 
 
 def can_view_operational_event(role: str, event_type: str) -> bool:
+    notification_events = {"notification.created", "notification.updated"}
     if role == AccountRole.ADMIN.value:
         return True
     if role == AccountRole.IT.value:
-        return event_type in {
-            "telemetry.snapshot",
-            "summary.updated",
-            "alert.created",
-            "alert.updated",
-            "alert.resolved",
-        }
+        return (
+            event_type
+            in {
+                "telemetry.snapshot",
+                "summary.updated",
+                "alert.created",
+                "alert.updated",
+                "alert.resolved",
+            }
+            | notification_events
+        )
     if role == AccountRole.STAFF.value:
-        return event_type in {
-            "report.submitted",
-            "report.updated",
-            "summary.updated",
-            "final_report.generated",
-            "final_report.updated",
-        }
+        return (
+            event_type
+            in {
+                "report.submitted",
+                "report.updated",
+                "summary.updated",
+                "final_report.generated",
+                "final_report.updated",
+            }
+            | notification_events
+        )
     if role == AccountRole.ENTERPRISE.value:
         return event_type in {"report.updated", "notification.created", "notification.updated"}
     return False

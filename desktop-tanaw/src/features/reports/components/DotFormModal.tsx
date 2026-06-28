@@ -1,29 +1,34 @@
-import { Download, FileText, X } from "lucide-react";
+import { Download, FileText, Info, X } from "lucide-react";
+import { InfoTooltip } from "../../../components/InfoTooltip";
 import { ModalPortal } from "../../../components/ModalPortal";
 import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
+import { demographicCount, getDemographicTotals } from "../utils/demographics";
 import { downloadDotReportPdf } from "../utils/pdf";
 
 type DotFormModalProps = {
+  demo: DemoBreakdown;
+  metrics: Metrics;
+  notes: string;
   onClose: () => void;
   period: SystemLogPeriod;
-  metrics: Metrics;
-  demo: DemoBreakdown;
-  notes: string;
   reportId?: string;
+  validationMessage?: string | null;
 };
 
-export function DotFormModal({ onClose, period, metrics, demo, notes, reportId = "TANAW-DRAFT" }: DotFormModalProps) {
-  const tpm = parseInt(demo.thisProvMale || "0", 10);
-  const tpf = parseInt(demo.thisProvFemale || "0", 10);
+export function DotFormModal({ onClose, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: DotFormModalProps) {
+  const tpm = demographicCount(demo.thisProvMale);
+  const tpf = demographicCount(demo.thisProvFemale);
   const totalThisProv = tpm + tpf;
 
-  const opm = parseInt(demo.otherProvMale || "0", 10);
-  const opf = parseInt(demo.otherProvFemale || "0", 10);
+  const opm = demographicCount(demo.otherProvMale);
+  const opf = demographicCount(demo.otherProvFemale);
   const totalOtherProv = opm + opf;
 
-  const fm = parseInt(demo.foreignMale || "0", 10);
-  const ff = parseInt(demo.foreignFemale || "0", 10);
+  const fm = demographicCount(demo.foreignMale);
+  const ff = demographicCount(demo.foreignFemale);
   const totalForeign = fm + ff;
+  const grandTotal = getDemographicTotals(demo).grandTotal;
+  const canDownload = !validationMessage;
 
   return (
     <ModalPortal>
@@ -35,8 +40,15 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
           <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 p-4 print:hidden">
             <div className="flex items-center gap-3">
               <FileText size={20} className="text-[#111827]" />
-              <h3 className="font-bold text-[#111827]">DOT Form Preview</h3>
-              <span className="rounded-sm bg-[#065f46]/10 px-2 py-1 text-xs font-semibold text-[#065f46]">Ready for Export</span>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-[#111827]">DOT Form Preview</h3>
+                <InfoTooltip content="Official DOT-style preview generated from the selected report demographics and unique count.">
+                  <Info size={14} className="text-gray-400 transition-colors hover:text-[#065f46]" />
+                </InfoTooltip>
+              </div>
+              <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${canDownload ? "bg-[#065f46]/10 text-[#065f46]" : "bg-amber-100 text-amber-800"}`}>
+                {canDownload ? "Ready for Export" : "Needs Allocation"}
+              </span>
             </div>
             <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-200 hover:text-[#111827]" aria-label="Close preview">
               <X size={20} />
@@ -45,6 +57,11 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
 
           <div className="flex-1 overflow-auto bg-white p-8 sm:p-12 print:overflow-visible print:p-8">
             <div className="mx-auto max-w-5xl">
+              {validationMessage && (
+                <div className="mb-5 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 print:hidden">
+                  {validationMessage} Official PDF download is disabled until the demographic total matches the Unique Count Cap of {metrics.unique.toLocaleString()}.
+                </div>
+              )}
               <h2 className="mb-6 text-xl font-bold tracking-wide text-black uppercase">Visitor Attraction</h2>
 
               <div className="overflow-x-auto print:overflow-visible">
@@ -110,7 +127,7 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
                       <td className="border border-black p-2">{fm || ""}</td>
                       <td className="border border-black p-2">{ff || ""}</td>
                       <td className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">{totalForeign || ""}</td>
-                      <td className="border border-black bg-gray-100 p-2 text-sm font-bold print:bg-transparent">{metrics.unique}</td>
+                      <td className="border border-black bg-gray-100 p-2 text-sm font-bold print:bg-transparent">{grandTotal || ""}</td>
                     </tr>
                     {[...Array(6)].map((_, i) => (
                       <tr key={i} className="h-8">
@@ -146,8 +163,13 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
               Close Preview
             </button>
             <button
-              onClick={() => downloadDotReportPdf({ reportId, period, metrics, demo, notes })}
-              className="flex items-center gap-2 rounded-sm bg-[#065f46] px-6 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#044a36]"
+              disabled={!canDownload}
+              onClick={() => {
+                if (canDownload) downloadDotReportPdf({ reportId, period, metrics, demo, notes });
+              }}
+              className={`flex items-center gap-2 rounded-sm px-6 py-2 text-sm font-medium shadow-sm transition-colors ${
+                canDownload ? "bg-[#065f46] text-white hover:bg-[#044a36]" : "cursor-not-allowed bg-gray-300 text-gray-500"
+              }`}
             >
               <Download size={16} /> Download PDF
             </button>

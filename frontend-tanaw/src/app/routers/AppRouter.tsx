@@ -11,6 +11,7 @@ import { AdminMapViewPage } from "@/features/mapview";
 import { StaffBatchReportsPage, StaffFinalReportsAuditPage } from "@/features/reports";
 import { ITSystemSettingsPage } from "@/features/system-settings";
 import { AdminSystemLogsPage, ITSystemLogsPage, StaffSystemLogsPage } from "@/features/system-logs";
+import { SupportTicketsPage } from "@/features/support-tickets";
 import { AccountLayout } from "@/shared/components/layout";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
 import { useAuthStore } from "../store/authStore";
@@ -43,6 +44,7 @@ export function AppRouter() {
         <Route path="lgu-accounts" element={<ITLguAccountsPage />} />
         <Route path="enterprise-accounts" element={<ITEnterpriseAccountsPage />} />
         <Route path="alerts" element={<ITAlertsPage />} />
+        <Route path="support-tickets" element={<SupportTicketsPage mode="it" />} />
         <Route path="system-logs" element={<ITSystemLogsPage />} />
         <Route path="dev-log" element={<ITDevLogPage />} />
         <Route path="system-settings" element={<ITSystemSettingsPage />} />
@@ -62,6 +64,7 @@ export function AppRouter() {
         <Route path="mapview" element={<AdminMapViewPage />} />
         <Route path="system-logs" element={<AdminSystemLogsPage />} />
         <Route path="alerts-monitor" element={<AdminAlertsMonitorPage />} />
+        <Route path="support-tickets" element={<SupportTicketsPage mode="admin" />} />
         <Route path="profile" element={<AccountProfilePage role="admin" />} />
         <Route path="security" element={<AccountSecurityPage />} />
       </Route>

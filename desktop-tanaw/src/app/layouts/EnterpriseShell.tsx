@@ -6,14 +6,18 @@ import { CameraManagementView } from "../../features/camera/components/CameraMan
 import { SimulationLab } from "../../features/camera/components/SimulationLab";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { DashboardView } from "../../features/dashboard/components/DashboardView";
-import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
+import { getAccountPreferences, getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
+import { updateStartupSettings } from "../../lib/appLifecycle";
 import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listNotifications, updateNotificationRead, type BackendNotification, type OperationalNotificationEnvelope } from "../../features/notifications/services/notifications";
+import { NotificationsView } from "../../features/notifications/components/NotificationsView";
 import { ProfileView } from "../../features/profile/components/ProfileView";
 import { ReportsView } from "../../features/reports/components/ReportsView";
 import { SecurityView } from "../../features/security/components/SecurityView";
 import { ENTERPRISE_THEME_STORAGE_KEY, getInitialThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
+import { readLocalStartupPreference, writeLocalStartupPreference } from "../../features/security/utils/startupPreference";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
+import { TicketsView } from "../../features/tickets/components/TicketsView";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
 import { routePaths } from "../router/routePaths";
@@ -30,12 +34,14 @@ const viewRouteById: Record<EnterpriseView, string> = {
   simulation: routePaths.enterpriseSimulation,
   profile: routePaths.enterpriseProfile,
   security: routePaths.enterpriseSecurity,
+  notifications: routePaths.enterpriseNotifications,
+  tickets: routePaths.enterpriseTickets,
 };
 
 const SIMULATION_UNLOCK_PHRASE = "simulation";
 const SIMULATION_UNLOCK_STORAGE_KEY = "tanaw:simulation-route-unlock";
 
-export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProps) {
+export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const logout = useAuthStore((state) => state.logout);
@@ -55,6 +61,7 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
   const [occupancyThreshold, setOccupancyThreshold] = useState(90);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>(getInitialThemePreference);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
   const [simulationNotification, setSimulationNotification] = useState<EnterpriseNotification | null>(null);
@@ -79,6 +86,30 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
   }, [currentUserQuery.data, updateUser]);
 
   useEffect(() => {
+    if (!token) return;
+
+    let disposed = false;
+    void getAccountPreferences()
+      .then((preferences) => {
+        if (disposed) return;
+        writeLocalStartupPreference(preferences.openAtLogin);
+        return updateStartupSettings(preferences.openAtLogin);
+      })
+      .catch(() => {
+        if (disposed) return;
+        const localPreference = readLocalStartupPreference();
+        if (localPreference !== null) {
+          return updateStartupSettings(localPreference).catch(() => undefined);
+        }
+        return undefined;
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
     setReadNotificationIds(readStoredNotificationIds(notificationStorageKey));
   }, [notificationStorageKey]);
 
@@ -97,6 +128,7 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
       root.classList.remove("light", "dark");
       root.classList.add(resolvedTheme);
       root.dataset.enterpriseTheme = theme;
+      setResolvedTheme(resolvedTheme);
     };
 
     window.localStorage.setItem(ENTERPRISE_THEME_STORAGE_KEY, theme);
@@ -320,6 +352,10 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
     navigate(viewRouteById[view]);
   };
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
+  };
+
   const notifications = useMemo(
     () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, simulationNotification, backendNotifications),
     [backendNotifications, readNotificationIds, reportsHistory, simulationNotification],
@@ -360,6 +396,7 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
         isNotificationsOpen={isNotificationsOpen}
         notifications={notifications}
         occupancyThreshold={occupancyThreshold}
+        resolvedTheme={resolvedTheme}
         showNotificationSettings={showNotifSettings}
         showSimulation={isSimulationUnlocked}
         unreadCount={unreadCount}
@@ -374,6 +411,7 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
         onNotificationsClose={() => setIsNotificationsOpen(false)}
         onNotificationsToggle={() => setIsNotificationsOpen((current) => !current)}
         onSetOccupancyThreshold={setOccupancyThreshold}
+        onToggleTheme={toggleTheme}
         onToggleNotificationSettings={() => setShowNotifSettings((current) => !current)}
       />
 
@@ -388,7 +426,19 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
             {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
             {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultThresholdPercent={occupancyThreshold} />}
             {activeView === "profile" && <ProfileView />}
-            {activeView === "security" && <SecurityView theme={theme} setTheme={setTheme} />}
+            {activeView === "security" && <SecurityView />}
+            {activeView === "tickets" && <TicketsView />}
+            {activeView === "notifications" && (
+              <NotificationsView
+                notifications={notifications}
+                unreadCount={unreadCount}
+                onMarkAllRead={() => markNotificationsRead(notifications)}
+                onSelectNotification={(notification) => {
+                  markNotificationsRead([notification]);
+                  navigateToView(notification.target);
+                }}
+              />
+            )}
           </div>
         </div>
       </main>
@@ -403,49 +453,6 @@ export function EnterpriseShell({ initialView = "cameras" }: EnterpriseShellProp
         onDismiss={(toastId) => setToasts(toasts.filter((toast) => toast.id !== toastId))}
       />
 
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@400;500;600;700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap');
-
-        .dark .bg-white { background-color: #1e293b !important; }
-        .dark .bg-white\\/50, .dark .bg-white\\/80 { background-color: rgba(17, 24, 39, 0.9) !important; }
-        .dark .bg-gray-50 { background-color: #0f172a !important; }
-        .dark .bg-gray-100 { background-color: #334155 !important; border-color: #475569 !important; }
-        .dark .bg-red-50 { background-color: #450a0a !important; }
-        .dark .bg-blue-50\\/20 { background-color: rgba(30, 64, 175, 0.16) !important; }
-        .dark .bg-\\[\\#065f46\\]\\/5 { background-color: rgba(16, 185, 129, 0.1) !important; }
-        .dark .bg-\\[\\#065f46\\]\\/10 { background-color: rgba(16, 185, 129, 0.16) !important; }
-        .dark .text-\\[\\#111827\\] { color: #f8fafc !important; }
-        .dark .text-\\[\\#2a3063\\] { color: #f8fafc !important; }
-        .dark .text-gray-500 { color: #94a3b8 !important; }
-        .dark .text-gray-600 { color: #cbd5e1 !important; }
-        .dark .text-gray-700 { color: #e2e8f0 !important; }
-        .dark .text-gray-800 { color: #f1f5f9 !important; }
-        .dark .text-red-900 { color: #fecaca !important; }
-        .dark .text-\\[\\#a40e0e\\] { color: #fca5a5 !important; }
-        .dark .border-gray-100 { border-color: #334155 !important; }
-        .dark .border-gray-200 { border-color: #475569 !important; }
-        .dark .border-gray-300 { border-color: #475569 !important; }
-        .dark .border-gray-50 { border-color: #1e293b !important; }
-        .dark .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important; }
-        .dark .shadow-xl, .dark .shadow-2xl { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important; }
-        .dark .hover\\:bg-gray-50:hover { background-color: #1e293b !important; }
-        .dark .hover\\:bg-gray-100:hover { background-color: #334155 !important; }
-        .dark .hover\\:bg-red-50:hover { background-color: #7f1d1d !important; }
-
-        .dark input:not([type="range"]), .dark select, .dark textarea {
-          background-color: #334155 !important;
-          color: #f8fafc !important;
-          border-color: #475569 !important;
-        }
-        .dark input:not([type="range"]):disabled, .dark select:disabled, .dark textarea:disabled {
-          background-color: #1e293b !important;
-          color: #94a3b8 !important;
-        }
-      `,
-        }}
-      />
     </div>
   );
 }
@@ -533,8 +540,17 @@ function notificationTypeFromSeverity(severity: BackendNotification["severity"])
 
 function notificationTarget(notification: BackendNotification): EnterpriseView {
   const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
+  if (text.includes("profile")) {
+    return "profile";
+  }
+  if (text.includes("password") || text.includes("security") || text.includes("startup") || text.includes("preference")) {
+    return "security";
+  }
   if (text.includes("camera") || text.includes("gateway") || text.includes("sync") || text.includes("threshold")) {
     return "cameras";
+  }
+  if (text.includes("support") || text.includes("ticket")) {
+    return "tickets";
   }
   return "reports";
 }

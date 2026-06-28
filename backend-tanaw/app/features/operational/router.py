@@ -1,8 +1,11 @@
+import base64
+import binascii
 import json
 from typing import Annotated
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +44,11 @@ from app.features.operational.schemas import (
     OperationalSummary,
     OperationalWebSocketEnvelope,
     ReportStatusUpdate,
+    SupportTicketCreate,
+    SupportTicketDetail,
+    SupportTicketMessageCreate,
+    SupportTicketStatusUpdate,
+    SupportTicketSummary,
     TelemetrySnapshotSummary,
     UserNotificationSummary,
 )
@@ -52,24 +60,32 @@ from app.features.operational.service import (
     build_fleet_simulation_telemetry_payload,
     create_final_report,
     create_operational_alert,
+    create_role_notifications,
+    create_support_ticket,
+    create_support_ticket_message,
     create_user_notification,
     enterprise_accounts_by_identifier,
     enterprise_identifier,
     evaluate_telemetry_alerts,
     get_enterprise_notification_recipient,
     get_operational_summary,
+    get_support_ticket_detail,
+    get_support_ticket_for_account,
     ingest_report_submission,
     ingest_telemetry,
     list_fleet_simulation_enterprises,
     list_intake_reports,
     list_latest_telemetry,
     list_operational_alerts,
+    list_support_tickets,
     list_user_notifications,
+    parse_ticket_attachments,
     set_user_notification_read,
     system_setting_enabled,
     to_operational_alert_summary,
     update_final_report_status,
     update_report_status,
+    update_support_ticket_status,
 )
 from app.features.operational.service import (
     list_final_reports as list_final_report_records,
@@ -81,6 +97,7 @@ router = APIRouter(prefix="/operational", tags=["operational"])
 OperationalReadAccount = Annotated[
     Account, Depends(require_roles({"admin", "it", "staff", "enterprise"}))
 ]
+TicketReadAccount = Annotated[Account, Depends(require_roles({"admin", "it", "enterprise"}))]
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
@@ -485,6 +502,202 @@ async def list_report_enterprises(
     ]
 
 
+@router.get("/tickets", response_model=list[SupportTicketSummary])
+async def list_tickets(
+    account: TicketReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[SupportTicketSummary]:
+    return await list_support_tickets(db, account)
+
+
+@router.get("/tickets/{ticket_id}", response_model=SupportTicketDetail)
+async def get_ticket_detail(
+    ticket_id: str,
+    account: TicketReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SupportTicketDetail:
+    ticket = await get_support_ticket_detail(db, account, ticket_id)
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
+        )
+    return ticket
+
+
+@router.get("/tickets/{ticket_id}/attachments/{attachment_index}")
+async def get_ticket_attachment(
+    ticket_id: str,
+    attachment_index: int,
+    account: TicketReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
+        )
+    attachments = parse_ticket_attachments(ticket.attachments_json)
+    if attachment_index < 0 or attachment_index >= len(attachments):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
+
+    attachment = attachments[attachment_index]
+    prefix = f"data:{attachment.mediaType};base64,"
+    try:
+        content = base64.b64decode(attachment.dataUrl.removeprefix(prefix), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Attachment data is not available.",
+        ) from exc
+
+    safe_file_name = attachment.fileName.replace('"', "").replace("\r", "").replace("\n", "")
+    return Response(
+        content=content,
+        media_type=attachment.mediaType,
+        headers={"Content-Disposition": f'inline; filename="{safe_file_name}"'},
+    )
+
+
+@router.post(
+    "/tickets",
+    response_model=SupportTicketSummary,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_enterprise_support_ticket(
+    payload: SupportTicketCreate,
+    account: EnterpriseAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SupportTicketSummary:
+    ticket = await create_support_ticket(db, account, payload)
+    enterprise = account.enterprise_name or account.display_name
+    severity = "Warning" if ticket.priority in {"High", "Urgent"} else "Info"
+    attachment_count = len(ticket.attachments)
+    attachment_suffix = (
+        f" Includes {attachment_count} photo attachment{'s' if attachment_count != 1 else ''}."
+        if attachment_count
+        else ""
+    )
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=support_ticket_notification_roles(ticket.category),
+        title=f"{enterprise} submitted support ticket {ticket.code}.",
+        message=f"{enterprise} submitted a {ticket.category.lower()} ticket: {ticket.subject}.{attachment_suffix}",
+        notification_type="Enterprise Support Ticket",
+        severity=severity,
+        actor=account,
+        source_type="support.ticket",
+        source_id=ticket.id,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+    await record_operational_log(
+        db,
+        category="Enterprise Activity",
+        severity=severity,
+        actor=enterprise,
+        actor_role="Enterprise Account",
+        action="Submit Support Ticket",
+        target=ticket.code,
+        summary=f"{enterprise} submitted {ticket.code}: {ticket.subject}.",
+        source_id=ticket.id,
+        metadata={
+            "enterpriseId": ticket.enterpriseId,
+            "category": ticket.category,
+            "priority": ticket.priority,
+            "attachmentCount": attachment_count,
+        },
+    )
+    return ticket
+
+
+@router.post("/tickets/{ticket_id}/messages", response_model=SupportTicketDetail)
+async def create_ticket_message(
+    ticket_id: str,
+    payload: SupportTicketMessageCreate,
+    account: ITAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SupportTicketDetail:
+    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
+        )
+    detail = await create_support_ticket_message(db, ticket, account, payload)
+    await notify_enterprise_ticket_update(
+        db,
+        ticket=detail,
+        actor=account,
+        title=f"IT replied to support ticket {detail.code}.",
+        message=f"IT replied to {detail.code}: {detail.subject}.",
+        notification_type="Support Ticket Reply",
+        severity="Info",
+    )
+    await record_operational_log(
+        db,
+        category="IT Activity",
+        severity="Success",
+        actor=account.display_name,
+        actor_role="IT Personnel",
+        action="Reply Support Ticket",
+        target=detail.code,
+        summary=f"{account.display_name} replied to {detail.code} from {detail.enterpriseName}.",
+        source_id=detail.id,
+        metadata={"enterpriseId": detail.enterpriseId, "ticketCode": detail.code},
+    )
+    return detail
+
+
+@router.patch("/tickets/{ticket_id}/status", response_model=SupportTicketDetail)
+async def update_ticket_status(
+    ticket_id: str,
+    payload: SupportTicketStatusUpdate,
+    account: ITAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SupportTicketDetail:
+    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    if ticket is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
+        )
+    previous_status = ticket.status
+    detail = await update_support_ticket_status(db, ticket, account, payload)
+    if previous_status != detail.status:
+        await notify_enterprise_ticket_update(
+            db,
+            ticket=detail,
+            actor=account,
+            title=f"Support ticket {detail.code} is now {detail.status}.",
+            message=f"IT updated {detail.code} status from {previous_status} to {detail.status}.",
+            notification_type="Support Ticket Status",
+            severity="Success" if detail.status == "Resolved" else "Info",
+        )
+        await record_operational_log(
+            db,
+            category="IT Activity",
+            severity="Success",
+            actor=account.display_name,
+            actor_role="IT Personnel",
+            action="Update Support Ticket Status",
+            target=detail.code,
+            summary=(
+                f"{account.display_name} updated {detail.code} from "
+                f"{previous_status} to {detail.status}."
+            ),
+            source_id=detail.id,
+            metadata={
+                "enterpriseId": detail.enterpriseId,
+                "ticketCode": detail.code,
+                "status": detail.status,
+            },
+        )
+    return detail
+
+
 @router.get("/notifications", response_model=list[UserNotificationSummary])
 async def list_notifications(
     account: OperationalReadAccount,
@@ -701,6 +914,7 @@ async def operational_websocket(
     await operational_ws_manager.connect(
         websocket,
         account.role.value,
+        account.id,
         enterprise_identifier(account) if account.role == AccountRole.ENTERPRISE else None,
     )
     try:
@@ -747,6 +961,45 @@ def ensure_simulation_api_allowed() -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Simulation Lab fleet endpoints are disabled in production.",
         )
+
+
+async def notify_enterprise_ticket_update(
+    db: AsyncSession,
+    *,
+    ticket: SupportTicketDetail,
+    actor: Account,
+    title: str,
+    message: str,
+    notification_type: str,
+    severity: str,
+) -> None:
+    recipient = await get_enterprise_notification_recipient(db, ticket.enterpriseId)
+    if recipient is None or recipient.status != AccountStatus.ACTIVE:
+        return
+    notification = await create_user_notification(
+        db,
+        recipient=recipient,
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        severity=severity,
+        actor=actor,
+        source_type="support.ticket",
+        source_id=ticket.id,
+    )
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="notification.created",
+            data=notification.model_dump(mode="json"),
+        )
+    )
+
+
+def support_ticket_notification_roles(category: str) -> list[AccountRole]:
+    roles = [AccountRole.ADMIN, AccountRole.IT]
+    if category == "Report Concern":
+        roles.append(AccountRole.STAFF)
+    return roles
 
 
 async def record_operational_log(

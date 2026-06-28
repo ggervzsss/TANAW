@@ -1,4 +1,5 @@
 import type { Camera } from "../../../types/enterprise";
+import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
 
 export type MlServiceStatus = {
   baseUrl: string;
@@ -490,10 +491,21 @@ function isNativeBrowserMjpegCamera(camera: Camera) {
 }
 
 function toMlTripwireLine(line: Camera["config"]["tripwires"]["entry"]) {
+  const normalized = normalizeTripwireLine(line);
+  const anchors = getTripwireAnchors(normalized).map(toMlTripwirePoint);
+  const sampledPoints = getTripwireSampledPoints(normalized).map(toMlTripwirePoint);
+
   return {
-    start: { x: line.start.x / 100, y: line.start.y / 100 },
-    end: { x: line.end.x / 100, y: line.end.y / 100 },
+    start: toMlTripwirePoint(normalized.start),
+    end: toMlTripwirePoint(normalized.end),
+    points: anchors,
+    curve: normalized.curve ?? "smooth",
+    sampled_points: sampledPoints,
   };
+}
+
+function toMlTripwirePoint(point: Camera["config"]["tripwires"]["entry"]["start"]) {
+  return { x: point.x / 100, y: point.y / 100 };
 }
 
 function toMlRoi(roi: Camera["config"]["roi"]) {

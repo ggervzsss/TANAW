@@ -2,6 +2,24 @@ import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
 import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, ReportStatus, TelemetrySnapshot } from "../types";
 
+export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
+
+export type BackendNotification = {
+  id: string;
+  recipientAccountId: string;
+  title: string;
+  message: string;
+  type: string;
+  severity: BackendNotificationSeverity;
+  sourceType: string | null;
+  sourceId: string | null;
+  createdBy: string | null;
+  recipientRole: string;
+  recipientEnterpriseId: string | null;
+  createdAt: string;
+  readAt: string | null;
+};
+
 export type OperationalWebSocketEnvelope =
   | { type: "telemetry.snapshot"; data: TelemetrySnapshot }
   | { type: "report.submitted"; data: IntakeReport }
@@ -11,7 +29,9 @@ export type OperationalWebSocketEnvelope =
   | { type: "summary.updated"; data: OperationalSummary }
   | { type: "alert.created"; data: PriorityAlert }
   | { type: "alert.updated"; data: PriorityAlert }
-  | { type: "alert.resolved"; data: PriorityAlert };
+  | { type: "alert.resolved"; data: PriorityAlert }
+  | { type: "notification.created"; data: BackendNotification }
+  | { type: "notification.updated"; data: BackendNotification };
 
 type MapEnterpriseResponse = Omit<MapEnterprise, "lat" | "lng" | "lastSync" | "gatewayStatus"> & {
   lat: number | null;
@@ -78,6 +98,16 @@ export async function listOperationalMapEnterprises() {
     lastSync: enterprise.lastSync ?? undefined,
     gatewayStatus: enterprise.gatewayStatus ?? "Not Linked",
   }));
+}
+
+export async function listUserNotifications() {
+  const response = await apiClient.get<BackendNotification[]>("/operational/notifications");
+  return response.data;
+}
+
+export async function updateUserNotificationRead(notificationId: string, read: boolean) {
+  const response = await apiClient.patch<BackendNotification>(`/operational/notifications/${notificationId}`, { read });
+  return response.data;
 }
 
 export function getOperationalWebSocketUrl() {

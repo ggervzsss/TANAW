@@ -232,6 +232,12 @@ async def ensure_notifications_schema(connection: Any) -> None:
     )
 
 
+async def ensure_support_ticket_schema(connection: Any) -> None:
+    await connection.exec_driver_sql(
+        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS attachments_json TEXT"
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with engine.begin() as connection:
@@ -239,6 +245,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await ensure_account_onboarding_schema(connection)
         await ensure_mock_reporting_schema(connection)
         await ensure_notifications_schema(connection)
+        await ensure_support_ticket_schema(connection)
 
     async with AsyncSessionLocal() as session:
         await seed_default_accounts(session)

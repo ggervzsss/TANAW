@@ -33,14 +33,14 @@ function RequireAuth({ children }: RequireAuthProps) {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path={routePaths.home} element={<Navigate to={routePaths.enterpriseCameras} replace />} />
+      <Route path={routePaths.home} element={<Navigate to={routePaths.enterpriseDashboard} replace />} />
       <Route path={routePaths.login} element={<LoginPage />} />
       <Route path={routePaths.changePassword} element={<ChangePasswordPage />} />
       <Route
         path={routePaths.enterprise}
         element={
           <RequireAuth>
-            <EnterpriseShell initialView="cameras" />
+            <EnterpriseShell initialView="dashboard" />
           </RequireAuth>
         }
       />
@@ -92,7 +92,23 @@ export function AppRouter() {
           </RequireAuth>
         }
       />
-      <Route path="*" element={<Navigate to={routePaths.enterpriseCameras} replace />} />
+      <Route
+        path={routePaths.enterpriseNotifications}
+        element={
+          <RequireAuth>
+            <EnterpriseShell initialView="notifications" />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={routePaths.enterpriseTickets}
+        element={
+          <RequireAuth>
+            <EnterpriseShell initialView="tickets" />
+          </RequireAuth>
+        }
+      />
+      <Route path="*" element={<Navigate to={routePaths.enterpriseDashboard} replace />} />
     </Routes>
   );
 }

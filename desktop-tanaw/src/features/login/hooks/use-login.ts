@@ -7,9 +7,8 @@ import { notifySuccess } from "../../toasts/services/toast-service";
 import { login } from "../api/login";
 import type { LoginFormValues } from "../schemas/login-schema";
 import { useAuthStore } from "../stores/auth-store";
-import type { AuthRole } from "../types";
 
-const getLandingRoute = (role: AuthRole) => (role === "enterprise" ? routePaths.enterpriseCameras : routePaths.enterpriseCameras);
+const getLandingRoute = () => routePaths.enterpriseDashboard;
 
 type LoginMutationValues = LoginFormValues & {
   rememberMe?: boolean;
@@ -43,7 +42,7 @@ export function useLogin(redirectTo?: string, options?: UseLoginOptions) {
         return;
       }
       notifySuccess("Secure login successful.");
-      navigate(redirectTo ?? getLandingRoute(session.user.role), { replace: true });
+      navigate(redirectTo ?? getLandingRoute(), { replace: true });
     },
     onError: (error) => {
       if (isAxiosError(error) && error.response?.status === 429) {

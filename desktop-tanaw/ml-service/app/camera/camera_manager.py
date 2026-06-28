@@ -32,7 +32,7 @@ from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
 from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack, TrackIdentityResolver
 
-NormalizedLine = tuple[tuple[float, float], tuple[float, float]]
+NormalizedPath = tuple[tuple[float, float], ...]
 
 
 @dataclass
@@ -67,8 +67,8 @@ DisplayFrameSnapshot = tuple[
     int,
     list[DisplayTrack],
     float,
-    NormalizedLine | None,
-    NormalizedLine | None,
+    NormalizedPath | None,
+    NormalizedPath | None,
     RegionOfInterest,
     bool,
     int,
@@ -238,12 +238,8 @@ class CameraProcessingManager:
                 event_cooldown_frames=_seconds_to_frames(
                     config.event_cooldown_seconds, processing_fps
                 ),
-                paired_line_max_gap_frames=_seconds_to_frames(
-                    config.paired_line_max_gap_seconds, processing_fps
-                ),
                 track_ttl_frames=_seconds_to_frames(config.track_ttl_seconds, processing_fps),
                 event_cooldown_seconds=config.event_cooldown_seconds,
-                paired_line_max_gap_seconds=config.paired_line_max_gap_seconds,
                 track_ttl_seconds=config.track_ttl_seconds,
             )
             self._counter.reset()
@@ -1296,28 +1292,35 @@ class CameraProcessingManager:
             if track.confidence < confidence:
                 continue
 
-            inside_roi = self._point_inside_roi(
-                track.counting_point, frame_width, frame_height, session.config
+            inside_roi = self._track_inside_roi(
+                track.counting_point,
+                track.centroid,
+                track.bbox,
+                frame_width,
+                frame_height,
+                session.config,
             )
             counting_eligible = inside_roi
             if counting_eligible:
                 self._schedule_track_embedding(
                     session, frame, track, frame_width, frame_height, now
                 )
-            direction = (
-                self._counter.update(
-                    track.track_id, track.counting_point, frame_width, frame_height
+            directions = (
+                self._counter.update_many(
+                    track.track_id, track.counting_point, frame_width, frame_height, track.bbox
                 )
                 if counting_eligible
-                else None
+                else []
             )
             visitor_decision = None
             visitor_id = self._visitor_registry.visitor_id_for_track(track.track_id)
-            if direction is not None:
+            for direction in directions:
+                event_decision = None
                 if direction == "entry":
-                    visitor_decision = self._resolve_unique_entry(session, track)
-                    visitor_id = visitor_decision.visitor_id
-                self._persist_count_event(session, track, direction, visitor_decision)
+                    event_decision = self._resolve_unique_entry(session, track)
+                    visitor_decision = event_decision
+                    visitor_id = event_decision.visitor_id
+                self._persist_count_event(session, track, direction, event_decision)
             display_tracks.append(
                 DisplayTrack(
                     track_id=track.track_id,
@@ -1325,7 +1328,7 @@ class CameraProcessingManager:
                     bbox=track.bbox,
                     confidence=track.confidence,
                     centroid=(int(track.centroid.x), int(track.centroid.y)),
-                    direction=direction,
+                    direction=directions[-1] if directions else None,
                     visitor_id=visitor_id,
                     is_unique_entry=visitor_decision.is_unique_entry if visitor_decision else None,
                     reid_score=visitor_decision.reid_score if visitor_decision else None,
@@ -1344,8 +1347,13 @@ class CameraProcessingManager:
         for source_track in source_tracks:
             if source_track.track_id > 0 or source_track.confidence < confidence:
                 continue
-            inside_roi = self._point_inside_roi(
-                source_track.counting_point, frame_width, frame_height, session.config
+            inside_roi = self._track_inside_roi(
+                source_track.counting_point,
+                source_track.centroid,
+                source_track.bbox,
+                frame_width,
+                frame_height,
+                session.config,
             )
             display_tracks.append(
                 DisplayTrack(
@@ -1370,6 +1378,52 @@ class CameraProcessingManager:
         x = point.x / max(frame_width, 1)
         y = point.y / max(frame_height, 1)
         return roi.left <= x <= roi.left + roi.width and roi.top <= y <= roi.top + roi.height
+
+    def _track_inside_roi(
+        self,
+        counting_point: Centroid,
+        centroid: Centroid,
+        bbox: tuple[int, int, int, int],
+        frame_width: int,
+        frame_height: int,
+        config: CameraStartRequest,
+    ) -> bool:
+        return (
+            self._point_inside_roi(counting_point, frame_width, frame_height, config)
+            or self._point_inside_roi(centroid, frame_width, frame_height, config)
+            or self._bbox_overlaps_roi(bbox, frame_width, frame_height, config)
+        )
+
+    def _bbox_overlaps_roi(
+        self,
+        bbox: tuple[int, int, int, int],
+        frame_width: int,
+        frame_height: int,
+        config: CameraStartRequest,
+    ) -> bool:
+        x1, y1, x2, y2 = bbox
+        box_left = max(0.0, float(min(x1, x2)))
+        box_top = max(0.0, float(min(y1, y2)))
+        box_right = min(float(frame_width), float(max(x1, x2)))
+        box_bottom = min(float(frame_height), float(max(y1, y2)))
+        box_area = max(0.0, box_right - box_left) * max(0.0, box_bottom - box_top)
+        if box_area <= 0:
+            return False
+
+        roi = config.roi
+        roi_left = roi.left * frame_width
+        roi_top = roi.top * frame_height
+        roi_right = (roi.left + roi.width) * frame_width
+        roi_bottom = (roi.top + roi.height) * frame_height
+        overlap_left = max(box_left, roi_left)
+        overlap_top = max(box_top, roi_top)
+        overlap_right = min(box_right, roi_right)
+        overlap_bottom = min(box_bottom, roi_bottom)
+        overlap_area = max(0.0, overlap_right - overlap_left) * max(
+            0.0, overlap_bottom - overlap_top
+        )
+
+        return overlap_area / box_area >= 0.25
 
     def _schedule_track_embedding(
         self,
@@ -1503,8 +1557,8 @@ class CameraProcessingManager:
         frame: np.ndarray,
         tracks: list[DisplayTrack],
         tripwire_position: float,
-        entry_line: NormalizedLine | None,
-        exit_line: NormalizedLine | None,
+        entry_line: NormalizedPath | None,
+        exit_line: NormalizedPath | None,
         roi: RegionOfInterest,
         reverse_direction: bool,
     ) -> np.ndarray:
@@ -1570,18 +1624,54 @@ class CameraProcessingManager:
                 else (34, 197, 94)
             )
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            self._draw_track_box(frame, (x1, y1, x2, y2), color)
             cv2.circle(frame, track.centroid, 4, (250, 204, 21), -1)
             if track.track_id > 0:
                 source_suffix = (
-                    f"/{track.source_track_id}" if track.source_track_id != track.track_id else ""
+                    f" | src {track.source_track_id}"
+                    if track.source_track_id != track.track_id
+                    else ""
                 )
                 label = f"#{track.track_id}{source_suffix}"
             else:
-                label = "PERSON"
-            self._draw_track_label(frame, x1, y1, f"{label} - {track.confidence * 100:.0f}%", color)
+                label = "Person"
+            self._draw_track_label(frame, x1, y1, f"{label} | {track.confidence * 100:.0f}%", color)
 
         return frame
+
+    def _draw_track_box(
+        self, frame: np.ndarray, bbox: tuple[int, int, int, int], color: tuple[int, int, int]
+    ) -> None:
+        frame_height, frame_width = frame.shape[:2]
+        x1, y1, x2, y2 = bbox
+        left = max(0, min(frame_width - 1, min(x1, x2)))
+        top = max(0, min(frame_height - 1, min(y1, y2)))
+        right = max(0, min(frame_width - 1, max(x1, x2)))
+        bottom = max(0, min(frame_height - 1, max(y1, y2)))
+        if right <= left or bottom <= top:
+            return
+
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (left, top), (right, bottom), color, -1)
+        cv2.addWeighted(overlay, 0.07, frame, 0.93, 0, frame)
+
+        shadow = (15, 23, 42)
+        cv2.rectangle(frame, (left, top), (right, bottom), shadow, 1)
+
+        width = right - left
+        height = bottom - top
+        corner = max(10, min(28, int(min(width, height) * 0.28)))
+        thickness = 2
+        line_type = cv2.LINE_AA
+
+        cv2.line(frame, (left, top), (left + corner, top), color, thickness, line_type)
+        cv2.line(frame, (left, top), (left, top + corner), color, thickness, line_type)
+        cv2.line(frame, (right, top), (right - corner, top), color, thickness, line_type)
+        cv2.line(frame, (right, top), (right, top + corner), color, thickness, line_type)
+        cv2.line(frame, (left, bottom), (left + corner, bottom), color, thickness, line_type)
+        cv2.line(frame, (left, bottom), (left, bottom - corner), color, thickness, line_type)
+        cv2.line(frame, (right, bottom), (right - corner, bottom), color, thickness, line_type)
+        cv2.line(frame, (right, bottom), (right, bottom - corner), color, thickness, line_type)
 
     def _draw_track_label(
         self, frame: np.ndarray, x: int, y: int, label: str, color: tuple[int, int, int]
@@ -1606,9 +1696,10 @@ class CameraProcessingManager:
         bottom = min(frame_height - 1, top + label_height)
 
         overlay = frame.copy()
-        cv2.rectangle(overlay, (left, top), (right, bottom), color, -1)
-        cv2.addWeighted(overlay, 0.58, frame, 0.42, 0, frame)
+        cv2.rectangle(overlay, (left, top), (right, bottom), (15, 23, 42), -1)
+        cv2.addWeighted(overlay, 0.78, frame, 0.22, 0, frame)
         cv2.rectangle(frame, (left, top), (right, bottom), color, 1)
+        cv2.rectangle(frame, (left, top), (min(right, left + 3), bottom), color, -1)
         cv2.putText(
             frame,
             label,
@@ -1642,7 +1733,7 @@ class CameraProcessingManager:
     def _draw_tripwire_line(
         self,
         frame: np.ndarray,
-        line: NormalizedLine | None,
+        line: NormalizedPath | None,
         frame_width: int,
         frame_height: int,
         label: str,
@@ -1651,16 +1742,18 @@ class CameraProcessingManager:
         if line is None:
             return
 
-        (x1, y1), (x2, y2) = line
-        start = (int(x1 * frame_width), int(y1 * frame_height))
-        end = (int(x2 * frame_width), int(y2 * frame_height))
-        cv2.line(frame, start, end, color, 2)
-        cv2.circle(frame, start, 4, color, -1)
-        cv2.circle(frame, end, 4, color, -1)
+        points = [(int(x * frame_width), int(y * frame_height)) for x, y in line]
+        if len(points) < 2:
+            return
+
+        for start, end in zip(points, points[1:], strict=False):
+            cv2.line(frame, start, end, color, 2)
+        cv2.circle(frame, points[0], 4, color, -1)
+        cv2.circle(frame, points[-1], 4, color, -1)
         cv2.putText(
             frame,
             label,
-            (start[0] + 6, max(18, start[1] - 6)),
+            (points[0][0] + 6, max(18, points[0][1] - 6)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.48,
             color,
@@ -1668,11 +1761,12 @@ class CameraProcessingManager:
             cv2.LINE_AA,
         )
 
-    def _normalized_line(self, line: TripwireLine | None) -> NormalizedLine | None:
+    def _normalized_line(self, line: TripwireLine | None) -> NormalizedPath | None:
         if line is None:
             return None
 
-        return ((line.start.x, line.start.y), (line.end.x, line.end.y))
+        points = line.sampled_points or line.points or [line.start, line.end]
+        return tuple((point.x, point.y) for point in points)
 
     def _resize_for_processing(self, frame: np.ndarray, max_width: int) -> np.ndarray:
         height, width = frame.shape[:2]

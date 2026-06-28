@@ -20,6 +20,7 @@ def format_enterprise_category(value: str | None) -> str | None:
 
 SAN_PEDRO_BARANGAYS = (
     "Bagong Silang",
+    "Bayan-bayanan",
     "Calendola",
     "Chrysanthemum",
     "Cuyab",

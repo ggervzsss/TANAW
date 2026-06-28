@@ -5,7 +5,7 @@ import {
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
   fitMapToSanPedroBounds,
-  getBarangayForPoint,
+  getBarangayPointResolution,
   getBarangayLabel,
   getGeoJsonColor,
   isBoundaryPolygonFeature,
@@ -14,25 +14,42 @@ import {
   sanPedroFallbackCenter,
   sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
+  type BarangayPointResolution,
   type GeoJsonFeatureCollection,
 } from "@/features/mapview/utils";
 import type { LocationDraft } from "../types";
 
-const mapContainerId = "enterprise-location-picker";
+const defaultMapContainerId = "enterprise-location-picker";
 
 type LocationPickerProps = {
   location: LocationDraft | null;
   isResolvingAddress?: boolean;
-  onChange: (location: LocationDraft, barangayName?: string | null) => void;
+  mapId?: string;
+  mapHeightClassName?: string;
+  resizeSignal?: string | number | boolean;
+  showBoundaries?: boolean;
+  onBoundaryDetection?: (location: LocationDraft, barangayDetection: BarangayPointResolution) => void;
+  onChange: (location: LocationDraft, barangayDetection?: BarangayPointResolution) => void;
   onReject?: (message: string) => void;
 };
 
-export function LocationPicker({ location, isResolvingAddress = false, onChange, onReject }: LocationPickerProps) {
+export function LocationPicker({
+  location,
+  isResolvingAddress = false,
+  mapId = defaultMapContainerId,
+  mapHeightClassName = "h-72",
+  resizeSignal,
+  showBoundaries = true,
+  onBoundaryDetection,
+  onChange,
+  onReject,
+}: LocationPickerProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
   const latestLocationRef = useRef<LocationDraft | null>(location);
   const boundaryRef = useRef<GeoJsonFeatureCollection | null>(null);
+  const lastBoundaryDetectionKeyRef = useRef("");
   const selectLocationRef = useRef<(latitude: number, longitude: number, source: LocationDraft["source"]) => void>(() => {});
   const [boundary, setBoundary] = useState<GeoJsonFeatureCollection | null>(null);
   const [isBoundaryLoading, setIsBoundaryLoading] = useState(true);
@@ -45,6 +62,21 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
   useEffect(() => {
     boundaryRef.current = boundary;
   }, [boundary]);
+
+  useEffect(() => {
+    if (!boundary || !location) return;
+
+    const detectionKey = `${location.latitude.toFixed(6)}:${location.longitude.toFixed(6)}:${boundary.features.length}`;
+    if (lastBoundaryDetectionKeyRef.current === detectionKey) return;
+    lastBoundaryDetectionKeyRef.current = detectionKey;
+
+    if (!isPointInsideSanPedro(boundary, location.latitude, location.longitude)) {
+      onReject?.("Choose a location inside San Pedro, Laguna.");
+      return;
+    }
+
+    onBoundaryDetection?.(location, getBarangayPointResolution(boundary, location.latitude, location.longitude));
+  }, [boundary, location, onBoundaryDetection, onReject]);
 
   const restoreMarkerAfterRejectedMove = useCallback(() => {
     const latestLocation = latestLocationRef.current;
@@ -63,7 +95,7 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
       }
 
       const latestLocation = latestLocationRef.current;
-      const barangayName = getBarangayForPoint(loadedBoundary, latitude, longitude);
+      const barangayDetection = getBarangayPointResolution(loadedBoundary, latitude, longitude);
       onChange(
         {
           ...(latestLocation ?? {}),
@@ -71,7 +103,7 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
           longitude,
           source,
         },
-        barangayName,
+        barangayDetection,
       );
     },
     [onChange, onReject, restoreMarkerAfterRejectedMove],
@@ -111,7 +143,7 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
   useEffect(() => {
     if (mapRef.current) return undefined;
 
-    const map = L.map(mapContainerId, {
+    const map = L.map(mapId, {
       center: sanPedroFallbackCenter,
       zoom: 13,
       maxBounds: sanPedroRelaxedFallbackBounds,
@@ -151,13 +183,33 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [mapId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return undefined;
+
+    const timers = [0, 180, 360].map((delay) =>
+      window.setTimeout(() => {
+        map.invalidateSize({ pan: false });
+      }, delay),
+    );
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [resizeSignal]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !boundary) return;
 
     boundaryLayerRef.current?.remove();
+    boundaryLayerRef.current = null;
+
+    if (!showBoundaries) {
+      return;
+    }
 
     const boundaryStyle: GeoJSONOptions["style"] = (geoFeature) => {
       const name = getBarangayLabel(geoFeature);
@@ -197,7 +249,7 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
     }).addTo(map);
 
     fitMapToSanPedroBounds(map, boundaryLayerRef.current);
-  }, [boundary]);
+  }, [boundary, showBoundaries]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -228,20 +280,21 @@ export function LocationPicker({ location, isResolvingAddress = false, onChange,
   }, [location]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
-      <div id={mapContainerId} className="h-72 w-full" />
+    <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white">
+      <div id={mapId} className={`${mapHeightClassName} w-full`} />
       <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
         <MapPin size={14} className="text-tgreen-dark shrink-0" />
-        <span className="truncate">{getFooterText(location, isResolvingAddress, isBoundaryLoading, isBoundaryError)}</span>
+        <span className="truncate">{getFooterText(location, isResolvingAddress, isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
       </div>
     </div>
   );
 }
 
-function getFooterText(location: LocationDraft | null, isResolvingAddress: boolean, isBoundaryLoading: boolean, isBoundaryError: boolean) {
+function getFooterText(location: LocationDraft | null, isResolvingAddress: boolean, isBoundaryLoading: boolean, isBoundaryError: boolean, showBoundaries: boolean) {
   if (isResolvingAddress) return "Resolving the selected location address...";
   if (location?.displayAddress) return location.displayAddress;
   if (isBoundaryLoading) return "Loading San Pedro barangay boundaries...";
   if (isBoundaryError) return "Boundary layer unavailable. Keep the marker within San Pedro city limits.";
+  if (!showBoundaries) return "Barangay boundaries hidden. Marker validation still uses San Pedro limits.";
   return "Click inside San Pedro to place a marker, or drag the marker to correct it.";
 }

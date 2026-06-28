@@ -1,8 +1,8 @@
-import { Activity, Bell, Building2, Users, Wifi } from "lucide-react";
+import { Activity, Bell, Building2, TicketCheck, Users, Wifi } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { AlertDetailsModal, PriorityAlertListItem } from "@/features/alerts-monitor/components";
 import { MetricCard } from "@/shared/components/cards";
@@ -144,6 +144,15 @@ function formatCompactTimestamp(timestamp: string) {
 }
 
 function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onClose: () => void }) {
+  const navigate = useNavigate();
+  const supportTicketId = getSupportTicketIdFromLog(activity);
+
+  const openTicket = () => {
+    if (!supportTicketId) return;
+    onClose();
+    navigate(`${routes.it.supportTickets}?ticket=${encodeURIComponent(supportTicketId)}`);
+  };
+
   return (
     <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-2">
@@ -156,6 +165,26 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
           <DetailField label="Summary" value={activity.summary} />
         </div>
       </div>
+      {supportTicketId && (
+        <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
+          <p className="text-sm font-semibold text-slate-700">This activity is tied to a support ticket. Open the ticket queue to inspect the full enterprise request, photos, status, and reply thread.</p>
+          <button
+            type="button"
+            onClick={openTicket}
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+          >
+            <TicketCheck size={14} />
+            Open Ticket
+          </button>
+        </div>
+      )}
     </ModalFrame>
   );
+}
+
+function getSupportTicketIdFromLog(log: SystemLog) {
+  if (!log.sourceId) return null;
+
+  const text = [log.action, log.target, log.summary, log.sourceId].join(" ").toLowerCase();
+  return text.includes("ticket") || text.includes("tck-") ? log.sourceId : null;
 }

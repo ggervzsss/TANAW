@@ -105,14 +105,14 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
             const height = Math.max(0, bottom - top);
             const isCrossing = track.direction === "entry" || track.direction === "exit";
             const isOutsideRoi = track.inside_roi === false;
-            const sourceSuffix = track.source_track_id !== track.track_id ? `/${track.source_track_id}` : "";
-            const label = track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "PERSON";
+            const sourceSuffix = track.source_track_id !== track.track_id ? ` | src ${track.source_track_id}` : "";
+            const label = track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "Person";
             const tone = getTrackTone(isOutsideRoi, isCrossing);
 
             return (
-              <div key={track.track_id} className={`absolute border ${tone.boxClass}`} style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}>
-                <span className={`absolute top-1 left-1 rounded-full border px-1.5 py-px text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-sm ${tone.labelClass}`}>
-                  {label} - {(track.confidence * 100).toFixed(0)}%
+              <div key={track.track_id} className={`absolute border bg-transparent ${tone.boxClass}`} style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}>
+                <span className={`absolute top-1 left-1 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}>
+                  {label} | {(track.confidence * 100).toFixed(0)}%
                 </span>
               </div>
             );
@@ -148,21 +148,21 @@ function clampPercent(value: number) {
 function getTrackTone(isOutsideRoi: boolean, isCrossing: boolean) {
   if (isOutsideRoi) {
     return {
-      boxClass: "border-slate-300/80 shadow-[0_0_10px_rgba(148,163,184,0.26)]",
-      labelClass: "border-slate-200/70 bg-slate-900/65 text-slate-100",
+      boxClass: "rounded-[3px] border-slate-300/75 shadow-[0_0_12px_rgba(148,163,184,0.2)] ring-1 ring-slate-950/35",
+      labelClass: "border-slate-300/25 bg-slate-950/80 text-slate-100 ring-1 ring-white/10",
     };
   }
 
   if (isCrossing) {
     return {
-      boxClass: "border-yellow-300/90 shadow-[0_0_10px_rgba(250,204,21,0.38)]",
-      labelClass: "border-yellow-200/60 bg-yellow-400/75 text-slate-950",
+      boxClass: "rounded-[3px] border-yellow-300/90 shadow-[0_0_14px_rgba(250,204,21,0.34)] ring-1 ring-slate-950/35",
+      labelClass: "border-yellow-200/45 bg-slate-950/82 text-yellow-100 ring-1 ring-yellow-300/20",
     };
   }
 
   return {
-    boxClass: "border-emerald-400/85 shadow-[0_0_10px_rgba(34,197,94,0.3)]",
-    labelClass: "border-emerald-200/60 bg-emerald-500/70 text-white",
+    boxClass: "rounded-[3px] border-emerald-300/85 shadow-[0_0_14px_rgba(16,185,129,0.3)] ring-1 ring-slate-950/35",
+    labelClass: "border-emerald-200/35 bg-slate-950/82 text-emerald-100 ring-1 ring-emerald-300/20",
   };
 }
 

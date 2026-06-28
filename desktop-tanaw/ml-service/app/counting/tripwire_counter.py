@@ -4,7 +4,7 @@ from math import hypot
 
 from app.counting.geometry import Centroid
 
-NormalizedLine = tuple[tuple[float, float], tuple[float, float]]
+NormalizedPath = tuple[tuple[float, float], ...]
 
 
 @dataclass
@@ -29,27 +29,23 @@ class TrackState:
     last_seen_frame: int
     last_seen_at: float | None = None
     line_sides: dict[str, int] = field(default_factory=dict)
+    bbox_line_sides: dict[str, int] = field(default_factory=dict)
     cooldowns: dict[str, int] = field(default_factory=dict)
     cooldown_until: dict[str, float] = field(default_factory=dict)
     counted_directions: set[str] = field(default_factory=set)
-    pending_line: str | None = None
-    pending_frame: int = 0
-    pending_at: float | None = None
 
 
 @dataclass
 class TripwireCounter:
     tripwire_position: float = 0.5
-    entry_line: NormalizedLine | None = None
-    exit_line: NormalizedLine | None = None
+    entry_line: NormalizedPath | None = None
+    exit_line: NormalizedPath | None = None
     reverse_direction: bool = False
     side_margin_px: float = 6.0
     min_crossing_distance_px: float = 10.0
     event_cooldown_frames: int = 18
-    paired_line_max_gap_frames: int = 90
     track_ttl_frames: int = 45
     event_cooldown_seconds: float = 3.6
-    paired_line_max_gap_seconds: float = 18.0
     track_ttl_seconds: float = 9.0
     counts: CountSnapshot = field(default_factory=CountSnapshot)
     frame_index: int = 0
@@ -82,11 +78,30 @@ class TripwireCounter:
     def update(
         self, track_id: int, point: Centroid, frame_width: int, frame_height: int
     ) -> str | None:
+        directions = self.update_many(track_id, point, frame_width, frame_height)
+        return directions[0] if directions else None
+
+    def update_many(
+        self,
+        track_id: int,
+        point: Centroid,
+        frame_width: int,
+        frame_height: int,
+        bbox: tuple[int, int, int, int] | None = None,
+    ) -> list[str]:
         lines = self._active_lines(frame_width)
         current_sides = {
             line_id: _point_side(point, line, frame_width, frame_height, self.side_margin_px)
             for line_id, line in lines.items()
         }
+        current_bbox_sides = (
+            {
+                line_id: _bbox_side(bbox, line, frame_width, frame_height, self.side_margin_px)
+                for line_id, line in lines.items()
+            }
+            if bbox is not None
+            else {}
+        )
 
         state = self.tracks.get(track_id)
         if state is None:
@@ -95,40 +110,55 @@ class TripwireCounter:
                 last_seen_frame=self.frame_index,
                 last_seen_at=self.current_time,
                 line_sides=current_sides,
+                bbox_line_sides=current_bbox_sides,
             )
-            return None
+            return []
 
         previous = state.point
         state.point = point
         state.last_seen_frame = self.frame_index
         state.last_seen_at = self.current_time
         movement_distance = _distance(previous, point)
-        if movement_distance < self.min_crossing_distance_px:
-            self._refresh_stable_sides(state, current_sides)
-            return None
-
         crossed_lines = self._crossed_lines(
-            state, current_sides, previous, point, lines, frame_width, frame_height
+            state,
+            current_sides,
+            current_bbox_sides,
+            previous,
+            point,
+            lines,
+            frame_width,
+            frame_height,
         )
-        direction = None
+        if movement_distance < self.min_crossing_distance_px and not crossed_lines:
+            self._refresh_stable_sides(state, current_sides, current_bbox_sides)
+            return []
+
+        directions: list[str] = []
         for crossed_line in crossed_lines:
-            direction = self._direction_for_crossing(state, crossed_line, previous, point)
-            if direction is not None:
-                break
-        self._refresh_stable_sides(state, current_sides)
+            direction = self._direction_for_crossing(crossed_line, previous, point)
+            if direction is None or direction in directions:
+                continue
+            directions.append(direction)
+        self._refresh_stable_sides(state, current_sides, current_bbox_sides)
 
-        if direction is None:
-            return None
+        counted: list[str] = []
+        for direction in directions:
+            if not self._count_direction(state, direction):
+                continue
+            counted.append(direction)
 
+        return counted
+
+    def _count_direction(self, state: TrackState, direction: str) -> bool:
         cooldown_key = direction
         if direction in state.counted_directions:
-            return None
+            return False
 
         if self.current_time is not None:
             if state.cooldown_until.get(cooldown_key, -1.0) > self.current_time:
-                return None
+                return False
         elif state.cooldowns.get(cooldown_key, -1) > self.frame_index:
-            return None
+            return False
 
         state.counted_directions.add(direction)
         state.cooldowns[cooldown_key] = self.frame_index + self.event_cooldown_frames
@@ -141,7 +171,7 @@ class TripwireCounter:
             self.counts.exit += 1
             self.counts.occupancy = max(0, self.counts.occupancy - 1)
 
-        return direction
+        return True
 
     def remap_track(self, previous_track_id: int, target_track_id: int) -> None:
         if previous_track_id == target_track_id:
@@ -156,10 +186,11 @@ class TripwireCounter:
         target.counted_directions.update(previous.counted_directions)
         target.cooldowns.update(previous.cooldowns)
         target.cooldown_until.update(previous.cooldown_until)
+        target.bbox_line_sides.update(previous.bbox_line_sides)
 
-    def _active_lines(self, frame_width: int) -> dict[str, NormalizedLine]:
+    def _active_lines(self, frame_width: int) -> dict[str, NormalizedPath]:
         if self.entry_line is not None or self.exit_line is not None:
-            lines: dict[str, NormalizedLine] = {}
+            lines: dict[str, NormalizedPath] = {}
             if self.entry_line is not None:
                 lines["entry"] = self.entry_line
             if self.exit_line is not None:
@@ -173,22 +204,40 @@ class TripwireCounter:
         self,
         state: TrackState,
         current_sides: dict[str, int],
+        current_bbox_sides: dict[str, int],
         previous: Centroid,
         current: Centroid,
-        lines: dict[str, NormalizedLine],
+        lines: dict[str, NormalizedPath],
         frame_width: int,
         frame_height: int,
     ) -> list[str]:
         crossed: list[tuple[float, str]] = []
+        crossed_line_ids: set[str] = set()
         for line_id, current_side in current_sides.items():
-            if current_side == 0:
-                continue
-
             previous_side = state.line_sides.get(line_id, 0)
-            if previous_side == 0:
+            point_crossed = (
+                current_side != 0 and previous_side != 0 and previous_side != current_side
+            )
+            line_exit_crossed = previous_side == 0 and current_side != 0
+            if not point_crossed and not line_exit_crossed:
                 continue
 
-            if previous_side == current_side:
+            crossed.append(
+                (
+                    _crossing_progress(
+                        previous, current, lines[line_id], frame_width, frame_height
+                    ),
+                    line_id,
+                )
+            )
+            crossed_line_ids.add(line_id)
+
+        for line_id, current_bbox_side in current_bbox_sides.items():
+            if line_id in crossed_line_ids:
+                continue
+
+            previous_bbox_side = state.bbox_line_sides.get(line_id, current_bbox_side)
+            if previous_bbox_side == current_bbox_side:
                 continue
 
             crossed.append(
@@ -203,7 +252,7 @@ class TripwireCounter:
         return [line_id for _, line_id in sorted(crossed)]
 
     def _direction_for_crossing(
-        self, state: TrackState, crossed_line: str | None, previous: Centroid, current: Centroid
+        self, crossed_line: str | None, previous: Centroid, current: Centroid
     ) -> str | None:
         if crossed_line is None:
             return None
@@ -214,58 +263,53 @@ class TripwireCounter:
                 return "exit" if direction == "entry" else "entry"
             return direction
 
-        if self.entry_line is not None and self.exit_line is not None:
-            return self._paired_line_direction(state, crossed_line)
-
         return crossed_line
 
-    def _paired_line_direction(self, state: TrackState, crossed_line: str) -> str | None:
-        expired_by_time = (
-            self.current_time is not None
-            and state.pending_at is not None
-            and self.current_time - state.pending_at > self.paired_line_max_gap_seconds
-        )
-        expired_by_frame = (
-            self.current_time is None
-            and self.frame_index - state.pending_frame > self.paired_line_max_gap_frames
-        )
-        if state.pending_line is not None and (expired_by_time or expired_by_frame):
-            state.pending_line = None
-            state.pending_frame = 0
-            state.pending_at = None
-
-        if state.pending_line is None:
-            state.pending_line = crossed_line
-            state.pending_frame = self.frame_index
-            state.pending_at = self.current_time
-            return None
-
-        if state.pending_line == crossed_line:
-            state.pending_frame = self.frame_index
-            state.pending_at = self.current_time
-            return None
-
-        direction = crossed_line
-        state.pending_line = None
-        state.pending_frame = 0
-        state.pending_at = None
-        return direction
-
-    def _refresh_stable_sides(self, state: TrackState, current_sides: dict[str, int]) -> None:
+    def _refresh_stable_sides(
+        self,
+        state: TrackState,
+        current_sides: dict[str, int],
+        current_bbox_sides: dict[str, int],
+    ) -> None:
         for line_id, side in current_sides.items():
             if side != 0:
                 state.line_sides[line_id] = side
+        state.bbox_line_sides.update(current_bbox_sides)
 
 
 def _point_side(
-    point: Centroid, line: NormalizedLine, frame_width: int, frame_height: int, margin_px: float
+    point: Centroid, line: NormalizedPath, frame_width: int, frame_height: int, margin_px: float
 ) -> int:
-    line_start, line_end = _scale_line(line, frame_width, frame_height)
+    line_start, line_end = _nearest_scaled_segment(
+        (point.x, point.y), line, frame_width, frame_height
+    )
     distance = _signed_line_distance((point.x, point.y), line_start, line_end)
     if abs(distance) < margin_px:
         return 0
 
     return 1 if distance > 0 else -1
+
+
+def _bbox_side(
+    bbox: tuple[int, int, int, int],
+    line: NormalizedPath,
+    frame_width: int,
+    frame_height: int,
+    margin_px: float,
+) -> int:
+    x1, y1, x2, y2 = bbox
+    center = ((x1 + x2) / 2, (y1 + y2) / 2)
+    line_start, line_end = _nearest_scaled_segment(center, line, frame_width, frame_height)
+    distances = [
+        _signed_line_distance((x1, y1), line_start, line_end),
+        _signed_line_distance((x2, y1), line_start, line_end),
+        _signed_line_distance((x1, y2), line_start, line_end),
+        _signed_line_distance((x2, y2), line_start, line_end),
+    ]
+    if min(distances) <= margin_px and max(distances) >= -margin_px:
+        return 0
+
+    return 1 if sum(distances) > 0 else -1
 
 
 def _signed_line_distance(
@@ -288,9 +332,10 @@ def _distance(first: Centroid, second: Centroid) -> float:
 
 
 def _crossing_progress(
-    previous: Centroid, current: Centroid, line: NormalizedLine, frame_width: int, frame_height: int
+    previous: Centroid, current: Centroid, line: NormalizedPath, frame_width: int, frame_height: int
 ) -> float:
-    line_start, line_end = _scale_line(line, frame_width, frame_height)
+    mid_point = ((previous.x + current.x) / 2, (previous.y + current.y) / 2)
+    line_start, line_end = _nearest_scaled_segment(mid_point, line, frame_width, frame_height)
     previous_distance = _signed_line_distance((previous.x, previous.y), line_start, line_end)
     current_distance = _signed_line_distance((current.x, current.y), line_start, line_end)
     denominator = previous_distance - current_distance
@@ -300,8 +345,38 @@ def _crossing_progress(
     return min(1.0, max(0.0, previous_distance / denominator))
 
 
-def _scale_line(
-    line: NormalizedLine, frame_width: int, frame_height: int
+def _nearest_scaled_segment(
+    point: tuple[float, float], line: NormalizedPath, frame_width: int, frame_height: int
 ) -> tuple[tuple[float, float], tuple[float, float]]:
-    (x1, y1), (x2, y2) = line
-    return (x1 * frame_width, y1 * frame_height), (x2 * frame_width, y2 * frame_height)
+    scaled_points = tuple((x * frame_width, y * frame_height) for x, y in line)
+    if len(scaled_points) < 2:
+        fallback = scaled_points[0] if scaled_points else (0.0, 0.0)
+        return fallback, fallback
+
+    closest_segment = (scaled_points[0], scaled_points[1])
+    closest_distance = float("inf")
+    for index in range(len(scaled_points) - 1):
+        segment = (scaled_points[index], scaled_points[index + 1])
+        distance = _point_segment_distance(point, segment[0], segment[1])
+        if distance < closest_distance:
+            closest_distance = distance
+            closest_segment = segment
+
+    return closest_segment
+
+
+def _point_segment_distance(
+    point: tuple[float, float], line_start: tuple[float, float], line_end: tuple[float, float]
+) -> float:
+    x, y = point
+    x1, y1 = line_start
+    x2, y2 = line_end
+    dx = x2 - x1
+    dy = y2 - y1
+    length_squared = dx * dx + dy * dy
+    if length_squared < 1e-9:
+        return hypot(x - x1, y - y1)
+
+    projection = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / length_squared))
+    closest = (x1 + projection * dx, y1 + projection * dy)
+    return hypot(x - closest[0], y - closest[1])

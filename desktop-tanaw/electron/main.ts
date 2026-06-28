@@ -31,6 +31,7 @@ const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const SPLASH_MIN_DISPLAY_MS = 1400;
+const STARTUP_UNAVAILABLE_MESSAGE = "Startup at sign-in is not available in this environment.";
 const execFileAsync = promisify(execFile);
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -379,16 +380,51 @@ function getBackgroundStatus() {
 }
 
 function getStartupSettings() {
-  const settings = app.getLoginItemSettings();
-  return { openAtLogin: settings.openAtLogin };
+  if (!isStartupRegistrationAvailable()) {
+    return { isAvailable: false, message: STARTUP_UNAVAILABLE_MESSAGE, openAtLogin: false };
+  }
+
+  try {
+    const settings = app.getLoginItemSettings(getStartupLoginItemOptions());
+    return { isAvailable: true, message: null, openAtLogin: settings.openAtLogin };
+  } catch (error) {
+    return {
+      isAvailable: false,
+      message: error instanceof Error ? error.message : STARTUP_UNAVAILABLE_MESSAGE,
+      openAtLogin: false,
+    };
+  }
 }
 
 function setStartupSettings(openAtLogin: boolean) {
+  if (!isStartupRegistrationAvailable()) {
+    throw new Error(STARTUP_UNAVAILABLE_MESSAGE);
+  }
+
   app.setLoginItemSettings({
+    ...getStartupLoginItemOptions(),
     openAtLogin,
     openAsHidden: true,
-    args: openAtLogin ? ["--background"] : [],
   });
+}
+
+function isStartupRegistrationAvailable() {
+  return process.platform === "darwin" || process.platform === "win32";
+}
+
+function getStartupLoginItemOptions() {
+  return {
+    args: getStartupLaunchArgs(),
+    path: process.execPath,
+  };
+}
+
+function getStartupLaunchArgs() {
+  if (app.isPackaged) {
+    return ["--background"];
+  }
+
+  return [app.getAppPath(), "--background"];
 }
 
 function createTray() {

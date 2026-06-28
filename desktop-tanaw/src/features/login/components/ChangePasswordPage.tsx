@@ -56,7 +56,7 @@ export function ChangePasswordPage() {
   }
 
   if (!user.mustChangePassword) {
-    return <Navigate to={routePaths.enterpriseCameras} replace />;
+    return <Navigate to={routePaths.enterpriseDashboard} replace />;
   }
 
   const updateField = (field: keyof PasswordValues) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -98,7 +98,7 @@ export function ChangePasswordPage() {
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       setSession(session);
       notifySuccess("Password updated.");
-      navigate(routePaths.enterpriseCameras, { replace: true });
+      navigate(routePaths.enterpriseDashboard, { replace: true });
     } catch {
       setFormMessage("Unable to update password. Check the temporary password and try again.");
     } finally {

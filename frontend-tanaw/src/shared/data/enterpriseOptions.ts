@@ -6,6 +6,7 @@ export const enterpriseCategories = [
 
 export const sanPedroBarangays = [
   "Bagong Silang",
+  "Bayan-bayanan",
   "Calendola",
   "Chrysanthemum",
   "Cuyab",

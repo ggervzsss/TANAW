@@ -644,7 +644,7 @@
     transform 220ms ease-out;
 }
 
-#enterprise-location-picker .tanaw-location-boundary-path {
+.tanaw-location-boundary-path {
   transition:
     fill-opacity 220ms ease-out,
     stroke-opacity 220ms ease-out,
