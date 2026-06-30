@@ -1,3 +1,4 @@
+import logging
 import queue
 import threading
 from collections import deque
@@ -7,6 +8,8 @@ from time import monotonic
 import numpy as np
 
 from app.reid.person_reid import PersonReIdentifier
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,7 @@ class AsyncReIdWorker:
         self._pending: set[tuple[int, int]] = set()
         self._lock = threading.Lock()
         self._dropped = 0
+        self._cleared = 0
         self._completed = 0
         self._latencies_ms: deque[float] = deque(maxlen=128)
         self._stopping = threading.Event()
@@ -56,6 +60,8 @@ class AsyncReIdWorker:
         requested_at: float,
     ) -> bool:
         key = (session_id, track_id)
+        if self._stopping.is_set():
+            return False
         with self._lock:
             if self._active_session_id is not None and session_id != self._active_session_id:
                 return False
@@ -91,40 +97,60 @@ class AsyncReIdWorker:
                 results.append(result)
         return results
 
-    def status(self) -> dict[str, int | float | None]:
+    def status(self) -> dict[str, int | float | bool | None]:
         with self._lock:
             latencies = sorted(self._latencies_ms)
             return {
                 "reid_queue_depth": self._tasks.qsize(),
                 "reid_tasks_pending": len(self._pending),
                 "reid_tasks_dropped": self._dropped,
+                "reid_tasks_cleared": self._cleared,
                 "reid_tasks_completed": self._completed,
+                "reid_worker_alive": self._thread.is_alive(),
                 "reid_worker_p50_ms": _percentile(latencies, 0.50),
                 "reid_worker_p95_ms": _percentile(latencies, 0.95),
             }
 
     def begin_session(self, session_id: int) -> None:
+        cleared_tasks = self._clear_queue()
+        self._clear_results()
         with self._lock:
             self._active_session_id = session_id
             self._dropped = 0
+            self._cleared = cleared_tasks
             self._completed = 0
             self._latencies_ms.clear()
-            self._pending = {key for key in self._pending if key[0] == session_id}
+            self._pending.clear()
+
+    def end_session(self, session_id: int) -> None:
+        cleared_tasks = self._clear_queue(session_id)
+        self._clear_results(session_id)
+        with self._lock:
+            if self._active_session_id == session_id:
+                self._active_session_id = None
+            self._pending = {key for key in self._pending if key[0] != session_id}
+            self._cleared += cleared_tasks
+
+    def close(self, timeout: float = 2.0) -> None:
+        self._stopping.set()
+        cleared_tasks = self._clear_queue()
+        with self._lock:
+            self._pending.clear()
+            self._cleared += cleared_tasks
+
         while True:
             try:
-                task = self._tasks.get_nowait()
-            except queue.Empty:
+                self._tasks.put_nowait(None)
                 break
-            if task is not None and task.session_id == session_id:
-                self._tasks.put_nowait(task)
-                break
+            except queue.Full:
+                cleared_tasks = self._clear_queue()
+                with self._lock:
+                    self._cleared += cleared_tasks
 
-    def close(self) -> None:
-        self._stopping.set()
-        try:
-            self._tasks.put_nowait(None)
-        except queue.Full:
-            pass
+        if self._thread is not threading.current_thread():
+            self._thread.join(timeout=timeout)
+            if self._thread.is_alive():
+                logger.warning("ReID worker thread did not stop cleanly.")
 
     def _run(self) -> None:
         while True:
@@ -156,6 +182,44 @@ class AsyncReIdWorker:
             )
             if self._stopping.is_set():
                 return
+
+    def _clear_queue(self, session_id: int | None = None) -> int:
+        cleared = 0
+        kept: list[ReIdTask | None] = []
+        while True:
+            try:
+                task = self._tasks.get_nowait()
+            except queue.Empty:
+                break
+            if task is None:
+                if session_id is None:
+                    cleared += 1
+                else:
+                    kept.append(task)
+                continue
+            if session_id is None or task.session_id == session_id:
+                cleared += 1
+            else:
+                kept.append(task)
+
+        for task in kept:
+            try:
+                self._tasks.put_nowait(task)
+            except queue.Full:
+                cleared += 1
+        return cleared
+
+    def _clear_results(self, session_id: int | None = None) -> None:
+        kept: list[ReIdResult] = []
+        while True:
+            try:
+                result = self._results.get_nowait()
+            except queue.Empty:
+                break
+            if session_id is not None and result.session_id != session_id:
+                kept.append(result)
+        for result in kept:
+            self._results.put(result)
 
 
 def _percentile(values: list[float], quantile: float) -> float | None:

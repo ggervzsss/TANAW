@@ -64,42 +64,117 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
               className="w-full rounded-sm border border-gray-300 px-2 py-1.5 font-mono text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
             />
           </CompactField>
-          <div className="grid grid-cols-2 gap-2">
-            <CompactField label="Camera Type">
-              <select
-                value={editForm.cameraType}
-                onChange={(event) => onEditFormChange({ ...editForm, cameraType: event.target.value as Camera["cameraType"] })}
-                className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-              >
-                <option value="IP_WEBCAM">IP Webcam</option>
-                <option value="RTSP_CCTV">RTSP CCTV</option>
-                <option value="USB_WEBCAM">USB Webcam</option>
-                <option value="ONVIF_CCTV">ONVIF CCTV</option>
-              </select>
-            </CompactField>
-            <CompactField label="Confidence">
-              <input
-                type="number"
-                min="0.05"
-                max="0.95"
-                step="0.05"
-                value={editForm.confidence}
-                onChange={(event) => onEditFormChange({ ...editForm, confidence: Number(event.target.value) })}
-                className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-              />
-            </CompactField>
-          </div>
-          <CompactField label="Processing Profile">
+          <CompactField label="Camera Type">
             <select
-              value={editForm.processingProfile}
-              onChange={(event) => onEditFormChange({ ...editForm, processingProfile: event.target.value as Camera["processingProfile"] })}
+              value={editForm.cameraType}
+              onChange={(event) => onEditFormChange({ ...editForm, cameraType: event.target.value as Camera["cameraType"] })}
               className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
             >
-              <option value="auto">Auto Detect</option>
-              <option value="cpu">CPU Optimized</option>
-              <option value="accelerated">GPU Accelerated</option>
+              <option value="IP_WEBCAM">IP Webcam</option>
+              <option value="RTSP_CCTV">RTSP CCTV</option>
+              <option value="USB_WEBCAM">USB Webcam</option>
+              <option value="ONVIF_CCTV">ONVIF CCTV</option>
             </select>
           </CompactField>
+          <details className="rounded-sm border border-gray-200 bg-gray-50 p-2">
+            <summary className="cursor-pointer text-[9px] font-bold tracking-wider text-gray-500 uppercase">Advanced Settings</summary>
+            <div className="mt-2 space-y-2">
+              <CompactField label="Processing Profile">
+                <select
+                  value={editForm.processingProfile}
+                  onChange={(event) => onEditFormChange({ ...editForm, processingProfile: event.target.value as Camera["processingProfile"] })}
+                  className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                >
+                  <option value="auto">Auto Recommended</option>
+                  <option value="compatibility">Compatibility</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="high_accuracy">High Accuracy</option>
+                  <option value="emergency">Emergency / Low Power</option>
+                </select>
+              </CompactField>
+              <div className="grid grid-cols-2 gap-2">
+                <CompactField label="Counting Confidence">
+                  <input
+                    type="number"
+                    min="0.05"
+                    max="0.95"
+                    step="0.05"
+                    value={editForm.confidence}
+                    onChange={(event) => onEditFormChange({ ...editForm, confidence: Number(event.target.value) })}
+                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                  />
+                </CompactField>
+                <CompactField label="Tracking Confidence">
+                  <input
+                    type="number"
+                    min="0.01"
+                    max={editForm.confidence}
+                    step="0.01"
+                    value={editForm.trackingConfidence ?? 0.15}
+                    onChange={(event) => onEditFormChange({ ...editForm, trackingConfidence: Number(event.target.value) })}
+                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                  />
+                </CompactField>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <CompactField label="ReID Mode">
+                  <select
+                    value={editForm.reidMode ?? "auto"}
+                    onChange={(event) => onEditFormChange({ ...editForm, reidMode: event.target.value as Camera["reidMode"] })}
+                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="off">Off</option>
+                    <option value="fast">Fast</option>
+                    <option value="quality">Quality</option>
+                  </select>
+                </CompactField>
+                <CompactField label="Unique Mode">
+                  <select
+                    value={editForm.uniqueCountingMode ?? "estimated_reid"}
+                    onChange={(event) => onEditFormChange({ ...editForm, uniqueCountingMode: event.target.value as Camera["uniqueCountingMode"] })}
+                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                  >
+                    <option value="estimated_reid">Estimated ReID</option>
+                    <option value="entry_only">Entry Only</option>
+                  </select>
+                </CompactField>
+              </div>
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <h5 className="flex items-center gap-1.5 text-[9px] font-bold tracking-wider text-gray-500 uppercase">
+                    <Maximize size={12} className="text-[#2d5eff]" /> Region Of Interest
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onEditFormChange({
+                        ...editForm,
+                        config: {
+                          ...editForm.config,
+                          roi: { top: 0, left: 0, width: 100, height: 100 },
+                        },
+                      })
+                    }
+                    className="rounded-sm border border-gray-200 bg-white px-2 py-1 text-[9px] font-bold text-gray-600 transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
+                  >
+                    Full Frame
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  {roiFields.map(({ label, key, min, max }) => (
+                    <div key={key}>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <label className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</label>
+                        <span className="text-[10px] font-bold text-gray-500">{editForm.config.roi[key]}%</span>
+                      </div>
+                      <input type="range" min={min} max={max} value={editForm.config.roi[key]} onChange={(event) => updateRoi(key, parseInt(event.target.value, 10))} className="w-full accent-[#2d5eff]" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </details>
           <div className="grid grid-cols-2 gap-2">
             <CompactField label="Username">
               <input
@@ -126,22 +201,6 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
         )}
       </section>
 
-      <section>
-        <h4 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-wider text-[#111827] uppercase">
-          <Maximize size={14} className="text-[#2d5eff]" /> Region of Interest
-        </h4>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-          {roiFields.map(({ label, key, min, max }) => (
-            <div key={key}>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <label className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</label>
-                <span className="text-[10px] font-bold text-gray-500">{editForm.config.roi[key]}%</span>
-              </div>
-              <input type="range" min={min} max={max} value={editForm.config.roi[key]} onChange={(event) => updateRoi(key, parseInt(event.target.value, 10))} className="w-full accent-[#2d5eff]" />
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

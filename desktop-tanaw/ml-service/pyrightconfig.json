@@ -3,7 +3,7 @@
   "exclude": ["**/__pycache__", ".venv", ".pytest_cache", "models"],
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.14",
+  "pythonVersion": "3.12",
   "typeCheckingMode": "basic",
   "reportMissingModuleSource": "none",
   "reportMissingTypeStubs": "none",

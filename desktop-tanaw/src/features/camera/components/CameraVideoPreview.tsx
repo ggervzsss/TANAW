@@ -27,7 +27,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
   const [contentRect, setContentRect] = useState<ContentRect | null>(null);
   const streamIsAvailable = isProcessing && streamUrl;
   const overlayConfig = isEditMode && editForm ? editForm.config : activeCam.config;
-  const shouldShowConfigOverlay = isEditMode || !streamIsAvailable;
+  const shouldShowConfigOverlay = true;
   const frameWidth = detections.frame_width ?? 0;
   const frameHeight = detections.frame_height ?? 0;
   const visibleTracks = detections.tracks.filter((track) => track.confidence >= activeCam.confidence);

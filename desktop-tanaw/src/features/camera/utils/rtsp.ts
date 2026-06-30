@@ -39,8 +39,5 @@ export function maskStreamCredentials(streamUrl: string) {
 function normalizeRtspHost(hostInput: string) {
   const withoutScheme = hostInput.trim().replace(/^rtsp:\/\//i, "");
   const withoutCredentials = withoutScheme.includes("@") ? withoutScheme.slice(withoutScheme.lastIndexOf("@") + 1) : withoutScheme;
-  const host = withoutCredentials.replace(/\/.*$/, "");
-
-  if (!host) return "";
-  return host.includes(":") ? host : `${host}:554`;
+  return withoutCredentials.replace(/\/.*$/, "");
 }

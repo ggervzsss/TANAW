@@ -26,13 +26,20 @@ class CountSnapshot:
 @dataclass
 class TrackState:
     point: Centroid
+    first_seen_frame: int
     last_seen_frame: int
+    first_seen_at: float | None = None
     last_seen_at: float | None = None
     line_sides: dict[str, int] = field(default_factory=dict)
-    bbox_line_sides: dict[str, int] = field(default_factory=dict)
     cooldowns: dict[str, int] = field(default_factory=dict)
     cooldown_until: dict[str, float] = field(default_factory=dict)
-    counted_directions: set[str] = field(default_factory=set)
+    pending_line: str | None = None
+    pending_started_frame: int | None = None
+    pending_started_at: float | None = None
+    last_crossed_line: str | None = None
+    last_counted_direction: str | None = None
+    last_reason: str | None = None
+    last_movement_delta: float | None = None
 
 
 @dataclass
@@ -47,6 +54,10 @@ class TripwireCounter:
     track_ttl_frames: int = 45
     event_cooldown_seconds: float = 3.6
     track_ttl_seconds: float = 9.0
+    min_track_age_frames: int = 1
+    min_track_age_seconds: float = 0.0
+    paired_line_max_gap_frames: int = 90
+    paired_line_max_gap_seconds: float = 18.0
     counts: CountSnapshot = field(default_factory=CountSnapshot)
     frame_index: int = 0
     tracks: dict[int, TrackState] = field(default_factory=dict)
@@ -74,6 +85,8 @@ class TripwireCounter:
             stale_by_frame = now is None and state.last_seen_frame < stale_before_frame
             if stale_by_time or stale_by_frame:
                 del self.tracks[track_id]
+            else:
+                self._expire_pending_sequence(state)
 
     def update(
         self, track_id: int, point: Centroid, frame_width: int, frame_height: int
@@ -87,30 +100,23 @@ class TripwireCounter:
         point: Centroid,
         frame_width: int,
         frame_height: int,
-        bbox: tuple[int, int, int, int] | None = None,
+        _bbox: tuple[int, int, int, int] | None = None,
     ) -> list[str]:
         lines = self._active_lines(frame_width)
         current_sides = {
             line_id: _point_side(point, line, frame_width, frame_height, self.side_margin_px)
             for line_id, line in lines.items()
         }
-        current_bbox_sides = (
-            {
-                line_id: _bbox_side(bbox, line, frame_width, frame_height, self.side_margin_px)
-                for line_id, line in lines.items()
-            }
-            if bbox is not None
-            else {}
-        )
 
         state = self.tracks.get(track_id)
         if state is None:
             self.tracks[track_id] = TrackState(
                 point=point,
+                first_seen_frame=self.frame_index,
                 last_seen_frame=self.frame_index,
+                first_seen_at=self.current_time,
                 last_seen_at=self.current_time,
                 line_sides=current_sides,
-                bbox_line_sides=current_bbox_sides,
             )
             return []
 
@@ -119,10 +125,10 @@ class TripwireCounter:
         state.last_seen_frame = self.frame_index
         state.last_seen_at = self.current_time
         movement_distance = _distance(previous, point)
+        state.last_movement_delta = movement_distance
         crossed_lines = self._crossed_lines(
             state,
             current_sides,
-            current_bbox_sides,
             previous,
             point,
             lines,
@@ -130,8 +136,14 @@ class TripwireCounter:
             frame_height,
         )
         if movement_distance < self.min_crossing_distance_px and not crossed_lines:
-            self._refresh_stable_sides(state, current_sides, current_bbox_sides)
+            state.last_reason = "movement_below_threshold"
+            self._refresh_stable_sides(state, current_sides)
             return []
+
+        self._refresh_stable_sides(state, current_sides)
+
+        if self._uses_paired_lines():
+            return self._count_paired_crossings(state, crossed_lines)
 
         directions: list[str] = []
         for crossed_line in crossed_lines:
@@ -139,7 +151,6 @@ class TripwireCounter:
             if direction is None or direction in directions:
                 continue
             directions.append(direction)
-        self._refresh_stable_sides(state, current_sides, current_bbox_sides)
 
         counted: list[str] = []
         for direction in directions:
@@ -151,16 +162,30 @@ class TripwireCounter:
 
     def _count_direction(self, state: TrackState, direction: str) -> bool:
         cooldown_key = direction
-        if direction in state.counted_directions:
+
+        if self.frame_index - state.first_seen_frame < self.min_track_age_frames:
+            state.last_reason = "track_age_below_minimum"
+            return False
+        if (
+            self.current_time is not None
+            and state.first_seen_at is not None
+            and self.current_time - state.first_seen_at < self.min_track_age_seconds
+        ):
+            state.last_reason = "track_age_below_minimum"
+            return False
+
+        if state.last_counted_direction == direction:
+            state.last_reason = f"{direction}_already_counted_for_track"
             return False
 
         if self.current_time is not None:
             if state.cooldown_until.get(cooldown_key, -1.0) > self.current_time:
+                state.last_reason = f"{direction}_cooldown_active"
                 return False
         elif state.cooldowns.get(cooldown_key, -1) > self.frame_index:
+            state.last_reason = f"{direction}_cooldown_active"
             return False
 
-        state.counted_directions.add(direction)
         state.cooldowns[cooldown_key] = self.frame_index + self.event_cooldown_frames
         if self.current_time is not None:
             state.cooldown_until[cooldown_key] = self.current_time + self.event_cooldown_seconds
@@ -170,6 +195,8 @@ class TripwireCounter:
         else:
             self.counts.exit += 1
             self.counts.occupancy = max(0, self.counts.occupancy - 1)
+        state.last_counted_direction = direction
+        state.last_reason = f"counted_{direction}"
 
         return True
 
@@ -183,10 +210,57 @@ class TripwireCounter:
         if target is None or previous.last_seen_frame > target.last_seen_frame:
             self.tracks[target_track_id] = previous
             target = previous
-        target.counted_directions.update(previous.counted_directions)
         target.cooldowns.update(previous.cooldowns)
         target.cooldown_until.update(previous.cooldown_until)
-        target.bbox_line_sides.update(previous.bbox_line_sides)
+        if previous.pending_line is not None and (
+            target.pending_started_frame is None
+            or previous.pending_started_frame is None
+            or previous.pending_started_frame >= target.pending_started_frame
+        ):
+            target.pending_line = previous.pending_line
+            target.pending_started_frame = previous.pending_started_frame
+            target.pending_started_at = previous.pending_started_at
+        if previous.last_crossed_line is not None:
+            target.last_crossed_line = previous.last_crossed_line
+        if previous.last_counted_direction is not None:
+            target.last_counted_direction = previous.last_counted_direction
+        if previous.last_reason is not None:
+            target.last_reason = previous.last_reason
+        if previous.last_movement_delta is not None:
+            target.last_movement_delta = previous.last_movement_delta
+
+    def debug_state(self, track_id: int) -> dict[str, int | float | str | bool | None] | None:
+        state = self.tracks.get(track_id)
+        if state is None:
+            return None
+
+        time_since_first_crossing = None
+        if self.current_time is not None and state.pending_started_at is not None:
+            time_since_first_crossing = max(0.0, self.current_time - state.pending_started_at)
+
+        pending_frame_gap = None
+        if state.pending_started_frame is not None:
+            pending_frame_gap = max(0, self.frame_index - state.pending_started_frame)
+
+        return {
+            "last_crossed_line": state.last_crossed_line,
+            "pending_line": state.pending_line,
+            "pending_started_frame": state.pending_started_frame,
+            "pending_frame_gap": pending_frame_gap,
+            "time_since_first_crossing": time_since_first_crossing,
+            "last_counted_direction": state.last_counted_direction,
+            "last_reason": state.last_reason,
+            "last_movement_delta": state.last_movement_delta,
+            "track_age_frames": max(0, self.frame_index - state.first_seen_frame),
+            "track_age_seconds": (
+                max(0.0, self.current_time - state.first_seen_at)
+                if self.current_time is not None and state.first_seen_at is not None
+                else None
+            ),
+            "entry_cooldown_until_frame": state.cooldowns.get("entry"),
+            "exit_cooldown_until_frame": state.cooldowns.get("exit"),
+            "inside_paired_sequence": state.pending_line is not None,
+        }
 
     def _active_lines(self, frame_width: int) -> dict[str, NormalizedPath]:
         if self.entry_line is not None or self.exit_line is not None:
@@ -204,7 +278,6 @@ class TripwireCounter:
         self,
         state: TrackState,
         current_sides: dict[str, int],
-        current_bbox_sides: dict[str, int],
         previous: Centroid,
         current: Centroid,
         lines: dict[str, NormalizedPath],
@@ -212,7 +285,6 @@ class TripwireCounter:
         frame_height: int,
     ) -> list[str]:
         crossed: list[tuple[float, str]] = []
-        crossed_line_ids: set[str] = set()
         for line_id, current_side in current_sides.items():
             previous_side = state.line_sides.get(line_id, 0)
             point_crossed = (
@@ -220,24 +292,6 @@ class TripwireCounter:
             )
             line_exit_crossed = previous_side == 0 and current_side != 0
             if not point_crossed and not line_exit_crossed:
-                continue
-
-            crossed.append(
-                (
-                    _crossing_progress(
-                        previous, current, lines[line_id], frame_width, frame_height
-                    ),
-                    line_id,
-                )
-            )
-            crossed_line_ids.add(line_id)
-
-        for line_id, current_bbox_side in current_bbox_sides.items():
-            if line_id in crossed_line_ids:
-                continue
-
-            previous_bbox_side = state.bbox_line_sides.get(line_id, current_bbox_side)
-            if previous_bbox_side == current_bbox_side:
                 continue
 
             crossed.append(
@@ -265,16 +319,75 @@ class TripwireCounter:
 
         return crossed_line
 
+    def _count_paired_crossings(self, state: TrackState, crossed_lines: list[str]) -> list[str]:
+        counted: list[str] = []
+        for crossed_line in crossed_lines:
+            direction = self._direction_for_paired_crossing(state, crossed_line)
+            if direction is None or direction in counted:
+                continue
+            if self._count_direction(state, direction):
+                counted.append(direction)
+        return counted
+
+    def _direction_for_paired_crossing(self, state: TrackState, crossed_line: str) -> str | None:
+        if crossed_line not in {"entry", "exit"}:
+            return None
+
+        self._expire_pending_sequence(state)
+        state.last_crossed_line = crossed_line
+        first_line = state.pending_line
+        if first_line is None or first_line == crossed_line:
+            state.pending_line = crossed_line
+            state.pending_started_frame = self.frame_index
+            state.pending_started_at = self.current_time
+            return None
+
+        direction = None
+        if first_line == "entry" and crossed_line == "exit":
+            direction = "exit"
+        elif first_line == "exit" and crossed_line == "entry":
+            direction = "entry"
+
+        state.pending_line = None
+        state.pending_started_frame = None
+        state.pending_started_at = None
+
+        if direction is None:
+            return None
+        if self.reverse_direction:
+            return "exit" if direction == "entry" else "entry"
+        return direction
+
+    def _expire_pending_sequence(self, state: TrackState) -> None:
+        if state.pending_line is None:
+            return
+
+        expired_by_time = (
+            self.current_time is not None
+            and state.pending_started_at is not None
+            and self.current_time - state.pending_started_at > self.paired_line_max_gap_seconds
+        )
+        expired_by_frame = (
+            self.current_time is None
+            and state.pending_started_frame is not None
+            and self.frame_index - state.pending_started_frame > self.paired_line_max_gap_frames
+        )
+        if expired_by_time or expired_by_frame:
+            state.pending_line = None
+            state.pending_started_frame = None
+            state.pending_started_at = None
+
+    def _uses_paired_lines(self) -> bool:
+        return self.entry_line is not None and self.exit_line is not None
+
     def _refresh_stable_sides(
         self,
         state: TrackState,
         current_sides: dict[str, int],
-        current_bbox_sides: dict[str, int],
     ) -> None:
         for line_id, side in current_sides.items():
             if side != 0:
                 state.line_sides[line_id] = side
-        state.bbox_line_sides.update(current_bbox_sides)
 
 
 def _point_side(
@@ -288,28 +401,6 @@ def _point_side(
         return 0
 
     return 1 if distance > 0 else -1
-
-
-def _bbox_side(
-    bbox: tuple[int, int, int, int],
-    line: NormalizedPath,
-    frame_width: int,
-    frame_height: int,
-    margin_px: float,
-) -> int:
-    x1, y1, x2, y2 = bbox
-    center = ((x1 + x2) / 2, (y1 + y2) / 2)
-    line_start, line_end = _nearest_scaled_segment(center, line, frame_width, frame_height)
-    distances = [
-        _signed_line_distance((x1, y1), line_start, line_end),
-        _signed_line_distance((x2, y1), line_start, line_end),
-        _signed_line_distance((x1, y2), line_start, line_end),
-        _signed_line_distance((x2, y2), line_start, line_end),
-    ]
-    if min(distances) <= margin_px and max(distances) >= -margin_px:
-        return 0
-
-    return 1 if sum(distances) > 0 else -1
 
 
 def _signed_line_distance(

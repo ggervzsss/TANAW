@@ -24,19 +24,30 @@ from app.config.camera_config import (
     MockResetResponse,
     MockStartRequest,
     MockStatusResponse,
+    OccupancyCorrectionRequest,
+    OccupancyCorrectionResponse,
     ReportSubmissionRecordResponse,
     ReportSubmissionRequest,
     ReportSubmissionResponse,
     SessionResponse,
     SyncMarkResponse,
 )
+from app.runtime.hardware import get_runtime_capabilities
 
 manager = CameraProcessingManager()
 
 app = FastAPI(title="TANAW Local ML Camera Service", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "file://",
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "null",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,6 +63,11 @@ def health() -> HealthResponse:
         error=counts["error"] if isinstance(counts["error"], str) else None,
         **model_status,
     )
+
+
+@app.get("/runtime/capabilities")
+def runtime_capabilities() -> dict[str, object]:
+    return get_runtime_capabilities()
 
 
 @app.post("/context/enterprise", response_model=EnterpriseContextResponse)
@@ -105,6 +121,30 @@ def metrics_summary(include_submitted: bool = False) -> MetricsSummaryResponse:
 @app.get("/metrics/history", response_model=MetricsHistoryResponse)
 def metrics_history(include_submitted: bool = False) -> MetricsHistoryResponse:
     return MetricsHistoryResponse(**manager.metrics_history(include_submitted=include_submitted))
+
+
+@app.post("/occupancy/correction", response_model=OccupancyCorrectionResponse)
+def record_occupancy_correction(
+    payload: OccupancyCorrectionRequest,
+) -> OccupancyCorrectionResponse:
+    return OccupancyCorrectionResponse(
+        **manager.record_occupancy_correction(
+            new_occupancy=payload.new_occupancy,
+            reason=payload.reason,
+            actor_id=payload.actor_id,
+            actor_name=payload.actor_name,
+            camera_id=payload.camera_id,
+            source_kind=payload.source_kind,
+        )
+    )
+
+
+@app.get("/occupancy/corrections", response_model=list[OccupancyCorrectionResponse])
+def occupancy_corrections(limit: int = 100) -> list[OccupancyCorrectionResponse]:
+    return [
+        OccupancyCorrectionResponse(**correction)
+        for correction in manager.occupancy_corrections(limit=limit)
+    ]
 
 
 @app.post("/reports/local-submit", response_model=ReportSubmissionResponse)
@@ -241,12 +281,12 @@ def detections() -> DetectionResponse:
 
 
 @app.get("/stream")
-async def stream():
+async def stream(overlay: bool = True) -> StreamingResponse:
     async def frames():
         last_frame_id = 0
         while True:
             frame, last_frame_id = await asyncio.to_thread(
-                manager.wait_for_stream_frame, last_frame_id
+                manager.wait_for_stream_frame, last_frame_id, 1.0, overlay
             )
             yield (
                 b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache\r\n\r\n"

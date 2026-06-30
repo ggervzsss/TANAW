@@ -186,8 +186,34 @@ class LocalMetricsStoreTest(unittest.TestCase):
             summary = store.metrics_summary()
 
             self.assertEqual(summary["unique_count"], 2)
+            self.assertEqual(summary["estimated_unique_count"], 2)
             self.assertEqual(summary["confirmed_unique_count"], 1)
             self.assertEqual(summary["degraded_unique_count"], 1)
+            self.assertEqual(summary["repeat_entry_count"], 0)
+
+    def test_occupancy_corrections_are_audited_and_included_in_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)), "enterprise-a")
+            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
+            store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
+
+            correction = store.record_occupancy_correction(
+                enterprise_id="enterprise-a",
+                camera_id=1,
+                old_occupancy=0,
+                new_occupancy=3,
+                reason="Manual headcount at front desk",
+                actor_name="Manager",
+            )
+            summary = store.metrics_summary()
+            corrections = store.list_occupancy_corrections()
+
+            self.assertEqual(correction["delta"], 3)
+            self.assertEqual(summary["current_occupancy"], 3)
+            self.assertEqual(summary["occupancy_correction_delta"], 3)
+            self.assertEqual(summary["peak_occupancy"], 3)
+            self.assertEqual(len(corrections), 1)
+            self.assertEqual(corrections[0]["reason"], "Manual headcount at front desk")
 
     def test_expired_visitor_metadata_cleanup_preserves_count_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -1,10 +1,23 @@
+from __future__ import annotations
+
 from math import hypot
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 CameraType = Literal["IP_WEBCAM", "RTSP_CCTV", "USB_WEBCAM", "ONVIF_CCTV"]
-ProcessingProfile = Literal["auto", "cpu", "accelerated"]
+ProcessingProfile = Literal[
+    "auto",
+    "compatibility",
+    "balanced",
+    "high_accuracy",
+    "emergency",
+]
+RuntimeBackend = Literal["auto", "cuda", "openvino", "cpu"]
+TrackerProfile = Literal["auto", "bytetrack", "botsort"]
+ReIdMode = Literal["auto", "off", "fast", "quality"]
+UniqueCountingMode = Literal["entry_only", "estimated_reid"]
+SourceKind = Literal["real", "mock", "hybrid"]
 SimulationMode = Literal["virtual", "hybrid"]
 SimulationScenario = Literal[
     "normal",
@@ -49,6 +62,8 @@ class RegionOfInterest(BaseModel):
 
 class CameraStartRequest(BaseModel):
     stream_url: str = Field(..., min_length=3)
+    tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
+    counting_confidence: float = Field(default=0.35, ge=0.05, le=0.95)
     confidence: float = Field(default=0.35, ge=0.05, le=0.95)
     camera_id: int | None = None
     camera_name: str | None = Field(default=None, max_length=120)
@@ -61,12 +76,32 @@ class CameraStartRequest(BaseModel):
     roi: RegionOfInterest = Field(default_factory=RegionOfInterest)
     reverse_direction: bool = False
     processing_profile: ProcessingProfile = "auto"
+    runtime_backend: RuntimeBackend = "auto"
+    tracker_profile: TrackerProfile = "auto"
+    reid_mode: ReIdMode = "auto"
+    unique_counting_mode: UniqueCountingMode = "estimated_reid"
     processing_fps: float | None = Field(default=None, ge=1.0, le=30.0)
     stream_fps: float = Field(default=24.0, ge=1.0, le=30.0)
     max_frame_width: int | None = Field(default=None, ge=320, le=1280)
     event_cooldown_seconds: float = Field(default=3.6, ge=0.5, le=30.0)
     paired_line_max_gap_seconds: float = Field(default=18.0, ge=1.0, le=120.0)
     track_ttl_seconds: float = Field(default=9.0, ge=1.0, le=60.0)
+    pending_reid_wait_seconds: float = Field(default=0.6, ge=0.1, le=2.0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_confidence_aliases(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        normalized = {**data}
+        has_confidence = "confidence" in normalized
+        has_counting_confidence = "counting_confidence" in normalized
+        if has_confidence and not has_counting_confidence:
+            normalized["counting_confidence"] = normalized["confidence"]
+        elif has_counting_confidence and not has_confidence:
+            normalized["confidence"] = normalized["counting_confidence"]
+        return normalized
 
     @field_validator("stream_url")
     @classmethod
@@ -87,6 +122,12 @@ class CameraStartRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_counting_geometry(self) -> CameraStartRequest:
+        if self.tracking_confidence > self.counting_confidence:
+            raise ValueError(
+                "tracking_confidence must be less than or equal to counting_confidence."
+            )
+        self.confidence = self.counting_confidence
+
         if self.entry_line is None and self.exit_line is None:
             return self
 
@@ -159,7 +200,22 @@ class HealthResponse(BaseModel):
     quality_reid_worker_p50_ms: float | None = None
     quality_reid_worker_p95_ms: float | None = None
     processing_profile: str | None = None
+    requested_processing_profile: str | None = None
+    normalized_processing_profile: str | None = None
+    effective_processing_profile: str | None = None
+    model_profile: str | None = None
+    model_name: str | None = None
+    selected_model: str | None = None
+    selected_runtime: str | None = None
+    runtime_backend: str | None = None
+    runtime_device: str | None = None
+    requested_runtime: str | None = None
+    selection_reason: str | None = None
+    fallback_reason: str | None = None
+    fallback_chain: list[str] = Field(default_factory=list)
     detector_image_size: int | None = None
+    detector_max_detections: int | None = None
+    target_processing_fps: float | None = None
     detector_p50_ms: float | None = None
     detector_p95_ms: float | None = None
     analytics_fps: float | None = None
@@ -175,7 +231,26 @@ class HealthResponse(BaseModel):
     identity_stitches: int = 0
     identity_splits: int = 0
     confirmed_unique_count: int = 0
+    estimated_unique_count: int = 0
     degraded_unique_count: int = 0
+    pending_unique_entries: int = 0
+    repeat_entry_count: int = 0
+    tracking_confidence: float | None = None
+    counting_confidence: float | None = None
+    reid_mode: str | None = None
+    effective_reid_mode: str | None = None
+    unique_counting_mode: str | None = None
+    requested_tracker: str | None = None
+    effective_tracker: str | None = None
+    tracker_profile: str | None = None
+    tracker_config_path: str | None = None
+    detector_model_availability: dict[str, Any] = Field(default_factory=dict)
+    reid_model_availability: dict[str, Any] = Field(default_factory=dict)
+    runtime_capabilities: dict[str, Any] = Field(default_factory=dict)
+    reid_tasks_cleared: int = 0
+    reid_worker_alive: bool = False
+    quality_reid_tasks_cleared: int = 0
+    quality_reid_worker_alive: bool = False
 
 
 class CountResponse(BaseModel):
@@ -205,6 +280,7 @@ class DetectionTrackResponse(BaseModel):
     identity_state: str | None = None
     identity_score: float | None = None
     identity_source: str | None = None
+    counting_debug: dict[str, Any] | None = None
 
 
 class DetectionResponse(BaseModel):
@@ -245,15 +321,43 @@ class MetricsSummaryResponse(BaseModel):
     peak_occupancy: int
     current_occupancy: int
     unique_count: int
+    estimated_unique_count: int = 0
     confirmed_unique_count: int = 0
     degraded_unique_count: int = 0
+    pending_unique_entries: int = 0
+    repeat_entry_count: int = 0
+    occupancy_correction_delta: int = 0
     total_events: int
     unsubmitted_events: int
     unsynced_events: int
     first_event_at: str | None = None
     last_event_at: str | None = None
-    source_kind: Literal["real", "mock", "hybrid"] = "real"
+    source_kind: SourceKind = "real"
     mock_run_id: str | None = None
+
+
+class OccupancyCorrectionRequest(BaseModel):
+    new_occupancy: int = Field(ge=0, le=100_000)
+    reason: str = Field(min_length=3, max_length=500)
+    actor_id: str | None = Field(default=None, max_length=160)
+    actor_name: str | None = Field(default=None, max_length=160)
+    camera_id: int | None = None
+    source_kind: SourceKind | None = None
+
+
+class OccupancyCorrectionResponse(BaseModel):
+    correction_id: str
+    enterprise_id: str | None = None
+    camera_id: int | None = None
+    old_occupancy: int
+    new_occupancy: int
+    delta: int
+    reason: str
+    actor_id: str | None = None
+    actor_name: str | None = None
+    source_kind: SourceKind = "real"
+    mock_run_id: str | None = None
+    recorded_at: str
 
 
 class HourlyMetricsPoint(BaseModel):

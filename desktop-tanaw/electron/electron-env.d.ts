@@ -21,9 +21,7 @@ declare namespace NodeJS {
   }
 }
 
-// Used in Renderer process, expose in `preload.ts`
 interface Window {
-  ipcRenderer: import("electron").IpcRenderer;
   tanawMlService?: {
     getStatus: () => Promise<{
       baseUrl: string;
@@ -32,6 +30,12 @@ interface Window {
       running: boolean;
     }>;
     restart: () => Promise<{
+      baseUrl: string;
+      error: string | null;
+      pid: number | null;
+      running: boolean;
+    }>;
+    stopCamera: () => Promise<{
       baseUrl: string;
       error: string | null;
       pid: number | null;
@@ -62,5 +66,12 @@ interface Window {
       message: string | null;
       openAtLogin: boolean;
     }>;
+  };
+  tanawCameraCredentials?: {
+    load: (scope: string) => Promise<Record<string, { password?: string; username?: string }>>;
+    save: (scope: string, records: Record<string, { password?: string; username?: string }>) => Promise<Record<string, { password?: string; username?: string }>>;
+  };
+  tanawAppEvents?: {
+    onMainProcessMessage: (listener: (message: string) => void) => () => void;
   };
 }

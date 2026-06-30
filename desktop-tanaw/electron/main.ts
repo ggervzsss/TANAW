@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, Tray } from "electron";
-import { existsSync } from "node:fs";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, Tray } from "electron";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -29,10 +29,38 @@ let isQuitting = false;
 
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
+const CAMERA_CREDENTIAL_STORE_FILE = "camera-credentials.json";
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const SPLASH_MIN_DISPLAY_MS = 1400;
 const STARTUP_UNAVAILABLE_MESSAGE = "Startup at sign-in is not available in this environment.";
 const execFileAsync = promisify(execFile);
+
+type CameraCredentialRecord = {
+  password?: string;
+  username?: string;
+};
+
+type CameraCredentialRecords = Record<string, CameraCredentialRecord>;
+type CameraCredentialStore = Record<string, CameraCredentialRecords>;
+
+type CameraCredentialStoreFile =
+  | {
+      encoding: "safeStorage";
+      payload: string;
+      version: 1;
+    }
+  | {
+      encoding: "plain";
+      scopes: CameraCredentialStore;
+      version: 1;
+    };
+
+if (process.platform === "linux") {
+  // TANAW's camera analysis runs in the Python ML service. Electron only renders
+  // the UI, so disabling Chromium GPU paths on Linux avoids noisy VAAPI/X11 logs.
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("disable-features", "VaapiVideoDecoder,VaapiVideoEncoder");
+}
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
@@ -190,6 +218,127 @@ async function stopCameraProcessingFromTray() {
     clearTimeout(timeout);
     updateTrayMenu();
   }
+}
+
+function getCameraCredentialStorePath() {
+  return path.join(app.getPath("userData"), CAMERA_CREDENTIAL_STORE_FILE);
+}
+
+function loadCameraCredentialStore(): CameraCredentialStore {
+  const storePath = getCameraCredentialStorePath();
+  if (!existsSync(storePath)) {
+    return {};
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(storePath, "utf8")) as unknown;
+    if (!isObjectRecord(raw) || raw.version !== 1) {
+      return {};
+    }
+
+    if (raw.encoding === "safeStorage" && typeof raw.payload === "string") {
+      if (!safeStorage.isEncryptionAvailable()) {
+        return {};
+      }
+      const decrypted = safeStorage.decryptString(Buffer.from(raw.payload, "base64"));
+      return normalizeCredentialStore(JSON.parse(decrypted) as unknown);
+    }
+
+    if (raw.encoding === "plain" && isObjectRecord(raw.scopes)) {
+      return normalizeCredentialStore(raw.scopes);
+    }
+  } catch {
+    return {};
+  }
+
+  return {};
+}
+
+function saveCameraCredentialStore(store: CameraCredentialStore) {
+  const storePath = getCameraCredentialStorePath();
+  mkdirSync(path.dirname(storePath), { recursive: true });
+
+  const payload: CameraCredentialStoreFile = safeStorage.isEncryptionAvailable()
+    ? {
+        encoding: "safeStorage",
+        payload: safeStorage.encryptString(JSON.stringify(store)).toString("base64"),
+        version: 1,
+      }
+    : {
+        encoding: "plain",
+        scopes: store,
+        version: 1,
+      };
+
+  writeFileSync(storePath, JSON.stringify(payload), { encoding: "utf8", mode: 0o600 });
+}
+
+function loadCameraCredentials(scopeInput: unknown): CameraCredentialRecords {
+  const scope = normalizeCredentialScope(scopeInput);
+  const store = loadCameraCredentialStore();
+  return store[scope] ?? {};
+}
+
+function saveCameraCredentials(scopeInput: unknown, recordsInput: unknown): CameraCredentialRecords {
+  const scope = normalizeCredentialScope(scopeInput);
+  const records = normalizeCredentialRecords(recordsInput);
+  const store = loadCameraCredentialStore();
+
+  if (Object.keys(records).length === 0) {
+    delete store[scope];
+  } else {
+    store[scope] = records;
+  }
+
+  saveCameraCredentialStore(store);
+  return records;
+}
+
+function normalizeCredentialScope(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("Camera credential scope is required.");
+  }
+  return value.trim().slice(0, 240);
+}
+
+function normalizeCredentialStore(value: unknown): CameraCredentialStore {
+  if (!isObjectRecord(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([scope, records]) => [normalizeCredentialScope(scope), normalizeCredentialRecords(records)] as const)
+      .filter(([, records]) => Object.keys(records).length > 0),
+  );
+}
+
+function normalizeCredentialRecords(value: unknown): CameraCredentialRecords {
+  if (!isObjectRecord(value)) {
+    return {};
+  }
+
+  const records: CameraCredentialRecords = {};
+  for (const [cameraId, record] of Object.entries(value)) {
+    if (!/^\d+$/.test(cameraId) || !isObjectRecord(record)) {
+      continue;
+    }
+
+    const username = normalizeCredentialValue(record.username);
+    const password = normalizeCredentialValue(record.password);
+    if (username || password) {
+      records[cameraId] = { password, username };
+    }
+  }
+  return records;
+}
+
+function normalizeCredentialValue(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 async function restartMlService() {
@@ -354,6 +503,11 @@ function registerMlServiceIpc() {
     await restartMlService();
     return getMlServiceStatusPayload();
   });
+
+  ipcMain.handle("ml-service:stop-camera", async () => {
+    await stopCameraProcessingFromTray();
+    return getMlServiceStatusPayload();
+  });
 }
 
 function registerAppLifecycleIpc() {
@@ -365,9 +519,26 @@ function registerAppLifecycleIpc() {
   ipcMain.handle("app-lifecycle:quit", () => quitApplication());
   ipcMain.handle("app-lifecycle:get-startup-settings", () => getStartupSettings());
   ipcMain.handle("app-lifecycle:update-startup-settings", (_event, openAtLogin: boolean) => {
-    setStartupSettings(Boolean(openAtLogin));
+    if (!isStartupRegistrationAvailable()) {
+      return getStartupSettings();
+    }
+
+    try {
+      setStartupSettings(Boolean(openAtLogin));
+    } catch (error) {
+      return {
+        isAvailable: false,
+        message: error instanceof Error ? error.message : STARTUP_UNAVAILABLE_MESSAGE,
+        openAtLogin: false,
+      };
+    }
     return getStartupSettings();
   });
+}
+
+function registerCameraCredentialIpc() {
+  ipcMain.handle("camera-credentials:load", (_event, scope: unknown) => loadCameraCredentials(scope));
+  ipcMain.handle("camera-credentials:save", (_event, scope: unknown, records: unknown) => saveCameraCredentials(scope, records));
 }
 
 function getBackgroundStatus() {
@@ -462,20 +633,20 @@ function getTrayIcon() {
   return fallbackIcon;
 }
 
-function getWindowIconPath() {
+function getWindowIcon() {
   const pngIconPath = path.join(process.env.VITE_PUBLIC, "favicon.png");
-  const tanawIcon = nativeImage.createFromPath(pngIconPath);
+  const tanawIcon = nativeImage.createFromPath(pngIconPath).resize({ width: 256, height: 256 });
   if (!tanawIcon.isEmpty()) {
-    return pngIconPath;
+    return tanawIcon;
   }
 
   const icoIconPath = path.join(process.env.VITE_PUBLIC, "favicon.ico");
-  const icoIcon = nativeImage.createFromPath(icoIconPath);
+  const icoIcon = nativeImage.createFromPath(icoIconPath).resize({ width: 256, height: 256 });
   if (!icoIcon.isEmpty()) {
-    return icoIconPath;
+    return icoIcon;
   }
 
-  return icoIconPath;
+  return nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_PNG_BASE64, "base64"));
 }
 
 function updateTrayMenu() {
@@ -518,6 +689,9 @@ function loadSplashScreen() {
   }
 
   void win.loadFile(splashPath).catch((error) => {
+    if (isNavigationAbort(error)) {
+      return;
+    }
     console.error("[tanaw] Splash screen could not be loaded.", error);
     loadMainWindowContent();
   });
@@ -542,8 +716,20 @@ function loadMainWindowContent() {
 
   const loadPromise = VITE_DEV_SERVER_URL ? win.loadURL(VITE_DEV_SERVER_URL) : win.loadFile(path.join(RENDERER_DIST, "index.html"));
   void loadPromise.catch((error) => {
+    if (isNavigationAbort(error)) {
+      return;
+    }
     console.error("[tanaw] Main window could not be loaded.", error);
   });
+}
+
+function isNavigationAbort(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as { code?: unknown; errno?: unknown };
+  return maybeError.code === "ERR_ABORTED" || maybeError.errno === -3;
 }
 
 function showWindowWhenReady() {
@@ -565,7 +751,7 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     height: 900,
     minWidth: 1100,
     minHeight: 720,
-    icon: getWindowIconPath(),
+    icon: getWindowIcon(),
     show: false,
     title: "TANAW Enterprise Desktop",
     webPreferences: {
@@ -634,6 +820,7 @@ if (gotSingleInstanceLock) {
 
     registerMlServiceIpc();
     registerAppLifecycleIpc();
+    registerCameraCredentialIpc();
     createTray();
     if (!shouldStartInBackground) {
       createWindow({ showSplash: true });

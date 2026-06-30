@@ -58,12 +58,64 @@ class CameraConfigValidationTest(unittest.TestCase):
 
     def test_processing_profile_is_validated(self) -> None:
         self.assertEqual(
-            CameraStartRequest(stream_url="000", processing_profile="cpu").processing_profile, "cpu"
+            CameraStartRequest(
+                stream_url="000", processing_profile="compatibility"
+            ).processing_profile,
+            "compatibility",
         )
+        self.assertEqual(
+            CameraStartRequest(
+                stream_url="000", processing_profile="high_accuracy"
+            ).processing_profile,
+            "high_accuracy",
+        )
+        self.assertEqual(
+            CameraStartRequest(
+                stream_url="000", runtime_backend="openvino", tracker_profile="botsort"
+            ).runtime_backend,
+            "openvino",
+        )
+        with self.assertRaises(ValidationError):
+            CameraStartRequest.model_validate({"stream_url": "000", "runtime_backend": "tensorrt"})
+        with self.assertRaises(ValidationError):
+            CameraStartRequest.model_validate({"stream_url": "000", "runtime_backend": "directml"})
         with self.assertRaises(ValidationError):
             CameraStartRequest.model_validate(
                 {"stream_url": "000", "processing_profile": "unsupported"}
             )
+        for removed_profile in ("experimental_max", "cpu", "accelerated"):
+            with self.subTest(removed_profile=removed_profile):
+                with self.assertRaises(ValidationError):
+                    CameraStartRequest.model_validate(
+                        {"stream_url": "000", "processing_profile": removed_profile}
+                    )
+
+    def test_confidence_aliases_and_modes_are_validated(self) -> None:
+        legacy = CameraStartRequest(stream_url="000", confidence=0.42)
+        self.assertEqual(legacy.counting_confidence, 0.42)
+        self.assertEqual(legacy.confidence, 0.42)
+
+        explicit = CameraStartRequest(
+            stream_url="000",
+            tracking_confidence=0.12,
+            counting_confidence=0.38,
+            reid_mode="quality",
+            unique_counting_mode="estimated_reid",
+        )
+        self.assertEqual(explicit.tracking_confidence, 0.12)
+        self.assertEqual(explicit.confidence, 0.38)
+        self.assertEqual(explicit.reid_mode, "quality")
+
+        with self.assertRaisesRegex(ValidationError, "tracking_confidence"):
+            CameraStartRequest.model_validate(
+                {
+                    "stream_url": "000",
+                    "tracking_confidence": 0.50,
+                    "counting_confidence": 0.35,
+                }
+            )
+        with self.assertRaises(ValidationError):
+            CameraStartRequest.model_validate({"stream_url": "000", "reid_mode": "slow"})
 
     def test_roi_outside_frame_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValidationError, "ROI left \\+ width"):

@@ -15,6 +15,8 @@ troubleshooting, read the [full README](./README.md).
 - Start Docker Desktop with Linux containers before running Docker commands on
   Windows.
 - Run Docker commands from the repository root unless stated otherwise.
+- Docker runs PostgreSQL, the backend, and the web portal. The desktop app runs
+  locally on the host.
 
 ## 1. Install the required tools
 
@@ -35,7 +37,8 @@ npm --version
 uv --version
 ```
 
-Install the Python version used by TANAW:
+Install the Python version used by backend tooling. The desktop ML service
+supports Python 3.12 or newer, but Python 3.14 works across the repo:
 
 ```shell
 uv python install 3.14
@@ -56,13 +59,13 @@ or other synchronized folders for the development checkout.
 Linux:
 
 ```shell
-cp .env.example .env
+test -f .env || cp .env.example .env
 ```
 
 Windows PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
 Open `.env` and replace:
@@ -163,7 +166,7 @@ docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --
 All generated accounts use:
 
 ```text
-Password: TanawTest123
+Password: TanawTest123!
 ```
 
 Useful generated accounts:
@@ -203,9 +206,8 @@ Open a second terminal in the repository root:
 ```shell
 cd desktop-tanaw
 npm ci
-cd ml-service
-uv sync --frozen
-cd ..
+uv sync --directory ml-service --frozen
+npm run models:setup
 npm run dev
 ```
 
@@ -239,7 +241,7 @@ In the enterprise desktop:
 
 In the web portal:
 
-1. Sign in as `reports.staff@tanaw.test` with `TanawTest123`.
+1. Sign in as `reports.staff@tanaw.test` with `TanawTest123!`.
 2. Open **Batch Reports** for the current month.
 3. Review the target report.
 4. Mark it **Ready to Consolidate**.
@@ -354,16 +356,22 @@ completely empty local database is intended.
 
 ## Everyday command cheat sheet
 
-| Goal                   | Command                                                                                                                                        |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Start containers       | `docker compose up -d`                                                                                                                         |
-| Rebuild and start      | `docker compose up --build -d`                                                                                                                 |
-| Show containers        | `docker compose ps`                                                                                                                            |
-| Follow logs            | `docker compose logs -f backend frontend`                                                                                                      |
-| Start desktop          | `cd desktop-tanaw`, then `npm run dev`                                                                                                         |
-| Show mock status       | `docker compose exec backend uv run mock-data status`                                                                                          |
-| Refresh mock data      | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --target-enterprise "archies_001@tanaw.sanpedro"` |
-| Remove mock data       | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off`                                                               |
-| Inspect desktop data   | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                          |
-| Stop containers        | `docker compose down`                                                                                                                          |
-| Delete Docker database | `docker compose down -v`                                                                                                                       |
+| Goal                         | Command                                                                                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Start containers             | `docker compose up -d`                                                                                                                                          |
+| Rebuild and start            | `docker compose up --build -d`                                                                                                                                  |
+| Show containers              | `docker compose ps`                                                                                                                                             |
+| Follow logs                  | `docker compose logs -f backend frontend`                                                                                                                       |
+| Install desktop dependencies | From `desktop-tanaw`: `npm ci`, then `uv sync --directory ml-service --frozen`                                                                                  |
+| Install default models       | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
+| Install full model set       | From `desktop-tanaw`: `npm run models:setup:full`                                                                                                               |
+| Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
+| Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
+| Generate mock data           | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"` |
+| Show mock status             | `docker compose exec backend uv run mock-data status`                                                                                                           |
+| Refresh mock data            | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"` |
+| Remove mock data             | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off`                                                                                |
+| Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                                           |
+| Clear one desktop ledger     | From `desktop-tanaw`: `npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes`                                                            |
+| Stop containers              | `docker compose down`                                                                                                                                           |
+| Delete Docker database       | `docker compose down -v`                                                                                                                                        |

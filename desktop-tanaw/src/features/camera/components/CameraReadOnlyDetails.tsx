@@ -33,10 +33,7 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
           <DetailRow label="Camera Type" value={formatCameraType(activeCam.cameraType)} tooltip="Configured camera source type for this node." />
           <DetailRow label="Assigned Zone" value={activeCam.zone} tooltip="Operational zone assigned to this camera." />
           <DetailRow label="Tripwire Mode" value="Entry / Exit Lines" tooltip="Counting mode used for entry and exit detection." />
-          <DetailRow label="Confidence" value={activeCam.confidence.toFixed(2)} tooltip="Minimum detection confidence used by the AI pipeline." />
-          <div className="col-span-2">
-            <DetailRow label="Processing" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="Processing mode selected for this camera node." />
-          </div>
+          <DetailRow label="Processing" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="Processing mode selected for this camera node." />
         </div>
       </div>
     </section>
@@ -45,9 +42,11 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
 
 function formatProcessingProfile(profile: Camera["processingProfile"]) {
   const labels: Record<Camera["processingProfile"], string> = {
-    accelerated: "GPU Accelerated",
-    auto: "Auto Detect",
-    cpu: "CPU Optimized",
+    auto: "Auto Recommended",
+    balanced: "Balanced",
+    compatibility: "Compatibility",
+    emergency: "Emergency / Low Power",
+    high_accuracy: "High Accuracy",
   };
   return labels[profile];
 }

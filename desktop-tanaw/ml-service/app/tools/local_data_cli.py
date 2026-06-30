@@ -12,6 +12,7 @@ DATABASE_NAME = "tanaw_metrics.sqlite3"
 LEDGER_TABLES = (
     "count_events",
     "count_snapshots",
+    "occupancy_corrections",
     "report_submissions",
     "visitor_identities",
     "visitor_model_embeddings",

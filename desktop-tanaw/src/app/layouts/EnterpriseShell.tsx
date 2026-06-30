@@ -8,7 +8,7 @@ import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, s
 import { DashboardView } from "../../features/dashboard/components/DashboardView";
 import { getAccountPreferences, getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
-import { updateStartupSettings } from "../../lib/appLifecycle";
+import { getStartupSettings, updateStartupSettings } from "../../lib/appLifecycle";
 import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listNotifications, updateNotificationRead, type BackendNotification, type OperationalNotificationEnvelope } from "../../features/notifications/services/notifications";
 import { NotificationsView } from "../../features/notifications/components/NotificationsView";
 import { ProfileView } from "../../features/profile/components/ProfileView";
@@ -90,16 +90,31 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
     let disposed = false;
     void getAccountPreferences()
-      .then((preferences) => {
+      .then(async (preferences) => {
         if (disposed) return;
         writeLocalStartupPreference(preferences.openAtLogin);
+        const startupSettings = await getStartupSettings();
+        if (
+          disposed ||
+          !startupSettings.isAvailable ||
+          startupSettings.openAtLogin === preferences.openAtLogin
+        ) {
+          return undefined;
+        }
         return updateStartupSettings(preferences.openAtLogin);
       })
-      .catch(() => {
+      .catch(async () => {
         if (disposed) return;
         const localPreference = readLocalStartupPreference();
         if (localPreference !== null) {
-          return updateStartupSettings(localPreference).catch(() => undefined);
+          const startupSettings = await getStartupSettings();
+          if (
+            !disposed &&
+            startupSettings.isAvailable &&
+            startupSettings.openAtLogin !== localPreference
+          ) {
+            return updateStartupSettings(localPreference).catch(() => undefined);
+          }
         }
         return undefined;
       });

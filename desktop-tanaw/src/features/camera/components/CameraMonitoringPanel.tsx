@@ -42,7 +42,9 @@ export function CameraMonitoringPanel({
   const cameraState = getCameraState(activeCam, isProcessingThisCamera);
   const streamVerified = ["online", "running"].includes(activeCam.status);
   const streamLabel = streamVerified ? "Stream Verified" : "Stream Needs Check";
-  const uniqueCount = health?.confirmed_unique_count ?? 0;
+  const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
+  const modelStatus = formatModelStatus(health);
+  const performanceStatus = formatPerformanceStatus(health);
 
   return (
     <div className="space-y-3">
@@ -55,7 +57,7 @@ export function CameraMonitoringPanel({
           <MetricBox icon={LogIn} label="Entry" value={counts.entry} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
           <MetricBox icon={LogOut} label="Exit" value={counts.exit} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
           <MetricBox icon={Users} label="Occupancy" value={counts.occupancy} tone="occupancy" tooltip="Current live occupancy, calculated from entries and exits." />
-          <MetricBox icon={Users} label="Unique" value={uniqueCount} tone="unique" tooltip="Estimated unique visitors counted for this node or reporting period." />
+          <MetricBox icon={Users} label="Estimated Visitors" value={estimatedUniqueCount} tone="unique" tooltip="Estimated visitors for this camera or reporting period." />
         </div>
       </section>
 
@@ -64,6 +66,8 @@ export function CameraMonitoringPanel({
           <StatusRow icon={Activity} label={serviceLabel} tone={serviceOnline ? "ok" : "error"} tooltip="Shows whether the local AI counting service is available." />
           <StatusRow icon={Wifi} label={cameraState.label} tone={cameraState.tone} tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable." />
           <StatusRow icon={CheckCircle} label={streamLabel} tone={streamVerified ? "ok" : "neutral"} tooltip="Shows whether the stream configuration has been verified." />
+          <StatusRow icon={Activity} label={modelStatus} tone={health?.model_ready ? "ok" : "neutral"} tooltip="Shows the active detector model, runtime, and tracker selected by TANAW." />
+          <StatusRow icon={Activity} label={performanceStatus} tone="neutral" tooltip="Shows current detector latency and analytics throughput." />
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -94,7 +98,7 @@ export function CameraMonitoringPanel({
               disabled={isStarting || isProcessingThisCamera}
               className="flex w-full items-center justify-center gap-1.5 rounded-sm bg-[#065f46] px-2 py-2 text-[11px] font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
             >
-              <Play size={14} /> {isStarting ? "Starting..." : "Start Processing"}
+              <Play size={14} /> {isStarting ? "Starting..." : "Start"}
             </button>
           </InfoTooltip>
           <InfoTooltip content="Stops live camera processing for this node." focusable={false}>
@@ -113,6 +117,7 @@ export function CameraMonitoringPanel({
       {(error || health?.error || serviceStatus?.error || counts.error) && (
         <div className="rounded-sm border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">{error ?? health?.error ?? serviceStatus?.error ?? counts.error}</div>
       )}
+      {health?.fallback_reason && <div className="rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">AI fallback mode is active. Counts may be less accurate.</div>}
     </div>
   );
 }
@@ -177,4 +182,40 @@ function getCameraState(activeCam: Camera, isProcessing: boolean): { label: stri
   if (["online", "running"].includes(activeCam.status)) return { label: "Camera Ready", tone: "ok" };
   if (activeCam.status === "error" || activeCam.status === "offline") return { label: "Camera Stopped", tone: "error" };
   return { label: "Camera Stopped", tone: "neutral" };
+}
+
+function formatModelStatus(health: MlHealth | null) {
+  const profile = formatProfile(health?.effective_processing_profile ?? health?.processing_profile);
+  const model = formatModelName(health?.selected_model ?? health?.model_name);
+  const runtime = (health?.selected_runtime ?? "runtime").toUpperCase();
+  const tracker = formatTracker(health?.effective_tracker);
+  return `${profile} / ${model} / ${runtime} / ${tracker}`;
+}
+
+function formatPerformanceStatus(health: MlHealth | null) {
+  const fps = typeof health?.analytics_fps === "number" ? `${health.analytics_fps.toFixed(1)} FPS` : "FPS adaptive";
+  const p95 = typeof health?.detector_p95_ms === "number" ? `${Math.round(health.detector_p95_ms)} ms p95` : "p95 pending";
+  return `${fps} / ${p95}`;
+}
+
+function formatProfile(profile: string | null | undefined) {
+  const labels: Record<string, string> = {
+    auto: "Auto",
+    balanced: "Balanced",
+    compatibility: "Compatibility",
+    emergency: "Emergency",
+    high_accuracy: "High Accuracy",
+  };
+  return labels[profile ?? ""] ?? "Profile pending";
+}
+
+function formatModelName(model: string | null | undefined) {
+  if (!model) return "Model pending";
+  return model.toUpperCase();
+}
+
+function formatTracker(tracker: string | null | undefined) {
+  if (tracker === "botsort") return "BoT-SORT";
+  if (tracker === "bytetrack") return "ByteTrack";
+  return "Tracker auto";
 }

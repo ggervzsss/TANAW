@@ -1,27 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
-
-// --------- Expose some API to the Renderer process ---------
-contextBridge.exposeInMainWorld("ipcRenderer", {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args;
-    return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args));
-  },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args;
-    return ipcRenderer.off(channel, ...omit);
-  },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args;
-    return ipcRenderer.send(channel, ...omit);
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args;
-    return ipcRenderer.invoke(channel, ...omit);
-  },
-
-  // You can expose other APTs you need here.
-  // ...
-});
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 contextBridge.exposeInMainWorld("tanawMlService", {
   getStatus() {
@@ -29,6 +6,9 @@ contextBridge.exposeInMainWorld("tanawMlService", {
   },
   restart() {
     return ipcRenderer.invoke("ml-service:restart");
+  },
+  stopCamera() {
+    return ipcRenderer.invoke("ml-service:stop-camera");
   },
 });
 
@@ -47,5 +27,24 @@ contextBridge.exposeInMainWorld("tanawAppLifecycle", {
   },
   updateStartupSettings(openAtLogin: boolean) {
     return ipcRenderer.invoke("app-lifecycle:update-startup-settings", openAtLogin);
+  },
+});
+
+contextBridge.exposeInMainWorld("tanawCameraCredentials", {
+  load(scope: string) {
+    return ipcRenderer.invoke("camera-credentials:load", scope);
+  },
+  save(scope: string, records: Record<string, { password?: string; username?: string }>) {
+    return ipcRenderer.invoke("camera-credentials:save", scope, records);
+  },
+});
+
+contextBridge.exposeInMainWorld("tanawAppEvents", {
+  onMainProcessMessage(listener: (message: string) => void) {
+    const handler = (_event: IpcRendererEvent, message: unknown) => {
+      listener(String(message));
+    };
+    ipcRenderer.on("main-process-message", handler);
+    return () => ipcRenderer.off("main-process-message", handler);
   },
 });

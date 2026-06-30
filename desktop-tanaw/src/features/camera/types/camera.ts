@@ -5,7 +5,6 @@ export type CameraFormValues = {
   cameraType: CameraType;
   rtsp: string;
   zone: string;
-  confidence: number;
   username: string;
   password: string;
 };

@@ -29,7 +29,7 @@ Want only the commands needed to test the system? Use the
 - [Default and temporary accounts](#default-and-temporary-accounts)
 - [Seed and simulate reports](#seed-and-simulate-reports)
 - [Remove simulated data](#remove-simulated-data)
-- [Run services without Docker](#run-services-without-docker)
+- [Optional host-run development](#optional-host-run-development)
 - [Production-like Docker build](#production-like-docker-build)
 - [Environment configuration](#environment-configuration)
 - [Local desktop data](#local-desktop-data)
@@ -45,7 +45,7 @@ enterprise operators. It provides:
 
 - enterprise authentication and enterprise-scoped local storage;
 - CCTV/IP camera registration, connection testing, and live monitoring;
-- YOLO-based person detection, ByteTrack tracking, and tripwire entry/exit
+- YOLO11-based person detection, ByteTrack/BoT-SORT tracking, and tripwire entry/exit
   counting;
 - privacy-conscious unique visitor estimation using local person ReID rather
   than facial recognition;
@@ -112,7 +112,7 @@ appearance metadata stay on the enterprise device.
 | -------------------- | -------------------------------------------------------------------------------------------------------- |
 | Web portal           | React 19, TypeScript 6, Vite 8, Tailwind CSS 4, React Router, TanStack Query, Zustand, Recharts, Leaflet |
 | Desktop app          | Electron 42, React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, Zustand                           |
-| Local ML service     | Python 3.14, FastAPI, OpenCV, Ultralytics YOLOv8, ByteTrack, OpenVINO, ONNX Runtime, SQLite              |
+| Local ML service     | Python 3.12+, FastAPI, OpenCV, Ultralytics YOLO11, ByteTrack/BoT-SORT, OpenVINO, ONNX Runtime, SQLite    |
 | Backend API          | Python 3.14, FastAPI, SQLAlchemy, asyncpg, Alembic, JWT, Argon2                                          |
 | Database             | PostgreSQL 17                                                                                            |
 | Local orchestration  | Docker Compose                                                                                           |
@@ -151,9 +151,9 @@ TANAW/
 
 Component-specific documentation:
 
-- [Backend and simulation details](./backend-tanaw/README.md)
-- [Target enterprise end-to-end test](./backend-tanaw/MOCK_DATA_TARGET_ACCOUNT_GUIDE.md)
-- [Desktop local data management](./desktop-tanaw/LOCAL_DATA_GUIDE.md)
+- [Backend overview](./backend-tanaw/README.md)
+- [Frontend web portal overview](./frontend-tanaw/README.md)
+- [Enterprise desktop and local data details](./desktop-tanaw/README.md)
 
 ## Prerequisites
 
@@ -167,7 +167,7 @@ For the web portal, backend, and database:
 For desktop development:
 
 - Node.js `22.12.0` or newer and npm
-- Python `3.14`
+- Python `3.12` or newer for the local ML service
 - [uv](https://docs.astral.sh/uv/)
 - optional CCTV, RTSP, HTTP, or local camera source for live counting
 
@@ -176,9 +176,9 @@ x86-64 computer. The Electron packaging target and native ML dependency wheels
 in the current lockfile are Windows x64. Windows on ARM is not currently a
 supported desktop-development target.
 
-Docker runs the PostgreSQL database, backend, and web portal. The Electron
-desktop runs on the host so that it can access native desktop features, local
-storage, ML models, and camera streams.
+Docker is the primary setup path for PostgreSQL, the backend API, and the web
+portal. The Electron desktop intentionally runs on the host so it can access
+native desktop features, local storage, ML models, and camera streams.
 
 ## Terminal compatibility
 
@@ -212,16 +212,24 @@ Open a new terminal after installing the prerequisites, then run:
 ```shell
 git --version
 docker compose version
+```
+
+Docker Desktop must be running before `docker compose` commands will work.
+
+If you will also run the enterprise desktop locally, verify Node.js, npm, and
+uv:
+
+```shell
 node --version
 npm --version
 uv --version
 ```
 
-Docker Desktop must be running before `docker compose` commands will work.
 Node.js must report `v22.12.0` or newer.
 
-The Python projects pin Python 3.14. Allow uv to install it before the first
-dependency sync:
+The backend pins Python 3.14. The desktop ML service supports Python 3.12 or
+newer; using Python 3.14 across the repo is the simplest local default. Allow
+uv to install it before the first dependency sync:
 
 ```shell
 uv python install 3.14
@@ -237,24 +245,24 @@ repository root.
 Linux/macOS:
 
 ```shell
-cp .env.example .env
+test -f .env || cp .env.example .env
 ```
 
 Windows PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
 Windows Command Prompt:
 
 ```bat
-copy .env.example .env
+if not exist .env copy .env.example .env
 ```
 
 Open `.env` in a text editor and replace the sample PostgreSQL password and JWT
 secret. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and inside
-`DATABASE_URL`. The template contains:
+`DATABASE_URL`. The important values should have this shape:
 
 ```dotenv
 TANAW_ENV=development
@@ -321,18 +329,19 @@ default IT account plus the temporary LGU accounts if they do not already exist.
 ### 4. Install and start the enterprise desktop
 
 The desktop is only required for camera monitoring and the complete
-enterprise-to-LGU reporting workflow.
+enterprise-to-LGU reporting workflow. It is not run through Docker.
 
 ```shell
 cd desktop-tanaw
 npm ci
-
-cd ml-service
-uv sync --frozen
-cd ..
-
+uv sync --directory ml-service --frozen
+npm run models:setup
 npm run dev
 ```
+
+`npm run models:setup` installs the default detector assets. For high-accuracy
+or CPU/OpenVINO testing, use `npm run models:setup:full` or
+`npm run models:setup:openvino` from `desktop-tanaw`.
 
 `npm run dev` starts the Electron development app. Electron then starts the
 local ML service automatically and uses the central API at
@@ -356,8 +365,9 @@ Build artifacts are written under `desktop-tanaw/release/`.
 The current installer build includes the TANAW desktop code, ML service source,
 and models, but it does not bundle a standalone Python runtime and installed
 Python packages. A machine running that development installer still needs
-Python 3.14 and uv available. Group members cloning the repository should use
-`npm run dev`, which uses the `.venv` created by `uv sync --frozen`.
+Python 3.12 or newer and uv available. Group members cloning the repository
+should use `npm run dev`, which uses the `.venv` created by
+`uv sync --directory ml-service --frozen`.
 
 ## Default and temporary accounts
 
@@ -458,7 +468,7 @@ accumulate in the same draft.
 All generated accounts use:
 
 ```text
-Password: TanawTest123
+Password: TanawTest123!
 ```
 
 LGU accounts:
@@ -481,7 +491,7 @@ Enterprise accounts:
 
 Archie's Event Place is not a generated account. Sign in with
 `archies@email.com` and the password selected during its account onboarding,
-not `TanawTest123`.
+not `TanawTest123!`.
 
 ### Complete the end-to-end report simulation
 
@@ -490,7 +500,8 @@ not `TanawTest123`.
 2. Wait for the prepared counts to appear on the desktop Dashboard.
 3. Open **Reports & Submissions**, create a **New Draft**, review the locked
    system metrics, complete any supplementary fields, and submit it.
-4. Sign in to the web portal as `reports.staff@tanaw.test`.
+4. Sign in to the web portal as `reports.staff@tanaw.test` with
+   `TanawTest123!`.
 5. Open **Batch Reports** for the current month.
 6. Review the target submission and accept it as **Ready to Consolidate**.
 7. Generate the final report once all participating enterprises are ready.
@@ -576,10 +587,12 @@ docker compose up --build -d
 Use this only when a fully clean local database is intended. Normal simulation
 cleanup should use `mock-data off`.
 
-## Run services without Docker
+## Optional host-run development
 
-Docker Compose is the recommended full-stack setup, but each service can also
-run directly on the host.
+Docker Compose is the recommended setup for PostgreSQL, the backend, and the
+web portal. Use host-run backend or frontend commands only when you are
+debugging a service directly, changing dependency behavior, or working without
+Compose.
 
 ### Backend API
 
@@ -589,7 +602,7 @@ Linux/macOS:
 
 ```shell
 cd backend-tanaw
-cp .env.example .env
+test -f .env || cp .env.example .env
 uv sync --frozen
 uv run uvicorn main:app --reload
 ```
@@ -598,7 +611,7 @@ Windows PowerShell:
 
 ```powershell
 Set-Location backend-tanaw
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 uv sync --frozen
 uv run uvicorn main:app --reload
 ```
@@ -607,7 +620,7 @@ Windows Command Prompt:
 
 ```bat
 cd backend-tanaw
-copy .env.example .env
+if not exist .env copy .env.example .env
 uv sync --frozen
 uv run uvicorn main:app --reload
 ```
@@ -620,6 +633,16 @@ Docker service hostname `db`.
 ```shell
 cd frontend-tanaw
 npm ci
+printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
+npm run dev
+```
+
+PowerShell:
+
+```powershell
+Set-Location frontend-tanaw
+npm ci
+Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
 npm run dev
 ```
 
@@ -735,8 +758,8 @@ These commands do not remove backend data. If a simulation is active, run
 `mock-data off` before clearing the local ledger; otherwise the target desktop
 can download the active prepared package again after sign-in.
 
-See [desktop-tanaw/LOCAL_DATA_GUIDE.md](./desktop-tanaw/LOCAL_DATA_GUIDE.md) for
-platform paths and additional inspection options.
+See [desktop-tanaw/README.md](./desktop-tanaw/README.md) for platform paths and
+additional inspection options.
 
 ## Development checks
 

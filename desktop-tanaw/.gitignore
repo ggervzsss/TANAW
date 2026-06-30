@@ -18,6 +18,7 @@ dist-ssr
 __pycache__/
 *.py[cod]
 .venv/
+.uv-cache/
 
 # Editor directories and files
 .vscode/*
@@ -32,3 +33,12 @@ __pycache__/
 
 # Personal files
 -docs
+
+# Local detector model downloads and exports
+ml-service/models/yolov8s.pt
+ml-service/models/yolov8m.pt
+ml-service/models/yolov8l.pt
+ml-service/models/yolov8x.pt
+ml-service/models/yolov8s_openvino_model/
+ml-service/models/yolov8m_openvino_model/
+ml-service/models/yolov8l_openvino_model/

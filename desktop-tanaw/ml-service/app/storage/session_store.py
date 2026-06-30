@@ -29,7 +29,7 @@ class SessionStore:
         try:
             with self._session_path.open("r", encoding="utf-8") as file:
                 payload = json.load(file)
-        except OSError, json.JSONDecodeError:
+        except (OSError, json.JSONDecodeError):
             return None
 
         return payload if isinstance(payload, dict) else None
@@ -133,6 +133,12 @@ class SessionStore:
 
     def metrics_history(self, include_submitted: bool = False) -> dict[str, Any]:
         return self._metrics_store.metrics_history(include_submitted=include_submitted)
+
+    def record_occupancy_correction(self, **values: Any) -> dict[str, Any]:
+        return self._metrics_store.record_occupancy_correction(**values)
+
+    def list_occupancy_corrections(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._metrics_store.list_occupancy_corrections(limit=limit)
 
     def record_report_submission(
         self,

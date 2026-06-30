@@ -367,6 +367,104 @@ class LocalMetricsStore:
                 ),
             )
 
+    def record_occupancy_correction(
+        self,
+        *,
+        enterprise_id: str | None,
+        camera_id: int | None,
+        old_occupancy: int,
+        new_occupancy: int,
+        reason: str,
+        actor_id: str | None = None,
+        actor_name: str | None = None,
+        source_kind: str = "real",
+        mock_run_id: str | None = None,
+        recorded_at: str | None = None,
+    ) -> dict[str, Any]:
+        correction_id = str(uuid4())
+        recorded_at = recorded_at or _utc_now()
+        delta = max(0, new_occupancy) - max(0, old_occupancy)
+        payload = {
+            "correction_id": correction_id,
+            "enterprise_id": enterprise_id,
+            "camera_id": camera_id,
+            "old_occupancy": max(0, old_occupancy),
+            "new_occupancy": max(0, new_occupancy),
+            "delta": delta,
+            "reason": reason,
+            "actor_id": actor_id,
+            "actor_name": actor_name,
+            "source_kind": source_kind,
+            "mock_run_id": mock_run_id,
+            "recorded_at": recorded_at,
+        }
+
+        with self._connection() as connection:
+            connection.execute(
+                """
+                insert into occupancy_corrections (
+                    correction_id,
+                    enterprise_id,
+                    camera_id,
+                    old_occupancy,
+                    new_occupancy,
+                    delta,
+                    reason,
+                    actor_id,
+                    actor_name,
+                    source_kind,
+                    mock_run_id,
+                    recorded_at,
+                    payload_json
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    correction_id,
+                    enterprise_id,
+                    camera_id,
+                    payload["old_occupancy"],
+                    payload["new_occupancy"],
+                    delta,
+                    reason,
+                    actor_id,
+                    actor_name,
+                    source_kind,
+                    mock_run_id,
+                    recorded_at,
+                    json.dumps(payload, sort_keys=True),
+                ),
+            )
+
+        return payload
+
+    def list_occupancy_corrections(self, limit: int = 100) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 500))
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                select
+                    correction_id,
+                    enterprise_id,
+                    camera_id,
+                    old_occupancy,
+                    new_occupancy,
+                    delta,
+                    reason,
+                    actor_id,
+                    actor_name,
+                    source_kind,
+                    mock_run_id,
+                    recorded_at
+                from occupancy_corrections
+                order by recorded_at desc
+                limit ?
+                """,
+                (limit,),
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
     def metrics_summary(self, include_submitted: bool = False) -> dict[str, int | str | None]:
         submitted_filter = "" if include_submitted else "where submitted_report_id is null"
         with self._connection() as connection:
@@ -401,18 +499,31 @@ class LocalMetricsStore:
                 {submitted_filter}
                 """
             ).fetchall()
+            correction_row = connection.execute(
+                """
+                select coalesce(sum(delta), 0) as correction_delta
+                from occupancy_corrections
+                """
+            ).fetchone()
 
         entries = _safe_int(row["entries"])
         exits = _safe_int(row["exits"])
+        correction_delta = _safe_int(correction_row["correction_delta"])
+        current_occupancy = max(0, entries - exits + correction_delta)
+        estimated_unique_count = _safe_int(row["unique_entries"])
         source_kind, mock_run_id = _provenance_for_rows(source_rows)
         return {
             "entries": entries,
             "exits": exits,
-            "peak_occupancy": _safe_int(row["peak_occupancy"]),
-            "current_occupancy": max(0, entries - exits),
-            "unique_count": _safe_int(row["unique_entries"]),
+            "peak_occupancy": max(_safe_int(row["peak_occupancy"]), current_occupancy),
+            "current_occupancy": current_occupancy,
+            "unique_count": estimated_unique_count,
+            "estimated_unique_count": estimated_unique_count,
             "confirmed_unique_count": _safe_int(row["confirmed_unique_entries"]),
             "degraded_unique_count": _safe_int(row["degraded_unique_entries"]),
+            "pending_unique_entries": 0,
+            "repeat_entry_count": max(0, entries - estimated_unique_count),
+            "occupancy_correction_delta": correction_delta,
             "total_events": _safe_int(row["total_events"]),
             "unsubmitted_events": _safe_int(unsubmitted_count),
             "unsynced_events": _safe_int(unsynced_count),
@@ -744,6 +855,9 @@ class LocalMetricsStore:
             count_snapshots = connection.execute(
                 f"select count(*) from count_snapshots where {event_filter}", params
             ).fetchone()[0]
+            occupancy_corrections = connection.execute(
+                f"select count(*) from occupancy_corrections where {event_filter}", params
+            ).fetchone()[0]
             report_rows = connection.execute(
                 f"select report_id from report_submissions where {event_filter}",
                 params,
@@ -767,10 +881,12 @@ class LocalMetricsStore:
             connection.execute(f"delete from count_events where {event_filter}", params)
             connection.execute(f"delete from count_snapshots where {event_filter}", params)
             connection.execute(f"delete from report_submissions where {event_filter}", params)
+            connection.execute(f"delete from occupancy_corrections where {event_filter}", params)
 
         return {
             "count_events": _safe_int(count_events),
             "count_snapshots": _safe_int(count_snapshots),
+            "occupancy_corrections": _safe_int(occupancy_corrections),
             "report_submissions": len(report_ids),
             "restored_real_events": _safe_int(restored_real_events),
         }
@@ -939,6 +1055,27 @@ class LocalMetricsStore:
                     synced_at text
                 );
 
+                create table if not exists occupancy_corrections (
+                    correction_id text primary key,
+                    enterprise_id text,
+                    camera_id integer,
+                    old_occupancy integer not null default 0,
+                    new_occupancy integer not null default 0,
+                    delta integer not null default 0,
+                    reason text not null,
+                    actor_id text,
+                    actor_name text,
+                    source_kind text not null default 'real',
+                    mock_run_id text,
+                    recorded_at text not null,
+                    payload_json text not null
+                );
+
+                create index if not exists idx_occupancy_corrections_recorded_at
+                    on occupancy_corrections(recorded_at);
+                create index if not exists idx_occupancy_corrections_source
+                    on occupancy_corrections(source_kind, mock_run_id);
+
                 create table if not exists visitor_identities (
                     visitor_id text primary key,
                     business_date text not null,
@@ -1007,6 +1144,14 @@ class LocalMetricsStore:
                 connection, "report_submissions", "source_kind", "text not null default 'real'"
             )
             _ensure_column(connection, "report_submissions", "mock_run_id", "text")
+            _ensure_column(connection, "occupancy_corrections", "enterprise_id", "text")
+            _ensure_column(
+                connection,
+                "occupancy_corrections",
+                "source_kind",
+                "text not null default 'real'",
+            )
+            _ensure_column(connection, "occupancy_corrections", "mock_run_id", "text")
             connection.execute(
                 """
                 update count_events

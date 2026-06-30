@@ -9,8 +9,16 @@ import numpy as np
 
 from app.config.camera_config import CameraStartRequest, TripwireLine
 from app.counting.tripwire_counter import TripwireCounter
-from app.detection.yolo_detector import YoloPersonTracker
+from app.detection.yolo_detector import DETECTOR_PROFILES, YoloPersonTracker
 from app.tracking import TrackIdentityResolver
+
+PROCESSING_PROFILE_CHOICES = [
+    "auto",
+    "compatibility",
+    "balanced",
+    "high_accuracy",
+    "emergency",
+]
 
 
 def main() -> None:
@@ -20,8 +28,15 @@ def main() -> None:
     parser.add_argument("--video", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--profile", choices=["auto", "cpu", "accelerated"], default="auto")
-    parser.add_argument("--confidence", type=float, default=0.35)
+    parser.add_argument("--profile", choices=PROCESSING_PROFILE_CHOICES, default="auto")
+    parser.add_argument(
+        "--runtime",
+        choices=["auto", "cuda", "openvino", "cpu"],
+        default="auto",
+    )
+    parser.add_argument("--tracker", choices=["auto", "bytetrack", "botsort"], default="auto")
+    parser.add_argument("--tracking-confidence", type=float, default=0.15)
+    parser.add_argument("--counting-confidence", type=float, default=0.35)
     parser.add_argument("--sample-fps", type=float)
     args = parser.parse_args()
 
@@ -30,13 +45,18 @@ def main() -> None:
         {
             "stream_url": "0",
             "processing_profile": args.profile,
-            "confidence": args.confidence,
+            "runtime_backend": args.runtime,
+            "tracker_profile": args.tracker,
+            "tracking_confidence": args.tracking_confidence,
+            "counting_confidence": args.counting_confidence,
         }
     )
     config = CameraStartRequest(**config_payload)
 
     tracker = YoloPersonTracker()
-    effective_profile = tracker.configure(config.processing_profile)
+    effective_profile = tracker.configure(
+        config.processing_profile, config.runtime_backend, config.tracker_profile
+    )
     tracker.warmup()
     tracker.reset_tracking()
     resolver = TrackIdentityResolver(lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0))
@@ -57,7 +77,8 @@ def main() -> None:
     source_fps = capture.get(cv2.CAP_PROP_FPS)
     if source_fps <= 0:
         source_fps = 30.0
-    sample_fps = args.sample_fps or (15.0 if effective_profile == "accelerated" else 8.0)
+    target_fps = DETECTOR_PROFILES[effective_profile].target_processing_fps or 8.0
+    sample_fps = args.sample_fps or target_fps
     sample_every = max(1, int(round(source_fps / max(sample_fps, 1.0))))
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -73,17 +94,18 @@ def main() -> None:
 
             frame = _resize(
                 frame,
-                config.max_frame_width or (960 if effective_profile == "accelerated" else 640),
+                config.max_frame_width
+                or (960 if effective_profile in {"balanced", "high_accuracy"} else 640),
             )
             frame_height, frame_width = frame.shape[:2]
             timestamp = frame_index / source_fps
             started_at = monotonic()
-            source_tracks = tracker.track_people(frame, config.confidence)
+            source_tracks = tracker.track_people(frame, config.tracking_confidence)
             tracks = resolver.resolve(source_tracks, timestamp, frame_width, frame_height)
             counter.begin_frame(timestamp)
-            events = []
+            events: list[dict[str, int | str]] = []
             for track in tracks:
-                if track.confidence < config.confidence or not _inside_roi(
+                if track.confidence < config.counting_confidence or not _inside_roi(
                     track.counting_point.x,
                     track.counting_point.y,
                     frame_width,
@@ -91,10 +113,14 @@ def main() -> None:
                     config,
                 ):
                     continue
-                direction = counter.update(
-                    track.track_id, track.counting_point, frame_width, frame_height
+                directions = counter.update_many(
+                    track.track_id,
+                    track.counting_point,
+                    frame_width,
+                    frame_height,
+                    track.bbox,
                 )
-                if direction is not None:
+                for direction in directions:
                     events.append({"track_id": track.track_id, "direction": direction})
             processing_ms = (monotonic() - started_at) * 1000.0
 
@@ -103,6 +129,11 @@ def main() -> None:
                     {
                         "frame_index": frame_index,
                         "timestamp": timestamp,
+                        "requested_profile": config.processing_profile,
+                        "effective_profile": effective_profile,
+                        "runtime_backend": tracker.selected_runtime,
+                        "tracker_profile": tracker.effective_tracker,
+                        "model_name": tracker.model_name,
                         "tracks": [
                             {
                                 "track_id": track.track_id,
@@ -138,9 +169,12 @@ def _load_config(path: Path | None) -> dict[str, Any]:
 
 def _normalized_line(
     line: TripwireLine | None,
-) -> tuple[tuple[float, float], tuple[float, float]] | None:
+) -> tuple[tuple[float, float], ...] | None:
     if line is None:
         return None
+    points = line.sampled_points or line.points
+    if points:
+        return tuple((point.x, point.y) for point in points)
     return ((line.start.x, line.start.y), (line.end.x, line.end.y))
 
 

@@ -1,5 +1,6 @@
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from typing import Any, cast
@@ -204,11 +205,112 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             entry_track = manager._detect_and_count(session, frame, 0.35)[0]
 
             self.assertEqual(entry_track.direction, "entry")
-            self.assertTrue(entry_track.is_unique_entry)
-            self.assertEqual(entry_track.reid_decision, "degraded_no_embedding")
+            self.assertIsNone(entry_track.is_unique_entry)
+            self.assertEqual(entry_track.reid_decision, "pending")
+            self.assertEqual(len(manager._pending_entry_events), 1)
+            _flush_pending(manager, session)
             summary = manager.metrics_summary()
             self.assertEqual(summary["entries"], 1)
             self.assertEqual(summary["unique_count"], 1)
+            self.assertEqual(summary["confirmed_unique_count"], 0)
+            self.assertEqual(summary["degraded_unique_count"], 1)
+            self.assertEqual(len(manager._pending_entry_events), 0)
+
+    def test_entry_event_with_ready_embedding_commits_unique_decision_immediately(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (50, 20, 90, 180))],
+                        [_track(1, (96, 20, 136, 180))],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            manager._appearance_buffer.record_sample(1, _embedding([1.0, 0.0, 0.0]), 0.95, 1)
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual(entry_track.direction, "entry")
+            self.assertTrue(entry_track.is_unique_entry)
+            self.assertEqual(entry_track.reid_decision, "new")
+            self.assertEqual(len(manager._pending_entry_events), 0)
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["entries"], 1)
+            self.assertEqual(summary["unique_count"], 1)
+            self.assertEqual(summary["confirmed_unique_count"], 1)
+            self.assertEqual(summary["degraded_unique_count"], 0)
+
+    def test_pending_entry_resolves_when_embedding_arrives_before_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (50, 20, 90, 180))],
+                        [_track(1, (96, 20, 136, 180))],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual(entry_track.reid_decision, "pending")
+            self.assertEqual(len(manager._pending_entry_events), 1)
+
+            manager._appearance_buffer.record_sample(1, _embedding([1.0, 0.0, 0.0]), 0.95, 2)
+            manager._flush_pending_entry_events(session, time.monotonic())
+
+            summary = manager.metrics_summary()
+            self.assertEqual(len(manager._pending_entry_events), 0)
+            self.assertEqual(summary["total_events"], 1)
+            self.assertEqual(summary["unique_count"], 1)
+            self.assertEqual(summary["confirmed_unique_count"], 1)
+            self.assertEqual(summary["degraded_unique_count"], 0)
+
+            manager._flush_pending_entry_events(session, time.monotonic() + 10.0, force=True)
+            self.assertEqual(manager.metrics_summary()["total_events"], 1)
+
+    def test_pending_entries_are_cleared_when_session_stops(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (50, 20, 90, 180))],
+                        [_track(1, (96, 20, 136, 180))],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            self.assertEqual(manager._detect_and_count(session, frame, 0.35)[0].direction, "entry")
+            self.assertEqual(len(manager._pending_entry_events), 1)
+
+            manager.stop()
+
+            self.assertEqual(len(manager._pending_entry_events), 0)
+            self.assertEqual(manager.metrics_summary()["entries"], 1)
 
     def test_slow_entry_crossing_is_counted_through_detection_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -236,9 +338,10 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             entry_track = manager._detect_and_count(session, frame, 0.35)[0]
 
             self.assertEqual(entry_track.direction, "entry")
+            _flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
-    def test_configured_entry_line_counts_without_waiting_for_exit_line(self) -> None:
+    def test_configured_entry_to_exit_line_sequence_counts_exit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             session = _custom_tripwire_session(1)
@@ -248,59 +351,6 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                     [
                         [_track_with_center(1, 50)],
                         [_track_with_center(1, 90)],
-                    ],
-                ),
-            )
-            with manager._lock:
-                manager._config = session.config
-                manager._counter = _counter_for_config(session.config)
-                manager._active_session = session
-
-            frame = np.zeros((200, 200, 3), dtype=np.uint8)
-            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
-            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
-
-            self.assertEqual(entry_track.direction, "entry")
-            summary = manager.metrics_summary()
-            self.assertEqual(summary["entries"], 1)
-            self.assertEqual(summary["exits"], 0)
-
-    def test_configured_entry_line_counts_when_bbox_crosses_visible_line(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _custom_tripwire_session(1)
-            manager._tracker = cast(
-                Any,
-                _FakeTracker(
-                    [
-                        [_track(1, (20, 20, 60, 180))],
-                        [_track(1, (30, 20, 90, 180))],
-                    ],
-                ),
-            )
-            with manager._lock:
-                manager._config = session.config
-                manager._counter = _counter_for_config(session.config)
-                manager._active_session = session
-
-            frame = np.zeros((200, 200, 3), dtype=np.uint8)
-            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
-            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
-
-            self.assertEqual(entry_track.direction, "entry")
-            summary = manager.metrics_summary()
-            self.assertEqual(summary["entries"], 1)
-            self.assertEqual(summary["exits"], 0)
-
-    def test_configured_exit_line_counts_without_waiting_for_entry_line(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            session = _custom_tripwire_session(1)
-            manager._tracker = cast(
-                Any,
-                _FakeTracker(
-                    [
-                        [_track_with_center(1, 110)],
                         [_track_with_center(1, 150)],
                     ],
                 ),
@@ -312,12 +362,79 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
             frame = np.zeros((200, 200, 3), dtype=np.uint8)
             self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            pending_track = manager._detect_and_count(session, frame, 0.35)[0]
             exit_track = manager._detect_and_count(session, frame, 0.35)[0]
 
+            self.assertIsNone(pending_track.direction)
             self.assertEqual(exit_track.direction, "exit")
             summary = manager.metrics_summary()
             self.assertEqual(summary["entries"], 0)
             self.assertEqual(summary["exits"], 1)
+
+    def test_configured_entry_to_exit_sequence_counts_when_bbox_crosses_visible_line(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (20, 20, 60, 180))],
+                        [_track(1, (30, 20, 90, 180))],
+                        [_track(1, (80, 20, 120, 180))],
+                        [_track(1, (120, 20, 160, 180))],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._counter = _counter_for_config(session.config)
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            pending_track = manager._detect_and_count(session, frame, 0.35)[0]
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            exit_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertIsNone(pending_track.direction)
+            self.assertEqual(exit_track.direction, "exit")
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["entries"], 0)
+            self.assertEqual(summary["exits"], 1)
+
+    def test_configured_exit_to_entry_line_sequence_counts_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(1)
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track_with_center(1, 150)],
+                        [_track_with_center(1, 110)],
+                        [_track_with_center(1, 50)],
+                    ],
+                ),
+            )
+            with manager._lock:
+                manager._config = session.config
+                manager._counter = _counter_for_config(session.config)
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
+            pending_track = manager._detect_and_count(session, frame, 0.35)[0]
+            entry_track = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertIsNone(pending_track.direction)
+            self.assertEqual(entry_track.direction, "entry")
+            _flush_pending(manager, session)
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["entries"], 1)
+            self.assertEqual(summary["exits"], 0)
 
     def test_track_with_bottom_point_outside_roi_can_count_when_centroid_is_inside(
         self,
@@ -344,6 +461,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
             self.assertTrue(entry_track.inside_roi)
             self.assertEqual(entry_track.direction, "entry")
+            _flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
     def test_exit_event_skips_unique_visitor_decision(self) -> None:
@@ -432,24 +550,70 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(first.track_id, second.track_id)
             self.assertNotEqual(first.source_track_id, second.source_track_id)
             self.assertEqual(second.direction, "entry")
+            _flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
     def test_low_confidence_track_is_kept_internal_but_not_displayed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             session = _session(1)
+            fake_tracker = _FakeTracker([[_track(1, (50, 20, 90, 180), confidence=0.15)]])
+            manager._tracker = cast(Any, fake_tracker)
+            with manager._lock:
+                manager._config = session.config
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            tracks = manager._detect_and_count(session, frame, 0.15, 0.35)
+
+            self.assertEqual(tracks, [])
+            self.assertEqual(fake_tracker.seen_confidences, [0.15])
+            self.assertEqual(manager._identity_resolver.status()["identity_active_tracks"], 1)
+
+    def test_entry_only_unique_mode_records_degraded_unique_without_reid_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _session(1, unique_counting_mode="entry_only")
             manager._tracker = cast(
-                Any, _FakeTracker([[_track(1, (50, 20, 90, 180), confidence=0.15)]])
+                Any,
+                _FakeTracker(
+                    [
+                        [_track(1, (50, 20, 90, 180))],
+                        [_track(1, (96, 20, 136, 180))],
+                    ],
+                ),
             )
             with manager._lock:
                 manager._config = session.config
                 manager._active_session = session
 
             frame = np.zeros((200, 200, 3), dtype=np.uint8)
-            tracks = manager._detect_and_count(session, frame, 0.35)
+            self.assertIsNone(manager._detect_and_count(session, frame, 0.15, 0.35)[0].direction)
+            entry_track = manager._detect_and_count(session, frame, 0.15, 0.35)[0]
+            summary = manager.metrics_summary()
 
-            self.assertEqual(tracks, [])
-            self.assertEqual(manager._identity_resolver.status()["identity_active_tracks"], 1)
+            self.assertEqual(entry_track.reid_decision, "entry_only")
+            self.assertEqual(len(manager._pending_entry_events), 0)
+            self.assertEqual(summary["entries"], 1)
+            self.assertEqual(summary["estimated_unique_count"], 1)
+            self.assertEqual(summary["degraded_unique_count"], 1)
+
+    def test_manual_occupancy_correction_updates_live_count_and_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            manager.bind_enterprise("enterprise-a", "Enterprise A")
+
+            correction = manager.record_occupancy_correction(
+                new_occupancy=4,
+                reason="Manual doorway headcount",
+                actor_name="Manager",
+                camera_id=1,
+            )
+
+            self.assertEqual(correction["old_occupancy"], 0)
+            self.assertEqual(correction["new_occupancy"], 4)
+            self.assertEqual(manager.counts()["occupancy"], 4)
+            self.assertEqual(manager.metrics_summary()["current_occupancy"], 4)
 
     def test_unconfirmed_detection_is_visible_only_above_configured_confidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -515,6 +679,10 @@ def _counter_for_config(config: CameraStartRequest) -> TripwireCounter:
     return counter
 
 
+def _flush_pending(manager: CameraProcessingManager, session: ProcessingSession) -> None:
+    manager._flush_pending_entry_events(session, time.monotonic() + 1.0, force=True)
+
+
 def _manager_with_store(directory: str) -> CameraProcessingManager:
     manager = CameraProcessingManager(directory)
     manager._session_store = SessionStore(str(Path(directory)))
@@ -541,11 +709,19 @@ def _track_with_center(track_id: int, center_x: int, confidence: float = 0.9) ->
     return _track(track_id, (center_x - 20, 20, center_x + 20, 180), confidence)
 
 
+def _embedding(values: list[float]) -> np.ndarray:
+    embedding = np.array(values, dtype=np.float32)
+    norm = float(np.linalg.norm(embedding))
+    return embedding / max(norm, 1e-6)
+
+
 class _FakeTracker:
     def __init__(self, responses: list[list[TrackResult]]) -> None:
         self._responses = responses
+        self.seen_confidences: list[float] = []
 
     def track_people(self, frame: np.ndarray, confidence: float) -> list[TrackResult]:
+        self.seen_confidences.append(confidence)
         return self._responses.pop(0)
 
 

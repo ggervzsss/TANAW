@@ -43,7 +43,11 @@ export type ReportRecord = {
 };
 
 export type CameraType = "IP_WEBCAM" | "RTSP_CCTV" | "USB_WEBCAM" | "ONVIF_CCTV";
-export type ProcessingProfile = "auto" | "cpu" | "accelerated";
+export type ProcessingProfile = "auto" | "compatibility" | "balanced" | "high_accuracy" | "emergency";
+export type RuntimeBackend = "auto" | "cuda" | "openvino" | "cpu";
+export type TrackerProfile = "auto" | "bytetrack" | "botsort";
+export type ReIdMode = "auto" | "off" | "fast" | "quality";
+export type UniqueCountingMode = "entry_only" | "estimated_reid";
 export type CameraStatus = "untested" | "online" | "offline" | "running" | "stopped" | "error";
 export type TripwirePoint = { x: number; y: number };
 export type TripwireCurveMode = "linear" | "smooth";
@@ -67,6 +71,9 @@ export type Camera = {
   cameraType: CameraType;
   processingProfile: ProcessingProfile;
   confidence: number;
+  trackingConfidence?: number;
+  reidMode?: ReIdMode;
+  uniqueCountingMode?: UniqueCountingMode;
   username?: string;
   password?: string;
   config: {

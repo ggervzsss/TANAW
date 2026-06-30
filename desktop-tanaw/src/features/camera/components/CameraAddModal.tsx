@@ -94,20 +94,7 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
 
               {isRtspCamera && <TapoRtspBuilder streamUrl={newCam.rtsp} onStreamUrlChange={(rtsp) => onChange({ ...newCam, rtsp })} />}
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Confidence</label>
-                  <input
-                    type="number"
-                    min="0.05"
-                    max="0.95"
-                    step="0.05"
-                    value={newCam.confidence}
-                    onChange={(event) => onChange({ ...newCam, confidence: Number(event.target.value) })}
-                    className={`w-full rounded-xl border p-3 text-sm transition outline-none focus:border-[#065f46] ${errors.confidence ? "border-tanaw-red" : "border-gray-300"}`}
-                  />
-                  {errors.confidence && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.confidence}</p>}
-                </div>
+              <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Username</label>
                   <input

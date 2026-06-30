@@ -210,6 +210,19 @@ class PersonReIdentifier:
         return self._total_inference_ms / self._inference_count
 
 
+def get_reid_model_availability() -> dict[str, dict[str, bool | str]]:
+    service_root = Path(__file__).resolve().parents[2]
+    models_root = service_root / "models"
+    return {
+        "person_reid_cpu": _model_availability(models_root / "person_reid_cpu.onnx"),
+        "person_reid_quality": _model_availability(models_root / "person_reid.onnx"),
+    }
+
+
+def _model_availability(path: Path) -> dict[str, bool | str]:
+    return {"path": str(path), "exists": path.exists(), "required": True}
+
+
 def _crop(frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:
     height, width = frame.shape[:2]
     x1, y1, x2, y2 = bbox

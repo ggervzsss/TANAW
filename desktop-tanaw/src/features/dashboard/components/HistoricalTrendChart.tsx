@@ -35,7 +35,7 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Local Metrics Trend</h3>
+            <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Historical Visitor Trends</h3>
             <InfoTooltip content="Shows occupancy and entry movement over the selected period.">
               <Info size={14} className="text-gray-400 transition-colors hover:text-[#065f46] dark:text-slate-500 dark:hover:text-emerald-300" />
             </InfoTooltip>

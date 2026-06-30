@@ -38,6 +38,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
   const activePoints = getTripwireAnchors(activeTripwire);
   const activeCurve = activeTripwire.curve ?? "smooth";
   const canDeleteSelectedPoint = Boolean(selectedPoint && selectedPoint.line === activeLine && activePoints.length > 2);
+  const showRoiOverlay = !isFullFrameRoi(config.roi);
 
   const updateLine = (line: TripwireKind, nextLine: TripwireLine) => {
     onConfigChange?.({
@@ -147,17 +148,19 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
 
   return (
     <div className={`absolute inset-0 ${canEdit ? "" : "pointer-events-none"}`} onKeyDown={handleKeyDown} tabIndex={canEdit ? 0 : -1}>
-      <div
-        className={`pointer-events-none absolute border-2 border-dashed ${isEditMode ? "border-[#2d5eff] bg-[#2d5eff]/10" : "border-[#2d5eff]/60 bg-[#2d5eff]/5"}`}
-        style={{
-          top: `${config.roi.top}%`,
-          left: `${config.roi.left}%`,
-          width: `${config.roi.width}%`,
-          height: `${config.roi.height}%`,
-        }}
-      >
-        <span className="absolute right-1 bottom-1 rounded-sm bg-white/90 px-1 text-[9px] font-bold text-[#2d5eff] shadow-sm">ROI</span>
-      </div>
+      {showRoiOverlay && (
+        <div
+          className={`pointer-events-none absolute border-2 border-dashed ${isEditMode ? "border-[#2d5eff] bg-[#2d5eff]/10" : "border-[#2d5eff]/60 bg-[#2d5eff]/5"}`}
+          style={{
+            top: `${config.roi.top}%`,
+            left: `${config.roi.left}%`,
+            width: `${config.roi.width}%`,
+            height: `${config.roi.height}%`,
+          }}
+        >
+          <span className="absolute right-1 bottom-1 rounded-sm bg-white/90 px-1 text-[9px] font-bold text-[#2d5eff] shadow-sm">ROI</span>
+        </div>
+      )}
 
       {canEdit && (
         <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-sm border border-white/15 bg-black/75 p-1.5 shadow-sm backdrop-blur-sm">
@@ -343,6 +346,10 @@ function getDefaultTripwires(centerX: number) {
       { x: Math.min(95, centerX + 8), y: 88 },
     ]),
   });
+}
+
+function isFullFrameRoi(roi: Camera["config"]["roi"]) {
+  return roi.top === 0 && roi.left === 0 && roi.width === 100 && roi.height === 100;
 }
 
 function normalizeTripwires(tripwires: Camera["config"]["tripwires"]) {

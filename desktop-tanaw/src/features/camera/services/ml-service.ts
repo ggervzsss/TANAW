@@ -44,7 +44,22 @@ export type MlHealth = {
   quality_reid_worker_p50_ms: number | null;
   quality_reid_worker_p95_ms: number | null;
   processing_profile: string | null;
+  requested_processing_profile: string | null;
+  normalized_processing_profile: string | null;
+  effective_processing_profile: string | null;
+  model_profile: string | null;
+  model_name: string | null;
+  selected_model: string | null;
+  selected_runtime: string | null;
+  runtime_backend: string | null;
+  runtime_device: string | null;
+  requested_runtime: string | null;
+  selection_reason: string | null;
+  fallback_reason: string | null;
+  fallback_chain: string[];
   detector_image_size: number | null;
+  detector_max_detections: number | null;
+  target_processing_fps: number | null;
   detector_p50_ms: number | null;
   detector_p95_ms: number | null;
   analytics_fps: number | null;
@@ -59,8 +74,27 @@ export type MlHealth = {
   identity_active_tracks: number;
   identity_stitches: number;
   identity_splits: number;
+  estimated_unique_count: number;
   confirmed_unique_count: number;
   degraded_unique_count: number;
+  pending_unique_entries: number;
+  repeat_entry_count: number;
+  tracking_confidence: number | null;
+  counting_confidence: number | null;
+  reid_mode: string | null;
+  effective_reid_mode: string | null;
+  unique_counting_mode: string | null;
+  requested_tracker: string | null;
+  effective_tracker: string | null;
+  tracker_profile: string | null;
+  tracker_config_path: string | null;
+  detector_model_availability: Record<string, unknown>;
+  reid_model_availability: Record<string, unknown>;
+  runtime_capabilities: Record<string, unknown>;
+  reid_tasks_cleared: number;
+  reid_worker_alive: boolean;
+  quality_reid_tasks_cleared: number;
+  quality_reid_worker_alive: boolean;
 };
 
 export type MlCounts = {
@@ -90,6 +124,7 @@ export type MlDetectionTrack = {
   identity_state: string | null;
   identity_score: number | null;
   identity_source: string | null;
+  counting_debug: Record<string, unknown> | null;
 };
 
 export type MlDetections = {
@@ -125,8 +160,12 @@ export type LocalMetricsSummary = {
   peak_occupancy: number;
   current_occupancy: number;
   unique_count: number;
+  estimated_unique_count: number;
   confirmed_unique_count: number;
   degraded_unique_count: number;
+  pending_unique_entries: number;
+  repeat_entry_count: number;
+  occupancy_correction_delta: number;
   total_events: number;
   unsubmitted_events: number;
   unsynced_events: number;
@@ -182,6 +221,21 @@ export type LocalReportSubmissionRecord = {
   source_kind?: "real" | "mock" | "hybrid";
   mock_run_id?: string | null;
   synced_at: string | null;
+};
+
+export type OccupancyCorrection = {
+  correction_id: string;
+  enterprise_id: string | null;
+  camera_id: number | null;
+  old_occupancy: number;
+  new_occupancy: number;
+  delta: number;
+  reason: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  source_kind: "real" | "mock" | "hybrid";
+  mock_run_id: string | null;
+  recorded_at: string;
 };
 
 export type MockPreparationRequest = {
@@ -318,6 +372,26 @@ export async function getLocalMetricsHistory(baseUrl: string, options: { include
   return requestJson<LocalMetricsHistory>(`${baseUrl}/metrics/history${queryFromOptions(options)}`, { method: "GET" }, 2500);
 }
 
+export async function recordOccupancyCorrection(
+  baseUrl: string,
+  payload: { newOccupancy: number; reason: string; actorId?: string | null; actorName?: string | null; cameraId?: number | null },
+): Promise<OccupancyCorrection> {
+  return requestJson<OccupancyCorrection>(
+    `${baseUrl}/occupancy/correction`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        new_occupancy: payload.newOccupancy,
+        reason: payload.reason,
+        actor_id: payload.actorId ?? null,
+        actor_name: payload.actorName ?? null,
+        camera_id: payload.cameraId ?? null,
+      }),
+    },
+    5000,
+  );
+}
+
 export async function recordLocalReportSubmission(
   baseUrl: string,
   payload: { reportId: string; period: string; notes: string; reportPayload: Record<string, unknown> },
@@ -451,18 +525,25 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera): Pr
         camera_id: camera.id,
         camera_type: camera.cameraType,
         confidence: camera.confidence,
+        counting_confidence: camera.confidence,
         entry_line: toMlTripwireLine(camera.config.tripwires.entry),
         event_cooldown_seconds: 3.6,
         exit_line: toMlTripwireLine(camera.config.tripwires.exit),
         paired_line_max_gap_seconds: 18,
         password: camera.password || null,
         processing_profile: camera.processingProfile,
+        runtime_backend: "auto",
+        tracker_profile: "auto",
+        pending_reid_wait_seconds: 0.6,
+        reid_mode: camera.reidMode ?? "auto",
         reverse_direction: camera.config.reverse,
         roi: toMlRoi(camera.config.roi),
         stream_fps: 24,
         stream_url: camera.rtsp,
+        tracking_confidence: camera.trackingConfidence ?? 0.15,
         track_ttl_seconds: 9,
         tripwire_position: camera.config.tripwire / 100,
+        unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
         username: camera.username || null,
       }),
     },
@@ -474,11 +555,16 @@ export async function stopCameraProcessing(baseUrl: string): Promise<{ message: 
   return requestJson<{ message: string }>(`${baseUrl}/camera/stop`, { method: "POST" }, 5000);
 }
 
-export function getStreamUrl(baseUrl: string, version: number) {
-  return `${baseUrl}/stream?v=${version}`;
+export function getStreamUrl(baseUrl: string, version: number, overlay = true) {
+  const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
+  return `${baseUrl}/stream?${params.toString()}`;
 }
 
-export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number) {
+export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number, isProcessing: boolean) {
+  if (isProcessing) {
+    return getStreamUrl(baseUrl, version, false);
+  }
+
   if (camera && isNativeBrowserMjpegCamera(camera)) {
     return camera.rtsp.trim();
   }
