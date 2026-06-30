@@ -18,7 +18,6 @@
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
     "local-data": "uv run --directory ml-service python -m app.tools.local_data_cli",
     "models:setup": "uv --cache-dir .uv-cache run --directory ml-service python scripts/setup_detector_models.py",
-    "models:setup:full": "uv --cache-dir .uv-cache run --directory ml-service python scripts/setup_detector_models.py --include-high-accuracy",
     "models:setup:openvino": "uv --cache-dir .uv-cache run --directory ml-service python scripts/setup_detector_models.py --export-openvino",
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",

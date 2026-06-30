@@ -29,15 +29,12 @@ DETECTOR_MODELS: dict[str, DetectorModel] = {
     "yolo11s": DetectorModel("yolo11s", (640,)),
     "yolo11m": DetectorModel("yolo11m", (640,)),
 }
-DEFAULT_DOWNLOADS = ("yolo11n", "yolo11s")
+DEFAULT_DOWNLOADS = tuple(DETECTOR_MODELS)
 
 
 def main() -> None:
     args = _parse_args()
-    models = _selected_models(
-        args.models,
-        include_high_accuracy=args.include_high_accuracy,
-    )
+    models = _selected_models(args.models)
     models_dir = args.models_dir.resolve()
     models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -59,12 +56,7 @@ def _parse_args() -> argparse.Namespace:
         nargs="+",
         choices=tuple(DETECTOR_MODELS),
         default=list(DEFAULT_DOWNLOADS),
-        help="Detector model weights to download. Defaults to yolo11n yolo11s.",
-    )
-    parser.add_argument(
-        "--include-high-accuracy",
-        action="store_true",
-        help="Also ensure yolo11m.pt exists for high-accuracy testing.",
+        help="Detector model weights to download. Defaults to all supported YOLO11 models.",
     )
     parser.add_argument(
         "--export-openvino",
@@ -85,12 +77,8 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _selected_models(
-    model_names: Iterable[str], *, include_high_accuracy: bool
-) -> list[DetectorModel]:
+def _selected_models(model_names: Iterable[str]) -> list[DetectorModel]:
     selected = list(dict.fromkeys(model_names))
-    if include_high_accuracy and "yolo11m" not in selected:
-        selected.append("yolo11m")
     return [DETECTOR_MODELS[name] for name in selected]
 
 

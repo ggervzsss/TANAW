@@ -339,9 +339,8 @@ npm run models:setup
 npm run dev
 ```
 
-`npm run models:setup` installs the default detector assets. For the
-high-accuracy YOLO11 model or CPU/OpenVINO testing, use `npm run models:setup:full` or
-`npm run models:setup:openvino` from `desktop-tanaw`.
+`npm run models:setup` installs all supported YOLO11 detector assets. For
+CPU/OpenVINO testing, use `npm run models:setup:openvino` from `desktop-tanaw`.
 
 `npm run dev` starts the Electron development app. Electron then starts the
 local ML service automatically and uses the central API at
