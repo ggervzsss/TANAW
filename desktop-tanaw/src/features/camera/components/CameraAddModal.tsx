@@ -2,6 +2,7 @@ import { Check, RefreshCw, Shield, Video, X } from "lucide-react";
 import type { FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import type { CameraFormValues } from "../types/camera";
+import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
 
 type CameraAddModalProps = {
@@ -108,13 +109,7 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Password</label>
-                  <input
-                    type="password"
-                    value={newCam.password}
-                    onChange={(event) => onChange({ ...newCam, password: event.target.value })}
-                    placeholder="Optional"
-                    className="w-full rounded-xl border border-gray-300 p-3 text-sm transition outline-none focus:border-[#065f46]"
-                  />
+                  <PasswordVisibilityInput value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} placeholder="Optional" variant="modal" hasError={Boolean(errors.password)} />
                   {errors.password && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.password}</p>}
                 </div>
               </div>

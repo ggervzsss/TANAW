@@ -285,18 +285,28 @@ class TripwireCounter:
         frame_height: int,
     ) -> list[str]:
         crossed: list[tuple[float, str]] = []
+        movement_distance = _distance(previous, current)
         for line_id, current_side in current_sides.items():
             previous_side = state.line_sides.get(line_id, 0)
+            movement_progress = (
+                _movement_crossing_progress(
+                    previous, current, lines[line_id], frame_width, frame_height
+                )
+                if movement_distance > self.min_crossing_distance_px
+                else None
+            )
             point_crossed = (
                 current_side != 0 and previous_side != 0 and previous_side != current_side
             )
             line_exit_crossed = previous_side == 0 and current_side != 0
-            if not point_crossed and not line_exit_crossed:
+            if movement_progress is None and not point_crossed and not line_exit_crossed:
                 continue
 
             crossed.append(
                 (
-                    _crossing_progress(
+                    movement_progress
+                    if movement_progress is not None
+                    else _crossing_progress(
                         previous, current, lines[line_id], frame_width, frame_height
                     ),
                     line_id,
@@ -434,6 +444,72 @@ def _crossing_progress(
         return 1.0
 
     return min(1.0, max(0.0, previous_distance / denominator))
+
+
+def _movement_crossing_progress(
+    previous: Centroid,
+    current: Centroid,
+    line: NormalizedPath,
+    frame_width: int,
+    frame_height: int,
+) -> float | None:
+    start = (previous.x, previous.y)
+    end = (current.x, current.y)
+    scaled_points = tuple((x * frame_width, y * frame_height) for x, y in line)
+    if len(scaled_points) < 2:
+        return None
+
+    crossings: list[float] = []
+    for index in range(len(scaled_points) - 1):
+        progress = _segment_intersection_progress(
+            start, end, scaled_points[index], scaled_points[index + 1]
+        )
+        if progress is not None:
+            crossings.append(progress)
+
+    return min(crossings) if crossings else None
+
+
+def _segment_intersection_progress(
+    movement_start: tuple[float, float],
+    movement_end: tuple[float, float],
+    line_start: tuple[float, float],
+    line_end: tuple[float, float],
+) -> float | None:
+    px, py = movement_start
+    rx = movement_end[0] - movement_start[0]
+    ry = movement_end[1] - movement_start[1]
+    qx, qy = line_start
+    sx = line_end[0] - line_start[0]
+    sy = line_end[1] - line_start[1]
+    denominator = _cross(rx, ry, sx, sy)
+    qpx = qx - px
+    qpy = qy - py
+
+    if abs(denominator) < 1e-9:
+        if abs(_cross(qpx, qpy, rx, ry)) >= 1e-9:
+            return None
+        movement_length_squared = rx * rx + ry * ry
+        if movement_length_squared < 1e-9:
+            return None
+        start_progress = ((qx - px) * rx + (qy - py) * ry) / movement_length_squared
+        end_progress = ((line_end[0] - px) * rx + (line_end[1] - py) * ry) / movement_length_squared
+        overlap_start = max(0.0, min(start_progress, end_progress))
+        overlap_end = min(1.0, max(start_progress, end_progress))
+        if overlap_start <= overlap_end:
+            return overlap_start
+        return None
+
+    t = _cross(qpx, qpy, sx, sy) / denominator
+    u = _cross(qpx, qpy, rx, ry) / denominator
+    tolerance = 1e-6
+    if -tolerance <= t <= 1.0 + tolerance and -tolerance <= u <= 1.0 + tolerance:
+        return min(1.0, max(0.0, t))
+    return None
+
+
+def _cross(ax: float, ay: float, bx: float, by: float) -> float:
+    return ax * by - ay * bx
 
 
 def _nearest_scaled_segment(

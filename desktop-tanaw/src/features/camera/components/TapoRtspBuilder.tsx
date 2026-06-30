@@ -1,18 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RadioTower } from "lucide-react";
 import { buildTapoRtspUrl, parseRtspConnection, TAPO_STREAM_OPTIONS, type TapoStreamId } from "../utils/rtsp";
 
 type TapoRtspBuilderProps = {
+  layout?: "responsive" | "stacked";
   streamUrl: string;
   onStreamUrlChange: (streamUrl: string) => void;
 };
 
-export function TapoRtspBuilder({ streamUrl, onStreamUrlChange }: TapoRtspBuilderProps) {
+export function TapoRtspBuilder({ layout = "responsive", streamUrl, onStreamUrlChange }: TapoRtspBuilderProps) {
   const initialConnection = parseRtspConnection(streamUrl);
+  const lastEmittedStreamUrl = useRef(streamUrl);
   const [host, setHost] = useState(initialConnection.host);
   const [streamId, setStreamId] = useState<TapoStreamId>(initialConnection.streamId);
+  const gridClass = layout === "stacked" ? "grid gap-3" : "grid gap-3 md:grid-cols-[minmax(12rem,1fr)_190px]";
 
   useEffect(() => {
+    if (streamUrl === lastEmittedStreamUrl.current) return;
+
+    lastEmittedStreamUrl.current = streamUrl;
     if (!streamUrl.trim()) {
       setHost("");
       setStreamId("stream2");
@@ -29,7 +35,9 @@ export function TapoRtspBuilder({ streamUrl, onStreamUrlChange }: TapoRtspBuilde
   const updateConnection = (nextHost: string, nextStreamId: TapoStreamId) => {
     setHost(nextHost);
     setStreamId(nextStreamId);
-    onStreamUrlChange(buildTapoRtspUrl(nextHost, nextStreamId));
+    const nextStreamUrl = buildTapoRtspUrl(nextHost, nextStreamId);
+    lastEmittedStreamUrl.current = nextStreamUrl;
+    onStreamUrlChange(nextStreamUrl);
   };
 
   return (
@@ -37,23 +45,26 @@ export function TapoRtspBuilder({ streamUrl, onStreamUrlChange }: TapoRtspBuilde
       <div className="mb-3 flex items-center gap-2 text-xs font-bold tracking-wider text-[#065f46] uppercase">
         <RadioTower size={14} /> Tapo C310 RTSP
       </div>
-      <div className="grid gap-3 md:grid-cols-[1fr_190px]">
-        <div>
+      <div className={gridClass}>
+        <div className="min-w-0">
           <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">Camera IP / Host</label>
           <input
             type="text"
             value={host}
             onChange={(event) => updateConnection(event.target.value, streamId)}
             placeholder="192.168.1.9"
-            className="w-full rounded-sm border border-emerald-200 bg-white p-2 font-mono text-sm text-gray-800 transition outline-none focus:border-[#065f46]"
+            autoComplete="off"
+            inputMode="url"
+            spellCheck={false}
+            className="w-full min-w-0 rounded-sm border border-emerald-200 bg-white px-2 py-2 font-mono text-[13px] text-gray-800 transition outline-none focus:border-[#065f46]"
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">RTSP Stream</label>
           <select
             value={streamId}
             onChange={(event) => updateConnection(host, event.target.value as TapoStreamId)}
-            className="w-full rounded-sm border border-emerald-200 bg-white p-2 text-sm font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+            className="w-full min-w-0 rounded-sm border border-emerald-200 bg-white p-2 text-sm font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
           >
             {TAPO_STREAM_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

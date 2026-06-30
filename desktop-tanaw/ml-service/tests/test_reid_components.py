@@ -70,12 +70,14 @@ class ReIdComponentsTest(unittest.TestCase):
 
 
 def _track(confidence: float, bbox: tuple[int, int, int, int]) -> TrackResult:
+    x1, y1, x2, y2 = bbox
+    center = Centroid((x1 + x2) / 2, (y1 + y2) / 2)
     return TrackResult(
         track_id=1,
         bbox=bbox,
         confidence=confidence,
-        centroid=Centroid(50, 50),
-        counting_point=Centroid(50, 100),
+        centroid=center,
+        counting_point=center,
     )
 
 

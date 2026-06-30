@@ -113,6 +113,7 @@ export type MlDetectionTrack = {
   bbox: [number, number, number, number];
   confidence: number;
   centroid: [number, number];
+  trigger_point?: [number, number];
   direction: string | null;
   visitor_id: string | null;
   is_unique_entry: boolean | null;

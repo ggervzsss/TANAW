@@ -1,5 +1,5 @@
-import { useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
-import { Move, Plus, RotateCcw, Trash2, Waves } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { GripVertical, Minus, Move, Plus, RotateCcw, Trash2, Waves } from "lucide-react";
 import type { Camera, TripwireLine, TripwirePoint } from "../../../types/enterprise";
 import {
   buildTripwireSvgPath,
@@ -18,6 +18,8 @@ type CameraOverlayConfigProps = {
 
 type TripwireKind = "entry" | "exit";
 type SelectedPoint = { line: TripwireKind; pointIndex: number };
+type ToolbarPosition = { x: number; y: number };
+type ToolbarDragState = { offsetX: number; offsetY: number; pointerId: number };
 type DragState =
   | { mode: "point"; line: TripwireKind; pointIndex: number }
   | { mode: "path"; line: TripwireKind; origin: TripwirePoint; originalPoints: TripwirePoint[] };
@@ -28,10 +30,15 @@ const lineStyles: Record<TripwireKind, { color: string; label: string; textClass
 };
 
 export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: CameraOverlayConfigProps) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [activeLine, setActiveLine] = useState<TripwireKind>("entry");
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<SelectedPoint | null>(null);
   const [isAddMode, setIsAddMode] = useState(false);
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState<ToolbarPosition>({ x: 12, y: 12 });
+  const [toolbarDragState, setToolbarDragState] = useState<ToolbarDragState | null>(null);
   const canEdit = isEditMode && Boolean(onConfigChange);
   const tripwires = normalizeTripwires(config.tripwires ?? getDefaultTripwires(config.tripwire));
   const activeTripwire = tripwires[activeLine];
@@ -39,6 +46,52 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
   const activeCurve = activeTripwire.curve ?? "smooth";
   const canDeleteSelectedPoint = Boolean(selectedPoint && selectedPoint.line === activeLine && activePoints.length > 2);
   const showRoiOverlay = !isFullFrameRoi(config.roi);
+
+  const clampToolbarPosition = useCallback((position: ToolbarPosition): ToolbarPosition => {
+    const overlay = overlayRef.current;
+    if (!overlay) {
+      return {
+        x: Math.max(8, position.x),
+        y: Math.max(8, position.y),
+      };
+    }
+
+    const padding = 8;
+    const bounds = overlay.getBoundingClientRect();
+    const toolbarWidth = toolbarRef.current?.offsetWidth ?? 0;
+    const toolbarHeight = toolbarRef.current?.offsetHeight ?? 0;
+    const maxX = Math.max(padding, bounds.width - toolbarWidth - padding);
+    const maxY = Math.max(padding, bounds.height - toolbarHeight - padding);
+
+    return {
+      x: Math.min(maxX, Math.max(padding, position.x)),
+      y: Math.min(maxY, Math.max(padding, position.y)),
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canEdit) return undefined;
+
+    const overlay = overlayRef.current;
+    if (!overlay) return undefined;
+
+    const resizeObserver = new ResizeObserver(() => {
+      setToolbarPosition((current) => clampToolbarPosition(current));
+    });
+    resizeObserver.observe(overlay);
+
+    return () => resizeObserver.disconnect();
+  }, [canEdit, clampToolbarPosition]);
+
+  useEffect(() => {
+    if (!canEdit) return undefined;
+
+    const frameId = window.requestAnimationFrame(() => {
+      setToolbarPosition((current) => clampToolbarPosition(current));
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [canEdit, clampToolbarPosition, isToolbarCollapsed]);
 
   const updateLine = (line: TripwireKind, nextLine: TripwireLine) => {
     onConfigChange?.({
@@ -146,8 +199,49 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
     setIsAddMode(false);
   };
 
+  const handleToolbarDragStart = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!canEdit) return;
+
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const overlayBounds = overlay.getBoundingClientRect();
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setToolbarDragState({
+      offsetX: event.clientX - overlayBounds.left - toolbarPosition.x,
+      offsetY: event.clientY - overlayBounds.top - toolbarPosition.y,
+      pointerId: event.pointerId,
+    });
+  };
+
+  const handleToolbarDragMove = (event: PointerEvent<HTMLButtonElement>) => {
+    if (toolbarDragState === null || toolbarDragState.pointerId !== event.pointerId) return;
+
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const overlayBounds = overlay.getBoundingClientRect();
+    event.preventDefault();
+    event.stopPropagation();
+    setToolbarPosition(
+      clampToolbarPosition({
+        x: event.clientX - overlayBounds.left - toolbarDragState.offsetX,
+        y: event.clientY - overlayBounds.top - toolbarDragState.offsetY,
+      }),
+    );
+  };
+
+  const handleToolbarDragEnd = (event: PointerEvent<HTMLButtonElement>) => {
+    if (toolbarDragState?.pointerId === event.pointerId && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setToolbarDragState(null);
+  };
+
   return (
-    <div className={`absolute inset-0 ${canEdit ? "" : "pointer-events-none"}`} onKeyDown={handleKeyDown} tabIndex={canEdit ? 0 : -1}>
+    <div ref={overlayRef} className={`absolute inset-0 ${canEdit ? "" : "pointer-events-none"}`} onKeyDown={handleKeyDown} tabIndex={canEdit ? 0 : -1}>
       {showRoiOverlay && (
         <div
           className={`pointer-events-none absolute border-2 border-dashed ${isEditMode ? "border-[#2d5eff] bg-[#2d5eff]/10" : "border-[#2d5eff]/60 bg-[#2d5eff]/5"}`}
@@ -163,56 +257,85 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
       )}
 
       {canEdit && (
-        <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-1.5rem)] rounded-sm border border-white/15 bg-black/75 p-1.5 shadow-sm backdrop-blur-sm">
-          <div className="flex flex-wrap items-center gap-1">
-            {(["entry", "exit"] as const).map((line) => (
-              <button
-                key={line}
-                type="button"
-                onClick={() => {
-                  setActiveLine(line);
-                  setSelectedPoint(null);
-                }}
-                className={`rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${activeLine === line ? lineStyles[line].textClass : "bg-white/10 text-white hover:bg-white/20"}`}
-              >
-                {lineStyles[line].label}
-              </button>
-            ))}
+        <div
+          ref={toolbarRef}
+          className="pointer-events-auto absolute top-0 left-0 z-20 max-w-[calc(100%-1rem)] rounded-sm border border-white/15 bg-black/75 p-1.5 shadow-sm backdrop-blur-sm"
+          style={{ transform: `translate(${toolbarPosition.x}px, ${toolbarPosition.y}px)` }}
+        >
+          {isToolbarCollapsed ? (
             <button
               type="button"
-              onClick={() => setIsAddMode((current) => !current)}
-              className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${isAddMode ? "bg-white text-slate-950" : "bg-white/10 text-white hover:bg-white/20"}`}
-              title="Click the video to add an anchor point"
+              onClick={() => setIsToolbarCollapsed(false)}
+              className="flex items-center gap-1.5 rounded-sm bg-white/10 px-2 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-white/20"
+              aria-label="Show tripwire toolbar"
             >
-              <Plus size={12} /> Point
+              <Waves size={13} /> Tripwire
             </button>
-            <button
-              type="button"
-              onClick={addPointToActivePath}
-              className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20"
-              title="Insert an anchor on the longest segment"
-            >
-              <Move size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={deleteSelectedPoint}
-              disabled={!canDeleteSelectedPoint}
-              className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:text-white/30"
-              title="Delete selected anchor"
-            >
-              <Trash2 size={13} />
-            </button>
-            <button type="button" onClick={toggleCurveMode} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" title="Toggle smooth/linear path">
-              <Waves size={13} />
-            </button>
-            <button type="button" onClick={resetActiveLine} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" title="Reset active tripwire">
-              <RotateCcw size={13} />
-            </button>
-          </div>
-          <p className="mt-1 max-w-96 text-[9px] leading-snug font-semibold text-white/70">
-            Drag anchors or the path. Double-click to add an anchor, select one and press Delete to remove it.
-          </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onPointerDown={handleToolbarDragStart}
+                  onPointerMove={handleToolbarDragMove}
+                  onPointerUp={handleToolbarDragEnd}
+                  onPointerCancel={handleToolbarDragEnd}
+                  onLostPointerCapture={() => setToolbarDragState(null)}
+                  className="cursor-grab rounded-sm p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white active:cursor-grabbing"
+                  aria-label="Move tripwire toolbar"
+                >
+                  <GripVertical size={13} />
+                </button>
+                {(["entry", "exit"] as const).map((line) => (
+                  <button
+                    key={line}
+                    type="button"
+                    onClick={() => {
+                      setActiveLine(line);
+                      setSelectedPoint(null);
+                    }}
+                    className={`rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${activeLine === line ? lineStyles[line].textClass : "bg-white/10 text-white hover:bg-white/20"}`}
+                    aria-pressed={activeLine === line}
+                  >
+                    {lineStyles[line].label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setIsAddMode((current) => !current)}
+                  className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${isAddMode ? "bg-white text-slate-950" : "bg-white/10 text-white hover:bg-white/20"}`}
+                  aria-label="Click the video to add an anchor point"
+                  aria-pressed={isAddMode}
+                >
+                  <Plus size={12} /> Point
+                </button>
+                <button type="button" onClick={addPointToActivePath} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Insert an anchor on the longest segment">
+                  <Move size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteSelectedPoint}
+                  disabled={!canDeleteSelectedPoint}
+                  className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:text-white/30"
+                  aria-label="Delete selected anchor"
+                >
+                  <Trash2 size={13} />
+                </button>
+                <button type="button" onClick={toggleCurveMode} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Toggle smooth or linear tripwire path">
+                  <Waves size={13} />
+                </button>
+                <button type="button" onClick={resetActiveLine} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Reset active tripwire">
+                  <RotateCcw size={13} />
+                </button>
+                <button type="button" onClick={() => setIsToolbarCollapsed(true)} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Hide tripwire toolbar">
+                  <Minus size={13} />
+                </button>
+              </div>
+              <p className="mt-1 max-w-96 text-[9px] leading-snug font-semibold text-white/70">
+                Drag anchors or the path. Double-click to add an anchor, select one and press Delete to remove it.
+              </p>
+            </>
+          )}
         </div>
       )}
 

@@ -103,6 +103,9 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
             const bottom = clampPercent((Math.max(y1, y2) / frameHeight) * 100);
             const width = Math.max(0, right - left);
             const height = Math.max(0, bottom - top);
+            const triggerPoint = track.trigger_point ?? track.centroid ?? getBboxCenter(track.bbox);
+            const triggerLeft = clampPercent((triggerPoint[0] / frameWidth) * 100);
+            const triggerTop = clampPercent((triggerPoint[1] / frameHeight) * 100);
             const isCrossing = track.direction === "entry" || track.direction === "exit";
             const isOutsideRoi = track.inside_roi === false;
             const sourceSuffix = track.source_track_id !== track.track_id ? ` | src ${track.source_track_id}` : "";
@@ -110,10 +113,17 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
             const tone = getTrackTone(isOutsideRoi, isCrossing);
 
             return (
-              <div key={track.track_id} className={`absolute border bg-transparent ${tone.boxClass}`} style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}>
-                <span className={`absolute top-1 left-1 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}>
-                  {label} | {(track.confidence * 100).toFixed(0)}%
-                </span>
+              <div key={track.track_id} className="contents">
+                <div className={`absolute border bg-transparent ${tone.boxClass}`} style={{ height: `${height}%`, left: `${left}%`, top: `${top}%`, width: `${width}%` }}>
+                  <span className={`absolute top-1 left-1 rounded-md border px-1.5 py-1 text-[9px] leading-none font-bold whitespace-nowrap shadow-sm backdrop-blur-md ${tone.labelClass}`}>
+                    {label} | {(track.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <span
+                  aria-hidden="true"
+                  className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_10px_rgba(34,211,238,0.42)] transition-[left,top] duration-75 ease-linear ${tone.triggerClass}`}
+                  style={{ left: `${triggerLeft}%`, top: `${triggerTop}%` }}
+                />
               </div>
             );
           })}
@@ -145,11 +155,17 @@ function clampPercent(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
+function getBboxCenter(bbox: [number, number, number, number]): [number, number] {
+  const [x1, y1, x2, y2] = bbox;
+  return [(x1 + x2) / 2, (y1 + y2) / 2];
+}
+
 function getTrackTone(isOutsideRoi: boolean, isCrossing: boolean) {
   if (isOutsideRoi) {
     return {
       boxClass: "rounded-[3px] border-slate-300/75 shadow-[0_0_12px_rgba(148,163,184,0.2)] ring-1 ring-slate-950/35",
       labelClass: "border-slate-300/25 bg-slate-950/80 text-slate-100 ring-1 ring-white/10",
+      triggerClass: "border-slate-950/70 bg-slate-100 ring-1 ring-white/35",
     };
   }
 
@@ -157,12 +173,14 @@ function getTrackTone(isOutsideRoi: boolean, isCrossing: boolean) {
     return {
       boxClass: "rounded-[3px] border-yellow-300/90 shadow-[0_0_14px_rgba(250,204,21,0.34)] ring-1 ring-slate-950/35",
       labelClass: "border-yellow-200/45 bg-slate-950/82 text-yellow-100 ring-1 ring-yellow-300/20",
+      triggerClass: "border-slate-950/75 bg-yellow-200 ring-1 ring-white/45",
     };
   }
 
   return {
     boxClass: "rounded-[3px] border-emerald-300/85 shadow-[0_0_14px_rgba(16,185,129,0.3)] ring-1 ring-slate-950/35",
     labelClass: "border-emerald-200/35 bg-slate-950/82 text-emerald-100 ring-1 ring-emerald-300/20",
+    triggerClass: "border-slate-950/75 bg-cyan-300 ring-1 ring-white/45",
   };
 }
 

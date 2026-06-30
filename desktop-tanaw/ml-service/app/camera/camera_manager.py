@@ -54,6 +54,7 @@ class DisplayTrack:
     bbox: tuple[int, int, int, int]
     confidence: float
     centroid: tuple[int, int]
+    trigger_point: tuple[int, int]
     direction: str | None = None
     visitor_id: str | None = None
     is_unique_entry: bool | None = None
@@ -430,6 +431,7 @@ class CameraProcessingManager:
                         "bbox": track.bbox,
                         "confidence": track.confidence,
                         "centroid": track.centroid,
+                        "trigger_point": track.trigger_point,
                         "direction": track.direction,
                         "visitor_id": track.visitor_id,
                         "is_unique_entry": track.is_unique_entry,
@@ -1285,7 +1287,9 @@ class CameraProcessingManager:
                         )
 
                 elapsed = time.monotonic() - started_at
-                remaining = frame_interval - elapsed
+                # If capture advanced while inference was running, prioritize the freshest
+                # frame over nominal pacing so live overlays do not drift behind the video.
+                remaining = 0.0 if skipped_frames > 0 else frame_interval - elapsed
                 if remaining > 0:
                     session.stop_event.wait(remaining)
         except Exception as exc:
@@ -1482,6 +1486,7 @@ class CameraProcessingManager:
                     bbox=track.bbox,
                     confidence=track.confidence,
                     centroid=(int(track.centroid.x), int(track.centroid.y)),
+                    trigger_point=(int(track.counting_point.x), int(track.counting_point.y)),
                     direction=directions[-1] if directions else None,
                     visitor_id=visitor_id,
                     is_unique_entry=visitor_decision.is_unique_entry if visitor_decision else None,
@@ -1525,6 +1530,10 @@ class CameraProcessingManager:
                     bbox=source_track.bbox,
                     confidence=source_track.confidence,
                     centroid=(int(source_track.centroid.x), int(source_track.centroid.y)),
+                    trigger_point=(
+                        int(source_track.counting_point.x),
+                        int(source_track.counting_point.y),
+                    ),
                     inside_roi=inside_roi,
                     counting_eligible=False,
                     identity_state="unconfirmed",
@@ -1859,7 +1868,7 @@ class CameraProcessingManager:
             )
 
             self._draw_track_box(frame, (x1, y1, x2, y2), color)
-            cv2.circle(frame, track.centroid, 4, (250, 204, 21), -1)
+            cv2.circle(frame, track.trigger_point, 4, (34, 211, 238), -1)
             if track.track_id > 0:
                 source_suffix = (
                     f" | src {track.source_track_id}"

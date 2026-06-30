@@ -27,10 +27,10 @@ class RuntimeHardwareTest(unittest.TestCase):
         self.assertIn("directml_provider", cast(dict[str, object], experimental))
 
     def test_system_memory_probe_handles_sysconf_errors(self) -> None:
-        with patch("app.runtime.hardware.os.sysconf", side_effect=OSError):
+        with patch("app.runtime.hardware.os.sysconf", side_effect=OSError, create=True):
             self.assertIsNone(_system_memory_mb())
 
-        with patch("app.runtime.hardware.os.sysconf", side_effect=ValueError):
+        with patch("app.runtime.hardware.os.sysconf", side_effect=ValueError, create=True):
             self.assertIsNone(_system_memory_mb())
 
     def test_missing_optional_runtime_imports_do_not_crash_capability_probe(self) -> None:

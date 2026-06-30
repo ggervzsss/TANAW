@@ -1,6 +1,7 @@
 import React from "react";
 import { Maximize, Video } from "lucide-react";
 import type { Camera } from "../../../types/enterprise";
+import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
 
 type CameraEditControlsProps = {
@@ -185,18 +186,13 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
               />
             </CompactField>
             <CompactField label="Password">
-              <input
-                type="password"
-                value={editForm.password ?? ""}
-                onChange={(event) => onEditFormChange({ ...editForm, password: event.target.value })}
-                className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
-              />
+              <PasswordVisibilityInput value={editForm.password ?? ""} onChange={(password) => onEditFormChange({ ...editForm, password })} />
             </CompactField>
           </div>
         </div>
         {isRtspCamera && (
           <div className="mt-2">
-            <TapoRtspBuilder streamUrl={editForm.rtsp} onStreamUrlChange={(rtsp) => onEditFormChange({ ...editForm, rtsp })} />
+            <TapoRtspBuilder streamUrl={editForm.rtsp} onStreamUrlChange={(rtsp) => onEditFormChange({ ...editForm, rtsp })} layout="stacked" />
           </div>
         )}
       </section>
