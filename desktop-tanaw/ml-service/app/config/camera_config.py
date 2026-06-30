@@ -244,6 +244,8 @@ class HealthResponse(BaseModel):
     effective_tracker: str | None = None
     tracker_profile: str | None = None
     tracker_config_path: str | None = None
+    detector_nms_iou: float | None = None
+    detector_person_class_ids: list[int] = Field(default_factory=list)
     detector_model_availability: dict[str, Any] = Field(default_factory=dict)
     reid_model_availability: dict[str, Any] = Field(default_factory=dict)
     runtime_capabilities: dict[str, Any] = Field(default_factory=dict)
@@ -269,6 +271,7 @@ class DetectionTrackResponse(BaseModel):
     bbox: tuple[int, int, int, int]
     confidence: float
     centroid: tuple[int, int]
+    trigger_point: tuple[int, int]
     direction: str | None = None
     visitor_id: str | None = None
     is_unique_entry: bool | None = None

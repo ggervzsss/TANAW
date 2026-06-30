@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 import platform
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 
 def get_runtime_capabilities() -> dict[str, Any]:
@@ -83,12 +84,14 @@ def get_runtime_capabilities() -> dict[str, Any]:
 
 
 def _system_memory_mb() -> int | None:
-    if not hasattr(os, "sysconf"):
+    sysconf = getattr(os, "sysconf", None)
+    if not callable(sysconf):
         return None
+    sysconf_value = cast(Callable[[str], int], sysconf)
 
     try:
-        page_size = int(os.sysconf("SC_PAGE_SIZE"))
-        page_count = int(os.sysconf("SC_PHYS_PAGES"))
+        page_size = sysconf_value("SC_PAGE_SIZE")
+        page_count = sysconf_value("SC_PHYS_PAGES")
     except (OSError, ValueError):
         return None
 

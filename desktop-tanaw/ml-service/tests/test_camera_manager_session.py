@@ -371,7 +371,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(summary["entries"], 0)
             self.assertEqual(summary["exits"], 1)
 
-    def test_configured_entry_to_exit_sequence_counts_when_bbox_crosses_visible_line(
+    def test_configured_entry_to_exit_sequence_waits_for_center_trigger_point(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -396,6 +396,10 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             frame = np.zeros((200, 200, 3), dtype=np.uint8)
             self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
             pending_track = manager._detect_and_count(session, frame, 0.35)[0]
+            debug_state = manager._counter.debug_state(1)
+            self.assertIsNotNone(debug_state)
+            assert debug_state is not None
+            self.assertIsNone(debug_state["pending_line"])
             self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
             exit_track = manager._detect_and_count(session, frame, 0.35)[0]
 
@@ -696,12 +700,13 @@ def _manager_with_store(directory: str) -> CameraProcessingManager:
 
 def _track(track_id: int, bbox: tuple[int, int, int, int], confidence: float = 0.9) -> TrackResult:
     x1, y1, x2, y2 = bbox
+    center = Centroid((x1 + x2) / 2, (y1 + y2) / 2)
     return TrackResult(
         track_id=track_id,
         bbox=bbox,
         confidence=confidence,
-        centroid=Centroid((x1 + x2) / 2, (y1 + y2) / 2),
-        counting_point=Centroid((x1 + x2) / 2, y2),
+        centroid=center,
+        counting_point=center,
     )
 
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from app.counting.geometry import Centroid, bbox_bottom_center, bbox_centroid
+from app.counting.geometry import Centroid, bbox_centroid
 from app.runtime.hardware import get_runtime_capabilities
 
 os.environ.setdefault("MPLCONFIGDIR", str(Path(gettempdir()) / "tanaw-matplotlib"))
@@ -26,6 +26,7 @@ PROCESSING_PROFILE_VALUES = {
 }
 RUNTIME_BACKEND_VALUES = {"auto", "cuda", "openvino", "cpu"}
 TRACKER_PROFILE_VALUES = {"auto", "bytetrack", "botsort"}
+PERSON_CLASS_IDS = (0,)
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class DetectorProfile:
     name: str
     model_name: str
     image_size: int
+    nms_iou: float
     max_detections: int
     preferred_runtimes: tuple[str, ...]
     target_processing_fps: float | None
@@ -56,6 +58,7 @@ class DetectorSelection:
     effective_tracker: str
     tracker_config_path: str
     image_size: int
+    nms_iou: float
     max_detections: int
     target_processing_fps: float | None
     selection_reason: str
@@ -77,6 +80,7 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         name="emergency",
         model_name="yolo11n",
         image_size=480,
+        nms_iou=0.45,
         max_detections=32,
         preferred_runtimes=("openvino", "cpu", "cuda"),
         target_processing_fps=7.0,
@@ -88,7 +92,8 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         name="compatibility",
         model_name="yolo11n",
         image_size=640,
-        max_detections=48,
+        nms_iou=0.50,
+        max_detections=64,
         preferred_runtimes=("cuda", "openvino", "cpu"),
         target_processing_fps=9.0,
         default_tracker="bytetrack",
@@ -99,7 +104,8 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         name="balanced",
         model_name="yolo11s",
         image_size=640,
-        max_detections=64,
+        nms_iou=0.55,
+        max_detections=96,
         preferred_runtimes=("cuda", "openvino", "cpu"),
         target_processing_fps=12.0,
         default_tracker="botsort",
@@ -110,7 +116,8 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         name="high_accuracy",
         model_name="yolo11m",
         image_size=640,
-        max_detections=96,
+        nms_iou=0.55,
+        max_detections=128,
         preferred_runtimes=("cuda", "openvino", "cpu"),
         target_processing_fps=12.0,
         default_tracker="botsort",
@@ -122,6 +129,7 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         name="legacy_yolov8n",
         model_name="yolov8n",
         image_size=480,
+        nms_iou=0.45,
         max_detections=32,
         preferred_runtimes=("openvino", "cpu", "cuda"),
         target_processing_fps=7.0,
@@ -135,7 +143,8 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         name="legacy_yolov8s",
         model_name="yolov8s",
         image_size=640,
-        max_detections=48,
+        nms_iou=0.50,
+        max_detections=64,
         preferred_runtimes=("cuda", "openvino", "cpu"),
         target_processing_fps=8.0,
         default_tracker="bytetrack",
@@ -167,6 +176,7 @@ class YoloPersonTracker:
     ) -> None:
         self.model_path = model_path
         self.image_size = image_size
+        self.nms_iou = 0.45
         self.max_detections = max_detections
         self.processing_profile = "auto"
         self.requested_profile = "auto"
@@ -345,6 +355,11 @@ class YoloPersonTracker:
 
         xyxy = boxes.xyxy.cpu().tolist()
         confidences = boxes.conf.cpu().tolist()
+        class_ids = (
+            boxes.cls.int().cpu().tolist()
+            if getattr(boxes, "cls", None) is not None
+            else [PERSON_CLASS_IDS[0] for _ in range(len(xyxy))]
+        )
         track_ids = (
             boxes.id.int().cpu().tolist()
             if boxes.id is not None
@@ -352,17 +367,20 @@ class YoloPersonTracker:
         )
 
         tracked: list[TrackResult] = []
-        for bbox, track_id, score in zip(xyxy, track_ids, confidences, strict=False):
+        for bbox, track_id, score, class_id in zip(
+            xyxy, track_ids, confidences, class_ids, strict=False
+        ):
+            if int(class_id) not in PERSON_CLASS_IDS:
+                continue
             x1, y1, x2, y2 = bbox
             centroid = bbox_centroid(x1, y1, x2, y2)
-            counting_point = bbox_bottom_center(x1, y1, x2, y2)
             tracked.append(
                 TrackResult(
                     track_id=int(track_id),
                     bbox=(int(x1), int(y1), int(x2), int(y2)),
                     confidence=float(score),
                     centroid=centroid,
-                    counting_point=counting_point,
+                    counting_point=centroid,
                 )
             )
 
@@ -374,13 +392,14 @@ class YoloPersonTracker:
             frame,
             persist=True,
             tracker=self.tracker_config_path,
-            classes=[0],
+            classes=list(PERSON_CLASS_IDS),
             conf=confidence,
             device=self._device,
             half=self._use_half,
             imgsz=self.image_size,
-            iou=0.45,
+            iou=self.nms_iou,
             max_det=self.max_detections,
+            agnostic_nms=False,
             verbose=False,
         )
         completed_at = monotonic()
@@ -393,12 +412,14 @@ class YoloPersonTracker:
             started_at = monotonic()
             model.predict(
                 blank_frame,
-                classes=[0],
+                classes=list(PERSON_CLASS_IDS),
                 conf=0.25,
                 device=self._device,
                 half=self._use_half,
                 imgsz=self.image_size,
+                iou=self.nms_iou,
                 max_det=self.max_detections,
+                agnostic_nms=False,
                 verbose=False,
             )
             self._record_inference_time(started_at, monotonic())
@@ -452,6 +473,7 @@ class YoloPersonTracker:
             or selection.effective_tracker != self.effective_tracker
             or selection.model_name != self.model_name
             or selection.image_size != self.image_size
+            or selection.nms_iou != self.nms_iou
             or selection.max_detections != self.max_detections
         )
 
@@ -467,6 +489,7 @@ class YoloPersonTracker:
         self.effective_tracker = selection.effective_tracker
         self.tracker_config_path = selection.tracker_config_path
         self.image_size = selection.image_size
+        self.nms_iou = selection.nms_iou
         self.max_detections = selection.max_detections
         self.target_processing_fps = selection.target_processing_fps
         self.selection_reason = selection.selection_reason
@@ -497,7 +520,9 @@ class YoloPersonTracker:
             "fallback_reason": self.fallback_reason,
             "fallback_chain": list(self.fallback_chain),
             "detector_image_size": self.image_size,
+            "detector_nms_iou": self.nms_iou,
             "detector_max_detections": self.max_detections,
+            "detector_person_class_ids": list(PERSON_CLASS_IDS),
             "target_processing_fps": self.target_processing_fps,
             "requested_tracker": self.requested_tracker,
             "effective_tracker": self.effective_tracker,
@@ -585,6 +610,7 @@ def resolve_detector_selection(
                 effective_tracker=tracker,
                 tracker_config_path=str(tracker_config_path),
                 image_size=profile.image_size,
+                nms_iou=profile.nms_iou,
                 max_detections=profile.max_detections,
                 target_processing_fps=profile.target_processing_fps,
                 selection_reason=selection_reason,
@@ -611,6 +637,7 @@ def resolve_detector_selection(
         effective_tracker=tracker,
         tracker_config_path=str(tracker_config_path),
         image_size=profile.image_size,
+        nms_iou=profile.nms_iou,
         max_detections=profile.max_detections,
         target_processing_fps=profile.target_processing_fps,
         selection_reason=selection_reason,

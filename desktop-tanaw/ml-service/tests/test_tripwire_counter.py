@@ -106,6 +106,16 @@ class TripwireCounterTest(unittest.TestCase):
         self.assertEqual(counter.counts.entry, 1)
         self.assertEqual(counter.counts.exit, 0)
 
+    def test_fast_center_movement_counts_when_it_intersects_sampled_path(self) -> None:
+        counter = TripwireCounter(entry_line=((0.40, 0.10), (0.60, 0.90)))
+        counter.reset()
+
+        self._update(counter, 9, 70, 100)
+        self._update(counter, 9, 130, 100, expected="entry")
+
+        self.assertEqual(counter.counts.entry, 1)
+        self.assertEqual(counter.counts.exit, 0)
+
     def test_paired_custom_path_counts_when_crossing_sampled_segment(self) -> None:
         counter = TripwireCounter(
             entry_line=((0.30, 0.0), (0.35, 0.50), (0.45, 1.0)),

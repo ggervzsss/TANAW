@@ -28,7 +28,7 @@ docker compose up --build -d
 cd desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
-npm run models:setup
+npm run models:setup:full
 printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
 npm run dev
 ```

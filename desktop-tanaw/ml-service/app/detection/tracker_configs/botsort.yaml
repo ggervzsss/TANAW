@@ -1,13 +1,13 @@
 # TANAW BoT-SORT settings. Ultralytics tracker ReID stays disabled because
 # TANAW resolves daily visitor identity in its separate ReID registry.
 tracker_type: botsort
-track_high_thresh: 0.35
-track_low_thresh: 0.10
-new_track_thresh: 0.45
-track_buffer: 38
-match_thresh: 0.80
+track_high_thresh: 0.25
+track_low_thresh: 0.08
+new_track_thresh: 0.28
+track_buffer: 60
+match_thresh: 0.78
 fuse_score: true
-gmc_method: sparseOptFlow
+gmc_method: none
 proximity_thresh: 0.50
-appearance_thresh: 0.25
+appearance_thresh: 0.80
 with_reid: false

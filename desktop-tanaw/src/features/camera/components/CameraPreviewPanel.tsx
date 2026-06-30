@@ -95,11 +95,11 @@ export function CameraPreviewPanel({
               <button
                 onClick={onEdit}
                 className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-[#065f46] hover:text-[#065f46]"
-                title="Edit Configuration"
+                aria-label="Edit configuration"
               >
                 <Edit2 size={14} />
               </button>
-              <button onClick={onDelete} className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-600 hover:text-red-600" title="Delete Node">
+              <button onClick={onDelete} className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-600 hover:text-red-600" aria-label="Delete node">
                 <Trash2 size={14} />
               </button>
             </>

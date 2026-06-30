@@ -443,6 +443,10 @@ textarea,
   .tanaw-stage-glow {
     transition: none;
   }
+
+  .tanaw-info-tooltip {
+    animation: none;
+  }
 }
 
 @media (max-height: 720px) {
@@ -471,6 +475,10 @@ textarea,
 
 .slide-in-from-right-8 {
   animation-name: tanaw-enterprise-slide-in-right;
+}
+
+.tanaw-info-tooltip {
+  animation: tanaw-info-tooltip-enter 160ms ease-out both;
 }
 
 @keyframes tanaw-enterprise-fade-in {
@@ -506,6 +514,18 @@ textarea,
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes tanaw-info-tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--tooltip-enter-y, 4px), 0) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
