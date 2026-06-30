@@ -15,7 +15,6 @@ DEFAULT_MODELS_DIR = SERVICE_ROOT / "models"
 class DetectorModel:
     name: str
     openvino_image_sizes: tuple[int, ...]
-    legacy: bool = False
 
     @property
     def filename(self) -> str:
@@ -29,8 +28,6 @@ DETECTOR_MODELS: dict[str, DetectorModel] = {
     "yolo11n": DetectorModel("yolo11n", (480, 640)),
     "yolo11s": DetectorModel("yolo11s", (640,)),
     "yolo11m": DetectorModel("yolo11m", (640,)),
-    "yolov8n": DetectorModel("yolov8n", (480,), legacy=True),
-    "yolov8s": DetectorModel("yolov8s", (640,), legacy=True),
 }
 DEFAULT_DOWNLOADS = ("yolo11n", "yolo11s")
 
@@ -40,7 +37,6 @@ def main() -> None:
     models = _selected_models(
         args.models,
         include_high_accuracy=args.include_high_accuracy,
-        include_legacy=args.include_legacy,
     )
     models_dir = args.models_dir.resolve()
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -71,11 +67,6 @@ def _parse_args() -> argparse.Namespace:
         help="Also ensure yolo11m.pt exists for high-accuracy testing.",
     )
     parser.add_argument(
-        "--include-legacy",
-        action="store_true",
-        help="Also ensure yolov8n.pt and yolov8s.pt exist as legacy fallback assets.",
-    )
-    parser.add_argument(
         "--export-openvino",
         action="store_true",
         help="Export selected weights to size-specific OpenVINO folders.",
@@ -95,15 +86,11 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _selected_models(
-    model_names: Iterable[str], *, include_high_accuracy: bool, include_legacy: bool
+    model_names: Iterable[str], *, include_high_accuracy: bool
 ) -> list[DetectorModel]:
     selected = list(dict.fromkeys(model_names))
     if include_high_accuracy and "yolo11m" not in selected:
         selected.append("yolo11m")
-    if include_legacy:
-        for model_name in ("yolov8n", "yolov8s"):
-            if model_name not in selected:
-                selected.append(model_name)
     return [DETECTOR_MODELS[name] for name in selected]
 
 

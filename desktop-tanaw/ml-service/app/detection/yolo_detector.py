@@ -42,7 +42,6 @@ class DetectorProfile:
     default_reid_mode: str
     role: str
     optional: bool = False
-    legacy: bool = False
 
 
 @dataclass(frozen=True)
@@ -125,48 +124,13 @@ DETECTOR_PROFILES: dict[str, DetectorProfile] = {
         role="higher-accuracy dedicated GPU profile",
         optional=True,
     ),
-    "legacy_yolov8n": DetectorProfile(
-        name="legacy_yolov8n",
-        model_name="yolov8n",
-        image_size=480,
-        nms_iou=0.45,
-        max_detections=32,
-        preferred_runtimes=("openvino", "cpu", "cuda"),
-        target_processing_fps=7.0,
-        default_tracker="bytetrack",
-        default_reid_mode="off",
-        role="legacy YOLOv8n fallback when YOLO11 assets are unavailable",
-        optional=True,
-        legacy=True,
-    ),
-    "legacy_yolov8s": DetectorProfile(
-        name="legacy_yolov8s",
-        model_name="yolov8s",
-        image_size=640,
-        nms_iou=0.50,
-        max_detections=64,
-        preferred_runtimes=("cuda", "openvino", "cpu"),
-        target_processing_fps=8.0,
-        default_tracker="bytetrack",
-        default_reid_mode="off",
-        role="optional legacy YOLOv8s compatibility asset",
-        optional=True,
-        legacy=True,
-    ),
 }
 
 PROFILE_FALLBACKS: dict[str, tuple[str, ...]] = {
-    "emergency": ("emergency", "legacy_yolov8n"),
-    "compatibility": ("compatibility", "emergency", "legacy_yolov8n"),
-    "balanced": ("balanced", "compatibility", "emergency", "legacy_yolov8n"),
-    "high_accuracy": (
-        "high_accuracy",
-        "balanced",
-        "compatibility",
-        "emergency",
-        "legacy_yolov8n",
-    ),
-    "legacy_yolov8n": ("legacy_yolov8n",),
+    "emergency": ("emergency",),
+    "compatibility": ("compatibility", "emergency"),
+    "balanced": ("balanced", "compatibility", "emergency"),
+    "high_accuracy": ("high_accuracy", "balanced", "compatibility", "emergency"),
 }
 
 
@@ -658,7 +622,6 @@ def get_detector_model_availability(models_root: Path | None = None) -> dict[str
             "role": profile.role,
             "required": profile.name == "emergency",
             "optional": profile.optional,
-            "legacy": profile.legacy,
             "available": pt_path.exists() or bool(openvino_available),
             "pt": {"path": str(pt_path), "exists": pt_path.exists()},
             "openvino": [{"path": str(path), "exists": path.exists()} for path in openvino_paths],
@@ -759,13 +722,10 @@ def _model_path_candidates(
 
 
 def _openvino_model_paths(model_name: str, image_size: int, models_root: Path) -> tuple[Path, ...]:
-    candidates = [
+    return (
         models_root / f"{model_name}_{image_size}_openvino_model",
         models_root / f"{model_name}_openvino_model",
-    ]
-    if model_name == "yolov8n" and image_size == 480:
-        candidates.insert(0, models_root / "yolov8n_480_openvino_model")
-    return tuple(candidates)
+    )
 
 
 def _available_runtimes_for_profile(profile_name: str, models_root: Path) -> list[str]:

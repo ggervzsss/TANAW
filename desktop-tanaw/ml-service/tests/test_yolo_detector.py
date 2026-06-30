@@ -121,10 +121,10 @@ class YoloPersonTrackerTest(unittest.TestCase):
             self.assertEqual(selection.fallback_chain, ("high_accuracy", "balanced"))
             self.assertIn("yolo11m", selection.fallback_reason or "")
 
-    def test_missing_yolo11_profiles_fall_back_to_legacy_yolov8n(self) -> None:
+    def test_balanced_falls_back_to_compatibility_when_yolo11s_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             models_root = Path(directory)
-            (models_root / "yolov8n.pt").write_bytes(b"placeholder")
+            (models_root / "yolo11n.pt").write_bytes(b"placeholder")
 
             selection = resolve_detector_selection(
                 processing_profile="balanced",
@@ -132,12 +132,12 @@ class YoloPersonTrackerTest(unittest.TestCase):
                 models_root=models_root,
             )
 
-            self.assertEqual(selection.effective_profile, "legacy_yolov8n")
-            self.assertEqual(selection.model_name, "yolov8n")
+            self.assertEqual(selection.effective_profile, "compatibility")
+            self.assertEqual(selection.model_name, "yolo11n")
             self.assertIn("yolo11s", selection.fallback_reason or "")
             self.assertEqual(
                 selection.fallback_chain,
-                ("balanced", "compatibility", "emergency", "legacy_yolov8n"),
+                ("balanced", "compatibility"),
             )
 
     def test_cpu_openvino_auto_selects_compatibility_when_yolo11n_export_exists(self) -> None:
@@ -219,10 +219,10 @@ class YoloPersonTrackerTest(unittest.TestCase):
             self.assertEqual(selection.effective_profile, "balanced")
             self.assertEqual(selection.model_name, "yolo11s")
 
-    def test_model_availability_reports_yolo11_and_legacy_assets(self) -> None:
+    def test_model_availability_reports_yolo11_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             models_root = Path(directory)
-            for model_name in ("yolo11n", "yolo11s", "yolo11m", "yolov8n", "yolov8s"):
+            for model_name in ("yolo11n", "yolo11s", "yolo11m"):
                 (models_root / f"{model_name}.pt").write_bytes(b"placeholder")
 
             availability = get_detector_model_availability(models_root)
@@ -234,12 +234,9 @@ class YoloPersonTrackerTest(unittest.TestCase):
                     "compatibility",
                     "balanced",
                     "high_accuracy",
-                    "legacy_yolov8n",
-                    "legacy_yolov8s",
                 },
             )
-            self.assertFalse(availability["balanced"]["legacy"])
-            self.assertTrue(availability["legacy_yolov8n"]["legacy"])
+            self.assertTrue(availability["balanced"]["available"])
 
     def test_requested_botsort_falls_back_when_config_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
