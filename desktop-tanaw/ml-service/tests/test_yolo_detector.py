@@ -12,28 +12,23 @@ from app.detection.yolo_detector import (
 
 
 class YoloPersonTrackerTest(unittest.TestCase):
-    def test_default_model_path_resolves_to_bundled_or_legacy_fallback(self) -> None:
-        tracker = YoloPersonTracker()
+    def test_default_model_path_resolves_to_local_setup_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            (models_root / "yolo11n.pt").write_bytes(b"placeholder")
 
-        model_path = Path(tracker._resolve_model_path())
+            with (
+                patch("app.detection.yolo_detector._models_root", return_value=models_root),
+                patch(
+                    "app.detection.yolo_detector.get_runtime_capabilities",
+                    return_value=_capabilities(cuda=False, openvino=False),
+                ),
+            ):
+                tracker = YoloPersonTracker()
+                model_path = Path(tracker._resolve_model_path())
 
-        self.assertIn(
-            model_path.name,
-            {
-                "yolo11n_480_openvino_model",
-                "yolo11n_640_openvino_model",
-                "yolo11n_openvino_model",
-                "yolo11n.pt",
-                "yolo11s_640_openvino_model",
-                "yolo11s_openvino_model",
-                "yolo11s.pt",
-                "yolov8n_480_openvino_model",
-                "yolov8n_openvino_model",
-                "yolov8n.pt",
-            },
-        )
-        self.assertIn("models", model_path.parts)
-        self.assertTrue(model_path.exists())
+            self.assertEqual(model_path, models_root / "yolo11n.pt")
+            self.assertTrue(model_path.exists())
 
     def test_missing_absolute_model_path_raises_clear_error(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

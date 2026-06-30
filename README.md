@@ -339,8 +339,8 @@ npm run models:setup
 npm run dev
 ```
 
-`npm run models:setup` installs the default detector assets. For high-accuracy
-or CPU/OpenVINO testing, use `npm run models:setup:full` or
+`npm run models:setup` installs the default detector assets. For the
+high-accuracy YOLO11 model or CPU/OpenVINO testing, use `npm run models:setup:full` or
 `npm run models:setup:openvino` from `desktop-tanaw`.
 
 `npm run dev` starts the Electron development app. Electron then starts the
@@ -362,8 +362,10 @@ npm run dist
 
 Build artifacts are written under `desktop-tanaw/release/`.
 
-The current installer build includes the TANAW desktop code, ML service source,
-and models, but it does not bundle a standalone Python runtime and installed
+The current installer build includes the TANAW desktop code and ML service
+source, but local model artifacts are not committed to Git. A build machine
+must run the model setup command first if installer packaging should include
+those assets. It does not bundle a standalone Python runtime and installed
 Python packages. A machine running that development installer still needs
 Python 3.12 or newer and uv available. Group members cloning the repository
 should use `npm run dev`, which uses the `.venv` created by

@@ -127,7 +127,7 @@ This prepares:
 - `models/yolo11n.pt` for emergency and compatibility fallback profiles
 - `models/yolo11s.pt` for the default balanced profile
 
-Prepare high-accuracy and legacy fallback assets:
+Prepare the high-accuracy YOLO11 asset:
 
 ```bash
 npm run models:setup:full
