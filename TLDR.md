@@ -160,8 +160,10 @@ telemetry, historical submissions, final reports, activity logs, and prepared
 current-month desktop counts for Archie's Event Place:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
+./scripts/mockdata-on
 ```
+
+PowerShell: `.\scripts\mockdata-on.ps1`
 
 All generated accounts use:
 
@@ -187,14 +189,18 @@ Desktop password: the password selected during Archie's onboarding
 Check the simulation:
 
 ```shell
-docker compose exec backend uv run mock-data status
+./scripts/mockdata-status
 ```
+
+PowerShell: `.\scripts\mockdata-status.ps1`
 
 If a simulation already exists or needs fresh dates, replace it:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
+./scripts/mockdata-reset
 ```
+
+PowerShell: `.\scripts\mockdata-reset.ps1`
 
 Other ranges are `30d` and `12m`. Other scenarios are `peak-traffic` and
 `camera-health`.
@@ -264,7 +270,20 @@ Invoke-RestMethod http://127.0.0.1:8765/mock/status
 
 ## 10. Desktop local-data commands
 
-Run these from `desktop-tanaw`. Close the desktop before any `clear` command.
+Close the desktop before clearing local data.
+
+Remove all local desktop ledger data, including real CCTV-derived rows and mock
+runs, while preserving camera definitions, Electron preferences, authentication
+storage, and caches:
+
+```shell
+./scripts/local-mockdata-off
+```
+
+PowerShell: `.\scripts\local-mockdata-off.ps1`
+
+The lower-level inspection and full reset commands still run from
+`desktop-tanaw`.
 
 Inspect all enterprise ledgers:
 
@@ -312,13 +331,15 @@ Keep the target desktop signed in and the containers running, then remove all
 run-tagged simulation data from another terminal opened at the repository root:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off
+./scripts/mockdata-off
 ```
+
+PowerShell: `.\scripts\mockdata-off.ps1`
 
 Confirm that the run is marked as removed:
 
 ```shell
-docker compose exec backend uv run mock-data status
+./scripts/mockdata-status
 ```
 
 Quit the desktop app. If `npm run dev` is still active, press `Ctrl+C` in its
@@ -366,11 +387,11 @@ completely empty local database is intended.
 | Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
-| Generate mock data           | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"` |
-| Show mock status             | `docker compose exec backend uv run mock-data status`                                                                                                           |
-| Refresh mock data            | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"` |
-| Remove mock data             | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off`                                                                                |
+| Generate mock data           | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                                                                                                         |
+| Show mock status             | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                                                                                                 |
+| Refresh mock data            | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                                                                                                   |
+| Remove mock data             | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                                                                                                       |
 | Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                                           |
-| Clear one desktop ledger     | From `desktop-tanaw`: `npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes`                                                            |
+| Clear desktop local ledgers   | `./scripts/local-mockdata-off` or `.\scripts\local-mockdata-off.ps1`                                                                                          |
 | Stop containers              | `docker compose down`                                                                                                                                           |
 | Delete Docker database       | `docker compose down -v`                                                                                                                                        |

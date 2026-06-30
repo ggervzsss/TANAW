@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ "$#" -ne 0 ]; then
+  echo "Usage: ./scripts/local-mockdata-off"
+  echo "Removes all local desktop ledger data while preserving camera settings."
+  exit 2
+fi
+
+cd "$REPO_ROOT/desktop-tanaw"
+exec npm run local-data -- clear --all-ledgers --yes
