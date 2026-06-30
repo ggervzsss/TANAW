@@ -28,7 +28,7 @@ docker compose up --build -d
 cd desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
-npm run models:setup:full
+npm run models:setup
 printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
 npm run dev
 ```
@@ -126,11 +126,12 @@ This prepares:
 
 - `models/yolo11n.pt` for emergency and compatibility fallback profiles
 - `models/yolo11s.pt` for the default balanced profile
+- `models/yolo11m.pt` for the high-accuracy profile
 
-Prepare high-accuracy and legacy fallback assets:
+To download a smaller local subset for constrained testing, pass explicit model names:
 
 ```bash
-npm run models:setup:full
+npm run models:setup -- --models yolo11n yolo11s
 ```
 
 Generate CPU/Intel OpenVINO exports:
@@ -157,7 +158,6 @@ PowerShell uses the same npm scripts.
 - `compatibility`: YOLO11n at 640px, ByteTrack, CUDA -> OpenVINO -> CPU, ReID off by default.
 - `balanced`: YOLO11s at 640px, BoT-SORT, CUDA -> OpenVINO -> CPU, fast ReID.
 - `high_accuracy`: YOLO11m at 640px, BoT-SORT, CUDA -> OpenVINO -> CPU, fast ReID.
-- `legacy_yolov8n`: internal fallback only when YOLO11 assets are unavailable.
 
 Stable detector runtimes are `cpu`, `cuda`, and `openvino`. TensorRT and DirectML provider detection may appear in diagnostics, but they are not stable detector runtime choices.
 

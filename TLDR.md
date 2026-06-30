@@ -363,8 +363,7 @@ completely empty local database is intended.
 | Show containers              | `docker compose ps`                                                                                                                                             |
 | Follow logs                  | `docker compose logs -f backend frontend`                                                                                                                       |
 | Install desktop dependencies | From `desktop-tanaw`: `npm ci`, then `uv sync --directory ml-service --frozen`                                                                                  |
-| Install default models       | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
-| Install full model set       | From `desktop-tanaw`: `npm run models:setup:full`                                                                                                               |
+| Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
 | Generate mock data           | `docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"` |
