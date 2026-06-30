@@ -439,8 +439,19 @@ With the account active and Docker services running, execute this from the
 repository root:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data on --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
+./scripts/mockdata-on
 ```
+
+PowerShell users can run the matching wrapper:
+
+```powershell
+.\scripts\mockdata-on.ps1
+```
+
+The script defaults to the six-month `full-workflow` scenario for
+`archies_001@tanaw.sanpedro`. To target a different enterprise, run it with
+`TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
+`$env:TANAW_MOCK_TARGET_ENTERPRISE = "actual_enterprise_id"`.
 
 This creates:
 
@@ -517,14 +528,18 @@ and then marked as synced locally.
 Show recent simulation runs:
 
 ```shell
-docker compose exec backend uv run mock-data status
+./scripts/mockdata-status
 ```
+
+PowerShell: `.\scripts\mockdata-status.ps1`
 
 Replace the active run with a fresh deterministic dataset:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data reset --range 6m --scenario full-workflow --target-enterprise "archies_001@tanaw.sanpedro"
+./scripts/mockdata-reset
 ```
+
+PowerShell: `.\scripts\mockdata-reset.ps1`
 
 Supported ranges:
 
@@ -549,8 +564,10 @@ month begins or before a demonstration.
 Keep the target enterprise signed in to the desktop when practical, then run:
 
 ```shell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off
+./scripts/mockdata-off
 ```
+
+PowerShell: `.\scripts\mockdata-off.ps1`
 
 This removes records belonging to active simulation run IDs, including:
 
@@ -572,7 +589,7 @@ in and reconnects.
 Confirm the result:
 
 ```shell
-docker compose exec backend uv run mock-data status
+./scripts/mockdata-status
 ```
 
 ### Destructive full database reset
@@ -718,6 +735,21 @@ in this README inject it only for the individual CLI process.
 Desktop records are separate from PostgreSQL and are scoped by enterprise.
 Close the desktop app before manually clearing local data.
 
+Remove all local desktop ledger data, including real CCTV-derived rows, mock
+runs, hybrid runs, reports, snapshots, and occupancy corrections, while
+preserving saved camera settings, authentication storage, preferences, and
+Electron caches:
+
+```shell
+./scripts/local-mockdata-off
+```
+
+PowerShell: `.\scripts\local-mockdata-off.ps1`
+
+The script does not remove backend data. If a backend simulation is active, run
+`./scripts/mockdata-off` as well; otherwise the target desktop can download the
+active prepared package again after sign-in.
+
 Inspect all local ledgers:
 
 ```shell
@@ -754,10 +786,6 @@ storage, preferences, and Electron caches:
 ```shell
 npm run local-data -- clear --full-device --yes
 ```
-
-These commands do not remove backend data. If a simulation is active, run
-`mock-data off` before clearing the local ledger; otherwise the target desktop
-can download the active prepared package again after sign-in.
 
 See [desktop-tanaw/README.md](./desktop-tanaw/README.md) for platform paths and
 additional inspection options.

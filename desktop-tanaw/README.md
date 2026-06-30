@@ -286,13 +286,13 @@ The simulator writes to the same enterprise-scoped SQLite ledger used by camera 
 
 Available controls include scenario presets, venue capacity, starting occupancy, event rate, duration, alert threshold, pause/resume, manual entry/exit events, and per-run cleanup. Simulated rows remain internally tagged with their run identifier and can be removed without deleting real camera events.
 
-To remove simulation data:
+To remove simulation data and any other local ledger rows:
 
 1. Use the Simulation Lab reset/cleanup controls when the run is active.
-2. Or clear the affected enterprise ledger:
+2. Or clear every local ledger while preserving camera definitions and settings:
 
    ```bash
-   npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
+   npm run local-data -- clear --all-ledgers --yes
    ```
 
 PowerShell uses the same command.
