@@ -11,11 +11,6 @@ export type SettingField =
       label: string;
       type: "toggle";
       value: boolean;
-    }
-  | {
-      label: string;
-      type: "readonly";
-      value: string;
     };
 
 export type SettingSection = {

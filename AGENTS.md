@@ -51,6 +51,15 @@ npm run type
 - Treat VSCode/Pylance diagnostics as useful static-analysis signals; verify whether they indicate real issues, especially in the Python ML service.
 - If a required check cannot run because of an environment issue, report the exact command and failure reason.
 
+## Staging And Commit Preparation
+
+- After any implementation is complete and the required checks have been run, add the completed changes to the git staging area.
+- Stage only files that belong to the completed implementation. Do not stage unrelated user changes or generated artifacts that are not part of the requested work.
+- Prepare an appropriate commit message based on the staged changes, but do not create the commit yet unless this workflow requires committing previously staged work before starting a new implementation.
+- Include the prepared commit message at the end of the response so the user can copy and paste it if they want to create the commit themselves.
+- Before starting any new implementation or unrelated set of changes, check for staged changes that are waiting to be committed. If staged changes exist and a prepared commit message is available for them, commit those staged changes first using that message. Then complete the new implementation, stage the new changes, and prepare a new commit message for them.
+- If the user reports an issue or bug in a recently implemented feature, use judgment before committing the staged changes. If the issue should be fixed as part of the same work, fix it before committing. If the report is unrelated or the staged work is already complete, commit the staged changes first using the prepared message.
+
 ## Dev Servers And Ports
 
 - If a project port is already running, assume it is probably the current app for that codebase and do not start a duplicate server.

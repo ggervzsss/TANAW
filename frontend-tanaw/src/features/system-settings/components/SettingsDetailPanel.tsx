@@ -96,18 +96,6 @@ function SettingControl({ field, value, onChange }: { field: SettingField; value
     );
   }
 
-  if (field.type === "readonly") {
-    return (
-      <button
-        type="button"
-        onClick={() => toast.success("Role permission matrix opened.")}
-        className="text-tgreen-dark hover:bg-tgreen-dark/5 rounded-lg border border-gray-300 px-4 py-3 text-sm font-bold transition"
-      >
-        {field.value}
-      </button>
-    );
-  }
-
   return (
     <select
       value={String(value)}
