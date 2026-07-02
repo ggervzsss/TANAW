@@ -38,7 +38,7 @@ export function useLogin() {
         navigate("/change-password", { replace: true });
         return;
       }
-      toast.success("Portal Initialized Successfully");
+      toast.success("Login successful");
       navigate(getRoleDashboardPath(session.user.role), { replace: true });
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 429) {
