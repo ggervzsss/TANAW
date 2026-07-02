@@ -53,7 +53,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
     } finally {
       queryClient.removeQueries({ queryKey: ["current-user"] });
       logout();
-      toast.success("Logout complete.");
+      toast.success("Logout complete");
       navigate(routes.login, { replace: true });
     }
   };

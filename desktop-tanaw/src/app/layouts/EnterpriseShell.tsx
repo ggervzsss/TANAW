@@ -14,6 +14,7 @@ import { NotificationsView } from "../../features/notifications/components/Notif
 import { ProfileView } from "../../features/profile/components/ProfileView";
 import { ReportsView } from "../../features/reports/components/ReportsView";
 import { SecurityView } from "../../features/security/components/SecurityView";
+import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { ENTERPRISE_THEME_STORAGE_KEY, getInitialThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { readLocalStartupPreference, writeLocalStartupPreference } from "../../features/security/utils/startupPreference";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
@@ -357,6 +358,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       logout();
+      notifySuccess("Logout complete");
       navigate(routePaths.login, { replace: true });
     }
   };

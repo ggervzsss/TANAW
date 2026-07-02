@@ -41,7 +41,7 @@ export function useLogin(redirectTo?: string, options?: UseLoginOptions) {
         navigate(routePaths.changePassword, { replace: true });
         return;
       }
-      notifySuccess("Secure login successful.");
+      notifySuccess("Login successful");
       navigate(redirectTo ?? getLandingRoute(), { replace: true });
     },
     onError: (error) => {
