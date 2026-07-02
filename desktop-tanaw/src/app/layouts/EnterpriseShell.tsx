@@ -6,9 +6,8 @@ import { CameraManagementView } from "../../features/camera/components/CameraMan
 import { SimulationLab } from "../../features/camera/components/SimulationLab";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { DashboardView } from "../../features/dashboard/components/DashboardView";
-import { getAccountPreferences, getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
+import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
-import { getStartupSettings, updateStartupSettings } from "../../lib/appLifecycle";
 import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listNotifications, updateNotificationRead, type BackendNotification, type OperationalNotificationEnvelope } from "../../features/notifications/services/notifications";
 import { NotificationsView } from "../../features/notifications/components/NotificationsView";
 import { ProfileView } from "../../features/profile/components/ProfileView";
@@ -16,7 +15,6 @@ import { ReportsView } from "../../features/reports/components/ReportsView";
 import { SecurityView } from "../../features/security/components/SecurityView";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { ENTERPRISE_THEME_STORAGE_KEY, getInitialThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
-import { readLocalStartupPreference, writeLocalStartupPreference } from "../../features/security/utils/startupPreference";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { TicketsView } from "../../features/tickets/components/TicketsView";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -85,45 +83,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       updateUser(currentUserQuery.data);
     }
   }, [currentUserQuery.data, updateUser]);
-
-  useEffect(() => {
-    if (!token) return;
-
-    let disposed = false;
-    void getAccountPreferences()
-      .then(async (preferences) => {
-        if (disposed) return;
-        writeLocalStartupPreference(preferences.openAtLogin);
-        const startupSettings = await getStartupSettings();
-        if (
-          disposed ||
-          !startupSettings.isAvailable ||
-          startupSettings.openAtLogin === preferences.openAtLogin
-        ) {
-          return undefined;
-        }
-        return updateStartupSettings(preferences.openAtLogin);
-      })
-      .catch(async () => {
-        if (disposed) return;
-        const localPreference = readLocalStartupPreference();
-        if (localPreference !== null) {
-          const startupSettings = await getStartupSettings();
-          if (
-            !disposed &&
-            startupSettings.isAvailable &&
-            startupSettings.openAtLogin !== localPreference
-          ) {
-            return updateStartupSettings(localPreference).catch(() => undefined);
-          }
-        }
-        return undefined;
-      });
-
-    return () => {
-      disposed = true;
-    };
-  }, [token]);
 
   useEffect(() => {
     setReadNotificationIds(readStoredNotificationIds(notificationStorageKey));
@@ -560,7 +519,7 @@ function notificationTarget(notification: BackendNotification): EnterpriseView {
   if (text.includes("profile")) {
     return "profile";
   }
-  if (text.includes("password") || text.includes("security") || text.includes("startup") || text.includes("preference")) {
+  if (text.includes("password") || text.includes("security")) {
     return "security";
   }
   if (text.includes("camera") || text.includes("gateway") || text.includes("sync") || text.includes("threshold")) {

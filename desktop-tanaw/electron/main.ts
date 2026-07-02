@@ -32,7 +32,6 @@ const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const CAMERA_CREDENTIAL_STORE_FILE = "camera-credentials.json";
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const SPLASH_MIN_DISPLAY_MS = 1400;
-const STARTUP_UNAVAILABLE_MESSAGE = "Startup at sign-in is not available in this environment.";
 const execFileAsync = promisify(execFile);
 
 type CameraCredentialRecord = {
@@ -510,92 +509,9 @@ function registerMlServiceIpc() {
   });
 }
 
-function registerAppLifecycleIpc() {
-  ipcMain.handle("app-lifecycle:get-background-status", () => getBackgroundStatus());
-  ipcMain.handle("app-lifecycle:show-window", () => {
-    showMainWindow();
-    return getBackgroundStatus();
-  });
-  ipcMain.handle("app-lifecycle:quit", () => quitApplication());
-  ipcMain.handle("app-lifecycle:get-startup-settings", () => getStartupSettings());
-  ipcMain.handle("app-lifecycle:update-startup-settings", (_event, openAtLogin: boolean) => {
-    if (!isStartupRegistrationAvailable()) {
-      return getStartupSettings();
-    }
-
-    try {
-      setStartupSettings(Boolean(openAtLogin));
-    } catch (error) {
-      return {
-        isAvailable: false,
-        message: error instanceof Error ? error.message : STARTUP_UNAVAILABLE_MESSAGE,
-        openAtLogin: false,
-      };
-    }
-    return getStartupSettings();
-  });
-}
-
 function registerCameraCredentialIpc() {
   ipcMain.handle("camera-credentials:load", (_event, scope: unknown) => loadCameraCredentials(scope));
   ipcMain.handle("camera-credentials:save", (_event, scope: unknown, records: unknown) => saveCameraCredentials(scope, records));
-}
-
-function getBackgroundStatus() {
-  return {
-    background: Boolean(win && !win.isVisible()),
-    mlServiceRunning: isMlServiceRunning(),
-    mlServiceError,
-    trayAvailable: Boolean(tray),
-  };
-}
-
-function getStartupSettings() {
-  if (!isStartupRegistrationAvailable()) {
-    return { isAvailable: false, message: STARTUP_UNAVAILABLE_MESSAGE, openAtLogin: false };
-  }
-
-  try {
-    const settings = app.getLoginItemSettings(getStartupLoginItemOptions());
-    return { isAvailable: true, message: null, openAtLogin: settings.openAtLogin };
-  } catch (error) {
-    return {
-      isAvailable: false,
-      message: error instanceof Error ? error.message : STARTUP_UNAVAILABLE_MESSAGE,
-      openAtLogin: false,
-    };
-  }
-}
-
-function setStartupSettings(openAtLogin: boolean) {
-  if (!isStartupRegistrationAvailable()) {
-    throw new Error(STARTUP_UNAVAILABLE_MESSAGE);
-  }
-
-  app.setLoginItemSettings({
-    ...getStartupLoginItemOptions(),
-    openAtLogin,
-    openAsHidden: true,
-  });
-}
-
-function isStartupRegistrationAvailable() {
-  return process.platform === "darwin" || process.platform === "win32";
-}
-
-function getStartupLoginItemOptions() {
-  return {
-    args: getStartupLaunchArgs(),
-    path: process.execPath,
-  };
-}
-
-function getStartupLaunchArgs() {
-  if (app.isPackaged) {
-    return ["--background"];
-  }
-
-  return [app.getAppPath(), "--background"];
 }
 
 function createTray() {
@@ -815,25 +731,19 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(async () => {
-    const shouldStartInBackground = process.argv.includes("--background");
     let splashStartedAt: number | null = null;
 
     registerMlServiceIpc();
-    registerAppLifecycleIpc();
     registerCameraCredentialIpc();
     createTray();
-    if (!shouldStartInBackground) {
-      createWindow({ showSplash: true });
-      splashStartedAt = Date.now();
-    }
+    createWindow({ showSplash: true });
+    splashStartedAt = Date.now();
     await startMlService();
-    if (!shouldStartInBackground) {
-      await waitForSplashMinimumDisplay(splashStartedAt);
-      if (!win || win.isDestroyed()) {
-        createWindow();
-      } else {
-        loadMainWindowContent();
-      }
+    await waitForSplashMinimumDisplay(splashStartedAt);
+    if (!win || win.isDestroyed()) {
+      createWindow();
+    } else {
+      loadMainWindowContent();
     }
   });
 }

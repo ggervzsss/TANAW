@@ -42,31 +42,6 @@ interface Window {
       running: boolean;
     }>;
   };
-  tanawAppLifecycle?: {
-    getBackgroundStatus: () => Promise<{
-      background: boolean;
-      mlServiceError: string | null;
-      mlServiceRunning: boolean;
-      trayAvailable: boolean;
-    }>;
-    getStartupSettings: () => Promise<{
-      isAvailable: boolean;
-      message: string | null;
-      openAtLogin: boolean;
-    }>;
-    quit: () => Promise<void>;
-    showWindow: () => Promise<{
-      background: boolean;
-      mlServiceError: string | null;
-      mlServiceRunning: boolean;
-      trayAvailable: boolean;
-    }>;
-    updateStartupSettings: (openAtLogin: boolean) => Promise<{
-      isAvailable: boolean;
-      message: string | null;
-      openAtLogin: boolean;
-    }>;
-  };
   tanawCameraCredentials?: {
     load: (scope: string) => Promise<Record<string, { password?: string; username?: string }>>;
     save: (scope: string, records: Record<string, { password?: string; username?: string }>) => Promise<Record<string, { password?: string; username?: string }>>;

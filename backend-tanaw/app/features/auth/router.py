@@ -689,30 +689,11 @@ async def update_preferences(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountPreferences:
     values = get_account_preferences(account)
-    previous_open_at_login = bool(values.get("openAtLogin", False))
     patch_values = payload.model_dump(mode="json", exclude_unset=True)
     values.update(patch_values)
     set_account_preferences(account, values)
     await db.commit()
-    response = AccountPreferences.model_validate(values)
-
-    if (
-        account.role == AccountRole.ENTERPRISE
-        and "openAtLogin" in patch_values
-        and bool(patch_values["openAtLogin"]) != previous_open_at_login
-    ):
-        enterprise = account.enterprise_name or account.display_name
-        state = "enabled" if response.openAtLogin else "disabled"
-        await notify_enterprise_account_change(
-            db,
-            account,
-            title=f"{enterprise} updated startup/background monitoring preference.",
-            message=f"{enterprise} {state} startup at sign-in.",
-            notification_type="Enterprise Security Updated",
-            source_type="enterprise.preferences",
-        )
-
-    return response
+    return AccountPreferences.model_validate(values)
 
 
 @router.post("/data-archive", response_model=StatusResponse)

@@ -12,24 +12,6 @@ contextBridge.exposeInMainWorld("tanawMlService", {
   },
 });
 
-contextBridge.exposeInMainWorld("tanawAppLifecycle", {
-  getBackgroundStatus() {
-    return ipcRenderer.invoke("app-lifecycle:get-background-status");
-  },
-  getStartupSettings() {
-    return ipcRenderer.invoke("app-lifecycle:get-startup-settings");
-  },
-  quit() {
-    return ipcRenderer.invoke("app-lifecycle:quit");
-  },
-  showWindow() {
-    return ipcRenderer.invoke("app-lifecycle:show-window");
-  },
-  updateStartupSettings(openAtLogin: boolean) {
-    return ipcRenderer.invoke("app-lifecycle:update-startup-settings", openAtLogin);
-  },
-});
-
 contextBridge.exposeInMainWorld("tanawCameraCredentials", {
   load(scope: string) {
     return ipcRenderer.invoke("camera-credentials:load", scope);
