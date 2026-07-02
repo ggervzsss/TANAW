@@ -66,10 +66,13 @@ from app.features.auth.schemas import (
     SystemSettingsPayload,
 )
 from app.features.auth.service import (
+    LoginLockoutPolicy,
     authenticate_account,
     clear_login_failures,
     lockout_seconds_remaining,
+    login_lockout_message,
     register_failed_login,
+    resolve_login_lockout_policy,
 )
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
@@ -83,6 +86,7 @@ from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
     AccountRole.IT,
@@ -168,6 +172,29 @@ async def notify_enterprise_account_change(
         )
 
 
+async def get_login_lockout_policy(db: AsyncSession) -> LoginLockoutPolicy:
+    record = await db.scalar(
+        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    )
+    return resolve_login_lockout_policy(load_system_settings_values(record))
+
+
+def load_system_settings_values(record: SystemConfiguration | None) -> dict[str, str | bool | int]:
+    if record is None:
+        return {}
+    try:
+        values = json.loads(record.values_json)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(values, dict):
+        return {}
+    return {
+        key: value
+        for key, value in values.items()
+        if isinstance(key, str) and isinstance(value, str | bool | int)
+    }
+
+
 def join_changed_fields(fields: list[str]) -> str:
     if len(fields) <= 1:
         return fields[0] if fields else "profile details"
@@ -197,13 +224,16 @@ async def login(
     payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> LoginResponse:
     candidate = await get_account_by_login_identifier(db, payload.username)
+    lockout_policy = (
+        await get_login_lockout_policy(db) if candidate is not None else LoginLockoutPolicy()
+    )
     if candidate is not None:
         remaining = lockout_seconds_remaining(candidate)
         if remaining > 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
-                    "message": "Account temporarily locked after three failed attempts.",
+                    "message": login_lockout_message(lockout_policy),
                     "retryAfterSeconds": remaining,
                 },
                 headers={"Retry-After": str(remaining)},
@@ -216,14 +246,14 @@ async def login(
         or not is_login_scope_allowed(account, payload.loginScope)
     ):
         if candidate is not None:
-            remaining = register_failed_login(candidate)
+            remaining = register_failed_login(candidate, policy=lockout_policy)
             await db.commit()
             if remaining > 0:
                 await notify_failed_login_threshold(db, candidate)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
-                        "message": "Account temporarily locked after three failed attempts.",
+                        "message": login_lockout_message(lockout_policy),
                         "retryAfterSeconds": remaining,
                     },
                     headers={"Retry-After": str(remaining)},
@@ -734,8 +764,14 @@ async def get_system_settings(
     _: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemSettingsPayload:
-    record = await db.scalar(select(SystemConfiguration).where(SystemConfiguration.id == "default"))
-    return SystemSettingsPayload(values=json.loads(record.values_json) if record else {})
+    record = await db.scalar(
+        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    )
+    return SystemSettingsPayload(
+        values=load_system_settings_values(record),
+        updatedBy=record.updated_by if record else None,
+        updatedAt=record.updated_at if record else None,
+    )
 
 
 @router.patch("/system-settings", response_model=SystemSettingsPayload)
@@ -748,13 +784,16 @@ async def update_system_settings(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="IT Personnel access required."
         )
-    record = await db.scalar(select(SystemConfiguration).where(SystemConfiguration.id == "default"))
+    record = await db.scalar(
+        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    )
     if record is None:
-        record = SystemConfiguration(id="default")
+        record = SystemConfiguration(id=SYSTEM_SETTINGS_ID)
         db.add(record)
     record.values_json = json.dumps(payload.values, sort_keys=True)
     record.updated_by = account.display_name
     await db.commit()
+    await db.refresh(record)
     await record_auth_log(
         db,
         category="IT Activity",
@@ -766,7 +805,11 @@ async def update_system_settings(
         summary=f"{account.display_name} saved persistent system settings.",
         source_id=record.id,
     )
-    return payload
+    return SystemSettingsPayload(
+        values=payload.values,
+        updatedBy=record.updated_by,
+        updatedAt=record.updated_at,
+    )
 
 
 async def record_auth_log(

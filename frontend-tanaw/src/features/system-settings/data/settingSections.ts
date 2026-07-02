@@ -6,19 +6,15 @@ export const settingSections: SettingSection[] = [
     id: "security",
     title: "Account & Security Settings",
     icon: ShieldCheck,
-    modified: "May 18, 2026 by Mike",
     fields: [
-      { label: "Session Timeout", type: "select", value: "30 minutes", options: ["15 minutes", "30 minutes", "60 minutes"] },
-      { label: "Password Reset Required", type: "toggle", value: true },
-      { label: "Failed Login Threshold", type: "select", value: "5 attempts", options: ["3 attempts", "5 attempts", "10 attempts"] },
-      { label: "Account Lock Duration", type: "select", value: "15 minutes", options: ["15 minutes", "30 minutes", "1 hour"] },
+      { key: "loginAttemptLimit", label: "Failed Login Threshold", type: "select", value: 3, options: [3, 5, 10] },
+      { key: "loginLockMinutes", label: "Account Lock Duration", type: "select", value: 5, options: [5, 15, 30, 60] },
     ],
   },
   {
     id: "logs",
     title: "Log Settings",
     icon: FileText,
-    modified: "May 16, 2026 by Mike",
     fields: [
       { label: "Log Retention Period", type: "select", value: "180 days", options: ["90 days", "180 days", "365 days"] },
       { label: "Log Critical Alerts", type: "toggle", value: true },
@@ -30,7 +26,6 @@ export const settingSections: SettingSection[] = [
     id: "notifications",
     title: "Notification Settings",
     icon: Bell,
-    modified: "May 15, 2026 by Mike",
     fields: [
       { label: "Notify Camera Offline", type: "toggle", value: true },
       { label: "Notify Gateway Offline", type: "toggle", value: true },

@@ -29,6 +29,12 @@ def test_mock_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch)
     assert settings.allow_mock_data is True
 
 
+def test_default_access_token_lifetime_supports_continuous_operation() -> None:
+    settings = Settings()
+
+    assert settings.access_token_expire_minutes == 60 * 24 * 30
+
+
 def test_cors_origins_are_trimmed_and_normalized() -> None:
     settings = Settings(cors_origins=" https://tanaw-sanpedro.vercel.app/, http://localhost:5173 ")
 

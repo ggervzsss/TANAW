@@ -69,6 +69,14 @@ export type CreateEnterpriseAccountPayload = {
   geocodedAddress?: string;
 };
 
+export type SystemSettingValue = string | boolean | number;
+
+export type SystemSettingsResponse = {
+  updatedAt: string | null;
+  updatedBy: string | null;
+  values: Record<string, SystemSettingValue>;
+};
+
 export type UpdateEnterpriseAccountPayload = {
   enterpriseName: string;
   category: string;
@@ -202,11 +210,11 @@ export async function requestDataArchive() {
 }
 
 export async function getSystemSettings() {
-  const response = await apiClient.get<{ values: Record<string, string | boolean> }>("/auth/system-settings");
-  return response.data.values;
+  const response = await apiClient.get<SystemSettingsResponse>("/auth/system-settings");
+  return response.data;
 }
 
-export async function updateSystemSettings(values: Record<string, string | boolean>) {
-  const response = await apiClient.patch<{ values: Record<string, string | boolean> }>("/auth/system-settings", { values });
-  return response.data.values;
+export async function updateSystemSettings(values: Record<string, SystemSettingValue>) {
+  const response = await apiClient.patch<SystemSettingsResponse>("/auth/system-settings", { values });
+  return response.data;
 }

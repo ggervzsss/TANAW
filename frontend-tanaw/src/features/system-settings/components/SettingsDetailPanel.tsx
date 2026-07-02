@@ -2,19 +2,20 @@ import { RotateCcw, Save, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Panel } from "@/shared/components/panel";
-import type { SettingField, SettingSection } from "../types";
+import type { SettingField, SettingSection, SettingValue } from "../types";
 
 type SettingsDetailPanelProps = {
   section: SettingSection;
-  storedValues: Record<string, string | boolean>;
+  storedValues: Record<string, SettingValue>;
   isSaving: boolean;
-  onSave: (values: Record<string, string | boolean>) => void;
+  metadataLabel: string;
+  onSave: (values: Record<string, SettingValue>) => void;
 };
 
-export function SettingsDetailPanel({ section, storedValues, isSaving, onSave }: SettingsDetailPanelProps) {
+export function SettingsDetailPanel({ section, storedValues, isSaving, metadataLabel, onSave }: SettingsDetailPanelProps) {
   const Icon = section.icon;
-  const defaults = useMemo(() => Object.fromEntries(section.fields.map((field) => [settingKey(section.id, field.label), field.value])), [section.fields, section.id]);
-  const [values, setValues] = useState<Record<string, string | boolean>>({
+  const defaults = useMemo<Record<string, SettingValue>>(() => Object.fromEntries(section.fields.map((field) => [settingKey(section.id, field), field.value])), [section.fields, section.id]);
+  const [values, setValues] = useState<Record<string, SettingValue>>({
     ...defaults,
     ...storedValues,
   });
@@ -28,7 +29,7 @@ export function SettingsDetailPanel({ section, storedValues, isSaving, onSave }:
           </div>
           <div>
             <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
-            <p className="mt-1 text-sm text-gray-500">Last modified: {section.modified}</p>
+            <p className="mt-1 text-sm text-gray-500">{metadataLabel}</p>
           </div>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-700 uppercase">
@@ -43,11 +44,11 @@ export function SettingsDetailPanel({ section, storedValues, isSaving, onSave }:
               <span className="mb-2 block text-[10px] font-bold tracking-wide text-gray-500 uppercase">{field.label}</span>
               <SettingControl
                 field={field}
-                value={values[settingKey(section.id, field.label)] ?? field.value}
+                value={values[settingKey(section.id, field)] ?? field.value}
                 onChange={(value) =>
                   setValues((current) => ({
                     ...current,
-                    [settingKey(section.id, field.label)]: value,
+                    [settingKey(section.id, field)]: value,
                   }))
                 }
               />
@@ -86,7 +87,7 @@ export function SettingsDetailPanel({ section, storedValues, isSaving, onSave }:
   );
 }
 
-function SettingControl({ field, value, onChange }: { field: SettingField; value: string | boolean; onChange: (value: string | boolean) => void }) {
+function SettingControl({ field, value, onChange }: { field: SettingField; value: SettingValue; onChange: (value: SettingValue) => void }) {
   if (field.type === "toggle") {
     return (
       <div className="flex items-center justify-between gap-4">
@@ -99,18 +100,25 @@ function SettingControl({ field, value, onChange }: { field: SettingField; value
   return (
     <select
       value={String(value)}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={(event) => onChange(typeof field.value === "number" ? Number(event.target.value) : event.target.value)}
       className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-1"
     >
       {field.options.map((option) => (
-        <option key={option} value={option}>
-          {option}
+        <option key={String(option)} value={String(option)}>
+          {formatSelectOption(field, option)}
         </option>
       ))}
     </select>
   );
 }
 
-function settingKey(sectionId: string, label: string) {
-  return `${sectionId}.${label}`;
+function formatSelectOption(field: SettingField, option: string | number) {
+  if (field.type !== "select") return String(option);
+  if (field.key === "loginAttemptLimit") return `${option} attempts`;
+  if (field.key === "loginLockMinutes") return `${option} minutes`;
+  return String(option);
+}
+
+function settingKey(sectionId: string, field: SettingField) {
+  return `${sectionId}.${field.key ?? field.label}`;
 }
