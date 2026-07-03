@@ -12,6 +12,12 @@ import { purgeExpiredActivityLogs } from "@/shared/services/activityLogs";
 import { activityLogsQueryKey } from "@/shared/hooks/useActivityLogs";
 
 const visibleSettingKeys = new Set(settingSections.flatMap((section) => section.fields.map((field) => settingKey(section.id, field))));
+const legacyNotificationSettingKeys: Record<string, string> = {
+  "notifications.cameraSessionErrorAlerts": "notifications.Notify Camera Offline",
+  "notifications.gatewayServiceErrorAlerts": "notifications.Notify Gateway Offline",
+  "notifications.syncDelayAlerts": "notifications.Notify Sync Failed",
+  "notifications.failedLoginLockoutAlerts": "notifications.Notify Failed Login Threshold",
+};
 
 export function ITSystemSettingsPage() {
   const [activeSectionId, setActiveSectionId] = useState(settingSections[0].id);
@@ -102,6 +108,11 @@ function filterVisibleSettings(values: Record<string, SettingValue>) {
   const retentionDays = resolveExistingRetentionDays(values);
   if (retentionDays !== null) {
     visibleSettings["logs.retentionDays"] = retentionDays;
+  }
+  for (const [stableKey, legacyKey] of Object.entries(legacyNotificationSettingKeys)) {
+    if (typeof visibleSettings[stableKey] !== "boolean" && typeof values[legacyKey] === "boolean") {
+      visibleSettings[stableKey] = values[legacyKey];
+    }
   }
   return visibleSettings;
 }

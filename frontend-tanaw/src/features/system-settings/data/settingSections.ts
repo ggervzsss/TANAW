@@ -24,10 +24,34 @@ export const settingSections: SettingSection[] = [
     title: "Notification Settings",
     icon: Bell,
     fields: [
-      { label: "Notify Camera Offline", type: "toggle", value: true },
-      { label: "Notify Gateway Offline", type: "toggle", value: true },
-      { label: "Notify Sync Failed", type: "toggle", value: true },
-      { label: "Notify Failed Login Threshold", type: "toggle", value: true },
+      {
+        key: "cameraSessionErrorAlerts",
+        label: "Camera Session Error Alerts",
+        description: "Create an IT maintenance alert when desktop telemetry reports a camera-specific session error.",
+        type: "toggle",
+        value: true,
+      },
+      {
+        key: "gatewayServiceErrorAlerts",
+        label: "Gateway Service Error Alerts",
+        description: "Create an IT maintenance alert when the desktop gateway or ML service reports a session error without a camera source.",
+        type: "toggle",
+        value: true,
+      },
+      {
+        key: "syncDelayAlerts",
+        label: "Sync Delay Alerts",
+        description: "Create an IT maintenance alert when desktop telemetry has events waiting for cloud synchronization.",
+        type: "toggle",
+        value: true,
+      },
+      {
+        key: "failedLoginLockoutAlerts",
+        label: "Failed Login Lockout Alerts",
+        description: "Create an IT security alert when an account reaches the failed-login threshold and is temporarily locked.",
+        type: "toggle",
+        value: true,
+      },
     ],
   },
 ];

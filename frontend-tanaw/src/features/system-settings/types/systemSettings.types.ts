@@ -6,6 +6,7 @@ export type SettingField =
   | {
       key?: string;
       label: string;
+      description?: string;
       type: "select";
       value: string | number;
       options: Array<string | number>;
@@ -13,6 +14,7 @@ export type SettingField =
   | {
       key?: string;
       label: string;
+      description?: string;
       type: "toggle";
       value: boolean;
     };

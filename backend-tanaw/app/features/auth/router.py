@@ -76,7 +76,7 @@ from app.features.auth.service import (
 )
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
-    NOTIFY_FAILED_LOGIN_THRESHOLD_KEY,
+    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     create_operational_alert,
     create_role_notifications,
     system_setting_enabled,
@@ -114,7 +114,7 @@ def get_auth_log_category(account: Account) -> str:
 
 
 async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> None:
-    if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_THRESHOLD_KEY):
+    if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_LOCKOUT_KEY):
         return
 
     alert = await create_operational_alert(

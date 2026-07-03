@@ -1,5 +1,5 @@
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -51,10 +51,16 @@ from app.features.operational.schemas import (
 STALE_GATEWAY_SECONDS = 120
 OFFLINE_GATEWAY_SECONDS = 900
 SYSTEM_SETTINGS_ID = "default"
-NOTIFY_CAMERA_OFFLINE_KEY = "notifications.Notify Camera Offline"
-NOTIFY_GATEWAY_OFFLINE_KEY = "notifications.Notify Gateway Offline"
-NOTIFY_SYNC_FAILED_KEY = "notifications.Notify Sync Failed"
-NOTIFY_FAILED_LOGIN_THRESHOLD_KEY = "notifications.Notify Failed Login Threshold"
+NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
+NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
+NOTIFY_SYNC_DELAY_KEY = "notifications.syncDelayAlerts"
+NOTIFY_FAILED_LOGIN_LOCKOUT_KEY = "notifications.failedLoginLockoutAlerts"
+NOTIFICATION_SETTING_LEGACY_KEYS = {
+    NOTIFY_CAMERA_SESSION_ERROR_KEY: ("notifications.Notify Camera Offline",),
+    NOTIFY_GATEWAY_SERVICE_ERROR_KEY: ("notifications.Notify Gateway Offline",),
+    NOTIFY_SYNC_DELAY_KEY: ("notifications.Notify Sync Failed",),
+    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: ("notifications.Notify Failed Login Threshold",),
+}
 
 
 class DuplicateReportPeriodError(Exception):
@@ -122,8 +128,23 @@ async def system_setting_enabled(db: AsyncSession, key: str, *, default: bool = 
         values = json.loads(record.values_json)
     except json.JSONDecodeError:
         return default
-    value = values.get(key) if isinstance(values, dict) else None
-    return value if isinstance(value, bool) else default
+    return resolve_system_setting_enabled(
+        values if isinstance(values, dict) else None, key, default=default
+    )
+
+
+def resolve_system_setting_enabled(
+    values: Mapping[str, object] | None, key: str, *, default: bool = True
+) -> bool:
+    values = values or {}
+    value = values.get(key)
+    if isinstance(value, bool):
+        return value
+    for legacy_key in NOTIFICATION_SETTING_LEGACY_KEYS.get(key, ()):
+        legacy_value = values.get(legacy_key)
+        if isinstance(legacy_value, bool):
+            return legacy_value
+    return default
 
 
 async def list_user_notifications(

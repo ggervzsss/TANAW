@@ -44,6 +44,7 @@ export function SettingsDetailPanel({ section, storedValues, isSaving, metadataL
           <div key={field.label} className="rounded-xl border border-gray-200 bg-white p-5">
             <label className="block">
               <span className="mb-2 block text-[10px] font-bold tracking-wide text-gray-500 uppercase">{field.label}</span>
+              {field.description && <span className="mb-4 block text-sm leading-6 text-gray-500">{field.description}</span>}
               <SettingControl
                 field={field}
                 value={values[settingKey(section.id, field)] ?? field.value}

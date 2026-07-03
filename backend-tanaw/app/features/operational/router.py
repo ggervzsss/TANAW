@@ -53,9 +53,9 @@ from app.features.operational.schemas import (
     UserNotificationSummary,
 )
 from app.features.operational.service import (
-    NOTIFY_CAMERA_OFFLINE_KEY,
-    NOTIFY_GATEWAY_OFFLINE_KEY,
-    NOTIFY_SYNC_FAILED_KEY,
+    NOTIFY_CAMERA_SESSION_ERROR_KEY,
+    NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
+    NOTIFY_SYNC_DELAY_KEY,
     DuplicateReportPeriodError,
     build_fleet_simulation_telemetry_payload,
     create_final_report,
@@ -130,7 +130,7 @@ async def ingest_desktop_telemetry(
         )
 
     if payload.metrics.unsyncedEvents > 0 and await system_setting_enabled(
-        db, NOTIFY_SYNC_FAILED_KEY
+        db, NOTIFY_SYNC_DELAY_KEY
     ):
         sync_alert = await create_operational_alert(
             db,
@@ -155,9 +155,9 @@ async def ingest_desktop_telemetry(
         )
 
     session_error_setting_key = (
-        NOTIFY_CAMERA_OFFLINE_KEY
+        NOTIFY_CAMERA_SESSION_ERROR_KEY
         if payload.session.cameraId is not None or payload.session.cameraName
-        else NOTIFY_GATEWAY_OFFLINE_KEY
+        else NOTIFY_GATEWAY_SERVICE_ERROR_KEY
     )
     if payload.session.error and await system_setting_enabled(db, session_error_setting_key):
         maintenance_alert = await create_operational_alert(
