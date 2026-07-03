@@ -499,6 +499,15 @@ class LocalMetricsStore:
                 {submitted_filter}
                 """
             ).fetchall()
+            payload_rows = connection.execute(
+                f"""
+                select payload_json
+                from count_events
+                {submitted_filter}
+                order by recorded_at asc
+                limit 25
+                """
+            ).fetchall()
             correction_row = connection.execute(
                 """
                 select coalesce(sum(delta), 0) as correction_delta
@@ -531,6 +540,7 @@ class LocalMetricsStore:
             "last_event_at": row["last_event_at"],
             "source_kind": source_kind,
             "mock_run_id": mock_run_id,
+            "period": _period_for_payload_rows(payload_rows),
         }
 
     def metrics_history(
@@ -718,21 +728,44 @@ class LocalMetricsStore:
         period: str,
     ) -> dict[str, int | str | None]:
         with self._connection() as connection:
-            existing_events = connection.execute(
-                "select count(*) from count_events where mock_run_id = ?",
+            existing_open_events = connection.execute(
+                """
+                select count(*)
+                from count_events
+                where mock_run_id = ?
+                  and submitted_report_id is null
+                """,
                 (mock_run_id,),
             ).fetchone()[0]
-            existing_reports = connection.execute(
-                "select count(*) from report_submissions where mock_run_id = ?",
-                (mock_run_id,),
+            existing_open_period = _period_for_payload_rows(
+                connection.execute(
+                    """
+                    select payload_json
+                    from count_events
+                    where mock_run_id = ?
+                      and submitted_report_id is null
+                    order by recorded_at asc
+                    limit 25
+                    """,
+                    (mock_run_id,),
+                ).fetchall()
+            )
+            existing_period_report = connection.execute(
+                """
+                select count(*)
+                from report_submissions
+                where mock_run_id = ?
+                  and period = ?
+                """,
+                (mock_run_id, period),
             ).fetchone()[0]
-        if existing_events or existing_reports:
+        if existing_period_report or (existing_open_events and existing_open_period == period):
             return {
                 **self.metrics_summary(include_submitted=False),
                 "prepared": False,
             }
 
-        self.remove_mock_data()
+        self._remove_mock_metric_data(mock_run_id)
         rng = random.Random(mock_run_id)
         entry_total = max(0, entries)
         exit_total = max(0, min(exits, entry_total))
@@ -835,6 +868,25 @@ class LocalMetricsStore:
             **self.metrics_summary(include_submitted=False),
             "prepared": True,
         }
+
+    def _remove_mock_metric_data(self, mock_run_id: str) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "delete from count_events where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
+                (mock_run_id,),
+            )
+            connection.execute(
+                "delete from count_snapshots where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
+                (mock_run_id,),
+            )
+            connection.execute(
+                """
+                delete from occupancy_corrections
+                where mock_run_id = ?
+                  and source_kind in ('mock', 'hybrid')
+                """,
+                (mock_run_id,),
+            )
 
     def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
         if mock_run_id:
@@ -1195,6 +1247,18 @@ def _provenance_for_rows(rows: list[sqlite3.Row]) -> tuple[str, str | None]:
     else:
         source_kind = "real"
     return source_kind, run_ids.pop() if len(run_ids) == 1 else None
+
+
+def _period_for_payload_rows(rows: list[sqlite3.Row]) -> str | None:
+    for row in rows:
+        try:
+            payload = json.loads(str(row["payload_json"]))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        period = payload.get("period") if isinstance(payload, dict) else None
+        if isinstance(period, str) and period.strip():
+            return period
+    return None
 
 
 def _submitted_filter_sql(include_submitted: bool) -> str:

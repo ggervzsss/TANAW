@@ -20,6 +20,7 @@ export type EnterpriseIntakeReport = {
     unique: number;
     peak: string | number;
   };
+  payload?: Record<string, unknown> | null;
 };
 
 export async function listEnterpriseReportHistory() {

@@ -299,7 +299,7 @@ PowerShell uses the same command.
 
 ### Backend Prepared Counts
 
-The backend mock-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves the prepared package through the authenticated backend connection and writes it into the local ledger.
+The backend mock-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves pending prepared packages through the authenticated backend connection and writes the selected period into the local ledger. For Archie's Event Place, the default scenario loads the overdue previous-period package first, exposes unfinished periods in the **Reporting Month** selector, then loads the current-period package after the overdue report syncs.
 
 Prepare from the project root:
 

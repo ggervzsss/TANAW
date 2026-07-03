@@ -458,22 +458,27 @@ This creates:
 - three LGU test accounts;
 - five enterprise test accounts;
 - enterprise telemetry snapshots;
-- historical enterprise submissions and finalized city reports;
-- current-period submissions ready for consolidation from supporting
-  enterprises;
+- historical enterprise submissions and finalized city reports for closed
+  periods;
+- previous-period and current-period submissions ready for consolidation from
+  supporting enterprises;
 - activity/audit logs;
-- prepared current-period counts for Archie's Event Place;
-- no current-period submission for Archie's, leaving the last step for a real
-  desktop submission.
+- prepared previous-period and current-period counts for Archie's Event Place;
+- no previous-period or current-period submission for Archie's, leaving both
+  steps for real desktop submissions.
 
 Archie's remains a normal, persistent account and is not deleted by
 `mock-data off`. The five generated enterprises act as supporting participants
 in the reporting scenario.
 
 A camera does not need to be running. The authenticated target desktop polls
-the backend and loads the finite prepared count package into its enterprise
-ledger. If a real camera is also running, later camera events continue to
-accumulate in the same draft.
+the backend and loads the oldest finite prepared count package into its
+enterprise ledger. After the overdue report is submitted and synced, the
+desktop loads the current-period package. If a real camera is also running,
+later camera events continue to accumulate in the same draft.
+
+When multiple unfinished periods are available, the desktop report workspace
+shows them in the **Reporting Month** selector.
 
 ### Simulation accounts
 
@@ -509,15 +514,18 @@ not `TanawTest123!`.
 
 1. Start the desktop application and sign in to Archie's Event Place using
    `archies@email.com` and its configured password.
-2. Wait for the prepared counts to appear on the desktop Dashboard.
-3. Open **Reports & Submissions**, create a **New Draft**, review the locked
-   system metrics, complete any supplementary fields, and submit it.
-4. Sign in to the web portal as `reports.staff@tanaw.test` with
+2. Wait for the overdue prepared counts to appear on the desktop Dashboard.
+3. Open **Reports & Submissions**, select the overdue **Reporting Month** if it
+   is not already selected, review the locked system metrics, complete the
+   demographic fields, and submit the overdue report.
+4. Wait for the current-period prepared counts to load, then complete and
+   submit the current report.
+5. Sign in to the web portal as `reports.staff@tanaw.test` with
    `TanawTest123!`.
-5. Open **Batch Reports** for the current month.
-6. Review the target submission and accept it as **Ready to Consolidate**.
-7. Generate the final report once all participating enterprises are ready.
-8. Open **Final Reports Audit** and inspect the consolidated totals and source
+6. Open **Batch Reports** for the relevant reporting periods.
+7. Review the target submissions and accept them as **Ready to Consolidate**.
+8. Generate the final report once all participating enterprises are ready.
+9. Open **Final Reports Audit** and inspect the consolidated totals and source
    rows.
 
 Desktop submissions are written to SQLite first, synchronized to PostgreSQL,

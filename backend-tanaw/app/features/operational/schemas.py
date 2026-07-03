@@ -159,6 +159,7 @@ class MockPreparationSummary(BaseModel):
     enterpriseId: str
     enterpriseName: str
     counts: MockPreparationCounts | None = None
+    pendingCounts: list[MockPreparationCounts] = Field(default_factory=list)
 
 
 class FleetSimulationEnterpriseSummary(BaseModel):
@@ -212,6 +213,7 @@ class IntakeReportSummary(BaseModel):
     remarks: str | None = None
     notes: str | None = None
     metrics: dict[str, int | str]
+    payload: dict | None = None
 
 
 FinalReportStatus = Literal["Draft", "Finalized", "Archived"]

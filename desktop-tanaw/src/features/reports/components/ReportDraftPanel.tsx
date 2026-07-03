@@ -15,11 +15,14 @@ type ReportDraftPanelProps = {
   activeReportId: string | null;
   demo: DemoBreakdown;
   isReadOnly: boolean;
+  isPeriodChanging: boolean;
   metricsError: string | null;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
+  periodOptions: string[];
   validationError: string | null;
+  onPeriodChange: (period: string) => void;
   onPreview: () => void;
   onSubmitPrompt: () => void;
   setDemo: React.Dispatch<React.SetStateAction<DemoBreakdown>>;
@@ -31,11 +34,14 @@ export function ReportDraftPanel({
   activeReportId,
   demo,
   isReadOnly,
+  isPeriodChanging,
   metricsError,
   metrics,
   notes,
   period,
+  periodOptions,
   validationError,
+  onPeriodChange,
   onPreview,
   onSubmitPrompt,
   setDemo,
@@ -52,8 +58,11 @@ export function ReportDraftPanel({
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodField
-          description={isCurrentReport ? "Reports are prepared for the current calendar month. Use the Submission Ledger to review past reports." : "This is the period saved with the selected ledger report."}
-          label={isCurrentReport ? "Current Reporting Month" : "Report Period"}
+          description={isCurrentReport ? "Unfinished reporting periods are loaded from prepared system counts." : "This is the period saved with the selected ledger report."}
+          isLoading={isPeriodChanging}
+          label={isCurrentReport ? "Reporting Month" : "Report Period"}
+          onPeriodChange={isCurrentReport ? onPeriodChange : undefined}
+          options={isCurrentReport ? periodOptions : []}
           period={period}
         />
         <SystemLockedMetrics demo={demo} metrics={metrics} />

@@ -337,6 +337,7 @@ class MetricsSummaryResponse(BaseModel):
     last_event_at: str | None = None
     source_kind: SourceKind = "real"
     mock_run_id: str | None = None
+    period: str | None = None
 
 
 class OccupancyCorrectionRequest(BaseModel):
@@ -456,7 +457,7 @@ class MockPrepareRequest(BaseModel):
 class MockPrepareResponse(MetricsSummaryResponse):
     enterprise_id: str
     enterprise_name: str | None = None
-    period: str
+    period: str | None = None
     prepared: bool = True
 
 

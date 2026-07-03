@@ -1172,7 +1172,18 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
             "unique": report.unique_count,
             "peak": str(report.peak_occupancy),
         },
+        payload=parse_report_payload(report.payload_json),
     )
+
+
+def parse_report_payload(payload_json: str | None) -> dict | None:
+    if not payload_json:
+        return None
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> FinalReportSummary:

@@ -32,6 +32,14 @@ TEST_ACCOUNT_PASSWORD = "TanawTest123!"
 DEFAULT_SCENARIO = "full-workflow"
 DEFAULT_SEED = "tanaw-testing-v2"
 REPORTING_STAFF_NAME = "Carla Mendoza"
+DEMOGRAPHIC_FIELDS = (
+    "thisProvMale",
+    "thisProvFemale",
+    "otherProvMale",
+    "otherProvFemale",
+    "foreignMale",
+    "foreignFemale",
+)
 
 
 @dataclass(frozen=True)
@@ -337,6 +345,7 @@ async def generate_mock_data(
         "finalReports": len(final_reports),
         "activityLogs": logs,
         "targetPreparedCounts": reports["targetPreparedCounts"],
+        "targetPreparedReportCounts": reports["targetPreparedReportCounts"],
     }
     run.generated_counts_json = json.dumps(counts, sort_keys=True)
     await db.commit()
@@ -467,7 +476,7 @@ async def create_operational_history(
     telemetry: list[EnterpriseTelemetrySnapshot] = []
     months = month_starts(range_start, range_end)
     current_month = months[-1]
-    target_prepared_counts: dict | None = None
+    target_prepared_counts: list[dict[str, int | str]] = []
 
     for month_index, month_start in enumerate(months):
         period = period_label(month_start)
@@ -491,13 +500,17 @@ async def create_operational_history(
                 month_start, current_month, enterprise.id, target.id
             )
             if should_skip:
-                target_prepared_counts = {
-                    "entries": base_entries,
-                    "exits": exits,
-                    "uniqueCount": unique_count,
-                    "peakOccupancy": peak,
-                    "period": period,
-                }
+                target_prepared_counts.append(
+                    {
+                        "entries": base_entries,
+                        "exits": exits,
+                        "uniqueCount": unique_count,
+                        "peakOccupancy": peak,
+                        "period": period,
+                    }
+                )
+
+            demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
 
             snapshot = EnterpriseTelemetrySnapshot(
                 enterprise_account_id=enterprise.id,
@@ -564,7 +577,19 @@ async def create_operational_history(
                 else None,
                 sync_status="synced",
                 payload_json=json.dumps(
-                    {"status": "Submitted", "source": "desktop-reporting"}, sort_keys=True
+                    {
+                        "demo": demographics,
+                        "metrics": {
+                            "entries": base_entries,
+                            "exits": exits,
+                            "peak": peak,
+                            "unique": unique_count,
+                        },
+                        "period": period,
+                        "source": "desktop-reporting",
+                        "status": "Submitted",
+                    },
+                    sort_keys=True,
                 ),
                 source_kind="mock",
                 mock_run_id=run_id,
@@ -573,15 +598,51 @@ async def create_operational_history(
             reports.append(report)
 
     await db.flush()
-    if target_prepared_counts is None:
+    if not target_prepared_counts:
         raise SystemExit(
-            "The target enterprise did not receive a current-period prepared count package."
+            "The target enterprise did not receive prepared count packages for the reporting scenario."
         )
     return {
         "reports": reports,
         "telemetry": telemetry,
-        "targetPreparedCounts": target_prepared_counts,
+        "targetPreparedCounts": target_prepared_counts[0],
+        "targetPreparedReportCounts": target_prepared_counts,
     }
+
+
+def build_demographic_breakdown(
+    unique_count: int, enterprise_index: int, month_index: int
+) -> dict[str, str]:
+    this_province_share = 58 + (enterprise_index % 4) * 2
+    other_province_share = 27 + (month_index % 3) * 2
+    this_province_total = unique_count * this_province_share // 100
+    other_province_total = unique_count * other_province_share // 100
+    if this_province_total + other_province_total > unique_count:
+        other_province_total = max(0, unique_count - this_province_total)
+    foreign_total = unique_count - this_province_total - other_province_total
+
+    this_prov_male, this_prov_female = split_gender(
+        this_province_total, 48 + ((enterprise_index + month_index) % 5)
+    )
+    other_prov_male, other_prov_female = split_gender(
+        other_province_total, 49 + ((enterprise_index * 2 + month_index) % 4)
+    )
+    foreign_male, foreign_female = split_gender(
+        foreign_total, 52 + ((enterprise_index + month_index * 2) % 4)
+    )
+    return {
+        "thisProvMale": str(this_prov_male),
+        "thisProvFemale": str(this_prov_female),
+        "otherProvMale": str(other_prov_male),
+        "otherProvFemale": str(other_prov_female),
+        "foreignMale": str(foreign_male),
+        "foreignFemale": str(foreign_female),
+    }
+
+
+def split_gender(total: int, male_percent: int) -> tuple[int, int]:
+    male = max(0, min(total, total * male_percent // 100))
+    return male, total - male
 
 
 async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> list[FinalReport]:
@@ -781,11 +842,18 @@ def should_skip_target_report(
     enterprise_account_id: str,
     target_account_id: str,
 ) -> bool:
-    return month_start == current_month and enterprise_account_id == target_account_id
+    previous_month = add_months(current_month, -1)
+    return enterprise_account_id == target_account_id and month_start in {
+        previous_month,
+        current_month,
+    }
 
 
 def seeded_review_status(month_start: datetime, current_month: datetime) -> str:
-    return "Ready to Consolidate" if month_start == current_month else "Consolidated"
+    previous_month = add_months(current_month, -1)
+    return (
+        "Ready to Consolidate" if month_start in {previous_month, current_month} else "Consolidated"
+    )
 
 
 async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
@@ -796,7 +864,9 @@ async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
     target: dict[str, Any] = raw_target if isinstance(raw_target, dict) else {}
     raw_counts = result.get("counts")
     counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
-    raw_prepared = counts.get("targetPreparedCounts")
+    raw_prepared_reports = counts.get("targetPreparedReportCounts")
+    prepared_reports = raw_prepared_reports if isinstance(raw_prepared_reports, list) else []
+    raw_prepared = prepared_reports[0] if prepared_reports else counts.get("targetPreparedCounts")
     prepared: dict[str, Any] = raw_prepared if isinstance(raw_prepared, dict) else {}
     enterprise_id = target.get("enterpriseId")
     if not isinstance(enterprise_id, str) or not enterprise_id:

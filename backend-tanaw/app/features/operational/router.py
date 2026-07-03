@@ -24,7 +24,11 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
-from app.features.operational.models import MockDataRun, OperationalAlert
+from app.features.operational.models import (
+    EnterpriseReportSubmission,
+    MockDataRun,
+    OperationalAlert,
+)
 from app.features.operational.schemas import (
     DesktopReportSubmissionIngest,
     DesktopTelemetryIngest,
@@ -251,12 +255,37 @@ async def get_desktop_mock_preparation(
     if run is None:
         return None
 
-    prepared_counts: MockPreparationCounts | None = None
+    pending_counts: list[MockPreparationCounts] = []
     if run.status == "active" and run.generated_counts_json:
         generated_counts = json.loads(run.generated_counts_json)
-        candidate = generated_counts.get("targetPreparedCounts")
-        if isinstance(candidate, dict):
-            prepared_counts = MockPreparationCounts.model_validate(candidate)
+        raw_candidates = generated_counts.get("targetPreparedReportCounts")
+        candidates = raw_candidates if isinstance(raw_candidates, list) else []
+        if not candidates:
+            fallback_candidate = generated_counts.get("targetPreparedCounts")
+            candidates = [fallback_candidate] if isinstance(fallback_candidate, dict) else []
+        candidate_periods = [
+            candidate["period"]
+            for candidate in candidates
+            if isinstance(candidate, dict) and isinstance(candidate.get("period"), str)
+        ]
+        submitted_periods = set(
+            (
+                await db.scalars(
+                    select(EnterpriseReportSubmission.period).where(
+                        EnterpriseReportSubmission.enterprise_id
+                        == (run.target_enterprise_id or enterprise_identifier(account)),
+                        EnterpriseReportSubmission.period.in_(candidate_periods),
+                    )
+                )
+            ).all()
+            if candidate_periods
+            else []
+        )
+        pending_counts = [
+            MockPreparationCounts.model_validate(candidate)
+            for candidate in candidates
+            if isinstance(candidate, dict) and candidate.get("period") not in submitted_periods
+        ]
 
     return MockPreparationSummary(
         runId=run.id,
@@ -265,7 +294,8 @@ async def get_desktop_mock_preparation(
         enterpriseName=run.target_enterprise_name
         or account.enterprise_name
         or account.display_name,
-        counts=prepared_counts,
+        counts=pending_counts[0] if pending_counts else None,
+        pendingCounts=pending_counts,
     )
 
 

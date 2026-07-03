@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
@@ -7,9 +7,9 @@ import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
-import type { LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
+import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
-import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
@@ -39,9 +39,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPeriodChanging, setIsPeriodChanging] = useState(false);
+  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendMockPreparationCounts[]>([]);
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
+  const periodOptions = useMemo(() => buildPeriodOptions(period, pendingPeriodCounts), [pendingPeriodCounts, period]);
 
   const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
 
@@ -54,17 +57,15 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     try {
       const status = await getMlServiceStatus();
       const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      setLiveMetrics({
-        entries: summary.entries,
-        exits: summary.exits,
-        peak: summary.peak_occupancy,
-        unique: summary.unique_count,
-      });
+      setLiveMetrics(metricsFromSummary(summary));
+      if (!activeReportId && summary.period) {
+        setPeriod(summary.period);
+      }
       setMetricsError(null);
     } catch (error) {
       setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
     }
-  }, []);
+  }, [activeReportId]);
 
   const refreshLocalReports = useCallback(async () => {
     try {
@@ -79,6 +80,19 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
   }, [setReportsHistory]);
 
+  const refreshPendingPeriods = useCallback(async () => {
+    try {
+      const preparation = await getDesktopMockPreparation();
+      const pendingCounts =
+        preparation?.status === "active"
+          ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : [])
+          : [];
+      setPendingPeriodCounts(pendingCounts);
+    } catch {
+      setPendingPeriodCounts([]);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshLocalMetrics();
     const intervalId = window.setInterval(() => void refreshLocalMetrics(), 5000);
@@ -91,12 +105,54 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     return () => window.clearInterval(intervalId);
   }, [refreshLocalReports]);
 
-  const handleReturnToCurrentReport = () => {
+  useEffect(() => {
+    void refreshPendingPeriods();
+    const intervalId = window.setInterval(() => void refreshPendingPeriods(), 15000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshPendingPeriods]);
+
+  useEffect(() => {
+    if (activeReportId || pendingPeriodCounts.length === 0) return;
+    if (!pendingPeriodCounts.some((counts) => counts.period === period)) {
+      setPeriod(pendingPeriodCounts[0].period);
+    }
+  }, [activeReportId, pendingPeriodCounts, period]);
+
+  const handleReturnToReportWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
-    setPeriod(getCurrentReportingPeriod());
+    setPeriod(nextPeriod ?? pendingPeriodCounts[0]?.period ?? getCurrentReportingPeriod());
     setNotes("");
     setDemo(emptyDemo());
     setPreviewReport(null);
+  };
+
+  const handlePeriodChange = async (nextPeriod: string) => {
+    if (activeReportId || nextPeriod === period) return;
+    if (!pendingPeriodCounts.some((counts) => counts.period === nextPeriod)) {
+      setPeriod(nextPeriod);
+      return;
+    }
+
+    setIsPeriodChanging(true);
+    try {
+      const prepared = await prepareDesktopMockCounts(nextPeriod);
+      if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period !== nextPeriod)) {
+        throw new Error(`No prepared count package is available for ${nextPeriod}.`);
+      }
+      setLiveMetrics(metricsFromSummary(prepared));
+      setPeriod(prepared.period || nextPeriod);
+      setNotes("");
+      setDemo(emptyDemo());
+      setPreviewReport(null);
+      setMetricsError(null);
+      void refreshPendingPeriods();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load the selected reporting period.";
+      setMetricsError(message);
+      notifyError(message);
+    } finally {
+      setIsPeriodChanging(false);
+    }
   };
 
   const handleViewReport = (report: ReportRecord) => {
@@ -255,12 +311,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       };
       setReportsHistory((prev) => upsertReport(prev, newReport));
     }
+    const nextPendingPeriod = pendingPeriodCounts.find((counts) => counts.period !== period)?.period;
+    setPendingPeriodCounts((prev) => prev.filter((counts) => counts.period !== period));
     setShowConfirm(false);
     setIsSubmitting(false);
     void refreshLocalMetrics();
     void refreshLocalReports();
     window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
-    handleReturnToCurrentReport();
+    handleReturnToReportWorkspace(nextPendingPeriod);
   };
 
   return (
@@ -282,17 +340,17 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
-          <p className="mt-1 text-sm text-gray-500">Prepare the current monthly report and review submitted report history.</p>
+          <p className="mt-1 text-sm text-gray-500">Prepare unfinished monthly reports and review submitted report history.</p>
           {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
           {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report ledger unavailable: {ledgerError}</p>}
         </div>
         {activeReport && (
           <button
             type="button"
-            onClick={handleReturnToCurrentReport}
+            onClick={() => handleReturnToReportWorkspace()}
             className="flex items-center gap-2 rounded-sm border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-[#111827] shadow-sm transition-colors hover:bg-gray-50"
           >
-            <ArrowLeft size={16} /> Return to Current Report
+            <ArrowLeft size={16} /> Return to Report Workspace
           </button>
         )}
       </div>
@@ -303,11 +361,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           activeReportId={activeReportId}
           demo={demo}
           isReadOnly={isReadOnly}
+          isPeriodChanging={isPeriodChanging}
           metrics={displayedMetrics}
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
+          periodOptions={periodOptions}
           validationError={validationError}
+          onPeriodChange={handlePeriodChange}
           onPreview={() =>
             setPreviewReport({
               demo,
@@ -362,6 +423,26 @@ function metricsFromReport(report: ReportRecord): Metrics {
   };
 }
 
+function metricsFromSummary(summary: LocalMetricsSummary): Metrics {
+  return {
+    entries: summary.entries,
+    exits: summary.exits,
+    peak: summary.peak_occupancy,
+    unique: summary.unique_count,
+  };
+}
+
+function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { prepared: boolean } {
+  return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
+}
+
+function buildPeriodOptions(period: string, pendingCounts: BackendMockPreparationCounts[]) {
+  if (pendingCounts.length > 0) {
+    return pendingCounts.map((counts) => counts.period);
+  }
+  return period ? [period] : [];
+}
+
 function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
@@ -403,6 +484,7 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
     peak,
     unique: report.metrics.unique,
     period: report.period,
+    demo: demoFromPayload(report.payload?.demo),
     notes: report.notes ?? "",
     remarks: report.remarks,
     submittedAt: report.submittedAt,

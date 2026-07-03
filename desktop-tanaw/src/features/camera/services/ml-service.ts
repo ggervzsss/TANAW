@@ -174,6 +174,7 @@ export type LocalMetricsSummary = {
   last_event_at: string | null;
   source_kind?: "real" | "mock" | "hybrid";
   mock_run_id?: string | null;
+  period?: string | null;
 };
 
 export type LocalHourlyDensityPoint = {
