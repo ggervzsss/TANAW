@@ -147,7 +147,7 @@ export function AccountProfilePage({ role }: AccountPageProps) {
     <PageMotion>
       <PageHeader title="Profile Settings" description="Manage your account identity and primary contact details." />
 
-      <form onSubmit={handleSave} className="mx-auto max-w-5xl space-y-6 xl:mx-0">
+      <form onSubmit={handleSave} className="mx-auto max-w-5xl space-y-6">
         <Panel className="overflow-hidden">
           <PanelHeader title="Account Display" icon={Upload} />
           <div className="p-6">
@@ -271,7 +271,7 @@ export function AccountSecurityPage() {
     <PageMotion>
       <PageHeader title="Security & Data Control" description="Manage credentials, active sessions, and account protection settings." />
 
-      <div className="mx-auto max-w-5xl space-y-6 xl:mx-0">
+      <div className="mx-auto max-w-5xl space-y-6">
         <Panel className="overflow-hidden">
           <PanelHeader title="Credential Control" icon={Key} />
           <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
