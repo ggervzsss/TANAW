@@ -454,7 +454,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                       <User size={14} /> Profile Settings
                     </button>
                     <button type="button" onClick={() => openAccountPage("security")} className={accountMenuButtonClass(securityPath)}>
-                      <Shield size={14} /> Security & Data Control
+                      <Shield size={14} /> Password Settings
                     </button>
                     {supportTicketsPath && (
                       <button type="button" onClick={openSupportTickets} className={accountMenuButtonClass(supportTicketsPath)}>

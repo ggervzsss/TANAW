@@ -269,11 +269,11 @@ export function AccountSecurityPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Security & Data Control" description="Manage credentials, active sessions, and account protection settings." />
+      <PageHeader title="Password Settings" description="Update your account password." />
 
       <div className="mx-auto max-w-5xl space-y-6">
         <Panel className="overflow-hidden">
-          <PanelHeader title="Credential Control" icon={Key} />
+          <PanelHeader title="Change Password" icon={Key} />
           <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
             <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
             <div className="grid gap-4 md:grid-cols-2">
