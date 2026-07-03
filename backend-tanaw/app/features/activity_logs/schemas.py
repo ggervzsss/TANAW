@@ -41,3 +41,8 @@ class ActivityLogCreate(BaseModel):
     metadata: dict[str, str | int | float | bool | None] | None = None
     sourceKind: Literal["real", "mock", "hybrid"] = "real"
     mockRunId: str | None = Field(default=None, max_length=36)
+
+
+class ActivityLogPurgeResponse(BaseModel):
+    deletedCount: int
+    retentionDays: int

@@ -1,4 +1,5 @@
 import { RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Panel } from "@/shared/components/panel";
@@ -9,10 +10,11 @@ type SettingsDetailPanelProps = {
   storedValues: Record<string, SettingValue>;
   isSaving: boolean;
   metadataLabel: string;
+  additionalContent?: ReactNode;
   onSave: (values: Record<string, SettingValue>) => void;
 };
 
-export function SettingsDetailPanel({ section, storedValues, isSaving, metadataLabel, onSave }: SettingsDetailPanelProps) {
+export function SettingsDetailPanel({ section, storedValues, isSaving, metadataLabel, additionalContent, onSave }: SettingsDetailPanelProps) {
   const Icon = section.icon;
   const defaults = useMemo<Record<string, SettingValue>>(() => Object.fromEntries(section.fields.map((field) => [settingKey(section.id, field), field.value])), [section.fields, section.id]);
   const [values, setValues] = useState<Record<string, SettingValue>>({
@@ -55,28 +57,31 @@ export function SettingsDetailPanel({ section, storedValues, isSaving, metadataL
             </label>
           </div>
         ))}
+        {additionalContent}
       </div>
 
       <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-gray-200 pt-5">
-        <button
-          onClick={() => {
-            setValues((current) => ({ ...current, ...defaults }));
-            toast.success("Selected settings reset to defaults.");
-          }}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-        >
-          <RotateCcw size={15} /> Reset Defaults
-        </button>
-        <button
-          disabled={isSaving}
-          onClick={() => {
-            const sectionValues = Object.fromEntries(Object.entries(values).filter(([key]) => key.startsWith(`${section.id}.`)));
-            onSave(sectionValues);
-          }}
-          className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-md transition"
-        >
-          <Save size={15} /> {isSaving ? "Saving..." : "Save Changes"}
-        </button>
+        <div className="flex flex-wrap justify-end gap-3">
+          <button
+            onClick={() => {
+              setValues((current) => ({ ...current, ...defaults }));
+              toast.success("Selected settings reset to defaults.");
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+          >
+            <RotateCcw size={15} /> Reset Defaults
+          </button>
+          <button
+            disabled={isSaving}
+            onClick={() => {
+              const sectionValues = Object.fromEntries(Object.entries(values).filter(([key]) => key.startsWith(`${section.id}.`)));
+              onSave(sectionValues);
+            }}
+            className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-md transition"
+          >
+            <Save size={15} /> {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
       </div>
     </Panel>
   );
@@ -111,6 +116,7 @@ function formatSelectOption(field: SettingField, option: string | number) {
   if (field.type !== "select") return String(option);
   if (field.key === "loginAttemptLimit") return `${option} attempts`;
   if (field.key === "loginLockMinutes") return `${option} minutes`;
+  if (field.key === "retentionDays") return `${option} days`;
   return String(option);
 }
 

@@ -16,10 +16,7 @@ export const settingSections: SettingSection[] = [
     title: "Log Settings",
     icon: FileText,
     fields: [
-      { label: "Log Retention Period", type: "select", value: "180 days", options: ["90 days", "180 days", "365 days"] },
-      { label: "Log Critical Alerts", type: "toggle", value: true },
-      { label: "Log Account Changes", type: "toggle", value: true },
-      { label: "Log Camera Events", type: "toggle", value: true },
+      { key: "retentionDays", label: "Log Retention Period", type: "select", value: 180, options: [90, 180, 365] },
     ],
   },
   {

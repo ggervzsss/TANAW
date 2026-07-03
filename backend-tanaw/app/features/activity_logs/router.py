@@ -10,11 +10,17 @@ from app.db.session import AsyncSessionLocal, get_db
 from app.features.accounts.dependencies import get_current_operational_account, is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import get_account_by_id
-from app.features.activity_logs.schemas import ActivityLogCreate, ActivityLogSummary
+from app.features.activity_logs.schemas import (
+    ActivityLogCreate,
+    ActivityLogPurgeResponse,
+    ActivityLogSummary,
+)
 from app.features.activity_logs.service import (
     create_activity_log,
+    get_activity_log_retention_days,
     get_actor_role_label,
     list_activity_logs_for_account,
+    purge_expired_activity_logs,
 )
 from app.features.activity_logs.websocket import activity_log_manager
 
@@ -27,6 +33,40 @@ async def list_activity_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ActivityLogSummary]:
     return await list_activity_logs_for_account(db, account)
+
+
+@router.post("/purge-expired", response_model=ActivityLogPurgeResponse)
+async def purge_expired_logs(
+    account: Annotated[Account, Depends(get_current_operational_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ActivityLogPurgeResponse:
+    if account.role != AccountRole.IT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="IT Personnel access required.",
+        )
+
+    retention_days = await get_activity_log_retention_days(db)
+    deleted_count = await purge_expired_activity_logs(db, retention_days)
+    log = await create_activity_log(
+        db,
+        ActivityLogCreate(
+            category="IT Activity",
+            severity="Warning" if deleted_count else "Info",
+            actor=account.display_name,
+            actorRole=get_actor_role_label(account),  # type: ignore[arg-type]
+            action="Purge Expired Activity Logs",
+            target="System Logs",
+            summary=(
+                f"{account.display_name} purged {deleted_count} activity logs older than "
+                f"{retention_days} days."
+            ),
+            sourceId="activity-log-purge",
+            metadata={"deletedCount": deleted_count, "retentionDays": retention_days},
+        ),
+    )
+    await activity_log_manager.broadcast(log)
+    return ActivityLogPurgeResponse(deletedCount=deleted_count, retentionDays=retention_days)
 
 
 @router.post("", response_model=ActivityLogSummary, status_code=status.HTTP_201_CREATED)
