@@ -1,4 +1,4 @@
-import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, RefreshCw, Save, Shield, Upload } from "lucide-react";
+import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, RefreshCw, Save, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -26,25 +26,6 @@ type ProfileUser = {
   category: string;
   barangay: string;
   address: string;
-};
-
-const roleIdentity: Record<UserRole, { node: string; affiliation: string }> = {
-  admin: {
-    node: "LGU Command Center",
-    affiliation: "San Pedro City Tourism Office",
-  },
-  it: {
-    node: "Technical Operations Desk",
-    affiliation: "TANAW Infrastructure",
-  },
-  staff: {
-    node: "Tourism Reporting Desk",
-    affiliation: "San Pedro City Tourism Office",
-  },
-  enterprise: {
-    node: "Enterprise Portal",
-    affiliation: "Registered Enterprise",
-  },
 };
 
 function useAccountProfile(): ProfileUser {
@@ -78,10 +59,6 @@ export function AccountProfilePage({ role }: AccountPageProps) {
   const isImageDraftCurrent = displayImageDraft.sourceDataUrl === authDisplayImageDataUrl;
   const displayImageDataUrl = isImageDraftCurrent ? displayImageDraft.dataUrl : authDisplayImageDataUrl;
   const displayImageFileName = isImageDraftCurrent ? displayImageDraft.fileName : "";
-  const identity = {
-    node: role === "enterprise" ? user.enterpriseName || "Enterprise Account" : roleIdentity[role].node,
-    affiliation: role === "enterprise" ? [user.category || "Registered Enterprise", user.barangay ? `Barangay ${user.barangay}` : ""].filter(Boolean).join(" - ") : roleIdentity[role].affiliation,
-  };
   const initials = useMemo(
     () =>
       user.name
@@ -145,7 +122,7 @@ export function AccountProfilePage({ role }: AccountPageProps) {
 
   return (
     <PageMotion>
-      <PageHeader title="Profile Settings" description="Manage your account identity and primary contact details." />
+      <PageHeader title="Profile Settings" description="Manage your profile photo and primary contact details." />
 
       <form onSubmit={handleSave} className="mx-auto max-w-5xl space-y-6">
         <Panel className="overflow-hidden">
@@ -197,18 +174,6 @@ export function AccountProfilePage({ role }: AccountPageProps) {
               {role === "enterprise" && <Field label="Registered Address" defaultValue={user.address} />}
               {role === "enterprise" && <Field label="Barangay" defaultValue={user.barangay} />}
             </div>
-          </div>
-        </Panel>
-
-        <Panel className="overflow-hidden">
-          <PanelHeader title="Account Identity" icon={Shield} />
-          <div className="p-6">
-            <div className="grid gap-4 md:grid-cols-3">
-              <ReadOnlyField label="Current Node" value={identity.node} />
-              <ReadOnlyField label="Affiliation" value={identity.affiliation} />
-              <ReadOnlyField label={role === "enterprise" ? "Enterprise ID" : "Directory ID"} value={role === "enterprise" ? user.enterpriseId || "Not assigned" : (authUser?.id ?? "Not assigned")} />
-            </div>
-            <p className="mt-4 text-xs font-medium text-slate-500">Structural role and affiliation changes are controlled through LGU account management.</p>
           </div>
         </Panel>
 
@@ -361,14 +326,5 @@ function Field({ label, defaultValue, name, type = "text", placeholder, minLengt
         input
       )}
     </label>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="mb-2 block text-[10px] font-bold tracking-wide text-slate-400 uppercase">{label}</span>
-      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900">{value}</div>
-    </div>
   );
 }
