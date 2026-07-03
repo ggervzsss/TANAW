@@ -271,68 +271,53 @@ export function AccountSecurityPage() {
     <PageMotion>
       <PageHeader title="Security & Data Control" description="Manage credentials, active sessions, and account protection settings." />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Credential Control" icon={Key} />
-            <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
-              <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
-                <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
-              </div>
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={isPasswordLoading}
-                  className="bg-tanaw-green disabled:bg-tanaw-green/70 inline-flex min-w-48 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#044a1e]"
-                >
-                  {isPasswordLoading ? <RefreshCw size={16} className="animate-spin" /> : isPasswordSuccess ? <Check size={16} /> : <Key size={16} />}
-                  {isPasswordLoading ? "Updating..." : isPasswordSuccess ? "Password Updated" : "Update Password"}
-                </button>
-              </div>
-            </form>
-          </Panel>
-
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Active Sessions" icon={MonitorSmartphone} />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-160 text-left text-sm">
-                <thead className="bg-slate-50 text-[10px] font-black tracking-widest text-slate-500 uppercase">
-                  <tr>
-                    <th className="border-b border-slate-200 p-3">Device</th>
-                    <th className="border-b border-slate-200 p-3">Location</th>
-                    <th className="border-b border-slate-200 p-3">Last Active</th>
-                    <th className="border-b border-slate-200 p-3">IP Address</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  <tr>
-                    <td className="flex items-center gap-2 p-3 font-semibold text-slate-900">
-                      <Monitor size={15} className="text-tanaw-green" /> Workstation Browser (Current)
-                    </td>
-                    <td className="p-3 font-medium text-slate-600">Current device</td>
-                    <td className="p-3 text-xs font-bold text-emerald-600">Active Now</td>
-                    <td className="p-3 font-mono text-xs text-slate-500">Unavailable</td>
-                  </tr>
-                </tbody>
-              </table>
+      <div className="mx-auto max-w-5xl space-y-6 xl:mx-0">
+        <Panel className="overflow-hidden">
+          <PanelHeader title="Credential Control" icon={Key} />
+          <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
+            <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
+              <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
             </div>
-          </Panel>
-        </div>
-
-        <div className="space-y-6">
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Enhanced Protection" icon={Shield} />
-            <div className="flex items-center justify-between gap-4 p-6">
-              <div>
-                <p className="text-sm font-bold text-slate-900">Two-Factor Auth</p>
-                <p className="mt-1 text-xs text-slate-500">Not configured for this local deployment.</p>
-              </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black tracking-wide text-slate-500 uppercase">Unavailable</span>
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={isPasswordLoading}
+                className="bg-tanaw-green disabled:bg-tanaw-green/70 inline-flex min-w-48 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#044a1e]"
+              >
+                {isPasswordLoading ? <RefreshCw size={16} className="animate-spin" /> : isPasswordSuccess ? <Check size={16} /> : <Key size={16} />}
+                {isPasswordLoading ? "Updating..." : isPasswordSuccess ? "Password Updated" : "Update Password"}
+              </button>
             </div>
-          </Panel>
-        </div>
+          </form>
+        </Panel>
+
+        <Panel className="overflow-hidden">
+          <PanelHeader title="Active Sessions" icon={MonitorSmartphone} />
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-160 text-left text-sm">
+              <thead className="bg-slate-50 text-[10px] font-black tracking-widest text-slate-500 uppercase">
+                <tr>
+                  <th className="border-b border-slate-200 p-3">Device</th>
+                  <th className="border-b border-slate-200 p-3">Location</th>
+                  <th className="border-b border-slate-200 p-3">Last Active</th>
+                  <th className="border-b border-slate-200 p-3">IP Address</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                <tr>
+                  <td className="flex items-center gap-2 p-3 font-semibold text-slate-900">
+                    <Monitor size={15} className="text-tanaw-green" /> Workstation Browser (Current)
+                  </td>
+                  <td className="p-3 font-medium text-slate-600">Current device</td>
+                  <td className="p-3 text-xs font-bold text-emerald-600">Active Now</td>
+                  <td className="p-3 font-mono text-xs text-slate-500">Unavailable</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       </div>
     </PageMotion>
   );
