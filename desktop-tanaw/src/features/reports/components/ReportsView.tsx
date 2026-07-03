@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
-import { EMPTY_METRICS, REPORTING_PERIODS } from "../../../lib/operationalDefaults";
+import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import type { LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
@@ -29,7 +29,7 @@ type DotPreviewState = {
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
-  const [period, setPeriod] = useState<SystemLogPeriod>("Current Period");
+  const [period, setPeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
 
@@ -43,12 +43,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
 
-  const periodKeys: string[] = [...REPORTING_PERIODS];
-  const currIndex = periodKeys.indexOf(period);
-  const prevPeriod = currIndex >= 0 && currIndex < periodKeys.length - 1 ? periodKeys[currIndex + 1] : null;
-  const prevMetrics = prevPeriod ? EMPTY_METRICS : null;
   const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
-  const uniqueTrend = prevMetrics && prevMetrics.unique > 0 ? Math.round(((displayedMetrics.unique - prevMetrics.unique) / prevMetrics.unique) * 100) : 0;
 
   const blockingMetricsError = activeReport ? null : metricsError;
   const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
@@ -96,9 +91,9 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     return () => window.clearInterval(intervalId);
   }, [refreshLocalReports]);
 
-  const handleGenerateNew = () => {
+  const handleReturnToCurrentReport = () => {
     setActiveReportId(null);
-    setPeriod("Current Period");
+    setPeriod(getCurrentReportingPeriod());
     setNotes("");
     setDemo(emptyDemo());
     setPreviewReport(null);
@@ -106,7 +101,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const handleViewReport = (report: ReportRecord) => {
     setActiveReportId(report.id);
-    setPeriod(report.period || "Current Period");
+    setPeriod(report.period || report.date || getCurrentReportingPeriod());
     setNotes(report.notes || "");
     setDemo(report.demo || emptyDemo());
   };
@@ -178,7 +173,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       : [
           {
             time: `${todayDate} ${now}`,
-            action: "Draft Created",
+            action: "Report Prepared",
             actor: "Enterprise User",
           },
           {
@@ -265,7 +260,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     void refreshLocalMetrics();
     void refreshLocalReports();
     window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
-    handleGenerateNew();
+    handleReturnToCurrentReport();
   };
 
   return (
@@ -287,16 +282,19 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
-          <p className="mt-1 text-sm text-gray-500">Generate LGU-required DOT reports using system-verified metrics.</p>
+          <p className="mt-1 text-sm text-gray-500">Prepare the current monthly report and review submitted report history.</p>
           {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
           {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report ledger unavailable: {ledgerError}</p>}
         </div>
-        <button
-          onClick={handleGenerateNew}
-          className="flex items-center gap-2 rounded-sm border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-[#111827] shadow-sm transition-colors hover:bg-gray-50"
-        >
-          <Plus size={16} /> New Draft
-        </button>
+        {activeReport && (
+          <button
+            type="button"
+            onClick={handleReturnToCurrentReport}
+            className="flex items-center gap-2 rounded-sm border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-[#111827] shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <ArrowLeft size={16} /> Return to Current Report
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -309,8 +307,6 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
-          prevMetrics={prevMetrics}
-          uniqueTrend={uniqueTrend}
           validationError={validationError}
           onPreview={() =>
             setPreviewReport({
@@ -324,14 +320,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           onSubmitPrompt={() => setShowConfirm(true)}
           setDemo={setDemo}
           setNotes={setNotes}
-          setPeriod={setPeriod}
         />
 
         <ReportLedgerTable
           activeReportId={activeReportId}
           reportsHistory={reportsHistory}
           onViewReport={handleViewReport}
-          onPreviewReport={handlePreviewReport}
           onPrintReport={handleDownloadReport}
         />
       </div>
@@ -464,7 +458,7 @@ function reportTimestamp(report: ReportRecord) {
 }
 
 function periodFromValue(value: string): SystemLogPeriod {
-  return value || "Current Period";
+  return value || getCurrentReportingPeriod();
 }
 
 function demoFromPayload(value: unknown): DemoBreakdown {
@@ -531,4 +525,8 @@ function emptyDemo(): DemoBreakdown {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : typeof value === "number" && Number.isInteger(value) && value >= 0 ? String(value) : "";
+}
+
+function getCurrentReportingPeriod() {
+  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date());
 }

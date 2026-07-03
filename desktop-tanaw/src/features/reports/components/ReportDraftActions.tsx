@@ -19,7 +19,7 @@ export function ReportDraftActions({ activeReport, isReadOnly, metricsError, val
         onClick={onPreview}
         className="flex flex-1 items-center justify-center gap-2 rounded-sm border-2 border-[#111827] bg-white py-2 text-xs font-bold tracking-wide text-[#111827] uppercase transition-colors hover:bg-[#111827] hover:text-white"
       >
-        <FileText size={14} /> Preview {isReadOnly ? "" : "Draft"}
+        <FileText size={14} /> Preview Report
       </button>
       {!isReadOnly && (
         <button
@@ -30,7 +30,7 @@ export function ReportDraftActions({ activeReport, isReadOnly, metricsError, val
           }`}
         >
           {activeReport?.status === "Returned for Revision" ? <RotateCcw size={14} /> : <Send size={14} />}
-          {activeReport?.status === "Returned for Revision" ? "Resubmit" : "Submit"}
+          {activeReport?.status === "Returned for Revision" ? "Resubmit Report" : "Submit Report"}
         </button>
       )}
     </div>
