@@ -69,6 +69,21 @@ def test_ordinary_telemetry_has_no_simulation_capacity_rule() -> None:
     assert occupancy_alert_condition(payload) is None
 
 
+def test_real_telemetry_uses_building_capacity_for_alert_condition() -> None:
+    payload = DesktopTelemetryIngest(
+        metrics=DesktopMetricsSummary(currentOccupancy=180),
+        sourceKind="real",
+    )
+
+    condition = occupancy_alert_condition(payload, building_capacity=200)
+
+    assert condition is not None
+    assert condition.capacity == 200
+    assert condition.threshold_percent == 90
+    assert condition.threshold_count == 180
+    assert condition.breached is True
+
+
 def test_it_receives_live_alert_websocket_events() -> None:
     assert can_view_operational_event("it", "alert.created")
     assert can_view_operational_event("it", "alert.updated")

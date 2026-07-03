@@ -308,6 +308,7 @@ async def create_enterprise_account(
         location_updated_at=location_updated_at,
         enterprise_id=enterprise_id,
         gateway_status="Not Linked",
+        building_capacity=payload.buildingCapacity,
     )
     await record_account_log(
         db,
@@ -319,7 +320,11 @@ async def create_enterprise_account(
         target=account.enterprise_name or account.email,
         summary=f"{actor.display_name} registered enterprise account {account.enterprise_name}.",
         source_id=account.id,
-        metadata={"enterpriseId": account.enterprise_id, "barangay": account.barangay},
+        metadata={
+            "enterpriseId": account.enterprise_id,
+            "barangay": account.barangay,
+            "buildingCapacity": account.building_capacity,
+        },
     )
     await record_account_log(
         db,
@@ -357,6 +362,7 @@ async def update_enterprise_account(
     account.phone = payload.contactNumber
     account.barangay = payload.barangay
     account.address = payload.address
+    account.building_capacity = payload.buildingCapacity
     account.status = AccountStatus(payload.status)
     await db.commit()
     await db.refresh(account)
@@ -374,6 +380,7 @@ async def update_enterprise_account(
         metadata={
             "enterpriseId": account.enterprise_id,
             "barangay": account.barangay,
+            "buildingCapacity": account.building_capacity,
             "status": account.status.value,
         },
     )

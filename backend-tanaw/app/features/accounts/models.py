@@ -46,6 +46,7 @@ class Account(Base):
     )
     gateway_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     gateway_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    building_capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[AccountRole] = mapped_column(
         Enum(AccountRole, name="account_role"), nullable=False

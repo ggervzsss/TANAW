@@ -76,6 +76,7 @@ class AuthUser(BaseModel):
     barangay: str | None = None
     address: str | None = None
     displayImageDataUrl: str | None = None
+    buildingCapacity: int = 100
 
 
 class LguAccountCreate(BaseModel):
@@ -117,6 +118,7 @@ class EnterpriseAccountCreate(BaseModel):
     locationSource: str | None = Field(default=None, max_length=40)
     locationConfidence: float | None = Field(default=None, ge=0, le=1)
     geocodedAddress: str | None = Field(default=None, max_length=500)
+    buildingCapacity: int = Field(default=100, ge=1, le=100_000)
 
     @field_validator("enterpriseName")
     @classmethod
@@ -197,6 +199,7 @@ class AccountSummary(BaseModel):
     locationUpdatedAt: datetime | None
     enterpriseId: str | None
     gatewayStatus: str | None
+    buildingCapacity: int
     displayName: str
     role: str
     title: str
@@ -245,6 +248,7 @@ class EnterpriseAccountUpdate(BaseModel):
     contactNumber: str | None = Field(default=None, max_length=40)
     barangay: str = Field(min_length=1, max_length=120)
     address: str = Field(min_length=1, max_length=255)
+    buildingCapacity: int = Field(default=100, ge=1, le=100_000)
     status: Literal["active", "inactive"]
 
     @field_validator("enterpriseName")
@@ -384,6 +388,10 @@ class LeadAdminNameUpdate(BaseModel):
     @classmethod
     def validate_manager_name(cls, value: str) -> str:
         return normalize_person_name(value)
+
+
+class BuildingCapacityUpdate(BaseModel):
+    buildingCapacity: int = Field(ge=1, le=100_000)
 
 
 class BusinessEmailChangeRequest(BaseModel):

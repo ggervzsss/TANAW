@@ -11,9 +11,7 @@ type EnterpriseTopbarProps = {
   initials: string;
   isNotificationsOpen: boolean;
   notifications: EnterpriseNotification[];
-  occupancyThreshold: number;
   resolvedTheme: "light" | "dark";
-  showNotificationSettings: boolean;
   showSimulation: boolean;
   unreadCount: number;
   user?: AuthUser | null;
@@ -23,9 +21,7 @@ type EnterpriseTopbarProps = {
   onNotificationSelect: (notification: EnterpriseNotification) => void;
   onNotificationsClose: () => void;
   onNotificationsToggle: () => void;
-  onSetOccupancyThreshold: (threshold: number) => void;
   onToggleTheme: () => void;
-  onToggleNotificationSettings: () => void;
 };
 
 const enterpriseNavigation = [
@@ -41,9 +37,7 @@ export function EnterpriseTopbar({
   initials,
   isNotificationsOpen,
   notifications,
-  occupancyThreshold,
   resolvedTheme,
-  showNotificationSettings,
   showSimulation,
   unreadCount,
   user,
@@ -53,9 +47,7 @@ export function EnterpriseTopbar({
   onNotificationSelect,
   onNotificationsClose,
   onNotificationsToggle,
-  onSetOccupancyThreshold,
   onToggleTheme,
-  onToggleNotificationSettings,
 }: EnterpriseTopbarProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
@@ -175,17 +167,13 @@ export function EnterpriseTopbar({
                 isOpen={isNotificationsOpen}
                 notifications={notifications}
                 unreadCount={unreadCount}
-                showSettings={showNotificationSettings}
-                occupancyThreshold={occupancyThreshold}
                 triggerVariant="topbar"
                 onToggleOpen={() => {
                   setShowProfileMenu(false);
                   onNotificationsToggle();
                 }}
-                onToggleSettings={onToggleNotificationSettings}
                 onMarkAllRead={onMarkAllRead}
                 onSelectNotification={onNotificationSelect}
-                onSetOccupancyThreshold={onSetOccupancyThreshold}
                 onViewAll={() => onNavigate("notifications")}
               />
             </div>

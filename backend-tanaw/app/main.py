@@ -33,6 +33,7 @@ async def ensure_account_onboarding_schema(connection: Any) -> None:
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS enterprise_id VARCHAR(120)",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS gateway_id VARCHAR(120)",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS gateway_status VARCHAR(40)",
+        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS building_capacity INTEGER NOT NULL DEFAULT 100",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS temporary_password_created_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS temporary_password_expires_at TIMESTAMP WITH TIME ZONE",

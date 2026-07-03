@@ -23,6 +23,7 @@ from app.features.accounts.models import (
 from app.features.accounts.schemas import (
     AccountChangeRequestResponse,
     AuthUser,
+    BuildingCapacityUpdate,
     BusinessEmailChangeRequest,
     ContactNumberChangeRequest,
     LeadAdminNameUpdate,
@@ -582,6 +583,48 @@ async def update_lead_admin_name(
     return to_auth_user(account)
 
 
+@router.patch("/profile/building-capacity", response_model=AuthUser)
+async def update_building_capacity(
+    payload: BuildingCapacityUpdate,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthUser:
+    require_enterprise_account(account)
+    previous_capacity = account.building_capacity
+    account.building_capacity = payload.buildingCapacity
+    await db.commit()
+    await db.refresh(account)
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Update Building Capacity",
+        target=account.email,
+        summary=f"{account.display_name} updated building capacity to {account.building_capacity}.",
+        source_id=account.id,
+        metadata={
+            "previousBuildingCapacity": previous_capacity,
+            "buildingCapacity": account.building_capacity,
+        },
+    )
+    if account.building_capacity != previous_capacity:
+        enterprise = enterprise_label(account)
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} updated building capacity.",
+            message=(
+                f"{enterprise} updated building capacity from "
+                f"{previous_capacity} to {account.building_capacity}."
+            ),
+            notification_type="Enterprise Profile Updated",
+            source_type="enterprise.capacity",
+        )
+    return to_auth_user(account)
+
+
 @router.post("/profile/business-email-change", response_model=AccountChangeRequestResponse)
 async def request_business_email_change(
     payload: BusinessEmailChangeRequest,
@@ -823,6 +866,7 @@ async def record_auth_log(
     target: str,
     summary: str,
     source_id: str,
+    metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
     log = await create_activity_log(
         db,
@@ -835,6 +879,7 @@ async def record_auth_log(
             target=target,
             summary=summary,
             sourceId=source_id,
+            metadata=metadata,
         ),
     )
     await activity_log_manager.broadcast(log)

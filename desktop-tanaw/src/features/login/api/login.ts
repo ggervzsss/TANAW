@@ -47,6 +47,11 @@ export async function updateLeadAdminName(managerName: string) {
   return normalizeSession({ token: "", user: response.data }).user;
 }
 
+export async function updateBuildingCapacity(buildingCapacity: number) {
+  const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile/building-capacity", { buildingCapacity });
+  return normalizeSession({ token: "", user: response.data }).user;
+}
+
 export async function requestBusinessEmailChange(email: string) {
   const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/business-email-change", { email });
   return response.data;

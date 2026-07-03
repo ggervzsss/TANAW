@@ -1,17 +1,13 @@
-import { AlertCircle, AlertTriangle, Bell, CheckCircle, Inbox, Settings } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bell, CheckCircle, Inbox } from "lucide-react";
 import type { EnterpriseNotification, EnterpriseView } from "../../../types/enterprise";
 
 type NotificationDropdownProps = {
   isOpen: boolean;
   notifications: EnterpriseNotification[];
   unreadCount: number;
-  showSettings: boolean;
-  occupancyThreshold: number;
   onToggleOpen: () => void;
-  onToggleSettings: () => void;
   onMarkAllRead: () => void;
   onSelectNotification: (notification: EnterpriseNotification) => void;
-  onSetOccupancyThreshold: (threshold: number) => void;
   onViewAll: () => void;
   triggerVariant?: "default" | "topbar";
 };
@@ -26,13 +22,9 @@ export function NotificationDropdown({
   isOpen,
   notifications,
   unreadCount,
-  showSettings,
-  occupancyThreshold,
   onToggleOpen,
-  onToggleSettings,
   onMarkAllRead,
   onSelectNotification,
-  onSetOccupancyThreshold,
   onViewAll,
   triggerVariant = "default",
 }: NotificationDropdownProps) {
@@ -72,29 +64,8 @@ export function NotificationDropdown({
               >
                 Mark all read
               </button>
-              <button onClick={onToggleSettings} className={`rounded-sm p-1 transition-colors ${showSettings ? "bg-[#065f46] text-white" : "text-gray-400 hover:bg-gray-200 hover:text-[#065f46]"}`}>
-                <Settings size={14} />
-              </button>
             </div>
           </div>
-
-          {showSettings && (
-            <div className="shrink-0 border-b border-[#065f46]/10 bg-[#065f46]/5 p-4 shadow-inner">
-              <label className="flex items-center justify-between text-xs font-bold text-[#111827]">
-                Overcrowding Threshold
-                <select
-                  value={occupancyThreshold}
-                  onChange={(event) => onSetOccupancyThreshold(Number(event.target.value))}
-                  className="ml-2 rounded-sm border border-gray-300 p-1.5 text-xs font-medium outline-none focus:border-[#065f46]"
-                >
-                  <option value={80}>80% Capacity</option>
-                  <option value={90}>90% Capacity</option>
-                  <option value={100}>100% Capacity</option>
-                </select>
-              </label>
-              <p className="mt-2 text-[10px] leading-relaxed font-medium text-gray-500">System will trigger a critical alert and push a toast notification when node occupancy surpasses this value.</p>
-            </div>
-          )}
 
           <div className="enterprise-notification-menu__body flex-1 overflow-y-auto bg-white">
             {notifications.map((notification) => (

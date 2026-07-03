@@ -64,6 +64,7 @@ def to_auth_user(account: Account) -> AuthUser:
         managerName=account.manager_name,
         barangay=account.barangay,
         address=account.address,
+        buildingCapacity=account.building_capacity,
         displayImageDataUrl=display_image_data_url
         if isinstance(display_image_data_url, str)
         else None,
@@ -90,6 +91,7 @@ def to_account_summary(account: Account) -> AccountSummary:
         locationUpdatedAt=account.location_updated_at,
         enterpriseId=account.enterprise_id,
         gatewayStatus=account.gateway_status,
+        buildingCapacity=account.building_capacity,
         displayName=account.display_name,
         role=account.role.value,
         title=account.title,
@@ -266,6 +268,7 @@ async def create_account_with_temporary_password(
     enterprise_id: str | None = None,
     gateway_id: str | None = None,
     gateway_status: str | None = None,
+    building_capacity: int = 100,
 ) -> Account:
     temporary_password = generate_temporary_password()
     now = datetime.now(UTC)
@@ -288,6 +291,7 @@ async def create_account_with_temporary_password(
         enterprise_id=enterprise_id,
         gateway_id=gateway_id,
         gateway_status=gateway_status,
+        building_capacity=building_capacity,
         password_hash=hash_password(temporary_password),
         role=role,
         display_name=display_name,

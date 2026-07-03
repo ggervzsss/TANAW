@@ -50,6 +50,7 @@ from app.features.operational.schemas import (
 
 STALE_GATEWAY_SECONDS = 120
 OFFLINE_GATEWAY_SECONDS = 900
+OCCUPANCY_ALERT_THRESHOLD_PERCENT = 90
 SYSTEM_SETTINGS_ID = "default"
 NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
 NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
@@ -547,23 +548,27 @@ def can_view_operational_event(role: str, event_type: str) -> bool:
 
 def occupancy_alert_condition(
     payload: DesktopTelemetryIngest,
+    building_capacity: int | None = None,
 ) -> OccupancyAlertCondition | None:
     simulation = (payload.payload or {}).get("simulation")
     if not isinstance(simulation, dict):
-        return None
-
-    capacity = simulation.get("capacity")
-    threshold_percent = simulation.get("thresholdPercent")
-    if (
-        not isinstance(capacity, int)
-        or isinstance(capacity, bool)
-        or capacity <= 0
-        or not isinstance(threshold_percent, int)
-        or isinstance(threshold_percent, bool)
-        or threshold_percent <= 0
-        or threshold_percent > 100
-    ):
-        return None
+        if payload.sourceKind != "real" or not is_valid_building_capacity(building_capacity):
+            return None
+        if building_capacity is None:
+            return None
+        capacity = building_capacity
+        threshold_percent = OCCUPANCY_ALERT_THRESHOLD_PERCENT
+    else:
+        raw_capacity = simulation.get("capacity")
+        raw_threshold_percent = simulation.get("thresholdPercent")
+        if not is_valid_occupancy_threshold(raw_capacity, raw_threshold_percent):
+            return None
+        assert isinstance(raw_capacity, int) and not isinstance(raw_capacity, bool)
+        assert isinstance(raw_threshold_percent, int) and not isinstance(
+            raw_threshold_percent, bool
+        )
+        capacity = raw_capacity
+        threshold_percent = raw_threshold_percent
 
     threshold_count = max(1, ceil(capacity * threshold_percent / 100))
     recovery_percent = max(0, threshold_percent - 10)
@@ -575,6 +580,24 @@ def occupancy_alert_condition(
         recovery_count=recovery_count,
         current_occupancy=payload.metrics.currentOccupancy,
     )
+
+
+def is_valid_building_capacity(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def is_valid_occupancy_threshold(capacity: object, threshold_percent: object) -> bool:
+    if (
+        not isinstance(capacity, int)
+        or isinstance(capacity, bool)
+        or capacity <= 0
+        or not isinstance(threshold_percent, int)
+        or isinstance(threshold_percent, bool)
+        or threshold_percent <= 0
+        or threshold_percent > 100
+    ):
+        return False
+    return True
 
 
 async def evaluate_telemetry_alerts(
@@ -590,7 +613,7 @@ async def evaluate_telemetry_alerts(
             OperationalAlert.status != "Resolved",
         )
     )
-    condition = occupancy_alert_condition(payload)
+    condition = occupancy_alert_condition(payload, account.building_capacity)
 
     if condition is not None and condition.breached:
         if existing is not None:
@@ -606,7 +629,7 @@ async def evaluate_telemetry_alerts(
             summary=(
                 f"Live occupancy reached {condition.current_occupancy} of "
                 f"{condition.capacity} people, exceeding the "
-                f"{condition.threshold_percent}% alert threshold."
+                f"{condition.threshold_percent}% building-capacity alert trigger."
             ),
             required_action=(
                 "Review live occupancy and apply the venue's crowd-management procedure."

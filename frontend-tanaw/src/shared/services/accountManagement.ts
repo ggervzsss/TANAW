@@ -20,6 +20,7 @@ export type AccountSummary = {
   locationUpdatedAt: string | null;
   enterpriseId: string | null;
   gatewayStatus: string | null;
+  buildingCapacity: number;
   displayName: string;
   role: string;
   title: string;
@@ -67,6 +68,7 @@ export type CreateEnterpriseAccountPayload = {
   locationSource?: string;
   locationConfidence?: number;
   geocodedAddress?: string;
+  buildingCapacity: number;
 };
 
 export type SystemSettingValue = string | boolean | number;
@@ -85,6 +87,7 @@ export type UpdateEnterpriseAccountPayload = {
   contactNumber?: string;
   barangay: string;
   address: string;
+  buildingCapacity: number;
   status: "active" | "inactive";
 };
 

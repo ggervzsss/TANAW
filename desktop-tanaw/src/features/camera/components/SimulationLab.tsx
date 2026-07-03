@@ -27,7 +27,7 @@ import {
 
 type SimulationLabProps = {
   baseUrl: string;
-  defaultThresholdPercent: number;
+  defaultBuildingCapacity: number;
 };
 
 type ScenarioPreset = {
@@ -76,13 +76,16 @@ const scenarioPresets: Record<SimulationScenario, ScenarioPreset> = {
   },
 };
 
-export function SimulationLab({ baseUrl, defaultThresholdPercent }: SimulationLabProps) {
+const DEFAULT_SIMULATION_THRESHOLD_PERCENT = 90;
+
+export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLabProps) {
+  const initialCapacity = clampNumber(defaultBuildingCapacity, 1, 100000);
   const [scenario, setScenario] = useState<SimulationScenario>("normal");
-  const [capacity, setCapacity] = useState(100);
+  const [capacity, setCapacity] = useState(initialCapacity);
   const [startingOccupancy, setStartingOccupancy] = useState(10);
   const [eventsPerMinute, setEventsPerMinute] = useState(scenarioPresets.normal.eventsPerMinute);
   const [durationMinutes, setDurationMinutes] = useState(10);
-  const [thresholdPercent, setThresholdPercent] = useState(defaultThresholdPercent);
+  const [thresholdPercent, setThresholdPercent] = useState(DEFAULT_SIMULATION_THRESHOLD_PERCENT);
   const [entryPercent, setEntryPercent] = useState(60);
   const [uniqueEntryPercent, setUniqueEntryPercent] = useState(88);
   const [status, setStatus] = useState<SimulationStatus | null>(null);
@@ -91,8 +94,8 @@ export function SimulationLab({ baseUrl, defaultThresholdPercent }: SimulationLa
   const [fleetEnterpriseCount, setFleetEnterpriseCount] = useState(6);
   const [fleetWarningCount, setFleetWarningCount] = useState(2);
   const [fleetBreachCount, setFleetBreachCount] = useState(1);
-  const [fleetCapacity, setFleetCapacity] = useState(100);
-  const [fleetThresholdPercent, setFleetThresholdPercent] = useState(defaultThresholdPercent);
+  const [fleetCapacity, setFleetCapacity] = useState(initialCapacity);
+  const [fleetThresholdPercent, setFleetThresholdPercent] = useState(DEFAULT_SIMULATION_THRESHOLD_PERCENT);
   const [error, setError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -115,9 +118,10 @@ export function SimulationLab({ baseUrl, defaultThresholdPercent }: SimulationLa
   }, [refreshStatus]);
 
   useEffect(() => {
-    setThresholdPercent(defaultThresholdPercent);
-    setFleetThresholdPercent(defaultThresholdPercent);
-  }, [defaultThresholdPercent]);
+    const nextCapacity = clampNumber(defaultBuildingCapacity, 1, 100000);
+    setCapacity(nextCapacity);
+    setFleetCapacity(nextCapacity);
+  }, [defaultBuildingCapacity]);
 
   useEffect(() => {
     let disposed = false;

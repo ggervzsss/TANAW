@@ -57,8 +57,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const notificationStorageKey = `tanaw-enterprise-notifications-read:${user?.id ?? "anonymous"}`;
   const [readNotificationIds, setReadNotificationIds] = useState<Set<number>>(() => readStoredNotificationIds(notificationStorageKey));
   const [toasts, setToasts] = useState<EnterpriseNotification[]>([]);
-  const [occupancyThreshold, setOccupancyThreshold] = useState(90);
-  const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>(getInitialThemePreference);
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [mlContextReady, setMlContextReady] = useState(false);
@@ -66,6 +64,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [simulationNotification, setSimulationNotification] = useState<EnterpriseNotification | null>(null);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
+  const buildingCapacity = user?.buildingCapacity ?? 100;
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
 
@@ -371,9 +370,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         initials={initials}
         isNotificationsOpen={isNotificationsOpen}
         notifications={notifications}
-        occupancyThreshold={occupancyThreshold}
         resolvedTheme={resolvedTheme}
-        showNotificationSettings={showNotifSettings}
         showSimulation={isSimulationUnlocked}
         unreadCount={unreadCount}
         user={user}
@@ -386,9 +383,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         }}
         onNotificationsClose={() => setIsNotificationsOpen(false)}
         onNotificationsToggle={() => setIsNotificationsOpen((current) => !current)}
-        onSetOccupancyThreshold={setOccupancyThreshold}
         onToggleTheme={toggleTheme}
-        onToggleNotificationSettings={() => setShowNotifSettings((current) => !current)}
       />
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -400,7 +395,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
             {activeView === "dashboard" && mlContextReady && <DashboardView />}
             {activeView === "cameras" && mlContextReady && <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />}
             {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
-            {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultThresholdPercent={occupancyThreshold} />}
+            {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultBuildingCapacity={buildingCapacity} />}
             {activeView === "profile" && <ProfileView />}
             {activeView === "security" && <SecurityView />}
             {activeView === "tickets" && <TicketsView />}
