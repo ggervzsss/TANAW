@@ -223,7 +223,7 @@ export function EnterpriseTopbar({
                       onClick={() => navigateFromMenu("security")}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
                     >
-                      <Shield size={14} /> Security & Data Control
+                      <Shield size={14} /> Password Settings
                     </button>
                     <button
                       type="button"

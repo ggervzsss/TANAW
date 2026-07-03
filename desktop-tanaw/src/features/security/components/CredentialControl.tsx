@@ -24,7 +24,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
         <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-50 text-[#065f46]">
           <Key size={16} />
         </span>
-        Credential Control
+        Change Password
       </h3>
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
