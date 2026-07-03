@@ -1,12 +1,12 @@
-import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Moon, RefreshCw, Save, Shield, Sun, Upload } from "lucide-react";
+import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, RefreshCw, Save, Shield, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { changePassword, getAccountPreferences, updateAccountPreferences, updateCurrentProfile } from "@/shared/services/accountManagement";
+import { changePassword, updateCurrentProfile } from "@/shared/services/accountManagement";
 import type { UserRole } from "@/shared/types/role.types";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
@@ -27,8 +27,6 @@ type ProfileUser = {
   barangay: string;
   address: string;
 };
-
-type ThemePreference = "light" | "dark" | "system";
 
 const roleIdentity: Record<UserRole, { node: string; affiliation: string }> = {
   admin: {
@@ -234,26 +232,6 @@ export function AccountSecurityPage() {
   const setSession = useAuthStore((state) => state.setSession);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
-  const [theme, setTheme] = useState<ThemePreference>("system");
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-
-  useEffect(() => {
-    void getAccountPreferences().then((preferences) => {
-      setTheme(preferences.theme);
-      setPreferencesLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const resolved = theme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
-    root.classList.remove("light", "dark");
-    root.classList.add(resolved);
-  }, [theme]);
-
-  useEffect(() => {
-    if (preferencesLoaded) void updateAccountPreferences(theme);
-  }, [preferencesLoaded, theme]);
 
   const handlePasswordUpdate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -291,7 +269,7 @@ export function AccountSecurityPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Security & Data Control" description="Manage credentials, active sessions, and local interface preferences." />
+      <PageHeader title="Security & Data Control" description="Manage credentials, active sessions, and account protection settings." />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
@@ -354,18 +332,6 @@ export function AccountSecurityPage() {
               <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black tracking-wide text-slate-500 uppercase">Unavailable</span>
             </div>
           </Panel>
-
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Interface Preference" icon={Moon} />
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
-                <ThemeButton active={theme === "light"} icon={<Sun size={14} />} label="Light" onClick={() => setTheme("light")} />
-                <ThemeButton active={theme === "dark"} icon={<Moon size={14} />} label="Dark" onClick={() => setTheme("dark")} />
-                <ThemeButton active={theme === "system"} icon={<Monitor size={14} />} label="System" onClick={() => setTheme("system")} />
-              </div>
-            </div>
-          </Panel>
-
         </div>
       </div>
     </PageMotion>
@@ -419,21 +385,5 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
       <span className="mb-2 block text-[10px] font-bold tracking-wide text-slate-400 uppercase">{label}</span>
       <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900">{value}</div>
     </div>
-  );
-}
-
-function ThemeButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition",
-        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900",
-      ].join(" ")}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
