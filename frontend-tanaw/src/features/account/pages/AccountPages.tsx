@@ -1,4 +1,4 @@
-import { Check, Database, Download, Key, Monitor, MonitorSmartphone, Moon, RefreshCw, Save, Shield, Sun, Upload } from "lucide-react";
+import { Check, Database, Download, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Moon, RefreshCw, Save, Shield, Sun, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -404,20 +404,42 @@ export function AccountSecurityPage() {
 }
 
 function Field({ label, defaultValue, name, type = "text", placeholder, minLength }: { label: string; defaultValue: string; name?: string; type?: string; placeholder?: string; minLength?: number }) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword && isPasswordVisible ? "text" : type;
+  const input = (
+    <input
+      key={`${label}-${defaultValue}`}
+      name={name}
+      type={inputType}
+      defaultValue={defaultValue}
+      placeholder={placeholder}
+      minLength={minLength}
+      required={isPassword}
+      readOnly={!name}
+      className={`focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${isPassword ? "pr-12" : ""}`}
+    />
+  );
+
   return (
     <label className="block">
       <span className="mb-2 block text-xs font-bold tracking-wide text-slate-500 uppercase">{label}</span>
-      <input
-        key={`${label}-${defaultValue}`}
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        minLength={minLength}
-        required={type === "password"}
-        readOnly={!name}
-        className="focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2"
-      />
+      {isPassword ? (
+        <span className="relative block">
+          {input}
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setIsPasswordVisible((current) => !current)}
+            className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-emerald-50 hover:text-tanaw-green focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none"
+            aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          >
+            {isPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </span>
+      ) : (
+        input
+      )}
     </label>
   );
 }

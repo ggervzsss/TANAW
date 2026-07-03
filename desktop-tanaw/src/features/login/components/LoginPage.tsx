@@ -233,6 +233,7 @@ function RecoveryPasswordInput({
         />
         <button
           type="button"
+          tabIndex={-1}
           onClick={() => setIsPasswordVisible((current) => !current)}
           className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
           aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
@@ -770,6 +771,7 @@ export function LoginPage() {
               {errors.password ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} /> : null}
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => setShowPassword((current) => !current)}
                 className="absolute right-4 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
                 aria-label={showPassword ? "Hide password" : "Show password"}
