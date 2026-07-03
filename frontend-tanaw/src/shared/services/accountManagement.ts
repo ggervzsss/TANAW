@@ -207,11 +207,6 @@ export async function updateAccountPreferences(theme: "light" | "dark" | "system
   return response.data;
 }
 
-export async function requestDataArchive() {
-  const response = await apiClient.post<{ status: string }>("/auth/data-archive");
-  return response.data;
-}
-
 export async function getSystemSettings() {
   const response = await apiClient.get<SystemSettingsResponse>("/auth/system-settings");
   return response.data;

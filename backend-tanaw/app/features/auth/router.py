@@ -769,39 +769,6 @@ async def update_preferences(
     return AccountPreferences.model_validate(values)
 
 
-@router.post("/data-archive", response_model=StatusResponse)
-async def request_data_archive(
-    account: Annotated[Account, Depends(get_current_account)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> StatusResponse:
-    db.add(
-        DevDelivery(
-            account_id=account.id,
-            channel=DeliveryChannel.EMAIL,
-            recipient=account.email,
-            subject="TANAW data archive request",
-            body=(
-                f"Data archive requested by {account.display_name}. "
-                "The request includes available account activity, reports, and audit logs."
-            ),
-            status=DeliveryStatus.RECORDED,
-        )
-    )
-    await db.commit()
-    await record_auth_log(
-        db,
-        category=get_auth_log_category(account),
-        severity="Info",
-        actor=account.display_name,
-        actor_role=get_actor_role_label(account),
-        action="Request Data Archive",
-        target=account.email,
-        summary=f"{account.display_name} requested a compliance data archive.",
-        source_id=account.id,
-    )
-    return StatusResponse(status="recorded")
-
-
 @router.get("/system-settings", response_model=SystemSettingsPayload)
 async def get_system_settings(
     _: Annotated[Account, Depends(get_current_account)],

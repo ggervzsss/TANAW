@@ -1,4 +1,4 @@
-import { Check, Database, Download, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Moon, RefreshCw, Save, Shield, Sun, Upload } from "lucide-react";
+import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Moon, RefreshCw, Save, Shield, Sun, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -6,7 +6,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { changePassword, getAccountPreferences, requestDataArchive, updateAccountPreferences, updateCurrentProfile } from "@/shared/services/accountManagement";
+import { changePassword, getAccountPreferences, updateAccountPreferences, updateCurrentProfile } from "@/shared/services/accountManagement";
 import type { UserRole } from "@/shared/types/role.types";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
@@ -236,8 +236,6 @@ export function AccountSecurityPage() {
   const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("system");
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const [isArchiveLoading, setIsArchiveLoading] = useState(false);
-  const [isArchiveSuccess, setIsArchiveSuccess] = useState(false);
 
   useEffect(() => {
     void getAccountPreferences().then((preferences) => {
@@ -288,20 +286,6 @@ export function AccountSecurityPage() {
       toast.error("Unable to update password. Check your current password and try again.");
     } finally {
       setIsPasswordLoading(false);
-    }
-  };
-
-  const handleArchiveRequest = async () => {
-    setIsArchiveLoading(true);
-    try {
-      await requestDataArchive();
-      setIsArchiveLoading(false);
-      setIsArchiveSuccess(true);
-      window.setTimeout(() => setIsArchiveSuccess(false), 3000);
-      toast.success("Data archive request recorded.");
-    } catch {
-      setIsArchiveLoading(false);
-      toast.error("Unable to request data archive.");
     }
   };
 
@@ -382,21 +366,6 @@ export function AccountSecurityPage() {
             </div>
           </Panel>
 
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Data Archive" icon={Database} />
-            <div className="p-6">
-              <p className="mb-5 text-xs leading-relaxed font-medium text-slate-500">Request a secure package of historical account activity, reports, and system logs for compliance review.</p>
-              <button
-                type="button"
-                onClick={handleArchiveRequest}
-                disabled={isArchiveLoading || isArchiveSuccess}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400"
-              >
-                {isArchiveLoading ? <RefreshCw size={16} className="animate-spin" /> : isArchiveSuccess ? <Check size={16} className="text-emerald-600" /> : <Download size={16} />}
-                {isArchiveLoading ? "Compiling Data..." : isArchiveSuccess ? "Archive Sent to Email" : "Request Data Archive"}
-              </button>
-            </div>
-          </Panel>
         </div>
       </div>
     </PageMotion>

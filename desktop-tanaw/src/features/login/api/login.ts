@@ -62,11 +62,6 @@ export async function requestContactNumberChange(phone: string) {
   return response.data;
 }
 
-export async function requestDataArchive() {
-  const response = await staffApi.post<{ status: string }>("/auth/data-archive");
-  return response.data;
-}
-
 export async function logout() {
   await staffApi.post("/auth/logout");
 }
