@@ -57,11 +57,6 @@ export function SettingsDetailPanel({ section, storedValues, isSaving, metadataL
         ))}
       </div>
 
-      <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-5">
-        <h4 className="text-sm font-bold text-gray-900">Change Logging</h4>
-        <p className="mt-2 text-sm text-gray-500">Saving changes creates a System Logs entry with the setting name, previous value, new value, timestamp, and IT operator.</p>
-      </div>
-
       <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-gray-200 pt-5">
         <button
           onClick={() => {
