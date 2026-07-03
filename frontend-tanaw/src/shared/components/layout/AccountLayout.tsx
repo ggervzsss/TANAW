@@ -12,7 +12,15 @@ type AccountLayoutProps = {
   role: UserRole;
 };
 
-const centeredAccountPagePaths = new Set<string>([routes.it.profile, routes.it.security, routes.admin.profile, routes.admin.security, routes.staff.profile, routes.staff.security]);
+const centeredTitleClassByPath = new Map<string, string>([
+  [routes.it.profile, "mx-auto w-full max-w-5xl"],
+  [routes.it.security, "mx-auto w-full max-w-5xl"],
+  [routes.admin.profile, "mx-auto w-full max-w-5xl"],
+  [routes.admin.security, "mx-auto w-full max-w-5xl"],
+  [routes.staff.profile, "mx-auto w-full max-w-5xl"],
+  [routes.staff.security, "mx-auto w-full max-w-5xl"],
+  [routes.it.systemSettings, "mx-auto w-full max-w-6xl"],
+]);
 
 export function AccountLayout({ role }: AccountLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
@@ -24,10 +32,10 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const updateUser = useAuthStore((state) => state.updateUser);
   const title = useHeaderStore((state) => state.title);
   const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
-  const isAccountSettingsPage = centeredAccountPagePaths.has(pathname);
+  const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
   const titleClassName = [
     "text-tanaw-navy mb-5 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl",
-    isAccountSettingsPage ? "mx-auto w-full max-w-5xl" : "",
+    centeredTitleClassName,
   ]
     .filter(Boolean)
     .join(" ");

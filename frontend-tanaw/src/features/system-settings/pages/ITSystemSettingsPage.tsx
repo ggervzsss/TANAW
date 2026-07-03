@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { PageHeader } from "@/shared/components/layout";
 import { ModalFrame, PageMotion } from "@/shared/components/ui";
-import { SettingsDetailPanel, SettingsSidebar } from "../components";
+import { SettingsDetailPanel } from "../components";
 import { settingSections } from "../data";
 import type { SettingField, SettingValue } from "../types";
 import { getSystemSettings, updateSystemSettings } from "@/shared/services/accountManagement";
@@ -20,7 +20,6 @@ const legacyNotificationSettingKeys: Record<string, string> = {
 };
 
 export function ITSystemSettingsPage() {
-  const [activeSectionId, setActiveSectionId] = useState(settingSections[0].id);
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({ queryKey: ["system-settings"], queryFn: getSystemSettings });
@@ -41,7 +40,6 @@ export function ITSystemSettingsPage() {
     },
     onError: () => toast.error("Unable to purge expired logs."),
   });
-  const selectedSection = useMemo(() => settingSections.find((section) => section.id === activeSectionId) ?? settingSections[0], [activeSectionId]);
   const systemSettings = settingsQuery.data;
   const storedValues = useMemo(() => filterVisibleSettings(systemSettings?.values ?? {}), [systemSettings?.values]);
   const metadataLabel = formatSettingsMetadata(systemSettings?.updatedBy ?? null, systemSettings?.updatedAt ?? null);
@@ -50,23 +48,22 @@ export function ITSystemSettingsPage() {
     <PageMotion>
       <PageHeader title="System Settings" description="Configure account security, logs, and technical notifications." />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <SettingsSidebar sections={settingSections} activeSectionId={activeSectionId} onSelectSection={setActiveSectionId} />
+      <div>
         <SettingsDetailPanel
-          key={`${selectedSection.id}:${JSON.stringify(storedValues)}`}
-          section={selectedSection}
+          key={JSON.stringify(storedValues)}
+          sections={settingSections}
           storedValues={storedValues}
           isSaving={saveMutation.isPending}
           metadataLabel={metadataLabel}
-          additionalContent={
-            selectedSection.id === "logs" ? (
+          additionalContentBySectionId={{
+            logs: (
               <PurgeLogsSettingCard
                 isPending={purgeMutation.isPending}
                 onOpenConfirm={() => setIsPurgeConfirmOpen(true)}
               />
-            ) : undefined
-          }
-          onSave={(sectionValues) => saveMutation.mutate({ ...storedValues, ...sectionValues })}
+            ),
+          }}
+          onSave={(values) => saveMutation.mutate(values)}
         />
       </div>
       {isPurgeConfirmOpen && (
