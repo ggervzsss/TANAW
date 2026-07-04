@@ -333,9 +333,9 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
     field === "managerName"
       ? "This updates the primary enterprise contact name after validation."
       : field === "email"
-        ? "A verified email-change flow is required before the active business email changes."
+        ? "This sends a business email change request to IT and Admin for review."
         : field === "phone"
-          ? "A verified contact-number flow is required before the active contact number changes."
+          ? "This sends a contact number change request to IT and Admin for review."
           : "This updates the occupancy capacity used by TANAW alerts and simulation defaults.";
 
   return (

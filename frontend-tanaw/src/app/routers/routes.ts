@@ -19,6 +19,7 @@ export const routes = {
   admin: {
     root: "/admin",
     mapview: "/admin/mapview",
+    enterpriseRequests: "/admin/enterprise-requests",
     systemLogs: "/admin/system-logs",
     alertsMonitor: "/admin/alerts-monitor",
     supportTickets: "/admin/support-tickets",

@@ -1,6 +1,6 @@
-import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, RefreshCw, Save, Upload } from "lucide-react";
+import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Pencil, RefreshCw, Save, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
@@ -8,6 +8,8 @@ import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { changePassword, updateCurrentProfile } from "@/shared/services/accountManagement";
 import type { UserRole } from "@/shared/types/role.types";
+import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { normalizePersonName, normalizePhilippineContactNumber, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
@@ -21,11 +23,6 @@ type ProfileUser = {
   email: string;
   department: string;
   phone: string;
-  enterpriseName: string;
-  enterpriseId: string;
-  category: string;
-  barangay: string;
-  address: string;
 };
 
 function useAccountProfile(): ProfileUser {
@@ -36,11 +33,6 @@ function useAccountProfile(): ProfileUser {
     email: authUser?.email ?? "",
     department: authUser?.title ?? "City Tourism Operations",
     phone: authUser?.phone ?? "",
-    enterpriseName: authUser?.enterpriseName ?? "",
-    enterpriseId: authUser?.enterpriseId ?? "",
-    category: authUser?.category ?? "",
-    barangay: authUser?.barangay ?? "",
-    address: authUser?.address ?? "",
   };
 }
 
@@ -75,19 +67,32 @@ export function AccountProfilePage({ role }: AccountPageProps) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const fullName = String(formData.get("fullName") ?? "").trim();
-    const [firstName, ...lastNameParts] = fullName.split(/\s+/);
+    const nameError = validatePersonName(fullName, "Full name");
+    if (nameError) {
+      toast.error(nameError);
+      return;
+    }
+    const phoneInput = String(formData.get("phone") ?? "");
+    const phoneError = validatePhilippineContactNumber(phoneInput, false);
+    if (phoneError) {
+      toast.error(phoneError);
+      return;
+    }
+    const normalizedFullName = normalizePersonName(fullName);
+    const [firstName, ...lastNameParts] = normalizedFullName.split(/\s+/);
     const lastName = lastNameParts.join(" ");
     if (!firstName || !lastName) {
       toast.error("Enter both first and last name.");
       return;
     }
+    const normalizedPhone = normalizePhilippineContactNumber(phoneInput);
     setIsLoading(true);
     try {
       const updated = await updateCurrentProfile({
         firstName,
         lastName,
-        email: String(formData.get("email") ?? ""),
-        phone: String(formData.get("phone") ?? ""),
+        email: user.email,
+        phone: normalizedPhone || undefined,
         displayImageDataUrl,
       });
       updateUser(updated);
@@ -95,9 +100,9 @@ export function AccountProfilePage({ role }: AccountPageProps) {
       setIsSuccess(true);
       window.setTimeout(() => setIsSuccess(false), 2600);
       toast.success("Profile updated.");
-    } catch {
+    } catch (error) {
       setIsLoading(false);
-      toast.error("Unable to update profile.");
+      toast.error(getApiErrorMessage(error, "Unable to update profile."));
     }
   };
 
@@ -167,12 +172,10 @@ export function AccountProfilePage({ role }: AccountPageProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field name="fullName" label={role === "enterprise" ? "Contact Person / Manager" : "Full Name"} defaultValue={user.name} />
-              <Field name="email" label={role === "enterprise" ? "Business Email" : "Professional Email"} defaultValue={user.email} type="email" />
-              <Field label={role === "enterprise" ? "Enterprise Name" : "Department"} defaultValue={role === "enterprise" ? user.enterpriseName : user.department} />
-              <Field name="phone" label="Phone" defaultValue={user.phone} type="tel" />
-              {role === "enterprise" && <Field label="Registered Address" defaultValue={user.address} />}
-              {role === "enterprise" && <Field label="Barangay" defaultValue={user.barangay} />}
+              <Field name="fullName" label="Full Name" defaultValue={user.name} editable />
+              <Field label="Professional Email" defaultValue={user.email} type="email" />
+              <Field label="Department" defaultValue={user.department} />
+              <Field name="phone" label="Phone" defaultValue={user.phone} type="tel" editable />
             </div>
           </div>
         </Panel>
@@ -288,12 +291,33 @@ export function AccountSecurityPage() {
   );
 }
 
-function Field({ label, defaultValue, name, type = "text", placeholder, minLength }: { label: string; defaultValue: string; name?: string; type?: string; placeholder?: string; minLength?: number }) {
+function Field({
+  label,
+  defaultValue,
+  editable = false,
+  name,
+  type = "text",
+  placeholder,
+  minLength,
+}: {
+  label: string;
+  defaultValue: string;
+  editable?: boolean;
+  name?: string;
+  type?: string;
+  placeholder?: string;
+  minLength?: number;
+}) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const isPassword = type === "password";
   const inputType = isPassword && isPasswordVisible ? "text" : type;
+  const canEdit = Boolean(name && editable && !isPassword);
+  const isReadOnly = !name || (canEdit && !isEditing);
   const input = (
     <input
+      ref={inputRef}
       key={`${label}-${defaultValue}`}
       name={name}
       type={inputType}
@@ -301,8 +325,10 @@ function Field({ label, defaultValue, name, type = "text", placeholder, minLengt
       placeholder={placeholder}
       minLength={minLength}
       required={isPassword}
-      readOnly={!name}
-      className={`focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${isPassword ? "pr-12" : ""}`}
+      readOnly={isReadOnly}
+      className={`focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${
+        isReadOnly ? "bg-slate-50" : "bg-white"
+      } ${isPassword || canEdit ? "pr-12" : ""}`}
     />
   );
 
@@ -323,7 +349,28 @@ function Field({ label, defaultValue, name, type = "text", placeholder, minLengt
           </button>
         </span>
       ) : (
-        input
+        <span className="relative block">
+          {input}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(true);
+                window.requestAnimationFrame(() => {
+                  inputRef.current?.focus();
+                  inputRef.current?.select();
+                });
+              }}
+              className={`absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none ${
+                isEditing ? "bg-emerald-50 text-tanaw-green" : "text-slate-400 hover:bg-emerald-50 hover:text-tanaw-green"
+              }`}
+              aria-label={`Edit ${label.toLowerCase()}`}
+              aria-pressed={isEditing}
+            >
+              <Pencil size={16} />
+            </button>
+          )}
+        </span>
       )}
     </label>
   );

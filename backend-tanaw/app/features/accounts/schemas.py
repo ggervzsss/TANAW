@@ -14,6 +14,15 @@ from app.features.accounts.options import (
 PHILIPPINE_MOBILE_ERROR = "Enter a valid Philippine mobile number starting with +63."
 NAME_ERROR = "Use letters, spaces, hyphen, or apostrophe only."
 
+ProfileChangeRequestType = Literal["businessEmail", "contactNumber"]
+
+
+class AccountProfileChangeRequest(BaseModel):
+    type: ProfileChangeRequestType
+    label: str
+    requestedValue: str
+    requestedAt: str | None = None
+
 
 def normalize_email_value(value: str) -> str:
     return value.strip().lower()
@@ -206,8 +215,13 @@ class AccountSummary(BaseModel):
     status: str
     mustChangePassword: bool
     isProtectedDefault: bool = False
+    profileChangeRequests: list[AccountProfileChangeRequest] = Field(default_factory=list)
     createdAt: datetime
     lastLoginAt: datetime | None
+
+
+class EnterpriseProfileChangeRequestResolution(BaseModel):
+    action: Literal["approve", "decline"]
 
 
 class AccountStatusUpdate(BaseModel):

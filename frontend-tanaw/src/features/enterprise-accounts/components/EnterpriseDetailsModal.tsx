@@ -18,6 +18,7 @@ import {
 
 type EnterpriseDetailsModalProps = {
   enterprise: AccountSummary;
+  readOnly?: boolean;
   onClose: () => void;
   onEnterpriseUpdated: (enterprise: AccountSummary) => void;
 };
@@ -46,7 +47,7 @@ const enterpriseCategoryValues = new Set<string>(enterpriseCategories.map((categ
 const sanPedroBarangayValues = new Set<string>(sanPedroBarangays);
 const allowedStatusValues = ["active", "inactive"] satisfies UpdateEnterpriseAccountPayload["status"][];
 
-export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
+export function EnterpriseDetailsModal({ enterprise, readOnly = false, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EnterpriseEditState>(() => getInitialForm(enterprise));
@@ -168,35 +169,42 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
               ))}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="mb-3 text-xs font-black tracking-wide text-slate-500 uppercase">Enterprise Actions</p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="bg-tanaw-green focus:ring-tanaw-green/15 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 focus:ring-4 focus:outline-none"
-                >
-                  <Pencil size={16} />
-                  Edit account information
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmMode("reset")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none"
-                >
-                  <KeyRound size={16} />
-                  Reset credentials
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmMode("status")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none"
-                >
-                  {enterprise.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
-                  {enterprise.status === "active" ? "Deactivate enterprise" : "Reactivate enterprise"}
-                </button>
+            {readOnly ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black tracking-wide text-slate-500 uppercase">Admin Review</p>
+                <p className="mt-1 text-sm font-medium text-slate-600">Enterprise account management actions are handled by IT personnel.</p>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-3 text-xs font-black tracking-wide text-slate-500 uppercase">Enterprise Actions</p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="bg-tanaw-green focus:ring-tanaw-green/15 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 focus:ring-4 focus:outline-none"
+                  >
+                    <Pencil size={16} />
+                    Edit account information
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmMode("reset")}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none"
+                  >
+                    <KeyRound size={16} />
+                    Reset credentials
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmMode("status")}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none"
+                  >
+                    {enterprise.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
+                    {enterprise.status === "active" ? "Deactivate enterprise" : "Reactivate enterprise"}
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <form onSubmit={handleEditSubmit} noValidate className="space-y-5">

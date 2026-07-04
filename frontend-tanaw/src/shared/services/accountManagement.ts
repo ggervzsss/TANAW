@@ -1,6 +1,15 @@
 import { apiClient } from "../lib/apiClient";
 import type { AuthUser } from "../types/role.types";
 
+export type ProfileChangeRequestType = "businessEmail" | "contactNumber";
+
+export type AccountProfileChangeRequest = {
+  type: ProfileChangeRequestType;
+  label: string;
+  requestedValue: string;
+  requestedAt: string | null;
+};
+
 export type AccountSummary = {
   id: string;
   email: string;
@@ -27,6 +36,7 @@ export type AccountSummary = {
   status: "active" | "inactive";
   mustChangePassword: boolean;
   isProtectedDefault: boolean;
+  profileChangeRequests: AccountProfileChangeRequest[];
   createdAt: string;
   lastLoginAt: string | null;
 };
@@ -143,6 +153,11 @@ export async function createEnterpriseAccount(payload: CreateEnterpriseAccountPa
 
 export async function updateEnterpriseAccount(accountId: string, payload: UpdateEnterpriseAccountPayload) {
   const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}`, payload);
+  return response.data;
+}
+
+export async function resolveEnterpriseProfileChangeRequest(accountId: string, requestType: ProfileChangeRequestType, action: "approve" | "decline") {
+  const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}/profile-change-requests/${requestType}`, { action });
   return response.data;
 }
 

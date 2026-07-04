@@ -3,6 +3,7 @@ import re
 import secrets
 import string
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +21,30 @@ from app.features.accounts.models import (
     DevDelivery,
 )
 from app.features.accounts.options import format_enterprise_category
-from app.features.accounts.schemas import AccountSummary, AuthUser, DeliverySummary
+from app.features.accounts.schemas import (
+    AccountProfileChangeRequest,
+    AccountSummary,
+    AuthUser,
+    DeliverySummary,
+    ProfileChangeRequestType,
+)
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
+PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
+PENDING_CONTACT_NUMBER_CHANGE_KEY = "pendingContactNumberChange"
+
+PROFILE_CHANGE_REQUEST_CONFIG: dict[ProfileChangeRequestType, tuple[str, str, str]] = {
+    "businessEmail": (
+        PENDING_BUSINESS_EMAIL_CHANGE_KEY,
+        "Business Email",
+        "email",
+    ),
+    "contactNumber": (
+        PENDING_CONTACT_NUMBER_CHANGE_KEY,
+        "Contact Number",
+        "phone",
+    ),
+}
 
 
 def get_account_preferences(account: Account) -> dict[str, object]:
@@ -35,6 +57,34 @@ def get_account_preferences(account: Account) -> dict[str, object]:
 
 def set_account_preferences(account: Account, values: dict[str, object]) -> None:
     account.preferences_json = json.dumps(values) if values else None
+
+
+def get_pending_profile_change_request(
+    account: Account, request_type: ProfileChangeRequestType
+) -> dict[str, str] | None:
+    key, _, value_key = PROFILE_CHANGE_REQUEST_CONFIG[request_type]
+    raw_request = get_account_preferences(account).get(key)
+    if not isinstance(raw_request, dict):
+        return None
+
+    requested_value = raw_request.get(value_key)
+    if not isinstance(requested_value, str) or not requested_value:
+        return None
+
+    requested_at = raw_request.get("requestedAt")
+    return {
+        value_key: requested_value,
+        "requestedAt": requested_at if isinstance(requested_at, str) else "",
+    }
+
+
+def clear_pending_profile_change_request(
+    account: Account, request_type: ProfileChangeRequestType
+) -> None:
+    key, _, _ = PROFILE_CHANGE_REQUEST_CONFIG[request_type]
+    values = get_account_preferences(account)
+    values.pop(key, None)
+    set_account_preferences(account, values)
 
 
 def set_display_image_data_url(account: Account, data_url: str | None) -> None:
@@ -98,9 +148,34 @@ def to_account_summary(account: Account) -> AccountSummary:
         status=account.status.value,
         mustChangePassword=account.must_change_password,
         isProtectedDefault=is_protected_startup_account(account),
+        profileChangeRequests=get_profile_change_requests(account),
         createdAt=account.created_at,
         lastLoginAt=account.last_login_at,
     )
+
+
+def get_profile_change_requests(account: Account) -> list[AccountProfileChangeRequest]:
+    if account.role != AccountRole.ENTERPRISE:
+        return []
+
+    requests: list[AccountProfileChangeRequest] = []
+    for request_type, (_, label, value_key) in PROFILE_CHANGE_REQUEST_CONFIG.items():
+        pending_request = get_pending_profile_change_request(account, request_type)
+        if pending_request is None:
+            continue
+        requested_value = pending_request.get(value_key)
+        if not requested_value:
+            continue
+        requested_at = pending_request.get("requestedAt") or None
+        requests.append(
+            AccountProfileChangeRequest(
+                type=cast(ProfileChangeRequestType, request_type),
+                label=label,
+                requestedValue=requested_value,
+                requestedAt=requested_at,
+            )
+        )
+    return requests
 
 
 def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:

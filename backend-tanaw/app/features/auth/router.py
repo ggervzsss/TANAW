@@ -32,6 +32,8 @@ from app.features.accounts.schemas import (
     ProfileUpdate,
 )
 from app.features.accounts.service import (
+    PENDING_BUSINESS_EMAIL_CHANGE_KEY,
+    PENDING_CONTACT_NUMBER_CHANGE_KEY,
     change_account_password,
     get_account_by_email,
     get_account_by_login_identifier,
@@ -91,10 +93,7 @@ SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
     AccountRole.IT,
-    AccountRole.STAFF,
 )
-PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
-PENDING_CONTACT_NUMBER_CHANGE_KEY = "pendingContactNumberChange"
 
 
 def is_login_scope_allowed(account: Account, login_scope: str) -> bool:
@@ -678,13 +677,13 @@ async def request_business_email_change(
         db,
         account,
         title=f"{enterprise} requested a business email change.",
-        message=f"{enterprise} requested a business email change.",
-        notification_type="Enterprise Profile Updated",
+        message=f"{enterprise} requested a business email change to {new_email}. IT review is required.",
+        notification_type="Enterprise Profile Change Request",
         source_type="enterprise.profile.email",
     )
     return AccountChangeRequestResponse(
         status="pending",
-        message="Email verification is not configured in this environment.",
+        message="Business email change request sent to IT and Admin for review.",
     )
 
 
@@ -737,13 +736,13 @@ async def request_contact_number_change(
         db,
         account,
         title=f"{enterprise} requested a contact number change.",
-        message=f"{enterprise} requested a contact number change.",
-        notification_type="Enterprise Profile Updated",
+        message=f"{enterprise} requested a contact number change to {payload.phone}. IT review is required.",
+        notification_type="Enterprise Profile Change Request",
         source_type="enterprise.profile.contact",
     )
     return AccountChangeRequestResponse(
         status="pending",
-        message="Contact verification is not configured in this environment.",
+        message="Contact number change request sent to IT and Admin for review.",
     )
 
 
