@@ -497,11 +497,16 @@ async def update_final_report_workflow_status(
         severity="Success",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action=f"Final Report {payload.status}",
+        action=f"Final Report {final_report.status}",
         target=final_report.id,
-        summary=f"{actor.display_name} changed final report {final_report.id} to {payload.status}.",
+        summary=f"{actor.display_name} changed final report {final_report.id} to {final_report.status}.",
         source_id=final_report.id,
-        metadata={"period": final_report.period, "status": payload.status},
+        metadata={
+            "period": final_report.period,
+            "status": final_report.status,
+            "requestedStatus": payload.status,
+            "archivedFromStatus": final_report.archivedFromStatus,
+        },
     )
     return final_report
 

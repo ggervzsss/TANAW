@@ -27,6 +27,7 @@ from app.features.operational.schemas import (
     DesktopReportSubmissionIngest,
     DesktopSessionSummary,
     DesktopTelemetryIngest,
+    FinalReportArchivedFromStatus,
     FinalReportCreate,
     FinalReportSourceSummary,
     FinalReportStatusUpdate,
@@ -62,6 +63,8 @@ NOTIFICATION_SETTING_LEGACY_KEYS = {
     NOTIFY_SYNC_DELAY_KEY: ("notifications.Notify Sync Failed",),
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: ("notifications.Notify Failed Login Threshold",),
 }
+FINAL_REPORT_ARCHIVED_STATUS = "Archived"
+FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized"}
 
 
 class DuplicateReportPeriodError(Exception):
@@ -1103,7 +1106,13 @@ async def update_final_report_status(
     if report is None:
         return None
 
-    report.status = payload.status
+    next_status, archived_from_status = resolve_final_report_status_transition(
+        current_status=report.status,
+        current_archived_from_status=report.archived_from_status,
+        requested_status=payload.status,
+    )
+    report.status = next_status
+    report.archived_from_status = archived_from_status
     await db.commit()
     await db.refresh(report)
     return await to_final_report_summary(db, report)
@@ -1202,6 +1211,7 @@ async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> Fina
         preparedBy=report.prepared_by,
         preparedRole=report.prepared_role,
         status=report.status,  # type: ignore[arg-type]
+        archivedFromStatus=to_final_report_archived_from_status(report.archived_from_status),
         totalEntry=report.total_entry,
         totalExit=report.total_exit,
         totalUnique=report.total_unique,
@@ -1218,6 +1228,39 @@ async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> Fina
             for source in sources
         ],
     )
+
+
+def resolve_final_report_status_transition(
+    *, current_status: str, current_archived_from_status: str | None, requested_status: str
+) -> tuple[str, str | None]:
+    if requested_status == FINAL_REPORT_ARCHIVED_STATUS:
+        if current_status == FINAL_REPORT_ARCHIVED_STATUS:
+            return FINAL_REPORT_ARCHIVED_STATUS, restore_target_status(current_archived_from_status)
+        archived_from_status = (
+            current_status if current_status in FINAL_REPORT_RESTORABLE_STATUSES else "Finalized"
+        )
+        return FINAL_REPORT_ARCHIVED_STATUS, archived_from_status
+
+    if current_status == FINAL_REPORT_ARCHIVED_STATUS and requested_status == "Draft":
+        return restore_target_status(current_archived_from_status), None
+
+    return requested_status, None
+
+
+def restore_target_status(archived_from_status: str | None) -> str:
+    return (
+        archived_from_status
+        if archived_from_status in FINAL_REPORT_RESTORABLE_STATUSES
+        else "Finalized"
+    )
+
+
+def to_final_report_archived_from_status(
+    archived_from_status: str | None,
+) -> FinalReportArchivedFromStatus | None:
+    if archived_from_status in FINAL_REPORT_RESTORABLE_STATUSES:
+        return cast(FinalReportArchivedFromStatus, archived_from_status)
+    return None
 
 
 def enterprise_identifier(account: Account) -> str:

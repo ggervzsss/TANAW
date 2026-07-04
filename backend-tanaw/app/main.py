@@ -116,6 +116,7 @@ async def ensure_mock_reporting_schema(connection: Any) -> None:
             prepared_by VARCHAR(120) NOT NULL,
             prepared_role VARCHAR(120) NOT NULL DEFAULT 'Staff Processing Division',
             status VARCHAR(40) NOT NULL DEFAULT 'Draft',
+            archived_from_status VARCHAR(40),
             total_entry INTEGER NOT NULL DEFAULT 0,
             total_exit INTEGER NOT NULL DEFAULT 0,
             total_unique INTEGER NOT NULL DEFAULT 0,
@@ -128,6 +129,9 @@ async def ensure_mock_reporting_schema(connection: Any) -> None:
     )
     await connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_final_reports_report_code ON final_reports (report_code)"
+    )
+    await connection.exec_driver_sql(
+        "ALTER TABLE final_reports ADD COLUMN IF NOT EXISTS archived_from_status VARCHAR(40)"
     )
     await connection.exec_driver_sql(
         "CREATE INDEX IF NOT EXISTS ix_final_reports_period ON final_reports (period)"

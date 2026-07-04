@@ -8,6 +8,7 @@ export type {
   EnterpriseCamera,
   EnterpriseStatus,
   FinalReport,
+  FinalReportArchivedFromStatus,
   FinalReportSource,
   FinalReportStatus,
   GatewayStatus,

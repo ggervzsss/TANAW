@@ -152,7 +152,8 @@ export type SystemLog = {
 };
 
 export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated" | "Missing";
-export type FinalReportStatus = "Draft" | "Finalized" | "Archived";
+export type FinalReportArchivedFromStatus = "Draft" | "Finalized";
+export type FinalReportStatus = FinalReportArchivedFromStatus | "Archived";
 export type LguAccountRoleLabel = "Admin" | "IT Personnel" | "LGU Staff";
 export type LguAccountStatus = "Active" | "Inactive";
 export type EnterpriseAccountStatus = "Active" | "Archived" | "Suspended";
@@ -242,6 +243,7 @@ export type FinalReport = {
   preparedBy: string;
   preparedRole: string;
   status: FinalReportStatus;
+  archivedFromStatus?: FinalReportArchivedFromStatus | null;
   totalEntry: number;
   totalExit: number;
   totalUnique: number;

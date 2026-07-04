@@ -56,7 +56,7 @@ export const useReportStore = create<ReportState>()(
       updateFinalReportStatus: (reportId, status) => {
         const report = get().finalReports.find((item) => item.id === reportId);
         set((state) => ({
-          finalReports: state.finalReports.map((item) => (item.id === reportId ? { ...item, status } : item)),
+          finalReports: state.finalReports.map((item) => (item.id === reportId ? applyFinalReportStatus(item, status) : item)),
         }));
 
         if (report && report.status !== status) {
@@ -227,6 +227,22 @@ function buildFinalReport(reports: IntakeReport[], preparedBy: string): FinalRep
       exit: report.metrics.exit,
     })),
   };
+}
+
+function applyFinalReportStatus(report: FinalReport, requestedStatus: FinalReportStatus): FinalReport {
+  if (requestedStatus === "Archived") {
+    return {
+      ...report,
+      status: "Archived",
+      archivedFromStatus: report.status === "Archived" ? (report.archivedFromStatus ?? "Finalized") : report.status,
+    };
+  }
+
+  if (report.status === "Archived" && requestedStatus === "Draft") {
+    return { ...report, status: report.archivedFromStatus ?? "Finalized", archivedFromStatus: null };
+  }
+
+  return { ...report, status: requestedStatus, archivedFromStatus: null };
 }
 
 export function getReportEnterpriseName(enterpriseId: string) {

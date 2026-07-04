@@ -216,6 +216,7 @@ class IntakeReportSummary(BaseModel):
     payload: dict | None = None
 
 
+FinalReportArchivedFromStatus = Literal["Draft", "Finalized"]
 FinalReportStatus = Literal["Draft", "Finalized", "Archived"]
 
 
@@ -236,6 +237,7 @@ class FinalReportSummary(BaseModel):
     preparedBy: str
     preparedRole: str
     status: FinalReportStatus
+    archivedFromStatus: FinalReportArchivedFromStatus | None = None
     totalEntry: int
     totalExit: int
     totalUnique: int
