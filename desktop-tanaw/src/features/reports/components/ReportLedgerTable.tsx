@@ -1,35 +1,47 @@
 import { useMemo, useState } from "react";
-import { Download, Edit2, FileText, Search } from "lucide-react";
+import { Download, FileText, Search } from "lucide-react";
 import { Badge } from "../../../components/Badge";
 import { Card } from "../../../components/Card";
 import type { ReportRecord } from "../../../types/enterprise";
 
-type ReportLedgerTableProps = {
-  activeReportId: string | null;
-  reportsHistory: ReportRecord[];
-  onViewReport: (report: ReportRecord) => void;
-  onPrintReport: (report: ReportRecord) => void;
+export type ReportLedgerRowKind = "current" | "pending" | "history";
+
+export type ReportLedgerRow = {
+  key: string;
+  kind: ReportLedgerRowKind;
+  report: ReportRecord;
+  reportLabel: string;
+  reportDescription: string;
+  statusLabel: string;
 };
 
-export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport, onPrintReport }: ReportLedgerTableProps) {
+type ReportLedgerTableProps = {
+  activeLedgerKey: string;
+  ledgerRows: ReportLedgerRow[];
+  onDownloadReport: (report: ReportRecord) => void;
+  onPreviewReport: (report: ReportRecord) => void;
+  onSelectReport: (row: ReportLedgerRow) => void;
+};
+
+export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadReport, onPreviewReport, onSelectReport }: ReportLedgerTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const statusOptions = useMemo(() => Array.from(new Set(reportsHistory.map((report) => report.status))).sort(), [reportsHistory]);
-  const filteredReports = useMemo(() => {
+  const statusOptions = useMemo(() => Array.from(new Set(ledgerRows.map((row) => row.statusLabel))).sort(), [ledgerRows]);
+  const filteredRows = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-    return reportsHistory.filter((report) => {
-      const matchesStatus = statusFilter === "All" || report.status === statusFilter;
-      const searchableText = [report.id, report.period ?? report.date, report.status].join(" ").toLowerCase();
+    return ledgerRows.filter((row) => {
+      const matchesStatus = statusFilter === "All" || row.statusLabel === statusFilter;
+      const searchableText = [row.report.id, row.reportLabel, row.reportDescription, row.report.period ?? row.report.date, row.statusLabel].join(" ").toLowerCase();
       return matchesStatus && (!normalizedSearchQuery || searchableText.includes(normalizedSearchQuery));
     });
-  }, [reportsHistory, searchQuery, statusFilter]);
+  }, [ledgerRows, searchQuery, statusFilter]);
 
   return (
     <Card className="flex flex-col overflow-hidden rounded-sm border border-gray-200 shadow-sm lg:col-span-2">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white p-5">
         <div>
           <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Submission Ledger</h3>
-          <p className="mt-1 text-xs text-gray-500">Use View or Edit to load a saved report into the workspace.</p>
+          <p className="mt-1 text-xs text-gray-500">Select a row to load its data into the workspace, or use View to open the DOT form preview.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <label className="relative block">
@@ -65,7 +77,7 @@ export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport
         <table className="w-full text-left text-sm whitespace-nowrap">
           <thead className="sticky top-0 bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
             <tr>
-              <th className="border-b border-gray-200 px-5 py-3">Report ID</th>
+              <th className="border-b border-gray-200 px-5 py-3">Report</th>
               <th className="border-b border-gray-200 px-5 py-3">Period</th>
               <th className="border-b border-gray-200 px-5 py-3 text-right">Unique Pax</th>
               <th className="border-b border-gray-200 px-5 py-3">Status</th>
@@ -73,50 +85,68 @@ export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredReports.map((report) => {
-              const isEditable = report.status === "Draft" || report.status === "Returned for Revision";
+            {filteredRows.map((row) => {
+              const report = row.report;
+              const isActive = activeLedgerKey === row.key;
               return (
-                <tr key={report.id} className={`group transition-colors ${activeReportId === report.id ? "bg-[#065f46]/5" : "hover:bg-gray-50"}`}>
-                  <td className="px-5 py-4 font-mono text-xs font-semibold text-[#111827]">{report.id}</td>
+                <tr
+                  key={row.key}
+                  role="button"
+                  tabIndex={0}
+                  aria-selected={isActive}
+                  onClick={() => onSelectReport(row)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectReport(row);
+                    }
+                  }}
+                  className={`group cursor-pointer transition-colors focus-visible:bg-[#065f46]/5 focus-visible:outline-none ${isActive ? "bg-[#065f46]/5" : "hover:bg-gray-50"}`}
+                >
+                  <td className="px-5 py-4">
+                    <p className="font-mono text-xs font-semibold text-[#111827]">{row.reportLabel}</p>
+                    <p className="mt-1 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">{row.reportDescription}</p>
+                  </td>
                   <td className="px-5 py-4 text-sm font-medium text-gray-700">{report.period ?? report.date}</td>
                   <td className="px-5 py-4 text-right font-mono font-bold text-[#065f46]">{report.unique?.toLocaleString() || 0}</td>
                   <td className="px-5 py-4">
-                    <Badge
-                      variant={
-                        report.status === "Consolidated"
-                          ? "success"
-                          : report.status === "Submitted" || report.status === "Resubmitted"
-                            ? "info"
-                            : report.status === "Returned for Revision"
-                              ? "warning"
-                              : "default"
-                      }
-                    >
-                      {report.status}
-                    </Badge>
+                    <Badge variant={badgeVariant(row)}>{row.statusLabel}</Badge>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex justify-end gap-3 opacity-60 transition-opacity group-hover:opacity-100">
-                      <button type="button" onClick={() => onPrintReport(report)} className="flex items-center text-gray-500 hover:text-[#065f46]" title="Download PDF">
-                        <Download size={16} />
+                    <div className="flex justify-end gap-3 opacity-70 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onPreviewReport(report);
+                        }}
+                        className="flex items-center gap-1 text-xs font-semibold tracking-wider text-[#065f46] uppercase hover:text-[#044a36]"
+                      >
+                        <FileText size={14} />
+                        View
                       </button>
                       <button
                         type="button"
-                        onClick={() => onViewReport(report)}
-                        className={`flex items-center gap-1 text-xs font-semibold tracking-wider uppercase ${isEditable ? "text-[#065f46] hover:text-[#044a36]" : "text-gray-400 hover:text-[#111827]"}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDownloadReport(report);
+                        }}
+                        className="flex items-center gap-1 text-xs font-semibold tracking-wider text-gray-500 uppercase hover:text-[#065f46]"
+                        title="Download PDF"
                       >
-                        {isEditable ? <Edit2 size={14} /> : <FileText size={14} />}
-                        {isEditable ? "Edit" : "View"}
+                        <Download size={14} />
+                        Download
                       </button>
                     </div>
                   </td>
                 </tr>
               );
             })}
-            {filteredReports.length === 0 && (
+            {filteredRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-400">
-                  {reportsHistory.length === 0 ? "No reports submitted yet." : "No reports match the current filters."}
+                  {ledgerRows.length === 0 ? "No reporting periods available yet." : "No reports match the current filters."}
                 </td>
               </tr>
             )}
@@ -125,4 +155,13 @@ export function ReportLedgerTable({ activeReportId, reportsHistory, onViewReport
       </div>
     </Card>
   );
+}
+
+function badgeVariant(row: ReportLedgerRow) {
+  if (row.kind === "current") return "success";
+  if (row.kind === "pending") return "warning";
+  if (row.report.status === "Consolidated") return "success";
+  if (row.report.status === "Submitted" || row.report.status === "Resubmitted") return "info";
+  if (row.report.status === "Returned for Revision") return "warning";
+  return "default";
 }

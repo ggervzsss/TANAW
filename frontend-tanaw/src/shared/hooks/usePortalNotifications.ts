@@ -190,7 +190,7 @@ function toneFromNotificationSeverity(severity: BackendNotificationSeverity): Po
 function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
   const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
   if (role === "admin") {
-    if (text.includes("enterprise.profile") || text.includes("profile change request")) return routes.admin.enterpriseRequests;
+    if (text.includes("enterprise.profile") || text.includes("profile change request")) return routes.admin.alertsMonitor;
     if (text.includes("support") || text.includes("ticket")) return routes.admin.supportTickets;
     return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.systemLogs : routes.admin.alertsMonitor;
   }

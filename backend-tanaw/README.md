@@ -31,7 +31,7 @@ and workflow events after they have been produced locally.
   control.
 - **Account management**: LGU and enterprise account creation, activation,
   profile metadata, enterprise identifiers, and role-specific account policies.
-- **Operational sync**: enterprise telemetry, gateway status, desktop report
+- **Operational sync**: enterprise telemetry, desktop app status, desktop report
   synchronization, prepared count packages, and sync audit trails.
 - **Reporting workflow**: enterprise intake reports, Staff review statuses,
   final report generation, source-row audit data, and reporting activity logs.

@@ -62,7 +62,6 @@ export function AppRouter() {
       >
         <Route index element={<Navigate to={routes.admin.mapview} replace />} />
         <Route path="mapview" element={<AdminMapViewPage />} />
-        <Route path="enterprise-requests" element={<ITEnterpriseAccountsPage mode="admin" />} />
         <Route path="system-logs" element={<AdminSystemLogsPage />} />
         <Route path="alerts-monitor" element={<AdminAlertsMonitorPage />} />
         <Route path="support-tickets" element={<SupportTicketsPage mode="admin" />} />

@@ -118,10 +118,10 @@ LGU_ACCOUNTS = (
     (
         "it.operations@tanaw.test",
         AccountRole.IT,
-        "Adrian Villanueva",
+        "Coco Martin",
         "IT Personnel",
-        "Adrian",
-        "Villanueva",
+        "Coco",
+        "Martin",
     ),
     (
         "system.admin@tanaw.test",
@@ -535,7 +535,7 @@ async def create_operational_history(
                 and enterprise_index == 2
                 and month_start == current_month
                 else "running",
-                error="Gateway synchronization delayed. Retrying automatically."
+                error="Desktop app synchronization delayed. Retrying automatically."
                 if scenario == "camera-health"
                 and enterprise_index == 2
                 and month_start == current_month

@@ -12,17 +12,12 @@ import { filterEnterpriseAccounts } from "../utils";
 
 const EMPTY_ACCOUNTS: AccountSummary[] = [];
 
-type EnterpriseAccountsPageProps = {
-  mode?: "it" | "admin";
-};
-
-export function ITEnterpriseAccountsPage({ mode = "it" }: EnterpriseAccountsPageProps) {
+export function ITEnterpriseAccountsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<EnterpriseStatusFilter>("all");
   const [barangay, setBarangay] = useState("All Barangays");
   const [selectedEnterprise, setSelectedEnterprise] = useState<AccountSummary | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
-  const canManageAccounts = mode === "it";
 
   const accountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
@@ -34,13 +29,10 @@ export function ITEnterpriseAccountsPage({ mode = "it" }: EnterpriseAccountsPage
 
   return (
     <PageMotion>
-      <PageHeader
-        title={mode === "it" ? "Enterprise Accounts" : "Enterprise Profile Requests"}
-        description={mode === "it" ? "Register establishments, issue temporary credentials, and manage account access." : "Review enterprise profile change requests sent to IT personnel."}
-      />
+      <PageHeader title="Enterprise Accounts" description="Register establishments, issue temporary credentials, and manage account access." />
 
       <EnterpriseAccountsMetrics accounts={accounts} />
-      <EnterpriseProfileRequestsPanel accounts={accounts} canResolve={canManageAccounts} onAccountUpdated={handleEnterpriseUpdated} />
+      <EnterpriseProfileRequestsPanel accounts={accounts} canResolve onAccountUpdated={handleEnterpriseUpdated} />
 
       <Panel className="mt-6 overflow-hidden">
         <EnterpriseAccountsToolbar
@@ -52,14 +44,13 @@ export function ITEnterpriseAccountsPage({ mode = "it" }: EnterpriseAccountsPage
           onStatusChange={setStatus}
           onBarangayChange={setBarangay}
           onRegister={() => setRegisterOpen(true)}
-          showRegister={canManageAccounts}
         />
         <EnterpriseAccountsTable accounts={accounts} filteredEnterprises={filteredEnterprises} isLoading={accountsQuery.isLoading} onSelectEnterprise={setSelectedEnterprise} />
       </Panel>
 
       <AnimatePresence>
-        {selectedEnterprise && <EnterpriseDetailsModal enterprise={selectedEnterprise} readOnly={!canManageAccounts} onClose={() => setSelectedEnterprise(null)} onEnterpriseUpdated={setSelectedEnterprise} />}
-        {registerOpen && canManageAccounts && <RegisterEnterpriseModal onClose={() => setRegisterOpen(false)} />}
+        {selectedEnterprise && <EnterpriseDetailsModal enterprise={selectedEnterprise} onClose={() => setSelectedEnterprise(null)} onEnterpriseUpdated={setSelectedEnterprise} />}
+        {registerOpen && <RegisterEnterpriseModal onClose={() => setRegisterOpen(false)} />}
       </AnimatePresence>
     </PageMotion>
   );

@@ -11,12 +11,11 @@ type EnterpriseAccountsToolbarProps = {
   onStatusChange: (value: EnterpriseStatusFilter) => void;
   onBarangayChange: (value: string) => void;
   onRegister: () => void;
-  showRegister?: boolean;
 };
 
-export function EnterpriseAccountsToolbar({ query, status, barangay, barangays, onQueryChange, onStatusChange, onBarangayChange, onRegister, showRegister = true }: EnterpriseAccountsToolbarProps) {
+export function EnterpriseAccountsToolbar({ query, status, barangay, barangays, onQueryChange, onStatusChange, onBarangayChange, onRegister }: EnterpriseAccountsToolbarProps) {
   return (
-    <div className={`grid grid-cols-1 gap-3 border-b border-gray-200 bg-gray-50 p-4 ${showRegister ? "xl:grid-cols-[minmax(260px,1fr)_auto_auto_auto]" : "xl:grid-cols-[minmax(260px,1fr)_auto_auto]"}`}>
+    <div className="grid grid-cols-1 gap-3 border-b border-gray-200 bg-gray-50 p-4 xl:grid-cols-[minmax(260px,1fr)_auto_auto_auto]">
       <div className="relative">
         <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
         <input
@@ -38,14 +37,12 @@ export function EnterpriseAccountsToolbar({ query, status, barangay, barangays, 
           ] as const
         }
       />
-      {showRegister && (
-        <button
-          onClick={onRegister}
-          className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
-        >
-          <Building2 size={16} /> Register Enterprise
-        </button>
-      )}
+      <button
+        onClick={onRegister}
+        className="bg-tgreen-dark hover:bg-tgreen-light inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
+      >
+        <Building2 size={16} /> Register Enterprise
+      </button>
     </div>
   );
 }

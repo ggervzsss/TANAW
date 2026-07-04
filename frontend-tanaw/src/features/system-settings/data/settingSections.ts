@@ -33,8 +33,8 @@ export const settingSections: SettingSection[] = [
       },
       {
         key: "gatewayServiceErrorAlerts",
-        label: "Gateway Service Error Alerts",
-        description: "Create an IT maintenance alert when the desktop gateway or ML service reports a session error without a camera source.",
+        label: "Desktop App Error Alerts",
+        description: "Create an IT maintenance alert when the desktop app or ML service reports a session error without a camera source.",
         type: "toggle",
         value: true,
       },

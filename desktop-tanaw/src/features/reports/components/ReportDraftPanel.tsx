@@ -20,10 +20,7 @@ type ReportDraftPanelProps = {
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
-  periodOptions: string[];
   validationError: string | null;
-  onPeriodChange: (period: string) => void;
-  onPreview: () => void;
   onSubmitPrompt: () => void;
   setDemo: React.Dispatch<React.SetStateAction<DemoBreakdown>>;
   setNotes: React.Dispatch<React.SetStateAction<string>>;
@@ -39,10 +36,7 @@ export function ReportDraftPanel({
   metrics,
   notes,
   period,
-  periodOptions,
   validationError,
-  onPeriodChange,
-  onPreview,
   onSubmitPrompt,
   setDemo,
   setNotes,
@@ -58,17 +52,15 @@ export function ReportDraftPanel({
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodField
-          description={isCurrentReport ? "Unfinished reporting periods are loaded from prepared system counts." : "This is the period saved with the selected ledger report."}
+          description={isCurrentReport ? "Use the Submission Ledger to switch between current and pending reporting periods." : "This is the period saved with the selected ledger report."}
           isLoading={isPeriodChanging}
-          label={isCurrentReport ? "Reporting Month" : "Report Period"}
-          onPeriodChange={isCurrentReport ? onPeriodChange : undefined}
-          options={isCurrentReport ? periodOptions : []}
+          label={isCurrentReport ? "Current Reporting Period" : "Report Period"}
           period={period}
         />
         <SystemLockedMetrics demo={demo} metrics={metrics} />
         <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} setDemo={setDemo} uniqueCap={metrics.unique} />
         <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
-        <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onPreview={onPreview} onSubmitPrompt={onSubmitPrompt} />
+        <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onSubmitPrompt={onSubmitPrompt} />
         <ReportAuditTrail activeReport={activeReport} />
       </div>
     </Card>

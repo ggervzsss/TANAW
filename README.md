@@ -5,7 +5,7 @@ for the City of San Pedro, Laguna. It connects participating enterprises to the
 city through a local desktop application that can count visitors from CCTV/IP
 camera streams, keep an offline-capable local ledger, and submit periodic
 reports. LGU personnel use the web portal to manage accounts, monitor enterprise
-and gateway status, review submissions, analyze visitor activity, and produce
+and desktop app status, review submissions, analyze visitor activity, and produce
 consolidated city reports.
 
 The system keeps computer-vision processing at the enterprise edge. Camera

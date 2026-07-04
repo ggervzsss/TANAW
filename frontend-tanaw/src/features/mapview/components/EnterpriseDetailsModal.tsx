@@ -41,7 +41,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
 
         <section className="grid gap-3 sm:grid-cols-2">
           <EnterpriseDetailRow icon={<Building2 size={15} />} label="Category" value={enterprise.category} />
-          <EnterpriseDetailRow icon={<Radio size={15} />} label="Gateway" value={<GatewayBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
+          <EnterpriseDetailRow icon={<Radio size={15} />} label="Desktop App Status" value={<DesktopAppStatusBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
           <EnterpriseDetailRow icon={<Clock size={15} />} label="Last sync" value={enterprise.lastSync ?? "No sync recorded"} />
           <EnterpriseDetailRow icon={<Phone size={15} />} label="Contact" value={enterprise.contact ?? "No contact listed"} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<MapPin size={15} />} label="Full Address" value={enterprise.fullAddress} />
@@ -86,7 +86,7 @@ function StatusBadge({ status }: { status: EnterpriseStatus }) {
   return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
 }
 
-function GatewayBadge({ status }: { status: GatewayStatus }) {
+function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
   const classes: Record<GatewayStatus, string> = {
     Connected: "border-emerald-200 bg-emerald-50 text-emerald-700",
     "Sync Delayed": "border-amber-200 bg-amber-50 text-amber-700",
@@ -94,6 +94,13 @@ function GatewayBadge({ status }: { status: GatewayStatus }) {
     "Not Linked": "border-slate-200 bg-slate-100 text-slate-600",
     Closed: "border-slate-200 bg-slate-100 text-slate-600",
   };
+  const label: Record<GatewayStatus, string> = {
+    Connected: "Online",
+    "Sync Delayed": "Sync Delayed",
+    Offline: "Offline",
+    "Not Linked": "No Desktop App Linked",
+    Closed: "Closed",
+  };
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{label[status]}</span>;
 }

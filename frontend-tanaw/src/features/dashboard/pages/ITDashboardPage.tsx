@@ -29,22 +29,22 @@ export function ITDashboardPage() {
   const operationalSummary = operationalSummaryQuery.data;
   const activeLguAccounts = lguAccounts.filter((account) => account.status === "active").length;
   const activeEnterprises = enterpriseAccounts.filter((enterprise) => enterprise.status === "active").length;
-  const gatewaysOnline = operationalSummary?.onlineGateways ?? enterpriseAccounts.filter((enterprise) => enterprise.gatewayStatus?.toLowerCase() === "connected").length;
+  const desktopAppsOnline = operationalSummary?.onlineGateways ?? enterpriseAccounts.filter((enterprise) => enterprise.gatewayStatus?.toLowerCase() === "connected").length;
   const recentActivities = logs.slice(0, 7);
 
   const actionableAlerts = priorityAlerts.filter((alert) => alert.status !== "Resolved").slice(0, 4);
 
   return (
     <PageMotion>
-      <PageHeader title="Dashboard" description="Operational overview for accounts, enterprise connectivity, camera health, and recent system activity." />
+      <PageHeader title="Dashboard" description="Operational overview for accounts, desktop app connectivity, camera health, and recent system activity." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5" variants={stagger}>
         <MetricCard label="LGU Accounts" value={lguAccountsQuery.isLoading ? "..." : activeLguAccounts} foot="Active account registry" color="#065f46" icon={Users} />
         <MetricCard label="Active Enterprises" value={enterpriseAccountsQuery.isLoading ? "..." : activeEnterprises} foot="Can access TANAW" color="#2563eb" icon={Building2} />
         <MetricCard
-          label="Gateways Online"
-          value={operationalSummaryQuery.isLoading && !operationalSummary ? "..." : gatewaysOnline}
-          foot={operationalSummary ? `${operationalSummary.delayedGateways} delayed / ${operationalSummary.offlineGateways} offline` : "Connected edge gateways"}
+          label="Desktop Apps Online"
+          value={operationalSummaryQuery.isLoading && !operationalSummary ? "..." : desktopAppsOnline}
+          foot={operationalSummary ? `${operationalSummary.delayedGateways} delayed / ${operationalSummary.offlineGateways} offline` : "Connected desktop apps"}
           color="#10b981"
           icon={Wifi}
         />

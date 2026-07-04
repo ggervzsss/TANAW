@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
-import { ReportLedgerTable } from "./ReportLedgerTable";
+import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
@@ -29,6 +28,7 @@ type DotPreviewState = {
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
+  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
   const [period, setPeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
@@ -44,7 +44,6 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
-  const periodOptions = useMemo(() => buildPeriodOptions(period, pendingPeriodCounts), [pendingPeriodCounts, period]);
 
   const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
 
@@ -52,14 +51,29 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
     checkDuplicatePeriod: !(activeReport && isReadOnly),
   });
+  const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
+  const ledgerRows = useMemo(
+    () =>
+      buildLedgerRows({
+        currentDemo: !activeReport ? demo : emptyDemo(),
+        currentMetrics: liveMetrics,
+        currentNotes: !activeReport ? notes : "",
+        currentPeriod: livePeriod,
+        pendingCounts: pendingPeriodCounts,
+        reportsHistory,
+      }),
+    [activeReport, demo, liveMetrics, livePeriod, notes, pendingPeriodCounts, reportsHistory],
+  );
 
   const refreshLocalMetrics = useCallback(async () => {
     try {
       const status = await getMlServiceStatus();
       const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
+      const summaryPeriod = summary.period || getCurrentReportingPeriod();
       setLiveMetrics(metricsFromSummary(summary));
-      if (!activeReportId && summary.period) {
-        setPeriod(summary.period);
+      setLivePeriod(summaryPeriod);
+      if (!activeReportId) {
+        setPeriod(summaryPeriod);
       }
       setMetricsError(null);
     } catch (error) {
@@ -111,25 +125,28 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     return () => window.clearInterval(intervalId);
   }, [refreshPendingPeriods]);
 
-  useEffect(() => {
-    if (activeReportId || pendingPeriodCounts.length === 0) return;
-    if (!pendingPeriodCounts.some((counts) => counts.period === period)) {
-      setPeriod(pendingPeriodCounts[0].period);
-    }
-  }, [activeReportId, pendingPeriodCounts, period]);
-
-  const handleReturnToReportWorkspace = (nextPeriod?: string) => {
+  const resetDraftWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
-    setPeriod(nextPeriod ?? pendingPeriodCounts[0]?.period ?? getCurrentReportingPeriod());
+    setPeriod(nextPeriod ?? livePeriod);
     setNotes("");
     setDemo(emptyDemo());
     setPreviewReport(null);
   };
 
-  const handlePeriodChange = async (nextPeriod: string) => {
-    if (activeReportId || nextPeriod === period) return;
+  const handleDraftPeriodSelect = async (nextPeriod: string) => {
+    if (!activeReportId && nextPeriod === period) return;
+
+    if (nextPeriod === livePeriod) {
+      resetDraftWorkspace(livePeriod);
+      return;
+    }
+
     if (!pendingPeriodCounts.some((counts) => counts.period === nextPeriod)) {
+      setActiveReportId(null);
       setPeriod(nextPeriod);
+      setNotes("");
+      setDemo(emptyDemo());
+      setPreviewReport(null);
       return;
     }
 
@@ -139,7 +156,9 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period !== nextPeriod)) {
         throw new Error(`No prepared count package is available for ${nextPeriod}.`);
       }
+      setActiveReportId(null);
       setLiveMetrics(metricsFromSummary(prepared));
+      setLivePeriod(prepared.period || nextPeriod);
       setPeriod(prepared.period || nextPeriod);
       setNotes("");
       setDemo(emptyDemo());
@@ -162,8 +181,16 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setDemo(report.demo || emptyDemo());
   };
 
+  const handleSelectLedgerRow = (row: ReportLedgerRow) => {
+    if (row.kind === "history") {
+      handleViewReport(row.report);
+      return;
+    }
+
+    void handleDraftPeriodSelect(row.report.period ?? row.report.date);
+  };
+
   const handlePreviewReport = (report: ReportRecord) => {
-    handleViewReport(report);
     setPreviewReport({
       demo: report.demo ?? emptyDemo(),
       metrics: metricsFromReport(report),
@@ -311,14 +338,13 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       };
       setReportsHistory((prev) => upsertReport(prev, newReport));
     }
-    const nextPendingPeriod = pendingPeriodCounts.find((counts) => counts.period !== period)?.period;
     setPendingPeriodCounts((prev) => prev.filter((counts) => counts.period !== period));
     setShowConfirm(false);
     setIsSubmitting(false);
     void refreshLocalMetrics();
     void refreshLocalReports();
     window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
-    handleReturnToReportWorkspace(nextPendingPeriod);
+    resetDraftWorkspace();
   };
 
   return (
@@ -344,15 +370,6 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
           {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report ledger unavailable: {ledgerError}</p>}
         </div>
-        {activeReport && (
-          <button
-            type="button"
-            onClick={() => handleReturnToReportWorkspace()}
-            className="flex items-center gap-2 rounded-sm border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-[#111827] shadow-sm transition-colors hover:bg-gray-50"
-          >
-            <ArrowLeft size={16} /> Return to Report Workspace
-          </button>
-        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -366,28 +383,18 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
-          periodOptions={periodOptions}
           validationError={validationError}
-          onPeriodChange={handlePeriodChange}
-          onPreview={() =>
-            setPreviewReport({
-              demo,
-              metrics: displayedMetrics,
-              notes,
-              period,
-              reportId: activeReportId ?? "TANAW-DRAFT",
-            })
-          }
           onSubmitPrompt={() => setShowConfirm(true)}
           setDemo={setDemo}
           setNotes={setNotes}
         />
 
         <ReportLedgerTable
-          activeReportId={activeReportId}
-          reportsHistory={reportsHistory}
-          onViewReport={handleViewReport}
-          onPrintReport={handleDownloadReport}
+          activeLedgerKey={activeLedgerKey}
+          ledgerRows={ledgerRows}
+          onDownloadReport={handleDownloadReport}
+          onPreviewReport={handlePreviewReport}
+          onSelectReport={handleSelectLedgerRow}
         />
       </div>
     </div>
@@ -436,11 +443,98 @@ function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { pre
   return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
 }
 
-function buildPeriodOptions(period: string, pendingCounts: BackendMockPreparationCounts[]) {
-  if (pendingCounts.length > 0) {
-    return pendingCounts.map((counts) => counts.period);
+function buildLedgerRows({
+  currentDemo,
+  currentMetrics,
+  currentNotes,
+  currentPeriod,
+  pendingCounts,
+  reportsHistory,
+}: {
+  currentDemo: DemoBreakdown;
+  currentMetrics: Metrics;
+  currentNotes: string;
+  currentPeriod: SystemLogPeriod;
+  pendingCounts: BackendMockPreparationCounts[];
+  reportsHistory: ReportRecord[];
+}): ReportLedgerRow[] {
+  const reportedPeriods = new Set(reportsHistory.map((report) => report.period ?? report.date));
+  const pendingPeriods = new Set<string>();
+  const rows: ReportLedgerRow[] = [
+    {
+      key: draftLedgerKey(currentPeriod),
+      kind: "current",
+      report: {
+        id: "TANAW-DRAFT",
+        date: currentPeriod,
+        status: "Draft",
+        entries: currentMetrics.entries,
+        exits: currentMetrics.exits,
+        peak: currentMetrics.peak,
+        unique: currentMetrics.unique,
+        period: currentPeriod,
+        demo: currentDemo,
+        notes: currentNotes,
+      },
+      reportLabel: "Current Reporting Period",
+      reportDescription: "Live workspace",
+      statusLabel: "Current Reporting Period",
+    },
+  ];
+
+  for (const counts of pendingCounts) {
+    if (counts.period === currentPeriod || reportedPeriods.has(counts.period) || pendingPeriods.has(counts.period)) continue;
+    pendingPeriods.add(counts.period);
+    rows.push({
+      key: draftLedgerKey(counts.period),
+      kind: "pending",
+      report: reportFromPendingCounts(counts),
+      reportLabel: "Pending Submission",
+      reportDescription: "Prepared counts",
+      statusLabel: "Pending Submission",
+    });
   }
-  return period ? [period] : [];
+
+  rows.push(
+    ...reportsHistory.map((report) => ({
+      key: historyLedgerKey(report.id),
+      kind: "history" as const,
+      report,
+      reportLabel: report.id,
+      reportDescription: report.syncStatus ? `Sync: ${report.syncStatus}` : "Saved report",
+      statusLabel: report.status,
+    })),
+  );
+
+  return rows;
+}
+
+function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRecord {
+  return {
+    id: pendingReportId(counts.period),
+    date: counts.period,
+    status: "Draft",
+    entries: counts.entries,
+    exits: counts.exits,
+    peak: counts.peakOccupancy,
+    unique: counts.uniqueCount,
+    period: counts.period,
+    demo: emptyDemo(),
+    notes: "",
+  };
+}
+
+function draftLedgerKey(period: string) {
+  return `draft:${period}`;
+}
+
+function historyLedgerKey(reportId: string) {
+  return `history:${reportId}`;
+}
+
+function pendingReportId(period: string) {
+  const normalizedPeriod = period.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase();
+  return normalizedPeriod ? `PENDING-${normalizedPeriod}` : "PENDING-REPORT";
 }
 
 function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
