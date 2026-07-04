@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
@@ -26,6 +26,8 @@ type DotPreviewState = {
   reportId: string;
 };
 
+const DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics";
+
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
@@ -41,9 +43,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPeriodChanging, setIsPeriodChanging] = useState(false);
   const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendMockPreparationCounts[]>([]);
+  const reportsHistoryRef = useRef(reportsHistory);
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
+  const demographicDraftStorageKey = useMemo(() => getDemographicDraftStorageKey(activeReportId, period), [activeReportId, period]);
+  const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
 
   const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
 
@@ -55,7 +60,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const ledgerRows = useMemo(
     () =>
       buildLedgerRows({
-        currentDemo: !activeReport ? demo : emptyDemo(),
+        currentDemo: !activeReport ? demo : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, livePeriod)) ?? emptyDemo(),
         currentMetrics: liveMetrics,
         currentNotes: !activeReport ? notes : "",
         currentPeriod: livePeriod,
@@ -65,6 +70,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     [activeReport, demo, liveMetrics, livePeriod, notes, pendingPeriodCounts, reportsHistory],
   );
   const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
+
+  useEffect(() => {
+    reportsHistoryRef.current = reportsHistory;
+  }, [reportsHistory]);
 
   const refreshLocalMetrics = useCallback(async () => {
     try {
@@ -125,6 +134,24 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     const intervalId = window.setInterval(() => void refreshPendingPeriods(), 15000);
     return () => window.clearInterval(intervalId);
   }, [refreshPendingPeriods]);
+
+  useEffect(() => {
+    const storedDemo = isReadOnly ? null : loadStoredDemographicDraft(demographicDraftStorageKey);
+    if (storedDemo) {
+      setDemo(storedDemo);
+    } else if (activeReportId) {
+      const report = reportsHistoryRef.current.find((item) => item.id === activeReportId);
+      setDemo(report?.demo ?? emptyDemo());
+    } else {
+      setDemo(emptyDemo());
+    }
+    setHydratedDemographicDraftKey(demographicDraftStorageKey);
+  }, [activeReportId, demographicDraftStorageKey, isReadOnly]);
+
+  useEffect(() => {
+    if (isReadOnly || hydratedDemographicDraftKey !== demographicDraftStorageKey) return;
+    saveStoredDemographicDraft(demographicDraftStorageKey, demo);
+  }, [demo, demographicDraftStorageKey, hydratedDemographicDraftKey, isReadOnly]);
 
   const resetDraftWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
@@ -340,6 +367,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setReportsHistory((prev) => upsertReport(prev, newReport));
     }
     setPendingPeriodCounts((prev) => prev.filter((counts) => counts.period !== period));
+    removeStoredDemographicDraft(demographicDraftStorageKey);
     setShowConfirm(false);
     setIsSubmitting(false);
     void refreshLocalMetrics();
@@ -445,6 +473,46 @@ function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { pre
   return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
 }
 
+function getDemographicDraftStorageKey(activeReportId: string | null, period: string) {
+  const scope = activeReportId ? `report:${activeReportId}` : `period:${period || getCurrentReportingPeriod()}`;
+  return `${DEMOGRAPHIC_DRAFT_STORAGE_PREFIX}:${encodeURIComponent(scope)}`;
+}
+
+function loadStoredDemographicDraft(storageKey: string): DemoBreakdown | null {
+  try {
+    const storedValue = window.localStorage.getItem(storageKey);
+    if (!storedValue) return null;
+    const parsed = JSON.parse(storedValue) as { demo?: unknown };
+    return demoFromPayload(parsed.demo);
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return null;
+  }
+}
+
+function saveStoredDemographicDraft(storageKey: string, demo: DemoBreakdown) {
+  try {
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        demo,
+        savedAt: new Date().toISOString(),
+        version: 1,
+      }),
+    );
+  } catch {
+    // Local draft persistence is best-effort and must not block report editing.
+  }
+}
+
+function removeStoredDemographicDraft(storageKey: string) {
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // Local draft persistence is best-effort and must not block report submission.
+  }
+}
+
 function buildLedgerRows({
   currentDemo,
   currentMetrics,
@@ -521,7 +589,7 @@ function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRe
     peak: counts.peakOccupancy,
     unique: counts.uniqueCount,
     period: counts.period,
-    demo: emptyDemo(),
+    demo: loadStoredDemographicDraft(getDemographicDraftStorageKey(null, counts.period)) ?? emptyDemo(),
     notes: "",
   };
 }
