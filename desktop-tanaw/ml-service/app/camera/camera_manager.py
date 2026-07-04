@@ -612,6 +612,9 @@ class CameraProcessingManager:
     def mark_report_synced(self, report_id: str) -> bool:
         return self._session_store.mark_report_synced(report_id)
 
+    def purge_report_raw_events(self, report_id: str) -> dict:
+        return self._session_store.purge_report_raw_events(report_id)
+
     def mark_events_synced(self) -> int:
         return self._session_store.mark_events_synced()
 

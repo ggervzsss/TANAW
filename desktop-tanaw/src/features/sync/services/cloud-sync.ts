@@ -11,6 +11,7 @@ import {
   markLocalEventsSynced,
   markLocalReportSynced,
   prepareLocalMockCounts,
+  purgeLocalReportRawEvents,
   resetLocalMockData,
   type LocalReportSubmissionRecord,
   type MlHealth,
@@ -18,6 +19,7 @@ import {
   type MlSession,
   type SimulationStatus,
 } from "../../camera/services/ml-service";
+import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 
@@ -192,6 +194,7 @@ export async function syncDesktopReportSubmissions(limit = 100) {
     syncedCount += 1;
   }
 
+  await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
   return syncedCount;
 }
 
@@ -217,6 +220,24 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
     },
   });
   await markLocalReportSynced(baseUrl, submission.report_id);
+}
+
+async function purgeFinalizedLocalReportRawData(baseUrl: string) {
+  const [localSubmissions, finalReports] = await Promise.all([listLocalReportSubmissions(baseUrl, 500), listEnterpriseFinalReports()]);
+  const finalizedSourceCodes = new Set(
+    finalReports.filter(isLockedFinalReport).flatMap((report) => report.sources.map((source) => source.code)),
+  );
+  const purgeableSubmissions = localSubmissions.filter((submission) => finalizedSourceCodes.has(submission.report_id) && !submission.raw_purged_at);
+
+  for (const submission of purgeableSubmissions) {
+    await purgeLocalReportRawEvents(baseUrl, submission.report_id);
+  }
+
+  return purgeableSubmissions.length;
+}
+
+function isLockedFinalReport(report: EnterpriseFinalReport) {
+  return report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized");
 }
 
 function activeSimulationRunId(simulation: SimulationStatus | null) {

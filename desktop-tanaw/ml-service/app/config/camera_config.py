@@ -512,6 +512,13 @@ class ReportSubmissionRecordResponse(BaseModel):
     source_kind: Literal["real", "mock", "hybrid"] = "real"
     mock_run_id: str | None = None
     synced_at: str | None = None
+    raw_purged_at: str | None = None
+
+
+class ReportRawDataPurgeResponse(BaseModel):
+    report_id: str
+    purged_events: int
+    raw_purged_at: str | None = None
 
 
 class SyncMarkResponse(BaseModel):

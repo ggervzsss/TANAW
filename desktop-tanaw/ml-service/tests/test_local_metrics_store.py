@@ -54,6 +54,29 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["notes"], "notes")
             self.assertEqual(reports[0]["payload"]["demo"]["foreignMale"], "2")
 
+    def test_purging_report_raw_events_keeps_submission_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)))
+            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
+            store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
+            store.record_report_submission("REP-001", "Current Period", "notes", {"source": "test"})
+
+            purged = store.purge_report_raw_events("REP-001")
+
+            self.assertEqual(purged["report_id"], "REP-001")
+            self.assertEqual(purged["purged_events"], 2)
+            self.assertIsNotNone(purged["raw_purged_at"])
+            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 0)
+            reports = store.list_report_submissions()
+            self.assertEqual(len(reports), 1)
+            self.assertEqual(reports[0]["entries"], 1)
+            self.assertEqual(reports[0]["unique_count"], 1)
+            self.assertEqual(reports[0]["raw_purged_at"], purged["raw_purged_at"])
+
+            repeated = store.purge_report_raw_events("REP-001")
+            self.assertEqual(repeated["purged_events"], 0)
+            self.assertEqual(repeated["raw_purged_at"], purged["raw_purged_at"])
+
     def test_hybrid_mock_rows_are_tagged_and_removed_without_real_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))

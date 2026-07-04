@@ -706,6 +706,41 @@ class LocalMetricsStore:
             )
         return result.rowcount > 0
 
+    def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
+        purged_at = _utc_now()
+        with self._connection() as connection:
+            report = connection.execute(
+                "select report_id, raw_purged_at from report_submissions where report_id = ?",
+                (report_id,),
+            ).fetchone()
+            if report is None:
+                return {
+                    "report_id": report_id,
+                    "purged_events": 0,
+                    "raw_purged_at": None,
+                }
+
+            result = connection.execute(
+                "delete from count_events where submitted_report_id = ?",
+                (report_id,),
+            )
+            purged_events = result.rowcount or 0
+            next_purged_at = (
+                purged_at
+                if purged_events > 0 or report["raw_purged_at"] is None
+                else report["raw_purged_at"]
+            )
+            connection.execute(
+                "update report_submissions set raw_purged_at = ? where report_id = ?",
+                (next_purged_at, report_id),
+            )
+
+        return {
+            "report_id": report_id,
+            "purged_events": _safe_int(purged_events),
+            "raw_purged_at": next_purged_at,
+        }
+
     def mark_events_synced(self, synced_at: str | None = None) -> int:
         synced_at = synced_at or _utc_now()
         with self._connection() as connection:
@@ -960,7 +995,8 @@ class LocalMetricsStore:
                     sync_status,
                     source_kind,
                     mock_run_id,
-                    synced_at
+                    synced_at,
+                    raw_purged_at
                 from report_submissions
                 where report_id = ?
                 """,
@@ -986,7 +1022,8 @@ class LocalMetricsStore:
                     sync_status,
                     source_kind,
                     mock_run_id,
-                    synced_at
+                    synced_at,
+                    raw_purged_at
                 from report_submissions
                 where period = ?
                 order by submitted_at desc
@@ -1014,7 +1051,8 @@ class LocalMetricsStore:
                     sync_status,
                     source_kind,
                     mock_run_id,
-                    synced_at
+                    synced_at,
+                    raw_purged_at
                 from report_submissions
                 order by submitted_at desc
                 limit ?
@@ -1104,7 +1142,8 @@ class LocalMetricsStore:
                     sync_status text not null default 'pending_cloud_sync',
                     source_kind text not null default 'real',
                     mock_run_id text,
-                    synced_at text
+                    synced_at text,
+                    raw_purged_at text
                 );
 
                 create table if not exists occupancy_corrections (
@@ -1196,6 +1235,7 @@ class LocalMetricsStore:
                 connection, "report_submissions", "source_kind", "text not null default 'real'"
             )
             _ensure_column(connection, "report_submissions", "mock_run_id", "text")
+            _ensure_column(connection, "report_submissions", "raw_purged_at", "text")
             _ensure_column(connection, "occupancy_corrections", "enterprise_id", "text")
             _ensure_column(
                 connection,
@@ -1348,4 +1388,5 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
         "source_kind": row["source_kind"],
         "mock_run_id": row["mock_run_id"],
         "synced_at": row["synced_at"],
+        "raw_purged_at": row["raw_purged_at"],
     }

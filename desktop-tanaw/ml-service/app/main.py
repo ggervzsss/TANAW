@@ -26,6 +26,7 @@ from app.config.camera_config import (
     MockStatusResponse,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
+    ReportRawDataPurgeResponse,
     ReportSubmissionRecordResponse,
     ReportSubmissionRequest,
     ReportSubmissionResponse,
@@ -170,6 +171,11 @@ def list_local_report_submissions(limit: int = 100) -> list[ReportSubmissionReco
 @app.post("/reports/local/{report_id}/synced", response_model=SyncMarkResponse)
 def mark_local_report_synced(report_id: str) -> SyncMarkResponse:
     return SyncMarkResponse(updated=1 if manager.mark_report_synced(report_id) else 0)
+
+
+@app.post("/reports/local/{report_id}/purge-raw", response_model=ReportRawDataPurgeResponse)
+def purge_local_report_raw_events(report_id: str) -> ReportRawDataPurgeResponse:
+    return ReportRawDataPurgeResponse(**manager.purge_report_raw_events(report_id))
 
 
 @app.post("/metrics/mark-synced", response_model=SyncMarkResponse)
