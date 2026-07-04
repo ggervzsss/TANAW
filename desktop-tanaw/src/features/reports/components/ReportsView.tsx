@@ -10,7 +10,7 @@ import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionR
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
 import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
-import { getDemographicAllocationStatus } from "../utils/demographics";
+import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
 
 type ReportsViewProps = {
@@ -64,6 +64,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       }),
     [activeReport, demo, liveMetrics, livePeriod, notes, pendingPeriodCounts, reportsHistory],
   );
+  const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
 
   const refreshLocalMetrics = useCallback(async () => {
     try {
@@ -383,6 +384,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
+          previousDemo={previousDemo}
           validationError={validationError}
           onSubmitPrompt={() => setShowConfirm(true)}
           setDemo={setDemo}
@@ -625,6 +627,11 @@ function upsertReport(current: ReportRecord[], report: ReportRecord) {
 
 function sortReports(reports: ReportRecord[]) {
   return [...reports].sort((first, second) => reportTimestamp(second) - reportTimestamp(first));
+}
+
+function findPreviousDemo(reports: ReportRecord[], activeReportId: string | null): DemoBreakdown | null {
+  const previousReport = reports.find((report) => report.id !== activeReportId && getDemographicTotals(report.demo ?? emptyDemo()).grandTotal > 0);
+  return previousReport?.demo ?? null;
 }
 
 function reportTimestamp(report: ReportRecord) {

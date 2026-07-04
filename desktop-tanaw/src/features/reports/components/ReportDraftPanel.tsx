@@ -20,6 +20,7 @@ type ReportDraftPanelProps = {
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
+  previousDemo?: DemoBreakdown | null;
   validationError: string | null;
   onSubmitPrompt: () => void;
   setDemo: React.Dispatch<React.SetStateAction<DemoBreakdown>>;
@@ -36,6 +37,7 @@ export function ReportDraftPanel({
   metrics,
   notes,
   period,
+  previousDemo = null,
   validationError,
   onSubmitPrompt,
   setDemo,
@@ -58,7 +60,7 @@ export function ReportDraftPanel({
           period={period}
         />
         <SystemLockedMetrics demo={demo} metrics={metrics} />
-        <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} setDemo={setDemo} uniqueCap={metrics.unique} />
+        <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} previousDemo={previousDemo} setDemo={setDemo} uniqueCap={metrics.unique} />
         <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
         <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onSubmitPrompt={onSubmitPrompt} />
         <ReportAuditTrail activeReport={activeReport} />
