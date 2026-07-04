@@ -23,18 +23,22 @@ from app.features.accounts.schemas import (
     EnterpriseAccountUpdate,
     EnterpriseGeocodeRequest,
     EnterpriseGeocodeResult,
+    EnterpriseProfileChangeRequestResolution,
     EnterpriseReverseGeocodeRequest,
     EnterpriseReverseGeocodeResult,
     LguAccountCreate,
     LguAccountUpdate,
+    ProfileChangeRequestType,
 )
 from app.features.accounts.service import (
     account_role_from_value,
+    clear_pending_profile_change_request,
     create_account_with_temporary_password,
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
     get_dev_delivery_by_id,
+    get_pending_profile_change_request,
     is_protected_startup_account,
     list_accounts_by_roles,
     list_dev_deliveries,
@@ -45,6 +49,9 @@ from app.features.accounts.service import (
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.operational.schemas import OperationalWebSocketEnvelope
+from app.features.operational.service import create_user_notification
+from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 dev_router = APIRouter(prefix="/dev", tags=["dev"])
@@ -308,6 +315,7 @@ async def create_enterprise_account(
         location_updated_at=location_updated_at,
         enterprise_id=enterprise_id,
         gateway_status="Not Linked",
+        building_capacity=payload.buildingCapacity,
     )
     await record_account_log(
         db,
@@ -319,7 +327,11 @@ async def create_enterprise_account(
         target=account.enterprise_name or account.email,
         summary=f"{actor.display_name} registered enterprise account {account.enterprise_name}.",
         source_id=account.id,
-        metadata={"enterpriseId": account.enterprise_id, "barangay": account.barangay},
+        metadata={
+            "enterpriseId": account.enterprise_id,
+            "barangay": account.barangay,
+            "buildingCapacity": account.building_capacity,
+        },
     )
     await record_account_log(
         db,
@@ -357,6 +369,7 @@ async def update_enterprise_account(
     account.phone = payload.contactNumber
     account.barangay = payload.barangay
     account.address = payload.address
+    account.building_capacity = payload.buildingCapacity
     account.status = AccountStatus(payload.status)
     await db.commit()
     await db.refresh(account)
@@ -374,8 +387,80 @@ async def update_enterprise_account(
         metadata={
             "enterpriseId": account.enterprise_id,
             "barangay": account.barangay,
+            "buildingCapacity": account.building_capacity,
             "status": account.status.value,
         },
+    )
+    return to_account_summary(account)
+
+
+@router.patch(
+    "/enterprises/{account_id}/profile-change-requests/{request_type}",
+    response_model=AccountSummary,
+)
+async def resolve_enterprise_profile_change_request(
+    account_id: str,
+    request_type: ProfileChangeRequestType,
+    payload: EnterpriseProfileChangeRequestResolution,
+    actor: ITAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountSummary:
+    account = await get_account_by_id(db, account_id)
+    if account is None or account.role != AccountRole.ENTERPRISE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
+        )
+
+    pending_request = get_pending_profile_change_request(account, request_type)
+    if pending_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile change request not found.",
+        )
+
+    previous_value = get_profile_request_current_value(account, request_type)
+    requested_value = get_profile_request_requested_value(pending_request, request_type)
+
+    if payload.action == "approve":
+        if request_type == "businessEmail":
+            await ensure_unique_account_email(db, requested_value, account.id)
+            account.email = requested_value
+        else:
+            account.phone = requested_value
+
+    clear_pending_profile_change_request(account, request_type)
+    await db.commit()
+    await db.refresh(account)
+
+    request_label = profile_request_label(request_type)
+    resolution_label = "approved" if payload.action == "approve" else "declined"
+    await record_account_log(
+        db,
+        category="IT Activity",
+        severity="Success" if payload.action == "approve" else "Info",
+        actor=actor.display_name,
+        actor_role="IT Personnel",
+        action=f"{payload.action.title()} Enterprise Profile Change",
+        target=account.enterprise_name or account.email,
+        summary=(
+            f"{actor.display_name} {resolution_label} {account.enterprise_name or account.display_name}'s "
+            f"{request_label.lower()} change request."
+        ),
+        source_id=account.id,
+        metadata={
+            "requestType": request_type,
+            "previousValue": previous_value,
+            "requestedValue": requested_value,
+            "resolution": payload.action,
+        },
+    )
+    await notify_enterprise_profile_change_resolution(
+        db,
+        account=account,
+        actor=actor,
+        request_type=request_type,
+        requested_value=requested_value,
+        approved=payload.action == "approve",
     )
     return to_account_summary(account)
 
@@ -548,6 +633,60 @@ async def ensure_credential_reset_keeps_it_access(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot reset credentials for the last active IT Personnel account.",
         )
+
+
+def get_profile_request_requested_value(
+    pending_request: dict[str, str], request_type: ProfileChangeRequestType
+) -> str:
+    return pending_request["email" if request_type == "businessEmail" else "phone"]
+
+
+def get_profile_request_current_value(
+    account: Account, request_type: ProfileChangeRequestType
+) -> str:
+    if request_type == "businessEmail":
+        return account.email
+    return account.phone or ""
+
+
+def profile_request_label(request_type: ProfileChangeRequestType) -> str:
+    return "Business Email" if request_type == "businessEmail" else "Contact Number"
+
+
+async def notify_enterprise_profile_change_resolution(
+    db: AsyncSession,
+    *,
+    account: Account,
+    actor: Account,
+    request_type: ProfileChangeRequestType,
+    requested_value: str,
+    approved: bool,
+) -> None:
+    request_label = profile_request_label(request_type)
+    resolution_text = "approved" if approved else "declined"
+    notification = await create_user_notification(
+        db,
+        recipient=account,
+        title=f"{request_label} change request {resolution_text}.",
+        message=(
+            f"IT {resolution_text} your {request_label.lower()} change request"
+            f"{f' to {requested_value}' if approved else ''}."
+        ),
+        notification_type="Enterprise Profile Change Request",
+        severity="Success" if approved else "Info",
+        actor=actor,
+        source_type=(
+            "enterprise.profile.email"
+            if request_type == "businessEmail"
+            else "enterprise.profile.contact"
+        ),
+        source_id=account.id,
+    )
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="notification.created", data=notification.model_dump(mode="json")
+        )
+    )
 
 
 async def record_account_log(

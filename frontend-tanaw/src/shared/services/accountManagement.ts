@@ -1,6 +1,15 @@
 import { apiClient } from "../lib/apiClient";
 import type { AuthUser } from "../types/role.types";
 
+export type ProfileChangeRequestType = "businessEmail" | "contactNumber";
+
+export type AccountProfileChangeRequest = {
+  type: ProfileChangeRequestType;
+  label: string;
+  requestedValue: string;
+  requestedAt: string | null;
+};
+
 export type AccountSummary = {
   id: string;
   email: string;
@@ -20,12 +29,14 @@ export type AccountSummary = {
   locationUpdatedAt: string | null;
   enterpriseId: string | null;
   gatewayStatus: string | null;
+  buildingCapacity: number;
   displayName: string;
   role: string;
   title: string;
   status: "active" | "inactive";
   mustChangePassword: boolean;
   isProtectedDefault: boolean;
+  profileChangeRequests: AccountProfileChangeRequest[];
   createdAt: string;
   lastLoginAt: string | null;
 };
@@ -67,6 +78,15 @@ export type CreateEnterpriseAccountPayload = {
   locationSource?: string;
   locationConfidence?: number;
   geocodedAddress?: string;
+  buildingCapacity: number;
+};
+
+export type SystemSettingValue = string | boolean | number;
+
+export type SystemSettingsResponse = {
+  updatedAt: string | null;
+  updatedBy: string | null;
+  values: Record<string, SystemSettingValue>;
 };
 
 export type UpdateEnterpriseAccountPayload = {
@@ -77,6 +97,7 @@ export type UpdateEnterpriseAccountPayload = {
   contactNumber?: string;
   barangay: string;
   address: string;
+  buildingCapacity: number;
   status: "active" | "inactive";
 };
 
@@ -132,6 +153,11 @@ export async function createEnterpriseAccount(payload: CreateEnterpriseAccountPa
 
 export async function updateEnterpriseAccount(accountId: string, payload: UpdateEnterpriseAccountPayload) {
   const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}`, payload);
+  return response.data;
+}
+
+export async function resolveEnterpriseProfileChangeRequest(accountId: string, requestType: ProfileChangeRequestType, action: "approve" | "decline") {
+  const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}/profile-change-requests/${requestType}`, { action });
   return response.data;
 }
 
@@ -196,17 +222,12 @@ export async function updateAccountPreferences(theme: "light" | "dark" | "system
   return response.data;
 }
 
-export async function requestDataArchive() {
-  const response = await apiClient.post<{ status: string }>("/auth/data-archive");
+export async function getSystemSettings() {
+  const response = await apiClient.get<SystemSettingsResponse>("/auth/system-settings");
   return response.data;
 }
 
-export async function getSystemSettings() {
-  const response = await apiClient.get<{ values: Record<string, string | boolean> }>("/auth/system-settings");
-  return response.data.values;
-}
-
-export async function updateSystemSettings(values: Record<string, string | boolean>) {
-  const response = await apiClient.patch<{ values: Record<string, string | boolean> }>("/auth/system-settings", { values });
-  return response.data.values;
+export async function updateSystemSettings(values: Record<string, SystemSettingValue>) {
+  const response = await apiClient.patch<SystemSettingsResponse>("/auth/system-settings", { values });
+  return response.data;
 }

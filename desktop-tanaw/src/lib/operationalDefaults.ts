@@ -17,7 +17,5 @@ export const EMPTY_LOCAL_METRICS_HISTORY: LocalMetricsHistory = {
   },
 };
 
-export const REPORTING_PERIODS = ["Current Period"] as const;
-
 export const EMPTY_REPORTS: ReportRecord[] = [];
 export const EMPTY_CAMERAS: Camera[] = [];

@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, LogOut, Menu, Settings, Shield, TicketCheck, User, Users, X } from "lucide-react";
+import { Activity, ChevronDown, LogOut, Menu, Moon, Settings, Shield, Sun, TicketCheck, User, Users, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { routes } from "@/app/routers/routes";
 import { logoutService } from "@/features/login/services";
 import { CITY_SEAL } from "../../constants/branding";
 import { usePortalNotifications } from "../../hooks/usePortalNotifications";
+import { getAccountPreferences, updateAccountPreferences } from "../../services/accountManagement";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "../../utils/routeUtils";
 import type { UserRole } from "../../types/role.types";
 import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
@@ -20,6 +21,9 @@ type PortalTopbarProps = {
   showDevLog?: boolean;
 };
 
+type ThemePreference = "light" | "dark" | "system";
+type ResolvedTheme = "light" | "dark";
+
 export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -30,9 +34,13 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemePreference>("system");
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
+  const skipNextThemeSaveRef = useRef(true);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
 
   const profile = {
@@ -101,6 +109,56 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       navigate(viewAllPath);
     }
   };
+
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
+  };
+
+  useEffect(() => {
+    let disposed = false;
+    void getAccountPreferences()
+      .then((preferences) => {
+        if (disposed) return;
+        setTheme(preferences.theme);
+        setPreferencesLoaded(true);
+      })
+      .catch(() => {
+        if (!disposed) {
+          setPreferencesLoaded(true);
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const nextResolvedTheme = resolveThemePreference(theme);
+      root.classList.remove("light", "dark");
+      root.classList.add(nextResolvedTheme);
+      setResolvedTheme(nextResolvedTheme);
+    };
+
+    applyTheme();
+
+    if (theme !== "system") return undefined;
+
+    mediaQuery.addEventListener("change", applyTheme);
+    return () => mediaQuery.removeEventListener("change", applyTheme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    if (skipNextThemeSaveRef.current) {
+      skipNextThemeSaveRef.current = false;
+      return;
+    }
+    void updateAccountPreferences(theme).catch(() => toast.error("Unable to save theme preference."));
+  }, [preferencesLoaded, theme]);
 
   useEffect(() => {
     if (!showProfileMenu) return undefined;
@@ -326,6 +384,21 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
               {showMobileNav ? <X size={18} /> : <Menu size={18} />}
             </button>
 
+            <button
+              type="button"
+              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => {
+                setShowProfileMenu(false);
+                setShowNotifications(false);
+                setOpenMenuId(null);
+                toggleTheme();
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.14] hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+            >
+              {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+
             <div ref={notificationMenuRef} className="relative">
               <PortalNotificationDropdown
                 isOpen={showNotifications}
@@ -381,7 +454,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                       <User size={14} /> Profile Settings
                     </button>
                     <button type="button" onClick={() => openAccountPage("security")} className={accountMenuButtonClass(securityPath)}>
-                      <Shield size={14} /> Security & Data Control
+                      <Shield size={14} /> Password Settings
                     </button>
                     {supportTicketsPath && (
                       <button type="button" onClick={openSupportTickets} className={accountMenuButtonClass(supportTicketsPath)}>
@@ -478,4 +551,11 @@ function getRoleSupportTicketsPath(role: UserRole) {
   if (role === "admin") return routes.admin.supportTickets;
   if (role === "it") return routes.it.supportTickets;
   return null;
+}
+
+function resolveThemePreference(theme: ThemePreference): ResolvedTheme {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return theme;
 }

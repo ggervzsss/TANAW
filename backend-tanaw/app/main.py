@@ -33,6 +33,7 @@ async def ensure_account_onboarding_schema(connection: Any) -> None:
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS enterprise_id VARCHAR(120)",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS gateway_id VARCHAR(120)",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS gateway_status VARCHAR(40)",
+        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS building_capacity INTEGER NOT NULL DEFAULT 100",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS temporary_password_created_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS temporary_password_expires_at TIMESTAMP WITH TIME ZONE",
@@ -115,6 +116,7 @@ async def ensure_mock_reporting_schema(connection: Any) -> None:
             prepared_by VARCHAR(120) NOT NULL,
             prepared_role VARCHAR(120) NOT NULL DEFAULT 'Staff Processing Division',
             status VARCHAR(40) NOT NULL DEFAULT 'Draft',
+            archived_from_status VARCHAR(40),
             total_entry INTEGER NOT NULL DEFAULT 0,
             total_exit INTEGER NOT NULL DEFAULT 0,
             total_unique INTEGER NOT NULL DEFAULT 0,
@@ -127,6 +129,9 @@ async def ensure_mock_reporting_schema(connection: Any) -> None:
     )
     await connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_final_reports_report_code ON final_reports (report_code)"
+    )
+    await connection.exec_driver_sql(
+        "ALTER TABLE final_reports ADD COLUMN IF NOT EXISTS archived_from_status VARCHAR(40)"
     )
     await connection.exec_driver_sql(
         "CREATE INDEX IF NOT EXISTS ix_final_reports_period ON final_reports (period)"

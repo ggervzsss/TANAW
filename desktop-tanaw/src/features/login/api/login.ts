@@ -1,13 +1,6 @@
 import { staffApi } from "../../../lib/axios";
 import type { LoginFormValues } from "../schemas/login-schema";
 import type { LoginResponse } from "../types";
-import type { ThemePreference } from "../../../types/enterprise";
-
-export type AccountPreferences = {
-  theme: ThemePreference;
-  openAtLogin: boolean;
-};
-
 function normalizeSession(response: LoginResponse): LoginResponse {
   return {
     ...response,
@@ -54,6 +47,11 @@ export async function updateLeadAdminName(managerName: string) {
   return normalizeSession({ token: "", user: response.data }).user;
 }
 
+export async function updateBuildingCapacity(buildingCapacity: number) {
+  const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile/building-capacity", { buildingCapacity });
+  return normalizeSession({ token: "", user: response.data }).user;
+}
+
 export async function requestBusinessEmailChange(email: string) {
   const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/business-email-change", { email });
   return response.data;
@@ -61,21 +59,6 @@ export async function requestBusinessEmailChange(email: string) {
 
 export async function requestContactNumberChange(phone: string) {
   const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/contact-number-change", { phone });
-  return response.data;
-}
-
-export async function getAccountPreferences() {
-  const response = await staffApi.get<AccountPreferences>("/auth/preferences");
-  return response.data;
-}
-
-export async function updateAccountPreferences(payload: Partial<AccountPreferences>) {
-  const response = await staffApi.patch<AccountPreferences>("/auth/preferences", payload);
-  return response.data;
-}
-
-export async function requestDataArchive() {
-  const response = await staffApi.post<{ status: string }>("/auth/data-archive");
   return response.data;
 }
 

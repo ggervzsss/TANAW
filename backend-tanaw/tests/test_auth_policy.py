@@ -10,9 +10,13 @@ from app.features.accounts.service import generate_temporary_password
 from app.features.auth.schemas import ForgotPasswordResetRequest
 from app.features.auth.service import (
     LOGIN_ATTEMPT_LIMIT,
+    LOGIN_LOCK_MINUTES,
+    LoginLockoutPolicy,
     clear_login_failures,
     lockout_seconds_remaining,
+    login_lockout_message,
     register_failed_login,
+    resolve_login_lockout_policy,
 )
 
 
@@ -89,6 +93,50 @@ def test_third_failed_login_locks_account_for_five_minutes() -> None:
     clear_login_failures(account)
     assert lockout_seconds_remaining(account, now) == 0
     assert account.failed_login_attempts == 0
+
+
+def test_custom_login_lockout_policy_controls_attempts_and_duration() -> None:
+    account = _account()
+    now = datetime(2026, 6, 21, tzinfo=UTC)
+    policy = LoginLockoutPolicy(attempt_limit=5, lock_minutes=15)
+
+    for _ in range(policy.attempt_limit - 1):
+        assert register_failed_login(account, now, policy=policy) == 0
+
+    assert register_failed_login(account, now, policy=policy) == 900
+    assert lockout_seconds_remaining(account, now + timedelta(minutes=14)) == 60
+
+
+def test_login_lockout_policy_resolves_valid_numeric_settings() -> None:
+    policy = resolve_login_lockout_policy(
+        {
+            "security.loginAttemptLimit": 10,
+            "security.loginLockMinutes": 30,
+        }
+    )
+
+    assert policy == LoginLockoutPolicy(attempt_limit=10, lock_minutes=30)
+
+
+def test_login_lockout_policy_ignores_invalid_and_legacy_settings() -> None:
+    policy = resolve_login_lockout_policy(
+        {
+            "security.Failed Login Threshold": "10 attempts",
+            "security.loginAttemptLimit": "10",
+            "security.loginLockMinutes": True,
+        }
+    )
+
+    assert policy == LoginLockoutPolicy(
+        attempt_limit=LOGIN_ATTEMPT_LIMIT, lock_minutes=LOGIN_LOCK_MINUTES
+    )
+
+
+def test_login_lockout_message_uses_configured_threshold() -> None:
+    assert (
+        login_lockout_message(LoginLockoutPolicy(attempt_limit=10, lock_minutes=30))
+        == "Account temporarily locked after 10 failed attempts."
+    )
 
 
 def _account() -> Account:

@@ -20,7 +20,7 @@ The portal is optimized for LGU operations:
 
 - IT personnel manage LGU and enterprise accounts, inspect operational status,
   review system logs, and maintain system settings.
-- Admin users monitor enterprise locations, gateway health, alerts, and system
+- Admin users monitor enterprise locations, desktop app health, alerts, and system
   activity.
 - LGU Staff review enterprise reports, inspect tourism analytics, consolidate
   accepted submissions, and audit final reports.
@@ -31,7 +31,7 @@ The portal is optimized for LGU operations:
   flows, and authenticated API state.
 - **IT workspace**: operational dashboard, LGU account management, enterprise
   account management, alerts, logs, delivery tracking, and settings.
-- **Admin workspace**: enterprise map, alert monitoring, gateway status, and
+- **Admin workspace**: enterprise map, alert monitoring, desktop app status, and
   centralized system logs.
 - **Staff workspace**: analytics, batch report review, final report generation,
   final report audit, and reporting activity.
@@ -61,7 +61,7 @@ The frontend expects the backend to provide:
 
 - authentication and current-user session endpoints;
 - role-specific account and enterprise APIs;
-- operational telemetry and gateway-status records;
+- operational telemetry and desktop app status records;
 - Staff review, report submission, final report, and audit endpoints;
 - activity logs and alert data;
 - CORS access for the web portal origin.

@@ -6,7 +6,7 @@ import { ModalPortal } from "@/shared/components/ui";
 import { CITY_SEAL } from "@/shared/constants/branding";
 import { operationalFinalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
 import { updateFinalReportStatus } from "@/shared/services/reporting";
-import type { FinalReport, FinalReportStatus } from "@/shared/types";
+import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
 import { DotFinalReportTable } from "./DotReportTable";
 import { downloadFinalReportPdf } from "../utils/pdf";
 
@@ -46,11 +46,11 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     });
   };
 
-  // TEMP TESTING ONLY: Restore button for final report archive test case. Remove after testing.
   const handleRestore = () => {
-    statusMutation.mutate("Draft", {
+    const restoreStatus = getRestoreStatus(report);
+    statusMutation.mutate(restoreStatus, {
       onSuccess: () => {
-        toast.success(`${report.id} has been restored to Drafts.`);
+        toast.success(`${report.id} has been restored as ${restoreStatus}.`);
         onClose();
       },
       onError: () => toast.error("Final report status could not be updated."),
@@ -187,4 +187,8 @@ function Signature({ label, sub }: { label: string; sub: string }) {
       <p className="mt-1 text-[10px] text-gray-500">{sub}</p>
     </div>
   );
+}
+
+function getRestoreStatus(report: FinalReport): FinalReportArchivedFromStatus {
+  return report.archivedFromStatus ?? "Finalized";
 }

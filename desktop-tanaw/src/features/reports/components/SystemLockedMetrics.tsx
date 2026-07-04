@@ -1,38 +1,26 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { getDemographicAllocationStatus } from "../utils/demographics";
 
 type SystemLockedMetricsProps = {
   demo: DemoBreakdown;
   metrics: Metrics;
-  prevMetrics: Metrics | null;
-  uniqueTrend: number;
 };
 
-export function SystemLockedMetrics({ demo, metrics, prevMetrics, uniqueTrend }: SystemLockedMetricsProps) {
+export function SystemLockedMetrics({ demo, metrics }: SystemLockedMetricsProps) {
   const allocation = getDemographicAllocationStatus(demo, metrics.unique);
   const totals = allocation.totals;
 
   return (
     <div className="rounded-sm border border-gray-200 bg-gray-50 p-4 shadow-inner">
-      <p className="mb-3 text-[10px] font-bold tracking-widest text-gray-500 uppercase">System Locked Metrics</p>
+      <p className="mb-3 text-[10px] font-bold tracking-widest text-gray-500 uppercase">Visitor Summary</p>
       <div className="space-y-3">
         <MetricRow label="Male" value={totals.male.toLocaleString()} />
         <MetricRow label="Female" value={totals.female.toLocaleString()} />
-        <MetricRow label="Total" value={totals.grandTotal.toLocaleString()} />
+        <MetricRow label="Demographic Total" value={totals.grandTotal.toLocaleString()} />
         <div className="flex items-center justify-between border-t border-gray-200 pt-3 text-sm">
-          <span className="font-semibold text-[#065f46]">Unique Count Cap</span>
+          <span className="font-semibold text-[#065f46]">System Unique Count</span>
           <div className="flex flex-col items-end">
             <span className="font-mono text-lg leading-none font-bold text-[#065f46]">{allocation.cap.toLocaleString()}</span>
-            {prevMetrics && (
-              <span
-                className={`mt-1.5 flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[9px] font-bold shadow-sm ${
-                  uniqueTrend >= 0 ? "border border-green-200 bg-green-100 text-green-700" : "border border-red-200 bg-red-100 text-red-700"
-                }`}
-              >
-                {uniqueTrend >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />} {Math.abs(uniqueTrend)}% vs Prev
-              </span>
-            )}
           </div>
         </div>
       </div>

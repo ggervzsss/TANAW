@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -64,8 +65,9 @@ class StatusResponse(BaseModel):
 
 class AccountPreferences(BaseModel):
     theme: Literal["light", "dark", "system"] = "system"
-    openAtLogin: bool = False
 
 
 class SystemSettingsPayload(BaseModel):
-    values: dict[str, str | bool]
+    values: dict[str, str | bool | int]
+    updatedBy: str | None = None
+    updatedAt: datetime | None = None

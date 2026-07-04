@@ -104,6 +104,7 @@ class FinalReport(Base):
         String(120), nullable=False, default="Staff Processing Division"
     )
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="Draft")
+    archived_from_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     total_entry: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_exit: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_unique: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -337,6 +337,7 @@ class MetricsSummaryResponse(BaseModel):
     last_event_at: str | None = None
     source_kind: SourceKind = "real"
     mock_run_id: str | None = None
+    period: str | None = None
 
 
 class OccupancyCorrectionRequest(BaseModel):
@@ -456,7 +457,7 @@ class MockPrepareRequest(BaseModel):
 class MockPrepareResponse(MetricsSummaryResponse):
     enterprise_id: str
     enterprise_name: str | None = None
-    period: str
+    period: str | None = None
     prepared: bool = True
 
 
@@ -511,6 +512,13 @@ class ReportSubmissionRecordResponse(BaseModel):
     source_kind: Literal["real", "mock", "hybrid"] = "real"
     mock_run_id: str | None = None
     synced_at: str | None = None
+    raw_purged_at: str | None = None
+
+
+class ReportRawDataPurgeResponse(BaseModel):
+    report_id: str
+    purged_events: int
+    raw_purged_at: str | None = None
 
 
 class SyncMarkResponse(BaseModel):

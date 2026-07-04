@@ -44,7 +44,10 @@ export function useDesktopCloudSync(contextReady: boolean) {
       if (syncStateRef.current.reports || isDisposed) return;
       syncStateRef.current.reports = true;
       try {
-        await syncDesktopReportSubmissions();
+        const syncedCount = await syncDesktopReportSubmissions();
+        if (syncedCount > 0) {
+          void runPreparation();
+        }
       } catch {
         // Report submissions are stored locally first, so transient cloud errors are retryable.
       } finally {

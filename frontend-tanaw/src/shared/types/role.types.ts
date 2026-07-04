@@ -16,5 +16,6 @@ export type AuthUser = {
   managerName: string | null;
   barangay: string | null;
   address: string | null;
+  buildingCapacity: number;
   displayImageDataUrl: string | null;
 };

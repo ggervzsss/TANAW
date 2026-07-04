@@ -26,6 +26,7 @@ type EnterpriseFormState = {
   enterpriseId: string;
   address: string;
   barangay: string;
+  buildingCapacity: string;
 };
 
 type EnterpriseFormErrors = Partial<Record<keyof EnterpriseFormState, string>>;
@@ -60,6 +61,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
     enterpriseId: "",
     address: "",
     barangay: "",
+    buildingCapacity: "100",
   });
   const [errors, setErrors] = useState<EnterpriseFormErrors>({});
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -197,6 +199,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
       barangay: form.barangay,
       address: form.address.trim(),
       enterpriseId: form.enterpriseId.trim() || undefined,
+      buildingCapacity: Number(form.buildingCapacity),
       ...(location
         ? {
             latitude: location.latitude,
@@ -236,6 +239,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
           <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
           <ContactNumberField name="contactNumber" label="Contact Number" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
           <FormField name="enterpriseId" label="Enterprise ID Seed" placeholder="Leave blank to use enterprise name" value={form.enterpriseId} onChange={(value) => updateField("enterpriseId", value)} />
+          <FormField name="buildingCapacity" label="Building Capacity" type="number" value={form.buildingCapacity} onChange={(value) => updateField("buildingCapacity", value)} error={errors.buildingCapacity} required />
           <FormField name="address" label="Block / Lot / Street" value={form.address} onChange={(value) => updateField("address", value)} error={errors.address} required />
           <SearchableDropdownField
             name="barangay"
@@ -633,6 +637,17 @@ function validateEnterpriseForm(form: EnterpriseFormState) {
   if (phoneError) errors.contactLocal = phoneError;
   if (!form.address.trim()) errors.address = "Address is required.";
   if (!sanPedroBarangayValues.has(form.barangay)) errors.barangay = "Choose a valid barangay.";
+  const capacityError = validateBuildingCapacity(form.buildingCapacity);
+  if (capacityError) errors.buildingCapacity = capacityError;
 
   return errors;
+}
+
+function validateBuildingCapacity(value: string) {
+  const capacity = Number(value);
+  if (!value.trim()) return "Building capacity is required.";
+  if (!Number.isInteger(capacity)) return "Building capacity must be a whole number.";
+  if (capacity < 1) return "Building capacity must be at least 1.";
+  if (capacity > 100000) return "Building capacity cannot exceed 100,000.";
+  return null;
 }

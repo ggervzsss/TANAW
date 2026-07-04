@@ -143,7 +143,7 @@ export function ChangePasswordPage() {
             <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">Welcome to San Pedro</h2>
             <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
             <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
-              Your gateway to manage tourism, empower enterprises, and build a thriving community.
+              Your platform to manage tourism, empower enterprises, and build a thriving community.
             </p>
             <div className="tanaw-auth-hero-location mt-10 flex items-center gap-3 text-xs font-bold tracking-[0.35em] text-white uppercase">
               <MapPin className="h-5 w-5 flex-none text-white" strokeWidth={2} />
@@ -287,6 +287,7 @@ function PasswordField({
         {error ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} aria-hidden="true" /> : null}
         <button
           type="button"
+          tabIndex={-1}
           onClick={() => setShowPassword((current) => !current)}
           className="absolute right-4 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
           aria-label={showPassword ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
@@ -328,4 +329,3 @@ function SampaguitaIcon({ className = "" }: { className?: string }) {
     </svg>
   );
 }
-

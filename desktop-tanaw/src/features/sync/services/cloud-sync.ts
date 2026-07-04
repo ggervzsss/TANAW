@@ -11,6 +11,7 @@ import {
   markLocalEventsSynced,
   markLocalReportSynced,
   prepareLocalMockCounts,
+  purgeLocalReportRawEvents,
   resetLocalMockData,
   type LocalReportSubmissionRecord,
   type MlHealth,
@@ -18,6 +19,7 @@ import {
   type MlSession,
   type SimulationStatus,
 } from "../../camera/services/ml-service";
+import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 
@@ -66,44 +68,75 @@ type DesktopTelemetryPayload = {
   payload: Record<string, unknown>;
 };
 
-type BackendMockPreparation = {
+export type BackendMockPreparationCounts = {
+  entries: number;
+  exits: number;
+  uniqueCount: number;
+  peakOccupancy: number;
+  period: string;
+};
+
+export type BackendMockPreparation = {
   runId: string;
   status: "active" | "removed";
   enterpriseId: string;
   enterpriseName: string;
-  counts: {
-    entries: number;
-    exits: number;
-    uniqueCount: number;
-    peakOccupancy: number;
-    period: string;
-  } | null;
+  counts: BackendMockPreparationCounts | null;
+  pendingCounts?: BackendMockPreparationCounts[];
 };
 
-export async function prepareDesktopMockCounts() {
+export async function getDesktopMockPreparation() {
+  const response = await staffApi.get<BackendMockPreparation | null>("/operational/desktop/mock-preparation");
+  return response.data;
+}
+
+export async function prepareDesktopMockCounts(period?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
   const simulation = await resolveOptional(() => getSimulationStatus(baseUrl));
   if (simulation?.mock_run_id && simulation.scenario) return null;
 
-  const response = await staffApi.get<BackendMockPreparation | null>("/operational/desktop/mock-preparation");
-  if (!response.data) return null;
+  const preparation = await getDesktopMockPreparation();
+  if (!preparation) return null;
 
-  if (response.data.status === "removed") {
-    return resetLocalMockData(baseUrl, response.data.runId);
+  if (preparation.status === "removed") {
+    return resetLocalMockData(baseUrl, preparation.runId);
   }
-  if (!response.data.counts) return null;
+  if (!period) {
+    const currentMetrics = await getLocalMetricsSummary(baseUrl);
+    const pendingPeriods =
+      preparation.pendingCounts?.map((counts) => counts.period) ??
+      (preparation.counts ? [preparation.counts.period] : []);
+    if (
+      currentMetrics.mock_run_id === preparation.runId &&
+      currentMetrics.period &&
+      pendingPeriods.includes(currentMetrics.period) &&
+      currentMetrics.unsubmitted_events > 0
+    ) {
+      return null;
+    }
+  }
+  const counts = selectMockPreparationCounts(preparation, period);
+  if (!counts) return null;
 
   return prepareLocalMockCounts(baseUrl, {
-    mockRunId: response.data.runId,
-    enterpriseId: response.data.enterpriseId,
-    enterpriseName: response.data.enterpriseName,
-    entries: response.data.counts.entries,
-    exits: response.data.counts.exits,
-    uniqueCount: response.data.counts.uniqueCount,
-    peakOccupancy: response.data.counts.peakOccupancy,
-    period: response.data.counts.period,
+    mockRunId: preparation.runId,
+    enterpriseId: preparation.enterpriseId,
+    enterpriseName: preparation.enterpriseName,
+    entries: counts.entries,
+    exits: counts.exits,
+    uniqueCount: counts.uniqueCount,
+    peakOccupancy: counts.peakOccupancy,
+    period: counts.period,
   });
+}
+
+function selectMockPreparationCounts(preparation: BackendMockPreparation, period?: string) {
+  if (!period) return preparation.counts;
+  return (
+    preparation.pendingCounts?.find((counts) => counts.period === period) ??
+    (preparation.counts?.period === period ? preparation.counts : null)
+  );
 }
 
 export async function syncDesktopTelemetry() {
@@ -161,6 +194,7 @@ export async function syncDesktopReportSubmissions(limit = 100) {
     syncedCount += 1;
   }
 
+  await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
   return syncedCount;
 }
 
@@ -186,6 +220,24 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
     },
   });
   await markLocalReportSynced(baseUrl, submission.report_id);
+}
+
+async function purgeFinalizedLocalReportRawData(baseUrl: string) {
+  const [localSubmissions, finalReports] = await Promise.all([listLocalReportSubmissions(baseUrl, 500), listEnterpriseFinalReports()]);
+  const finalizedSourceCodes = new Set(
+    finalReports.filter(isLockedFinalReport).flatMap((report) => report.sources.map((source) => source.code)),
+  );
+  const purgeableSubmissions = localSubmissions.filter((submission) => finalizedSourceCodes.has(submission.report_id) && !submission.raw_purged_at);
+
+  for (const submission of purgeableSubmissions) {
+    await purgeLocalReportRawEvents(baseUrl, submission.report_id);
+  }
+
+  return purgeableSubmissions.length;
+}
+
+function isLockedFinalReport(report: EnterpriseFinalReport) {
+  return report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized");
 }
 
 function activeSimulationRunId(simulation: SimulationStatus | null) {

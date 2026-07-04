@@ -85,9 +85,9 @@ Remove-Item Env:TANAW_ML_SERVICE_PORT
 
 The desktop app is not containerized for normal development or production use.
 Dockerizing the Electron runtime would make camera access, native app storage,
-tray/startup behavior, installer packaging, and Windows permissions harder for
-end users. Use Docker for the central backend/frontend/database stack, and run
-the desktop locally.
+tray behavior, installer packaging, and Windows permissions harder for end
+users. Use Docker for the central backend/frontend/database stack, and run the
+desktop locally.
 
 Containerizing desktop internals can still be useful for CI or isolated
 ML-service checks, but it is not the supported way to run the enterprise app.
@@ -299,7 +299,7 @@ PowerShell uses the same command.
 
 ### Backend Prepared Counts
 
-The backend mock-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves the prepared package through the authenticated backend connection and writes it into the local ledger.
+The backend mock-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves pending prepared packages through the authenticated backend connection and writes the selected period into the local ledger. For Archie's Event Place, the default scenario loads the overdue previous-period package first, exposes unfinished periods in the **Reporting Month** selector, then loads the current-period package after the overdue report syncs.
 
 Prepare from the project root:
 

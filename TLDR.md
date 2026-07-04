@@ -156,8 +156,9 @@ it is not `archies_001@tanaw.sanpedro`.
 ## 6. Load the report simulation
 
 This command creates LGU accounts, enterprise accounts, six months of
-telemetry, historical submissions, final reports, activity logs, and prepared
-current-month desktop counts for Archie's Event Place:
+telemetry, historical submissions, closed-period final reports, activity logs,
+and prepared previous-period plus current-period desktop counts for Archie's
+Event Place:
 
 ```shell
 ./scripts/mockdata-on
@@ -234,23 +235,27 @@ Password: the password selected during Archie's onboarding
 ```
 
 A camera is not required for this test. The desktop downloads the target
-enterprise's prepared current-month counts.
+enterprise's overdue prepared counts first, then loads the current-period
+counts after the overdue report syncs. If multiple unfinished periods are
+available, use the desktop **Reporting Month** selector.
 
 ## 8. Complete the report test
 
 In the enterprise desktop:
 
-1. Wait for prepared counts to appear on the Dashboard.
+1. Wait for overdue prepared counts to appear on the Dashboard.
 2. Open **Reports & Submissions**.
-3. Create a **New Draft**.
-4. Complete any supplementary fields and submit the report.
+3. Select the overdue **Reporting Month** if needed.
+4. Complete the demographic fields and submit the overdue report.
+5. Wait for current-period prepared counts to appear.
+6. Complete the demographic fields and submit the current report.
 
 In the web portal:
 
 1. Sign in as `reports.staff@tanaw.test` with `TanawTest123!`.
-2. Open **Batch Reports** for the current month.
-3. Review the target report.
-4. Mark it **Ready to Consolidate**.
+2. Open **Batch Reports** for the relevant reporting periods.
+3. Review the target reports.
+4. Mark them **Ready to Consolidate**.
 5. Generate the final report.
 6. Open **Final Reports Audit** and inspect its source rows.
 

@@ -164,6 +164,9 @@ class SessionStore:
     def mark_report_synced(self, report_id: str) -> bool:
         return self._metrics_store.mark_report_synced(report_id)
 
+    def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
+        return self._metrics_store.purge_report_raw_events(report_id)
+
     def mark_events_synced(self) -> int:
         return self._metrics_store.mark_events_synced()
 

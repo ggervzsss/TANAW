@@ -8,10 +8,15 @@ from app.features.operational.schemas import (
     FleetSimulationTarget,
 )
 from app.features.operational.service import (
+    NOTIFY_CAMERA_SESSION_ERROR_KEY,
+    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
+    NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
+    NOTIFY_SYNC_DELAY_KEY,
     build_fleet_simulation_telemetry_payload,
     can_view_operational_event,
     gateway_status_for_snapshot,
     occupancy_alert_condition,
+    resolve_system_setting_enabled,
 )
 
 
@@ -62,6 +67,21 @@ def test_ordinary_telemetry_has_no_simulation_capacity_rule() -> None:
     )
 
     assert occupancy_alert_condition(payload) is None
+
+
+def test_real_telemetry_uses_building_capacity_for_alert_condition() -> None:
+    payload = DesktopTelemetryIngest(
+        metrics=DesktopMetricsSummary(currentOccupancy=180),
+        sourceKind="real",
+    )
+
+    condition = occupancy_alert_condition(payload, building_capacity=200)
+
+    assert condition is not None
+    assert condition.capacity == 200
+    assert condition.threshold_percent == 90
+    assert condition.threshold_count == 180
+    assert condition.breached is True
 
 
 def test_it_receives_live_alert_websocket_events() -> None:
@@ -145,6 +165,49 @@ def test_unsynced_gateway_snapshot_is_reported_as_sync_delayed() -> None:
     snapshot.received_at = datetime.now(UTC)
 
     assert gateway_status_for_snapshot(snapshot) == "Sync Delayed"
+
+
+def test_notification_setting_uses_stable_key_value() -> None:
+    assert (
+        resolve_system_setting_enabled(
+            {NOTIFY_SYNC_DELAY_KEY: False},
+            NOTIFY_SYNC_DELAY_KEY,
+        )
+        is False
+    )
+
+
+def test_notification_setting_reads_legacy_label_key() -> None:
+    assert (
+        resolve_system_setting_enabled(
+            {"notifications.Notify Failed Login Threshold": False},
+            NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
+        )
+        is False
+    )
+
+
+def test_notification_setting_prefers_stable_key_over_legacy_key() -> None:
+    assert (
+        resolve_system_setting_enabled(
+            {
+                NOTIFY_CAMERA_SESSION_ERROR_KEY: True,
+                "notifications.Notify Camera Offline": False,
+            },
+            NOTIFY_CAMERA_SESSION_ERROR_KEY,
+        )
+        is True
+    )
+
+
+def test_notification_setting_ignores_invalid_values() -> None:
+    assert (
+        resolve_system_setting_enabled(
+            {NOTIFY_GATEWAY_SERVICE_ERROR_KEY: "false"},
+            NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
+        )
+        is True
+    )
 
 
 def enterprise_account() -> Account:

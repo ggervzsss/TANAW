@@ -24,7 +24,11 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
-from app.features.operational.models import MockDataRun, OperationalAlert
+from app.features.operational.models import (
+    EnterpriseReportSubmission,
+    MockDataRun,
+    OperationalAlert,
+)
 from app.features.operational.schemas import (
     DesktopReportSubmissionIngest,
     DesktopTelemetryIngest,
@@ -53,9 +57,9 @@ from app.features.operational.schemas import (
     UserNotificationSummary,
 )
 from app.features.operational.service import (
-    NOTIFY_CAMERA_OFFLINE_KEY,
-    NOTIFY_GATEWAY_OFFLINE_KEY,
-    NOTIFY_SYNC_FAILED_KEY,
+    NOTIFY_CAMERA_SESSION_ERROR_KEY,
+    NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
+    NOTIFY_SYNC_DELAY_KEY,
     DuplicateReportPeriodError,
     build_fleet_simulation_telemetry_payload,
     create_final_report,
@@ -130,7 +134,7 @@ async def ingest_desktop_telemetry(
         )
 
     if payload.metrics.unsyncedEvents > 0 and await system_setting_enabled(
-        db, NOTIFY_SYNC_FAILED_KEY
+        db, NOTIFY_SYNC_DELAY_KEY
     ):
         sync_alert = await create_operational_alert(
             db,
@@ -155,9 +159,9 @@ async def ingest_desktop_telemetry(
         )
 
     session_error_setting_key = (
-        NOTIFY_CAMERA_OFFLINE_KEY
+        NOTIFY_CAMERA_SESSION_ERROR_KEY
         if payload.session.cameraId is not None or payload.session.cameraName
-        else NOTIFY_GATEWAY_OFFLINE_KEY
+        else NOTIFY_GATEWAY_SERVICE_ERROR_KEY
     )
     if payload.session.error and await system_setting_enabled(db, session_error_setting_key):
         maintenance_alert = await create_operational_alert(
@@ -167,7 +171,7 @@ async def ingest_desktop_telemetry(
             requester=account.display_name,
             enterprise=account.enterprise_name or account.display_name,
             summary=payload.session.error,
-            required_action="Review the camera or gateway error and restore monitoring.",
+            required_action="Review the camera or desktop app error and restore monitoring.",
             resolution_mode="Remote Review",
             owner="IT",
             source_id=f"telemetry:{account.id}:{payload.session.cameraId or 'gateway'}",
@@ -184,9 +188,9 @@ async def ingest_desktop_telemetry(
             severity="Warning",
             actor=account.enterprise_name or account.display_name,
             actor_role="Enterprise Account",
-            action="Gateway Telemetry Error",
+            action="Desktop App Sync Error",
             target=account.enterprise_name or account.email,
-            summary=f"{account.enterprise_name or account.display_name} reported gateway status {payload.session.status}: {payload.session.error}",
+            summary=f"{account.enterprise_name or account.display_name} reported desktop app sync status {payload.session.status}: {payload.session.error}",
             source_id=snapshot.id,
             metadata={
                 "enterpriseId": snapshot.enterpriseId,
@@ -251,12 +255,37 @@ async def get_desktop_mock_preparation(
     if run is None:
         return None
 
-    prepared_counts: MockPreparationCounts | None = None
+    pending_counts: list[MockPreparationCounts] = []
     if run.status == "active" and run.generated_counts_json:
         generated_counts = json.loads(run.generated_counts_json)
-        candidate = generated_counts.get("targetPreparedCounts")
-        if isinstance(candidate, dict):
-            prepared_counts = MockPreparationCounts.model_validate(candidate)
+        raw_candidates = generated_counts.get("targetPreparedReportCounts")
+        candidates = raw_candidates if isinstance(raw_candidates, list) else []
+        if not candidates:
+            fallback_candidate = generated_counts.get("targetPreparedCounts")
+            candidates = [fallback_candidate] if isinstance(fallback_candidate, dict) else []
+        candidate_periods = [
+            candidate["period"]
+            for candidate in candidates
+            if isinstance(candidate, dict) and isinstance(candidate.get("period"), str)
+        ]
+        submitted_periods = set(
+            (
+                await db.scalars(
+                    select(EnterpriseReportSubmission.period).where(
+                        EnterpriseReportSubmission.enterprise_id
+                        == (run.target_enterprise_id or enterprise_identifier(account)),
+                        EnterpriseReportSubmission.period.in_(candidate_periods),
+                    )
+                )
+            ).all()
+            if candidate_periods
+            else []
+        )
+        pending_counts = [
+            MockPreparationCounts.model_validate(candidate)
+            for candidate in candidates
+            if isinstance(candidate, dict) and candidate.get("period") not in submitted_periods
+        ]
 
     return MockPreparationSummary(
         runId=run.id,
@@ -265,7 +294,8 @@ async def get_desktop_mock_preparation(
         enterpriseName=run.target_enterprise_name
         or account.enterprise_name
         or account.display_name,
-        counts=prepared_counts,
+        counts=pending_counts[0] if pending_counts else None,
+        pendingCounts=pending_counts,
     )
 
 
@@ -467,11 +497,16 @@ async def update_final_report_workflow_status(
         severity="Success",
         actor=actor.display_name,
         actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action=f"Final Report {payload.status}",
+        action=f"Final Report {final_report.status}",
         target=final_report.id,
-        summary=f"{actor.display_name} changed final report {final_report.id} to {payload.status}.",
+        summary=f"{actor.display_name} changed final report {final_report.id} to {final_report.status}.",
         source_id=final_report.id,
-        metadata={"period": final_report.period, "status": payload.status},
+        metadata={
+            "period": final_report.period,
+            "status": final_report.status,
+            "requestedStatus": payload.status,
+            "archivedFromStatus": final_report.archivedFromStatus,
+        },
     )
     return final_report
 

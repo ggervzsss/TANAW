@@ -2,10 +2,12 @@ from datetime import UTC, datetime
 
 from app.core.password_policy import validate_password_policy
 from app.features.mock_data.cli import (
+    DEMOGRAPHIC_FIELDS,
     ENTERPRISES,
     LGU_ACCOUNTS,
     REPORTING_STAFF_NAME,
     TEST_ACCOUNT_PASSWORD,
+    build_demographic_breakdown,
     seeded_review_status,
     should_skip_target_report,
 )
@@ -111,12 +113,24 @@ def test_generated_account_content_has_no_mock_label() -> None:
     assert validate_password_policy(TEST_ACCOUNT_PASSWORD) == TEST_ACCOUNT_PASSWORD
 
 
-def test_only_target_enterprise_is_missing_for_current_month() -> None:
+def test_target_enterprise_is_missing_for_previous_and_current_month() -> None:
+    older_month = datetime(2026, 4, 1, tzinfo=UTC)
     previous_month = datetime(2026, 5, 1, tzinfo=UTC)
     current_month = datetime(2026, 6, 1, tzinfo=UTC)
 
-    assert not should_skip_target_report(previous_month, current_month, "target", "target")
+    assert not should_skip_target_report(older_month, current_month, "target", "target")
+    assert should_skip_target_report(previous_month, current_month, "target", "target")
     assert not should_skip_target_report(current_month, current_month, "supporting", "target")
     assert should_skip_target_report(current_month, current_month, "target", "target")
-    assert seeded_review_status(previous_month, current_month) == "Consolidated"
+    assert seeded_review_status(older_month, current_month) == "Consolidated"
+    assert seeded_review_status(previous_month, current_month) == "Ready to Consolidate"
     assert seeded_review_status(current_month, current_month) == "Ready to Consolidate"
+
+
+def test_seeded_demographics_match_unique_visitor_count() -> None:
+    unique_count = 537
+    demographics = build_demographic_breakdown(unique_count, enterprise_index=2, month_index=3)
+
+    assert set(demographics) == set(DEMOGRAPHIC_FIELDS)
+    assert all(value.isdigit() for value in demographics.values())
+    assert sum(int(value) for value in demographics.values()) == unique_count

@@ -1,5 +1,5 @@
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -27,6 +27,7 @@ from app.features.operational.schemas import (
     DesktopReportSubmissionIngest,
     DesktopSessionSummary,
     DesktopTelemetryIngest,
+    FinalReportArchivedFromStatus,
     FinalReportCreate,
     FinalReportSourceSummary,
     FinalReportStatusUpdate,
@@ -50,11 +51,20 @@ from app.features.operational.schemas import (
 
 STALE_GATEWAY_SECONDS = 120
 OFFLINE_GATEWAY_SECONDS = 900
+OCCUPANCY_ALERT_THRESHOLD_PERCENT = 90
 SYSTEM_SETTINGS_ID = "default"
-NOTIFY_CAMERA_OFFLINE_KEY = "notifications.Notify Camera Offline"
-NOTIFY_GATEWAY_OFFLINE_KEY = "notifications.Notify Gateway Offline"
-NOTIFY_SYNC_FAILED_KEY = "notifications.Notify Sync Failed"
-NOTIFY_FAILED_LOGIN_THRESHOLD_KEY = "notifications.Notify Failed Login Threshold"
+NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
+NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
+NOTIFY_SYNC_DELAY_KEY = "notifications.syncDelayAlerts"
+NOTIFY_FAILED_LOGIN_LOCKOUT_KEY = "notifications.failedLoginLockoutAlerts"
+NOTIFICATION_SETTING_LEGACY_KEYS = {
+    NOTIFY_CAMERA_SESSION_ERROR_KEY: ("notifications.Notify Camera Offline",),
+    NOTIFY_GATEWAY_SERVICE_ERROR_KEY: ("notifications.Notify Gateway Offline",),
+    NOTIFY_SYNC_DELAY_KEY: ("notifications.Notify Sync Failed",),
+    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: ("notifications.Notify Failed Login Threshold",),
+}
+FINAL_REPORT_ARCHIVED_STATUS = "Archived"
+FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized"}
 
 
 class DuplicateReportPeriodError(Exception):
@@ -122,8 +132,23 @@ async def system_setting_enabled(db: AsyncSession, key: str, *, default: bool = 
         values = json.loads(record.values_json)
     except json.JSONDecodeError:
         return default
-    value = values.get(key) if isinstance(values, dict) else None
-    return value if isinstance(value, bool) else default
+    return resolve_system_setting_enabled(
+        values if isinstance(values, dict) else None, key, default=default
+    )
+
+
+def resolve_system_setting_enabled(
+    values: Mapping[str, object] | None, key: str, *, default: bool = True
+) -> bool:
+    values = values or {}
+    value = values.get(key)
+    if isinstance(value, bool):
+        return value
+    for legacy_key in NOTIFICATION_SETTING_LEGACY_KEYS.get(key, ()):
+        legacy_value = values.get(legacy_key)
+        if isinstance(legacy_value, bool):
+            return legacy_value
+    return default
 
 
 async def list_user_notifications(
@@ -526,23 +551,27 @@ def can_view_operational_event(role: str, event_type: str) -> bool:
 
 def occupancy_alert_condition(
     payload: DesktopTelemetryIngest,
+    building_capacity: int | None = None,
 ) -> OccupancyAlertCondition | None:
     simulation = (payload.payload or {}).get("simulation")
     if not isinstance(simulation, dict):
-        return None
-
-    capacity = simulation.get("capacity")
-    threshold_percent = simulation.get("thresholdPercent")
-    if (
-        not isinstance(capacity, int)
-        or isinstance(capacity, bool)
-        or capacity <= 0
-        or not isinstance(threshold_percent, int)
-        or isinstance(threshold_percent, bool)
-        or threshold_percent <= 0
-        or threshold_percent > 100
-    ):
-        return None
+        if payload.sourceKind != "real" or not is_valid_building_capacity(building_capacity):
+            return None
+        if building_capacity is None:
+            return None
+        capacity = building_capacity
+        threshold_percent = OCCUPANCY_ALERT_THRESHOLD_PERCENT
+    else:
+        raw_capacity = simulation.get("capacity")
+        raw_threshold_percent = simulation.get("thresholdPercent")
+        if not is_valid_occupancy_threshold(raw_capacity, raw_threshold_percent):
+            return None
+        assert isinstance(raw_capacity, int) and not isinstance(raw_capacity, bool)
+        assert isinstance(raw_threshold_percent, int) and not isinstance(
+            raw_threshold_percent, bool
+        )
+        capacity = raw_capacity
+        threshold_percent = raw_threshold_percent
 
     threshold_count = max(1, ceil(capacity * threshold_percent / 100))
     recovery_percent = max(0, threshold_percent - 10)
@@ -554,6 +583,24 @@ def occupancy_alert_condition(
         recovery_count=recovery_count,
         current_occupancy=payload.metrics.currentOccupancy,
     )
+
+
+def is_valid_building_capacity(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def is_valid_occupancy_threshold(capacity: object, threshold_percent: object) -> bool:
+    if (
+        not isinstance(capacity, int)
+        or isinstance(capacity, bool)
+        or capacity <= 0
+        or not isinstance(threshold_percent, int)
+        or isinstance(threshold_percent, bool)
+        or threshold_percent <= 0
+        or threshold_percent > 100
+    ):
+        return False
+    return True
 
 
 async def evaluate_telemetry_alerts(
@@ -569,7 +616,7 @@ async def evaluate_telemetry_alerts(
             OperationalAlert.status != "Resolved",
         )
     )
-    condition = occupancy_alert_condition(payload)
+    condition = occupancy_alert_condition(payload, account.building_capacity)
 
     if condition is not None and condition.breached:
         if existing is not None:
@@ -585,7 +632,7 @@ async def evaluate_telemetry_alerts(
             summary=(
                 f"Live occupancy reached {condition.current_occupancy} of "
                 f"{condition.capacity} people, exceeding the "
-                f"{condition.threshold_percent}% alert threshold."
+                f"{condition.threshold_percent}% building-capacity alert trigger."
             ),
             required_action=(
                 "Review live occupancy and apply the venue's crowd-management procedure."
@@ -1059,7 +1106,13 @@ async def update_final_report_status(
     if report is None:
         return None
 
-    report.status = payload.status
+    next_status, archived_from_status = resolve_final_report_status_transition(
+        current_status=report.status,
+        current_archived_from_status=report.archived_from_status,
+        requested_status=payload.status,
+    )
+    report.status = next_status
+    report.archived_from_status = archived_from_status
     await db.commit()
     await db.refresh(report)
     return await to_final_report_summary(db, report)
@@ -1128,7 +1181,18 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
             "unique": report.unique_count,
             "peak": str(report.peak_occupancy),
         },
+        payload=parse_report_payload(report.payload_json),
     )
+
+
+def parse_report_payload(payload_json: str | None) -> dict | None:
+    if not payload_json:
+        return None
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> FinalReportSummary:
@@ -1147,6 +1211,7 @@ async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> Fina
         preparedBy=report.prepared_by,
         preparedRole=report.prepared_role,
         status=report.status,  # type: ignore[arg-type]
+        archivedFromStatus=to_final_report_archived_from_status(report.archived_from_status),
         totalEntry=report.total_entry,
         totalExit=report.total_exit,
         totalUnique=report.total_unique,
@@ -1163,6 +1228,39 @@ async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> Fina
             for source in sources
         ],
     )
+
+
+def resolve_final_report_status_transition(
+    *, current_status: str, current_archived_from_status: str | None, requested_status: str
+) -> tuple[str, str | None]:
+    if requested_status == FINAL_REPORT_ARCHIVED_STATUS:
+        if current_status == FINAL_REPORT_ARCHIVED_STATUS:
+            return FINAL_REPORT_ARCHIVED_STATUS, restore_target_status(current_archived_from_status)
+        archived_from_status = (
+            current_status if current_status in FINAL_REPORT_RESTORABLE_STATUSES else "Finalized"
+        )
+        return FINAL_REPORT_ARCHIVED_STATUS, archived_from_status
+
+    if current_status == FINAL_REPORT_ARCHIVED_STATUS and requested_status == "Draft":
+        return restore_target_status(current_archived_from_status), None
+
+    return requested_status, None
+
+
+def restore_target_status(archived_from_status: str | None) -> str:
+    return (
+        archived_from_status
+        if archived_from_status in FINAL_REPORT_RESTORABLE_STATUSES
+        else "Finalized"
+    )
+
+
+def to_final_report_archived_from_status(
+    archived_from_status: str | None,
+) -> FinalReportArchivedFromStatus | None:
+    if archived_from_status in FINAL_REPORT_RESTORABLE_STATUSES:
+        return cast(FinalReportArchivedFromStatus, archived_from_status)
+    return None
 
 
 def enterprise_identifier(account: Account) -> str:

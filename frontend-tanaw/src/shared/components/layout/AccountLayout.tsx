@@ -12,6 +12,16 @@ type AccountLayoutProps = {
   role: UserRole;
 };
 
+const centeredTitleClassByPath = new Map<string, string>([
+  [routes.it.profile, "mx-auto w-full max-w-5xl"],
+  [routes.it.security, "mx-auto w-full max-w-5xl"],
+  [routes.admin.profile, "mx-auto w-full max-w-5xl"],
+  [routes.admin.security, "mx-auto w-full max-w-5xl"],
+  [routes.staff.profile, "mx-auto w-full max-w-5xl"],
+  [routes.staff.security, "mx-auto w-full max-w-5xl"],
+  [routes.it.systemSettings, "mx-auto w-full max-w-6xl"],
+]);
+
 export function AccountLayout({ role }: AccountLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
   const typedBufferRef = useRef("");
@@ -22,6 +32,13 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const updateUser = useAuthStore((state) => state.updateUser);
   const title = useHeaderStore((state) => state.title);
   const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
+  const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
+  const titleClassName = [
+    "text-tanaw-navy mb-5 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl",
+    centeredTitleClassName,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const currentUserQuery = useQuery({
     queryKey: ["current-user", token],
@@ -81,7 +98,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
         <PortalTopbar role={role} showDevLog={isDevLogUnlocked} />
         <main ref={mainRef} className="it-portal-main flex-1 overflow-y-auto bg-[#f8f9fa] px-8 py-8 text-[15px] max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5">
           <div className="mx-auto w-full max-w-470">
-            {title && <h1 className="text-tanaw-navy mb-5 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl">{title}</h1>}
+            {title && <h1 className={titleClassName}>{title}</h1>}
             {pathname === routes.it.devLog && !isDevLogUnlocked ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}
           </div>
         </main>

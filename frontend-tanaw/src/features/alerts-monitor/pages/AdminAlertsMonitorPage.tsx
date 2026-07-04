@@ -1,11 +1,14 @@
 import { AlertTriangle, Bell, CheckCircle2, Clock3, Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
+import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { EmptyState, FilterSelect, PageMotion } from "@/shared/components/ui";
+import { type AccountSummary, listEnterpriseAccounts } from "@/shared/services/accountManagement";
 import type { AlertSeverity, PriorityAlert, PriorityAlertStatus, PriorityAlertType } from "@/shared/types";
 import { AlertDetailsModal, AlertStatusBadge, ResolutionBadge, SeverityBadge } from "../components";
 
@@ -16,9 +19,12 @@ type TypeFilter = "All Types" | PriorityAlertType;
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info"];
 const statusFilters: StatusFilter[] = ["All Statuses", "New", "In Review", "Resolved"];
 const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Submission Delay", "Threshold Breach", "Foot Traffic Alert", "Occupancy Spike", "Failed Login Threshold"];
+const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 
 export function AdminAlertsMonitorPage() {
   const { alerts } = useAlerts();
+  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
+  const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ENTERPRISE_ACCOUNTS;
   const [query, setQuery] = useState("");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All Severities");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Statuses");
@@ -54,6 +60,8 @@ export function AdminAlertsMonitorPage() {
         <MetricCard label="In Review" value={inReviewAlerts.length} foot="Currently being handled" color="#ca8a04" footClassName="text-yellow-700" icon={Clock3} />
         <MetricCard label="Resolved" value={resolvedAlerts.length} foot="Closed alert records" color="#065f46" icon={CheckCircle2} />
       </motion.section>
+
+      <EnterpriseProfileRequestsPanel accounts={enterpriseAccounts} canResolve={false} onAccountUpdated={() => undefined} />
 
       <Panel className="mt-6 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/tanaw_local"
     jwt_secret_key: str = "change-this-local-development-secret"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 8
+    access_token_expire_minutes: int = 60 * 24 * 30
     default_it_username: str = "default@email.com"
     default_it_password: str = "default"
     temporary_admin_username: str = "admin@email.com"

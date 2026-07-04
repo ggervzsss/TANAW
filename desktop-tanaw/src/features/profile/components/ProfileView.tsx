@@ -3,12 +3,12 @@ import { Check, Pencil, RefreshCw, Save, Shield, Upload, X } from "lucide-react"
 import { Card } from "../../../components/Card";
 import { ModalPortal } from "../../../components/ModalPortal";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { requestBusinessEmailChange, requestContactNumberChange, updateLeadAdminName, updateProfileImage } from "../../login/api/login";
+import { requestBusinessEmailChange, requestContactNumberChange, updateBuildingCapacity, updateLeadAdminName, updateProfileImage } from "../../login/api/login";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { readProfileImageFile } from "../../../utils/image-upload";
 import { normalizeEmail, normalizeName, toPhilippineLocalDigits, validateEmail, validateName, validatePhilippineContactNumber } from "../../../utils/form-validation";
 
-type EditableProfileField = "managerName" | "email" | "phone";
+type EditableProfileField = "managerName" | "email" | "phone" | "buildingCapacity";
 
 type AccountChangeStatus = {
   message: string;
@@ -29,6 +29,7 @@ export function ProfileView() {
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? user?.name ?? "Enterprise Account";
   const managerName = user?.managerName ?? user?.name ?? user?.displayName ?? "Not provided";
   const businessEmail = user?.email ?? "Not provided";
+  const buildingCapacity = user?.buildingCapacity ?? 100;
   const phoneLocal = toPhilippineLocalDigits(user?.phone ?? "");
   const phoneDisplay = phoneLocal ? `+63 ${phoneLocal}` : "Not provided";
   const initials = getInitials(enterpriseName);
@@ -38,7 +39,7 @@ export function ProfileView() {
   useEffect(() => {
     setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
     setDisplayImageFileName("");
-  }, [user?.displayImageDataUrl, user?.email, user?.managerName, user?.phone]);
+  }, [user?.buildingCapacity, user?.displayImageDataUrl, user?.email, user?.managerName, user?.phone]);
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -136,6 +137,7 @@ export function ProfileView() {
               <ProfileDisplayField label="Full Name / Lead Admin" value={managerName} onEdit={() => openEditModal("managerName")} />
               <ProfileDisplayField label="Business Email" value={businessEmail} onEdit={() => openEditModal("email")} />
               <ProfileDisplayField label="Contact Number" value={phoneDisplay} onEdit={() => openEditModal("phone")} />
+              <ProfileDisplayField label="Building Capacity" value={`${buildingCapacity.toLocaleString()} people`} onEdit={() => openEditModal("buildingCapacity")} />
               <ProfileDisplayField label="Enterprise Name" value={enterpriseName} locked />
               <div className="md:col-span-2">
                 <ProfileDisplayField label="Registered Address" value={user?.address ?? "Not provided"} locked />
@@ -201,9 +203,12 @@ export function ProfileView() {
     } else if (field === "email") {
       setModalValue(user?.email ?? "");
       setModalPhoneLocal("");
-    } else {
+    } else if (field === "phone") {
       setModalValue("");
       setModalPhoneLocal(toPhilippineLocalDigits(user?.phone ?? ""));
+    } else {
+      setModalValue(String(buildingCapacity));
+      setModalPhoneLocal("");
     }
   }
 
@@ -218,6 +223,7 @@ export function ProfileView() {
   function getCurrentModalDisplay(field: EditableProfileField) {
     if (field === "managerName") return managerName;
     if (field === "email") return businessEmail;
+    if (field === "buildingCapacity") return `${buildingCapacity.toLocaleString()} people`;
     return phoneDisplay;
   }
 
@@ -242,10 +248,15 @@ export function ProfileView() {
         const response = await requestBusinessEmailChange(normalizeEmail(modalValue));
         setAccountChangeStatus({ message: response.message, tone: "info" });
         notifySuccess("Business email change request recorded.");
-      } else {
+      } else if (activeModal === "phone") {
         const response = await requestContactNumberChange(`+63${modalPhoneLocal}`);
         setAccountChangeStatus({ message: response.message, tone: "info" });
         notifySuccess("Contact number change request recorded.");
+      } else {
+        const updated = await updateBuildingCapacity(Number(modalValue));
+        updateUser(updated);
+        setAccountChangeStatus({ message: "Building capacity updated.", tone: "success" });
+        notifySuccess("Building capacity updated.");
       }
       closeEditModal();
     } catch (error) {
@@ -316,14 +327,16 @@ type ProfileEditModalProps = {
 
 function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPhoneChange, onSubmit, onValueChange, phoneLocal, value }: ProfileEditModalProps) {
   const isPhone = field === "phone";
-  const title = field === "managerName" ? "Update Lead Admin Name" : field === "email" ? "Change Business Email" : "Change Contact Number";
-  const label = field === "managerName" ? "New lead admin name" : field === "email" ? "New business email" : "New contact number";
+  const title = field === "managerName" ? "Update Lead Admin Name" : field === "email" ? "Change Business Email" : field === "phone" ? "Change Contact Number" : "Update Building Capacity";
+  const label = field === "managerName" ? "New lead admin name" : field === "email" ? "New business email" : field === "phone" ? "New contact number" : "Building capacity";
   const description =
     field === "managerName"
       ? "This updates the primary enterprise contact name after validation."
       : field === "email"
-        ? "A verified email-change flow is required before the active business email changes."
-        : "A verified contact-number flow is required before the active contact number changes.";
+        ? "This sends a business email change request to IT and Admin for review."
+        : field === "phone"
+          ? "This sends a contact number change request to IT and Admin for review."
+          : "This updates the occupancy capacity used by TANAW alerts and simulation defaults.";
 
   return (
     <ModalPortal>
@@ -371,8 +384,8 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
                 </div>
               ) : (
                 <input
-                  type={field === "email" ? "email" : "text"}
-                  autoComplete={field === "email" ? "email" : "name"}
+                  type={field === "email" ? "email" : field === "buildingCapacity" ? "number" : "text"}
+                  autoComplete={field === "email" ? "email" : field === "buildingCapacity" ? "off" : "name"}
                   autoFocus
                   value={value}
                   onChange={(event) => onValueChange(event.target.value)}
@@ -397,7 +410,7 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
                 className="flex min-w-32 items-center justify-center gap-2 rounded-full bg-[#065f46] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-[#065f46]/70"
               >
                 {isSaving && <RefreshCw size={15} className="animate-spin" />}
-                {isSaving ? "Saving..." : field === "managerName" ? "Update Name" : "Submit Request"}
+                {isSaving ? "Saving..." : field === "managerName" ? "Update Name" : field === "buildingCapacity" ? "Update Capacity" : "Submit Request"}
               </button>
             </div>
           </form>
@@ -410,7 +423,17 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
 function validateModalValue(field: EditableProfileField, value: string, phoneLocal: string) {
   if (field === "managerName") return validateName(value, "Full name");
   if (field === "email") return validateEmail(value);
+  if (field === "buildingCapacity") return validateBuildingCapacity(value);
   return validatePhilippineContactNumber(phoneLocal ? `+63${phoneLocal}` : "", true);
+}
+
+function validateBuildingCapacity(value: string) {
+  const capacity = Number(value);
+  if (!value.trim()) return "Building capacity is required.";
+  if (!Number.isInteger(capacity)) return "Building capacity must be a whole number.";
+  if (capacity < 1) return "Building capacity must be at least 1.";
+  if (capacity > 100000) return "Building capacity cannot exceed 100,000.";
+  return "";
 }
 
 function getRequestErrorMessage(error: unknown, fallback: string) {

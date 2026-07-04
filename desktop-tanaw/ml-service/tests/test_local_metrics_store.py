@@ -54,6 +54,29 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["notes"], "notes")
             self.assertEqual(reports[0]["payload"]["demo"]["foreignMale"], "2")
 
+    def test_purging_report_raw_events_keeps_submission_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)))
+            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
+            store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
+            store.record_report_submission("REP-001", "Current Period", "notes", {"source": "test"})
+
+            purged = store.purge_report_raw_events("REP-001")
+
+            self.assertEqual(purged["report_id"], "REP-001")
+            self.assertEqual(purged["purged_events"], 2)
+            self.assertIsNotNone(purged["raw_purged_at"])
+            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 0)
+            reports = store.list_report_submissions()
+            self.assertEqual(len(reports), 1)
+            self.assertEqual(reports[0]["entries"], 1)
+            self.assertEqual(reports[0]["unique_count"], 1)
+            self.assertEqual(reports[0]["raw_purged_at"], purged["raw_purged_at"])
+
+            repeated = store.purge_report_raw_events("REP-001")
+            self.assertEqual(repeated["purged_events"], 0)
+            self.assertEqual(repeated["raw_purged_at"], purged["raw_purged_at"])
+
     def test_hybrid_mock_rows_are_tagged_and_removed_without_real_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))
@@ -316,6 +339,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(summary["unsubmitted_events"], 71)
             self.assertEqual(summary["source_kind"], "mock")
             self.assertEqual(summary["mock_run_id"], "run-1")
+            self.assertEqual(summary["period"], "Jun 1 - Jun 30, 2026")
             self.assertTrue(summary["prepared"])
             self.assertEqual(store.list_report_submissions(), [])
 
@@ -331,6 +355,72 @@ class LocalMetricsStoreTest(unittest.TestCase):
             )
             self.assertFalse(repeated["prepared"])
             self.assertEqual(repeated["total_events"], 71)
+
+    def test_prepared_counts_allow_next_period_after_submission(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+
+            first = store.prepare_mock_counts(
+                mock_run_id="run-1",
+                entries=40,
+                exits=31,
+                unique_count=24,
+                peak_occupancy=12,
+                camera_id=7,
+                camera_name="Main Entrance",
+                period="Jun 1 - Jun 30, 2026",
+            )
+            self.assertTrue(first["prepared"])
+
+            store.record_report_submission("REP-JUN", "Jun 1 - Jun 30, 2026")
+
+            second = store.prepare_mock_counts(
+                mock_run_id="run-1",
+                entries=55,
+                exits=42,
+                unique_count=36,
+                peak_occupancy=18,
+                camera_id=7,
+                camera_name="Main Entrance",
+                period="Jul 1 - Jul 31, 2026",
+            )
+
+            self.assertTrue(second["prepared"])
+            self.assertEqual(second["entries"], 55)
+            self.assertEqual(second["period"], "Jul 1 - Jul 31, 2026")
+            self.assertEqual(len(store.list_report_submissions()), 1)
+
+    def test_prepared_counts_can_switch_open_periods(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+
+            first = store.prepare_mock_counts(
+                mock_run_id="run-1",
+                entries=40,
+                exits=31,
+                unique_count=24,
+                peak_occupancy=12,
+                camera_id=7,
+                camera_name="Main Entrance",
+                period="Jun 1 - Jun 30, 2026",
+            )
+            self.assertTrue(first["prepared"])
+
+            second = store.prepare_mock_counts(
+                mock_run_id="run-1",
+                entries=55,
+                exits=42,
+                unique_count=36,
+                peak_occupancy=18,
+                camera_id=7,
+                camera_name="Main Entrance",
+                period="Jul 1 - Jul 31, 2026",
+            )
+
+            self.assertTrue(second["prepared"])
+            self.assertEqual(second["entries"], 55)
+            self.assertEqual(second["period"], "Jul 1 - Jul 31, 2026")
+            self.assertEqual(store.metrics_summary()["period"], "Jul 1 - Jul 31, 2026")
 
     def test_sync_acknowledgements_update_local_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

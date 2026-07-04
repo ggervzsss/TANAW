@@ -23,6 +23,7 @@ from app.features.accounts.models import (
 from app.features.accounts.schemas import (
     AccountChangeRequestResponse,
     AuthUser,
+    BuildingCapacityUpdate,
     BusinessEmailChangeRequest,
     ContactNumberChangeRequest,
     LeadAdminNameUpdate,
@@ -31,6 +32,8 @@ from app.features.accounts.schemas import (
     ProfileUpdate,
 )
 from app.features.accounts.service import (
+    PENDING_BUSINESS_EMAIL_CHANGE_KEY,
+    PENDING_CONTACT_NUMBER_CHANGE_KEY,
     change_account_password,
     get_account_by_email,
     get_account_by_login_identifier,
@@ -66,14 +69,17 @@ from app.features.auth.schemas import (
     SystemSettingsPayload,
 )
 from app.features.auth.service import (
+    LoginLockoutPolicy,
     authenticate_account,
     clear_login_failures,
     lockout_seconds_remaining,
+    login_lockout_message,
     register_failed_login,
+    resolve_login_lockout_policy,
 )
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
-    NOTIFY_FAILED_LOGIN_THRESHOLD_KEY,
+    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     create_operational_alert,
     create_role_notifications,
     system_setting_enabled,
@@ -83,13 +89,11 @@ from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
     AccountRole.IT,
-    AccountRole.STAFF,
 )
-PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
-PENDING_CONTACT_NUMBER_CHANGE_KEY = "pendingContactNumberChange"
 
 
 def is_login_scope_allowed(account: Account, login_scope: str) -> bool:
@@ -110,7 +114,7 @@ def get_auth_log_category(account: Account) -> str:
 
 
 async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> None:
-    if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_THRESHOLD_KEY):
+    if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_LOCKOUT_KEY):
         return
 
     alert = await create_operational_alert(
@@ -168,6 +172,29 @@ async def notify_enterprise_account_change(
         )
 
 
+async def get_login_lockout_policy(db: AsyncSession) -> LoginLockoutPolicy:
+    record = await db.scalar(
+        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    )
+    return resolve_login_lockout_policy(load_system_settings_values(record))
+
+
+def load_system_settings_values(record: SystemConfiguration | None) -> dict[str, str | bool | int]:
+    if record is None:
+        return {}
+    try:
+        values = json.loads(record.values_json)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(values, dict):
+        return {}
+    return {
+        key: value
+        for key, value in values.items()
+        if isinstance(key, str) and isinstance(value, str | bool | int)
+    }
+
+
 def join_changed_fields(fields: list[str]) -> str:
     if len(fields) <= 1:
         return fields[0] if fields else "profile details"
@@ -197,13 +224,16 @@ async def login(
     payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> LoginResponse:
     candidate = await get_account_by_login_identifier(db, payload.username)
+    lockout_policy = (
+        await get_login_lockout_policy(db) if candidate is not None else LoginLockoutPolicy()
+    )
     if candidate is not None:
         remaining = lockout_seconds_remaining(candidate)
         if remaining > 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
-                    "message": "Account temporarily locked after three failed attempts.",
+                    "message": login_lockout_message(lockout_policy),
                     "retryAfterSeconds": remaining,
                 },
                 headers={"Retry-After": str(remaining)},
@@ -216,14 +246,14 @@ async def login(
         or not is_login_scope_allowed(account, payload.loginScope)
     ):
         if candidate is not None:
-            remaining = register_failed_login(candidate)
+            remaining = register_failed_login(candidate, policy=lockout_policy)
             await db.commit()
             if remaining > 0:
                 await notify_failed_login_threshold(db, candidate)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
-                        "message": "Account temporarily locked after three failed attempts.",
+                        "message": login_lockout_message(lockout_policy),
                         "retryAfterSeconds": remaining,
                     },
                     headers={"Retry-After": str(remaining)},
@@ -552,6 +582,48 @@ async def update_lead_admin_name(
     return to_auth_user(account)
 
 
+@router.patch("/profile/building-capacity", response_model=AuthUser)
+async def update_building_capacity(
+    payload: BuildingCapacityUpdate,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthUser:
+    require_enterprise_account(account)
+    previous_capacity = account.building_capacity
+    account.building_capacity = payload.buildingCapacity
+    await db.commit()
+    await db.refresh(account)
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Update Building Capacity",
+        target=account.email,
+        summary=f"{account.display_name} updated building capacity to {account.building_capacity}.",
+        source_id=account.id,
+        metadata={
+            "previousBuildingCapacity": previous_capacity,
+            "buildingCapacity": account.building_capacity,
+        },
+    )
+    if account.building_capacity != previous_capacity:
+        enterprise = enterprise_label(account)
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} updated building capacity.",
+            message=(
+                f"{enterprise} updated building capacity from "
+                f"{previous_capacity} to {account.building_capacity}."
+            ),
+            notification_type="Enterprise Profile Updated",
+            source_type="enterprise.capacity",
+        )
+    return to_auth_user(account)
+
+
 @router.post("/profile/business-email-change", response_model=AccountChangeRequestResponse)
 async def request_business_email_change(
     payload: BusinessEmailChangeRequest,
@@ -605,13 +677,13 @@ async def request_business_email_change(
         db,
         account,
         title=f"{enterprise} requested a business email change.",
-        message=f"{enterprise} requested a business email change.",
-        notification_type="Enterprise Profile Updated",
+        message=f"{enterprise} requested a business email change to {new_email}. IT review is required.",
+        notification_type="Enterprise Profile Change Request",
         source_type="enterprise.profile.email",
     )
     return AccountChangeRequestResponse(
         status="pending",
-        message="Email verification is not configured in this environment.",
+        message="Business email change request sent to IT and Admin for review.",
     )
 
 
@@ -664,13 +736,13 @@ async def request_contact_number_change(
         db,
         account,
         title=f"{enterprise} requested a contact number change.",
-        message=f"{enterprise} requested a contact number change.",
-        notification_type="Enterprise Profile Updated",
+        message=f"{enterprise} requested a contact number change to {payload.phone}. IT review is required.",
+        notification_type="Enterprise Profile Change Request",
         source_type="enterprise.profile.contact",
     )
     return AccountChangeRequestResponse(
         status="pending",
-        message="Contact verification is not configured in this environment.",
+        message="Contact number change request sent to IT and Admin for review.",
     )
 
 
@@ -689,63 +761,11 @@ async def update_preferences(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountPreferences:
     values = get_account_preferences(account)
-    previous_open_at_login = bool(values.get("openAtLogin", False))
     patch_values = payload.model_dump(mode="json", exclude_unset=True)
     values.update(patch_values)
     set_account_preferences(account, values)
     await db.commit()
-    response = AccountPreferences.model_validate(values)
-
-    if (
-        account.role == AccountRole.ENTERPRISE
-        and "openAtLogin" in patch_values
-        and bool(patch_values["openAtLogin"]) != previous_open_at_login
-    ):
-        enterprise = account.enterprise_name or account.display_name
-        state = "enabled" if response.openAtLogin else "disabled"
-        await notify_enterprise_account_change(
-            db,
-            account,
-            title=f"{enterprise} updated startup/background monitoring preference.",
-            message=f"{enterprise} {state} startup at sign-in.",
-            notification_type="Enterprise Security Updated",
-            source_type="enterprise.preferences",
-        )
-
-    return response
-
-
-@router.post("/data-archive", response_model=StatusResponse)
-async def request_data_archive(
-    account: Annotated[Account, Depends(get_current_account)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> StatusResponse:
-    db.add(
-        DevDelivery(
-            account_id=account.id,
-            channel=DeliveryChannel.EMAIL,
-            recipient=account.email,
-            subject="TANAW data archive request",
-            body=(
-                f"Data archive requested by {account.display_name}. "
-                "The request includes available account activity, reports, and audit logs."
-            ),
-            status=DeliveryStatus.RECORDED,
-        )
-    )
-    await db.commit()
-    await record_auth_log(
-        db,
-        category=get_auth_log_category(account),
-        severity="Info",
-        actor=account.display_name,
-        actor_role=get_actor_role_label(account),
-        action="Request Data Archive",
-        target=account.email,
-        summary=f"{account.display_name} requested a compliance data archive.",
-        source_id=account.id,
-    )
-    return StatusResponse(status="recorded")
+    return AccountPreferences.model_validate(values)
 
 
 @router.get("/system-settings", response_model=SystemSettingsPayload)
@@ -753,8 +773,14 @@ async def get_system_settings(
     _: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemSettingsPayload:
-    record = await db.scalar(select(SystemConfiguration).where(SystemConfiguration.id == "default"))
-    return SystemSettingsPayload(values=json.loads(record.values_json) if record else {})
+    record = await db.scalar(
+        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    )
+    return SystemSettingsPayload(
+        values=load_system_settings_values(record),
+        updatedBy=record.updated_by if record else None,
+        updatedAt=record.updated_at if record else None,
+    )
 
 
 @router.patch("/system-settings", response_model=SystemSettingsPayload)
@@ -767,13 +793,16 @@ async def update_system_settings(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="IT Personnel access required."
         )
-    record = await db.scalar(select(SystemConfiguration).where(SystemConfiguration.id == "default"))
+    record = await db.scalar(
+        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    )
     if record is None:
-        record = SystemConfiguration(id="default")
+        record = SystemConfiguration(id=SYSTEM_SETTINGS_ID)
         db.add(record)
     record.values_json = json.dumps(payload.values, sort_keys=True)
     record.updated_by = account.display_name
     await db.commit()
+    await db.refresh(record)
     await record_auth_log(
         db,
         category="IT Activity",
@@ -785,7 +814,11 @@ async def update_system_settings(
         summary=f"{account.display_name} saved persistent system settings.",
         source_id=record.id,
     )
-    return payload
+    return SystemSettingsPayload(
+        values=payload.values,
+        updatedBy=record.updated_by,
+        updatedAt=record.updated_at,
+    )
 
 
 async def record_auth_log(
@@ -799,6 +832,7 @@ async def record_auth_log(
     target: str,
     summary: str,
     source_id: str,
+    metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
     log = await create_activity_log(
         db,
@@ -811,6 +845,7 @@ async def record_auth_log(
             target=target,
             summary=summary,
             sourceId=source_id,
+            metadata=metadata,
         ),
     )
     await activity_log_manager.broadcast(log)

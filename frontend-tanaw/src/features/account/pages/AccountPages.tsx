@@ -1,13 +1,15 @@
-import { Check, Database, Download, Key, Monitor, MonitorSmartphone, Moon, RefreshCw, Save, Shield, Sun, Upload } from "lucide-react";
+import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Pencil, RefreshCw, Save, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { changePassword, getAccountPreferences, requestDataArchive, updateAccountPreferences, updateCurrentProfile } from "@/shared/services/accountManagement";
+import { changePassword, updateCurrentProfile } from "@/shared/services/accountManagement";
 import type { UserRole } from "@/shared/types/role.types";
+import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { normalizePersonName, normalizePhilippineContactNumber, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
@@ -21,32 +23,6 @@ type ProfileUser = {
   email: string;
   department: string;
   phone: string;
-  enterpriseName: string;
-  enterpriseId: string;
-  category: string;
-  barangay: string;
-  address: string;
-};
-
-type ThemePreference = "light" | "dark" | "system";
-
-const roleIdentity: Record<UserRole, { node: string; affiliation: string }> = {
-  admin: {
-    node: "LGU Command Center",
-    affiliation: "San Pedro City Tourism Office",
-  },
-  it: {
-    node: "Technical Operations Desk",
-    affiliation: "TANAW Infrastructure",
-  },
-  staff: {
-    node: "Tourism Reporting Desk",
-    affiliation: "San Pedro City Tourism Office",
-  },
-  enterprise: {
-    node: "Enterprise Portal",
-    affiliation: "Registered Enterprise",
-  },
 };
 
 function useAccountProfile(): ProfileUser {
@@ -57,11 +33,6 @@ function useAccountProfile(): ProfileUser {
     email: authUser?.email ?? "",
     department: authUser?.title ?? "City Tourism Operations",
     phone: authUser?.phone ?? "",
-    enterpriseName: authUser?.enterpriseName ?? "",
-    enterpriseId: authUser?.enterpriseId ?? "",
-    category: authUser?.category ?? "",
-    barangay: authUser?.barangay ?? "",
-    address: authUser?.address ?? "",
   };
 }
 
@@ -80,10 +51,6 @@ export function AccountProfilePage({ role }: AccountPageProps) {
   const isImageDraftCurrent = displayImageDraft.sourceDataUrl === authDisplayImageDataUrl;
   const displayImageDataUrl = isImageDraftCurrent ? displayImageDraft.dataUrl : authDisplayImageDataUrl;
   const displayImageFileName = isImageDraftCurrent ? displayImageDraft.fileName : "";
-  const identity = {
-    node: role === "enterprise" ? user.enterpriseName || "Enterprise Account" : roleIdentity[role].node,
-    affiliation: role === "enterprise" ? [user.category || "Registered Enterprise", user.barangay ? `Barangay ${user.barangay}` : ""].filter(Boolean).join(" - ") : roleIdentity[role].affiliation,
-  };
   const initials = useMemo(
     () =>
       user.name
@@ -100,19 +67,32 @@ export function AccountProfilePage({ role }: AccountPageProps) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const fullName = String(formData.get("fullName") ?? "").trim();
-    const [firstName, ...lastNameParts] = fullName.split(/\s+/);
+    const nameError = validatePersonName(fullName, "Full name");
+    if (nameError) {
+      toast.error(nameError);
+      return;
+    }
+    const phoneInput = String(formData.get("phone") ?? "");
+    const phoneError = validatePhilippineContactNumber(phoneInput, false);
+    if (phoneError) {
+      toast.error(phoneError);
+      return;
+    }
+    const normalizedFullName = normalizePersonName(fullName);
+    const [firstName, ...lastNameParts] = normalizedFullName.split(/\s+/);
     const lastName = lastNameParts.join(" ");
     if (!firstName || !lastName) {
       toast.error("Enter both first and last name.");
       return;
     }
+    const normalizedPhone = normalizePhilippineContactNumber(phoneInput);
     setIsLoading(true);
     try {
       const updated = await updateCurrentProfile({
         firstName,
         lastName,
-        email: String(formData.get("email") ?? ""),
-        phone: String(formData.get("phone") ?? ""),
+        email: user.email,
+        phone: normalizedPhone || undefined,
         displayImageDataUrl,
       });
       updateUser(updated);
@@ -120,9 +100,9 @@ export function AccountProfilePage({ role }: AccountPageProps) {
       setIsSuccess(true);
       window.setTimeout(() => setIsSuccess(false), 2600);
       toast.success("Profile updated.");
-    } catch {
+    } catch (error) {
       setIsLoading(false);
-      toast.error("Unable to update profile.");
+      toast.error(getApiErrorMessage(error, "Unable to update profile."));
     }
   };
 
@@ -147,9 +127,9 @@ export function AccountProfilePage({ role }: AccountPageProps) {
 
   return (
     <PageMotion>
-      <PageHeader title="Profile Settings" description="Manage your account identity and primary contact details." />
+      <PageHeader title="Profile Settings" description="Manage your profile photo and primary contact details." />
 
-      <form onSubmit={handleSave} className="mx-auto max-w-5xl space-y-6 xl:mx-0">
+      <form onSubmit={handleSave} className="mx-auto max-w-5xl space-y-6">
         <Panel className="overflow-hidden">
           <PanelHeader title="Account Display" icon={Upload} />
           <div className="p-6">
@@ -192,25 +172,11 @@ export function AccountProfilePage({ role }: AccountPageProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field name="fullName" label={role === "enterprise" ? "Contact Person / Manager" : "Full Name"} defaultValue={user.name} />
-              <Field name="email" label={role === "enterprise" ? "Business Email" : "Professional Email"} defaultValue={user.email} type="email" />
-              <Field label={role === "enterprise" ? "Enterprise Name" : "Department"} defaultValue={role === "enterprise" ? user.enterpriseName : user.department} />
-              <Field name="phone" label="Phone" defaultValue={user.phone} type="tel" />
-              {role === "enterprise" && <Field label="Registered Address" defaultValue={user.address} />}
-              {role === "enterprise" && <Field label="Barangay" defaultValue={user.barangay} />}
+              <Field name="fullName" label="Full Name" defaultValue={user.name} editable />
+              <Field label="Professional Email" defaultValue={user.email} type="email" />
+              <Field label="Department" defaultValue={user.department} />
+              <Field name="phone" label="Phone" defaultValue={user.phone} type="tel" editable />
             </div>
-          </div>
-        </Panel>
-
-        <Panel className="overflow-hidden">
-          <PanelHeader title="Account Identity" icon={Shield} />
-          <div className="p-6">
-            <div className="grid gap-4 md:grid-cols-3">
-              <ReadOnlyField label="Current Node" value={identity.node} />
-              <ReadOnlyField label="Affiliation" value={identity.affiliation} />
-              <ReadOnlyField label={role === "enterprise" ? "Enterprise ID" : "Directory ID"} value={role === "enterprise" ? user.enterpriseId || "Not assigned" : (authUser?.id ?? "Not assigned")} />
-            </div>
-            <p className="mt-4 text-xs font-medium text-slate-500">Structural role and affiliation changes are controlled through LGU account management.</p>
           </div>
         </Panel>
 
@@ -234,28 +200,6 @@ export function AccountSecurityPage() {
   const setSession = useAuthStore((state) => state.setSession);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
-  const [theme, setTheme] = useState<ThemePreference>("system");
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const [isArchiveLoading, setIsArchiveLoading] = useState(false);
-  const [isArchiveSuccess, setIsArchiveSuccess] = useState(false);
-
-  useEffect(() => {
-    void getAccountPreferences().then((preferences) => {
-      setTheme(preferences.theme);
-      setPreferencesLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const resolved = theme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
-    root.classList.remove("light", "dark");
-    root.classList.add(resolved);
-  }, [theme]);
-
-  useEffect(() => {
-    if (preferencesLoaded) void updateAccountPreferences(theme);
-  }, [preferencesLoaded, theme]);
 
   const handlePasswordUpdate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -291,158 +235,143 @@ export function AccountSecurityPage() {
     }
   };
 
-  const handleArchiveRequest = async () => {
-    setIsArchiveLoading(true);
-    try {
-      await requestDataArchive();
-      setIsArchiveLoading(false);
-      setIsArchiveSuccess(true);
-      window.setTimeout(() => setIsArchiveSuccess(false), 3000);
-      toast.success("Data archive request recorded.");
-    } catch {
-      setIsArchiveLoading(false);
-      toast.error("Unable to request data archive.");
-    }
-  };
-
   return (
     <PageMotion>
-      <PageHeader title="Security & Data Control" description="Manage credentials, active sessions, and local interface preferences." />
+      <PageHeader title="Password Settings" description="Update your account password." />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Credential Control" icon={Key} />
-            <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
-              <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
-                <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
-              </div>
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={isPasswordLoading}
-                  className="bg-tanaw-green disabled:bg-tanaw-green/70 inline-flex min-w-48 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#044a1e]"
-                >
-                  {isPasswordLoading ? <RefreshCw size={16} className="animate-spin" /> : isPasswordSuccess ? <Check size={16} /> : <Key size={16} />}
-                  {isPasswordLoading ? "Updating..." : isPasswordSuccess ? "Password Updated" : "Update Password"}
-                </button>
-              </div>
-            </form>
-          </Panel>
-
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Active Sessions" icon={MonitorSmartphone} />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-160 text-left text-sm">
-                <thead className="bg-slate-50 text-[10px] font-black tracking-widest text-slate-500 uppercase">
-                  <tr>
-                    <th className="border-b border-slate-200 p-3">Device</th>
-                    <th className="border-b border-slate-200 p-3">Location</th>
-                    <th className="border-b border-slate-200 p-3">Last Active</th>
-                    <th className="border-b border-slate-200 p-3">IP Address</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  <tr>
-                    <td className="flex items-center gap-2 p-3 font-semibold text-slate-900">
-                      <Monitor size={15} className="text-tanaw-green" /> Workstation Browser (Current)
-                    </td>
-                    <td className="p-3 font-medium text-slate-600">Current device</td>
-                    <td className="p-3 text-xs font-bold text-emerald-600">Active Now</td>
-                    <td className="p-3 font-mono text-xs text-slate-500">Unavailable</td>
-                  </tr>
-                </tbody>
-              </table>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <Panel className="overflow-hidden">
+          <PanelHeader title="Change Password" icon={Key} />
+          <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
+            <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
+              <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
             </div>
-          </Panel>
-        </div>
-
-        <div className="space-y-6">
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Enhanced Protection" icon={Shield} />
-            <div className="flex items-center justify-between gap-4 p-6">
-              <div>
-                <p className="text-sm font-bold text-slate-900">Two-Factor Auth</p>
-                <p className="mt-1 text-xs text-slate-500">Not configured for this local deployment.</p>
-              </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black tracking-wide text-slate-500 uppercase">Unavailable</span>
-            </div>
-          </Panel>
-
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Interface Preference" icon={Moon} />
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
-                <ThemeButton active={theme === "light"} icon={<Sun size={14} />} label="Light" onClick={() => setTheme("light")} />
-                <ThemeButton active={theme === "dark"} icon={<Moon size={14} />} label="Dark" onClick={() => setTheme("dark")} />
-                <ThemeButton active={theme === "system"} icon={<Monitor size={14} />} label="System" onClick={() => setTheme("system")} />
-              </div>
-            </div>
-          </Panel>
-
-          <Panel className="overflow-hidden">
-            <PanelHeader title="Data Archive" icon={Database} />
-            <div className="p-6">
-              <p className="mb-5 text-xs leading-relaxed font-medium text-slate-500">Request a secure package of historical account activity, reports, and system logs for compliance review.</p>
+            <div className="flex justify-end pt-2">
               <button
-                type="button"
-                onClick={handleArchiveRequest}
-                disabled={isArchiveLoading || isArchiveSuccess}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400"
+                type="submit"
+                disabled={isPasswordLoading}
+                className="bg-tanaw-green disabled:bg-tanaw-green/70 inline-flex min-w-48 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#044a1e]"
               >
-                {isArchiveLoading ? <RefreshCw size={16} className="animate-spin" /> : isArchiveSuccess ? <Check size={16} className="text-emerald-600" /> : <Download size={16} />}
-                {isArchiveLoading ? "Compiling Data..." : isArchiveSuccess ? "Archive Sent to Email" : "Request Data Archive"}
+                {isPasswordLoading ? <RefreshCw size={16} className="animate-spin" /> : isPasswordSuccess ? <Check size={16} /> : <Key size={16} />}
+                {isPasswordLoading ? "Updating..." : isPasswordSuccess ? "Password Updated" : "Update Password"}
               </button>
             </div>
-          </Panel>
-        </div>
+          </form>
+        </Panel>
+
+        <Panel className="overflow-hidden">
+          <PanelHeader title="Active Sessions" icon={MonitorSmartphone} />
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-160 text-left text-sm">
+              <thead className="bg-slate-50 text-[10px] font-black tracking-widest text-slate-500 uppercase">
+                <tr>
+                  <th className="border-b border-slate-200 p-3">Device</th>
+                  <th className="border-b border-slate-200 p-3">Location</th>
+                  <th className="border-b border-slate-200 p-3">Last Active</th>
+                  <th className="border-b border-slate-200 p-3">IP Address</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                <tr>
+                  <td className="flex items-center gap-2 p-3 font-semibold text-slate-900">
+                    <Monitor size={15} className="text-tanaw-green" /> Workstation Browser (Current)
+                  </td>
+                  <td className="p-3 font-medium text-slate-600">Current device</td>
+                  <td className="p-3 text-xs font-bold text-emerald-600">Active Now</td>
+                  <td className="p-3 font-mono text-xs text-slate-500">Unavailable</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       </div>
     </PageMotion>
   );
 }
 
-function Field({ label, defaultValue, name, type = "text", placeholder, minLength }: { label: string; defaultValue: string; name?: string; type?: string; placeholder?: string; minLength?: number }) {
+function Field({
+  label,
+  defaultValue,
+  editable = false,
+  name,
+  type = "text",
+  placeholder,
+  minLength,
+}: {
+  label: string;
+  defaultValue: string;
+  editable?: boolean;
+  name?: string;
+  type?: string;
+  placeholder?: string;
+  minLength?: number;
+}) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isPassword = type === "password";
+  const inputType = isPassword && isPasswordVisible ? "text" : type;
+  const canEdit = Boolean(name && editable && !isPassword);
+  const isReadOnly = !name || (canEdit && !isEditing);
+  const input = (
+    <input
+      ref={inputRef}
+      key={`${label}-${defaultValue}`}
+      name={name}
+      type={inputType}
+      defaultValue={defaultValue}
+      placeholder={placeholder}
+      minLength={minLength}
+      required={isPassword}
+      readOnly={isReadOnly}
+      className={`focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${
+        isReadOnly ? "bg-slate-50" : "bg-white"
+      } ${isPassword || canEdit ? "pr-12" : ""}`}
+    />
+  );
+
   return (
     <label className="block">
       <span className="mb-2 block text-xs font-bold tracking-wide text-slate-500 uppercase">{label}</span>
-      <input
-        key={`${label}-${defaultValue}`}
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        minLength={minLength}
-        required={type === "password"}
-        readOnly={!name}
-        className="focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2"
-      />
+      {isPassword ? (
+        <span className="relative block">
+          {input}
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setIsPasswordVisible((current) => !current)}
+            className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-emerald-50 hover:text-tanaw-green focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none"
+            aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          >
+            {isPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </span>
+      ) : (
+        <span className="relative block">
+          {input}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(true);
+                window.requestAnimationFrame(() => {
+                  inputRef.current?.focus();
+                  inputRef.current?.select();
+                });
+              }}
+              className={`absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none ${
+                isEditing ? "bg-emerald-50 text-tanaw-green" : "text-slate-400 hover:bg-emerald-50 hover:text-tanaw-green"
+              }`}
+              aria-label={`Edit ${label.toLowerCase()}`}
+              aria-pressed={isEditing}
+            >
+              <Pencil size={16} />
+            </button>
+          )}
+        </span>
+      )}
     </label>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="mb-2 block text-[10px] font-bold tracking-wide text-slate-400 uppercase">{label}</span>
-      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900">{value}</div>
-    </div>
-  );
-}
-
-function ThemeButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition",
-        active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900",
-      ].join(" ")}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
