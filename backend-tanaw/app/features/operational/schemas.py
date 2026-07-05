@@ -216,8 +216,8 @@ class IntakeReportSummary(BaseModel):
     payload: dict | None = None
 
 
-FinalReportArchivedFromStatus = Literal["Draft", "Finalized"]
-FinalReportStatus = Literal["Draft", "Finalized", "Archived"]
+FinalReportArchivedFromStatus = Literal["Draft", "Finalized", "Returned for Revision"]
+FinalReportStatus = Literal["Draft", "Finalized", "Archived", "Returned for Revision"]
 
 
 class FinalReportSourceSummary(BaseModel):
@@ -431,6 +431,21 @@ class FinalReportCreate(BaseModel):
 
 class FinalReportStatusUpdate(BaseModel):
     status: FinalReportStatus
+
+
+class FinalReportRevisionReturn(BaseModel):
+    sourceReportIds: list[str] = Field(min_length=1, max_length=500)
+    remarks: str = Field(min_length=5, max_length=2000)
+
+    @field_validator("sourceReportIds")
+    @classmethod
+    def validate_unique_source_report_ids(cls, value: list[str]) -> list[str]:
+        normalized_ids = [item.strip() for item in value if item.strip()]
+        if len(normalized_ids) != len(value):
+            raise ValueError("Source report IDs cannot be blank.")
+        if len(normalized_ids) != len(set(normalized_ids)):
+            raise ValueError("Source report IDs must be unique.")
+        return normalized_ids
 
 
 class OperationalWebSocketEnvelope(BaseModel):

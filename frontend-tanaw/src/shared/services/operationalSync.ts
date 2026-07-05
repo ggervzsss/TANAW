@@ -54,6 +54,11 @@ export type FinalReportStatusPayload = {
   status: FinalReportStatus;
 };
 
+export type FinalReportRevisionPayload = {
+  sourceReportIds: string[];
+  remarks: string;
+};
+
 export async function listLatestTelemetry() {
   const response = await apiClient.get<TelemetrySnapshot[]>("/operational/telemetry/latest");
   return response.data;
@@ -86,6 +91,11 @@ export async function createFinalReport(payload: FinalReportCreatePayload) {
 
 export async function updateFinalReportStatus(reportId: string, payload: FinalReportStatusPayload) {
   const response = await apiClient.patch<FinalReport>(`/operational/reports/final/${reportId}/status`, payload);
+  return response.data;
+}
+
+export async function returnFinalReportForRevision(reportId: string, payload: FinalReportRevisionPayload) {
+  const response = await apiClient.post<FinalReport>(`/operational/reports/final/${reportId}/return-revision`, payload);
   return response.data;
 }
 

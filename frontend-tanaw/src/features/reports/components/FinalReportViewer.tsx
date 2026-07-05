@@ -1,11 +1,13 @@
-import { Archive, ArchiveRestore, CheckCircle, Download, Printer, X } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Printer, X } from "lucide-react";
 import { motion } from "motion/react";
 import toast from "react-hot-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import { useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
 import { CITY_SEAL } from "@/shared/constants/branding";
-import { operationalFinalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
-import { updateFinalReportStatus } from "@/shared/services/reporting";
+import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
+import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
 import { DotFinalReportTable } from "./DotReportTable";
 import { downloadFinalReportPdf } from "../utils/pdf";
@@ -17,6 +19,9 @@ type FinalReportViewerProps = {
 
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [returnRemarks, setReturnRemarks] = useState("");
   const statusMutation = useMutation({
     mutationFn: (status: FinalReportStatus) => updateFinalReportStatus(report.id, { status }),
     onSuccess: (updatedReport) => {
@@ -24,7 +29,23 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
     },
   });
+  const returnMutation = useMutation({
+    mutationFn: () =>
+      returnFinalReportForRevision(report.id, {
+        sourceReportIds: selectedSourceIds,
+        remarks: returnRemarks.trim(),
+      }),
+    onSuccess: (updatedReport) => {
+      queryClient.setQueryData<FinalReport[]>(operationalFinalReportsQueryKey, (current = []) => current.map((item) => (item.id === updatedReport.id ? updatedReport : item)));
+      void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
+      toast.success(`${report.id} returned for source report revision.`);
+      onClose();
+    },
+    onError: (error) => toast.error(apiErrorMessage(error, "Final report could not be returned for revision.")),
+  });
   const downloadReport = () => downloadFinalReportPdf(report);
+  const canSubmitReturn = selectedSourceIds.length > 0 && returnRemarks.trim().length >= 5 && !returnMutation.isPending;
 
   const handleArchive = () => {
     statusMutation.mutate("Archived", {
@@ -55,6 +76,18 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       },
       onError: () => toast.error("Final report status could not be updated."),
     });
+  };
+
+  const handleSourceToggle = (sourceId: string) => {
+    setSelectedSourceIds((current) => (current.includes(sourceId) ? current.filter((id) => id !== sourceId) : [...current, sourceId]));
+  };
+
+  const handleReturnForRevision = () => {
+    if (!canSubmitReturn) {
+      toast.error("Select at least one source report and enter audit remarks.");
+      return;
+    }
+    returnMutation.mutate();
   };
 
   return (
@@ -90,13 +123,22 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               ) : (
                 <>
                   {report.status === "Draft" && (
-                    <button
-                      type="button"
-                      onClick={handleFinalize}
-                      className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
-                    >
-                      <CheckCircle size={15} /> Mark as Finalized
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowReturnForm((current) => !current)}
+                        className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+                      >
+                        <AlertTriangle size={15} /> Return for Revision
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleFinalize}
+                        className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
+                      >
+                        <CheckCircle size={15} /> Mark as Finalized
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"
@@ -133,6 +175,58 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           </div>
 
           <div className="flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
+            {showReturnForm && report.status === "Draft" && (
+              <section className="print-hide mb-6 rounded-2xl border border-red-100 bg-red-50/70 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-red-900">Return Draft Final Report for Revision</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-red-800">
+                      Selected source reports will be returned to the enterprise. Unselected source reports will move back to Ready to Consolidate.
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setShowReturnForm(false)} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700">
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  {report.sources.map((source) => (
+                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm">
+                      <span>
+                        <span className="block font-semibold text-slate-900">{source.enterprise}</span>
+                        <span className="mt-0.5 block font-mono text-xs text-slate-500">
+                          {source.code} | Unique: {source.unique.toLocaleString()}
+                        </span>
+                      </span>
+                      <input type="checkbox" checked={selectedSourceIds.includes(source.id)} onChange={() => handleSourceToggle(source.id)} className="h-4 w-4 accent-red-600" />
+                    </label>
+                  ))}
+                </div>
+
+                <label className="mt-4 block">
+                  <span className="text-xs font-bold tracking-[0.16em] text-red-800 uppercase">Audit remarks</span>
+                  <textarea
+                    value={returnRemarks}
+                    onChange={(event) => setReturnRemarks(event.target.value)}
+                    rows={3}
+                    className="mt-2 w-full rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    placeholder="Describe the discrepancy and what the enterprise needs to correct."
+                  />
+                </label>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleReturnForRevision}
+                    disabled={!canSubmitReturn}
+                    className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-200"
+                  >
+                    <AlertTriangle size={15} /> {returnMutation.isPending ? "Returning..." : "Confirm Return for Revision"}
+                  </button>
+                </div>
+              </section>
+            )}
+
             <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
               <ul className="space-y-2 font-mono text-xs text-gray-600">
@@ -140,10 +234,17 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                   <span>v1.0 Draft aggregated by System Pipeline</span>
                   <span>{report.generatedOn} 04:15 AM</span>
                 </li>
-                <li className="flex items-center justify-between pt-1">
-                  <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
-                  <span>{report.generatedOn} 09:30 AM</span>
-                </li>
+                {report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized") ? (
+                  <li className="flex items-center justify-between pt-1">
+                    <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
+                    <span>{report.generatedOn} 09:30 AM</span>
+                  </li>
+                ) : (
+                  <li className="flex items-center justify-between pt-1">
+                    <span>{report.status === "Returned for Revision" ? "v1.1 Returned for source report revision" : "v1.1 Awaiting final audit decision"}</span>
+                    <span>{report.generatedOn} 09:30 AM</span>
+                  </li>
+                )}
               </ul>
             </div>
 
@@ -191,4 +292,12 @@ function Signature({ label, sub }: { label: string; sub: string }) {
 
 function getRestoreStatus(report: FinalReport): FinalReportArchivedFromStatus {
   return report.archivedFromStatus ?? "Finalized";
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data && typeof error.response.data === "object" ? (error.response.data as { detail?: unknown }).detail : null;
+    if (typeof detail === "string" && detail.trim()) return detail;
+  }
+  return fallback;
 }

@@ -34,6 +34,7 @@ from app.features.operational.schemas import (
     DesktopTelemetryIngest,
     EnterpriseNotificationCreate,
     FinalReportCreate,
+    FinalReportRevisionReturn,
     FinalReportStatusUpdate,
     FinalReportSummary,
     FleetSimulationEnterpriseSummary,
@@ -85,6 +86,7 @@ from app.features.operational.service import (
     list_support_tickets,
     list_user_notifications,
     parse_ticket_attachments,
+    return_final_report_for_revision,
     set_user_notification_read,
     system_setting_enabled,
     to_operational_alert_summary,
@@ -482,6 +484,45 @@ async def generate_final_report(
     return final_report
 
 
+@router.post("/reports/final/{report_id}/return-revision", response_model=FinalReportSummary)
+async def return_final_report_revision(
+    report_id: str,
+    payload: FinalReportRevisionReturn,
+    actor: StaffWorkflowAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FinalReportSummary:
+    try:
+        final_report = await return_final_report_for_revision(db, report_id, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if final_report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
+
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="final_report.updated", data=final_report.model_dump(mode="json")
+        )
+    )
+    await broadcast_summary(db)
+    await record_operational_log(
+        db,
+        category="Staff Operation",
+        severity="Warning",
+        actor=actor.display_name,
+        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
+        action="Return Final Report for Revision",
+        target=final_report.id,
+        summary=f"{actor.display_name} returned {final_report.id} for source report revision.",
+        source_id=final_report.id,
+        metadata={
+            "period": final_report.period,
+            "sourceReportIds": ",".join(payload.sourceReportIds),
+            "remarks": payload.remarks,
+        },
+    )
+    return final_report
+
+
 @router.patch("/reports/final/{report_id}/status", response_model=FinalReportSummary)
 async def update_final_report_workflow_status(
     report_id: str,
@@ -489,7 +530,10 @@ async def update_final_report_workflow_status(
     actor: StaffWorkflowAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FinalReportSummary:
-    final_report = await update_final_report_status(db, report_id, payload)
+    try:
+        final_report = await update_final_report_status(db, report_id, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if final_report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
 

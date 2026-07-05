@@ -6,7 +6,7 @@ export function ReportStatusBadge({ status }: { status: ReportStatus | FinalRepo
       ? "bg-yellow-50 text-yellow-700 border-yellow-200"
       : status === "Ready to Consolidate" || status === "Finalized"
         ? "bg-teal-50 text-teal-700 border-teal-200"
-        : status === "Returned" || status === "Missing"
+        : status === "Returned" || status === "Returned for Revision" || status === "Missing"
           ? "bg-red-50 text-red-700 border-red-200"
           : status === "Consolidated" || status === "Draft"
             ? "bg-blue-50 text-blue-700 border-blue-200"

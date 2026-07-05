@@ -6,6 +6,8 @@ import pytest
 from app.features.operational.models import EnterpriseReportSubmission
 from app.features.operational.service import (
     InvalidReportWorkflowError,
+    resolve_final_report_status_transition,
+    validate_final_report_revision_return,
     validate_final_report_sources,
     validate_report_review_transition,
 )
@@ -43,6 +45,29 @@ def test_final_report_sources_must_be_ready_and_same_period() -> None:
                 _report("REP-003", "Ready to Consolidate", "Jul 1 - Jul 31, 2026"),
             ]
         )
+
+
+def test_final_report_revision_return_requires_draft_and_owned_sources() -> None:
+    validate_final_report_revision_return("Draft", {"source-1", "source-2"}, {"source-1"})
+
+    with pytest.raises(InvalidReportWorkflowError):
+        validate_final_report_revision_return("Finalized", {"source-1"}, {"source-1"})
+
+    with pytest.raises(InvalidReportWorkflowError):
+        validate_final_report_revision_return("Draft", {"source-1"}, {"source-2"})
+
+
+def test_returned_final_report_can_be_archived_and_restored() -> None:
+    assert resolve_final_report_status_transition(
+        current_status="Returned for Revision",
+        current_archived_from_status=None,
+        requested_status="Archived",
+    ) == ("Archived", "Returned for Revision")
+    assert resolve_final_report_status_transition(
+        current_status="Archived",
+        current_archived_from_status="Returned for Revision",
+        requested_status="Returned for Revision",
+    ) == ("Returned for Revision", None)
 
 
 def _report(report_id: str, review_status: str, period: str) -> EnterpriseReportSubmission:

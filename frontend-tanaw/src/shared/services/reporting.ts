@@ -4,8 +4,10 @@ import {
   createFinalReport,
   listFinalReports,
   listIntakeReports as listOperationalIntakeReports,
+  returnFinalReportForRevision,
   updateFinalReportStatus,
   updateIntakeReportStatus,
+  type FinalReportRevisionPayload,
   type FinalReportCreatePayload,
   type FinalReportStatusPayload,
   type UpdateReportStatusPayload,
@@ -35,4 +37,14 @@ export async function notifyEnterprise(payload: EnterpriseNotificationPayload) {
   return response.data;
 }
 
-export { createFinalReport, listFinalReports, updateFinalReportStatus, updateIntakeReportStatus, type FinalReportCreatePayload, type FinalReportStatusPayload, type UpdateReportStatusPayload };
+export {
+  createFinalReport,
+  listFinalReports,
+  returnFinalReportForRevision,
+  updateFinalReportStatus,
+  updateIntakeReportStatus,
+  type FinalReportCreatePayload,
+  type FinalReportRevisionPayload,
+  type FinalReportStatusPayload,
+  type UpdateReportStatusPayload,
+};
