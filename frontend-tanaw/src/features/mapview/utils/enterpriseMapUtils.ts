@@ -1,6 +1,7 @@
 import L from "leaflet";
 import type { AccountSummary } from "@/shared/services/accountManagement";
 import type { EnterpriseStatus, GatewayStatus, MapEnterprise } from "@/shared/types";
+import type { LeafletMapTheme } from "./leafletTheme";
 
 export type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
 
@@ -89,6 +90,60 @@ export const hoverBoundaryStyle: L.PathOptions = {
   opacity: 0.92,
   weight: 2,
 };
+
+export function getBaseBoundaryStyle(name: string, theme: LeafletMapTheme, pane: string, variant: "admin" | "location" = "admin"): L.PathOptions {
+  const isDark = theme === "dark";
+  const isAdmin = variant === "admin";
+
+  return {
+    color: isDark ? "#9ee7c0" : "#2a3063",
+    weight: isAdmin ? 1.15 : 1,
+    opacity: isDark ? 0.94 : isAdmin ? 0.86 : 0.78,
+    fillColor: getGeoJsonColor(name),
+    fillOpacity: isDark ? (isAdmin ? 0.3 : 0.24) : isAdmin ? 0.48 : 0.34,
+    pane,
+    className: `${isAdmin ? "tanaw-boundary-path" : "tanaw-location-boundary-path"} outline-none`,
+  };
+}
+
+export function getActiveBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
+  if (theme === "dark") {
+    return {
+      color: "#93c5fd",
+      fillOpacity: 0.46,
+      opacity: 0.98,
+      weight: 2.6,
+    };
+  }
+
+  return activeBoundaryStyle;
+}
+
+export function getDimmedBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
+  if (theme === "dark") {
+    return {
+      color: "#64748b",
+      fillOpacity: 0.12,
+      opacity: 0.62,
+      weight: 1.05,
+    };
+  }
+
+  return dimmedBoundaryStyle;
+}
+
+export function getHoverBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
+  if (theme === "dark") {
+    return {
+      color: "#e0f2fe",
+      fillOpacity: 0.42,
+      opacity: 0.96,
+      weight: 2,
+    };
+  }
+
+  return hoverBoundaryStyle;
+}
 
 export function normalizeGeoJson(payload: GeoJsonFeatureCollection): GeoJsonFeatureCollection {
   return {
@@ -368,7 +423,7 @@ function escapeHtml(value: string) {
 }
 
 export function createBoundaryTooltipHtml(name: string) {
-  return `<div style="font-family:Bai Jamjuree,sans-serif;font-size:11px;font-weight:800;color:#2a3063;padding:2px 4px;text-transform:uppercase;">${escapeHtml(name)}</div>`;
+  return `<div class="tanaw-map-tooltip tanaw-map-tooltip--boundary">${escapeHtml(name)}</div>`;
 }
 
 export function createBoundaryPopupHtml(featureItem: GeoJSON.Feature) {
@@ -376,15 +431,15 @@ export function createBoundaryPopupHtml(featureItem: GeoJSON.Feature) {
   const type = escapeHtml(getFeatureValue(featureItem, ["type"], "barangay"));
   const postalCode = escapeHtml(getFeatureValue(featureItem, ["postal_code", "addr:postcode"], "4023"));
 
-  return `<div style="font-family:Bai Jamjuree,sans-serif;min-width:190px;padding:4px;"><h3 style="margin:0 0 2px;color:#2a3063;font-weight:800;font-size:13px;">${name}</h3><p style="margin:0 0 8px;font-size:9px;color:#666;text-transform:uppercase;letter-spacing:1px;">San Pedro, Laguna ${postalCode}</p><span style="font-size:9px;color:#055b25;font-weight:800;padding:2px 5px;border:1px solid #055b25;border-radius:3px;text-transform:uppercase;">${type} boundary</span></div>`;
+  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${name}</h3><p class="tanaw-map-popup__meta">San Pedro, Laguna ${postalCode}</p><span class="tanaw-map-popup__badge">${type} boundary</span></div>`;
 }
 
 export function createTooltipHtml(enterprise: MapEnterprise, color: string) {
   const occupancyShare = Math.min(100, Math.round((enterprise.totalLiveOccupancy / Math.max(1, enterprise.estimatedUniqueCount)) * 100));
 
-  return `<div style="font-family:Bai Jamjuree,sans-serif;min-width:140px;"><h4 style="margin:0;font-size:11px;font-weight:800;color:#2a3063;">${escapeHtml(enterprise.name)}</h4><p style="margin:2px 0 0;font-size:9px;color:#666;text-transform:uppercase;">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><div style="margin-top:5px;height:4px;background:#e5e5e5;border-radius:2px;"><div style="height:100%;width:${occupancyShare}%;background:${color};border-radius:2px;"></div></div></div>`;
+  return `<div class="tanaw-map-tooltip"><h4 class="tanaw-map-tooltip__title">${escapeHtml(enterprise.name)}</h4><p class="tanaw-map-tooltip__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><div class="tanaw-map-tooltip__meter"><div class="tanaw-map-tooltip__meter-fill" style="width:${occupancyShare}%;background:${color};"></div></div></div>`;
 }
 
 export function createPopupHtml(enterprise: MapEnterprise, color: string) {
-  return `<div style="font-family:Bai Jamjuree,sans-serif;min-width:220px;padding:4px;"><h3 style="margin:0 0 2px;color:#2a3063;font-weight:800;font-size:13px;">${escapeHtml(enterprise.name)}</h3><p style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:1px;">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p style="font-size:10px;color:#2a3063;font-weight:800;">${enterprise.totalLiveOccupancy.toLocaleString()} live occupancy | ${enterprise.estimatedUniqueCount.toLocaleString()} est. unique</p><span style="font-size:9px;color:${color};font-weight:800;padding:2px 4px;border:1px solid ${color};border-radius:2px;text-transform:uppercase;">${enterprise.status}</span></div>`;
+  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${escapeHtml(enterprise.name)}</h3><p class="tanaw-map-popup__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-popup__metric">${enterprise.totalLiveOccupancy.toLocaleString()} live occupancy | ${enterprise.estimatedUniqueCount.toLocaleString()} est. unique</p><span class="tanaw-map-popup__status" style="color:${color};border-color:${color};">${enterprise.status}</span></div>`;
 }

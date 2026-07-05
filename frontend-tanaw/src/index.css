@@ -961,9 +961,186 @@ html.dark .tanaw-toast--error {
 }
 
 .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
   border: 1px solid #e5e5e5 !important;
   border-radius: 8px !important;
+  color: #2a3063 !important;
   box-shadow: 0 10px 25px -5px rgb(0 0 0 / 30%) !important;
+}
+
+.leaflet-popup-tip {
+  background: #ffffff !important;
+}
+
+.tanaw-leaflet-map {
+  background: #edf2f7;
+}
+
+.tanaw-leaflet-map--dark {
+  background: #0b1120;
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-zoom {
+  border: 1px solid rgb(51 65 85 / 0.9) !important;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.34);
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-zoom a {
+  background: #121c31 !important;
+  border-bottom-color: rgb(51 65 85 / 0.9) !important;
+  color: #e2e8f0 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-zoom a:hover,
+.tanaw-leaflet-map--dark .leaflet-control-zoom a:focus {
+  background: #172033 !important;
+  color: #6ee7b7 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-attribution {
+  background: rgb(15 23 42 / 0.82) !important;
+  color: #cbd5e1 !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.28);
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-attribution a {
+  color: #6ee7b7 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-popup-content-wrapper {
+  background: #121c31 !important;
+  border-color: rgb(51 65 85 / 0.9) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 22px 48px rgb(0 0 0 / 0.45) !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-popup-tip {
+  background: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip {
+  background: #121c31 !important;
+  border-color: rgb(51 65 85 / 0.9) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.4) !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-top::before {
+  border-top-color: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-bottom::before {
+  border-bottom-color: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-left::before {
+  border-left-color: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-right::before {
+  border-right-color: #121c31 !important;
+}
+
+.tanaw-map-tooltip {
+  min-width: 140px;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.tanaw-map-tooltip--boundary {
+  min-width: auto;
+  padding: 2px 4px;
+  color: #2a3063;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tanaw-map-tooltip__title {
+  margin: 0;
+  color: #2a3063;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tanaw-map-tooltip__meta {
+  margin: 2px 0 0;
+  color: #666666;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.tanaw-map-tooltip__meter {
+  height: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+  background: #e5e5e5;
+  border-radius: 2px;
+}
+
+.tanaw-map-tooltip__meter-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.tanaw-map-popup {
+  min-width: 190px;
+  padding: 4px;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.tanaw-map-popup__title {
+  margin: 0 0 2px;
+  color: #2a3063;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tanaw-map-popup__meta {
+  margin: 0 0 8px;
+  color: #666666;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.tanaw-map-popup__metric {
+  margin: 0 0 8px;
+  color: #2a3063;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tanaw-map-popup__badge,
+.tanaw-map-popup__status {
+  display: inline-block;
+  padding: 2px 5px;
+  border: 1px solid #055b25;
+  border-radius: 3px;
+  color: #055b25;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-tooltip--boundary,
+.tanaw-leaflet-map--dark .tanaw-map-tooltip__title,
+.tanaw-leaflet-map--dark .tanaw-map-popup__title,
+.tanaw-leaflet-map--dark .tanaw-map-popup__metric {
+  color: #f8fafc;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-tooltip__meta,
+.tanaw-leaflet-map--dark .tanaw-map-popup__meta {
+  color: #94a3b8;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-tooltip__meter {
+  background: #334155;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-popup__badge {
+  border-color: #6ee7b7;
+  color: #6ee7b7;
 }
 
 #admin-enterprise-map .tanaw-boundary-path {

@@ -6,11 +6,15 @@ export {
   createTooltipHtml,
   dimmedBoundaryStyle,
   fitMapToSanPedroBounds,
+  getActiveBoundaryStyle,
   getBarangayLabel,
+  getBaseBoundaryStyle,
+  getDimmedBoundaryStyle,
   getEnterpriseStatusColor,
   getEnterprisesByBarangay,
   getFeatureValue,
   getGeoJsonColor,
+  getHoverBoundaryStyle,
   hoverBoundaryStyle,
   getBarangayFeatureForPoint,
   getBarangayPointResolution,
@@ -25,5 +29,7 @@ export {
   SAN_PEDRO_BARANGAYS_URL,
   toMapEnterprise,
 } from "./enterpriseMapUtils";
+export { getCurrentLeafletMapTheme, mountLeafletThemeLayer } from "./leafletTheme";
 export { getDarkStatusBadgeClass } from "./mapStatusStyles";
 export type { BarangayPointResolution, GeoJsonFeatureCollection } from "./enterpriseMapUtils";
+export type { LeafletMapTheme } from "./leafletTheme";
