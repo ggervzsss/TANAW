@@ -345,6 +345,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
     const cloudSyncError = await syncSubmittedReportToCloud(reportId);
     const submittedSyncStatus = cloudSyncError ? submission.sync_status : "synced";
+    const restoredWorkspaceMetrics = !cloudSyncError && !activeReportId ? await prepareNextWorkspaceMetrics() : null;
 
     const submittedMetrics: Metrics = {
       entries: submission.entries,
@@ -399,8 +400,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     removeStoredDemographicDraft(demographicDraftStorageKey);
     setShowConfirm(false);
     setIsSubmitting(false);
-    void refreshLocalMetrics();
+    if (restoredWorkspaceMetrics) {
+      setLiveMetrics(metricsFromSummary(restoredWorkspaceMetrics));
+      setLivePeriod(restoredWorkspaceMetrics.period || currentReportingPeriod);
+    } else {
+      void refreshLocalMetrics();
+    }
     void refreshLocalReports();
+    void refreshPendingPeriods();
     if (cloudSyncError) {
       notifyError(`Report saved locally, but cloud sync is still pending: ${cloudSyncError}`);
       window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
@@ -734,6 +741,15 @@ async function syncSubmittedReportToCloud(reportId: string) {
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : "The backend could not be reached.";
+  }
+}
+
+async function prepareNextWorkspaceMetrics() {
+  try {
+    const prepared = await prepareDesktopMockCounts();
+    return isPreparedMetrics(prepared) ? prepared : null;
+  } catch {
+    return null;
   }
 }
 
