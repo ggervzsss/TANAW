@@ -8,28 +8,31 @@ import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync"
 import { listEnterpriseAccounts, type AccountSummary } from "@/shared/services/accountManagement";
 import type { MapEnterprise } from "@/shared/types";
 import {
-  activeBoundaryStyle,
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
   createPopupHtml,
   createTooltipHtml,
-  dimmedBoundaryStyle,
   fitMapToSanPedroBounds,
+  getActiveBoundaryStyle,
   getBarangayLabel,
+  getBaseBoundaryStyle,
+  getCurrentLeafletMapTheme,
+  getDimmedBoundaryStyle,
   getDarkStatusBadgeClass,
   getEnterpriseStatusColor,
   getEnterprisesByBarangay,
   getFeatureValue,
-  getGeoJsonColor,
-  hoverBoundaryStyle,
+  getHoverBoundaryStyle,
   isBoundaryPolygonFeature,
   isPointInsideSanPedro,
+  mountLeafletThemeLayer,
   normalizeBarangayName,
   normalizeGeoJson,
   sanPedroFallbackCenter,
   sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
   type GeoJsonFeatureCollection,
+  type LeafletMapTheme,
 } from "../utils";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
 
@@ -54,6 +57,7 @@ export function AdminEnterpriseMap() {
   const [selectedBarangayName, setSelectedBarangayName] = useState<string | null>(null);
   const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
   const token = useAuthStore((state) => state.token);
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
   const mapEnterprisesQuery = useOperationalMapEnterprises();
@@ -121,15 +125,15 @@ export function AdminEnterpriseMap() {
       const layerKey = normalizeBarangayName(getBarangayLabel(featureItem));
 
       if (layerKey === selectedKey) {
-        layer.setStyle(activeBoundaryStyle);
+        layer.setStyle(getActiveBoundaryStyle(mapTheme));
         activeBoundaryRef.current = layer;
         layer.bringToFront();
         return;
       }
 
-      layer.setStyle(dimmedBoundaryStyle);
+      layer.setStyle(getDimmedBoundaryStyle(mapTheme));
     });
-  }, []);
+  }, [mapTheme]);
 
   const findBoundaryLayerByName = useCallback((barangayName: string) => {
     const selectedKey = normalizeBarangayName(barangayName);
@@ -259,13 +263,11 @@ export function AdminEnterpriseMap() {
       boundaryPane.style.zIndex = "410";
     }
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    }).addTo(map);
+    const cleanupTileLayer = mountLeafletThemeLayer(map, setMapTheme);
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
     return () => {
+      cleanupTileLayer();
       Object.values(markersRef.current).forEach((marker) => marker.remove());
       markersRef.current = {};
       activeBoundaryRef.current = null;
@@ -284,15 +286,7 @@ export function AdminEnterpriseMap() {
 
     const boundaryStyle: GeoJSONOptions["style"] = (geoFeature) => {
       const name = getBarangayLabel(geoFeature);
-      return {
-        color: "#2a3063",
-        weight: 1.15,
-        opacity: 0.86,
-        fillColor: getGeoJsonColor(name),
-        fillOpacity: 0.48,
-        pane: "boundaryPane",
-        className: "tanaw-boundary-path outline-none",
-      };
+      return getBaseBoundaryStyle(name, mapTheme, "boundaryPane", "admin");
     };
 
     const onEachFeature: GeoJSONOptions["onEachFeature"] = (geoFeature, layer: Layer) => {
@@ -309,13 +303,13 @@ export function AdminEnterpriseMap() {
         mouseover: (event) => {
           const target = event.target as L.Path;
           const isActive = activeBoundaryRef.current === target;
-          target.setStyle(isActive ? activeBoundaryStyle : hoverBoundaryStyle);
+          target.setStyle(isActive ? getActiveBoundaryStyle(mapTheme) : getHoverBoundaryStyle(mapTheme));
           target.bringToFront();
         },
         mouseout: (event) => {
           const target = event.target as L.Path;
           if (activeBoundaryRef.current === target) {
-            target.setStyle(activeBoundaryStyle);
+            target.setStyle(getActiveBoundaryStyle(mapTheme));
             return;
           }
 
@@ -339,7 +333,7 @@ export function AdminEnterpriseMap() {
       fitMapToSanPedroBounds(map, boundaryLayerRef.current);
       hasInitialOverviewFitRef.current = true;
     }
-  }, [applyBoundarySelection, boundary, selectBarangay, showBoundaries]);
+  }, [applyBoundarySelection, boundary, mapTheme, selectBarangay, showBoundaries]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -411,7 +405,7 @@ export function AdminEnterpriseMap() {
   }, [mapEnterprises, selectedEnterpriseId]);
 
   return (
-    <div className="border-tanaw-gray bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden rounded-xl border shadow-sm max-sm:min-h-140">
+    <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
       <div className="absolute inset-0 z-0">
         <div id={mapContainerId} className="h-full w-full" />
       </div>

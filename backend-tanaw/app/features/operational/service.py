@@ -29,6 +29,7 @@ from app.features.operational.schemas import (
     DesktopTelemetryIngest,
     FinalReportArchivedFromStatus,
     FinalReportCreate,
+    FinalReportRevisionReturn,
     FinalReportSourceSummary,
     FinalReportStatusUpdate,
     FinalReportSummary,
@@ -64,10 +65,15 @@ NOTIFICATION_SETTING_LEGACY_KEYS = {
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: ("notifications.Notify Failed Login Threshold",),
 }
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
-FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized"}
+FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
+FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
 
 
 class DuplicateReportPeriodError(Exception):
+    pass
+
+
+class InvalidReportWorkflowError(Exception):
     pass
 
 
@@ -1011,6 +1017,7 @@ async def update_report_status(
     if report is None:
         return None
 
+    validate_report_review_transition(report.review_status, payload.status)
     report.review_status = payload.status
     report.remarks = payload.remarks
     await db.commit()
@@ -1052,6 +1059,7 @@ async def create_final_report(
     ).all()
     if not source_reports:
         return None
+    validate_final_report_sources(source_reports)
 
     period = final_report_period(source_reports)
     report = FinalReport(
@@ -1093,18 +1101,65 @@ async def create_final_report(
     return await to_final_report_summary(db, report)
 
 
+async def return_final_report_for_revision(
+    db: AsyncSession, report_id: str, payload: FinalReportRevisionReturn
+) -> FinalReportSummary | None:
+    report = await find_final_report(db, report_id)
+    if report is None:
+        return None
+    sources = list(
+        (
+            await db.scalars(
+                select(FinalReportSource).where(FinalReportSource.final_report_id == report.id)
+            )
+        ).all()
+    )
+    source_ids = {source.intake_report_id for source in sources}
+    selected_source_ids = set(payload.sourceReportIds)
+    validate_final_report_revision_return(report.status, source_ids, selected_source_ids)
+
+    intake_reports = {
+        intake_report.id: intake_report
+        for intake_report in (
+            await db.scalars(
+                select(EnterpriseReportSubmission).where(
+                    EnterpriseReportSubmission.id.in_(source_ids)
+                )
+            )
+        ).all()
+    }
+
+    for source in sources:
+        intake_report = intake_reports.get(source.intake_report_id)
+        if intake_report is None:
+            continue
+        if source.intake_report_id in selected_source_ids:
+            intake_report.review_status = "Returned"
+            intake_report.remarks = payload.remarks
+        else:
+            intake_report.review_status = "Ready to Consolidate"
+            intake_report.remarks = "Restored to Ready to Consolidate after final audit return."
+
+    report.status = FINAL_REPORT_RETURNED_STATUS
+    report.archived_from_status = None
+    await db.commit()
+    await db.refresh(report)
+    return await to_final_report_summary(db, report)
+
+
 async def update_final_report_status(
     db: AsyncSession, report_id: str, payload: FinalReportStatusUpdate
 ) -> FinalReportSummary | None:
-    report = (
-        await db.scalars(
-            select(FinalReport).where(
-                (FinalReport.id == report_id) | (FinalReport.report_code == report_id)
-            )
-        )
-    ).first()
+    report = await find_final_report(db, report_id)
     if report is None:
         return None
+    if payload.status == FINAL_REPORT_RETURNED_STATUS and not (
+        report.status == FINAL_REPORT_ARCHIVED_STATUS
+        and report.archived_from_status == FINAL_REPORT_RETURNED_STATUS
+    ):
+        raise InvalidReportWorkflowError(
+            "Use the final audit return action to return a draft final report for revision."
+        )
 
     next_status, archived_from_status = resolve_final_report_status_transition(
         current_status=report.status,
@@ -1116,6 +1171,16 @@ async def update_final_report_status(
     await db.commit()
     await db.refresh(report)
     return await to_final_report_summary(db, report)
+
+
+async def find_final_report(db: AsyncSession, report_id: str) -> FinalReport | None:
+    return (
+        await db.scalars(
+            select(FinalReport).where(
+                (FinalReport.id == report_id) | (FinalReport.report_code == report_id)
+            )
+        )
+    ).first()
 
 
 async def enterprise_accounts_by_id(db: AsyncSession) -> dict[str, Account]:
@@ -1302,6 +1367,48 @@ def final_report_period(reports: Sequence[EnterpriseReportSubmission]) -> str:
     if not year.isdigit():
         year = str(_aware(first.submitted_at).year)
     return f"{first.month} {year}"
+
+
+def validate_report_review_transition(current_status: str, requested_status: str) -> None:
+    if current_status != "Pending Review":
+        raise InvalidReportWorkflowError(
+            f"{current_status} reports cannot be changed through intake review actions."
+        )
+    if requested_status not in {"Ready to Consolidate", "Returned"}:
+        raise InvalidReportWorkflowError(
+            "Intake review can only accept a pending report or return it for revision."
+        )
+
+
+def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission]) -> None:
+    invalid_reports = [
+        report.report_id for report in reports if report.review_status != "Ready to Consolidate"
+    ]
+    if invalid_reports:
+        joined_ids = ", ".join(invalid_reports)
+        raise InvalidReportWorkflowError(
+            f"Only reports marked Ready to Consolidate can be included in a final report: {joined_ids}."
+        )
+
+    periods = {report.period for report in reports}
+    if len(periods) > 1:
+        raise InvalidReportWorkflowError("A final report can only include one reporting period.")
+
+
+def validate_final_report_revision_return(
+    current_status: str, source_ids: set[str], selected_source_ids: set[str]
+) -> None:
+    if current_status != "Draft":
+        raise InvalidReportWorkflowError("Only draft final reports can be returned for revision.")
+    if not source_ids:
+        raise InvalidReportWorkflowError("This final report has no source reports to return.")
+
+    unknown_source_ids = selected_source_ids - source_ids
+    if unknown_source_ids:
+        joined_ids = ", ".join(sorted(unknown_source_ids))
+        raise InvalidReportWorkflowError(
+            f"Selected source reports do not belong to this final report: {joined_ids}."
+        )
 
 
 def source_kind_for_reports(reports: Sequence[EnterpriseReportSubmission]) -> str:

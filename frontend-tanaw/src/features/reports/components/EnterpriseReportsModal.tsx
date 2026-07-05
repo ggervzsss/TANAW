@@ -51,7 +51,7 @@ export function EnterpriseReportsModal({ enterprise, reports, onClose, onOpenRep
           <DetailField label="Open Submissions" value={activeReports.length.toLocaleString()} />
         </div>
         {needsNotification ? (
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 shadow-sm">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 shadow-sm dark:border-amber-300/25 dark:bg-amber-400/10">
             <p className="text-[10px] font-bold tracking-[0.18em] text-amber-700 uppercase">Follow-up</p>
             <p className="mt-2 max-w-64 text-sm leading-relaxed font-semibold text-amber-950">No submission is ready to consolidate for the selected period.</p>
             <button
@@ -79,17 +79,17 @@ export function EnterpriseReportsModal({ enterprise, reports, onClose, onOpenRep
 
 function ReportSection({ title, reports, empty, onOpenReport }: { title: string; reports: IntakeReport[]; empty: string; onOpenReport: (report: IntakeReport) => void }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+    <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-[#0f172a]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-xs font-bold tracking-[0.18em] text-slate-500 uppercase">{title}</h3>
-        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100">{reports.length} records</span>
+        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:bg-[#121c31] dark:text-emerald-200 dark:ring-emerald-300/20">{reports.length} records</span>
       </div>
       <div className="space-y-3">
         {reports.map((report) => (
           <button
             key={report.id}
             onClick={() => onOpenReport(report)}
-            className="w-full rounded-2xl border border-white bg-white p-4 text-left shadow-sm ring-1 ring-slate-900/4 transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50/40 hover:shadow-md"
+            className="w-full rounded-2xl border border-white bg-white p-4 text-left shadow-sm ring-1 ring-slate-900/4 transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50/40 hover:shadow-md dark:border-slate-700 dark:bg-[#121c31] dark:ring-white/8 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10"
           >
             <div className="flex items-start justify-between gap-4">
               <div>

@@ -26,8 +26,8 @@ export type EnterpriseIntakeReport = {
 export type EnterpriseFinalReport = {
   id: string;
   period: string;
-  status: "Draft" | "Finalized" | "Archived";
-  archivedFromStatus?: "Draft" | "Finalized" | null;
+  status: "Draft" | "Finalized" | "Archived" | "Returned for Revision";
+  archivedFromStatus?: "Draft" | "Finalized" | "Returned for Revision" | null;
   sources: {
     id: string;
     code: string;

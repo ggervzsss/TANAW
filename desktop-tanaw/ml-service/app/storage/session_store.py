@@ -146,6 +146,7 @@ class SessionStore:
         period: str,
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
+        metrics: dict[str, Any] | None = None,
         source_kind: str | None = None,
         mock_run_id: str | None = None,
     ) -> dict[str, int | str | None]:
@@ -154,6 +155,7 @@ class SessionStore:
             period=period,
             notes=notes,
             payload=payload,
+            metrics=metrics,
             source_kind=source_kind,
             mock_run_id=mock_run_id,
         )

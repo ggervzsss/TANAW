@@ -152,7 +152,7 @@ export type SystemLog = {
 };
 
 export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated" | "Missing";
-export type FinalReportArchivedFromStatus = "Draft" | "Finalized";
+export type FinalReportArchivedFromStatus = "Draft" | "Finalized" | "Returned for Revision";
 export type FinalReportStatus = FinalReportArchivedFromStatus | "Archived";
 export type LguAccountRoleLabel = "Admin" | "IT Personnel" | "LGU Staff";
 export type LguAccountStatus = "Active" | "Inactive";

@@ -34,6 +34,7 @@ from app.features.operational.schemas import (
     DesktopTelemetryIngest,
     EnterpriseNotificationCreate,
     FinalReportCreate,
+    FinalReportRevisionReturn,
     FinalReportStatusUpdate,
     FinalReportSummary,
     FleetSimulationEnterpriseSummary,
@@ -61,6 +62,7 @@ from app.features.operational.service import (
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
     DuplicateReportPeriodError,
+    InvalidReportWorkflowError,
     build_fleet_simulation_telemetry_payload,
     create_final_report,
     create_operational_alert,
@@ -84,6 +86,7 @@ from app.features.operational.service import (
     list_support_tickets,
     list_user_notifications,
     parse_ticket_attachments,
+    return_final_report_for_revision,
     set_user_notification_read,
     system_setting_enabled,
     to_operational_alert_summary,
@@ -221,6 +224,7 @@ async def ingest_desktop_report_submission(
     )
     await operational_ws_manager.broadcast(envelope)
     await broadcast_summary(db)
+    await notify_staff_report_submission(db, account, report)
     await record_operational_log(
         db,
         category="Staff Submission",
@@ -405,7 +409,10 @@ async def update_intake_report_status(
     actor: StaffWorkflowAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IntakeReportSummary:
-    report = await update_report_status(db, report_id, payload)
+    try:
+        report = await update_report_status(db, report_id, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
@@ -447,7 +454,10 @@ async def generate_final_report(
     actor: StaffWorkflowAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FinalReportSummary:
-    final_report = await create_final_report(db, payload)
+    try:
+        final_report = await create_final_report(db, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if final_report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -475,6 +485,45 @@ async def generate_final_report(
     return final_report
 
 
+@router.post("/reports/final/{report_id}/return-revision", response_model=FinalReportSummary)
+async def return_final_report_revision(
+    report_id: str,
+    payload: FinalReportRevisionReturn,
+    actor: StaffWorkflowAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FinalReportSummary:
+    try:
+        final_report = await return_final_report_for_revision(db, report_id, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if final_report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
+
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="final_report.updated", data=final_report.model_dump(mode="json")
+        )
+    )
+    await broadcast_summary(db)
+    await record_operational_log(
+        db,
+        category="Staff Operation",
+        severity="Warning",
+        actor=actor.display_name,
+        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
+        action="Return Final Report for Revision",
+        target=final_report.id,
+        summary=f"{actor.display_name} returned {final_report.id} for source report revision.",
+        source_id=final_report.id,
+        metadata={
+            "period": final_report.period,
+            "sourceReportIds": ",".join(payload.sourceReportIds),
+            "remarks": payload.remarks,
+        },
+    )
+    return final_report
+
+
 @router.patch("/reports/final/{report_id}/status", response_model=FinalReportSummary)
 async def update_final_report_workflow_status(
     report_id: str,
@@ -482,7 +531,10 @@ async def update_final_report_workflow_status(
     actor: StaffWorkflowAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FinalReportSummary:
-    final_report = await update_final_report_status(db, report_id, payload)
+    try:
+        final_report = await update_final_report_status(db, report_id, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if final_report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
 
@@ -1028,6 +1080,39 @@ async def notify_enterprise_ticket_update(
             data=notification.model_dump(mode="json"),
         )
     )
+
+
+async def notify_staff_report_submission(
+    db: AsyncSession, actor: Account, report: IntakeReportSummary
+) -> None:
+    is_resubmission = staff_report_notification_is_resubmission(report)
+    action_label = "resubmitted" if is_resubmission else "submitted"
+    notification_type = (
+        "Enterprise Report Resubmitted" if is_resubmission else "Enterprise Report Submitted"
+    )
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.STAFF],
+        title=notification_type,
+        message=f"{report.enterprise} {action_label} {report.code} for {report.period}.",
+        notification_type=notification_type,
+        severity="Info",
+        actor=actor,
+        source_type="enterprise.report",
+        source_id=report.id,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+
+
+def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bool:
+    payload_status = (report.payload or {}).get("status")
+    return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"
 
 
 def support_ticket_notification_roles(category: str) -> list[AccountRole]:

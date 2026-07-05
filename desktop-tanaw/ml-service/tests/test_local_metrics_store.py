@@ -3,10 +3,23 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.config.camera_config import reporting_period_submission_error
 from app.storage.local_metrics_store import LocalMetricsStore
 
 
 class LocalMetricsStoreTest(unittest.TestCase):
+    def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
+        self.assertIsNotNone(
+            reporting_period_submission_error(
+                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
+            )
+        )
+        self.assertIsNone(
+            reporting_period_submission_error(
+                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
+            )
+        )
+
     def test_duplicate_reporting_period_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))
@@ -143,6 +156,58 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["entries"], 1)
             self.assertEqual(reports[0]["unique_count"], 1)
             self.assertEqual(reports[0]["notes"], "revised")
+
+    def test_resubmitting_existing_report_uses_report_metrics_not_current_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)))
+            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
+            store.record_report_submission("REP-001", "June 2026", "first", {"notes": "first"})
+            store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
+
+            resubmission = store.record_report_submission(
+                "REP-001",
+                "June 2026",
+                "revised",
+                {"notes": "revised"},
+                metrics={
+                    "entries": 1,
+                    "exits": 0,
+                    "peak_occupancy": 1,
+                    "unique_count": 1,
+                },
+            )
+
+            self.assertEqual(resubmission["entries"], 1)
+            self.assertEqual(resubmission["unique_count"], 1)
+            self.assertEqual(store.metrics_summary()["entries"], 1)
+            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 1)
+            reports = store.list_report_submissions()
+            self.assertEqual(reports[0]["entries"], 1)
+            self.assertEqual(reports[0]["unique_count"], 1)
+            self.assertEqual(reports[0]["notes"], "revised")
+
+    def test_resubmitting_cloud_report_does_not_consume_current_open_events(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)))
+            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
+
+            resubmission = store.record_report_submission(
+                "REP-CLOUD",
+                "June 2026",
+                "revised",
+                {"status": "Resubmitted"},
+                metrics={
+                    "entries": 5,
+                    "exits": 2,
+                    "peak_occupancy": 4,
+                    "unique_count": 3,
+                },
+            )
+
+            self.assertEqual(resubmission["entries"], 5)
+            self.assertEqual(resubmission["unique_count"], 3)
+            self.assertEqual(store.metrics_summary()["entries"], 1)
+            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 1)
 
     def test_metrics_history_groups_events_and_can_include_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

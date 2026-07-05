@@ -42,6 +42,7 @@ export function AccountProfilePage({ role }: AccountPageProps) {
   const user = useAccountProfile();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [fieldResetSignal, setFieldResetSignal] = useState(0);
   const authDisplayImageDataUrl = authUser?.displayImageDataUrl ?? null;
   const [displayImageDraft, setDisplayImageDraft] = useState(() => ({
     dataUrl: authDisplayImageDataUrl,
@@ -98,6 +99,7 @@ export function AccountProfilePage({ role }: AccountPageProps) {
       updateUser(updated);
       setIsLoading(false);
       setIsSuccess(true);
+      setFieldResetSignal((current) => current + 1);
       window.setTimeout(() => setIsSuccess(false), 2600);
       toast.success("Profile updated.");
     } catch (error) {
@@ -172,10 +174,10 @@ export function AccountProfilePage({ role }: AccountPageProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field name="fullName" label="Full Name" defaultValue={user.name} editable />
+              <Field key={`fullName-${user.name}-${fieldResetSignal}`} name="fullName" label="Full Name" defaultValue={user.name} editable />
               <Field label="Professional Email" defaultValue={user.email} type="email" />
               <Field label="Department" defaultValue={user.department} />
-              <Field name="phone" label="Phone" defaultValue={user.phone} type="tel" editable />
+              <Field key={`phone-${user.phone}-${fieldResetSignal}`} name="phone" label="Phone" defaultValue={user.phone} type="tel" editable />
             </div>
           </div>
         </Panel>
@@ -314,7 +316,8 @@ function Field({
   const isPassword = type === "password";
   const inputType = isPassword && isPasswordVisible ? "text" : type;
   const canEdit = Boolean(name && editable && !isPassword);
-  const isReadOnly = !name || (canEdit && !isEditing);
+  const isReadOnly = !isPassword && (!name || !editable || (canEdit && !isEditing));
+
   const input = (
     <input
       ref={inputRef}
@@ -326,8 +329,10 @@ function Field({
       minLength={minLength}
       required={isPassword}
       readOnly={isReadOnly}
-      className={`focus:ring-tanaw-green/20 w-full rounded-lg border border-slate-200 p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${
-        isReadOnly ? "bg-slate-50" : "bg-white"
+      aria-readonly={isReadOnly}
+      tabIndex={isReadOnly ? -1 : undefined}
+      className={`focus:ring-tanaw-green/20 w-full rounded-lg border p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${
+        isReadOnly ? "cursor-default border-slate-200 bg-slate-50" : "border-tanaw-green bg-white shadow-sm"
       } ${isPassword || canEdit ? "pr-12" : ""}`}
     />
   );
@@ -355,6 +360,11 @@ function Field({
             <button
               type="button"
               onClick={() => {
+                if (isEditing) {
+                  setIsEditing(false);
+                  return;
+                }
+
                 setIsEditing(true);
                 window.requestAnimationFrame(() => {
                   inputRef.current?.focus();
@@ -364,7 +374,7 @@ function Field({
               className={`absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none ${
                 isEditing ? "bg-emerald-50 text-tanaw-green" : "text-slate-400 hover:bg-emerald-50 hover:text-tanaw-green"
               }`}
-              aria-label={`Edit ${label.toLowerCase()}`}
+              aria-label={isEditing ? `Lock ${label.toLowerCase()}` : `Edit ${label.toLowerCase()}`}
               aria-pressed={isEditing}
             >
               <Pencil size={16} />

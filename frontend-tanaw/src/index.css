@@ -2,6 +2,8 @@
 @import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: "Bai Jamjuree";
   font-style: normal;
@@ -136,7 +138,38 @@
   --tanaw-muted: #6b7280;
   --tanaw-border: #d8ded8;
   --tanaw-error: #dc2626;
+  --tanaw-page-bg: #f8f9fa;
+  --tanaw-page-bg-gradient: linear-gradient(135deg, rgb(241 245 249), rgb(229 231 235));
+  --tanaw-surface: #ffffff;
+  --tanaw-surface-muted: #f8fafc;
+  --tanaw-surface-subtle: #f1f5f9;
+  --tanaw-surface-strong: #e2e8f0;
+  --tanaw-dark-surface: #121c31;
+  --tanaw-dark-surface-muted: #0f172a;
+  --tanaw-dark-surface-subtle: #172033;
+  --tanaw-dark-border: #334155;
   --tanaw-topbar-height: 5.5rem;
+  color-scheme: light;
+}
+
+html.dark {
+  --tanaw-green: #34d399;
+  --tanaw-green-dark: #10b981;
+  --tanaw-green-soft: #6ee7b7;
+  --tanaw-gold: #fcd34d;
+  --tanaw-bg: #0b1120;
+  --tanaw-card: #121c31;
+  --tanaw-text: #f8fafc;
+  --tanaw-muted: #94a3b8;
+  --tanaw-border: #334155;
+  --tanaw-error: #f87171;
+  --tanaw-page-bg: #0f172a;
+  --tanaw-page-bg-gradient: linear-gradient(135deg, #0b1120 0%, #0f172a 54%, #111827 100%);
+  --tanaw-surface: #121c31;
+  --tanaw-surface-muted: #0f172a;
+  --tanaw-surface-subtle: #172033;
+  --tanaw-surface-strong: #1e293b;
+  color-scheme: dark;
 }
 
 @media (max-width: 640px) {
@@ -156,15 +189,292 @@
 
   body {
     min-width: 320px;
-    background: linear-gradient(135deg, rgb(241 245 249), rgb(229 231 235));
+    background: var(--tanaw-page-bg-gradient);
     font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
-    color: #2a3063;
+    color: var(--tanaw-text);
+    transition:
+      background-color 180ms ease,
+      color 180ms ease;
+  }
+
+  :where(
+    a[href],
+    button:not(:disabled),
+    input[type="button"]:not(:disabled),
+    input[type="checkbox"]:not(:disabled),
+    input[type="color"]:not(:disabled),
+    input[type="file"]:not(:disabled),
+    input[type="radio"]:not(:disabled),
+    input[type="range"]:not(:disabled),
+    input[type="reset"]:not(:disabled),
+    input[type="submit"]:not(:disabled),
+    label[for],
+    select:not(:disabled),
+    summary,
+    [role="button"]:not([aria-disabled="true"]),
+    [data-clickable="true"]:not([aria-disabled="true"])
+  ) {
+    cursor: pointer;
+  }
+
+  :where(
+    button:disabled,
+    input[type="button"]:disabled,
+    input[type="checkbox"]:disabled,
+    input[type="color"]:disabled,
+    input[type="file"]:disabled,
+    input[type="radio"]:disabled,
+    input[type="range"]:disabled,
+    input[type="reset"]:disabled,
+    input[type="submit"]:disabled,
+    select:disabled,
+    [aria-disabled="true"]
+  ) {
+    cursor: not-allowed;
   }
 }
 
 @layer components {
   .profile-menu-button {
-    @apply hover:text-tanaw-green flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50;
+    @apply hover:text-tanaw-green flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200;
+  }
+}
+
+@layer utilities {
+  html.dark :where(.bg-\[\#f8f9fa\], .bg-\[\#f8faf8\], .bg-slate-50, .bg-gray-50) {
+    background-color: #0f172a;
+  }
+
+  html.dark :where(.bg-white, .bg-white\/96, .bg-white\/95, .bg-white\/90, .bg-white\/86, .bg-white\/80, .bg-white\/70, .bg-white\/60, .bg-white\/50) {
+    background-color: rgb(18 28 49 / 0.96);
+  }
+
+  html.dark :where(.bg-slate-100, .bg-gray-100) {
+    background-color: #1e293b;
+  }
+
+  html.dark :where(.bg-slate-200, .bg-gray-200, .disabled\:bg-gray-100:disabled, .disabled\:bg-slate-200:disabled) {
+    background-color: #334155;
+  }
+
+  html.dark :where(.bg-emerald-50, .bg-tgreen-dark\/5, .bg-tgreen-dark\/6, .bg-tgreen-dark\/10) {
+    background-color: rgb(16 185 129 / 0.14);
+  }
+
+  html.dark :where(.bg-emerald-100) {
+    background-color: rgb(16 185 129 / 0.22);
+  }
+
+  html.dark :where(.bg-blue-50, .bg-sky-50) {
+    background-color: rgb(59 130 246 / 0.14);
+  }
+
+  html.dark :where(.bg-indigo-50, .bg-violet-50) {
+    background-color: rgb(129 140 248 / 0.14);
+  }
+
+  html.dark :where(.bg-teal-50) {
+    background-color: rgb(20 184 166 / 0.14);
+  }
+
+  html.dark :where(.bg-amber-50, .bg-yellow-50, .bg-amber-50\/70, .bg-amber-50\/80) {
+    background-color: rgb(245 158 11 / 0.15);
+  }
+
+  html.dark :where(.bg-amber-100, .bg-yellow-100) {
+    background-color: rgb(245 158 11 / 0.22);
+  }
+
+  html.dark :where(.bg-red-50, .bg-red-50\/80) {
+    background-color: rgb(239 68 68 / 0.14);
+  }
+
+  html.dark :where(.bg-red-100) {
+    background-color: rgb(239 68 68 / 0.22);
+  }
+
+  html.dark :where(.border-gray-100, .border-gray-200, .border-gray-300, .border-slate-100, .border-slate-200, .border-slate-300, .border-white\/70, .border-white\/80, .border-white\/85) {
+    border-color: rgb(51 65 85 / 0.88);
+  }
+
+  html.dark :where(.border-emerald-100, .border-emerald-200) {
+    border-color: rgb(52 211 153 / 0.26);
+  }
+
+  html.dark :where(.border-blue-200, .border-sky-100) {
+    border-color: rgb(96 165 250 / 0.28);
+  }
+
+  html.dark :where(.border-indigo-200, .border-violet-200) {
+    border-color: rgb(129 140 248 / 0.3);
+  }
+
+  html.dark :where(.border-teal-200) {
+    border-color: rgb(45 212 191 / 0.3);
+  }
+
+  html.dark :where(.border-amber-100, .border-amber-200, .border-yellow-200) {
+    border-color: rgb(251 191 36 / 0.32);
+  }
+
+  html.dark :where(.border-red-200, .border-red-300) {
+    border-color: rgb(248 113 113 / 0.32);
+  }
+
+  html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not(:last-child),
+  html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgb(51 65 85 / 0.88);
+  }
+
+  html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not(:last-child),
+  html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgb(51 65 85 / 0.42);
+  }
+
+  html.dark :where(.ring-white, .ring-slate-900\/4, .ring-slate-900\/5, .ring-emerald-950\/5, .ring-emerald-950\/6, .ring-black\/3, .ring-black\/4, .ring-black\/5) {
+    --tw-ring-color: rgb(255 255 255 / 0.08);
+  }
+
+  html.dark :where(.text-tanaw-navy, .text-charcoal-800, .text-gray-950, .text-gray-900, .text-slate-950, .text-slate-900) {
+    color: #f8fafc;
+  }
+
+  html.dark :where(.text-gray-800, .text-slate-800, .text-gray-700, .text-slate-700, .text-gray-600, .text-slate-600) {
+    color: #cbd5e1;
+  }
+
+  html.dark :where(.text-gray-500, .text-slate-500, .text-gray-400, .text-slate-400, .disabled\:text-gray-400:disabled, .disabled\:text-slate-300:disabled) {
+    color: #94a3b8;
+  }
+
+  html.dark :where(.text-tgreen-dark, .text-tanaw-green, .text-emerald-900, .text-emerald-800, .text-emerald-700, .text-emerald-600) {
+    color: #6ee7b7;
+  }
+
+  html.dark :where(.text-blue-700, .text-sky-700) {
+    color: #93c5fd;
+  }
+
+  html.dark :where(.text-indigo-700, .text-violet-700) {
+    color: #a5b4fc;
+  }
+
+  html.dark :where(.text-teal-700) {
+    color: #5eead4;
+  }
+
+  html.dark :where(.text-amber-950, .text-amber-900, .text-amber-800, .text-amber-700, .text-yellow-700, .text-yellow-600) {
+    color: #fcd34d;
+  }
+
+  html.dark :where(.text-red-800, .text-red-700, .text-red-600, .text-tanaw-red) {
+    color: #fca5a5;
+  }
+
+  html.dark :where(.placeholder\:text-slate-400::placeholder, .placeholder\:text-gray-400::placeholder, input::placeholder, textarea::placeholder) {
+    color: #64748b;
+  }
+
+  html.dark :where(.hover\:bg-gray-50:hover, .hover\:bg-slate-50:hover, .focus\:bg-gray-50:focus, .focus\:bg-slate-50:focus) {
+    background-color: #1e293b;
+  }
+
+  html.dark :where(.hover\:bg-gray-100:hover, .hover\:bg-slate-100:hover) {
+    background-color: #334155;
+  }
+
+  html.dark :where(.hover\:bg-emerald-50:hover, .hover\:bg-emerald-50\/70:hover, .hover\:bg-tgreen-dark\/5:hover, .hover\:bg-tgreen-dark\/6:hover, .focus\:bg-tgreen-dark\/6:focus) {
+    background-color: rgb(16 185 129 / 0.14);
+  }
+
+  html.dark :where(.hover\:bg-red-50:hover) {
+    background-color: rgb(239 68 68 / 0.14);
+  }
+
+  html.dark :where(.hover\:text-tanaw-green:hover, .hover\:text-tgreen-dark:hover, .hover\:text-emerald-700:hover) {
+    color: #6ee7b7;
+  }
+
+  html.dark :where(.hover\:text-red-700:hover) {
+    color: #fca5a5;
+  }
+
+  html.dark :where(.from-slate-50, .from-gray-50) {
+    --tw-gradient-from: #172033;
+  }
+
+  html.dark :where(.from-emerald-50) {
+    --tw-gradient-from: #0f2d3c;
+  }
+
+  html.dark :where(.from-amber-50) {
+    --tw-gradient-from: #312638;
+  }
+
+  html.dark :where(.via-white) {
+    --tw-gradient-via: #172033;
+  }
+
+  html.dark :where(.to-white) {
+    --tw-gradient-to: #121c31;
+  }
+
+  html.dark :where(.to-amber-50, .to-amber-50\/70, .to-amber-50\/80) {
+    --tw-gradient-to: #312638;
+  }
+
+  html.dark :where(input, textarea, select) {
+    color-scheme: dark;
+  }
+
+  html.dark :where(.tanaw-document-preview) {
+    background-color: #ffffff;
+    color: #000000;
+    color-scheme: light;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-white) {
+    background-color: #ffffff;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-50, .tanaw-document-preview .bg-slate-50) {
+    background-color: #f9fafb;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-100, .tanaw-document-preview .bg-slate-100) {
+    background-color: #f3f4f6;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-300) {
+    background-color: #d1d5db;
+  }
+
+  html.dark :where(.tanaw-document-preview .border-gray-200, .tanaw-document-preview .border-slate-200) {
+    border-color: #e5e7eb;
+  }
+
+  html.dark :where(.tanaw-document-preview .divide-gray-100, .tanaw-document-preview .divide-slate-100) > :not([hidden]) ~ :not([hidden]) {
+    border-color: #f3f4f6;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-900, .tanaw-document-preview .text-slate-900) {
+    color: #111827;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-800, .tanaw-document-preview .text-slate-800) {
+    color: #1f2937;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-700, .tanaw-document-preview .text-slate-700) {
+    color: #374151;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-600, .tanaw-document-preview .text-slate-600) {
+    color: #4b5563;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-500, .tanaw-document-preview .text-slate-500) {
+    color: #6b7280;
   }
 }
 
@@ -231,10 +541,10 @@ html.dark .tanaw-toast--error {
 }
 
 .tanaw-login-photo {
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center center;
-  filter: saturate(0.96) contrast(0.96) brightness(0.9);
+  position: absolute;
+  overflow: hidden;
+  background: #064e2f;
+  transform: translateZ(0);
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 58%, rgb(0 0 0 / 0.72) 72%, transparent 100%);
   -webkit-mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
@@ -243,10 +553,40 @@ html.dark .tanaw-toast--error {
   mask-repeat: no-repeat;
 }
 
+.tanaw-login-photo::before,
+.tanaw-login-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center center;
+  transform: translateZ(0);
+  transition:
+    opacity 280ms ease,
+    filter 280ms ease;
+  will-change: opacity;
+}
+
+.tanaw-login-photo::before {
+  background-image: var(--tanaw-auth-day-image);
+  filter: saturate(0.96) contrast(0.96) brightness(0.9);
+  opacity: 1;
+}
+
+.tanaw-login-photo::after {
+  background-image: var(--tanaw-auth-night-image, var(--tanaw-auth-day-image));
+  filter: saturate(1.06) contrast(1.03) brightness(0.92);
+  opacity: 0;
+}
+
 .tanaw-login-color-grade {
   background:
     radial-gradient(circle at 79% 16%, rgb(247 247 243 / 0.56), transparent 28%), radial-gradient(circle at 18% 82%, rgb(3 61 36 / 0.7), transparent 40%),
     linear-gradient(90deg, rgb(3 61 36 / 0.48) 0%, rgb(6 78 47 / 0.34) 38%, rgb(247 247 243 / 0.5) 70%, rgb(247 247 243 / 0.94) 100%), rgb(3 61 36 / 0.12);
+  transition:
+    background 280ms ease,
+    opacity 280ms ease;
 }
 
 .tanaw-login-edge-blur {
@@ -254,11 +594,39 @@ html.dark .tanaw-toast--error {
     radial-gradient(circle at 28% 52%, transparent 34%, rgb(3 20 12 / 0.24) 74%, rgb(3 20 12 / 0.36) 100%),
     linear-gradient(90deg, rgb(3 61 36 / 0.34) 0%, transparent 28%, rgb(247 247 243 / 0.08) 54%, rgb(247 247 243 / 0.76) 100%);
   box-shadow: inset 0 0 110px rgb(0 0 0 / 0.28);
+  transition:
+    background 280ms ease,
+    box-shadow 280ms ease,
+    opacity 280ms ease;
+}
+
+html.dark .tanaw-login-photo::before {
+  opacity: 0;
+}
+
+html.dark .tanaw-login-photo::after {
+  opacity: 1;
+}
+
+html.dark .tanaw-login-color-grade {
+  background:
+    radial-gradient(circle at 76% 18%, rgb(20 184 166 / 0.16), transparent 30%), radial-gradient(circle at 17% 82%, rgb(6 78 59 / 0.68), transparent 42%),
+    linear-gradient(90deg, rgb(3 7 18 / 0.2) 0%, rgb(6 78 59 / 0.24) 42%, rgb(15 23 42 / 0.56) 72%, rgb(15 23 42 / 0.94) 100%), rgb(3 7 18 / 0.18);
+}
+
+html.dark .tanaw-login-edge-blur {
+  background:
+    radial-gradient(circle at 28% 52%, transparent 32%, rgb(3 7 18 / 0.18) 74%, rgb(3 7 18 / 0.34) 100%),
+    linear-gradient(90deg, rgb(3 7 18 / 0.16) 0%, transparent 30%, rgb(3 7 18 / 0.22) 56%, rgb(15 23 42 / 0.86) 100%);
+  box-shadow: inset 0 0 140px rgb(0 0 0 / 0.38);
 }
 
 .tanaw-auth-stage {
   overflow-x: hidden;
   overflow-y: auto;
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
 }
 
 .tanaw-auth-shell {
@@ -286,6 +654,11 @@ html.dark .tanaw-toast--error {
 
 .tanaw-auth-card {
   padding: clamp(1.5rem, 4svh, 2.5rem);
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease;
 }
 
 .tanaw-auth-card-header {
@@ -318,6 +691,11 @@ html.dark .tanaw-toast--error {
 
 .tanaw-auth-field {
   height: clamp(3rem, 6.2svh, 3.5rem);
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    color 200ms ease;
 }
 
 .tanaw-auth-control-gap {
@@ -340,6 +718,79 @@ html.dark .tanaw-toast--error {
 .tanaw-auth-reset-callout {
   margin-bottom: clamp(1rem, 2.8svh, 1.5rem);
   padding: clamp(0.9rem, 2.3svh, 1rem);
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease;
+}
+
+.tanaw-auth-theme-toggle {
+  position: fixed;
+  top: clamp(0.875rem, 2vw, 1.5rem);
+  right: clamp(0.875rem, 2vw, 1.5rem);
+  z-index: 30;
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 0.66);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.78);
+  color: #1f2937;
+  box-shadow:
+    0 14px 34px rgb(3 20 12 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.68);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  transition:
+    transform 160ms ease,
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.tanaw-auth-theme-toggle:hover {
+  color: var(--tanaw-green);
+  background: rgb(255 255 255 / 0.9);
+  box-shadow:
+    0 18px 42px rgb(3 20 12 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.76);
+  transform: translateY(-1px);
+}
+
+.tanaw-auth-theme-toggle:active {
+  transform: translateY(0);
+}
+
+.tanaw-auth-theme-toggle:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgb(6 78 47 / 0.16),
+    0 18px 42px rgb(3 20 12 / 0.22);
+}
+
+.tanaw-auth-theme-toggle__icon {
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+html.dark .tanaw-auth-theme-toggle {
+  border-color: rgb(148 163 184 / 0.36);
+  background: rgb(15 23 42 / 0.72);
+  color: #f8fafc;
+  box-shadow:
+    0 16px 40px rgb(0 0 0 / 0.36),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+html.dark .tanaw-auth-theme-toggle:hover {
+  background: rgb(18 28 49 / 0.84);
+  color: var(--tanaw-gold);
 }
 
 @media (max-height: 760px) {
@@ -617,6 +1068,19 @@ html.dark .tanaw-toast--error {
   .tanaw-stage-glow {
     transition: none;
   }
+
+  .tanaw-login-photo::before,
+  .tanaw-login-photo::after,
+  .tanaw-login-color-grade,
+  .tanaw-login-edge-blur,
+  .tanaw-auth-stage,
+  .tanaw-auth-card,
+  .tanaw-auth-field,
+  .tanaw-auth-reset-callout,
+  .tanaw-auth-theme-toggle,
+  .tanaw-auth-theme-toggle__icon {
+    transition: none;
+  }
 }
 
 @media (max-width: 767px), (max-height: 720px) {
@@ -693,9 +1157,186 @@ html.dark .tanaw-toast--error {
 }
 
 .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
   border: 1px solid #e5e5e5 !important;
   border-radius: 8px !important;
+  color: #2a3063 !important;
   box-shadow: 0 10px 25px -5px rgb(0 0 0 / 30%) !important;
+}
+
+.leaflet-popup-tip {
+  background: #ffffff !important;
+}
+
+.tanaw-leaflet-map {
+  background: #edf2f7;
+}
+
+.tanaw-leaflet-map--dark {
+  background: #0b1120;
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-zoom {
+  border: 1px solid rgb(51 65 85 / 0.9) !important;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.34);
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-zoom a {
+  background: #121c31 !important;
+  border-bottom-color: rgb(51 65 85 / 0.9) !important;
+  color: #e2e8f0 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-zoom a:hover,
+.tanaw-leaflet-map--dark .leaflet-control-zoom a:focus {
+  background: #172033 !important;
+  color: #6ee7b7 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-attribution {
+  background: rgb(15 23 42 / 0.82) !important;
+  color: #cbd5e1 !important;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.28);
+}
+
+.tanaw-leaflet-map--dark .leaflet-control-attribution a {
+  color: #6ee7b7 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-popup-content-wrapper {
+  background: #121c31 !important;
+  border-color: rgb(51 65 85 / 0.9) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 22px 48px rgb(0 0 0 / 0.45) !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-popup-tip {
+  background: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip {
+  background: #121c31 !important;
+  border-color: rgb(51 65 85 / 0.9) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.4) !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-top::before {
+  border-top-color: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-bottom::before {
+  border-bottom-color: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-left::before {
+  border-left-color: #121c31 !important;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tooltip-right::before {
+  border-right-color: #121c31 !important;
+}
+
+.tanaw-map-tooltip {
+  min-width: 140px;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.tanaw-map-tooltip--boundary {
+  min-width: auto;
+  padding: 2px 4px;
+  color: #2a3063;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tanaw-map-tooltip__title {
+  margin: 0;
+  color: #2a3063;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tanaw-map-tooltip__meta {
+  margin: 2px 0 0;
+  color: #666666;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.tanaw-map-tooltip__meter {
+  height: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+  background: #e5e5e5;
+  border-radius: 2px;
+}
+
+.tanaw-map-tooltip__meter-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.tanaw-map-popup {
+  min-width: 190px;
+  padding: 4px;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.tanaw-map-popup__title {
+  margin: 0 0 2px;
+  color: #2a3063;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tanaw-map-popup__meta {
+  margin: 0 0 8px;
+  color: #666666;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.tanaw-map-popup__metric {
+  margin: 0 0 8px;
+  color: #2a3063;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tanaw-map-popup__badge,
+.tanaw-map-popup__status {
+  display: inline-block;
+  padding: 2px 5px;
+  border: 1px solid #055b25;
+  border-radius: 3px;
+  color: #055b25;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-tooltip--boundary,
+.tanaw-leaflet-map--dark .tanaw-map-tooltip__title,
+.tanaw-leaflet-map--dark .tanaw-map-popup__title,
+.tanaw-leaflet-map--dark .tanaw-map-popup__metric {
+  color: #f8fafc;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-tooltip__meta,
+.tanaw-leaflet-map--dark .tanaw-map-popup__meta {
+  color: #94a3b8;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-tooltip__meter {
+  background: #334155;
+}
+
+.tanaw-leaflet-map--dark .tanaw-map-popup__badge {
+  border-color: #6ee7b7;
+  color: #6ee7b7;
 }
 
 #admin-enterprise-map .tanaw-boundary-path {

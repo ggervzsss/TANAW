@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap");
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
@@ -22,6 +24,21 @@
   --tanaw-border: #d8ded8;
   --tanaw-error: #dc2626;
   --tanaw-topbar-height: 5.5rem;
+  color-scheme: light;
+}
+
+html.dark {
+  --tanaw-green: #34d399;
+  --tanaw-green-dark: #10b981;
+  --tanaw-green-soft: #6ee7b7;
+  --tanaw-gold: #fcd34d;
+  --tanaw-bg: #0b1120;
+  --tanaw-card: #121c31;
+  --tanaw-text: #f8fafc;
+  --tanaw-muted: #94a3b8;
+  --tanaw-border: #334155;
+  --tanaw-error: #f87171;
+  color-scheme: dark;
 }
 
 @media (max-width: 640px) {
@@ -49,6 +66,44 @@ input,
 textarea,
 [contenteditable="true"] {
   user-select: text;
+}
+
+@layer base {
+  :where(
+    a[href],
+    button:not(:disabled),
+    input[type="button"]:not(:disabled),
+    input[type="checkbox"]:not(:disabled),
+    input[type="color"]:not(:disabled),
+    input[type="file"]:not(:disabled),
+    input[type="radio"]:not(:disabled),
+    input[type="range"]:not(:disabled),
+    input[type="reset"]:not(:disabled),
+    input[type="submit"]:not(:disabled),
+    label[for],
+    select:not(:disabled),
+    summary,
+    [role="button"]:not([aria-disabled="true"]),
+    [data-clickable="true"]:not([aria-disabled="true"])
+  ) {
+    cursor: pointer;
+  }
+
+  :where(
+    button:disabled,
+    input[type="button"]:disabled,
+    input[type="checkbox"]:disabled,
+    input[type="color"]:disabled,
+    input[type="file"]:disabled,
+    input[type="radio"]:disabled,
+    input[type="range"]:disabled,
+    input[type="reset"]:disabled,
+    input[type="submit"]:disabled,
+    select:disabled,
+    [aria-disabled="true"]
+  ) {
+    cursor: not-allowed;
+  }
 }
 
 .tanaw-toast-viewport {
@@ -114,10 +169,10 @@ html.dark .tanaw-toast--error {
 }
 
 .tanaw-login-photo {
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center center;
-  filter: saturate(0.96) contrast(0.96) brightness(0.9);
+  position: absolute;
+  overflow: hidden;
+  background: #064e2f;
+  transform: translateZ(0);
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 58%, rgb(0 0 0 / 0.72) 72%, transparent 100%);
   -webkit-mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
@@ -126,10 +181,40 @@ html.dark .tanaw-toast--error {
   mask-repeat: no-repeat;
 }
 
+.tanaw-login-photo::before,
+.tanaw-login-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center center;
+  transform: translateZ(0);
+  transition:
+    opacity 280ms ease,
+    filter 280ms ease;
+  will-change: opacity;
+}
+
+.tanaw-login-photo::before {
+  background-image: var(--tanaw-auth-day-image);
+  filter: saturate(0.96) contrast(0.96) brightness(0.9);
+  opacity: 1;
+}
+
+.tanaw-login-photo::after {
+  background-image: var(--tanaw-auth-night-image, var(--tanaw-auth-day-image));
+  filter: saturate(1.06) contrast(1.03) brightness(0.92);
+  opacity: 0;
+}
+
 .tanaw-login-color-grade {
   background:
     radial-gradient(circle at 79% 16%, rgb(247 247 243 / 0.56), transparent 28%), radial-gradient(circle at 18% 82%, rgb(3 61 36 / 0.7), transparent 40%),
     linear-gradient(90deg, rgb(3 61 36 / 0.48) 0%, rgb(6 78 47 / 0.34) 38%, rgb(247 247 243 / 0.5) 70%, rgb(247 247 243 / 0.94) 100%), rgb(3 61 36 / 0.12);
+  transition:
+    background 280ms ease,
+    opacity 280ms ease;
 }
 
 .tanaw-login-edge-blur {
@@ -137,11 +222,39 @@ html.dark .tanaw-toast--error {
     radial-gradient(circle at 28% 52%, transparent 34%, rgb(3 20 12 / 0.24) 74%, rgb(3 20 12 / 0.36) 100%),
     linear-gradient(90deg, rgb(3 61 36 / 0.34) 0%, transparent 28%, rgb(247 247 243 / 0.08) 54%, rgb(247 247 243 / 0.76) 100%);
   box-shadow: inset 0 0 110px rgb(0 0 0 / 0.28);
+  transition:
+    background 280ms ease,
+    box-shadow 280ms ease,
+    opacity 280ms ease;
+}
+
+html.dark .tanaw-login-photo::before {
+  opacity: 0;
+}
+
+html.dark .tanaw-login-photo::after {
+  opacity: 1;
+}
+
+html.dark .tanaw-login-color-grade {
+  background:
+    radial-gradient(circle at 76% 18%, rgb(20 184 166 / 0.16), transparent 30%), radial-gradient(circle at 17% 82%, rgb(6 78 59 / 0.68), transparent 42%),
+    linear-gradient(90deg, rgb(3 7 18 / 0.2) 0%, rgb(6 78 59 / 0.24) 42%, rgb(15 23 42 / 0.56) 72%, rgb(15 23 42 / 0.94) 100%), rgb(3 7 18 / 0.18);
+}
+
+html.dark .tanaw-login-edge-blur {
+  background:
+    radial-gradient(circle at 28% 52%, transparent 32%, rgb(3 7 18 / 0.18) 74%, rgb(3 7 18 / 0.34) 100%),
+    linear-gradient(90deg, rgb(3 7 18 / 0.16) 0%, transparent 30%, rgb(3 7 18 / 0.22) 56%, rgb(15 23 42 / 0.86) 100%);
+  box-shadow: inset 0 0 140px rgb(0 0 0 / 0.38);
 }
 
 .tanaw-auth-stage {
   overflow-x: hidden;
   overflow-y: auto;
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
 }
 
 .tanaw-auth-desktop-stage {
@@ -175,6 +288,19 @@ html.dark .tanaw-toast--error {
 
 .tanaw-auth-card {
   padding: clamp(1.5rem, 4svh, 2.5rem);
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease;
+}
+
+html.dark .tanaw-auth-card {
+  border-color: rgb(148 163 184 / 0.34) !important;
+  background: rgb(18 28 49 / 0.94) !important;
+  box-shadow:
+    0 30px 90px rgb(0 0 0 / 0.48),
+    inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
 }
 
 .tanaw-auth-card-header {
@@ -207,6 +333,59 @@ html.dark .tanaw-toast--error {
 
 .tanaw-auth-field {
   height: clamp(3rem, 6.2svh, 3.5rem);
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    color 200ms ease;
+}
+
+html.dark .tanaw-auth-field {
+  border-color: var(--tanaw-border) !important;
+  background-color: rgb(15 23 42 / 0.86) !important;
+}
+
+html.dark .tanaw-auth-field:focus-within {
+  border-color: rgb(52 211 153 / 0.72) !important;
+  box-shadow: 0 0 0 4px rgb(52 211 153 / 0.14) !important;
+}
+
+html.dark .tanaw-auth-field :where(svg, button) {
+  color: #94a3b8;
+}
+
+html.dark .tanaw-auth-field button:hover {
+  color: var(--tanaw-green);
+}
+
+html.dark .tanaw-auth-card :where(input, textarea, select),
+html.dark .tanaw-auth-dialog :where(input, textarea, select) {
+  color: var(--tanaw-text);
+}
+
+html.dark .tanaw-auth-card :where(input::placeholder, textarea::placeholder),
+html.dark .tanaw-auth-dialog :where(input::placeholder, textarea::placeholder) {
+  color: #64748b;
+}
+
+html.dark .tanaw-auth-card .bg-red-50,
+html.dark .tanaw-auth-dialog .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.28) !important;
+}
+
+html.dark .tanaw-auth-card .border-red-100,
+html.dark .tanaw-auth-dialog .border-red-100 {
+  border-color: rgb(248 113 113 / 0.28) !important;
+}
+
+html.dark .tanaw-auth-card .text-red-700,
+html.dark .tanaw-auth-dialog .text-red-700 {
+  color: #fecaca !important;
+}
+
+html.dark .tanaw-auth-card .hover\:bg-emerald-50:hover,
+html.dark .tanaw-auth-dialog .hover\:bg-emerald-50:hover {
+  background-color: rgb(16 185 129 / 0.12) !important;
 }
 
 .tanaw-auth-control-gap {
@@ -229,6 +408,127 @@ html.dark .tanaw-toast--error {
 .tanaw-auth-reset-callout {
   margin-bottom: clamp(1rem, 2.8svh, 1.5rem);
   padding: clamp(0.9rem, 2.3svh, 1rem);
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease;
+}
+
+html.dark .tanaw-auth-reset-callout {
+  border-color: rgb(251 191 36 / 0.24) !important;
+  background-color: rgb(146 64 14 / 0.18) !important;
+}
+
+html.dark .tanaw-auth-reset-callout .text-amber-800 {
+  color: #fde68a !important;
+}
+
+html.dark .tanaw-auth-support-icon {
+  border-color: var(--tanaw-border) !important;
+  background-color: rgb(15 23 42 / 0.82) !important;
+  color: #cbd5e1 !important;
+}
+
+.tanaw-auth-dialog {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease;
+}
+
+html.dark .tanaw-auth-dialog {
+  border-color: rgb(148 163 184 / 0.34) !important;
+  background: rgb(18 28 49 / 0.96) !important;
+  box-shadow:
+    0 34px 100px rgb(0 0 0 / 0.52),
+    inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
+html.dark .tanaw-auth-dialog .bg-white {
+  background-color: rgb(15 23 42 / 0.9) !important;
+}
+
+html.dark .tanaw-auth-dialog .bg-\[\#f8faf8\],
+html.dark .tanaw-auth-dialog .bg-emerald-50 {
+  background-color: rgb(16 185 129 / 0.12) !important;
+}
+
+html.dark .tanaw-auth-dialog .border-emerald-100 {
+  border-color: rgb(52 211 153 / 0.24) !important;
+}
+
+html.dark .tanaw-auth-dialog .text-emerald-950 {
+  color: #d1fae5 !important;
+}
+
+.tanaw-auth-theme-toggle {
+  position: fixed;
+  top: clamp(0.875rem, 2vw, 1.5rem);
+  right: clamp(0.875rem, 2vw, 1.5rem);
+  z-index: 30;
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 0.66);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.78);
+  color: #1f2937;
+  box-shadow:
+    0 14px 34px rgb(3 20 12 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.68);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  transition:
+    transform 160ms ease,
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.tanaw-auth-theme-toggle:hover {
+  color: var(--tanaw-green);
+  background: rgb(255 255 255 / 0.9);
+  box-shadow:
+    0 18px 42px rgb(3 20 12 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.76);
+  transform: translateY(-1px);
+}
+
+.tanaw-auth-theme-toggle:active {
+  transform: translateY(0);
+}
+
+.tanaw-auth-theme-toggle:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgb(6 78 47 / 0.16),
+    0 18px 42px rgb(3 20 12 / 0.22);
+}
+
+.tanaw-auth-theme-toggle__icon {
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+html.dark .tanaw-auth-theme-toggle {
+  border-color: rgb(148 163 184 / 0.36);
+  background: rgb(15 23 42 / 0.72);
+  color: #f8fafc;
+  box-shadow:
+    0 16px 40px rgb(0 0 0 / 0.36),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+html.dark .tanaw-auth-theme-toggle:hover {
+  background: rgb(18 28 49 / 0.84);
+  color: var(--tanaw-gold);
 }
 
 @media (max-height: 760px) {
@@ -513,6 +813,19 @@ html.dark .tanaw-toast--error {
     transition: none;
   }
 
+  .tanaw-login-photo::before,
+  .tanaw-login-photo::after,
+  .tanaw-login-color-grade,
+  .tanaw-login-edge-blur,
+  .tanaw-auth-stage,
+  .tanaw-auth-card,
+  .tanaw-auth-field,
+  .tanaw-auth-reset-callout,
+  .tanaw-auth-theme-toggle,
+  .tanaw-auth-theme-toggle__icon {
+    transition: none;
+  }
+
   .tanaw-info-tooltip {
     animation: none;
   }
@@ -698,6 +1011,20 @@ html.dark .tanaw-toast--error {
   background-color: #e5eee8 !important;
 }
 
+.enterprise-shell .bg-emerald-50,
+.enterprise-shell .bg-emerald-50\/70,
+.enterprise-shell .bg-emerald-50\/80,
+.enterprise-shell .bg-green-50 {
+  background-color: #dcf7ea !important;
+}
+
+.enterprise-shell .bg-amber-50,
+.enterprise-shell .bg-amber-50\/60,
+.enterprise-shell .bg-amber-50\/70,
+.enterprise-shell .bg-amber-100 {
+  background-color: #fff1c2 !important;
+}
+
 .enterprise-shell .bg-blue-50,
 .enterprise-shell .bg-blue-50\/20 {
   background-color: #eaf2ff !important;
@@ -778,6 +1105,23 @@ html.dark .tanaw-toast--error {
 
 .enterprise-shell .text-green-600 {
   color: #047857 !important;
+}
+
+.enterprise-shell .text-emerald-700,
+.enterprise-shell .text-emerald-800,
+.enterprise-shell .text-emerald-900,
+.enterprise-shell .text-\[\#065f46\] {
+  color: #065f46 !important;
+}
+
+.enterprise-shell .text-amber-700,
+.enterprise-shell .text-amber-800,
+.enterprise-shell .text-amber-900 {
+  color: #92400e !important;
+}
+
+.enterprise-shell .text-tanaw-red {
+  color: #a40e0e !important;
 }
 
 .enterprise-shell .shadow-sm {
@@ -1103,6 +1447,56 @@ html.dark .enterprise-shell .enterprise-ticket-panel-header {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
 }
 
+html.dark .enterprise-shell .tanaw-status-badge {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+html.dark .enterprise-shell .tanaw-status-badge--success {
+  border-color: rgb(110 231 183 / 0.36) !important;
+  background-color: rgb(16 185 129 / 0.22) !important;
+  color: #a7f3d0 !important;
+}
+
+html.dark .enterprise-shell .tanaw-status-badge--warning {
+  border-color: rgb(251 191 36 / 0.42) !important;
+  background-color: rgb(245 158 11 / 0.22) !important;
+  color: #fde68a !important;
+}
+
+html.dark .enterprise-shell .tanaw-status-badge--info {
+  border-color: rgb(147 197 253 / 0.36) !important;
+  background-color: rgb(59 130 246 / 0.2) !important;
+  color: #bfdbfe !important;
+}
+
+html.dark .enterprise-shell .tanaw-trend-chip--peak {
+  border-color: rgb(251 191 36 / 0.46) !important;
+  background-color: rgb(245 158 11 / 0.18) !important;
+  color: #fcd34d !important;
+}
+
+html.dark .enterprise-shell .tanaw-trend-chip--utilization {
+  border-color: rgb(110 231 183 / 0.38) !important;
+  background-color: rgb(16 185 129 / 0.2) !important;
+  color: #6ee7b7 !important;
+}
+
+html.dark .enterprise-shell .tanaw-report-remarks {
+  border-color: rgb(251 191 36 / 0.42) !important;
+  background:
+    linear-gradient(135deg, rgb(245 158 11 / 0.14), rgb(120 53 15 / 0.2)),
+    rgb(15 23 42 / 0.66) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+html.dark .enterprise-shell .tanaw-report-remarks__title {
+  color: #fcd34d !important;
+}
+
+html.dark .enterprise-shell .tanaw-report-remarks__message {
+  color: #fef3c7 !important;
+}
+
 html.dark .enterprise-shell .enterprise-profile-menu button {
   color: #e2e8f0 !important;
 }
@@ -1134,8 +1528,14 @@ html.dark .enterprise-shell table tbody tr:hover {
   background-color: rgb(51 65 85 / 0.55);
 }
 
+html.dark .enterprise-shell .divide-gray-100 > :not(:last-child),
 html.dark .enterprise-shell .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
   border-color: #334155 !important;
+}
+
+html.dark .enterprise-shell table tbody.divide-gray-100 > :not(:last-child),
+html.dark .enterprise-shell table tbody.divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(148 163 184 / 0.24) !important;
 }
 
 html.dark .enterprise-shell .hover\:bg-gray-50:hover,

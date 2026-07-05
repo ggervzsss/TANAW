@@ -112,7 +112,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
       />
 
       {!isItResponder && (
-        <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800">
+        <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
           IT personnel handle enterprise responses. Admin can monitor ticket status, attachments, and communication.
         </div>
       )}
@@ -284,7 +284,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
         {ticket && (
           <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-5">
-              <div className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 via-white to-amber-50/60 p-5">
+              <div className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 via-white to-amber-50/60 p-5 dark:border-emerald-300/20 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-mono text-xs font-bold tracking-wide text-emerald-700">{ticket.code}</p>
@@ -307,7 +307,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                 <DetailField label="Camera Node" value={ticket.cameraNode || "Not specified"} />
               </div>
 
-              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
+              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
                     <Paperclip size={16} className="text-emerald-700" />
@@ -322,7 +322,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                         key={attachment.id ?? `${attachment.fileName}-${index}`}
                         type="button"
                         onClick={() => setPreviewAttachment(attachment)}
-                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50"
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-700 dark:bg-[#0f172a] dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10"
                       >
                         <TicketAttachmentImage attachment={attachment} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-slate-200" />
                         <span className="min-w-0">
@@ -339,7 +339,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
             </div>
 
             <div className="space-y-5">
-              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
+              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
                     <ShieldCheck size={16} className="text-emerald-700" />
@@ -355,20 +355,20 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                         type="button"
                         disabled={ticket.status === statusOption || statusMutation.isPending}
                         onClick={() => statusMutation.mutate(statusOption)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 uppercase transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 uppercase transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-200 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                       >
                         {statusOption}
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800">
+                  <p className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
                     Admin supervision can inspect this ticket and communication history. IT personnel handle responses and workflow changes.
                   </p>
                 )}
               </section>
 
-              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
+              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
                 <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
                   <MessageSquare size={16} className="text-emerald-700" />
                   Conversation
@@ -457,7 +457,7 @@ function TicketAttachmentImage({ alt, attachment, className, isFullPreview = fal
 
 function AttachmentImageFallback({ className, icon = "error", isFullPreview, message }: { className: string; icon?: "error" | "loading"; isFullPreview: boolean; message: string }) {
   return (
-    <div className={`${className} flex ${isFullPreview ? "min-h-72" : ""} items-center justify-center border border-dashed border-slate-200 bg-white text-center text-slate-500`}>
+    <div className={`${className} flex ${isFullPreview ? "min-h-72" : ""} items-center justify-center border border-dashed border-slate-200 bg-white text-center text-slate-500 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-300`}>
       <span className="flex max-w-full flex-col items-center gap-2 px-3">
         {icon === "loading" ? <RefreshCw size={isFullPreview ? 28 : 18} className="animate-spin text-emerald-700" /> : <ImageIcon size={isFullPreview ? 30 : 18} className="text-slate-400" />}
         {isFullPreview && <span className="text-sm font-semibold">{message}</span>}
@@ -518,7 +518,7 @@ function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
 function ConversationItem({ authorName, authorRole, createdAt, message }: { authorName: string; authorRole: string; createdAt: string; message: string }) {
   const isEnterprise = authorRole === "enterprise";
   return (
-    <article className={`rounded-2xl border p-3 ${isEnterprise ? "border-emerald-100 bg-emerald-50/70" : "border-blue-100 bg-blue-50/70"}`}>
+    <article className={`rounded-2xl border p-3 ${isEnterprise ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-black text-slate-950">{authorName}</p>
         <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
@@ -532,25 +532,25 @@ function ConversationItem({ authorName, authorRole, createdAt, message }: { auth
 
 function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
   const classes: Record<SupportTicketStatus, string> = {
-    Open: "border-blue-200 bg-blue-50 text-blue-700",
-    "In Review": "border-amber-200 bg-amber-50 text-amber-700",
-    Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    Open: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-300/30 dark:bg-blue-500/15 dark:text-blue-200",
+    "In Review": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
+    Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   };
   return <span className={`rounded-full border px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{status}</span>;
 }
 
 function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
   const classes: Record<SupportTicketPriority, string> = {
-    Urgent: "bg-red-50 text-red-700 ring-red-100",
-    High: "bg-amber-50 text-amber-700 ring-amber-100",
-    Normal: "bg-slate-100 text-slate-700 ring-slate-200",
-    Low: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    Urgent: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
+    High: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
+    Normal: "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-600",
+    Low: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20",
   };
   return <span className={`rounded-full px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ring-1 ${classes[priority]}`}>{priority}</span>;
 }
 
 function CategoryBadge({ category }: { category: SupportTicketCategory }) {
-  return <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap text-emerald-700 uppercase ring-1 ring-emerald-100">{category}</span>;
+  return <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap text-emerald-700 uppercase ring-1 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20">{category}</span>;
 }
 
 function authorRoleLabel(role: string) {

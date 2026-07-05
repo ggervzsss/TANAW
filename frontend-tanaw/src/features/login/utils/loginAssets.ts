@@ -3,3 +3,5 @@ export const CITY_HALL_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/t
 export const SAN_PEDRO_SEAL = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
 
 export const SAN_PEDRO_GATEWAY_IMAGE = "/images/dsc00386.jpg";
+
+export const SAN_PEDRO_GATEWAY_NIGHT_IMAGE = "/images/dsc00386-night.png";

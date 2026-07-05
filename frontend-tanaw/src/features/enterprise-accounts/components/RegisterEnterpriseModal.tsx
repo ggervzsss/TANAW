@@ -251,7 +251,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             required
           />
 
-          <div className="rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.68)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.7)_100%)] p-4 shadow-sm ring-1 ring-white md:col-span-2">
+          <div className="rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.68)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.7)_100%)] p-4 shadow-sm ring-1 ring-white md:col-span-2 dark:border-emerald-300/20 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:ring-white/8">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-bold tracking-wide text-slate-500 uppercase">Map Location</p>
@@ -262,7 +262,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
                 <button
                   type="button"
                   onClick={() => setIsFullMapOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#121c31] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                 >
                   <Maximize2 size={15} />
                   Full Map View
@@ -424,7 +424,7 @@ function FullMapView({
           role="dialog"
           aria-modal="true"
           aria-label="Full map view"
-          className="relative z-1501 flex max-h-[calc(100dvh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[28px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.42)] ring-1 ring-black/5"
+          className="relative z-1501 flex max-h-[calc(100dvh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-[28px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.42)] ring-1 ring-black/5 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.55)] dark:ring-white/8"
           initial={{ opacity: 0, y: 12, scale: 0.985 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.985 }}
@@ -432,7 +432,7 @@ function FullMapView({
           onPointerDown={(event) => event.stopPropagation()}
         >
           <div className="from-tanaw-green to-tanaw-lime h-1.5 bg-linear-to-r via-[#d9b44a]" />
-          <header className="flex flex-wrap items-start justify-between gap-4 border-b border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] px-5 py-4">
+          <header className="flex flex-wrap items-start justify-between gap-4 border-b border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] px-5 py-4 dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)]">
             <div className="min-w-0">
               <p className="text-[10px] font-black tracking-[0.18em] text-emerald-700/80 uppercase">Map Location</p>
               <h3 className="text-tanaw-navy mt-1 text-xl leading-tight font-bold">Full Map View</h3>
@@ -452,7 +452,7 @@ function FullMapView({
               <button
                 type="button"
                 onClick={onClose}
-                className="hover:text-tanaw-green focus:ring-tanaw-green/15 flex h-10 w-10 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 focus:ring-4 focus:outline-none"
+                className="hover:text-tanaw-green focus:ring-tanaw-green/15 flex h-10 w-10 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 focus:ring-4 focus:outline-none dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-[#1d2940] dark:hover:text-emerald-200"
                 aria-label="Close full map view"
               >
                 <X size={18} />
@@ -501,7 +501,7 @@ type LocationStatusPanelProps = {
 
 function LocationStatusPanel({ address, barangay, detectedBarangay, location, locationError, locationNotice }: LocationStatusPanelProps) {
   return (
-    <aside className="rounded-2xl border border-emerald-100 bg-white/86 p-4 text-sm shadow-sm ring-1 ring-white">
+    <aside className="rounded-2xl border border-emerald-100 bg-white/86 p-4 text-sm shadow-sm ring-1 ring-white dark:border-emerald-300/20 dark:bg-[#121c31]/92 dark:ring-white/8">
       <div className="flex items-center gap-2">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
           {locationError ? <AlertTriangle size={17} /> : location ? <CheckCircle2 size={17} /> : <MapPin size={17} />}
@@ -533,7 +533,7 @@ function LocationStatusPanel({ address, barangay, detectedBarangay, location, lo
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-[#0f172a]">
       <p className="text-[10px] font-black tracking-[0.15em] text-slate-500 uppercase">{label}</p>
       <p className="mt-1 line-clamp-2 text-sm font-semibold wrap-break-word text-slate-800">{value}</p>
     </div>
@@ -546,7 +546,7 @@ function BoundaryToggleButton({ showBoundaries, onClick }: { showBoundaries: boo
       type="button"
       onClick={onClick}
       aria-pressed={showBoundaries}
-      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#121c31] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
     >
       <Layers size={15} />
       {showBoundaries ? "Hide Boundaries" : "Show Boundaries"}

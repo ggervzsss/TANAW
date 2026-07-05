@@ -12,10 +12,17 @@ import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { useLogin } from "../hooks/use-login";
 import { loginSchema, type LoginFormValues } from "../schemas/login-schema";
 import { isRememberEnabled, useAuthStore } from "../stores/auth-store";
+import { AuthThemeToggle } from "./AuthThemeToggle";
 
-const cityHallImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
+const cityHallDayImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
+const cityHallNightImage = `${import.meta.env.BASE_URL}images/dsc00386-night.png`;
 
 const citySeal = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
+
+const authBackgroundImageStyle = {
+  "--tanaw-auth-day-image": `url("${cityHallDayImage}")`,
+  "--tanaw-auth-night-image": `url("${cityHallNightImage}")`,
+} as CSSProperties;
 
 type FormErrors = Partial<Record<keyof LoginFormValues, string>>;
 type DialogMode = "forgot" | "support" | null;
@@ -666,7 +673,7 @@ export function LoginPage() {
       className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid h-svh min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
       style={stageGlowStyle}
     >
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={{ backgroundImage: `url("${cityHallImage}")` }} aria-hidden="true" />
+      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
@@ -688,6 +695,7 @@ export function LoginPage() {
           />
         ))}
       </div>
+      <AuthThemeToggle />
 
       <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
         <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
@@ -853,7 +861,7 @@ export function LoginPage() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={activeDialog === "forgot" ? "desktop-forgot-password-title" : "desktop-contact-support-title"}
-                className="my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
+                className="tanaw-auth-dialog my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}

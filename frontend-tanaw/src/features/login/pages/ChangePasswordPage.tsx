@@ -9,9 +9,10 @@ import { useAuthStore } from "@/app/store/authStore";
 import { changePassword } from "@/shared/services/accountManagement";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
+import { AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { logoutService } from "../services";
-import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_SEAL } from "../utils";
+import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
 
 type PasswordValues = {
   currentPassword: string;
@@ -36,6 +37,11 @@ const particles = [
   { left: "15%", top: "84%", size: 2, delay: "5.8s", duration: "16s" },
   { left: "88%", top: "78%", size: 2, delay: "7.1s", duration: "14s" },
 ];
+
+const authBackgroundImageStyle = {
+  "--tanaw-auth-day-image": `url(${SAN_PEDRO_GATEWAY_IMAGE})`,
+  "--tanaw-auth-night-image": `url(${SAN_PEDRO_GATEWAY_NIGHT_IMAGE})`,
+} as CSSProperties;
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -111,7 +117,7 @@ export function ChangePasswordPage() {
       className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
       style={stageGlowStyle}
     >
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={{ backgroundImage: `url(${SAN_PEDRO_GATEWAY_IMAGE})` }} aria-hidden="true" />
+      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
@@ -133,6 +139,7 @@ export function ChangePasswordPage() {
           />
         ))}
       </div>
+      <AuthThemeToggle />
 
       <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">
         <section className="tanaw-auth-hero relative hidden min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white lg:flex xl:pb-14">

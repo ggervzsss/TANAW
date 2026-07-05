@@ -10,9 +10,16 @@ import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { notifySuccess } from "../../toasts/services/toast-service";
 import { changePassword, logout as logoutRequest } from "../api/login";
 import { useAuthStore } from "../stores/auth-store";
+import { AuthThemeToggle } from "./AuthThemeToggle";
 
-const cityHallImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
+const cityHallDayImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
+const cityHallNightImage = `${import.meta.env.BASE_URL}images/dsc00386-night.png`;
 const citySeal = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
+
+const authBackgroundImageStyle = {
+  "--tanaw-auth-day-image": `url("${cityHallDayImage}")`,
+  "--tanaw-auth-night-image": `url("${cityHallNightImage}")`,
+} as CSSProperties;
 
 type PasswordValues = {
   currentPassword: string;
@@ -121,7 +128,7 @@ export function ChangePasswordPage() {
       className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid h-svh min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
       style={stageGlowStyle}
     >
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={{ backgroundImage: `url("${cityHallImage}")` }} aria-hidden="true" />
+      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
@@ -143,6 +150,7 @@ export function ChangePasswordPage() {
           />
         ))}
       </div>
+      <AuthThemeToggle />
 
       <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
         <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>

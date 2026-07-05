@@ -8,7 +8,7 @@ import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../.
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
-import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, syncDesktopReportSubmission, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
@@ -29,9 +29,10 @@ type DotPreviewState = {
 const DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics";
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
+  const currentReportingPeriod = useMemo(() => getCurrentReportingPeriod(), []);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
-  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
-  const [period, setPeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
+  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
+  const [period, setPeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
 
@@ -50,24 +51,44 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const demographicDraftStorageKey = useMemo(() => getDemographicDraftStorageKey(activeReportId, period), [activeReportId, period]);
   const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
 
-  const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
+  const selectedPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, period)) ?? null;
+  const displayedMetrics = activeReport
+    ? metricsFromReport(activeReport)
+    : isSameReportingMonth(period, livePeriod)
+      ? liveMetrics
+      : selectedPeriodCounts
+        ? metricsFromPendingCounts(selectedPeriodCounts)
+        : liveMetrics;
+  const currentPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, currentReportingPeriod)) ?? null;
+  const currentLedgerMetrics =
+    isSameReportingMonth(livePeriod, currentReportingPeriod)
+      ? liveMetrics
+      : currentPeriodCounts
+        ? metricsFromPendingCounts(currentPeriodCounts)
+        : EMPTY_METRICS;
+  const currentLedgerDemo =
+    !activeReport && isSameReportingMonth(period, currentReportingPeriod)
+      ? demo
+      : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, currentReportingPeriod)) ?? emptyDemo();
+  const currentLedgerNotes = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "";
 
   const blockingMetricsError = activeReport ? null : metricsError;
   const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
     checkDuplicatePeriod: !(activeReport && isReadOnly),
+    checkReportingPeriod: !isReadOnly,
   });
   const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
   const ledgerRows = useMemo(
     () =>
       buildLedgerRows({
-        currentDemo: !activeReport ? demo : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, livePeriod)) ?? emptyDemo(),
-        currentMetrics: liveMetrics,
-        currentNotes: !activeReport ? notes : "",
-        currentPeriod: livePeriod,
+        currentDemo: currentLedgerDemo,
+        currentMetrics: currentLedgerMetrics,
+        currentNotes: currentLedgerNotes,
+        currentPeriod: currentReportingPeriod,
         pendingCounts: pendingPeriodCounts,
         reportsHistory,
       }),
-    [activeReport, demo, liveMetrics, livePeriod, notes, pendingPeriodCounts, reportsHistory],
+    [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, currentReportingPeriod, pendingPeriodCounts, reportsHistory],
   );
   const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
 
@@ -79,17 +100,17 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     try {
       const status = await getMlServiceStatus();
       const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      const summaryPeriod = summary.period || getCurrentReportingPeriod();
+      const summaryPeriod = summary.period || currentReportingPeriod;
       setLiveMetrics(metricsFromSummary(summary));
       setLivePeriod(summaryPeriod);
       if (!activeReportId) {
-        setPeriod(summaryPeriod);
+        setPeriod((currentPeriod) => (isSameReportingMonth(currentPeriod, summaryPeriod) ? summaryPeriod : currentPeriod));
       }
       setMetricsError(null);
     } catch (error) {
       setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
     }
-  }, [activeReportId]);
+  }, [activeReportId, currentReportingPeriod]);
 
   const refreshLocalReports = useCallback(async () => {
     try {
@@ -155,21 +176,22 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const resetDraftWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
-    setPeriod(nextPeriod ?? livePeriod);
+    setPeriod(nextPeriod ?? currentReportingPeriod);
     setNotes("");
     setDemo(emptyDemo());
     setPreviewReport(null);
   };
 
   const handleDraftPeriodSelect = async (nextPeriod: string) => {
-    if (!activeReportId && nextPeriod === period) return;
+    const hasPreparedCounts = pendingPeriodCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod));
+    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && (isSameReportingMonth(livePeriod, nextPeriod) || !hasPreparedCounts)) return;
 
-    if (nextPeriod === livePeriod) {
-      resetDraftWorkspace(livePeriod);
+    if (isSameReportingMonth(nextPeriod, currentReportingPeriod) && !hasPreparedCounts) {
+      resetDraftWorkspace(currentReportingPeriod);
       return;
     }
 
-    if (!pendingPeriodCounts.some((counts) => counts.period === nextPeriod)) {
+    if (!hasPreparedCounts) {
       setActiveReportId(null);
       setPeriod(nextPeriod);
       setNotes("");
@@ -251,6 +273,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setIsSubmitting(true);
     const submitValidationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
       checkDuplicatePeriod: true,
+      checkReportingPeriod: true,
     });
     if (submitValidationError) {
       notifyError(submitValidationError);
@@ -306,6 +329,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     try {
       const status = await getMlServiceStatus();
       submission = await recordLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, {
+        metrics: {
+          entries: reportMetrics.entries,
+          exits: reportMetrics.exits,
+          peakOccupancy: reportMetrics.peak,
+          uniqueCount: reportMetrics.unique,
+        },
         notes,
         period,
         reportId,
@@ -316,6 +345,9 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setIsSubmitting(false);
       return;
     }
+    const cloudSyncError = await syncSubmittedReportToCloud(reportId);
+    const submittedSyncStatus = cloudSyncError ? submission.sync_status : "synced";
+    const restoredWorkspaceMetrics = !cloudSyncError && !activeReportId ? await prepareNextWorkspaceMetrics() : null;
 
     const submittedMetrics: Metrics = {
       entries: submission.entries,
@@ -339,7 +371,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
               demo,
               notes,
               submittedAt: submission.submitted_at,
-              syncStatus: submission.sync_status,
+              syncStatus: submittedSyncStatus,
               remarks: null,
               auditTrail: nextAuditTrail,
             };
@@ -360,7 +392,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         demo,
         notes,
         submittedAt: submission.submitted_at,
-        syncStatus: submission.sync_status,
+        syncStatus: submittedSyncStatus,
         auditTrail: nextAuditTrail,
         remarks: null,
       };
@@ -370,9 +402,18 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     removeStoredDemographicDraft(demographicDraftStorageKey);
     setShowConfirm(false);
     setIsSubmitting(false);
-    void refreshLocalMetrics();
+    if (restoredWorkspaceMetrics) {
+      setLiveMetrics(metricsFromSummary(restoredWorkspaceMetrics));
+      setLivePeriod(restoredWorkspaceMetrics.period || currentReportingPeriod);
+    } else {
+      void refreshLocalMetrics();
+    }
     void refreshLocalReports();
-    window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
+    void refreshPendingPeriods();
+    if (cloudSyncError) {
+      notifyError(`Report saved locally, but cloud sync is still pending: ${cloudSyncError}`);
+      window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
+    }
     resetDraftWorkspace();
   };
 
@@ -437,8 +478,12 @@ function validateReportDraft(
   period: string,
   reports: ReportRecord[],
   activeReportId: string | null,
-  options: { checkDuplicatePeriod: boolean },
+  options: { checkDuplicatePeriod: boolean; checkReportingPeriod: boolean },
 ) {
+  if (options.checkReportingPeriod) {
+    const periodSubmissionError = getReportingPeriodSubmissionError(period);
+    if (periodSubmissionError) return periodSubmissionError;
+  }
   const allocationError = validateDemographicAllocation(metrics, demo);
   if (allocationError) return allocationError;
   if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
@@ -466,6 +511,15 @@ function metricsFromSummary(summary: LocalMetricsSummary): Metrics {
     exits: summary.exits,
     peak: summary.peak_occupancy,
     unique: summary.unique_count,
+  };
+}
+
+function metricsFromPendingCounts(counts: BackendMockPreparationCounts): Metrics {
+  return {
+    entries: counts.entries,
+    exits: counts.exits,
+    peak: counts.peakOccupancy,
+    unique: counts.uniqueCount,
   };
 }
 
@@ -528,7 +582,7 @@ function buildLedgerRows({
   pendingCounts: BackendMockPreparationCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
-  const reportedPeriods = new Set(reportsHistory.map((report) => report.period ?? report.date));
+  const reportedPeriods = new Set(reportsHistory.map((report) => reportingMonthKey(report.period ?? report.date)));
   const pendingPeriods = new Set<string>();
   const rows: ReportLedgerRow[] = [
     {
@@ -553,8 +607,9 @@ function buildLedgerRows({
   ];
 
   for (const counts of pendingCounts) {
-    if (counts.period === currentPeriod || reportedPeriods.has(counts.period) || pendingPeriods.has(counts.period)) continue;
-    pendingPeriods.add(counts.period);
+    const countsPeriodKey = reportingMonthKey(counts.period);
+    if (isSameReportingMonth(counts.period, currentPeriod) || reportedPeriods.has(countsPeriodKey) || pendingPeriods.has(countsPeriodKey)) continue;
+    pendingPeriods.add(countsPeriodKey);
     rows.push({
       key: draftLedgerKey(counts.period),
       kind: "pending",
@@ -595,7 +650,7 @@ function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRe
 }
 
 function draftLedgerKey(period: string) {
-  return `draft:${period}`;
+  return `draft:${reportingMonthKey(period)}`;
 }
 
 function historyLedgerKey(reportId: string) {
@@ -611,15 +666,16 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
+  const metrics = metricsFromLocalSubmission(submission);
 
   return {
     id: submission.report_id,
     date: submission.period,
     status: payloadStatus,
-    entries: submission.entries,
-    exits: submission.exits,
-    peak: submission.peak_occupancy,
-    unique: submission.unique_count,
+    entries: metrics.entries,
+    exits: metrics.exits,
+    peak: metrics.peak,
+    unique: metrics.unique,
     period: periodFromValue(submission.period),
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
@@ -636,9 +692,31 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
   };
 }
 
+function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+  const payloadMetrics = submission.payload.metrics;
+  if (payloadMetrics && typeof payloadMetrics === "object") {
+    const metrics = payloadMetrics as Record<string, unknown>;
+    const entries = nonNegativeInteger(metrics.entries);
+    const exits = nonNegativeInteger(metrics.exits);
+    const peak = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
+    const unique = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
+    if (entries !== null && exits !== null && peak !== null && unique !== null) {
+      return { entries, exits: Math.min(exits, entries), peak, unique };
+    }
+  }
+
+  return {
+    entries: submission.entries,
+    exits: submission.exits,
+    peak: submission.peak_occupancy,
+    unique: submission.unique_count,
+  };
+}
+
 function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord {
   const peak = typeof report.metrics.peak === "number" ? report.metrics.peak : Number(report.metrics.peak) || 0;
-  const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : "Submitted";
+  const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
+  const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
   return {
     id: report.code,
     date: report.period,
@@ -663,6 +741,24 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
   };
 }
 
+async function syncSubmittedReportToCloud(reportId: string) {
+  try {
+    await syncDesktopReportSubmission(reportId);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "The backend could not be reached.";
+  }
+}
+
+async function prepareNextWorkspaceMetrics() {
+  try {
+    const prepared = await prepareDesktopMockCounts();
+    return isPreparedMetrics(prepared) ? prepared : null;
+  } catch {
+    return null;
+  }
+}
+
 function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRecord[]) {
   const reportsById = new Map<string, ReportRecord>();
 
@@ -677,6 +773,15 @@ function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRe
       continue;
     }
 
+    if (isPendingLocalReport(localReport)) {
+      reportsById.set(report.id, {
+        ...report,
+        ...localReport,
+        remarks: report.remarks ?? localReport.remarks,
+      });
+      continue;
+    }
+
     reportsById.set(report.id, {
       ...localReport,
       ...report,
@@ -686,6 +791,10 @@ function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRe
   }
 
   return sortReports(Array.from(reportsById.values()));
+}
+
+function isPendingLocalReport(report: ReportRecord) {
+  return Boolean(report.syncStatus && report.syncStatus !== "synced");
 }
 
 function upsertReport(current: ReportRecord[], report: ReportRecord) {
@@ -778,6 +887,152 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value : typeof value === "number" && Number.isInteger(value) && value >= 0 ? String(value) : "";
 }
 
-function getCurrentReportingPeriod() {
-  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date());
+function nonNegativeInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
+  return null;
 }
+
+function getCurrentReportingPeriod() {
+  const now = new Date();
+  return reportingPeriodLabel(now);
+}
+
+function reportingPeriodLabel(value: Date) {
+  const reportingValue = reportingDate(value);
+  const month = monthName(reportingValue.monthIndex, "short");
+  const lastDay = lastDayOfMonth(reportingValue.year, reportingValue.monthIndex);
+  return `${month} 1 - ${month} ${lastDay}, ${reportingValue.year}`;
+}
+
+function isSameReportingMonth(first: string, second: string) {
+  return reportingMonthKey(first) === reportingMonthKey(second);
+}
+
+function getReportingPeriodSubmissionError(period: string, now = new Date()) {
+  const periodEnd = reportingPeriodEndDate(period);
+  if (!periodEnd) {
+    return "Reporting period must include a recognizable month and year before submission.";
+  }
+
+  const opensOn = addCalendarDays(periodEnd, 1);
+  if (calendarDateKey(reportingDate(now)) >= calendarDateKey(opensOn)) return null;
+
+  return `Submission opens on ${formatCalendarDate(opensOn)} after the ${monthName(periodEnd.monthIndex)} ${periodEnd.year} reporting period closes.`;
+}
+
+function reportingMonthKey(value: string) {
+  const normalizedValue = value.trim();
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
+  if (rangeMatch) {
+    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
+  }
+
+  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  if (monthYearMatch) {
+    return monthKey(monthYearMatch[1], monthYearMatch[2]) ?? normalizedValue.toLowerCase();
+  }
+
+  return normalizedValue.toLowerCase();
+}
+
+function reportingPeriodEndDate(value: string): CalendarDate | null {
+  const normalizedValue = value.trim();
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$/.exec(normalizedValue);
+  if (rangeMatch) {
+    const monthIndex = monthIndexFromLabel(rangeMatch[2] || rangeMatch[1]);
+    const day = Number(rangeMatch[3]);
+    const year = Number(rangeMatch[4]);
+    if (monthIndex === null || !isValidCalendarDate(year, monthIndex, day)) return null;
+    return { day, monthIndex, year };
+  }
+
+  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  if (monthYearMatch) {
+    const monthIndex = monthIndexFromLabel(monthYearMatch[1]);
+    const year = Number(monthYearMatch[2]);
+    if (monthIndex === null || !Number.isInteger(year)) return null;
+    return { day: lastDayOfMonth(year, monthIndex), monthIndex, year };
+  }
+
+  return null;
+}
+
+function monthKey(monthLabel: string, yearLabel: string) {
+  const monthIndex = monthIndexFromLabel(monthLabel);
+  const year = Number(yearLabel);
+  if (monthIndex === null || !Number.isInteger(year)) return null;
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+}
+
+type CalendarDate = {
+  day: number;
+  monthIndex: number;
+  year: number;
+};
+
+function monthIndexFromLabel(monthLabel: string): number | null {
+  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  return typeof monthIndex === "number" ? monthIndex : null;
+}
+
+function isValidCalendarDate(year: number, monthIndex: number, day: number) {
+  return Number.isInteger(year) && Number.isInteger(day) && day >= 1 && day <= lastDayOfMonth(year, monthIndex);
+}
+
+function lastDayOfMonth(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+function addCalendarDays(value: CalendarDate, days: number): CalendarDate {
+  const date = new Date(Date.UTC(value.year, value.monthIndex, value.day + days));
+  return {
+    day: date.getUTCDate(),
+    monthIndex: date.getUTCMonth(),
+    year: date.getUTCFullYear(),
+  };
+}
+
+function reportingDate(value: Date): CalendarDate {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: REPORTING_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(value);
+  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return {
+    day: partValue("day"),
+    monthIndex: partValue("month") - 1,
+    year: partValue("year"),
+  };
+}
+
+function calendarDateKey(value: CalendarDate) {
+  return value.year * 10_000 + (value.monthIndex + 1) * 100 + value.day;
+}
+
+function formatCalendarDate(value: CalendarDate) {
+  return `${monthName(value.monthIndex, "short")} ${value.day}, ${value.year}`;
+}
+
+function monthName(monthIndex: number, format: "short" | "long" = "long") {
+  return new Intl.DateTimeFormat("en-US", { month: format, timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
+}
+
+const REPORTING_TIME_ZONE = "Asia/Manila";
+
+const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};

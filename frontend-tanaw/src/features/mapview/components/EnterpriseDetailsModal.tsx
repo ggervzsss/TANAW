@@ -13,9 +13,9 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
   return (
     <ModalFrame title={enterprise.name} eyebrow="Enterprise Details" onClose={onClose} maxWidthClassName="max-w-5xl">
       <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
-        <section className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm">
+        <section className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-500/10">
           <div className="flex items-start gap-3">
-            <span className="text-tanaw-green flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-emerald-100">
+            <span className="text-tanaw-green flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-emerald-100 dark:bg-[#172033] dark:text-emerald-200 dark:ring-emerald-300/20">
               <Building2 size={22} />
             </span>
             <div className="min-w-0">
@@ -54,7 +54,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
 
 function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-white bg-white p-4 shadow-sm ring-1 ring-emerald-100/70 ${className}`}>
+    <div className={`rounded-2xl border border-white bg-white p-4 shadow-sm ring-1 ring-emerald-100/70 dark:border-slate-700 dark:bg-[#121c31] dark:ring-emerald-300/20 ${className}`}>
       <div className="text-tanaw-green flex items-center gap-2">
         {icon}
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>
@@ -66,7 +66,7 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
 
 function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white ${className}`}>
+    <div className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}>
       <span className="text-tanaw-green mt-0.5">{icon}</span>
       <div className="min-w-0">
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>
@@ -78,9 +78,9 @@ function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: Rea
 
 function StatusBadge({ status }: { status: EnterpriseStatus }) {
   const classes: Record<EnterpriseStatus, string> = {
-    Normal: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    Warning: "border-amber-200 bg-amber-50 text-amber-700",
-    Critical: "border-red-200 bg-red-50 text-red-700",
+    Normal: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
+    Warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
+    Critical: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
   };
 
   return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
@@ -88,11 +88,11 @@ function StatusBadge({ status }: { status: EnterpriseStatus }) {
 
 function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
   const classes: Record<GatewayStatus, string> = {
-    Connected: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    "Sync Delayed": "border-amber-200 bg-amber-50 text-amber-700",
-    Offline: "border-red-200 bg-red-50 text-red-700",
-    "Not Linked": "border-slate-200 bg-slate-100 text-slate-600",
-    Closed: "border-slate-200 bg-slate-100 text-slate-600",
+    Connected: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
+    "Sync Delayed": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
+    Offline: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
+    "Not Linked": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
+    Closed: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
   };
   const label: Record<GatewayStatus, string> = {
     Connected: "Online",

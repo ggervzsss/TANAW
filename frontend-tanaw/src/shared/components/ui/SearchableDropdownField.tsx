@@ -136,12 +136,12 @@ export function SearchableDropdownField({ name, label, options, value, onChange,
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         className={[
-          "focus:border-tanaw-green focus:ring-tanaw-green/15 flex w-full items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-left text-sm transition outline-none focus:ring-4",
+          "focus:border-tanaw-green focus:ring-tanaw-green/15 flex w-full items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-left text-sm transition outline-none focus:ring-4 dark:bg-[#0f172a]",
           error ? "border-red-300" : "border-slate-300",
         ].join(" ")}
       >
-        <span className={selectedOption ? "font-semibold text-gray-900" : "text-gray-400"}>{selectedOption?.[1] ?? `Select ${label.toLowerCase()}`}</span>
-        <ChevronDown size={16} className={`shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <span className={selectedOption ? "font-semibold text-gray-900 dark:text-slate-100" : "text-gray-400 dark:text-slate-500"}>{selectedOption?.[1] ?? `Select ${label.toLowerCase()}`}</span>
+        <ChevronDown size={16} className={`shrink-0 text-gray-400 transition-transform dark:text-slate-500 ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {error && <p className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>}
 
@@ -162,10 +162,10 @@ export function SearchableDropdownField({ name, label, options, value, onChange,
               exit={{ opacity: 0, y: -6, scale: 0.98 }}
               transition={{ duration: 0.14, ease: "easeOut" }}
               style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width, maxHeight: menuStyle.maxHeight }}
-              className="fixed z-1401 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+              className="fixed z-1401 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-slate-700 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.45)]"
               onMouseDown={(event) => event.stopPropagation()}
             >
-              <div className="shrink-0 border-b border-gray-100 p-2">
+              <div className="shrink-0 border-b border-gray-100 p-2 dark:border-slate-700">
                 <label className="relative block">
                   <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
                   <input
@@ -178,7 +178,7 @@ export function SearchableDropdownField({ name, label, options, value, onChange,
                     placeholder={`Search ${label.toLowerCase()}`}
                     role="combobox"
                     aria-expanded={isOpen}
-                    className="focus:ring-tgreen-dark w-full rounded-md border border-gray-200 bg-gray-50 py-2 pr-3 pl-9 text-sm outline-none focus:ring-1"
+                    className="focus:ring-tgreen-dark w-full rounded-md border border-gray-200 bg-gray-50 py-2 pr-3 pl-9 text-sm outline-none focus:ring-1 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
                 </label>
               </div>
@@ -196,7 +196,11 @@ export function SearchableDropdownField({ name, label, options, value, onChange,
                       role="option"
                       aria-selected={selected}
                       className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
-                        active ? "bg-emerald-50 font-semibold text-emerald-800" : selected ? "font-semibold text-emerald-800" : "text-gray-700 hover:bg-gray-50"
+                        active
+                          ? "bg-emerald-50 font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200"
+                          : selected
+                            ? "font-semibold text-emerald-800 dark:text-emerald-200"
+                            : "text-gray-700 hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-800"
                       }`}
                     >
                       <span>{optionLabel}</span>

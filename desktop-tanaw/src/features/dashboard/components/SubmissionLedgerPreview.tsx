@@ -69,13 +69,13 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
           ) : (
             <div
               key={`empty-preview-${currentPage}-${index}`}
-              className="flex min-h-38 flex-col justify-between rounded-lg border border-dashed border-gray-200 bg-gray-50/80 p-4 text-left dark:border-slate-700 dark:bg-slate-900/45"
+              className="flex min-h-38 flex-col justify-between rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-left dark:border-slate-700 dark:bg-slate-900/45"
             >
               <div>
-                <p className="font-mono text-xs font-bold text-gray-300 dark:text-slate-600">EMPTY SLOT</p>
-                <h4 className="mt-2 text-base font-bold text-gray-400 dark:text-slate-400">No report yet</h4>
+                <p className="font-mono text-xs font-bold text-slate-400 dark:text-slate-600">EMPTY SLOT</p>
+                <h4 className="mt-2 text-base font-bold text-slate-500 dark:text-slate-300">No report yet</h4>
               </div>
-              <p className="text-xs font-medium text-gray-400 dark:text-slate-500">Submitted ledger records will appear here when available.</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Submitted ledger records will appear here when available.</p>
             </div>
           ),
         )}

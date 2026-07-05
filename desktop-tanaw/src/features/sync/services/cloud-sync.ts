@@ -132,12 +132,99 @@ export async function prepareDesktopMockCounts(period?: string) {
 }
 
 function selectMockPreparationCounts(preparation: BackendMockPreparation, period?: string) {
-  if (!period) return preparation.counts;
+  if (!period) {
+    const currentPeriod = currentReportingPeriodLabel();
+    return preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, currentPeriod)) ?? preparation.counts;
+  }
   return (
-    preparation.pendingCounts?.find((counts) => counts.period === period) ??
-    (preparation.counts?.period === period ? preparation.counts : null)
+    preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, period)) ??
+    (preparation.counts && isSameReportingMonth(preparation.counts.period, period) ? preparation.counts : null)
   );
 }
+
+function currentReportingPeriodLabel() {
+  const now = reportingDate(new Date());
+  const month = monthName(now.monthIndex);
+  const lastDay = lastDayOfMonth(now.year, now.monthIndex);
+  return `${month} 1 - ${month} ${lastDay}, ${now.year}`;
+}
+
+function isSameReportingMonth(first: string, second: string) {
+  return reportingMonthKey(first) === reportingMonthKey(second);
+}
+
+function reportingMonthKey(value: string) {
+  const normalizedValue = value.trim();
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
+  if (rangeMatch) {
+    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
+  }
+
+  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  if (monthYearMatch) {
+    return monthKey(monthYearMatch[1], monthYearMatch[2]) ?? normalizedValue.toLowerCase();
+  }
+
+  return normalizedValue.toLowerCase();
+}
+
+function monthKey(monthLabel: string, yearLabel: string) {
+  const monthIndex = monthIndexFromLabel(monthLabel);
+  const year = Number(yearLabel);
+  if (monthIndex === null || !Number.isInteger(year)) return null;
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+}
+
+type CalendarDate = {
+  day: number;
+  monthIndex: number;
+  year: number;
+};
+
+function reportingDate(value: Date): CalendarDate {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: REPORTING_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(value);
+  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return {
+    day: partValue("day"),
+    monthIndex: partValue("month") - 1,
+    year: partValue("year"),
+  };
+}
+
+function monthIndexFromLabel(monthLabel: string): number | null {
+  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  return typeof monthIndex === "number" ? monthIndex : null;
+}
+
+function lastDayOfMonth(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+function monthName(monthIndex: number) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
+}
+
+const REPORTING_TIME_ZONE = "Asia/Manila";
+
+const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
 
 export async function syncDesktopTelemetry() {
   const serviceStatus = await getMlServiceStatus();
@@ -198,15 +285,27 @@ export async function syncDesktopReportSubmissions(limit = 100) {
   return syncedCount;
 }
 
+export async function syncDesktopReportSubmission(reportId: string) {
+  const serviceStatus = await getMlServiceStatus();
+  const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+  const submission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId && item.sync_status !== "synced");
+  if (!submission) return 0;
+
+  await syncReportSubmission(baseUrl, submission);
+  await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
+  return 1;
+}
+
 async function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
+  const metrics = reportMetricsFromSubmission(submission);
   await staffApi.post("/operational/desktop/report-submissions", {
     reportId: submission.report_id,
     period: submission.period,
     submittedAt: submission.submitted_at,
-    entries: submission.entries,
-    exits: submission.exits,
-    peakOccupancy: submission.peak_occupancy,
-    uniqueCount: submission.unique_count,
+    entries: metrics.entries,
+    exits: metrics.exits,
+    peakOccupancy: metrics.peakOccupancy,
+    uniqueCount: metrics.uniqueCount,
     notes: submission.notes,
     syncStatus: submission.sync_status,
     sourceKind: sourceKindFromPayload(submission),
@@ -220,6 +319,38 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
     },
   });
   await markLocalReportSynced(baseUrl, submission.report_id);
+}
+
+function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {
+  const payloadMetrics = submission.payload.metrics;
+  if (payloadMetrics && typeof payloadMetrics === "object") {
+    const metrics = payloadMetrics as Record<string, unknown>;
+    const entries = nonNegativeInteger(metrics.entries);
+    const exits = nonNegativeInteger(metrics.exits);
+    const peakOccupancy = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
+    const uniqueCount = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
+    if (entries !== null && exits !== null && peakOccupancy !== null && uniqueCount !== null) {
+      return {
+        entries,
+        exits: Math.min(exits, entries),
+        peakOccupancy,
+        uniqueCount,
+      };
+    }
+  }
+
+  return {
+    entries: submission.entries,
+    exits: submission.exits,
+    peakOccupancy: submission.peak_occupancy,
+    uniqueCount: submission.unique_count,
+  };
+}
+
+function nonNegativeInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
+  return null;
 }
 
 async function purgeFinalizedLocalReportRawData(baseUrl: string) {

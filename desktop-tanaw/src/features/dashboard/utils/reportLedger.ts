@@ -6,20 +6,42 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
+  const metrics = metricsFromLocalSubmission(submission);
 
   return {
     id: submission.report_id,
     date: submission.period,
     status: payloadStatus,
-    entries: submission.entries,
-    exits: submission.exits,
-    peak: submission.peak_occupancy,
-    unique: submission.unique_count,
+    entries: metrics.entries,
+    exits: metrics.exits,
+    peak: metrics.peak,
+    unique: metrics.unique,
     period: periodFromValue(submission.period),
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
     submittedAt: submission.submitted_at,
     syncStatus: submission.sync_status,
+  };
+}
+
+function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+  const payloadMetrics = submission.payload.metrics;
+  if (payloadMetrics && typeof payloadMetrics === "object") {
+    const metrics = payloadMetrics as Record<string, unknown>;
+    const entries = nonNegativeInteger(metrics.entries);
+    const exits = nonNegativeInteger(metrics.exits);
+    const peak = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
+    const unique = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
+    if (entries !== null && exits !== null && peak !== null && unique !== null) {
+      return { entries, exits: Math.min(exits, entries), peak, unique };
+    }
+  }
+
+  return {
+    entries: submission.entries,
+    exits: submission.exits,
+    peak: submission.peak_occupancy,
+    unique: submission.unique_count,
   };
 }
 
@@ -76,6 +98,12 @@ function isReportStatus(value: string) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : typeof value === "number" && Number.isInteger(value) && value >= 0 ? String(value) : "";
+}
+
+function nonNegativeInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
+  return null;
 }
 
 function reportTimestamp(report: ReportRecord) {

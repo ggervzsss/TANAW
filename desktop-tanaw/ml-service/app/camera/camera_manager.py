@@ -592,6 +592,7 @@ class CameraProcessingManager:
         period: str,
         notes: str | None = None,
         payload: dict | None = None,
+        metrics: dict | None = None,
         source_kind: str | None = None,
         mock_run_id: str | None = None,
     ) -> dict:
@@ -600,6 +601,7 @@ class CameraProcessingManager:
             period=period,
             notes=notes,
             payload=payload,
+            metrics=metrics,
             source_kind=source_kind,
             mock_run_id=mock_run_id,
         )

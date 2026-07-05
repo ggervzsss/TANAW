@@ -153,7 +153,11 @@ def record_local_report_submission(payload: ReportSubmissionRequest) -> ReportSu
     try:
         return ReportSubmissionResponse(
             **manager.record_report_submission(
-                payload.report_id, payload.period, payload.notes, payload.payload
+                payload.report_id,
+                payload.period,
+                payload.notes,
+                payload.payload,
+                metrics=payload.metrics.model_dump() if payload.metrics else None,
             )
         )
     except ValueError as exc:

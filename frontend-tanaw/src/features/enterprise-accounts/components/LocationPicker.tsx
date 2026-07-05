@@ -5,17 +5,20 @@ import {
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
   fitMapToSanPedroBounds,
+  getBaseBoundaryStyle,
   getBarangayPointResolution,
   getBarangayLabel,
-  getGeoJsonColor,
+  getCurrentLeafletMapTheme,
   isBoundaryPolygonFeature,
   isPointInsideSanPedro,
+  mountLeafletThemeLayer,
   normalizeGeoJson,
   sanPedroFallbackCenter,
   sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
   type BarangayPointResolution,
   type GeoJsonFeatureCollection,
+  type LeafletMapTheme,
 } from "@/features/mapview/utils";
 import type { LocationDraft } from "../types";
 
@@ -54,6 +57,7 @@ export function LocationPicker({
   const [boundary, setBoundary] = useState<GeoJsonFeatureCollection | null>(null);
   const [isBoundaryLoading, setIsBoundaryLoading] = useState(true);
   const [isBoundaryError, setIsBoundaryError] = useState(false);
+  const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
 
   useEffect(() => {
     latestLocationRef.current = location;
@@ -159,10 +163,7 @@ export function LocationPicker({
       boundaryPane.style.zIndex = "410";
     }
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    }).addTo(map);
+    const cleanupTileLayer = mountLeafletThemeLayer(map, setMapTheme);
     L.control.zoom({ position: "bottomright" }).addTo(map);
     map.on("click", (event) => {
       selectLocationRef.current(event.latlng.lat, event.latlng.lng, markerRef.current ? "adjusted" : "manual");
@@ -176,6 +177,7 @@ export function LocationPicker({
 
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
+      cleanupTileLayer();
       markerRef.current?.remove();
       markerRef.current = null;
       boundaryLayerRef.current?.remove();
@@ -213,15 +215,7 @@ export function LocationPicker({
 
     const boundaryStyle: GeoJSONOptions["style"] = (geoFeature) => {
       const name = getBarangayLabel(geoFeature);
-      return {
-        color: "#2a3063",
-        fillColor: getGeoJsonColor(name),
-        fillOpacity: 0.34,
-        opacity: 0.78,
-        pane: "locationBoundaryPane",
-        weight: 1,
-        className: "tanaw-location-boundary-path outline-none",
-      };
+      return getBaseBoundaryStyle(name, mapTheme, "locationBoundaryPane", "location");
     };
 
     const onEachFeature: GeoJSONOptions["onEachFeature"] = (geoFeature, layer: Layer) => {
@@ -249,7 +243,7 @@ export function LocationPicker({
     }).addTo(map);
 
     fitMapToSanPedroBounds(map, boundaryLayerRef.current);
-  }, [boundary, showBoundaries]);
+  }, [boundary, mapTheme, showBoundaries]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -280,9 +274,9 @@ export function LocationPicker({
   }, [location]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white">
+    <div className="h-fit self-start overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white dark:border-emerald-300/20 dark:bg-slate-900 dark:ring-white/8">
       <div id={mapId} className={`${mapHeightClassName} w-full`} />
-      <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 dark:border-slate-700 dark:bg-[#121c31] dark:text-slate-300">
         <MapPin size={14} className="text-tgreen-dark shrink-0" />
         <span className="truncate">{getFooterText(location, isResolvingAddress, isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
       </div>

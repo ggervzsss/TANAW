@@ -397,13 +397,25 @@ export async function recordOccupancyCorrection(
 
 export async function recordLocalReportSubmission(
   baseUrl: string,
-  payload: { reportId: string; period: string; notes: string; reportPayload: Record<string, unknown> },
+  payload: {
+    metrics: { entries: number; exits: number; peakOccupancy: number; uniqueCount: number };
+    notes: string;
+    period: string;
+    reportId: string;
+    reportPayload: Record<string, unknown>;
+  },
 ): Promise<LocalReportSubmission> {
   return requestJson<LocalReportSubmission>(
     `${baseUrl}/reports/local-submit`,
     {
       method: "POST",
       body: JSON.stringify({
+        metrics: {
+          entries: payload.metrics.entries,
+          exits: payload.metrics.exits,
+          peak_occupancy: payload.metrics.peakOccupancy,
+          unique_count: payload.metrics.uniqueCount,
+        },
         notes: payload.notes || null,
         payload: payload.reportPayload,
         period: payload.period,

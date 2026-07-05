@@ -17,11 +17,11 @@ export function ContactNumberField({ name, label, value, onChange, error, requir
       <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-slate-500 uppercase">{label}</span>
       <div
         className={[
-          "focus-within:border-tanaw-green focus-within:ring-tanaw-green/15 flex w-full overflow-hidden rounded-xl border bg-white transition focus-within:ring-4",
+          "focus-within:border-tanaw-green focus-within:ring-tanaw-green/15 flex w-full overflow-hidden rounded-xl border bg-white transition focus-within:ring-4 dark:bg-[#0f172a]",
           error ? "border-red-300" : "border-slate-300",
         ].join(" ")}
       >
-        <span className="flex items-center border-r border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700">+63</span>
+        <span className="flex items-center border-r border-slate-200 bg-slate-50 px-4 text-sm font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">+63</span>
         <input
           name={`${name}Local`}
           type="tel"
@@ -35,7 +35,7 @@ export function ContactNumberField({ name, label, value, onChange, error, requir
             onChange(toPhilippineLocalDigits(event.clipboardData.getData("text")));
           }}
           placeholder="9171234567"
-          className="min-w-0 flex-1 px-4 py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+          className="min-w-0 flex-1 px-4 py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
       </div>
       <input type="hidden" name={name} value={normalizedValue} />

@@ -50,7 +50,7 @@ export function ReportDraftPanel({
       className={`h-fit rounded-sm border-t-4 p-6 shadow-md transition-colors lg:col-span-1 ${isReadOnly ? "border-t-gray-400" : activeReport?.status === "Returned for Revision" ? "border-t-[#ffd200]" : "border-t-[#065f46]"}`}
     >
       <ReportDraftHeader activeReport={activeReport} activeReportId={activeReportId} isReadOnly={isReadOnly} />
-      <ReportDraftAlerts activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} />
+      <ReportDraftAlerts activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} />
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodField
