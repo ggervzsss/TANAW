@@ -93,10 +93,10 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   }, [role]);
 
   return (
-    <section className="text-charcoal-800 flex h-screen w-full overflow-hidden bg-[#f8f9fa] font-['Bai_Jamjuree'] max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible">
+    <section className="text-charcoal-800 flex h-screen w-full overflow-hidden bg-[#f8f9fa] font-['Bai_Jamjuree'] transition-colors duration-200 max-[920px]:h-auto max-[920px]:min-h-screen max-[920px]:flex-col max-[920px]:overflow-visible dark:bg-[#0b1120] dark:text-slate-100">
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <PortalTopbar role={role} showDevLog={isDevLogUnlocked} />
-        <main ref={mainRef} className="it-portal-main flex-1 overflow-y-auto bg-[#f8f9fa] px-8 py-8 text-[15px] max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5">
+        <main ref={mainRef} className="it-portal-main flex-1 overflow-y-auto bg-[#f8f9fa] px-8 py-8 text-[15px] transition-colors duration-200 max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5 dark:bg-[#0f172a]">
           <div className="mx-auto w-full max-w-470">
             {title && <h1 className={titleClassName}>{title}</h1>}
             {pathname === routes.it.devLog && !isDevLogUnlocked ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}

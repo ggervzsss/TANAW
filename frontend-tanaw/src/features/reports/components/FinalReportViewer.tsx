@@ -128,13 +128,13 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none"
+            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
-            <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black">
+            <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:text-slate-100">
               <div>
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
                 <h3 className="text-tanaw-navy mt-1 text-lg font-bold">Official Artifact Viewer</h3>
@@ -185,14 +185,14 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 <button
                   type="button"
                   onClick={downloadReport}
-                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
+                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                 >
                   <Download size={15} /> Download PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
+                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                 >
                   <Printer size={15} /> Print to PDF
                 </button>
@@ -200,14 +200,14 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                   type="button"
                   onClick={onClose}
                   aria-label="Close final report"
-                  className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+                  className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-emerald-200"
                 >
                   <X size={20} />
                 </button>
               </div>
             </div>
 
-            <div className="flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
+            <div className="tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
               <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
                 <ul className="space-y-2 font-mono text-xs text-gray-600">
@@ -271,14 +271,14 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               role="dialog"
               aria-modal="true"
               aria-labelledby="return-final-report-title"
-              className="relative z-1401 my-auto max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-[28px] border border-red-100 bg-white text-slate-950 shadow-[0_34px_100px_rgba(20,2,2,0.36)] ring-1 ring-red-950/5"
+              className="relative z-1401 my-auto max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-[28px] border border-red-100 bg-white text-slate-950 shadow-[0_34px_100px_rgba(20,2,2,0.36)] ring-1 ring-red-950/5 dark:border-red-300/25 dark:bg-[#121c31] dark:text-slate-100 dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
               initial={{ opacity: 0, y: 12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.98 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               <div className="h-1.5 bg-linear-to-r from-red-700 via-red-500 to-amber-400" />
-              <header className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50/70 px-6 py-5 max-sm:px-5">
+              <header className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50/70 px-6 py-5 max-sm:px-5 dark:border-red-300/25 dark:bg-red-500/10">
                 <div className="min-w-0">
                   <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-red-700 uppercase">{report.id}</p>
                   <h2 id="return-final-report-title" className="text-tanaw-navy text-xl leading-tight font-bold">
@@ -293,7 +293,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                   onClick={closeReturnDialog}
                   disabled={returnMutation.isPending}
                   aria-label="Close return for revision dialog"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-300/25 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-red-500/10 dark:hover:text-red-200"
                 >
                   <X size={19} />
                 </button>
@@ -302,7 +302,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-6 py-5 max-sm:px-5">
                 <div className="grid max-h-[38vh] gap-2 overflow-y-auto pr-1">
                   {report.sources.map((source) => (
-                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60">
+                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10">
                       <span className="min-w-0">
                         <span className="block truncate font-semibold text-slate-900">{source.enterprise}</span>
                         <span className="mt-0.5 block font-mono text-xs text-slate-500">
@@ -333,7 +333,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 </label>
               </div>
 
-              <footer className="flex flex-wrap justify-end gap-3 border-t border-red-100 bg-white px-6 py-4 max-sm:px-5">
+              <footer className="flex flex-wrap justify-end gap-3 border-t border-red-100 bg-white px-6 py-4 max-sm:px-5 dark:border-red-300/25 dark:bg-[#121c31]">
                 <button
                   type="button"
                   onClick={closeReturnDialog}

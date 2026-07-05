@@ -280,9 +280,9 @@ export function LocationPicker({
   }, [location]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white">
+    <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white dark:border-emerald-300/20 dark:bg-slate-900 dark:ring-white/8">
       <div id={mapId} className={`${mapHeightClassName} w-full`} />
-      <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 dark:border-slate-700 dark:bg-[#121c31] dark:text-slate-300">
         <MapPin size={14} className="text-tgreen-dark shrink-0" />
         <span className="truncate">{getFooterText(location, isResolvingAddress, isBoundaryLoading, isBoundaryError, showBoundaries)}</span>
       </div>

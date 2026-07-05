@@ -16,28 +16,28 @@ type PortalNotificationDropdownProps = {
 
 const toneClasses: Record<PortalNotificationTone, { icon: string; badge: string; dot: string; accent: string }> = {
   critical: {
-    icon: "bg-red-50 text-red-700 ring-red-100",
-    badge: "bg-red-50 text-red-700 ring-red-100",
+    icon: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
+    badge: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
     dot: "bg-red-600",
-    accent: "from-red-50",
+    accent: "from-red-50 dark:from-red-950/35",
   },
   warning: {
-    icon: "bg-amber-50 text-amber-700 ring-amber-100",
-    badge: "bg-amber-50 text-amber-700 ring-amber-100",
+    icon: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
+    badge: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
     dot: "bg-amber-500",
-    accent: "from-amber-50",
+    accent: "from-amber-50 dark:from-amber-950/35",
   },
   success: {
-    icon: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    icon: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20",
+    badge: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20",
     dot: "bg-emerald-600",
-    accent: "from-emerald-50",
+    accent: "from-emerald-50 dark:from-emerald-950/35",
   },
   info: {
-    icon: "bg-sky-50 text-sky-700 ring-sky-100",
-    badge: "bg-sky-50 text-sky-700 ring-sky-100",
+    icon: "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-300/20",
+    badge: "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-300/20",
     dot: "bg-sky-600",
-    accent: "from-sky-50",
+    accent: "from-sky-50 dark:from-sky-950/35",
   },
 };
 
@@ -68,9 +68,9 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white text-slate-800 shadow-[0_24px_68px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
+            className="absolute top-full right-0 z-1002 mt-4 flex w-[min(26rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-white/85 bg-white text-slate-800 shadow-[0_24px_68px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:shadow-[0_24px_68px_rgba(0,0,0,0.48)] dark:ring-white/8"
           >
-            <div className="border-b border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-amber-50/80 px-5 py-4">
+            <div className="border-b border-emerald-100 bg-linear-to-r from-emerald-50 via-white to-amber-50/80 px-5 py-4 dark:border-slate-600 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-black text-slate-950">Notifications</p>
@@ -88,13 +88,13 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
               </div>
             </div>
 
-            <div className="max-h-112 overflow-y-auto bg-white">
+            <div className="max-h-112 overflow-y-auto bg-white dark:bg-[#121c31]">
               {notifications.map((notification) => (
                 <button
                   key={notification.id}
                   type="button"
                   onClick={() => onSelectNotification(notification)}
-                  className={`group flex w-full gap-3 border-b border-slate-100 bg-linear-to-r ${toneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 ${
+                  className={`group flex w-full gap-3 border-b border-slate-100 bg-linear-to-r ${toneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 dark:border-slate-700 dark:to-[#121c31] dark:hover:bg-emerald-500/10 ${
                     notification.read ? "opacity-75" : ""
                   }`}
                 >
@@ -103,7 +103,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className={`truncate text-sm leading-snug group-hover:text-emerald-800 ${notification.read ? "font-semibold text-slate-700" : "font-black text-slate-950"}`}>
+                      <span className={`truncate text-sm leading-snug group-hover:text-emerald-800 dark:group-hover:text-emerald-200 ${notification.read ? "font-semibold text-slate-700 dark:text-slate-200" : "font-black text-slate-950 dark:text-white"}`}>
                         {notification.title}
                       </span>
                       {!notification.read && <span className={`h-2 w-2 shrink-0 rounded-full ${toneClasses[notification.tone].dot}`} />}
@@ -132,7 +132,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
               )}
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 text-center">
+            <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 text-center dark:border-slate-700 dark:bg-[#0f172a]">
               <button
                 type="button"
                 disabled={!viewAllPath}

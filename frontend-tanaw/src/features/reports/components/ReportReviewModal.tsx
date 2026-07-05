@@ -45,13 +45,13 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none"
+            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
-            <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-5">
+            <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-5 dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)]">
               <div>
                 <div className="mb-2 flex items-center gap-3">
                   <h3 className="text-tanaw-navy text-lg font-bold">Review DOT Form Generation</h3>
@@ -80,14 +80,14 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               </div>
             </div>
 
-            <div className="grow overflow-y-auto bg-gray-100 p-6 print:bg-white print:p-0">
-              <section className="bg-white p-6 text-black shadow-sm print:shadow-none">
+            <div className="grow overflow-y-auto bg-gray-100 p-6 print:bg-white print:p-0 dark:bg-[#0f172a]">
+              <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm print:shadow-none">
                 <DotSingleReportTable report={report} />
               </section>
 
-              <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+              <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
                 <h4 className="text-tanaw-navy mb-4 text-sm font-semibold">Data Lineage & Telemetry Sources</h4>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-[#0f172a]">
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-gray-200 text-gray-500">
                       <tr>
@@ -112,7 +112,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                 </div>
               </div>
 
-              <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+              <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
                 <h4 className="text-tanaw-navy mb-2 text-sm font-semibold">Data Protection & Remarks</h4>
                 <p className="mb-4 text-xs text-gray-500">{statusMessage}</p>
                 <textarea
@@ -126,7 +126,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               </div>
             </div>
 
-            <div className="print-hide flex flex-wrap items-center justify-between gap-3 border-t border-emerald-100 bg-white p-5">
+            <div className="print-hide flex flex-wrap items-center justify-between gap-3 border-t border-emerald-100 bg-white p-5 dark:border-slate-700 dark:bg-[#121c31]">
               <p className="max-w-xl text-xs font-semibold text-slate-500">{canReview ? "Choose a review decision for this submitted report." : reviewLockedMessage(report.status)}</p>
               <div className="flex flex-wrap justify-end gap-3">
                 <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">

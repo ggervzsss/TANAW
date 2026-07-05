@@ -11,6 +11,8 @@ import { CITY_SEAL } from "../../constants/branding";
 import { usePortalNotifications } from "../../hooks/usePortalNotifications";
 import { getAccountPreferences, updateAccountPreferences } from "../../services/accountManagement";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "../../utils/routeUtils";
+import { applyThemePreference, getStoredThemePreference, persistThemePreference, resolveThemePreference } from "../../utils/theme";
+import type { ResolvedTheme, ThemePreference } from "../../utils/theme";
 import type { UserRole } from "../../types/role.types";
 import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
 import type { NavigationItem } from "./navigation";
@@ -20,9 +22,6 @@ type PortalTopbarProps = {
   role: UserRole;
   showDevLog?: boolean;
 };
-
-type ThemePreference = "light" | "dark" | "system";
-type ResolvedTheme = "light" | "dark";
 
 export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
@@ -34,8 +33,8 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemePreference>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
+  const [theme, setTheme] = useState<ThemePreference>(getStoredThemePreference);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveThemePreference(getStoredThemePreference()));
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
@@ -120,6 +119,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       .then((preferences) => {
         if (disposed) return;
         setTheme(preferences.theme);
+        persistThemePreference(preferences.theme);
         setPreferencesLoaded(true);
       })
       .catch(() => {
@@ -134,19 +134,16 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const applyTheme = () => {
-      const nextResolvedTheme = resolveThemePreference(theme);
-      root.classList.remove("light", "dark");
-      root.classList.add(nextResolvedTheme);
-      setResolvedTheme(nextResolvedTheme);
+      setResolvedTheme(applyThemePreference(theme));
     };
 
+    persistThemePreference(theme);
     applyTheme();
 
     if (theme !== "system") return undefined;
 
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     mediaQuery.addEventListener("change", applyTheme);
     return () => mediaQuery.removeEventListener("change", applyTheme);
   }, [theme]);
@@ -551,11 +548,4 @@ function getRoleSupportTicketsPath(role: UserRole) {
   if (role === "admin") return routes.admin.supportTickets;
   if (role === "it") return routes.it.supportTickets;
   return null;
-}
-
-function resolveThemePreference(theme: ThemePreference): ResolvedTheme {
-  if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return theme;
 }

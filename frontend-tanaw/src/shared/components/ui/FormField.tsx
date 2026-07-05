@@ -23,7 +23,7 @@ export function FormField({ name, label, type = "text", required = false, placeh
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         autoComplete={autoComplete}
         className={[
-          "focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border bg-white px-4 py-3 text-sm font-medium text-slate-900 transition outline-none focus:ring-4",
+          "focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border bg-white px-4 py-3 text-sm font-medium text-slate-900 transition outline-none focus:ring-4 dark:bg-[#0f172a] dark:text-slate-100 dark:placeholder:text-slate-500",
           error ? "border-red-300" : "border-slate-300",
         ].join(" ")}
       />
