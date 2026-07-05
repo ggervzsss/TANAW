@@ -249,15 +249,27 @@ export async function syncDesktopReportSubmissions(limit = 100) {
   return syncedCount;
 }
 
+export async function syncDesktopReportSubmission(reportId: string) {
+  const serviceStatus = await getMlServiceStatus();
+  const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+  const submission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId && item.sync_status !== "synced");
+  if (!submission) return 0;
+
+  await syncReportSubmission(baseUrl, submission);
+  await resolveOptional(() => purgeFinalizedLocalReportRawData(baseUrl));
+  return 1;
+}
+
 async function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
+  const metrics = reportMetricsFromSubmission(submission);
   await staffApi.post("/operational/desktop/report-submissions", {
     reportId: submission.report_id,
     period: submission.period,
     submittedAt: submission.submitted_at,
-    entries: submission.entries,
-    exits: submission.exits,
-    peakOccupancy: submission.peak_occupancy,
-    uniqueCount: submission.unique_count,
+    entries: metrics.entries,
+    exits: metrics.exits,
+    peakOccupancy: metrics.peakOccupancy,
+    uniqueCount: metrics.uniqueCount,
     notes: submission.notes,
     syncStatus: submission.sync_status,
     sourceKind: sourceKindFromPayload(submission),
@@ -271,6 +283,38 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
     },
   });
   await markLocalReportSynced(baseUrl, submission.report_id);
+}
+
+function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {
+  const payloadMetrics = submission.payload.metrics;
+  if (payloadMetrics && typeof payloadMetrics === "object") {
+    const metrics = payloadMetrics as Record<string, unknown>;
+    const entries = nonNegativeInteger(metrics.entries);
+    const exits = nonNegativeInteger(metrics.exits);
+    const peakOccupancy = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
+    const uniqueCount = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
+    if (entries !== null && exits !== null && peakOccupancy !== null && uniqueCount !== null) {
+      return {
+        entries,
+        exits: Math.min(exits, entries),
+        peakOccupancy,
+        uniqueCount,
+      };
+    }
+  }
+
+  return {
+    entries: submission.entries,
+    exits: submission.exits,
+    peakOccupancy: submission.peak_occupancy,
+    uniqueCount: submission.unique_count,
+  };
+}
+
+function nonNegativeInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
+  return null;
 }
 
 async function purgeFinalizedLocalReportRawData(baseUrl: string) {

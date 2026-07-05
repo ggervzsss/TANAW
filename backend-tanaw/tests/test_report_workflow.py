@@ -1,9 +1,11 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
 from app.features.operational.models import EnterpriseReportSubmission
+from app.features.operational.schemas import DesktopReportSubmissionIngest
 from app.features.operational.service import (
     InvalidReportWorkflowError,
     resolve_final_report_status_transition,
@@ -68,6 +70,40 @@ def test_returned_final_report_can_be_archived_and_restored() -> None:
         current_archived_from_status="Returned for Revision",
         requested_status="Returned for Revision",
     ) == ("Returned for Revision", None)
+
+
+def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() -> None:
+    payload = DesktopReportSubmissionIngest(
+        reportId="REP-963735",
+        period="Jun 1 - Jun 30, 2026",
+        submittedAt=datetime(2026, 7, 5, 8, 43, 12, tzinfo=UTC),
+        entries=747,
+        exits=702,
+        peakOccupancy=61,
+        uniqueCount=532,
+        payload={
+            "demo": {
+                "foreignFemale": "37",
+                "foreignMale": "42",
+                "otherProvFemale": "68",
+                "otherProvMale": "74",
+                "thisProvFemale": "149",
+                "thisProvMale": "155",
+            },
+            "metrics": {
+                "entries": 660,
+                "exits": 625,
+                "peak": 58,
+                "unique": 525,
+            },
+            "status": "Resubmitted",
+        },
+    )
+
+    assert payload.entries == 660
+    assert payload.exits == 625
+    assert payload.peakOccupancy == 58
+    assert payload.uniqueCount == 525
 
 
 def _report(report_id: str, review_status: str, period: str) -> EnterpriseReportSubmission:

@@ -8,7 +8,7 @@ import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../.
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
-import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, syncDesktopReportSubmission, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
@@ -327,6 +327,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     try {
       const status = await getMlServiceStatus();
       submission = await recordLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, {
+        metrics: {
+          entries: reportMetrics.entries,
+          exits: reportMetrics.exits,
+          peakOccupancy: reportMetrics.peak,
+          uniqueCount: reportMetrics.unique,
+        },
         notes,
         period,
         reportId,
@@ -337,6 +343,8 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setIsSubmitting(false);
       return;
     }
+    const cloudSyncError = await syncSubmittedReportToCloud(reportId);
+    const submittedSyncStatus = cloudSyncError ? submission.sync_status : "synced";
 
     const submittedMetrics: Metrics = {
       entries: submission.entries,
@@ -360,7 +368,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
               demo,
               notes,
               submittedAt: submission.submitted_at,
-              syncStatus: submission.sync_status,
+              syncStatus: submittedSyncStatus,
               remarks: null,
               auditTrail: nextAuditTrail,
             };
@@ -381,7 +389,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         demo,
         notes,
         submittedAt: submission.submitted_at,
-        syncStatus: submission.sync_status,
+        syncStatus: submittedSyncStatus,
         auditTrail: nextAuditTrail,
         remarks: null,
       };
@@ -393,7 +401,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setIsSubmitting(false);
     void refreshLocalMetrics();
     void refreshLocalReports();
-    window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
+    if (cloudSyncError) {
+      notifyError(`Report saved locally, but cloud sync is still pending: ${cloudSyncError}`);
+      window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
+    }
     resetDraftWorkspace();
   };
 
@@ -642,15 +653,16 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
+  const metrics = metricsFromLocalSubmission(submission);
 
   return {
     id: submission.report_id,
     date: submission.period,
     status: payloadStatus,
-    entries: submission.entries,
-    exits: submission.exits,
-    peak: submission.peak_occupancy,
-    unique: submission.unique_count,
+    entries: metrics.entries,
+    exits: metrics.exits,
+    peak: metrics.peak,
+    unique: metrics.unique,
     period: periodFromValue(submission.period),
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
@@ -664,6 +676,27 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
     remarks: null,
     submittedAt: submission.submitted_at,
     syncStatus: submission.sync_status,
+  };
+}
+
+function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+  const payloadMetrics = submission.payload.metrics;
+  if (payloadMetrics && typeof payloadMetrics === "object") {
+    const metrics = payloadMetrics as Record<string, unknown>;
+    const entries = nonNegativeInteger(metrics.entries);
+    const exits = nonNegativeInteger(metrics.exits);
+    const peak = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
+    const unique = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
+    if (entries !== null && exits !== null && peak !== null && unique !== null) {
+      return { entries, exits: Math.min(exits, entries), peak, unique };
+    }
+  }
+
+  return {
+    entries: submission.entries,
+    exits: submission.exits,
+    peak: submission.peak_occupancy,
+    unique: submission.unique_count,
   };
 }
 
@@ -693,6 +726,15 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
       },
     ],
   };
+}
+
+async function syncSubmittedReportToCloud(reportId: string) {
+  try {
+    await syncDesktopReportSubmission(reportId);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "The backend could not be reached.";
+  }
 }
 
 function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRecord[]) {
@@ -821,6 +863,12 @@ function emptyDemo(): DemoBreakdown {
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : typeof value === "number" && Number.isInteger(value) && value >= 0 ? String(value) : "";
+}
+
+function nonNegativeInteger(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
+  return null;
 }
 
 function getCurrentReportingPeriod() {

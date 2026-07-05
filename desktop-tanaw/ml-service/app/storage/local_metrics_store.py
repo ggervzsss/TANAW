@@ -614,6 +614,7 @@ class LocalMetricsStore:
         period: str,
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
+        metrics: dict[str, Any] | None = None,
         source_kind: str | None = None,
         mock_run_id: str | None = None,
     ) -> dict[str, int | str | None]:
@@ -626,7 +627,7 @@ class LocalMetricsStore:
             and existing_period_submission["report_id"] != report_id
         ):
             raise ValueError(f"A report for {period} has already been submitted.")
-        if existing_submission is not None and summary["unsubmitted_events"] == 0:
+        if existing_submission is not None and metrics is None:
             summary = {
                 **summary,
                 "entries": existing_submission["entries"],
@@ -637,10 +638,24 @@ class LocalMetricsStore:
                 ),
                 "unique_count": existing_submission["unique_count"],
             }
+        if metrics is not None:
+            summary = _summary_with_report_metrics(summary, metrics)
         report_payload = payload or {}
-        resolved_source_kind = source_kind or str(summary["source_kind"])
+        payload_status = (
+            report_payload.get("status") if isinstance(report_payload.get("status"), str) else None
+        )
+        should_consume_open_events = existing_submission is None and payload_status != "Resubmitted"
+        resolved_source_kind = source_kind or (
+            str(existing_submission["source_kind"])
+            if existing_submission is not None and existing_submission["source_kind"]
+            else str(summary["source_kind"])
+        )
         resolved_mock_run_id = mock_run_id or (
-            str(summary["mock_run_id"]) if summary["mock_run_id"] else None
+            str(existing_submission["mock_run_id"])
+            if existing_submission is not None and existing_submission["mock_run_id"]
+            else str(summary["mock_run_id"])
+            if summary["mock_run_id"]
+            else None
         )
 
         with self._connection() as connection:
@@ -677,14 +692,15 @@ class LocalMetricsStore:
                     resolved_mock_run_id,
                 ),
             )
-            connection.execute(
-                """
-                update count_events
-                set submitted_report_id = ?
-                where submitted_report_id is null
-                """,
-                (report_id,),
-            )
+            if should_consume_open_events:
+                connection.execute(
+                    """
+                    update count_events
+                    set submitted_report_id = ?
+                    where submitted_report_id is null
+                    """,
+                    (report_id,),
+                )
 
         return {
             **summary,
@@ -1263,6 +1279,24 @@ class LocalMetricsStore:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _summary_with_report_metrics(
+    summary: dict[str, Any], metrics: dict[str, Any]
+) -> dict[str, Any]:
+    entries = _safe_int(metrics.get("entries"))
+    exits = min(_safe_int(metrics.get("exits")), entries)
+    peak_occupancy = _safe_int(metrics.get("peak_occupancy", metrics.get("peakOccupancy")))
+    unique_count = _safe_int(metrics.get("unique_count", metrics.get("uniqueCount")))
+    return {
+        **summary,
+        "entries": entries,
+        "exits": exits,
+        "peak_occupancy": peak_occupancy,
+        "current_occupancy": max(0, entries - exits),
+        "unique_count": unique_count,
+        "estimated_unique_count": unique_count,
+    }
 
 
 def _safe_scope(value: str | None) -> str:

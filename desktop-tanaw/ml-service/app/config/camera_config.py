@@ -386,10 +386,24 @@ class MetricsHistoryResponse(BaseModel):
     historical: dict[str, list[HistoricalMetricsPoint]]
 
 
+class ReportSubmissionMetrics(BaseModel):
+    entries: int = Field(ge=0, le=100_000)
+    exits: int = Field(ge=0, le=100_000)
+    peak_occupancy: int = Field(ge=0, le=100_000)
+    unique_count: int = Field(ge=0, le=100_000)
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> ReportSubmissionMetrics:
+        if self.exits > self.entries:
+            raise ValueError("Total exits cannot exceed total entries.")
+        return self
+
+
 class ReportSubmissionRequest(BaseModel):
     report_id: str = Field(..., min_length=3, max_length=80)
     period: str = Field(default="Current Period", min_length=1, max_length=120)
     notes: str | None = Field(default=None, max_length=5000)
+    metrics: ReportSubmissionMetrics | None = None
     payload: dict | None = None
 
     @model_validator(mode="after")
