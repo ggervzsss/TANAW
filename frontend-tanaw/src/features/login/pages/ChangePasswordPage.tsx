@@ -9,6 +9,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { changePassword } from "@/shared/services/accountManagement";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
+import { AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { logoutService } from "../services";
 import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
@@ -138,6 +139,7 @@ export function ChangePasswordPage() {
           />
         ))}
       </div>
+      <AuthThemeToggle />
 
       <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">
         <section className="tanaw-auth-hero relative hidden min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white lg:flex xl:pb-14">

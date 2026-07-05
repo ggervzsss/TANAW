@@ -14,7 +14,7 @@ import { ProfileView } from "../../features/profile/components/ProfileView";
 import { ReportsView } from "../../features/reports/components/ReportsView";
 import { SecurityView } from "../../features/security/components/SecurityView";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
-import { ENTERPRISE_THEME_STORAGE_KEY, getInitialThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
+import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { TicketsView } from "../../features/tickets/components/TicketsView";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -58,7 +58,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [readNotificationIds, setReadNotificationIds] = useState<Set<number>>(() => readStoredNotificationIds(notificationStorageKey));
   const [toasts, setToasts] = useState<EnterpriseNotification[]>([]);
   const [theme, setTheme] = useState<ThemePreference>(getInitialThemePreference);
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
   const [simulationNotification, setSimulationNotification] = useState<EnterpriseNotification | null>(null);
@@ -95,17 +95,12 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   }, [currentUserQuery.isError, logout, navigate]);
 
   useEffect(() => {
-    const root = window.document.documentElement;
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const applyTheme = () => {
-      const resolvedTheme = resolveThemePreference(theme);
-      root.classList.remove("light", "dark");
-      root.classList.add(resolvedTheme);
-      root.dataset.enterpriseTheme = theme;
-      setResolvedTheme(resolvedTheme);
+      setResolvedTheme(applyThemePreference(theme));
     };
 
-    window.localStorage.setItem(ENTERPRISE_THEME_STORAGE_KEY, theme);
+    persistThemePreference(theme);
     applyTheme();
 
     if (theme !== "system") return undefined;

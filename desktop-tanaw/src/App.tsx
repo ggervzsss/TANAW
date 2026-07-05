@@ -1,20 +1,14 @@
 import { useEffect } from "react";
 import { AppProviders } from "./app/providers/AppProviders";
 import { AppRouter } from "./app/router/AppRouter";
-import { ENTERPRISE_THEME_STORAGE_KEY, getInitialThemePreference, resolveThemePreference } from "./features/security/utils/theme";
+import { applyThemePreference, getInitialThemePreference, persistThemePreference } from "./features/security/utils/theme";
 
 export default function App() {
   useEffect(() => {
     const theme = getInitialThemePreference();
-    const applyStoredTheme = () => {
-      const resolvedTheme = resolveThemePreference(theme);
-      const root = window.document.documentElement;
-      root.classList.remove("light", "dark");
-      root.classList.add(resolvedTheme);
-      root.dataset.enterpriseTheme = theme;
-    };
+    const applyStoredTheme = () => applyThemePreference(theme);
 
-    window.localStorage.setItem(ENTERPRISE_THEME_STORAGE_KEY, theme);
+    persistThemePreference(theme);
     applyStoredTheme();
 
     if (theme !== "system") return undefined;

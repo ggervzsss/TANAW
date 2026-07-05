@@ -10,6 +10,7 @@ import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { notifySuccess } from "../../toasts/services/toast-service";
 import { changePassword, logout as logoutRequest } from "../api/login";
 import { useAuthStore } from "../stores/auth-store";
+import { AuthThemeToggle } from "./AuthThemeToggle";
 
 const cityHallDayImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
 const cityHallNightImage = `${import.meta.env.BASE_URL}images/dsc00386-night.png`;
@@ -149,6 +150,7 @@ export function ChangePasswordPage() {
           />
         ))}
       </div>
+      <AuthThemeToggle />
 
       <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
         <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
