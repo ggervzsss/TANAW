@@ -224,6 +224,7 @@ async def ingest_desktop_report_submission(
     )
     await operational_ws_manager.broadcast(envelope)
     await broadcast_summary(db)
+    await notify_staff_report_submission(db, account, report)
     await record_operational_log(
         db,
         category="Staff Submission",
@@ -1079,6 +1080,39 @@ async def notify_enterprise_ticket_update(
             data=notification.model_dump(mode="json"),
         )
     )
+
+
+async def notify_staff_report_submission(
+    db: AsyncSession, actor: Account, report: IntakeReportSummary
+) -> None:
+    is_resubmission = staff_report_notification_is_resubmission(report)
+    action_label = "resubmitted" if is_resubmission else "submitted"
+    notification_type = (
+        "Enterprise Report Resubmitted" if is_resubmission else "Enterprise Report Submitted"
+    )
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.STAFF],
+        title=notification_type,
+        message=f"{report.enterprise} {action_label} {report.code} for {report.period}.",
+        notification_type=notification_type,
+        severity="Info",
+        actor=actor,
+        source_type="enterprise.report",
+        source_id=report.id,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+
+
+def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bool:
+    payload_status = (report.payload or {}).get("status")
+    return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"
 
 
 def support_ticket_notification_roles(category: str) -> list[AccountRole]:

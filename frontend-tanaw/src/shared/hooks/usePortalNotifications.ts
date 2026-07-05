@@ -96,6 +96,7 @@ export function usePortalNotifications(role: UserRole) {
 
   const drafts = useMemo(() => {
     const persistedNotifications = buildBackendNotifications(backendNotifications, role);
+    const backendReportSourceIds = getBackendReportNotificationSourceIds(backendNotifications);
 
     if (role === "admin") {
       return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin"), ...buildLogNotifications(mergedLogs, "admin")];
@@ -106,7 +107,11 @@ export function usePortalNotifications(role: UserRole) {
     }
 
     if (role === "staff") {
-      return [...persistedNotifications, ...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises), ...buildLogNotifications(mergedLogs, "staff")];
+      return [
+        ...persistedNotifications,
+        ...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises, backendReportSourceIds),
+        ...buildLogNotifications(mergedLogs, "staff", backendReportSourceIds),
+      ];
     }
 
     return persistedNotifications;
@@ -200,9 +205,23 @@ function getBackendNotificationTargetPath(role: UserRole, notification: BackendN
     return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : routes.it.alerts;
   }
   if (role === "staff") {
-    return routes.staff.systemLogs;
+    return text.includes("report") || text.includes("batch") ? routes.staff.batchReports : routes.staff.systemLogs;
   }
   return undefined;
+}
+
+function getBackendReportNotificationSourceIds(notifications: BackendNotification[]) {
+  return new Set(
+    notifications.flatMap((notification) => {
+      if (!notification.sourceId || !isBackendReportNotification(notification)) return [];
+      return [notification.sourceId];
+    }),
+  );
+}
+
+function isBackendReportNotification(notification: BackendNotification) {
+  const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
+  return text.includes("enterprise report") || text.includes("enterprise.report") || text.includes("batch reports");
 }
 
 function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"): DraftNotification[] {
@@ -244,9 +263,10 @@ function buildDevDeliveryNotifications(deliveries: DevDelivery[]): DraftNotifica
     });
 }
 
-function buildLogNotifications(logs: SystemLog[], role: "admin" | "it" | "staff"): DraftNotification[] {
+function buildLogNotifications(logs: SystemLog[], role: "admin" | "it" | "staff", backendReportSourceIds = new Set<string>()): DraftNotification[] {
   return logs
     .filter((log) => isRoleRelevantLog(log, role))
+    .filter((log) => !isDuplicateStaffReportSubmissionLog(log, role, backendReportSourceIds))
     .map((log) => ({
       id: `activity-log:${log.id}:${log.severity}`,
       title: `${log.severity} ${log.action}`,
@@ -260,7 +280,7 @@ function buildLogNotifications(logs: SystemLog[], role: "admin" | "it" | "staff"
     }));
 }
 
-function buildStaffReportNotifications(reports: IntakeReport[], finalReports: FinalReport[], enterprises: ReportEnterprise[]): DraftNotification[] {
+function buildStaffReportNotifications(reports: IntakeReport[], finalReports: FinalReport[], enterprises: ReportEnterprise[], backendReportSourceIds = new Set<string>()): DraftNotification[] {
   const currentPeriod = getCurrentSubmissionPeriod();
   const currentReports = reports.filter((report) => report.month === currentPeriod.month && getReportYear(report) === currentPeriod.year);
   const enterpriseMissingNotifications = enterprises
@@ -278,18 +298,21 @@ function buildStaffReportNotifications(reports: IntakeReport[], finalReports: Fi
     }));
 
   const reportNotifications = reports
-    .filter((report) => shouldNotifyStaffAboutReport(report))
-    .map<DraftNotification>((report) => ({
-      id: `report:${report.id}:${report.status}`,
-      title: getReportNotificationTitle(report.status),
-      message: `${report.enterprise} submitted ${report.code} for ${report.period}. Status: ${report.status}.`,
-      time: report.submitted,
-      source: "Batch Reports",
-      statusLabel: report.status,
-      tone: toneFromReportStatus(report.status),
-      targetPath: routes.staff.batchReports,
-      sortTime: toSortTime(report.submitted),
-    }));
+    .filter((report) => shouldNotifyStaffAboutReport(report, backendReportSourceIds))
+    .map<DraftNotification>((report) => {
+      const submittedKey = report.submittedAt ?? report.submitted;
+      return {
+        id: `report:${report.id}:${report.status}:${submittedKey}`,
+        title: getReportNotificationTitle(report.status),
+        message: `${report.enterprise} submitted ${report.code} for ${report.period}. Status: ${report.status}.`,
+        time: report.submitted,
+        source: "Batch Reports",
+        statusLabel: report.status,
+        tone: toneFromReportStatus(report.status),
+        targetPath: routes.staff.batchReports,
+        sortTime: toSortTime(submittedKey),
+      };
+    });
 
   const finalReportNotifications = finalReports
     .filter((report) => report.status === "Draft")
@@ -323,7 +346,12 @@ function isRoleRelevantLog(log: SystemLog, role: "admin" | "it" | "staff") {
   return (log.category === "Staff Submission" || log.category === "Staff Operation") && (log.action.toLowerCase().includes("report") || log.severity === "Warning");
 }
 
-function shouldNotifyStaffAboutReport(report: IntakeReport) {
+function isDuplicateStaffReportSubmissionLog(log: SystemLog, role: "admin" | "it" | "staff", backendReportSourceIds: Set<string>) {
+  return role === "staff" && log.category === "Staff Submission" && Boolean(log.sourceId && backendReportSourceIds.has(log.sourceId));
+}
+
+function shouldNotifyStaffAboutReport(report: IntakeReport, backendReportSourceIds: Set<string>) {
+  if (report.status === "Pending Review" && backendReportSourceIds.has(report.id)) return false;
   return report.status === "Pending Review" || report.status === "Ready to Consolidate" || report.status === "Returned" || report.status === "Missing";
 }
 
