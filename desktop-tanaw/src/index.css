@@ -1490,8 +1490,14 @@ html.dark .enterprise-shell table tbody tr:hover {
   background-color: rgb(51 65 85 / 0.55);
 }
 
+html.dark .enterprise-shell .divide-gray-100 > :not(:last-child),
 html.dark .enterprise-shell .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
   border-color: #334155 !important;
+}
+
+html.dark .enterprise-shell table tbody.divide-gray-100 > :not(:last-child),
+html.dark .enterprise-shell table tbody.divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(148 163 184 / 0.24) !important;
 }
 
 html.dark .enterprise-shell .hover\:bg-gray-50:hover,

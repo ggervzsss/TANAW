@@ -285,8 +285,14 @@ html.dark {
     border-color: rgb(248 113 113 / 0.32);
   }
 
+  html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not(:last-child),
   html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
     border-color: rgb(51 65 85 / 0.88);
+  }
+
+  html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not(:last-child),
+  html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgb(51 65 85 / 0.42);
   }
 
   html.dark :where(.ring-white, .ring-slate-900\/4, .ring-slate-900\/5, .ring-emerald-950\/5, .ring-emerald-950\/6, .ring-black\/3, .ring-black\/4, .ring-black\/5) {
