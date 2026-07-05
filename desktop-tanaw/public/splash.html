@@ -9,6 +9,7 @@
       body {
         --tanaw-gold: #d7b35a;
         --tanaw-gold-deep: #b68a2d;
+        --tanaw-splash-media-mask: radial-gradient(ellipse 54% 58% at center, #000 0 45%, rgb(0 0 0 / 0.82) 58%, rgb(0 0 0 / 0.24) 70%, transparent 84%);
         width: 100%;
         height: 100%;
         margin: 0;
@@ -17,7 +18,9 @@
       }
 
       body {
+        position: relative;
         display: grid;
+        isolation: isolate;
         place-items: center;
         color: #10241b;
         font-family:
@@ -28,8 +31,21 @@
           sans-serif;
       }
 
+      body::before {
+        content: "";
+        position: fixed;
+        inset: -12vmax;
+        z-index: 0;
+        background: url("./media/loading-page-poster.jpg") center / cover no-repeat;
+        opacity: 0.22;
+        filter: blur(32px) saturate(0.86);
+        transform: scale(1.04);
+        pointer-events: none;
+      }
+
       .splash-card {
         position: relative;
+        z-index: 1;
         width: clamp(46rem, 52vw, 58rem);
         max-width: calc(100vw - 3rem);
         max-height: calc(100vh - 4.5rem);
@@ -37,10 +53,15 @@
         display: grid;
         place-items: center;
         overflow: hidden;
-        background: #ffffff url("./media/loading-page-poster.jpg") center / cover no-repeat;
-        border: 1px solid rgb(15 23 42 / 0.16);
-        border-radius: 8px;
-        box-shadow: 0 26px 68px rgb(15 23 42 / 0.18);
+        background: transparent;
+      }
+
+      .splash-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: url("./media/loading-page-poster.jpg") center / cover no-repeat;
       }
 
       video {
@@ -54,6 +75,16 @@
         background: transparent;
         opacity: 1;
         transition: opacity 180ms ease;
+      }
+
+      .splash-card::before,
+      video {
+        -webkit-mask-image: var(--tanaw-splash-media-mask);
+        mask-image: var(--tanaw-splash-media-mask);
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
       }
 
       html[data-video-state="fallback"] video {
