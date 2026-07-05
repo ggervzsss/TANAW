@@ -21,6 +21,8 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
     value: report.remarks ?? "",
   }));
   const remarks = remarksDraft.reportId === report.id ? remarksDraft.value : (report.remarks ?? "");
+  const canReview = report.status === "Pending Review";
+  const statusMessage = reviewStatusMessage(report.status);
 
   return (
     <ModalPortal>
@@ -100,37 +102,63 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
 
             <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
               <h4 className="text-tanaw-navy mb-2 text-sm font-semibold">Data Protection & Remarks</h4>
-              <p className="mb-4 text-xs text-gray-500">Values in the DOT form are read-only and populated directly from edge node telemetry.</p>
+              <p className="mb-4 text-xs text-gray-500">{statusMessage}</p>
               <textarea
                 value={remarks}
                 onChange={(event) => setRemarksDraft({ reportId: report.id, value: event.target.value })}
+                disabled={!canReview || isUpdating}
                 className="focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-900 transition outline-none focus:ring-2"
                 rows={3}
-                placeholder="Add remarks for revision or consolidation notes..."
+                placeholder={canReview ? "Add remarks for revision or consolidation notes..." : "No further review remarks can be added in this state."}
               />
             </div>
           </div>
 
-          <div className="print-hide flex flex-wrap justify-end gap-3 border-t border-emerald-100 bg-white p-5">
-            <button
-              type="button"
-              onClick={() => onReturn(report, remarks)}
-              disabled={isUpdating}
-              className="rounded-xl border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
-            >
-              {isUpdating ? "Updating..." : "Return for Revision"}
-            </button>
-            <button
-              type="button"
-              onClick={() => onAccept(report, remarks)}
-              disabled={isUpdating}
-              className="bg-tanaw-green hover:bg-tanaw-green/90 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-wait disabled:opacity-60"
-            >
-              {isUpdating ? "Updating..." : "Accept & Mark Ready"}
-            </button>
+          <div className="print-hide flex flex-wrap items-center justify-between gap-3 border-t border-emerald-100 bg-white p-5">
+            <p className="max-w-xl text-xs font-semibold text-slate-500">{canReview ? "Choose a review decision for this submitted report." : reviewLockedMessage(report.status)}</p>
+            <div className="flex flex-wrap justify-end gap-3">
+              <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                Close
+              </button>
+              {canReview && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onReturn(report, remarks)}
+                    disabled={isUpdating}
+                    className="rounded-xl border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isUpdating ? "Updating..." : "Return for Revision"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onAccept(report, remarks)}
+                    disabled={isUpdating}
+                    className="bg-tanaw-green hover:bg-tanaw-green/90 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isUpdating ? "Updating..." : "Accept & Mark Ready"}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </motion.section>
       </motion.div>
     </ModalPortal>
   );
+}
+
+function reviewStatusMessage(status: IntakeReport["status"]) {
+  if (status === "Pending Review") return "Values in the DOT form are read-only and populated directly from edge node telemetry.";
+  if (status === "Ready to Consolidate") return "This report has already been accepted and is waiting for final report generation.";
+  if (status === "Returned") return "This report has been returned to the enterprise. Wait for a revised submission before reviewing again.";
+  if (status === "Consolidated") return "This report has already been included in a final batch report and is locked.";
+  return "This record is not available for review actions.";
+}
+
+function reviewLockedMessage(status: IntakeReport["status"]) {
+  if (status === "Ready to Consolidate") return "No further intake review action is available. Generate the final report once all required submissions are ready.";
+  if (status === "Returned") return "No Staff action is available until the enterprise submits a revision.";
+  if (status === "Consolidated") return "This intake report is part of a generated final report.";
+  return "This report cannot be changed from this modal.";
 }

@@ -71,6 +71,10 @@ class DuplicateReportPeriodError(Exception):
     pass
 
 
+class InvalidReportWorkflowError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class OccupancyAlertCondition:
     capacity: int
@@ -1011,6 +1015,7 @@ async def update_report_status(
     if report is None:
         return None
 
+    validate_report_review_transition(report.review_status, payload.status)
     report.review_status = payload.status
     report.remarks = payload.remarks
     await db.commit()
@@ -1052,6 +1057,7 @@ async def create_final_report(
     ).all()
     if not source_reports:
         return None
+    validate_final_report_sources(source_reports)
 
     period = final_report_period(source_reports)
     report = FinalReport(
@@ -1302,6 +1308,32 @@ def final_report_period(reports: Sequence[EnterpriseReportSubmission]) -> str:
     if not year.isdigit():
         year = str(_aware(first.submitted_at).year)
     return f"{first.month} {year}"
+
+
+def validate_report_review_transition(current_status: str, requested_status: str) -> None:
+    if current_status != "Pending Review":
+        raise InvalidReportWorkflowError(
+            f"{current_status} reports cannot be changed through intake review actions."
+        )
+    if requested_status not in {"Ready to Consolidate", "Returned"}:
+        raise InvalidReportWorkflowError(
+            "Intake review can only accept a pending report or return it for revision."
+        )
+
+
+def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission]) -> None:
+    invalid_reports = [
+        report.report_id for report in reports if report.review_status != "Ready to Consolidate"
+    ]
+    if invalid_reports:
+        joined_ids = ", ".join(invalid_reports)
+        raise InvalidReportWorkflowError(
+            f"Only reports marked Ready to Consolidate can be included in a final report: {joined_ids}."
+        )
+
+    periods = {report.period for report in reports}
+    if len(periods) > 1:
+        raise InvalidReportWorkflowError("A final report can only include one reporting period.")
 
 
 def source_kind_for_reports(reports: Sequence[EnterpriseReportSubmission]) -> str:

@@ -61,6 +61,7 @@ from app.features.operational.service import (
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
     DuplicateReportPeriodError,
+    InvalidReportWorkflowError,
     build_fleet_simulation_telemetry_payload,
     create_final_report,
     create_operational_alert,
@@ -405,7 +406,10 @@ async def update_intake_report_status(
     actor: StaffWorkflowAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IntakeReportSummary:
-    report = await update_report_status(db, report_id, payload)
+    try:
+        report = await update_report_status(db, report_id, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
@@ -447,7 +451,10 @@ async def generate_final_report(
     actor: StaffWorkflowAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FinalReportSummary:
-    final_report = await create_final_report(db, payload)
+    try:
+        final_report = await create_final_report(db, payload)
+    except InvalidReportWorkflowError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if final_report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

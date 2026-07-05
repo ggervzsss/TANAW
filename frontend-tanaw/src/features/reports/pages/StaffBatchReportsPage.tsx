@@ -1,4 +1,5 @@
 import { AnimatePresence } from "motion/react";
+import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -73,8 +74,8 @@ export function StaffBatchReportsPage() {
       setSelectedReport(null);
       toast.success(`${updatedReport.code} updated to ${updatedReport.status}.`);
     },
-    onError: () => {
-      toast.error("Report status could not be updated. Check the API connection and try again.");
+    onError: (error) => {
+      toast.error(apiErrorMessage(error, "Report status could not be updated. Refresh the report list and try again."));
     },
   });
 
@@ -92,7 +93,7 @@ export function StaffBatchReportsPage() {
       toast.success(`${finalReport.id} generated for Final Reports Audit.`);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Final report could not be generated.");
+      toast.error(apiErrorMessage(error, "Final report could not be generated."));
     },
   });
 
@@ -102,6 +103,10 @@ export function StaffBatchReportsPage() {
   };
 
   const handleAccept = (report: IntakeReport, remarks: string) => {
+    if (report.status !== "Pending Review") {
+      toast.error("Only reports pending review can be accepted.");
+      return;
+    }
     updateStatusMutation.mutate({
       report,
       status: "Ready to Consolidate",
@@ -110,6 +115,10 @@ export function StaffBatchReportsPage() {
   };
 
   const handleReturn = (report: IntakeReport, remarks: string) => {
+    if (report.status !== "Pending Review") {
+      toast.error("Only reports pending review can be returned.");
+      return;
+    }
     updateStatusMutation.mutate({
       report,
       status: "Returned",
@@ -175,4 +184,12 @@ export function StaffBatchReportsPage() {
       </AnimatePresence>
     </PageMotion>
   );
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data && typeof error.response.data === "object" ? (error.response.data as { detail?: unknown }).detail : null;
+    if (typeof detail === "string" && detail.trim()) return detail;
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
 }
