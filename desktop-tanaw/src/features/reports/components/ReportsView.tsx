@@ -29,9 +29,10 @@ type DotPreviewState = {
 const DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics";
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
+  const currentReportingPeriod = useMemo(() => getCurrentReportingPeriod(), []);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
-  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
-  const [period, setPeriod] = useState<SystemLogPeriod>(() => getCurrentReportingPeriod());
+  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
+  const [period, setPeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
 
@@ -50,7 +51,26 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const demographicDraftStorageKey = useMemo(() => getDemographicDraftStorageKey(activeReportId, period), [activeReportId, period]);
   const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
 
-  const displayedMetrics = activeReport ? metricsFromReport(activeReport) : liveMetrics;
+  const selectedPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, period)) ?? null;
+  const displayedMetrics = activeReport
+    ? metricsFromReport(activeReport)
+    : isSameReportingMonth(period, livePeriod)
+      ? liveMetrics
+      : selectedPeriodCounts
+        ? metricsFromPendingCounts(selectedPeriodCounts)
+        : liveMetrics;
+  const currentPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, currentReportingPeriod)) ?? null;
+  const currentLedgerMetrics =
+    isSameReportingMonth(livePeriod, currentReportingPeriod)
+      ? liveMetrics
+      : currentPeriodCounts
+        ? metricsFromPendingCounts(currentPeriodCounts)
+        : EMPTY_METRICS;
+  const currentLedgerDemo =
+    !activeReport && isSameReportingMonth(period, currentReportingPeriod)
+      ? demo
+      : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, currentReportingPeriod)) ?? emptyDemo();
+  const currentLedgerNotes = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "";
 
   const blockingMetricsError = activeReport ? null : metricsError;
   const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
@@ -60,14 +80,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const ledgerRows = useMemo(
     () =>
       buildLedgerRows({
-        currentDemo: !activeReport ? demo : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, livePeriod)) ?? emptyDemo(),
-        currentMetrics: liveMetrics,
-        currentNotes: !activeReport ? notes : "",
-        currentPeriod: livePeriod,
+        currentDemo: currentLedgerDemo,
+        currentMetrics: currentLedgerMetrics,
+        currentNotes: currentLedgerNotes,
+        currentPeriod: currentReportingPeriod,
         pendingCounts: pendingPeriodCounts,
         reportsHistory,
       }),
-    [activeReport, demo, liveMetrics, livePeriod, notes, pendingPeriodCounts, reportsHistory],
+    [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, currentReportingPeriod, pendingPeriodCounts, reportsHistory],
   );
   const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
 
@@ -79,17 +99,17 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     try {
       const status = await getMlServiceStatus();
       const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      const summaryPeriod = summary.period || getCurrentReportingPeriod();
+      const summaryPeriod = summary.period || currentReportingPeriod;
       setLiveMetrics(metricsFromSummary(summary));
       setLivePeriod(summaryPeriod);
       if (!activeReportId) {
-        setPeriod(summaryPeriod);
+        setPeriod((currentPeriod) => (isSameReportingMonth(currentPeriod, summaryPeriod) ? summaryPeriod : currentPeriod));
       }
       setMetricsError(null);
     } catch (error) {
       setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
     }
-  }, [activeReportId]);
+  }, [activeReportId, currentReportingPeriod]);
 
   const refreshLocalReports = useCallback(async () => {
     try {
@@ -155,21 +175,22 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const resetDraftWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
-    setPeriod(nextPeriod ?? livePeriod);
+    setPeriod(nextPeriod ?? currentReportingPeriod);
     setNotes("");
     setDemo(emptyDemo());
     setPreviewReport(null);
   };
 
   const handleDraftPeriodSelect = async (nextPeriod: string) => {
-    if (!activeReportId && nextPeriod === period) return;
+    const hasPreparedCounts = pendingPeriodCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod));
+    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && (isSameReportingMonth(livePeriod, nextPeriod) || !hasPreparedCounts)) return;
 
-    if (nextPeriod === livePeriod) {
-      resetDraftWorkspace(livePeriod);
+    if (isSameReportingMonth(nextPeriod, currentReportingPeriod) && !hasPreparedCounts) {
+      resetDraftWorkspace(currentReportingPeriod);
       return;
     }
 
-    if (!pendingPeriodCounts.some((counts) => counts.period === nextPeriod)) {
+    if (!hasPreparedCounts) {
       setActiveReportId(null);
       setPeriod(nextPeriod);
       setNotes("");
@@ -469,6 +490,15 @@ function metricsFromSummary(summary: LocalMetricsSummary): Metrics {
   };
 }
 
+function metricsFromPendingCounts(counts: BackendMockPreparationCounts): Metrics {
+  return {
+    entries: counts.entries,
+    exits: counts.exits,
+    peak: counts.peakOccupancy,
+    unique: counts.uniqueCount,
+  };
+}
+
 function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { prepared: boolean } {
   return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
 }
@@ -528,7 +558,7 @@ function buildLedgerRows({
   pendingCounts: BackendMockPreparationCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
-  const reportedPeriods = new Set(reportsHistory.map((report) => report.period ?? report.date));
+  const reportedPeriods = new Set(reportsHistory.map((report) => reportingMonthKey(report.period ?? report.date)));
   const pendingPeriods = new Set<string>();
   const rows: ReportLedgerRow[] = [
     {
@@ -553,8 +583,9 @@ function buildLedgerRows({
   ];
 
   for (const counts of pendingCounts) {
-    if (counts.period === currentPeriod || reportedPeriods.has(counts.period) || pendingPeriods.has(counts.period)) continue;
-    pendingPeriods.add(counts.period);
+    const countsPeriodKey = reportingMonthKey(counts.period);
+    if (isSameReportingMonth(counts.period, currentPeriod) || reportedPeriods.has(countsPeriodKey) || pendingPeriods.has(countsPeriodKey)) continue;
+    pendingPeriods.add(countsPeriodKey);
     rows.push({
       key: draftLedgerKey(counts.period),
       kind: "pending",
@@ -595,7 +626,7 @@ function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRe
 }
 
 function draftLedgerKey(period: string) {
-  return `draft:${period}`;
+  return `draft:${reportingMonthKey(period)}`;
 }
 
 function historyLedgerKey(reportId: string) {
@@ -779,5 +810,53 @@ function stringValue(value: unknown) {
 }
 
 function getCurrentReportingPeriod() {
-  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date());
+  const now = new Date();
+  return reportingPeriodLabel(now);
 }
+
+function reportingPeriodLabel(value: Date) {
+  const month = new Intl.DateTimeFormat("en-US", { month: "short" }).format(value);
+  const lastDay = new Date(value.getFullYear(), value.getMonth() + 1, 0).getDate();
+  return `${month} 1 - ${month} ${lastDay}, ${value.getFullYear()}`;
+}
+
+function isSameReportingMonth(first: string, second: string) {
+  return reportingMonthKey(first) === reportingMonthKey(second);
+}
+
+function reportingMonthKey(value: string) {
+  const normalizedValue = value.trim();
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*[A-Za-z]+\s+\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
+  if (rangeMatch) {
+    return monthKey(rangeMatch[1], rangeMatch[2]) ?? normalizedValue.toLowerCase();
+  }
+
+  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  if (monthYearMatch) {
+    return monthKey(monthYearMatch[1], monthYearMatch[2]) ?? normalizedValue.toLowerCase();
+  }
+
+  return normalizedValue.toLowerCase();
+}
+
+function monthKey(monthLabel: string, yearLabel: string) {
+  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  const year = Number(yearLabel);
+  if (monthIndex === undefined || !Number.isInteger(year)) return null;
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+}
+
+const MONTH_INDEX_BY_LABEL: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
