@@ -9,14 +9,14 @@ type PriorityAlertListItemProps = {
 
 export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemProps) {
   return (
-    <article className="cursor-pointer px-6 py-4 transition hover:bg-emerald-50" onClick={() => onOpen(alert)}>
+    <article className="cursor-pointer px-6 py-4 transition hover:bg-emerald-50 dark:hover:bg-emerald-500/10" onClick={() => onOpen(alert)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SeverityBadge severity={alert.severity} />
         <ResolutionBadge mode={alert.resolutionMode} />
       </div>
-      <p className="text-charcoal-800 mt-3 mb-1 text-sm font-semibold">{alert.summary}</p>
-      <p className="m-0 text-xs leading-relaxed text-gray-500">{alert.requiredAction}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold tracking-wide text-gray-400 uppercase">
+      <p className="text-charcoal-800 mt-3 mb-1 text-sm font-semibold dark:text-slate-100">{alert.summary}</p>
+      <p className="m-0 text-xs leading-relaxed text-gray-500 dark:text-slate-300">{alert.requiredAction}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold tracking-wide text-gray-400 uppercase dark:text-slate-400">
         <span>{alert.type}</span>
         <span>{alert.enterprise ?? alert.requester}</span>
         <span>{alert.time}</span>
@@ -69,29 +69,29 @@ export function AllAlertsModal({ alerts, onClose, onSelectAlert }: { alerts: Pri
 
 export function SeverityBadge({ severity }: { severity: AlertSeverity }) {
   const classes: Record<AlertSeverity, string> = {
-    Info: "bg-blue-50 text-blue-700",
-    Warning: "bg-yellow-50 text-yellow-700",
-    Critical: "bg-red-50 text-red-700",
+    Info: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
+    Warning: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
+    Critical: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
   };
   return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[severity]}`}>{severity}</span>;
 }
 
 export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode }) {
   const classes: Record<PriorityAlertResolutionMode, string> = {
-    "On-site Visit Required": "bg-red-50 text-red-700",
-    "In-system Action": "bg-emerald-50 text-emerald-700",
-    "Staff Follow-up": "bg-amber-50 text-amber-700",
-    "Remote Review": "bg-blue-50 text-blue-700",
-    "Admin Monitoring": "bg-indigo-50 text-indigo-700",
+    "On-site Visit Required": "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
+    "In-system Action": "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200",
+    "Staff Follow-up": "bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200",
+    "Remote Review": "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
+    "Admin Monitoring": "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200",
   };
   return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[mode]}`}>{mode}</span>;
 }
 
 export function AlertStatusBadge({ status }: { status: PriorityAlert["status"] }) {
   const classes: Record<PriorityAlert["status"], string> = {
-    New: "border-red-200 bg-red-50 text-red-700",
-    "In Review": "border-yellow-200 bg-yellow-50 text-yellow-700",
-    Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    New: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
+    "In Review": "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
+    Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   };
   return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{status}</span>;
 }
