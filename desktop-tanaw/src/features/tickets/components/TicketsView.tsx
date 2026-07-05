@@ -360,7 +360,7 @@ export function TicketsView() {
             </div>
           ) : (
             <div className="flex min-h-96 flex-col items-center justify-center bg-white px-6 py-14 text-center dark:bg-[#121c31]">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-300/20">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
                 {isLoading ? <RefreshCw size={22} className="animate-spin" /> : <CheckCircle2 size={22} />}
               </div>
               <p className="mt-4 text-sm font-black text-[#111827] dark:text-slate-100">{isLoading ? "Loading tickets" : "No support tickets"}</p>
@@ -400,7 +400,7 @@ function TicketPanelHeader({ icon, subtitle, title }: TicketPanelHeaderProps) {
   return (
     <div className="enterprise-ticket-panel-header border-b border-emerald-100 px-6 py-5 dark:border-slate-600">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-[#065f46] ring-1 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-200 dark:ring-emerald-300/20">
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
           {icon}
         </span>
         <div>

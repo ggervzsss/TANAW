@@ -42,11 +42,11 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
           </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Live occupancy and comparable entry-flow contribution over selected periods</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-200">
+            <span className="tanaw-trend-chip tanaw-trend-chip--peak rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-900 dark:border-amber-300/24 dark:bg-amber-300/12 dark:text-amber-200">
               Peak reference {peakReference.toLocaleString()}
             </span>
             <InfoTooltip content="Shows how current occupancy compares with the highest observed occupancy.">
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-bold text-[#065f46] dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-200">
+              <span className="tanaw-trend-chip tanaw-trend-chip--utilization rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/12 dark:text-emerald-200">
                 Utilization {utilizationRate}%
               </span>
             </InfoTooltip>

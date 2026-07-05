@@ -27,7 +27,7 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
             <h3 className="mt-1 text-3xl font-bold tracking-tight text-[#111827] dark:text-slate-100">{currentOccupancy.toLocaleString()}</h3>
             <p className="mt-1 text-xs font-medium text-gray-500 dark:text-slate-400">Currently Inside</p>
           </div>
-          <div className="rounded-sm bg-[#065f46]/10 p-3 text-[#065f46] dark:bg-emerald-400/10 dark:text-emerald-300">
+          <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-400/12 dark:text-emerald-200 dark:ring-emerald-300/20">
             <Users size={20} />
           </div>
         </div>
@@ -49,7 +49,7 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
             </div>
             <p className="mt-1 text-xs font-medium text-gray-500 dark:text-slate-400">Cumulative (In / Out)</p>
           </div>
-          <div className="rounded-sm bg-gray-100 p-3 text-[#111827] dark:bg-slate-700 dark:text-slate-100">
+          <div className="rounded-xl bg-slate-100 p-3 text-slate-800 ring-1 ring-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:ring-slate-600">
             <Activity size={20} />
           </div>
         </div>
@@ -67,7 +67,7 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
             <h3 className="mt-1 text-3xl font-bold tracking-tight text-[#065f46] dark:text-emerald-300">{uniqueCount.toLocaleString()}</h3>
             <p className="mt-1 text-xs font-medium text-gray-500 dark:text-slate-400">Deduplicated Baseline</p>
           </div>
-          <div className="rounded-sm bg-[#065f46]/10 p-3 text-[#065f46] dark:bg-emerald-400/10 dark:text-emerald-300">
+          <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-400/12 dark:text-emerald-200 dark:ring-emerald-300/20">
             <User size={20} />
           </div>
         </div>

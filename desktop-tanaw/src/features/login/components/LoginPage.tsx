@@ -861,7 +861,7 @@ export function LoginPage() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={activeDialog === "forgot" ? "desktop-forgot-password-title" : "desktop-contact-support-title"}
-                className="my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
+                className="tanaw-auth-dialog my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8"
                 initial={{ opacity: 0, y: 16, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}

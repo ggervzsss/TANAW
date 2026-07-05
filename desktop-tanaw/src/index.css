@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap");
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
@@ -22,6 +24,21 @@
   --tanaw-border: #d8ded8;
   --tanaw-error: #dc2626;
   --tanaw-topbar-height: 5.5rem;
+  color-scheme: light;
+}
+
+html.dark {
+  --tanaw-green: #34d399;
+  --tanaw-green-dark: #10b981;
+  --tanaw-green-soft: #6ee7b7;
+  --tanaw-gold: #fcd34d;
+  --tanaw-bg: #0b1120;
+  --tanaw-card: #121c31;
+  --tanaw-text: #f8fafc;
+  --tanaw-muted: #94a3b8;
+  --tanaw-border: #334155;
+  --tanaw-error: #f87171;
+  color-scheme: dark;
 }
 
 @media (max-width: 640px) {
@@ -240,6 +257,14 @@ html.dark .tanaw-login-edge-blur {
     color 220ms ease;
 }
 
+html.dark .tanaw-auth-card {
+  border-color: rgb(148 163 184 / 0.34) !important;
+  background: rgb(18 28 49 / 0.94) !important;
+  box-shadow:
+    0 30px 90px rgb(0 0 0 / 0.48),
+    inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
 .tanaw-auth-card-header {
   margin-bottom: clamp(1.15rem, 3.2svh, 2rem);
 }
@@ -277,6 +302,54 @@ html.dark .tanaw-login-edge-blur {
     color 200ms ease;
 }
 
+html.dark .tanaw-auth-field {
+  border-color: var(--tanaw-border) !important;
+  background-color: rgb(15 23 42 / 0.86) !important;
+}
+
+html.dark .tanaw-auth-field:focus-within {
+  border-color: rgb(52 211 153 / 0.72) !important;
+  box-shadow: 0 0 0 4px rgb(52 211 153 / 0.14) !important;
+}
+
+html.dark .tanaw-auth-field :where(svg, button) {
+  color: #94a3b8;
+}
+
+html.dark .tanaw-auth-field button:hover {
+  color: var(--tanaw-green);
+}
+
+html.dark .tanaw-auth-card :where(input, textarea, select),
+html.dark .tanaw-auth-dialog :where(input, textarea, select) {
+  color: var(--tanaw-text);
+}
+
+html.dark .tanaw-auth-card :where(input::placeholder, textarea::placeholder),
+html.dark .tanaw-auth-dialog :where(input::placeholder, textarea::placeholder) {
+  color: #64748b;
+}
+
+html.dark .tanaw-auth-card .bg-red-50,
+html.dark .tanaw-auth-dialog .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.28) !important;
+}
+
+html.dark .tanaw-auth-card .border-red-100,
+html.dark .tanaw-auth-dialog .border-red-100 {
+  border-color: rgb(248 113 113 / 0.28) !important;
+}
+
+html.dark .tanaw-auth-card .text-red-700,
+html.dark .tanaw-auth-dialog .text-red-700 {
+  color: #fecaca !important;
+}
+
+html.dark .tanaw-auth-card .hover\:bg-emerald-50:hover,
+html.dark .tanaw-auth-dialog .hover\:bg-emerald-50:hover {
+  background-color: rgb(16 185 129 / 0.12) !important;
+}
+
 .tanaw-auth-control-gap {
   margin-bottom: clamp(1rem, 3.1svh, 1.75rem);
 }
@@ -301,6 +374,54 @@ html.dark .tanaw-login-edge-blur {
     background-color 220ms ease,
     border-color 220ms ease,
     color 220ms ease;
+}
+
+html.dark .tanaw-auth-reset-callout {
+  border-color: rgb(251 191 36 / 0.24) !important;
+  background-color: rgb(146 64 14 / 0.18) !important;
+}
+
+html.dark .tanaw-auth-reset-callout .text-amber-800 {
+  color: #fde68a !important;
+}
+
+html.dark .tanaw-auth-support-icon {
+  border-color: var(--tanaw-border) !important;
+  background-color: rgb(15 23 42 / 0.82) !important;
+  color: #cbd5e1 !important;
+}
+
+.tanaw-auth-dialog {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease;
+}
+
+html.dark .tanaw-auth-dialog {
+  border-color: rgb(148 163 184 / 0.34) !important;
+  background: rgb(18 28 49 / 0.96) !important;
+  box-shadow:
+    0 34px 100px rgb(0 0 0 / 0.52),
+    inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
+}
+
+html.dark .tanaw-auth-dialog .bg-white {
+  background-color: rgb(15 23 42 / 0.9) !important;
+}
+
+html.dark .tanaw-auth-dialog .bg-\[\#f8faf8\],
+html.dark .tanaw-auth-dialog .bg-emerald-50 {
+  background-color: rgb(16 185 129 / 0.12) !important;
+}
+
+html.dark .tanaw-auth-dialog .border-emerald-100 {
+  border-color: rgb(52 211 153 / 0.24) !important;
+}
+
+html.dark .tanaw-auth-dialog .text-emerald-950 {
+  color: #d1fae5 !important;
 }
 
 .tanaw-auth-theme-toggle {
@@ -852,6 +973,20 @@ html.dark .tanaw-auth-theme-toggle:hover {
   background-color: #e5eee8 !important;
 }
 
+.enterprise-shell .bg-emerald-50,
+.enterprise-shell .bg-emerald-50\/70,
+.enterprise-shell .bg-emerald-50\/80,
+.enterprise-shell .bg-green-50 {
+  background-color: #dcf7ea !important;
+}
+
+.enterprise-shell .bg-amber-50,
+.enterprise-shell .bg-amber-50\/60,
+.enterprise-shell .bg-amber-50\/70,
+.enterprise-shell .bg-amber-100 {
+  background-color: #fff1c2 !important;
+}
+
 .enterprise-shell .bg-blue-50,
 .enterprise-shell .bg-blue-50\/20 {
   background-color: #eaf2ff !important;
@@ -932,6 +1067,23 @@ html.dark .tanaw-auth-theme-toggle:hover {
 
 .enterprise-shell .text-green-600 {
   color: #047857 !important;
+}
+
+.enterprise-shell .text-emerald-700,
+.enterprise-shell .text-emerald-800,
+.enterprise-shell .text-emerald-900,
+.enterprise-shell .text-\[\#065f46\] {
+  color: #065f46 !important;
+}
+
+.enterprise-shell .text-amber-700,
+.enterprise-shell .text-amber-800,
+.enterprise-shell .text-amber-900 {
+  color: #92400e !important;
+}
+
+.enterprise-shell .text-tanaw-red {
+  color: #a40e0e !important;
 }
 
 .enterprise-shell .shadow-sm {
@@ -1255,6 +1407,56 @@ html.dark .enterprise-shell .enterprise-ticket-panel-header {
   background: linear-gradient(115deg, rgb(6 78 59 / 0.22) 0%, var(--enterprise-card-elevated-bg) 48%, rgb(120 53 15 / 0.22) 100%) !important;
   border-color: var(--enterprise-border) !important;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+html.dark .enterprise-shell .tanaw-status-badge {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+html.dark .enterprise-shell .tanaw-status-badge--success {
+  border-color: rgb(110 231 183 / 0.36) !important;
+  background-color: rgb(16 185 129 / 0.22) !important;
+  color: #a7f3d0 !important;
+}
+
+html.dark .enterprise-shell .tanaw-status-badge--warning {
+  border-color: rgb(251 191 36 / 0.42) !important;
+  background-color: rgb(245 158 11 / 0.22) !important;
+  color: #fde68a !important;
+}
+
+html.dark .enterprise-shell .tanaw-status-badge--info {
+  border-color: rgb(147 197 253 / 0.36) !important;
+  background-color: rgb(59 130 246 / 0.2) !important;
+  color: #bfdbfe !important;
+}
+
+html.dark .enterprise-shell .tanaw-trend-chip--peak {
+  border-color: rgb(251 191 36 / 0.46) !important;
+  background-color: rgb(245 158 11 / 0.18) !important;
+  color: #fcd34d !important;
+}
+
+html.dark .enterprise-shell .tanaw-trend-chip--utilization {
+  border-color: rgb(110 231 183 / 0.38) !important;
+  background-color: rgb(16 185 129 / 0.2) !important;
+  color: #6ee7b7 !important;
+}
+
+html.dark .enterprise-shell .tanaw-report-remarks {
+  border-color: rgb(251 191 36 / 0.42) !important;
+  background:
+    linear-gradient(135deg, rgb(245 158 11 / 0.14), rgb(120 53 15 / 0.2)),
+    rgb(15 23 42 / 0.66) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+html.dark .enterprise-shell .tanaw-report-remarks__title {
+  color: #fcd34d !important;
+}
+
+html.dark .enterprise-shell .tanaw-report-remarks__message {
+  color: #fef3c7 !important;
 }
 
 html.dark .enterprise-shell .enterprise-profile-menu button {
