@@ -405,7 +405,7 @@ export function AdminEnterpriseMap() {
   }, [mapEnterprises, selectedEnterpriseId]);
 
   return (
-    <div className="border-tanaw-gray bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden rounded-xl border shadow-sm">
+    <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
       <div className="absolute inset-0 z-0">
         <div id={mapContainerId} className="h-full w-full" />
       </div>

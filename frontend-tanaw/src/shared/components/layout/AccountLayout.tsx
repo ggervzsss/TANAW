@@ -35,8 +35,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const isMapView = pathname === routes.admin.mapview;
   const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
   const titleClassName = [
-    "text-tanaw-navy shrink-0 text-2xl font-bold tracking-tight max-sm:text-xl",
-    isMapView ? "mb-4 max-sm:mb-3" : "mb-5 max-sm:mb-4",
+    "text-tanaw-navy mb-5 shrink-0 text-2xl font-bold tracking-tight max-sm:mb-4 max-sm:text-xl",
     centeredTitleClassName,
   ]
     .filter(Boolean)
@@ -48,12 +47,12 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     .filter(Boolean)
     .join(" ");
   const mainClassName = [
-    "it-portal-main flex-1 bg-[#f8f9fa] px-8 py-8 text-[15px] transition-colors duration-200 max-2xl:px-7 max-xl:px-6 dark:bg-[#0f172a]",
-    isMapView ? "min-h-0 overflow-hidden max-sm:px-3 max-sm:py-3" : "overflow-y-auto max-sm:px-4 max-sm:py-5",
+    "it-portal-main flex-1 bg-[#f8f9fa] text-[15px] transition-colors duration-200 dark:bg-[#0f172a]",
+    isMapView ? "min-h-0 overflow-hidden p-0" : "overflow-y-auto px-8 py-8 max-2xl:px-7 max-xl:px-6 max-sm:px-4 max-sm:py-5",
   ]
     .filter(Boolean)
     .join(" ");
-  const mainContentClassName = ["mx-auto w-full max-w-470", isMapView ? "flex h-full min-h-0 flex-col" : ""].filter(Boolean).join(" ");
+  const mainContentClassName = isMapView ? "flex h-full min-h-0 w-full flex-col" : "mx-auto w-full max-w-470";
 
   const currentUserQuery = useQuery({
     queryKey: ["current-user", token],
@@ -113,7 +112,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
         <PortalTopbar role={role} showDevLog={isDevLogUnlocked} />
         <main ref={mainRef} className={mainClassName}>
           <div className={mainContentClassName}>
-            {title && <h1 className={titleClassName}>{title}</h1>}
+            {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
             {pathname === routes.it.devLog && !isDevLogUnlocked ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}
           </div>
         </main>
