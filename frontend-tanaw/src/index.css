@@ -196,6 +196,42 @@ html.dark {
       background-color 180ms ease,
       color 180ms ease;
   }
+
+  :where(
+    a[href],
+    button:not(:disabled),
+    input[type="button"]:not(:disabled),
+    input[type="checkbox"]:not(:disabled),
+    input[type="color"]:not(:disabled),
+    input[type="file"]:not(:disabled),
+    input[type="radio"]:not(:disabled),
+    input[type="range"]:not(:disabled),
+    input[type="reset"]:not(:disabled),
+    input[type="submit"]:not(:disabled),
+    label[for],
+    select:not(:disabled),
+    summary,
+    [role="button"]:not([aria-disabled="true"]),
+    [data-clickable="true"]:not([aria-disabled="true"])
+  ) {
+    cursor: pointer;
+  }
+
+  :where(
+    button:disabled,
+    input[type="button"]:disabled,
+    input[type="checkbox"]:disabled,
+    input[type="color"]:disabled,
+    input[type="file"]:disabled,
+    input[type="radio"]:disabled,
+    input[type="range"]:disabled,
+    input[type="reset"]:disabled,
+    input[type="submit"]:disabled,
+    select:disabled,
+    [aria-disabled="true"]
+  ) {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {
