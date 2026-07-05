@@ -24,9 +24,6 @@ export function SystemLockedMetrics({ demo, metrics }: SystemLockedMetricsProps)
           </div>
         </div>
       </div>
-      <p className={`mt-4 text-center text-[9px] tracking-wider uppercase ${allocation.isComplete ? "text-gray-400" : allocation.isOverCap ? "text-red-600" : "text-amber-700"}`}>
-        {allocation.isComplete ? "* Demographics total matches edge unique count." : allocation.validationMessage}
-      </p>
     </div>
   );
 }
