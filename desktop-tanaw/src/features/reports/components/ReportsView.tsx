@@ -669,7 +669,8 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
 
 function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord {
   const peak = typeof report.metrics.peak === "number" ? report.metrics.peak : Number(report.metrics.peak) || 0;
-  const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : "Submitted";
+  const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
+  const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
   return {
     id: report.code,
     date: report.period,
@@ -708,6 +709,15 @@ function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRe
       continue;
     }
 
+    if (isPendingLocalReport(localReport)) {
+      reportsById.set(report.id, {
+        ...report,
+        ...localReport,
+        remarks: report.remarks ?? localReport.remarks,
+      });
+      continue;
+    }
+
     reportsById.set(report.id, {
       ...localReport,
       ...report,
@@ -717,6 +727,10 @@ function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRe
   }
 
   return sortReports(Array.from(reportsById.values()));
+}
+
+function isPendingLocalReport(report: ReportRecord) {
+  return Boolean(report.syncStatus && report.syncStatus !== "synced");
 }
 
 function upsertReport(current: ReportRecord[], report: ReportRecord) {
