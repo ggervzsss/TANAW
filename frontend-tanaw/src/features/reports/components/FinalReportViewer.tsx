@@ -19,7 +19,7 @@ type FinalReportViewerProps = {
 
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
-  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [returnRemarks, setReturnRemarks] = useState("");
   const statusMutation = useMutation({
@@ -40,6 +40,9 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
       toast.success(`${report.id} returned for source report revision.`);
+      setShowReturnDialog(false);
+      setSelectedSourceIds([]);
+      setReturnRemarks("");
       onClose();
     },
     onError: (error) => toast.error(apiErrorMessage(error, "Final report could not be returned for revision.")),
@@ -82,6 +85,13 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     setSelectedSourceIds((current) => (current.includes(sourceId) ? current.filter((id) => id !== sourceId) : [...current, sourceId]));
   };
 
+  const closeReturnDialog = () => {
+    if (returnMutation.isPending) return;
+    setShowReturnDialog(false);
+    setSelectedSourceIds([]);
+    setReturnRemarks("");
+  };
+
   const handleReturnForRevision = () => {
     if (!canSubmitReturn) {
       toast.error("Select at least one source report and enter audit remarks.");
@@ -91,192 +101,239 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   };
 
   return (
-    <ModalPortal>
-      <motion.div
-        className="fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] p-4 backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
-        <motion.section
-          className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none"
-          initial={{ opacity: 0, y: 12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 12, scale: 0.98 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
+    <>
+      <ModalPortal>
+        <motion.div
+          className="fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] p-4 backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
         >
-          <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black">
-            <div>
-              <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
-              <h3 className="text-tanaw-navy mt-1 text-lg font-bold">Official Artifact Viewer</h3>
-              <p className="text-xs font-semibold text-gray-500">LGU official format with data lineage.</p>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              {report.status === "Archived" ? (
-                <button
-                  type="button"
-                  onClick={handleRestore}
-                  className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
-                >
-                  <ArchiveRestore size={15} /> Restore
-                </button>
-              ) : (
-                <>
-                  {report.status === "Draft" && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setShowReturnForm((current) => !current)}
-                        className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
-                      >
-                        <AlertTriangle size={15} /> Return for Revision
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleFinalize}
-                        className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
-                      >
-                        <CheckCircle size={15} /> Mark as Finalized
-                      </button>
-                    </>
-                  )}
+          <motion.section
+            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none"
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black">
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
+                <h3 className="text-tanaw-navy mt-1 text-lg font-bold">Official Artifact Viewer</h3>
+                <p className="text-xs font-semibold text-gray-500">LGU official format with data lineage.</p>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                {report.status === "Archived" ? (
                   <button
                     type="button"
-                    onClick={handleArchive}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                    onClick={handleRestore}
+                    className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
                   >
-                    <Archive size={15} /> Archive
+                    <ArchiveRestore size={15} /> Restore
                   </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={downloadReport}
-                className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
-              >
-                <Download size={15} /> Download PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
-              >
-                <Printer size={15} /> Print to PDF
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close final report"
-                className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
-              >
-                <X size={20} />
-              </button>
+                ) : (
+                  <>
+                    {report.status === "Draft" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowReturnDialog(true)}
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+                        >
+                          <AlertTriangle size={15} /> Return for Revision
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleFinalize}
+                          className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
+                        >
+                          <CheckCircle size={15} /> Mark as Finalized
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleArchive}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                    >
+                      <Archive size={15} /> Archive
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={downloadReport}
+                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
+                >
+                  <Download size={15} /> Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50"
+                >
+                  <Printer size={15} /> Print to PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close final report"
+                  className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
-            {showReturnForm && report.status === "Draft" && (
-              <section className="print-hide mb-6 rounded-2xl border border-red-100 bg-red-50/70 p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-red-900">Return Draft Final Report for Revision</h4>
-                    <p className="mt-1 text-xs leading-relaxed text-red-800">
-                      Selected source reports will be returned to the enterprise. Unselected source reports will move back to Ready to Consolidate.
-                    </p>
-                  </div>
-                  <button type="button" onClick={() => setShowReturnForm(false)} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700">
-                    Cancel
-                  </button>
+            <div className="flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
+              <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
+                <ul className="space-y-2 font-mono text-xs text-gray-600">
+                  <li className="flex items-center justify-between border-b border-gray-200 pb-2">
+                    <span>v1.0 Draft aggregated by System Pipeline</span>
+                    <span>{report.generatedOn} 04:15 AM</span>
+                  </li>
+                  {report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized") ? (
+                    <li className="flex items-center justify-between pt-1">
+                      <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
+                      <span>{report.generatedOn} 09:30 AM</span>
+                    </li>
+                  ) : (
+                    <li className="flex items-center justify-between pt-1">
+                      <span>{report.status === "Returned for Revision" ? "v1.1 Returned for source report revision" : "v1.1 Awaiting final audit decision"}</span>
+                      <span>{report.generatedOn} 09:30 AM</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              <div className="mb-6 border-b-2 border-black pb-4 text-center">
+                <img src={CITY_SEAL} className="mx-auto mb-3 h-16 w-16 grayscale" alt="San Pedro Seal" />
+                <h1 className="font-serif text-lg font-bold tracking-widest uppercase">City Government of San Pedro</h1>
+                <p className="mt-1 text-xs tracking-wider uppercase">Tourism & Economic Development Office</p>
+                <h2 className="mt-5 text-xl font-bold underline">{report.title}</h2>
+                <p className="mt-1 font-mono text-sm">Reporting Period: {report.period}</p>
+              </div>
+
+              <p className="mb-6 text-justify text-sm leading-relaxed">
+                This document certifies the consolidated visitor analytics derived from the TANAW Edge Intelligence Network for the stated period. Aggregation relies on immutable edge telemetry over{" "}
+                {report.enterpriseCount} monitored enterprise nodes.
+              </p>
+
+              <DotFinalReportTable report={report} />
+
+              <div className="mt-auto pt-10">
+                <div className="mb-8 flex items-end justify-between">
+                  <Signature label="Prepared By" sub={report.preparedRole} />
+                  <div className="h-24 w-48" aria-hidden="true" />
                 </div>
+                <div className="flex items-end justify-between">
+                  <Signature label="Checked By" sub="Tourism Audit Officer" />
+                  <Signature label="Approved By" sub="Head of Department" />
+                </div>
+              </div>
+            </div>
+          </motion.section>
+        </motion.div>
+      </ModalPortal>
 
-                <div className="mt-4 grid gap-2">
+      {showReturnDialog && report.status === "Draft" && (
+        <ModalPortal>
+          <motion.div
+            className="print-hide fixed inset-0 z-1400 flex min-h-dvh items-center justify-center overflow-y-auto bg-[rgba(3,20,12,0.72)] p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="return-final-report-title"
+              className="relative z-1401 my-auto max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-[28px] border border-red-100 bg-white text-slate-950 shadow-[0_34px_100px_rgba(20,2,2,0.36)] ring-1 ring-red-950/5"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              <div className="h-1.5 bg-linear-to-r from-red-700 via-red-500 to-amber-400" />
+              <header className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50/70 px-6 py-5 max-sm:px-5">
+                <div className="min-w-0">
+                  <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-red-700 uppercase">{report.id}</p>
+                  <h2 id="return-final-report-title" className="text-tanaw-navy text-xl leading-tight font-bold">
+                    Return Final Report for Revision
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-red-800">
+                    Select the source reports that need enterprise correction. Unselected reports will move back to Ready to Consolidate.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReturnDialog}
+                  disabled={returnMutation.isPending}
+                  aria-label="Close return for revision dialog"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <X size={19} />
+                </button>
+              </header>
+
+              <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-6 py-5 max-sm:px-5">
+                <div className="grid max-h-[38vh] gap-2 overflow-y-auto pr-1">
                   {report.sources.map((source) => (
-                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm">
-                      <span>
-                        <span className="block font-semibold text-slate-900">{source.enterprise}</span>
+                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60">
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-slate-900">{source.enterprise}</span>
                         <span className="mt-0.5 block font-mono text-xs text-slate-500">
                           {source.code} | Unique: {source.unique.toLocaleString()}
                         </span>
                       </span>
-                      <input type="checkbox" checked={selectedSourceIds.includes(source.id)} onChange={() => handleSourceToggle(source.id)} className="h-4 w-4 accent-red-600" />
+                      <input
+                        type="checkbox"
+                        checked={selectedSourceIds.includes(source.id)}
+                        onChange={() => handleSourceToggle(source.id)}
+                        disabled={returnMutation.isPending}
+                        className="h-4 w-4 shrink-0 accent-red-600"
+                      />
                     </label>
                   ))}
                 </div>
 
-                <label className="mt-4 block">
+                <label className="mt-5 block">
                   <span className="text-xs font-bold tracking-[0.16em] text-red-800 uppercase">Audit remarks</span>
                   <textarea
                     value={returnRemarks}
                     onChange={(event) => setReturnRemarks(event.target.value)}
-                    rows={3}
-                    className="mt-2 w-full rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    rows={4}
+                    disabled={returnMutation.isPending}
+                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder="Describe the discrepancy and what the enterprise needs to correct."
                   />
                 </label>
-
-                <div className="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleReturnForRevision}
-                    disabled={!canSubmitReturn}
-                    className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-200"
-                  >
-                    <AlertTriangle size={15} /> {returnMutation.isPending ? "Returning..." : "Confirm Return for Revision"}
-                  </button>
-                </div>
-              </section>
-            )}
-
-            <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
-              <ul className="space-y-2 font-mono text-xs text-gray-600">
-                <li className="flex items-center justify-between border-b border-gray-200 pb-2">
-                  <span>v1.0 Draft aggregated by System Pipeline</span>
-                  <span>{report.generatedOn} 04:15 AM</span>
-                </li>
-                {report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized") ? (
-                  <li className="flex items-center justify-between pt-1">
-                    <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
-                    <span>{report.generatedOn} 09:30 AM</span>
-                  </li>
-                ) : (
-                  <li className="flex items-center justify-between pt-1">
-                    <span>{report.status === "Returned for Revision" ? "v1.1 Returned for source report revision" : "v1.1 Awaiting final audit decision"}</span>
-                    <span>{report.generatedOn} 09:30 AM</span>
-                  </li>
-                )}
-              </ul>
-            </div>
-
-            <div className="mb-6 border-b-2 border-black pb-4 text-center">
-              <img src={CITY_SEAL} className="mx-auto mb-3 h-16 w-16 grayscale" alt="San Pedro Seal" />
-              <h1 className="font-serif text-lg font-bold tracking-widest uppercase">City Government of San Pedro</h1>
-              <p className="mt-1 text-xs tracking-wider uppercase">Tourism & Economic Development Office</p>
-              <h2 className="mt-5 text-xl font-bold underline">{report.title}</h2>
-              <p className="mt-1 font-mono text-sm">Reporting Period: {report.period}</p>
-            </div>
-
-            <p className="mb-6 text-justify text-sm leading-relaxed">
-              This document certifies the consolidated visitor analytics derived from the TANAW Edge Intelligence Network for the stated period. Aggregation relies on immutable edge telemetry over{" "}
-              {report.enterpriseCount} monitored enterprise nodes.
-            </p>
-
-            <DotFinalReportTable report={report} />
-
-            <div className="mt-auto pt-10">
-              <div className="mb-8 flex items-end justify-between">
-                <Signature label="Prepared By" sub={report.preparedRole} />
-                <div className="h-24 w-48" aria-hidden="true" />
               </div>
-              <div className="flex items-end justify-between">
-                <Signature label="Checked By" sub="Tourism Audit Officer" />
-                <Signature label="Approved By" sub="Head of Department" />
-              </div>
-            </div>
-          </div>
-        </motion.section>
-      </motion.div>
-    </ModalPortal>
+
+              <footer className="flex flex-wrap justify-end gap-3 border-t border-red-100 bg-white px-6 py-4 max-sm:px-5">
+                <button
+                  type="button"
+                  onClick={closeReturnDialog}
+                  disabled={returnMutation.isPending}
+                  className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReturnForRevision}
+                  disabled={!canSubmitReturn}
+                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-200"
+                >
+                  <AlertTriangle size={15} /> {returnMutation.isPending ? "Returning..." : "Confirm Return for Revision"}
+                </button>
+              </footer>
+            </motion.section>
+          </motion.div>
+        </ModalPortal>
+      )}
+    </>
   );
 }
 
