@@ -10,7 +10,7 @@ import { PageMotion } from "@/shared/components/ui";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
-import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, EnterpriseReportsModal, ReportReviewModal } from "../components";
+import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, EnterpriseReportsModal, ReportActionConfirmDialog, ReportReviewModal } from "../components";
 import { getAvailableMonths, getAvailableYears, getCurrentSubmissionPeriod, getDefaultSubmissionPeriod, getEnterpriseReportRows, reportMatchesPeriod } from "../utils";
 
 const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
@@ -32,6 +32,7 @@ export function StaffBatchReportsPage() {
   const [yearFilter, setYearFilter] = useState(defaultPeriod.year);
   const [selectedEnterprise, setSelectedEnterprise] = useState<ReportEnterprise | null>(null);
   const [selectedReport, setSelectedReport] = useState<IntakeReport | null>(null);
+  const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
 
   const availableMonths = useMemo(() => getAvailableMonths(reports, currentPeriod), [currentPeriod, reports]);
   const availableYears = useMemo(() => getAvailableYears(reports, currentPeriod), [currentPeriod, reports]);
@@ -90,6 +91,7 @@ export function StaffBatchReportsPage() {
     onSuccess: (finalReport) => {
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
+      setIsGenerateConfirmOpen(false);
       toast.success(`${finalReport.id} generated for Final Reports Audit.`);
     },
     onError: (error) => {
@@ -98,6 +100,11 @@ export function StaffBatchReportsPage() {
   });
 
   const handleGenerate = () => {
+    if (!allReady || consolidateMutation.isPending) return;
+    setIsGenerateConfirmOpen(true);
+  };
+
+  const confirmGenerate = () => {
     if (!allReady || consolidateMutation.isPending) return;
     consolidateMutation.mutate();
   };
@@ -180,6 +187,26 @@ export function StaffBatchReportsPage() {
         )}
         {selectedReport && (
           <ReportReviewModal report={selectedReport} isUpdating={updateStatusMutation.isPending} onClose={() => setSelectedReport(null)} onAccept={handleAccept} onReturn={handleReturn} />
+        )}
+        {isGenerateConfirmOpen && (
+          <ReportActionConfirmDialog
+            title="Generate Final Report?"
+            eyebrow="Final batch report"
+            message="This will consolidate the accepted enterprise reports for the selected period and create a final report draft for audit. Source reports included in the batch will move forward in the workflow."
+            tone="emerald"
+            confirmLabel="Generate Final Report"
+            pendingLabel="Generating..."
+            isPending={consolidateMutation.isPending}
+            isConfirmDisabled={!allReady || readyReports.length === 0}
+            onCancel={() => setIsGenerateConfirmOpen(false)}
+            onConfirm={confirmGenerate}
+            details={[
+              { label: "Period", value: `${monthFilter} ${yearFilter}` },
+              { label: "Scope", value: barangayFilter === ALL_BARANGAYS_FILTER ? "All barangays" : barangayFilter },
+              { label: "Reports", value: `${readyReports.length} ready submissions` },
+              { label: "Enterprises", value: `${selectedReportEnterprises.length} covered enterprises` },
+            ]}
+          />
         )}
       </AnimatePresence>
     </PageMotion>

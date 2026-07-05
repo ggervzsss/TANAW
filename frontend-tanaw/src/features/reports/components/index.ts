@@ -5,5 +5,6 @@ export { BatchReportsToolbar } from "./BatchReportsToolbar";
 export { DotFinalReportTable, DotSingleReportTable } from "./DotReportTable";
 export { EnterpriseReportsModal } from "./EnterpriseReportsModal";
 export { FinalReportViewer } from "./FinalReportViewer";
+export { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 export { ReportReviewModal } from "./ReportReviewModal";
 export { ReportStatusBadge } from "./ReportStatusBadge";

@@ -10,6 +10,7 @@ import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/s
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
 import { DotFinalReportTable } from "./DotReportTable";
+import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { downloadFinalReportPdf } from "../utils/pdf";
 
 type FinalReportViewerProps = {
@@ -17,8 +18,11 @@ type FinalReportViewerProps = {
   onClose: () => void;
 };
 
+type FinalReportConfirmAction = "archive" | "finalize" | "restore" | "return" | null;
+
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
+  const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [returnRemarks, setReturnRemarks] = useState("");
@@ -40,6 +44,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
       toast.success(`${report.id} returned for source report revision.`);
+      setConfirmAction(null);
       setShowReturnDialog(false);
       setSelectedSourceIds([]);
       setReturnRemarks("");
@@ -49,32 +54,44 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   });
   const downloadReport = () => downloadFinalReportPdf(report);
   const canSubmitReturn = selectedSourceIds.length > 0 && returnRemarks.trim().length >= 5 && !returnMutation.isPending;
+  const selectedReturnSources = report.sources.filter((source) => selectedSourceIds.includes(source.id));
+  const confirmCopy = confirmAction ? finalReportConfirmCopy(confirmAction, report) : null;
+  const confirmDetails = confirmAction
+    ? finalReportConfirmDetails({
+        action: confirmAction,
+        report,
+        returnRemarks,
+        selectedSources: selectedReturnSources,
+      })
+    : [];
 
-  const handleArchive = () => {
-    statusMutation.mutate("Archived", {
-      onSuccess: () => {
-        toast.success(`${report.id} has been moved to Archives.`);
-        onClose();
-      },
-      onError: () => toast.error("Final report status could not be updated."),
-    });
+  const requestArchive = () => {
+    if (statusMutation.isPending) return;
+    setConfirmAction("archive");
   };
 
-  const handleFinalize = () => {
-    statusMutation.mutate("Finalized", {
-      onSuccess: () => {
-        toast.success(`${report.id} marked as Finalized. Ready for DOT handoff.`);
-        onClose();
-      },
-      onError: () => toast.error("Final report status could not be updated."),
-    });
+  const requestFinalize = () => {
+    if (statusMutation.isPending) return;
+    setConfirmAction("finalize");
   };
 
-  const handleRestore = () => {
+  const requestRestore = () => {
+    if (statusMutation.isPending) return;
+    setConfirmAction("restore");
+  };
+
+  const confirmStatusAction = () => {
+    if (statusMutation.isPending) return;
+    const action = confirmAction;
+    if (action !== "archive" && action !== "finalize" && action !== "restore") return;
     const restoreStatus = getRestoreStatus(report);
-    statusMutation.mutate(restoreStatus, {
+    const nextStatus: FinalReportStatus = action === "archive" ? "Archived" : action === "finalize" ? "Finalized" : restoreStatus;
+    statusMutation.mutate(nextStatus, {
       onSuccess: () => {
-        toast.success(`${report.id} has been restored as ${restoreStatus}.`);
+        setConfirmAction(null);
+        if (action === "archive") toast.success(`${report.id} has been moved to Archives.`);
+        if (action === "finalize") toast.success(`${report.id} marked as Finalized. Ready for DOT handoff.`);
+        if (action === "restore") toast.success(`${report.id} has been restored as ${restoreStatus}.`);
         onClose();
       },
       onError: () => toast.error("Final report status could not be updated."),
@@ -87,6 +104,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
 
   const closeReturnDialog = () => {
     if (returnMutation.isPending) return;
+    setConfirmAction(null);
     setShowReturnDialog(false);
     setSelectedSourceIds([]);
     setReturnRemarks("");
@@ -97,7 +115,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       toast.error("Select at least one source report and enter audit remarks.");
       return;
     }
-    returnMutation.mutate();
+    setConfirmAction("return");
   };
 
   return (
@@ -126,8 +144,9 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 {report.status === "Archived" ? (
                   <button
                     type="button"
-                    onClick={handleRestore}
-                    className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
+                    onClick={requestRestore}
+                    disabled={statusMutation.isPending}
+                    className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:cursor-wait disabled:opacity-60"
                   >
                     <ArchiveRestore size={15} /> Restore
                   </button>
@@ -138,14 +157,16 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                         <button
                           type="button"
                           onClick={() => setShowReturnDialog(true)}
-                          className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+                          disabled={statusMutation.isPending}
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
                         >
                           <AlertTriangle size={15} /> Return for Revision
                         </button>
                         <button
                           type="button"
-                          onClick={handleFinalize}
-                          className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
+                          onClick={requestFinalize}
+                          disabled={statusMutation.isPending}
+                          className="bg-tanaw-green hover:bg-tanaw-green/90 inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:cursor-wait disabled:opacity-60"
                         >
                           <CheckCircle size={15} /> Mark as Finalized
                         </button>
@@ -153,8 +174,9 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                     )}
                     <button
                       type="button"
-                      onClick={handleArchive}
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                      onClick={requestArchive}
+                      disabled={statusMutation.isPending}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-wait disabled:opacity-60"
                     >
                       <Archive size={15} /> Archive
                     </button>
@@ -333,8 +355,110 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           </motion.div>
         </ModalPortal>
       )}
+
+      {confirmCopy && (
+        <ReportActionConfirmDialog
+          title={confirmCopy.title}
+          eyebrow={confirmCopy.eyebrow}
+          message={confirmCopy.message}
+          tone={confirmCopy.tone}
+          confirmLabel={confirmCopy.confirmLabel}
+          pendingLabel={confirmCopy.pendingLabel}
+          isPending={confirmAction === "return" ? returnMutation.isPending : statusMutation.isPending}
+          isConfirmDisabled={confirmAction === "return" ? !canSubmitReturn : false}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            if (confirmAction === "return") {
+              if (!canSubmitReturn) {
+                toast.error("Select at least one source report and enter audit remarks.");
+                return;
+              }
+              returnMutation.mutate();
+              return;
+            }
+            confirmStatusAction();
+          }}
+          details={confirmDetails}
+        />
+      )}
     </>
   );
+}
+
+function finalReportConfirmCopy(action: Exclude<FinalReportConfirmAction, null>, report: FinalReport) {
+  if (action === "finalize") {
+    return {
+      title: "Finalize draft report?",
+      eyebrow: "Final audit decision",
+      message: "This will mark the consolidated draft as Finalized and ready for official DOT handoff. Further source-report corrections should be handled before this action.",
+      tone: "emerald" as const,
+      confirmLabel: "Finalize Report",
+      pendingLabel: "Finalizing...",
+    };
+  }
+
+  if (action === "archive") {
+    return {
+      title: "Archive final report?",
+      eyebrow: "Archive report",
+      message: "This will move the final report out of the active audit list while preserving its current workflow status for restoration.",
+      tone: "amber" as const,
+      confirmLabel: "Archive Report",
+      pendingLabel: "Archiving...",
+    };
+  }
+
+  if (action === "restore") {
+    const restoreStatus = getRestoreStatus(report);
+    return {
+      title: "Restore archived report?",
+      eyebrow: "Restore report",
+      message: `This will return the archived report to the active audit workflow as ${restoreStatus}.`,
+      tone: "emerald" as const,
+      confirmLabel: "Restore Report",
+      pendingLabel: "Restoring...",
+    };
+  }
+
+  return {
+    title: "Return sources for revision?",
+    eyebrow: "Source revision",
+    message: "This will return the selected enterprise source reports for correction. Unselected source reports will remain ready for consolidation.",
+    tone: "red" as const,
+    confirmLabel: "Return for Revision",
+    pendingLabel: "Returning...",
+  };
+}
+
+function finalReportConfirmDetails({
+  action,
+  report,
+  returnRemarks,
+  selectedSources,
+}: {
+  action: Exclude<FinalReportConfirmAction, null>;
+  report: FinalReport;
+  returnRemarks: string;
+  selectedSources: FinalReport["sources"];
+}) {
+  if (action === "return") {
+    return [
+      { label: "Final Report", value: report.id },
+      { label: "Period", value: report.period },
+      {
+        label: "Sources",
+        value: selectedSources.length > 0 ? selectedSources.map((source) => `${source.code} (${source.enterprise})`).join(", ") : "No source reports selected.",
+      },
+      { label: "Remarks", value: returnRemarks.trim() },
+    ];
+  }
+
+  return [
+    { label: "Final Report", value: report.id },
+    { label: "Period", value: report.period },
+    { label: "Current Status", value: report.status },
+    { label: "Next Status", value: action === "archive" ? "Archived" : action === "finalize" ? "Finalized" : getRestoreStatus(report) },
+  ];
 }
 
 function Signature({ label, sub }: { label: string; sub: string }) {
