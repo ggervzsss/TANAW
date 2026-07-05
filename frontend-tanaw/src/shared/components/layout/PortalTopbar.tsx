@@ -104,6 +104,8 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 
   const handleViewAllNotifications = () => {
     setShowNotifications(false);
+    setOpenMenuId(null);
+    setShowMobileNav(false);
     if (viewAllPath) {
       navigate(viewAllPath);
     }

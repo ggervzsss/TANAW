@@ -8,6 +8,7 @@ import { ITEnterpriseAccountsPage } from "@/features/enterprise-accounts";
 import { ITLguAccountsPage } from "@/features/lgu-accounts";
 import { ChangePasswordPage, EnterpriseAccessPage, LoginPage } from "@/features/login";
 import { AdminMapViewPage } from "@/features/mapview";
+import { NotificationsPage } from "@/features/notifications";
 import { StaffBatchReportsPage, StaffFinalReportsAuditPage } from "@/features/reports";
 import { ITSystemSettingsPage } from "@/features/system-settings";
 import { AdminSystemLogsPage, ITSystemLogsPage, StaffSystemLogsPage } from "@/features/system-logs";
@@ -45,6 +46,7 @@ export function AppRouter() {
         <Route path="enterprise-accounts" element={<ITEnterpriseAccountsPage />} />
         <Route path="alerts" element={<ITAlertsPage />} />
         <Route path="support-tickets" element={<SupportTicketsPage mode="it" />} />
+        <Route path="notifications" element={<NotificationsPage role="it" />} />
         <Route path="system-logs" element={<ITSystemLogsPage />} />
         <Route path="dev-log" element={<ITDevLogPage />} />
         <Route path="system-settings" element={<ITSystemSettingsPage />} />
@@ -65,6 +67,7 @@ export function AppRouter() {
         <Route path="system-logs" element={<AdminSystemLogsPage />} />
         <Route path="alerts-monitor" element={<AdminAlertsMonitorPage />} />
         <Route path="support-tickets" element={<SupportTicketsPage mode="admin" />} />
+        <Route path="notifications" element={<NotificationsPage role="admin" />} />
         <Route path="profile" element={<AccountProfilePage role="admin" />} />
         <Route path="security" element={<AccountSecurityPage />} />
       </Route>
@@ -81,6 +84,7 @@ export function AppRouter() {
         <Route path="batch-reports" element={<StaffBatchReportsPage />} />
         <Route path="final-reports-audit" element={<StaffFinalReportsAuditPage />} />
         <Route path="analytics" element={<StaffAnalyticsPage />} />
+        <Route path="notifications" element={<NotificationsPage role="staff" />} />
         <Route path="system-logs" element={<StaffSystemLogsPage />} />
         <Route path="profile" element={<AccountProfilePage role="staff" />} />
         <Route path="security" element={<AccountSecurityPage />} />

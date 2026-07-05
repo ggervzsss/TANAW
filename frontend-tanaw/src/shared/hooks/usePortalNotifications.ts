@@ -40,9 +40,9 @@ const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_BACKEND_NOTIFICATIONS: BackendNotification[] = [];
 
 const viewAllPathByRole: Record<UserRole, string | undefined> = {
-  admin: routes.admin.alertsMonitor,
-  it: routes.it.alerts,
-  staff: routes.staff.batchReports,
+  admin: routes.admin.notifications,
+  it: routes.it.notifications,
+  staff: routes.staff.notifications,
   enterprise: undefined,
 };
 
@@ -117,17 +117,17 @@ export function usePortalNotifications(role: UserRole) {
     return persistedNotifications;
   }, [alerts, backendNotifications, devDeliveries, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
 
-  const notifications = useMemo(
+  const allNotifications = useMemo(
     () =>
-      drafts
+      [...drafts]
         .sort((left, right) => right.sortTime - left.sortTime)
-        .slice(0, MAX_VISIBLE_NOTIFICATIONS)
         .map((notification) => ({
           ...notification,
           read: Boolean(notification.read) || readIds.has(notification.id),
         })),
     [drafts, readIds],
   );
+  const notifications = useMemo(() => allNotifications.slice(0, MAX_VISIBLE_NOTIFICATIONS), [allNotifications]);
 
   const persistReadIds = useCallback(
     (nextIds: Set<string>) => {
@@ -141,27 +141,28 @@ export function usePortalNotifications(role: UserRole) {
 
   const markAsRead = useCallback(
     (notificationId: string) => {
-      const backendId = notifications.find((notification) => notification.id === notificationId)?.backendId;
+      const backendId = allNotifications.find((notification) => notification.id === notificationId)?.backendId;
       if (backendId) {
         void updateUserNotificationRead(backendId, true);
       }
       persistReadIds(new Set(readIds).add(notificationId));
     },
-    [notifications, persistReadIds, readIds],
+    [allNotifications, persistReadIds, readIds],
   );
 
   const markAllAsRead = useCallback(() => {
-    notifications
+    allNotifications
       .filter((notification): notification is PortalNotification & { backendId: string } => Boolean(notification.backendId) && !notification.read)
       .forEach((notification) => {
         void updateUserNotificationRead(notification.backendId, true);
       });
-    persistReadIds(new Set([...readIds, ...notifications.map((notification) => notification.id)]));
-  }, [notifications, persistReadIds, readIds]);
+    persistReadIds(new Set([...readIds, ...allNotifications.map((notification) => notification.id)]));
+  }, [allNotifications, persistReadIds, readIds]);
 
   return {
     notifications,
-    unreadCount: notifications.filter((notification) => !notification.read).length,
+    allNotifications,
+    unreadCount: allNotifications.filter((notification) => !notification.read).length,
     isLoading: alertsLoading || backendNotificationsQuery.isLoading || devDeliveriesQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
     viewAllPath: viewAllPathByRole[role],
     markAsRead,
