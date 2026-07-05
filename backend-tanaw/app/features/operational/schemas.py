@@ -1,10 +1,44 @@
-from datetime import datetime
+import re
+from calendar import month_abbr, month_name, monthrange
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 SourceKind = Literal["real", "mock", "hybrid"]
 FleetSimulationLane = Literal["normal", "warning", "one-minute-breach"]
+REPORTING_TIME_ZONE = ZoneInfo("Asia/Manila")
+REPORTING_PERIOD_RANGE_RE = re.compile(
+    r"^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$"
+)
+REPORTING_PERIOD_MONTH_RE = re.compile(r"^([A-Za-z]+)\s+(\d{4})$")
+MONTH_INDEX_BY_LABEL = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
 
 
 class DesktopMetricsSummary(BaseModel):
@@ -136,6 +170,60 @@ def _first_present(values: dict, *keys: str) -> object:
     return None
 
 
+def reporting_period_submission_error(period: str, submitted_at: datetime) -> str | None:
+    period_end = _reporting_period_end_date(period)
+    if period_end is None:
+        return "Reporting period must include a recognizable month and year before submission."
+
+    submitted_date = _reporting_date(submitted_at)
+    opens_on = period_end + timedelta(days=1)
+    if submitted_date >= opens_on:
+        return None
+
+    return (
+        f"Submission opens on {_format_period_date(opens_on)} after the "
+        f"{month_name[period_end.month]} {period_end.year} reporting period closes."
+    )
+
+
+def _reporting_period_end_date(period: str) -> date | None:
+    normalized_period = period.strip()
+    range_match = REPORTING_PERIOD_RANGE_RE.match(normalized_period)
+    if range_match:
+        start_month, end_month, end_day, year = range_match.groups()
+        month = _month_number(end_month or start_month)
+        if month is None:
+            return None
+        try:
+            return date(int(year), month, int(end_day))
+        except ValueError:
+            return None
+
+    month_year_match = REPORTING_PERIOD_MONTH_RE.match(normalized_period)
+    if month_year_match:
+        month_label, year_label = month_year_match.groups()
+        month = _month_number(month_label)
+        if month is None:
+            return None
+        year = int(year_label)
+        return date(year, month, monthrange(year, month)[1])
+
+    return None
+
+
+def _month_number(month_label: str) -> int | None:
+    return MONTH_INDEX_BY_LABEL.get(month_label.lower())
+
+
+def _reporting_date(value: datetime) -> date:
+    aware_value = value.replace(tzinfo=UTC) if value.tzinfo is None else value
+    return aware_value.astimezone(REPORTING_TIME_ZONE).date()
+
+
+def _format_period_date(value: date) -> str:
+    return f"{month_abbr[value.month]} {value.day}, {value.year}"
+
+
 class DesktopReportSubmissionIngest(BaseModel):
     reportId: str = Field(min_length=3, max_length=80)
     period: str = Field(default="Current Period", min_length=1, max_length=120)
@@ -157,6 +245,9 @@ class DesktopReportSubmissionIngest(BaseModel):
             self.entries, self.exits, self.peakOccupancy, self.uniqueCount = payload_metrics
         if self.exits > self.entries:
             raise ValueError("Total exits cannot exceed total entries.")
+        period_submission_error = reporting_period_submission_error(self.period, self.submittedAt)
+        if period_submission_error:
+            raise ValueError(period_submission_error)
         demo = (self.payload or {}).get("demo")
         required_demo_fields = {
             "thisProvMale",

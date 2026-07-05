@@ -3,10 +3,23 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.config.camera_config import reporting_period_submission_error
 from app.storage.local_metrics_store import LocalMetricsStore
 
 
 class LocalMetricsStoreTest(unittest.TestCase):
+    def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
+        self.assertIsNotNone(
+            reporting_period_submission_error(
+                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
+            )
+        )
+        self.assertIsNone(
+            reporting_period_submission_error(
+                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
+            )
+        )
+
     def test_duplicate_reporting_period_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))

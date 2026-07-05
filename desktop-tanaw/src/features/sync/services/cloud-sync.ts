@@ -143,10 +143,10 @@ function selectMockPreparationCounts(preparation: BackendMockPreparation, period
 }
 
 function currentReportingPeriodLabel() {
-  const now = new Date();
-  const month = new Intl.DateTimeFormat("en-US", { month: "short" }).format(now);
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return `${month} 1 - ${month} ${lastDay}, ${now.getFullYear()}`;
+  const now = reportingDate(new Date());
+  const month = monthName(now.monthIndex);
+  const lastDay = lastDayOfMonth(now.year, now.monthIndex);
+  return `${month} 1 - ${month} ${lastDay}, ${now.year}`;
 }
 
 function isSameReportingMonth(first: string, second: string) {
@@ -155,9 +155,9 @@ function isSameReportingMonth(first: string, second: string) {
 
 function reportingMonthKey(value: string) {
   const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*[A-Za-z]+\s+\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
   if (rangeMatch) {
-    return monthKey(rangeMatch[1], rangeMatch[2]) ?? normalizedValue.toLowerCase();
+    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
   }
 
   const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
@@ -169,13 +169,49 @@ function reportingMonthKey(value: string) {
 }
 
 function monthKey(monthLabel: string, yearLabel: string) {
-  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  const monthIndex = monthIndexFromLabel(monthLabel);
   const year = Number(yearLabel);
-  if (monthIndex === undefined || !Number.isInteger(year)) return null;
+  if (monthIndex === null || !Number.isInteger(year)) return null;
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 }
 
-const MONTH_INDEX_BY_LABEL: Record<string, number> = {
+type CalendarDate = {
+  day: number;
+  monthIndex: number;
+  year: number;
+};
+
+function reportingDate(value: Date): CalendarDate {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: REPORTING_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(value);
+  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return {
+    day: partValue("day"),
+    monthIndex: partValue("month") - 1,
+    year: partValue("year"),
+  };
+}
+
+function monthIndexFromLabel(monthLabel: string): number | null {
+  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  return typeof monthIndex === "number" ? monthIndex : null;
+}
+
+function lastDayOfMonth(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+function monthName(monthIndex: number) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
+}
+
+const REPORTING_TIME_ZONE = "Asia/Manila";
+
+const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
   jan: 0,
   feb: 1,
   mar: 2,

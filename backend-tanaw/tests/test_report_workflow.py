@@ -5,7 +5,10 @@ from typing import cast
 import pytest
 
 from app.features.operational.models import EnterpriseReportSubmission
-from app.features.operational.schemas import DesktopReportSubmissionIngest
+from app.features.operational.schemas import (
+    DesktopReportSubmissionIngest,
+    reporting_period_submission_error,
+)
 from app.features.operational.service import (
     InvalidReportWorkflowError,
     resolve_final_report_status_transition,
@@ -104,6 +107,48 @@ def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() 
     assert payload.exits == 625
     assert payload.peakOccupancy == 58
     assert payload.uniqueCount == 525
+
+
+def test_desktop_submission_rejects_open_reporting_period() -> None:
+    with pytest.raises(ValueError, match="Submission opens on Aug 1, 2026"):
+        DesktopReportSubmissionIngest(
+            reportId="REP-260701",
+            period="Jul 1 - Jul 31, 2026",
+            submittedAt=datetime(2026, 7, 15, 8, 0, tzinfo=UTC),
+            entries=10,
+            exits=4,
+            peakOccupancy=6,
+            uniqueCount=6,
+            payload={
+                "demo": {
+                    "foreignFemale": "1",
+                    "foreignMale": "1",
+                    "otherProvFemale": "1",
+                    "otherProvMale": "1",
+                    "thisProvFemale": "1",
+                    "thisProvMale": "1",
+                },
+                "metrics": {
+                    "entries": 10,
+                    "exits": 4,
+                    "peak": 6,
+                    "unique": 6,
+                },
+                "status": "Submitted",
+            },
+        )
+
+
+def test_reporting_period_submission_opens_on_next_manila_month() -> None:
+    assert reporting_period_submission_error(
+        "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
+    )
+    assert (
+        reporting_period_submission_error(
+            "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
+        )
+        is None
+    )
 
 
 def _report(report_id: str, review_status: str, period: str) -> EnterpriseReportSubmission:

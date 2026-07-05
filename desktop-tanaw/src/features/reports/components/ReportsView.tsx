@@ -75,6 +75,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const blockingMetricsError = activeReport ? null : metricsError;
   const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
     checkDuplicatePeriod: !(activeReport && isReadOnly),
+    checkReportingPeriod: !isReadOnly,
   });
   const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
   const ledgerRows = useMemo(
@@ -272,6 +273,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setIsSubmitting(true);
     const submitValidationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
       checkDuplicatePeriod: true,
+      checkReportingPeriod: true,
     });
     if (submitValidationError) {
       notifyError(submitValidationError);
@@ -476,8 +478,12 @@ function validateReportDraft(
   period: string,
   reports: ReportRecord[],
   activeReportId: string | null,
-  options: { checkDuplicatePeriod: boolean },
+  options: { checkDuplicatePeriod: boolean; checkReportingPeriod: boolean },
 ) {
+  if (options.checkReportingPeriod) {
+    const periodSubmissionError = getReportingPeriodSubmissionError(period);
+    if (periodSubmissionError) return periodSubmissionError;
+  }
   const allocationError = validateDemographicAllocation(metrics, demo);
   if (allocationError) return allocationError;
   if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
@@ -893,20 +899,33 @@ function getCurrentReportingPeriod() {
 }
 
 function reportingPeriodLabel(value: Date) {
-  const month = new Intl.DateTimeFormat("en-US", { month: "short" }).format(value);
-  const lastDay = new Date(value.getFullYear(), value.getMonth() + 1, 0).getDate();
-  return `${month} 1 - ${month} ${lastDay}, ${value.getFullYear()}`;
+  const reportingValue = reportingDate(value);
+  const month = monthName(reportingValue.monthIndex, "short");
+  const lastDay = lastDayOfMonth(reportingValue.year, reportingValue.monthIndex);
+  return `${month} 1 - ${month} ${lastDay}, ${reportingValue.year}`;
 }
 
 function isSameReportingMonth(first: string, second: string) {
   return reportingMonthKey(first) === reportingMonthKey(second);
 }
 
+function getReportingPeriodSubmissionError(period: string, now = new Date()) {
+  const periodEnd = reportingPeriodEndDate(period);
+  if (!periodEnd) {
+    return "Reporting period must include a recognizable month and year before submission.";
+  }
+
+  const opensOn = addCalendarDays(periodEnd, 1);
+  if (calendarDateKey(reportingDate(now)) >= calendarDateKey(opensOn)) return null;
+
+  return `Submission opens on ${formatCalendarDate(opensOn)} after the ${monthName(periodEnd.monthIndex)} ${periodEnd.year} reporting period closes.`;
+}
+
 function reportingMonthKey(value: string) {
   const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*[A-Za-z]+\s+\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
   if (rangeMatch) {
-    return monthKey(rangeMatch[1], rangeMatch[2]) ?? normalizedValue.toLowerCase();
+    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
   }
 
   const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
@@ -917,14 +936,93 @@ function reportingMonthKey(value: string) {
   return normalizedValue.toLowerCase();
 }
 
+function reportingPeriodEndDate(value: string): CalendarDate | null {
+  const normalizedValue = value.trim();
+  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$/.exec(normalizedValue);
+  if (rangeMatch) {
+    const monthIndex = monthIndexFromLabel(rangeMatch[2] || rangeMatch[1]);
+    const day = Number(rangeMatch[3]);
+    const year = Number(rangeMatch[4]);
+    if (monthIndex === null || !isValidCalendarDate(year, monthIndex, day)) return null;
+    return { day, monthIndex, year };
+  }
+
+  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  if (monthYearMatch) {
+    const monthIndex = monthIndexFromLabel(monthYearMatch[1]);
+    const year = Number(monthYearMatch[2]);
+    if (monthIndex === null || !Number.isInteger(year)) return null;
+    return { day: lastDayOfMonth(year, monthIndex), monthIndex, year };
+  }
+
+  return null;
+}
+
 function monthKey(monthLabel: string, yearLabel: string) {
-  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  const monthIndex = monthIndexFromLabel(monthLabel);
   const year = Number(yearLabel);
-  if (monthIndex === undefined || !Number.isInteger(year)) return null;
+  if (monthIndex === null || !Number.isInteger(year)) return null;
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 }
 
-const MONTH_INDEX_BY_LABEL: Record<string, number> = {
+type CalendarDate = {
+  day: number;
+  monthIndex: number;
+  year: number;
+};
+
+function monthIndexFromLabel(monthLabel: string): number | null {
+  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
+  return typeof monthIndex === "number" ? monthIndex : null;
+}
+
+function isValidCalendarDate(year: number, monthIndex: number, day: number) {
+  return Number.isInteger(year) && Number.isInteger(day) && day >= 1 && day <= lastDayOfMonth(year, monthIndex);
+}
+
+function lastDayOfMonth(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+function addCalendarDays(value: CalendarDate, days: number): CalendarDate {
+  const date = new Date(Date.UTC(value.year, value.monthIndex, value.day + days));
+  return {
+    day: date.getUTCDate(),
+    monthIndex: date.getUTCMonth(),
+    year: date.getUTCFullYear(),
+  };
+}
+
+function reportingDate(value: Date): CalendarDate {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: REPORTING_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(value);
+  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return {
+    day: partValue("day"),
+    monthIndex: partValue("month") - 1,
+    year: partValue("year"),
+  };
+}
+
+function calendarDateKey(value: CalendarDate) {
+  return value.year * 10_000 + (value.monthIndex + 1) * 100 + value.day;
+}
+
+function formatCalendarDate(value: CalendarDate) {
+  return `${monthName(value.monthIndex, "short")} ${value.day}, ${value.year}`;
+}
+
+function monthName(monthIndex: number, format: "short" | "long" = "long") {
+  return new Intl.DateTimeFormat("en-US", { month: format, timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
+}
+
+const REPORTING_TIME_ZONE = "Asia/Manila";
+
+const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
   jan: 0,
   feb: 1,
   mar: 2,
