@@ -324,7 +324,8 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
                 if bool(counts_payload.get("running"))
                 else CAMERA_WS_IDLE_INTERVAL_SECONDS
             )
-            await asyncio.sleep(interval)
+            if not await wait_for_camera_websocket_client(websocket, interval):
+                return
     except WebSocketDisconnect:
         return
     except RuntimeError:
@@ -346,6 +347,19 @@ async def stream(overlay: bool = True) -> StreamingResponse:
             )
 
     return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+async def wait_for_camera_websocket_client(websocket: WebSocket, timeout_seconds: float) -> bool:
+    try:
+        await asyncio.wait_for(websocket.receive_text(), timeout=timeout_seconds)
+    except TimeoutError:
+        return True
+    except WebSocketDisconnect:
+        return False
+    except RuntimeError:
+        return False
+
+    return True
 
 
 def build_health_payload() -> dict[str, Any]:
