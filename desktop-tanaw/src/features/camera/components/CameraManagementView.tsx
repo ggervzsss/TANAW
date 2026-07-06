@@ -14,6 +14,7 @@ import {
   DEFAULT_ML_SERVICE_BASE_URL,
   EMPTY_ML_COUNTS,
   EMPTY_ML_DETECTIONS,
+  getMlCameraWebSocketUrl,
   getMlCounts,
   getMlDetections,
   getMlHealth,
@@ -25,7 +26,7 @@ import {
   stopCameraProcessing,
   testCameraConnection,
 } from "../services/ml-service";
-import type { MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
+import type { MlCameraLiveEnvelope, MlCounts, MlDetections, MlHealth, MlServiceStatus, MlSession } from "../services/ml-service";
 import { loadCameraCredentials, saveCameraCredentials, type CameraCredentialRecords } from "../services/camera-credentials";
 
 type CameraManagementViewProps = {
@@ -47,6 +48,11 @@ const DEFAULT_COUNTING_CONFIDENCE = 0.35;
 const DEFAULT_TRACKING_CONFIDENCE = 0.15;
 const DEFAULT_ROI: Camera["config"]["roi"] = { top: 0, left: 0, width: 100, height: 100 };
 const PREVIOUS_DEFAULT_ROI: Camera["config"]["roi"] = { top: 10, left: 10, width: 80, height: 80 };
+const ML_STATUS_FALLBACK_INTERVAL_MS = 10_000;
+const ML_SESSION_FALLBACK_INTERVAL_MS = 10_000;
+const ML_COUNTS_FALLBACK_INTERVAL_MS = 5_000;
+const ML_DETECTIONS_FALLBACK_INTERVAL_MS = 2_000;
+const ML_LIVE_RECONNECT_MAX_DELAY_MS = 10_000;
 
 type CameraFormErrors = Partial<Record<keyof CameraFormValues, string>>;
 
@@ -66,6 +72,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   const [detections, setDetections] = useState<MlDetections>(EMPTY_ML_DETECTIONS);
   const [processingCameraId, setProcessingCameraId] = useState<number | null>(null);
   const [monitoringError, setMonitoringError] = useState<string | null>(null);
+  const [isMlLiveConnected, setIsMlLiveConnected] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
   const [isTesting, setIsTesting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -120,34 +127,47 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     }
   }, [activeCameraIds, mlBaseUrl, processingCameraId, setCameras]);
 
-  const refreshMlSession = useCallback(async () => {
-    try {
-      const session = await getMlSession(mlBaseUrl);
+  const applyMlSession = useCallback(
+    async (session: MlSession) => {
       setCounts(session.counts);
 
       if (session.running && session.camera_id !== null) {
         if (!activeCameraIds.has(session.camera_id)) {
-          await stopCameraProcessing(mlBaseUrl);
+          try {
+            await stopCameraProcessing(mlBaseUrl);
+          } catch (error) {
+            setMonitoringError(toErrorMessage(error));
+            return false;
+          }
           setProcessingCameraId(null);
           setCounts(EMPTY_ML_COUNTS);
           setDetections(EMPTY_ML_DETECTIONS);
           setCameras((current) => current.map((camera) => (camera.status === "running" ? { ...camera, status: "stopped" } : camera)));
           setMonitoringError("A running camera session from another enterprise was stopped to keep this account's CCTV setup isolated.");
-          return;
+          return false;
         }
 
         setProcessingCameraId(session.camera_id);
         setCameras((current) => current.map((camera) => (camera.id === session.camera_id && camera.status !== "running" ? { ...camera, status: "running" } : camera)));
         setActiveCamId((current) => current ?? session.camera_id);
-        return;
+        return true;
       }
 
       setProcessingCameraId(null);
       setDetections(EMPTY_ML_DETECTIONS);
+      return false;
+    },
+    [activeCameraIds, mlBaseUrl, setCameras],
+  );
+
+  const refreshMlSession = useCallback(async () => {
+    try {
+      const session = await getMlSession(mlBaseUrl);
+      await applyMlSession(session);
     } catch {
       // The regular health/count polling handles service-offline UI state.
     }
-  }, [activeCameraIds, mlBaseUrl, setCameras]);
+  }, [applyMlSession, mlBaseUrl]);
 
   const refreshDetections = useCallback(async () => {
     if (!processingCameraId || !counts.running) {
@@ -161,6 +181,31 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       setDetections((current) => ({ ...current, running: false, status: "offline", tracks: [] }));
     }
   }, [counts.running, mlBaseUrl, processingCameraId]);
+
+  const handleMlLiveEnvelope = useCallback(
+    (rawData: string) => {
+      let envelope: MlCameraLiveEnvelope;
+      try {
+        envelope = JSON.parse(rawData) as MlCameraLiveEnvelope;
+      } catch {
+        return;
+      }
+
+      if (envelope.type !== "camera.state") return;
+
+      const { detections: nextDetections, health: nextHealth, session } = envelope.data;
+      setHealth(nextHealth);
+      void applyMlSession(session);
+
+      if (session.running && session.camera_id !== null && activeCameraIds.has(session.camera_id)) {
+        setDetections(nextDetections);
+        return;
+      }
+
+      setDetections(EMPTY_ML_DETECTIONS);
+    },
+    [activeCameraIds, applyMlSession],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -226,28 +271,97 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   }, [activeCam]);
 
   useEffect(() => {
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    let reconnectAttempt = 0;
+    let closedByEffect = false;
+
+    const scheduleReconnect = () => {
+      if (closedByEffect) return;
+      const delay = Math.min(1000 * 2 ** reconnectAttempt, ML_LIVE_RECONNECT_MAX_DELAY_MS);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(connect, delay);
+    };
+
+    const connect = () => {
+      if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+      }
+
+      try {
+        socket = new WebSocket(getMlCameraWebSocketUrl(mlBaseUrl));
+      } catch {
+        setIsMlLiveConnected(false);
+        scheduleReconnect();
+        return;
+      }
+
+      socket.onopen = () => {
+        reconnectAttempt = 0;
+        setIsMlLiveConnected(true);
+      };
+
+      socket.onmessage = (event) => {
+        if (typeof event.data === "string") {
+          handleMlLiveEnvelope(event.data);
+        }
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
+
+      socket.onclose = () => {
+        setIsMlLiveConnected(false);
+        scheduleReconnect();
+      };
+    };
+
+    connect();
+
+    return () => {
+      closedByEffect = true;
+      setIsMlLiveConnected(false);
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+      }
+    };
+  }, [handleMlLiveEnvelope, mlBaseUrl]);
+
+  useEffect(() => {
     void refreshMlStatus();
-    const intervalId = window.setInterval(() => void refreshMlStatus(), 4000);
+    const intervalId = window.setInterval(() => void refreshMlStatus(), ML_STATUS_FALLBACK_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [refreshMlStatus]);
 
   useEffect(() => {
+    if (isMlLiveConnected) return undefined;
+
     void refreshMlSession();
-    const intervalId = window.setInterval(() => void refreshMlSession(), 4000);
+    const intervalId = window.setInterval(() => void refreshMlSession(), ML_SESSION_FALLBACK_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [refreshMlSession]);
+  }, [isMlLiveConnected, refreshMlSession]);
 
   useEffect(() => {
+    if (isMlLiveConnected) return undefined;
+
     void refreshCounts();
-    const intervalId = window.setInterval(() => void refreshCounts(), 1000);
+    const intervalId = window.setInterval(() => void refreshCounts(), ML_COUNTS_FALLBACK_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [refreshCounts]);
+  }, [isMlLiveConnected, refreshCounts]);
 
   useEffect(() => {
+    if (isMlLiveConnected) return undefined;
+
     void refreshDetections();
-    const intervalId = window.setInterval(() => void refreshDetections(), 250);
+    const intervalId = window.setInterval(() => void refreshDetections(), ML_DETECTIONS_FALLBACK_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [refreshDetections]);
+  }, [isMlLiveConnected, refreshDetections]);
 
   const handleDelete = () => {
     if (!activeCam) return;

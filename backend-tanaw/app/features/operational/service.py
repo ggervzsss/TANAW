@@ -38,6 +38,7 @@ from app.features.operational.schemas import (
     IntakeReportSummary,
     OperationalAlertSummary,
     OperationalSummary,
+    ReportDemographicsSummary,
     ReportStatusUpdate,
     SupportTicketAttachment,
     SupportTicketCreate,
@@ -67,6 +68,14 @@ NOTIFICATION_SETTING_LEGACY_KEYS = {
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
 FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
 FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
+REPORT_DEMOGRAPHIC_FIELDS = (
+    "thisProvMale",
+    "thisProvFemale",
+    "otherProvMale",
+    "otherProvFemale",
+    "foreignMale",
+    "foreignFemale",
+)
 
 
 class DuplicateReportPeriodError(Exception):
@@ -1226,6 +1235,7 @@ def to_telemetry_summary(
 
 
 def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReportSummary:
+    payload = parse_report_payload(report.payload_json)
     return IntakeReportSummary(
         id=report.id,
         enterpriseId=report.enterprise_id,
@@ -1246,7 +1256,8 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
             "unique": report.unique_count,
             "peak": str(report.peak_occupancy),
         },
-        payload=parse_report_payload(report.payload_json),
+        payload=payload,
+        demographics=report_demographics_from_payload(payload, report.unique_count),
     )
 
 
@@ -1260,6 +1271,36 @@ def parse_report_payload(payload_json: str | None) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def report_demographics_from_payload(
+    payload: Mapping[str, object] | None, unique_count: int
+) -> ReportDemographicsSummary | None:
+    demo = payload.get("demo") if payload else None
+    if not isinstance(demo, Mapping):
+        return None
+
+    values: dict[str, int] = {}
+    for field in REPORT_DEMOGRAPHIC_FIELDS:
+        value = report_non_negative_int(demo.get(field))
+        if value is None:
+            return None
+        values[field] = value
+
+    if sum(values.values()) != unique_count:
+        return None
+
+    return ReportDemographicsSummary(**values)
+
+
+def report_non_negative_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value)
+    return None
+
+
 async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> FinalReportSummary:
     sources = (
         await db.scalars(
@@ -1268,6 +1309,18 @@ async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> Fina
             .order_by(FinalReportSource.enterprise.asc())
         )
     ).all()
+    intake_reports_by_id: dict[str, EnterpriseReportSubmission] = {}
+    source_intake_ids = [source.intake_report_id for source in sources]
+    if source_intake_ids:
+        intake_reports = (
+            await db.scalars(
+                select(EnterpriseReportSubmission).where(
+                    EnterpriseReportSubmission.id.in_(source_intake_ids)
+                )
+            )
+        ).all()
+        intake_reports_by_id = {intake_report.id: intake_report for intake_report in intake_reports}
+
     return FinalReportSummary(
         id=report.report_code,
         title=report.title,
@@ -1289,9 +1342,21 @@ async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> Fina
                 unique=source.unique_count,
                 entry=source.entries,
                 exit=source.exits,
+                demographics=source_demographics(source, intake_reports_by_id),
             )
             for source in sources
         ],
+    )
+
+
+def source_demographics(
+    source: FinalReportSource, intake_reports_by_id: Mapping[str, EnterpriseReportSubmission]
+) -> ReportDemographicsSummary | None:
+    intake_report = intake_reports_by_id.get(source.intake_report_id)
+    if intake_report is None:
+        return None
+    return report_demographics_from_payload(
+        parse_report_payload(intake_report.payload_json), source.unique_count
     )
 
 

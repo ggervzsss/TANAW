@@ -329,6 +329,15 @@ class ReportStatusUpdate(BaseModel):
     remarks: str | None = Field(default=None, max_length=2000)
 
 
+class ReportDemographicsSummary(BaseModel):
+    thisProvMale: int = Field(ge=0)
+    thisProvFemale: int = Field(ge=0)
+    otherProvMale: int = Field(ge=0)
+    otherProvFemale: int = Field(ge=0)
+    foreignMale: int = Field(ge=0)
+    foreignFemale: int = Field(ge=0)
+
+
 class IntakeReportSummary(BaseModel):
     id: str
     enterpriseId: str
@@ -345,6 +354,7 @@ class IntakeReportSummary(BaseModel):
     notes: str | None = None
     metrics: dict[str, int | str]
     payload: dict | None = None
+    demographics: ReportDemographicsSummary | None = None
 
 
 FinalReportArchivedFromStatus = Literal["Draft", "Finalized", "Returned for Revision"]
@@ -358,6 +368,7 @@ class FinalReportSourceSummary(BaseModel):
     unique: int
     entry: int
     exit: int
+    demographics: ReportDemographicsSummary | None = None
 
 
 class FinalReportSummary(BaseModel):

@@ -148,6 +148,15 @@ export type MlSession = {
   updated_at: string | null;
 };
 
+export type MlCameraLiveState = {
+  counts: MlCounts;
+  detections: MlDetections;
+  health: MlHealth;
+  session: MlSession;
+};
+
+export type MlCameraLiveEnvelope = { type: "camera.state"; data: MlCameraLiveState } | { type: "heartbeat" };
+
 export type MlEnterpriseContext = {
   enterprise_id: string;
   enterprise_name: string | null;
@@ -577,6 +586,12 @@ export async function stopCameraProcessing(baseUrl: string): Promise<{ message: 
 export function getStreamUrl(baseUrl: string, version: number, overlay = true) {
   const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
   return `${baseUrl}/stream?${params.toString()}`;
+}
+
+export function getMlCameraWebSocketUrl(baseUrl: string) {
+  const url = new URL("/camera/ws", baseUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
 }
 
 export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number, isProcessing: boolean) {

@@ -11,6 +11,7 @@ from app.features.operational.schemas import (
 )
 from app.features.operational.service import (
     InvalidReportWorkflowError,
+    report_demographics_from_payload,
     resolve_final_report_status_transition,
     validate_final_report_revision_return,
     validate_final_report_sources,
@@ -107,6 +108,51 @@ def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() 
     assert payload.exits == 625
     assert payload.peakOccupancy == 58
     assert payload.uniqueCount == 525
+
+
+def test_report_demographics_preserve_submitted_breakdown() -> None:
+    demographics = report_demographics_from_payload(
+        {
+            "demo": {
+                "foreignFemale": "27",
+                "foreignMale": "27",
+                "otherProvFemale": "80",
+                "otherProvMale": "81",
+                "thisProvFemale": "161",
+                "thisProvMale": "161",
+            }
+        },
+        537,
+    )
+
+    assert demographics is not None
+    assert demographics.model_dump() == {
+        "foreignFemale": 27,
+        "foreignMale": 27,
+        "otherProvFemale": 80,
+        "otherProvMale": 81,
+        "thisProvFemale": 161,
+        "thisProvMale": 161,
+    }
+
+
+def test_report_demographics_reject_mismatched_totals() -> None:
+    assert (
+        report_demographics_from_payload(
+            {
+                "demo": {
+                    "foreignFemale": "1",
+                    "foreignMale": "1",
+                    "otherProvFemale": "1",
+                    "otherProvMale": "1",
+                    "thisProvFemale": "1",
+                    "thisProvMale": "1",
+                }
+            },
+            7,
+        )
+        is None
+    )
 
 
 def test_desktop_submission_rejects_open_reporting_period() -> None:
