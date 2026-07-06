@@ -225,6 +225,7 @@ function buildFinalReport(reports: IntakeReport[], preparedBy: string): FinalRep
       unique: report.metrics.unique,
       entry: report.metrics.entry,
       exit: report.metrics.exit,
+      demographics: report.demographics ?? null,
     })),
   };
 }
