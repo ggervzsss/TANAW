@@ -52,7 +52,7 @@ export function downloadIntakeReportPdf(report: IntakeReport) {
     ["Review Status", report.status],
   ]);
   drawDotTable(commands, 222, rows);
-  drawText(commands, "Telemetry Summary", MARGIN, 120, 11, true);
+  drawText(commands, "Live Count Summary", MARGIN, 120, 11, true);
   drawText(commands, `Entries: ${formatNumber(report.metrics.entry)}   Exits: ${formatNumber(report.metrics.exit)}   Peak Occupancy: ${report.metrics.peak}`, MARGIN, 102, 9);
   drawText(commands, `Remarks: ${report.remarks || report.notes || "None recorded."}`, MARGIN, 86, 9);
 

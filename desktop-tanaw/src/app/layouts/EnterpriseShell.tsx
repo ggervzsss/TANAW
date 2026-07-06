@@ -68,7 +68,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
 
-  useDesktopCloudSync(mlContextReady);
+  useDesktopCloudSync(mlContextReady, mlBaseUrl);
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],

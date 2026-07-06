@@ -32,7 +32,7 @@ export function DotSingleReportTable({ report }: { report: IntakeReport }) {
           </tr>
         </tbody>
       </table>
-      <p className="mt-5 text-xs text-gray-500 italic">Demographic splits and unique visitors are estimated from TANAW edge telemetry. Raw counts are read-only.</p>
+      <p className="mt-5 text-xs text-gray-500 italic">Demographic splits and unique visitors are estimated from TANAW local camera records. Raw counts are read-only.</p>
     </div>
   );
 }

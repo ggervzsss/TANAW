@@ -157,7 +157,7 @@ export function StaffAnalyticsPage() {
         <div className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div>
             <span className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Reporting Period</span>
-            <p className="mt-1 text-[11px] leading-snug text-gray-500">Filter comparative data and telemetry logs by calendar month.</p>
+            <p className="mt-1 text-[11px] leading-snug text-gray-500">Filter comparative data and live update history by calendar month.</p>
           </div>
           <div className="mt-4">
             <select

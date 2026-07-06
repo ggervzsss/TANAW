@@ -148,7 +148,6 @@ function handleOperationalEnvelope(queryClient: ReturnType<typeof useQueryClient
     const snapshot = envelope.data;
     queryClient.setQueryData<TelemetrySnapshot[]>(operationalTelemetryQueryKey, (current = []) => upsertById(current, snapshot));
     queryClient.setQueryData<MapEnterprise[]>(operationalMapEnterprisesQueryKey, (current) => updateMapEnterpriseTelemetry(current, snapshot));
-    void queryClient.invalidateQueries({ queryKey: operationalMapEnterprisesQueryKey });
     return;
   }
 
