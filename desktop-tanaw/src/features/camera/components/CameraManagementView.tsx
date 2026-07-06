@@ -56,6 +56,17 @@ const ML_LIVE_RECONNECT_MAX_DELAY_MS = 10_000;
 
 type CameraFormErrors = Partial<Record<keyof CameraFormValues, string>>;
 
+function updateCamerasWhenChanged(cameras: Camera[], updateCamera: (camera: Camera) => Camera) {
+  let changed = false;
+  const updated = cameras.map((camera) => {
+    const nextCamera = updateCamera(camera);
+    if (nextCamera !== camera) changed = true;
+    return nextCamera;
+  });
+
+  return changed ? updated : cameras;
+}
+
 export function CameraManagementView({ cameras, setCameras, storageKey }: CameraManagementViewProps) {
   const [activeCamId, setActiveCamId] = useState<number | null>(cameras[0]?.id ?? null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -88,7 +99,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   const updateCameraStatus = useCallback(
     (cameraId: number, status: Camera["status"]) => {
-      setCameras((current) => current.map((camera) => (camera.id === cameraId ? { ...camera, status } : camera)));
+      setCameras((current) => updateCamerasWhenChanged(current, (camera) => (camera.id === cameraId && camera.status !== status ? { ...camera, status } : camera)));
     },
     [setCameras],
   );
@@ -120,7 +131,9 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       if (!nextCounts.running) {
         setProcessingCameraId(null);
         setDetections(EMPTY_ML_DETECTIONS);
-        setCameras((current) => current.map((camera) => (camera.status === "running" ? { ...camera, status: nextCounts.status === "error" ? "error" : "stopped" } : camera)));
+        setCameras((current) =>
+          updateCamerasWhenChanged(current, (camera) => (camera.status === "running" ? { ...camera, status: nextCounts.status === "error" ? "error" : "stopped" } : camera)),
+        );
       }
     } catch {
       setCounts((current) => ({ ...current, running: false, status: "offline" }));
@@ -142,13 +155,13 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
           setProcessingCameraId(null);
           setCounts(EMPTY_ML_COUNTS);
           setDetections(EMPTY_ML_DETECTIONS);
-          setCameras((current) => current.map((camera) => (camera.status === "running" ? { ...camera, status: "stopped" } : camera)));
+          setCameras((current) => updateCamerasWhenChanged(current, (camera) => (camera.status === "running" ? { ...camera, status: "stopped" } : camera)));
           setMonitoringError("A running camera session from another enterprise was stopped to keep this account's CCTV setup isolated.");
           return false;
         }
 
         setProcessingCameraId(session.camera_id);
-        setCameras((current) => current.map((camera) => (camera.id === session.camera_id && camera.status !== "running" ? { ...camera, status: "running" } : camera)));
+        setCameras((current) => updateCamerasWhenChanged(current, (camera) => (camera.id === session.camera_id && camera.status !== "running" ? { ...camera, status: "running" } : camera)));
         setActiveCamId((current) => current ?? session.camera_id);
         return true;
       }
