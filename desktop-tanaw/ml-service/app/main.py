@@ -1,6 +1,9 @@
 import asyncio
+import json
+from time import monotonic
+from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -35,6 +38,11 @@ from app.config.camera_config import (
 )
 from app.runtime.hardware import get_runtime_capabilities
 
+CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
+CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
+CAMERA_WS_HEALTH_INTERVAL_SECONDS = 2.00
+CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
+
 manager = CameraProcessingManager()
 
 app = FastAPI(title="TANAW Local ML Camera Service", version="0.1.0")
@@ -57,13 +65,7 @@ app.add_middleware(
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    counts = manager.counts()
-    model_status = manager.model_status()
-    return HealthResponse(
-        running=bool(counts["running"]),
-        error=counts["error"] if isinstance(counts["error"], str) else None,
-        **model_status,
-    )
+    return HealthResponse.model_validate(build_health_payload())
 
 
 @app.get("/runtime/capabilities")
@@ -290,6 +292,46 @@ def detections() -> DetectionResponse:
     return DetectionResponse.model_validate(manager.detections())
 
 
+@app.websocket("/camera/ws")
+async def camera_state_websocket(websocket: WebSocket) -> None:
+    await websocket.accept()
+    last_payload: str | None = None
+    last_send_at = monotonic()
+    last_health_at = 0.0
+    health_payload: dict[str, Any] | None = None
+
+    try:
+        while True:
+            now = monotonic()
+            if health_payload is None or now - last_health_at >= CAMERA_WS_HEALTH_INTERVAL_SECONDS:
+                health_payload = await asyncio.to_thread(build_health_payload)
+                last_health_at = now
+
+            envelope = await asyncio.to_thread(build_camera_state_envelope, health_payload)
+            payload = json.dumps(envelope, separators=(",", ":"), sort_keys=True)
+
+            if payload != last_payload:
+                await websocket.send_text(payload)
+                last_payload = payload
+                last_send_at = now
+            elif now - last_send_at >= CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS:
+                await websocket.send_text('{"type":"heartbeat"}')
+                last_send_at = now
+
+            counts_payload = envelope["data"]["counts"]
+            interval = (
+                CAMERA_WS_FRAME_INTERVAL_SECONDS
+                if bool(counts_payload.get("running"))
+                else CAMERA_WS_IDLE_INTERVAL_SECONDS
+            )
+            if not await wait_for_camera_websocket_client(websocket, interval):
+                return
+    except WebSocketDisconnect:
+        return
+    except RuntimeError:
+        return
+
+
 @app.get("/stream")
 async def stream(overlay: bool = True) -> StreamingResponse:
     async def frames():
@@ -305,3 +347,39 @@ async def stream(overlay: bool = True) -> StreamingResponse:
             )
 
     return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+async def wait_for_camera_websocket_client(websocket: WebSocket, timeout_seconds: float) -> bool:
+    try:
+        await asyncio.wait_for(websocket.receive_text(), timeout=timeout_seconds)
+    except TimeoutError:
+        return True
+    except WebSocketDisconnect:
+        return False
+    except RuntimeError:
+        return False
+
+    return True
+
+
+def build_health_payload() -> dict[str, Any]:
+    counts = manager.counts()
+    return HealthResponse(
+        running=bool(counts["running"]),
+        error=counts["error"] if isinstance(counts["error"], str) else None,
+        **manager.model_status(),
+    ).model_dump(mode="json")
+
+
+def build_camera_state_envelope(health_payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "camera.state",
+        "data": {
+            "counts": CountResponse.model_validate(manager.counts()).model_dump(mode="json"),
+            "detections": DetectionResponse.model_validate(manager.detections()).model_dump(
+                mode="json"
+            ),
+            "health": health_payload,
+            "session": SessionResponse(**manager.session()).model_dump(mode="json"),
+        },
+    }

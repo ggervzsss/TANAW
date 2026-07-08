@@ -21,7 +21,7 @@ type TableCell = {
 };
 
 export function downloadIntakeReportPdf(report: IntakeReport) {
-  const demographics = getDotDemographics(report.metrics.unique);
+  const demographics = getDotDemographics(report.metrics.unique, report.demographics ?? report.payload?.demo);
   const rows: TableCell[][] = [
     [
       { value: `${report.enterprise}\n${report.month}`, align: "left", bold: true },
@@ -52,7 +52,7 @@ export function downloadIntakeReportPdf(report: IntakeReport) {
     ["Review Status", report.status],
   ]);
   drawDotTable(commands, 222, rows);
-  drawText(commands, "Telemetry Summary", MARGIN, 120, 11, true);
+  drawText(commands, "Live Count Summary", MARGIN, 120, 11, true);
   drawText(commands, `Entries: ${formatNumber(report.metrics.entry)}   Exits: ${formatNumber(report.metrics.exit)}   Peak Occupancy: ${report.metrics.peak}`, MARGIN, 102, 9);
   drawText(commands, `Remarks: ${report.remarks || report.notes || "None recorded."}`, MARGIN, 86, 9);
 
@@ -89,7 +89,7 @@ export function downloadFinalReportPdf(report: FinalReport) {
 }
 
 function buildFinalReportSourceRow(source: FinalReportSource): TableCell[] {
-  const demographics = getDotDemographics(source.unique);
+  const demographics = getDotDemographics(source.unique, source.demographics);
   return [
     { value: source.enterprise, align: "left", bold: true },
     { value: source.code },
@@ -111,7 +111,7 @@ function buildFinalReportSourceRow(source: FinalReportSource): TableCell[] {
 function buildFinalReportTotalRow(report: FinalReport): TableCell[] {
   const totals = report.sources.reduce(
     (next, source) => {
-      const demographics = getDotDemographics(source.unique);
+      const demographics = getDotDemographics(source.unique, source.demographics);
       return {
         provMale: next.provMale + demographics.provMale,
         provFemale: next.provFemale + demographics.provFemale,

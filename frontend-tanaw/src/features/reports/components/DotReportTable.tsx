@@ -2,7 +2,7 @@ import type { FinalReport, IntakeReport } from "@/shared/types";
 import { getDotDemographics } from "../utils/dotDemographics";
 
 export function DotSingleReportTable({ report }: { report: IntakeReport }) {
-  const d = getDotDemographics(report.metrics.unique);
+  const d = getDotDemographics(report.metrics.unique, report.demographics ?? report.payload?.demo);
 
   return (
     <div className="w-full">
@@ -32,13 +32,13 @@ export function DotSingleReportTable({ report }: { report: IntakeReport }) {
           </tr>
         </tbody>
       </table>
-      <p className="mt-5 text-xs text-gray-500 italic">Demographic splits and unique visitors are estimated from TANAW edge telemetry. Raw counts are read-only.</p>
+      <p className="mt-5 text-xs text-gray-500 italic">Demographic splits and unique visitors are estimated from TANAW local camera records. Raw counts are read-only.</p>
     </div>
   );
 }
 
 export function DotFinalReportTable({ report }: { report: FinalReport }) {
-  const rows = report.sources.map((source) => ({ source, demographics: getDotDemographics(source.unique) }));
+  const rows = report.sources.map((source) => ({ source, demographics: getDotDemographics(source.unique, source.demographics) }));
   const totals = rows.reduce(
     (next, { source, demographics }) => ({
       provMale: next.provMale + demographics.provMale,

@@ -238,7 +238,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               </div>
 
               <p className="mb-6 text-justify text-sm leading-relaxed">
-                This document certifies the consolidated visitor analytics derived from the TANAW Edge Intelligence Network for the stated period. Aggregation relies on immutable edge telemetry over{" "}
+                This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. Aggregation relies on verified local camera records from{" "}
                 {report.enterpriseCount} monitored enterprise nodes.
               </p>
 

@@ -27,7 +27,7 @@ export const settingSections: SettingSection[] = [
       {
         key: "cameraSessionErrorAlerts",
         label: "Camera Session Error Alerts",
-        description: "Create an IT maintenance alert when desktop telemetry reports a camera-specific session error.",
+        description: "Create an IT maintenance alert when the desktop app reports a camera-specific session error.",
         type: "toggle",
         value: true,
       },
@@ -40,8 +40,8 @@ export const settingSections: SettingSection[] = [
       },
       {
         key: "syncDelayAlerts",
-        label: "Sync Delay Alerts",
-        description: "Create an IT maintenance alert when desktop telemetry has events waiting for cloud synchronization.",
+        label: "Live Update Delay Alerts",
+        description: "Create an IT maintenance alert when desktop records are waiting to be sent to the cloud.",
         type: "toggle",
         value: true,
       },

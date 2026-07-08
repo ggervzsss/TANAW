@@ -86,13 +86,13 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               </section>
 
               <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <h4 className="text-tanaw-navy mb-4 text-sm font-semibold">Data Lineage & Telemetry Sources</h4>
+                <h4 className="text-tanaw-navy mb-4 text-sm font-semibold">Data Sources</h4>
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-[#0f172a]">
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-gray-200 text-gray-500">
                       <tr>
                         <th className="pb-2 font-semibold">Source Node / Camera</th>
-                        <th className="pb-2 font-semibold">Last Timestamp Sync</th>
+                        <th className="pb-2 font-semibold">Last Update Time</th>
                         <th className="pb-2 text-right font-semibold">Unique Pax Contributed</th>
                       </tr>
                     </thead>
@@ -180,7 +180,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
 }
 
 function reviewStatusMessage(status: IntakeReport["status"]) {
-  if (status === "Pending Review") return "Values in the DOT form are read-only and populated directly from edge node telemetry.";
+  if (status === "Pending Review") return "Values in the DOT form are read-only and populated directly from local camera records.";
   if (status === "Ready to Consolidate") return "This report has already been accepted and is waiting for final report generation.";
   if (status === "Returned") return "This report has been returned to the enterprise. Wait for a revised submission before reviewing again.";
   if (status === "Consolidated") return "This report has already been included in a final batch report and is locked.";

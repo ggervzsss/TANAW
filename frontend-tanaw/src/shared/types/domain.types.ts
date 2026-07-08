@@ -158,6 +158,19 @@ export type LguAccountRoleLabel = "Admin" | "IT Personnel" | "LGU Staff";
 export type LguAccountStatus = "Active" | "Inactive";
 export type EnterpriseAccountStatus = "Active" | "Archived" | "Suspended";
 
+export type ReportDemographics = {
+  thisProvMale: number;
+  thisProvFemale: number;
+  otherProvMale: number;
+  otherProvFemale: number;
+  foreignMale: number;
+  foreignFemale: number;
+};
+
+export type ReportPayload = Record<string, unknown> & {
+  demo?: Partial<Record<keyof ReportDemographics, number | string>>;
+};
+
 export type LguAccount = {
   id: string;
   firstName: string;
@@ -216,6 +229,8 @@ export type IntakeReport = {
     unique: number;
     peak: string;
   };
+  payload?: ReportPayload | null;
+  demographics?: ReportDemographics | null;
 };
 
 export type ReportEnterprise = {
@@ -233,6 +248,7 @@ export type FinalReportSource = {
   unique: number;
   entry: number;
   exit: number;
+  demographics?: ReportDemographics | null;
 };
 
 export type FinalReport = {

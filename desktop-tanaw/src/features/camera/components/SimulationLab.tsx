@@ -306,7 +306,7 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
           {scenario === "custom" && <NumberField label="Entry Probability %" value={entryPercent} min={0} max={100} disabled={isActive} onChange={setEntryPercent} />}
 
           <p className="rounded-sm border border-emerald-100 bg-emerald-50 p-3 text-[11px] leading-relaxed font-medium text-emerald-900">
-            A duration of 0 runs until you stop it. Events are stored in the normal local ledger and synchronize through TANAW’s existing five-second telemetry cycle.
+            A duration of 0 runs until you stop it. Events are stored in the normal local ledger and sent to TANAW as live updates with periodic backup checks.
           </p>
 
           {error && <p className="rounded-sm border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">{error}</p>}
@@ -387,7 +387,7 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
             </div>
 
             <p className="mt-3 text-[11px] leading-relaxed font-medium text-emerald-900">
-              The current desktop enterprise is skipped when enough other enterprises exist, so this can run beside the local virtual sensor without fighting over the same telemetry.
+              The current desktop enterprise is skipped when enough other enterprises exist, so this can run beside the local virtual sensor without competing for the same live data.
             </p>
 
             {fleetError && <p className="mt-3 rounded-sm border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">{fleetError}</p>}
@@ -497,7 +497,7 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-[#111827]">Fleet Run Monitor</p>
-                <p className="mt-1 text-xs text-gray-500">Background citywide telemetry simulation for the admin dashboard and operational map.</p>
+                <p className="mt-1 text-xs text-gray-500">Background citywide live-data simulation for the admin dashboard and operational map.</p>
               </div>
               <RadioTower size={18} className={fleetState?.state === "running" ? "text-[#065f46]" : "text-gray-400"} />
             </div>
@@ -524,7 +524,7 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
               <div className="mt-4 rounded-sm bg-gray-50 p-3 text-[11px] leading-relaxed text-gray-600">
                 <p>
                   Run <span className="font-black text-gray-800">{fleetState.runId}</span> · {formatElapsed(fleetState.elapsedSeconds)} elapsed · last synced{" "}
-                  {fleetState.lastSyncedAt ? new Date(fleetState.lastSyncedAt).toLocaleTimeString() : "waiting for next sync"}
+                  {fleetState.lastSyncedAt ? new Date(fleetState.lastSyncedAt).toLocaleTimeString() : "waiting for next update"}
                 </p>
                 <p className="mt-1">One-minute breach lanes cycle through ramp-up, 60 seconds over threshold, then recovery below the alert threshold.</p>
               </div>

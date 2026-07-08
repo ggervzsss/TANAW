@@ -22,7 +22,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
                 {enterprise.sourceKind && enterprise.sourceKind !== "real" && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black tracking-[0.14em] text-amber-800 uppercase">Simulated Telemetry</span>
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black tracking-[0.14em] text-amber-800 uppercase">Simulated Live Data</span>
                 )}
               </div>
               <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
@@ -42,7 +42,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
         <section className="grid gap-3 sm:grid-cols-2">
           <EnterpriseDetailRow icon={<Building2 size={15} />} label="Category" value={enterprise.category} />
           <EnterpriseDetailRow icon={<Radio size={15} />} label="Desktop App Status" value={<DesktopAppStatusBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
-          <EnterpriseDetailRow icon={<Clock size={15} />} label="Last sync" value={enterprise.lastSync ?? "No sync recorded"} />
+          <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ?? "No update recorded"} />
           <EnterpriseDetailRow icon={<Phone size={15} />} label="Contact" value={enterprise.contact ?? "No contact listed"} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<MapPin size={15} />} label="Full Address" value={enterprise.fullAddress} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<Clock size={15} />} label="Operating Hours" value={enterprise.operatingHours ?? "Not specified"} />
@@ -96,7 +96,7 @@ function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
   };
   const label: Record<GatewayStatus, string> = {
     Connected: "Online",
-    "Sync Delayed": "Sync Delayed",
+    "Sync Delayed": "Updates Delayed",
     Offline: "Offline",
     "Not Linked": "No Desktop App Linked",
     Closed: "Closed",
