@@ -1,7 +1,6 @@
 import json
 from datetime import UTC, datetime
 from typing import Annotated
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -77,6 +76,8 @@ from app.features.auth.service import (
     register_failed_login,
     resolve_login_lockout_policy,
 )
+from app.features.mail.service import deliver_email, email_idempotency_key
+from app.features.mail.templates import business_email_change_email
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
@@ -358,9 +359,10 @@ async def forgot_password_request(
 @router.post("/forgot-password/verify", response_model=ForgotPasswordVerifyResponse)
 async def forgot_password_verify(
     payload: ForgotPasswordVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ForgotPasswordVerifyResponse:
     try:
-        reset_token = verify_password_reset_code(payload.challengeId, payload.code)
+        reset_token = await verify_password_reset_code(db, payload.challengeId, payload.code)
     except PasswordRecoveryError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -397,9 +399,10 @@ async def forgot_password_reset(
 
 @router.get("/support-info", response_model=SupportInfoResponse)
 async def get_support_info() -> SupportInfoResponse:
-    has_contact = bool(settings.support_email or settings.support_phone)
+    support_email = settings.email_inbound_address or settings.support_email
+    has_contact = bool(support_email or settings.support_phone)
     return SupportInfoResponse(
-        supportEmail=settings.support_email,
+        supportEmail=support_email,
         supportPhone=settings.support_phone,
         message=(
             "Use the configured support contact below."
@@ -413,24 +416,6 @@ async def get_support_info() -> SupportInfoResponse:
 async def create_support_request(
     payload: SupportRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> StatusResponse:
-    recipient = settings.support_email or "TANAW system administrator"
-    db.add(
-        DevDelivery(
-            account_id=str(uuid4()),
-            channel=DeliveryChannel.EMAIL,
-            recipient=recipient,
-            subject="TANAW login support request",
-            body=(
-                "A login support request was recorded.\n\n"
-                f"Name: {payload.name.strip()}\n"
-                f"Email: {payload.email}\n\n"
-                f"Message:\n{payload.message.strip()}\n\n"
-                "No external email was sent by the local development logger."
-            ),
-            status=DeliveryStatus.RECORDED,
-        ),
-    )
-    await db.commit()
     await create_operational_alert(
         db,
         alert_type="Maintenance Request",
@@ -646,19 +631,15 @@ async def request_business_email_change(
         PENDING_BUSINESS_EMAIL_CHANGE_KEY,
         {"email": new_email, "requestedAt": datetime.now(UTC).isoformat()},
     )
-    db.add(
-        DevDelivery(
-            account_id=account.id,
-            channel=DeliveryChannel.EMAIL,
-            recipient=new_email,
-            subject="TANAW business email change request",
-            body=(
-                f"{enterprise_label(account)} requested a business email change.\n\n"
-                "Email verification is not configured in this environment. "
-                "No verification token was generated or sent."
-            ),
-            status=DeliveryStatus.RECORDED,
-        )
+    await deliver_email(
+        db,
+        account_id=account.id,
+        recipient=new_email,
+        content=business_email_change_email(account, new_email),
+        idempotency_key=email_idempotency_key(
+            "business-email-change", f"{account.id}-{int(datetime.now(UTC).timestamp())}"
+        ),
+        tags={"category": "business_email_change"},
     )
     await db.commit()
     await record_auth_log(

@@ -51,6 +51,7 @@ app/
     accounts/          # LGU/enterprise accounts, dependencies, services, APIs
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
+    mail/              # Resend sending, receiving webhooks, and email templates
     mock_data/         # Explicit CLI-driven test-data tooling
     operational/       # Telemetry, sync, intake reports, and final reports
 alembic/               # Database migration files
@@ -61,6 +62,40 @@ main.py                # FastAPI application entry point
 The backend follows a feature-oriented layout. Shared infrastructure lives in
 `app/core`, `app/db`, and `app/api`; domain behavior lives under
 `app/features`.
+
+## Email Integration
+
+TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
+messages locally without contacting an external provider. `EMAIL_DELIVERY_MODE=resend`
+sends transactional messages through Resend and accepts signed Resend webhooks.
+
+The Resend-managed development sender can deliver only to the Resend account
+email, so set `EMAIL_TEST_RECIPIENT` until a custom sending domain is verified.
+Incoming support mail sent to `EMAIL_INBOUND_ADDRESS` is matched to an existing
+TANAW account by sender address and is created or appended in the existing
+Support Tickets queue. Unknown senders and other catch-all recipients are
+acknowledged but not imported.
+
+Secrets belong only in a private `.env` or deployment secret store:
+
+```dotenv
+EMAIL_DELIVERY_MODE=resend
+RESEND_API_KEY=replace_with_your_private_key
+RESEND_WEBHOOK_SECRET=replace_with_your_private_webhook_secret
+EMAIL_FROM_NAME=TANAW
+EMAIL_FROM_ADDRESS=onboarding@resend.dev
+EMAIL_REPLY_TO=support@your-resend-receiving-domain.resend.app
+EMAIL_INBOUND_ADDRESS=support@your-resend-receiving-domain.resend.app
+EMAIL_TEST_RECIPIENT=the-email-used-to-register-with-resend@example.com
+```
+
+Register the public webhook URL as
+`https://<api-host>/webhooks/resend` and subscribe it to `email.received`,
+`email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`,
+`email.failed`, `email.complained`, and `email.suppressed`. When a verified LGU
+domain becomes available, change the sender, reply-to, and inbound address in
+the environment and remove `EMAIL_TEST_RECIPIENT`; no application code change
+is required.
 
 ## Data Boundaries
 

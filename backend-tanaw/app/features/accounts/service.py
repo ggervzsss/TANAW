@@ -28,6 +28,8 @@ from app.features.accounts.schemas import (
     DeliverySummary,
     ProfileChangeRequestType,
 )
+from app.features.mail.service import deliver_email, email_idempotency_key
+from app.features.mail.templates import onboarding_email
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
 PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
@@ -290,7 +292,7 @@ async def list_accounts_by_roles(db: AsyncSession, roles: list[AccountRole]) -> 
     return list(result)
 
 
-def create_onboarding_delivery(
+def create_sms_onboarding_delivery(
     account: Account, temporary_password: str, channel: DeliveryChannel, recipient: str
 ) -> DevDelivery:
     subject = "Your TANAW account credentials"
@@ -378,13 +380,18 @@ async def create_account_with_temporary_password(
     )
     db.add(account)
     await db.flush()
-    db.add(
-        create_onboarding_delivery(
-            account, temporary_password, DeliveryChannel.EMAIL, account.email
-        )
+    await deliver_email(
+        db,
+        account_id=account.id,
+        recipient=account.email,
+        content=onboarding_email(account, temporary_password),
+        idempotency_key=email_idempotency_key("account-onboarding", account.id),
+        tags={"category": "account_onboarding"},
     )
     if phone:
-        db.add(create_onboarding_delivery(account, temporary_password, DeliveryChannel.SMS, phone))
+        db.add(
+            create_sms_onboarding_delivery(account, temporary_password, DeliveryChannel.SMS, phone)
+        )
     await db.commit()
     await db.refresh(account)
     return account
@@ -400,14 +407,19 @@ async def reset_account_password(db: AsyncSession, account: Account) -> Account:
     account.token_invalid_before = now
     account.failed_login_attempts = 0
     account.locked_until = None
-    db.add(
-        create_onboarding_delivery(
-            account, temporary_password, DeliveryChannel.EMAIL, account.email
-        )
+    await deliver_email(
+        db,
+        account_id=account.id,
+        recipient=account.email,
+        content=onboarding_email(account, temporary_password),
+        idempotency_key=email_idempotency_key(
+            "account-password-reset", f"{account.id}-{int(now.timestamp())}"
+        ),
+        tags={"category": "account_password_reset"},
     )
     if account.phone:
         db.add(
-            create_onboarding_delivery(
+            create_sms_onboarding_delivery(
                 account, temporary_password, DeliveryChannel.SMS, account.phone
             )
         )

@@ -105,6 +105,11 @@ class DevDelivery(Base):
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="local")
+    provider_message_id: Mapped[str | None] = mapped_column(
+        String(120), unique=True, index=True, nullable=True
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[DeliveryStatus] = mapped_column(
         Enum(DeliveryStatus, name="delivery_status"),
         nullable=False,

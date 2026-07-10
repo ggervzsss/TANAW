@@ -731,6 +731,14 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |
 | `FRONTEND_PORT`               | Host port mapped to the portal; defaults to `5173`     |
 | `TANAW_ALLOW_MOCK_DATA`       | Explicit simulation safety switch; false by default    |
+| `EMAIL_DELIVERY_MODE`         | `log` locally or `resend` for real email delivery       |
+| `RESEND_API_KEY`              | Backend-only Resend API credential                      |
+| `RESEND_WEBHOOK_SECRET`       | Signature secret for the Resend webhook                 |
+| `EMAIL_FROM_NAME`             | Display name used for TANAW transactional messages      |
+| `EMAIL_FROM_ADDRESS`          | Verified sender or Resend development sender            |
+| `EMAIL_REPLY_TO`              | Reply-to address routed into TANAW support               |
+| `EMAIL_INBOUND_ADDRESS`       | Exact inbound address imported as support tickets       |
+| `EMAIL_TEST_RECIPIENT`        | Development-only recipient restriction                  |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |

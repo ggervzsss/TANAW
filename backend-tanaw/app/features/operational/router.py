@@ -24,6 +24,8 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.mail.service import deliver_email, email_idempotency_key
+from app.features.mail.templates import support_ticket_reply_email
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     MockDataRun,
@@ -715,6 +717,25 @@ async def create_ticket_message(
             status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
         )
     detail = await create_support_ticket_message(db, ticket, account, payload)
+    recipient = await get_account_by_id(db, ticket.enterprise_account_id)
+    if recipient is not None and detail.messages:
+        reply = detail.messages[-1]
+        await deliver_email(
+            db,
+            account_id=recipient.id,
+            recipient=recipient.email,
+            content=support_ticket_reply_email(
+                ticket_code=detail.code,
+                subject=detail.subject,
+                recipient_name=recipient.display_name,
+                author_name=account.display_name,
+                message=reply.message,
+            ),
+            idempotency_key=email_idempotency_key("support-reply", reply.id),
+            tags={"category": "support_reply"},
+            raise_on_failure=False,
+        )
+        await db.commit()
     await notify_enterprise_ticket_update(
         db,
         ticket=detail,

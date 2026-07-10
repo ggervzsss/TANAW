@@ -2,9 +2,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -12,6 +12,7 @@ from app.core.http_security import apply_security_headers
 from app.db.base import Base
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.seed import seed_default_accounts
+from app.features.mail.service import EmailDeliveryError
 
 
 async def ensure_account_onboarding_schema(connection: Any) -> None:
@@ -243,6 +244,19 @@ async def ensure_support_ticket_schema(connection: Any) -> None:
     )
 
 
+async def ensure_email_schema(connection: Any) -> None:
+    statements = [
+        "ALTER TABLE dev_deliveries ADD COLUMN IF NOT EXISTS provider VARCHAR(40) NOT NULL DEFAULT 'local'",
+        "ALTER TABLE dev_deliveries ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(120)",
+        "ALTER TABLE dev_deliveries ADD COLUMN IF NOT EXISTS error_message TEXT",
+    ]
+    for statement in statements:
+        await connection.exec_driver_sql(statement)
+    await connection.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_dev_deliveries_provider_message_id ON dev_deliveries (provider_message_id)"
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with engine.begin() as connection:
@@ -251,6 +265,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await ensure_mock_reporting_schema(connection)
         await ensure_notifications_schema(connection)
         await ensure_support_ticket_schema(connection)
+        await ensure_email_schema(connection)
 
     async with AsyncSessionLocal() as session:
         await seed_default_accounts(session)
@@ -260,6 +275,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+
+@app.exception_handler(EmailDeliveryError)
+async def email_delivery_error_handler(_: Request, __: EmailDeliveryError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "detail": "TANAW could not deliver the email. Verify the email configuration and try again."
+        },
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

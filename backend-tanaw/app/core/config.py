@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     support_email: str | None = None
     support_phone: str | None = None
+    email_delivery_mode: str = "log"
+    resend_api_key: str | None = None
+    resend_webhook_secret: str | None = None
+    resend_api_base_url: str = "https://api.resend.com"
+    email_from_name: str = "TANAW"
+    email_from_address: str = "onboarding@resend.dev"
+    email_reply_to: str | None = None
+    email_inbound_address: str | None = None
+    email_test_recipient: str | None = None
+    email_request_timeout_seconds: float = 10.0
     allow_mock_data: bool = Field(
         default=False, validation_alias=AliasChoices("TANAW_ALLOW_MOCK_DATA", "ALLOW_MOCK_DATA")
     )
@@ -54,6 +64,29 @@ class Settings(BaseSettings):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
 
         return value
+
+    @field_validator("email_delivery_mode")
+    @classmethod
+    def validate_email_delivery_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"log", "resend"}:
+            raise ValueError("EMAIL_DELIVERY_MODE must be either 'log' or 'resend'.")
+        return normalized
+
+    @field_validator(
+        "resend_api_key",
+        "resend_webhook_secret",
+        "email_reply_to",
+        "email_inbound_address",
+        "email_test_recipient",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_email_setting(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        return normalized or None
 
     @property
     def cors_origin_list(self) -> list[str]:

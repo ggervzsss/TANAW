@@ -397,7 +397,11 @@ async def get_support_ticket_detail(
 
 
 async def create_support_ticket(
-    db: AsyncSession, account: Account, payload: SupportTicketCreate
+    db: AsyncSession,
+    account: Account,
+    payload: SupportTicketCreate,
+    *,
+    commit: bool = True,
 ) -> SupportTicketSummary:
     ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
     ticket = SupportTicket(
@@ -419,7 +423,10 @@ async def create_support_ticket(
         else None,
     )
     db.add(ticket)
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(ticket)
     return to_support_ticket_summary(ticket)
 
@@ -429,6 +436,8 @@ async def create_support_ticket_message(
     ticket: SupportTicket,
     author: Account,
     payload: SupportTicketMessageCreate,
+    *,
+    commit: bool = True,
 ) -> SupportTicketDetail:
     message = SupportTicketMessage(
         ticket_id=ticket.id,
@@ -440,7 +449,10 @@ async def create_support_ticket_message(
     db.add(message)
     if ticket.status == "Open":
         ticket.status = "In Review"
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(ticket)
     await db.refresh(message)
     detail = await get_support_ticket_detail(db, author, ticket.id)

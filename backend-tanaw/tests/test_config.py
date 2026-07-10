@@ -35,6 +35,18 @@ def test_default_access_token_lifetime_supports_continuous_operation() -> None:
     assert settings.access_token_expire_minutes == 60 * 24 * 30
 
 
+def test_email_delivery_defaults_to_safe_local_logging() -> None:
+    settings = Settings()
+
+    assert settings.email_delivery_mode == "log"
+    assert settings.resend_api_key is None
+
+
+def test_invalid_email_delivery_mode_is_rejected() -> None:
+    with pytest.raises(ValueError, match="EMAIL_DELIVERY_MODE"):
+        Settings(email_delivery_mode="smtp")
+
+
 def test_cors_origins_are_trimmed_and_normalized() -> None:
     settings = Settings(cors_origins=" https://tanaw-sanpedro.vercel.app/, http://localhost:5173 ")
 
