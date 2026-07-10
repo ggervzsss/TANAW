@@ -253,6 +253,24 @@ async def ensure_email_schema(connection: Any) -> None:
     for statement in statements:
         await connection.exec_driver_sql(statement)
     await connection.exec_driver_sql(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'dev_deliveries'
+                  AND column_name = 'channel'
+            ) THEN
+                DELETE FROM dev_deliveries WHERE channel::text = 'SMS';
+                ALTER TABLE dev_deliveries DROP COLUMN channel;
+            END IF;
+        END $$
+        """
+    )
+    await connection.exec_driver_sql("DROP TYPE IF EXISTS delivery_channel")
+    await connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_dev_deliveries_provider_message_id ON dev_deliveries (provider_message_id)"
     )
 

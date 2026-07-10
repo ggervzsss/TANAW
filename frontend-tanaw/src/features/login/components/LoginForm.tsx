@@ -622,7 +622,7 @@ function RecoveryDialogContent({
     return (
       <RecoveryStepFrame key="code" title="Verification Code">
         <form onSubmit={onVerify}>
-          <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter the 6-digit verification code recorded in Dev Log. The code expires in {expiresIn} minutes and can be used once.</p>
+          <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter the 6-digit verification code sent to your registered email. The code expires in {expiresIn} minutes and can be used once.</p>
           <label htmlFor="recovery-code" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
             Verification code
           </label>
@@ -684,7 +684,7 @@ function RecoveryDialogContent({
   return (
     <RecoveryStepFrame key="email" title="Account Recovery">
       <form onSubmit={onRequest}>
-        <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter your registered email. If an account matches, a verification code is recorded in Dev Log for secure recovery.</p>
+        <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter your registered email. If an account matches, a verification code will be sent there for secure recovery.</p>
         <label htmlFor="recovery-target" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
           Registered email
         </label>
@@ -839,7 +839,7 @@ function SupportDialogContent({
       </div>
 
       {submitted ? (
-        <div className="mt-5 rounded-[28px] border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-950">Support request recorded in Dev Log.</div>
+        <div className="mt-5 rounded-[28px] border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-950">Support request sent to TANAW support.</div>
       ) : (
         <form onSubmit={onSubmit} className="mt-5 space-y-3">
           <input

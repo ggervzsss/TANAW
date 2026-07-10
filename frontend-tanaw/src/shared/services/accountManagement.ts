@@ -44,7 +44,6 @@ export type AccountSummary = {
 export type DevDelivery = {
   id: string;
   accountId: string;
-  channel: "email" | "sms";
   recipient: string;
   subject: string;
   body: string;

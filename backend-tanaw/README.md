@@ -68,6 +68,9 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
 messages locally without contacting an external provider. `EMAIL_DELIVERY_MODE=resend`
 sends transactional messages through Resend and accepts signed Resend webhooks.
+Email is TANAW's only credential, recovery, OTP, and support-message delivery
+channel. Account phone numbers remain contact/profile information and are never
+used for SMS delivery or phone-based OTPs.
 
 The Resend-managed development sender can deliver only to the Resend account
 email, so set `EMAIL_TEST_RECIPIENT` until a custom sending domain is verified.

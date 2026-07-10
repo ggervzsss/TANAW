@@ -83,11 +83,6 @@ class Account(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class DeliveryChannel(StrEnum):
-    EMAIL = "email"
-    SMS = "sms"
-
-
 class DeliveryStatus(StrEnum):
     RECORDED = "recorded"
     SENT = "sent"
@@ -99,9 +94,6 @@ class DevDelivery(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    channel: Mapped[DeliveryChannel] = mapped_column(
-        Enum(DeliveryChannel, name="delivery_channel"), nullable=False
-    )
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)

@@ -321,7 +321,6 @@ class EnterpriseAccountUpdate(BaseModel):
 class DeliverySummary(BaseModel):
     id: str
     accountId: str
-    channel: str
     recipient: str
     subject: str
     body: str

@@ -34,7 +34,7 @@ export function ITLguAccountsPage() {
     mutationFn: (accountId: string) => resetAccountPassword(accountId),
     onSuccess: async (updatedAccount) => {
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("Temporary credentials recorded in Dev Log");
+      toast.success("Temporary credentials sent by email");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
       setPendingPasswordReset(null);
     },
@@ -106,7 +106,7 @@ function ConfirmPasswordResetModal({ account, isPending, onClose, onConfirm }: {
           <div>
             <p className="font-bold">This will generate new temporary credentials.</p>
             <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
-              The current password for {account.displayName} will stop working. New temporary credentials will be recorded in Dev Log and the user will need to change the password after signing in.
+              The current password for {account.displayName} will stop working. New temporary credentials will be sent to the registered email, and the user will need to change the password after signing in.
             </p>
           </div>
         </div>

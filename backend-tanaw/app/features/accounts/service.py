@@ -16,8 +16,6 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    DeliveryChannel,
-    DeliveryStatus,
     DevDelivery,
 )
 from app.features.accounts.options import format_enterprise_category
@@ -184,7 +182,6 @@ def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
     return DeliverySummary(
         id=delivery.id,
         accountId=delivery.account_id,
-        channel=delivery.channel.value,
         recipient=delivery.recipient,
         subject=delivery.subject,
         body=delivery.body,
@@ -292,35 +289,6 @@ async def list_accounts_by_roles(db: AsyncSession, roles: list[AccountRole]) -> 
     return list(result)
 
 
-def create_sms_onboarding_delivery(
-    account: Account, temporary_password: str, channel: DeliveryChannel, recipient: str
-) -> DevDelivery:
-    subject = "Your TANAW account credentials"
-    if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
-        login_details = (
-            f"Enterprise ID: {account.enterprise_id}\n"
-            f"Contact email: {account.email}\n"
-            "You may sign in with either your Enterprise ID or contact email.\n"
-        )
-    else:
-        login_details = f"Username: {account.email}\n"
-    body = (
-        f"Hello {account.display_name},\n\n"
-        "Your TANAW account has been created.\n"
-        f"{login_details}"
-        f"Temporary password: {temporary_password}\n\n"
-        "Use this temporary password to log in. You will be required to change it before accessing the system."
-    )
-    return DevDelivery(
-        account_id=account.id,
-        channel=channel,
-        recipient=recipient,
-        subject=subject,
-        body=body,
-        status=DeliveryStatus.RECORDED,
-    )
-
-
 async def create_account_with_temporary_password(
     db: AsyncSession,
     *,
@@ -388,10 +356,6 @@ async def create_account_with_temporary_password(
         idempotency_key=email_idempotency_key("account-onboarding", account.id),
         tags={"category": "account_onboarding"},
     )
-    if phone:
-        db.add(
-            create_sms_onboarding_delivery(account, temporary_password, DeliveryChannel.SMS, phone)
-        )
     await db.commit()
     await db.refresh(account)
     return account
@@ -417,12 +381,6 @@ async def reset_account_password(db: AsyncSession, account: Account) -> Account:
         ),
         tags={"category": "account_password_reset"},
     )
-    if account.phone:
-        db.add(
-            create_sms_onboarding_delivery(
-                account, temporary_password, DeliveryChannel.SMS, account.phone
-            )
-        )
     await db.commit()
     await db.refresh(account)
     return account

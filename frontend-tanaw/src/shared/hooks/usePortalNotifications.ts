@@ -3,10 +3,8 @@ import { useCallback, useMemo, useState } from "react";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore, useReportStore, useSystemLogStore } from "@/app/store";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
-import { listDevDeliveries } from "@/shared/services/accountManagement";
 import { listFinalReports, listIntakeReports, listReportEnterprises } from "@/shared/services/reporting";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
-import type { DevDelivery } from "@/shared/services/accountManagement";
 import type { FinalReport, IntakeReport, LogSeverity, PriorityAlert, ReportEnterprise, ReportStatus, SystemLog } from "@/shared/types";
 import type { UserRole } from "@/shared/types/role.types";
 import { useActivityLogs } from "./useActivityLogs";
@@ -32,10 +30,7 @@ type DraftNotification = Omit<PortalNotification, "read"> & { read?: boolean };
 
 const MAX_VISIBLE_NOTIFICATIONS = 18;
 const READ_STORAGE_LIMIT = 500;
-const SUPPORT_SUBJECT = "tanaw login support request";
-const PASSWORD_RESET_SUBJECT = "tanaw password reset verification code";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const EMPTY_DEV_DELIVERIES: DevDelivery[] = [];
 const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_BACKEND_NOTIFICATIONS: BackendNotification[] = [];
 
@@ -66,12 +61,6 @@ export function usePortalNotifications(role: UserRole) {
     enabled: role === "staff",
     refetchInterval: role === "staff" ? 30_000 : false,
   });
-  const devDeliveriesQuery = useQuery({
-    queryKey: ["dev-deliveries"],
-    queryFn: listDevDeliveries,
-    enabled: role === "it",
-    refetchInterval: role === "it" ? 10_000 : false,
-  });
   const reportEnterprisesQuery = useQuery({
     queryKey: ["report-enterprises"],
     queryFn: listReportEnterprises,
@@ -88,7 +77,6 @@ export function usePortalNotifications(role: UserRole) {
   const readIds = readState.storageKey === storageKey ? readState.ids : readStoredNotificationIds(storageKey);
 
   const mergedLogs = useMemo(() => mergeLogs(activityLogs, localLogs), [activityLogs, localLogs]);
-  const devDeliveries = devDeliveriesQuery.data ?? EMPTY_DEV_DELIVERIES;
   const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
   const reports = reportsQuery.data ?? localReports;
   const effectiveFinalReports = finalReportsQuery.data ?? finalReports;
@@ -103,7 +91,7 @@ export function usePortalNotifications(role: UserRole) {
     }
 
     if (role === "it") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it"), ...buildDevDeliveryNotifications(devDeliveries), ...buildLogNotifications(mergedLogs, "it")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it"), ...buildLogNotifications(mergedLogs, "it")];
     }
 
     if (role === "staff") {
@@ -115,7 +103,7 @@ export function usePortalNotifications(role: UserRole) {
     }
 
     return persistedNotifications;
-  }, [alerts, backendNotifications, devDeliveries, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
+  }, [alerts, backendNotifications, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
 
   const allNotifications = useMemo(
     () =>
@@ -240,28 +228,6 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"):
       targetPath: role === "admin" ? routes.admin.alertsMonitor : routes.it.alerts,
       sortTime: toSortTime(alert.time),
     }));
-}
-
-function buildDevDeliveryNotifications(deliveries: DevDelivery[]): DraftNotification[] {
-  return deliveries
-    .filter((delivery) => {
-      const subject = delivery.subject.toLowerCase();
-      return subject.includes(SUPPORT_SUBJECT) || subject.includes(PASSWORD_RESET_SUBJECT);
-    })
-    .map((delivery) => {
-      const isSupportRequest = delivery.subject.toLowerCase().includes(SUPPORT_SUBJECT);
-      return {
-        id: `dev-delivery:${delivery.id}:${delivery.status}`,
-        title: isSupportRequest ? "Login Support Request" : "Password Reset Code Recorded",
-        message: `${delivery.channel.toUpperCase()} to ${delivery.recipient}: ${delivery.subject}`,
-        time: formatTimestamp(delivery.createdAt),
-        source: "Dev Log",
-        statusLabel: delivery.status,
-        tone: isSupportRequest ? "warning" : "info",
-        targetPath: routes.it.devLog,
-        sortTime: toSortTime(delivery.createdAt),
-      };
-    });
 }
 
 function buildLogNotifications(logs: SystemLog[], role: "admin" | "it" | "staff", backendReportSourceIds = new Set<string>()): DraftNotification[] {

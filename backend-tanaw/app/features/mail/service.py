@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.features.accounts.models import (
-    DeliveryChannel,
     DeliveryStatus,
     DevDelivery,
 )
@@ -35,7 +34,6 @@ async def deliver_email(
         if settings.is_production:
             delivery = DevDelivery(
                 account_id=account_id,
-                channel=DeliveryChannel.EMAIL,
                 recipient=normalized_recipient,
                 subject=content.subject,
                 body=REDACTED_EMAIL_BODY,
@@ -49,7 +47,6 @@ async def deliver_email(
             return delivery
         delivery = DevDelivery(
             account_id=account_id,
-            channel=DeliveryChannel.EMAIL,
             recipient=normalized_recipient,
             subject=content.subject,
             body=content.text,
@@ -80,7 +77,6 @@ async def deliver_email(
 
     delivery = DevDelivery(
         account_id=account_id,
-        channel=DeliveryChannel.EMAIL,
         recipient=normalized_recipient,
         subject=content.subject,
         body=REDACTED_EMAIL_BODY,

@@ -14,9 +14,6 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    DeliveryChannel,
-    DeliveryStatus,
-    DevDelivery,
     SystemConfiguration,
 )
 from app.features.accounts.schemas import (
@@ -685,20 +682,6 @@ async def request_contact_number_change(
         account,
         PENDING_CONTACT_NUMBER_CHANGE_KEY,
         {"phone": payload.phone, "requestedAt": datetime.now(UTC).isoformat()},
-    )
-    db.add(
-        DevDelivery(
-            account_id=account.id,
-            channel=DeliveryChannel.SMS,
-            recipient=payload.phone,
-            subject="TANAW contact number change request",
-            body=(
-                f"{enterprise_label(account)} requested a contact number change.\n\n"
-                "Contact verification is not configured in this environment. "
-                "No OTP code was generated or sent."
-            ),
-            status=DeliveryStatus.RECORDED,
-        )
     )
     await db.commit()
     await record_auth_log(

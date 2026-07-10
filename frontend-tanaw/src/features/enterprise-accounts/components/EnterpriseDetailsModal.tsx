@@ -76,7 +76,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
-      toast.success("Temporary credentials recorded in Dev Log");
+      toast.success("Temporary credentials sent by email");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to reset credentials")),
   });
@@ -326,7 +326,7 @@ function ConfirmEnterprisePasswordResetModal({ enterprise, isPending, onClose, o
           <div>
             <p className="font-bold">This will generate new temporary credentials.</p>
             <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
-              The current password for {enterpriseName} will stop working. New temporary credentials will be recorded in Dev Log and the enterprise user will need to change the password after signing in.
+              The current password for {enterpriseName} will stop working. New temporary credentials will be sent to the registered email, and the enterprise user will need to change the password after signing in.
             </p>
           </div>
         </div>
