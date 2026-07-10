@@ -49,7 +49,6 @@ class ForgotPasswordResetRequest(BaseModel):
 
 class SupportInfoResponse(BaseModel):
     supportEmail: str | None
-    supportPhone: str | None
     message: str
 
 

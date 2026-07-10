@@ -397,10 +397,9 @@ async def forgot_password_reset(
 @router.get("/support-info", response_model=SupportInfoResponse)
 async def get_support_info() -> SupportInfoResponse:
     support_email = settings.email_inbound_address or settings.support_email
-    has_contact = bool(support_email or settings.support_phone)
+    has_contact = bool(support_email)
     return SupportInfoResponse(
         supportEmail=support_email,
-        supportPhone=settings.support_phone,
         message=(
             "Use the configured support contact below."
             if has_contact

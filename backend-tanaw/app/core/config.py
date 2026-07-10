@@ -32,7 +32,6 @@ class Settings(BaseSettings):
     geocoder_user_agent: str = "TANAW/1.0 local-development"
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     support_email: str | None = None
-    support_phone: str | None = None
     email_delivery_mode: str = "log"
     resend_api_key: str | None = None
     resend_webhook_secret: str | None = None

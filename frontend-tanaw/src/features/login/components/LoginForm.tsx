@@ -18,7 +18,6 @@ type DialogMode = "forgot" | "support" | null;
 type RecoveryStep = "email" | "code" | "password" | "success";
 type SupportInfo = {
   supportEmail: string | null;
-  supportPhone: string | null;
   message: string;
 };
 type ApiErrorPayload = { detail?: string | { msg?: string }[] };
@@ -250,11 +249,7 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
   };
 
   const handleCopySupport = async () => {
-    const supportCopy = supportInfo?.supportEmail
-      ? `TANAW support email: ${supportInfo.supportEmail}`
-      : supportInfo?.supportPhone
-        ? `TANAW support phone: ${supportInfo.supportPhone}`
-        : "Please contact the TANAW system administrator.";
+    const supportCopy = supportInfo?.supportEmail ? `TANAW support email: ${supportInfo.supportEmail}` : "Please contact the TANAW system administrator.";
 
     try {
       await navigator.clipboard.writeText(supportCopy);
@@ -308,7 +303,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
     } catch {
       setSupportInfo({
         supportEmail: null,
-        supportPhone: null,
         message: "Please contact the TANAW system administrator.",
       });
     }
@@ -814,7 +808,7 @@ function SupportDialogContent({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCopy: () => void;
 }) {
-  const hasSupportContact = Boolean(info?.supportEmail || info?.supportPhone);
+  const hasSupportContact = Boolean(info?.supportEmail);
   const supportEmailIsUsable = Boolean(info?.supportEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.supportEmail));
   const mailtoHref = supportEmailIsUsable ? `mailto:${info?.supportEmail}?subject=${encodeURIComponent("TANAW login support request")}` : undefined;
 
@@ -826,7 +820,6 @@ function SupportDialogContent({
         </div>
         <p className="text-sm font-semibold text-(--tanaw-text)">{info?.message ?? "Checking support contact..."}</p>
         {info?.supportEmail ? <p className="mt-2 text-sm text-(--tanaw-muted)">Email: {info.supportEmail}</p> : null}
-        {info?.supportPhone ? <p className="mt-1 text-sm text-(--tanaw-muted)">Phone: {info.supportPhone}</p> : null}
         {mailtoHref ? (
           <a
             href={mailtoHref}
