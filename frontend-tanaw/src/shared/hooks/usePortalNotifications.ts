@@ -151,7 +151,7 @@ export function usePortalNotifications(role: UserRole) {
     notifications,
     allNotifications,
     unreadCount: allNotifications.filter((notification) => !notification.read).length,
-    isLoading: alertsLoading || backendNotificationsQuery.isLoading || devDeliveriesQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
+    isLoading: alertsLoading || backendNotificationsQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
     viewAllPath: viewAllPathByRole[role],
     markAsRead,
     markAllAsRead,

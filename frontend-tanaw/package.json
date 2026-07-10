@@ -11,7 +11,7 @@
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
     "preview": "vite preview",
     "prettier": "prettier --write .",
-    "type": "tsc --noEmit",
+    "type": "tsc -b",
     "pp": "tsc -b && vite build && vite preview"
   },
   "dependencies": {
