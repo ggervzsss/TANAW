@@ -1,49 +1,11 @@
-import base64
-import hashlib
-import hmac
-import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.core.config import Settings, get_settings
 from app.features.accounts.models import DeliveryStatus
-from app.features.mail.router import _email_body_as_text, verify_resend_webhook
 from app.features.mail.service import REDACTED_EMAIL_BODY, deliver_email
 from app.features.mail.templates import EmailContent
-
-
-def test_resend_webhook_signature_is_verified() -> None:
-    payload = b'{"type":"email.received"}'
-    event_id = "msg_test"
-    timestamp = str(int(time.time()))
-    secret_bytes = b"tanaw-webhook-secret"
-    secret = f"whsec_{base64.b64encode(secret_bytes).decode()}"
-    signed_payload = f"{event_id}.{timestamp}.".encode() + payload
-    signature = base64.b64encode(
-        hmac.new(secret_bytes, signed_payload, hashlib.sha256).digest()
-    ).decode()
-
-    assert verify_resend_webhook(
-        payload=payload,
-        event_id=event_id,
-        timestamp=timestamp,
-        signature=f"v1,{signature}",
-        secret=secret,
-    )
-    assert not verify_resend_webhook(
-        payload=b"tampered",
-        event_id=event_id,
-        timestamp=timestamp,
-        signature=f"v1,{signature}",
-        secret=secret,
-    )
-
-
-def test_received_html_is_converted_to_plain_text() -> None:
-    assert _email_body_as_text(None, "<p>Hello <strong>TANAW</strong></p><script>x</script>") == (
-        "Hello TANAW"
-    )
 
 
 @pytest.mark.asyncio

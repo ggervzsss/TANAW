@@ -447,7 +447,9 @@ async def create_support_ticket_message(
         message=payload.message,
     )
     db.add(message)
-    if ticket.status == "Open":
+    if author.role == AccountRole.ENTERPRISE and ticket.status == "Resolved":
+        ticket.status = "Open"
+    elif author.role == AccountRole.IT and ticket.status == "Open":
         ticket.status = "In Review"
     if commit:
         await db.commit()

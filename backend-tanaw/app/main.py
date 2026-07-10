@@ -245,6 +245,7 @@ async def ensure_support_ticket_schema(connection: Any) -> None:
 
 
 async def ensure_email_schema(connection: Any) -> None:
+    await connection.exec_driver_sql("DROP TABLE IF EXISTS inbound_email_receipts")
     statements = [
         "ALTER TABLE dev_deliveries ADD COLUMN IF NOT EXISTS provider VARCHAR(40) NOT NULL DEFAULT 'local'",
         "ALTER TABLE dev_deliveries ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(120)",

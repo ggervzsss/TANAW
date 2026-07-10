@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Annotated
@@ -6,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.features.accounts.dependencies import get_current_account
@@ -60,7 +60,6 @@ from app.features.auth.schemas import (
     LoginRequest,
     LoginResponse,
     StatusResponse,
-    SupportInfoResponse,
     SupportRequest,
     SystemSettingsPayload,
 )
@@ -86,7 +85,6 @@ from app.features.operational.service import (
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-settings = get_settings()
 SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
@@ -394,36 +392,48 @@ async def forgot_password_reset(
     return StatusResponse(status="ok")
 
 
-@router.get("/support-info", response_model=SupportInfoResponse)
-async def get_support_info() -> SupportInfoResponse:
-    support_email = settings.email_inbound_address or settings.support_email
-    has_contact = bool(support_email)
-    return SupportInfoResponse(
-        supportEmail=support_email,
-        message=(
-            "Use the configured support contact below."
-            if has_contact
-            else "Please contact the TANAW system administrator."
-        ),
-    )
-
-
 @router.post("/support-request", response_model=StatusResponse)
 async def create_support_request(
     payload: SupportRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> StatusResponse:
-    await create_operational_alert(
+    requester_name = payload.name.strip()
+    requester_email = str(payload.email).strip().lower()
+    alert = await create_operational_alert(
         db,
         alert_type="Maintenance Request",
         severity="Warning",
-        requester=payload.name.strip(),
+        requester=f"{requester_name} <{requester_email}>",
         summary=payload.message.strip(),
-        required_action="Review the login support request and contact the requester.",
+        required_action=f"Review the login support request and contact {requester_email}.",
         resolution_mode="Remote Review",
         owner="IT",
         enterprise=None,
-        source_id=f"support:{payload.email}:{payload.message.strip()}",
+        source_id=f"login-support:{hashlib.sha256(requester_email.encode()).hexdigest()}",
     )
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="alert.created",
+            data=to_operational_alert_summary(alert).model_dump(mode="json"),
+        )
+    )
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.ADMIN],
+        title=f"Login support requested by {requester_name}.",
+        message=f"{requester_email}: {payload.message.strip()}",
+        notification_type="Login Support Request",
+        severity="Warning",
+        actor=None,
+        source_type="operational.alert",
+        source_id=alert.id,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
     return StatusResponse(status="ok")
 
 

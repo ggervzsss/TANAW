@@ -24,7 +24,6 @@ async def deliver_email(
     recipient: str,
     content: EmailContent,
     idempotency_key: str,
-    reply_to: str | None = None,
     tags: dict[str, str] | None = None,
     raise_on_failure: bool = True,
 ) -> DevDelivery:
@@ -67,7 +66,6 @@ async def deliver_email(
                 subject=content.subject,
                 text=content.text,
                 html=content.html,
-                reply_to=reply_to or settings.email_reply_to,
                 idempotency_key=idempotency_key,
                 tags=tags,
             )

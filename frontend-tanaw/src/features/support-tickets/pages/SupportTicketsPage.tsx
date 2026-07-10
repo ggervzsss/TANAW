@@ -106,7 +106,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
         title="Support Tickets"
         description={
           isItResponder
-            ? "Technical inbox for portal and email support requests, attachments, and IT responses."
+            ? "Technical inbox for TANAW support requests, attachments, and IT responses."
             : "Read-only supervision for TANAW support requests, IT responses, and ticket status."
         }
       />

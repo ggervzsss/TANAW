@@ -1,1 +1,1 @@
-"""Transactional and inbound email integration."""
+"""Outbound transactional email integration."""

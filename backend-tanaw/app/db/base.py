@@ -9,7 +9,6 @@ from app.features.accounts.models import (
 )
 from app.features.activity_logs.models import ActivityLog
 from app.features.auth.models import PasswordResetChallenge
-from app.features.mail.models import InboundEmailReceipt
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     EnterpriseTelemetrySnapshot,
@@ -34,7 +33,6 @@ __all__ = [
     "FinalReport",
     "FinalReportSource",
     "MockDataRun",
-    "InboundEmailReceipt",
     "OperationalAlert",
     "PasswordResetChallenge",
     "SupportTicket",

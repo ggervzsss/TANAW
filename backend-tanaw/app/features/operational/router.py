@@ -107,6 +107,7 @@ OperationalReadAccount = Annotated[
     Account, Depends(require_roles({"admin", "it", "staff", "enterprise"}))
 ]
 TicketReadAccount = Annotated[Account, Depends(require_roles({"admin", "it", "enterprise"}))]
+TicketMessageAccount = Annotated[Account, Depends(require_roles({"it", "enterprise"}))]
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
@@ -708,7 +709,7 @@ async def create_enterprise_support_ticket(
 async def create_ticket_message(
     ticket_id: str,
     payload: SupportTicketMessageCreate,
-    account: ITAccount,
+    account: TicketMessageAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketDetail:
     ticket = await get_support_ticket_for_account(db, account, ticket_id)
@@ -717,40 +718,62 @@ async def create_ticket_message(
             status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
         )
     detail = await create_support_ticket_message(db, ticket, account, payload)
-    recipient = await get_account_by_id(db, ticket.enterprise_account_id)
-    if recipient is not None and detail.messages:
-        reply = detail.messages[-1]
-        await deliver_email(
+    if account.role == AccountRole.IT:
+        recipient = await get_account_by_id(db, ticket.enterprise_account_id)
+        if recipient is not None and detail.messages:
+            reply = detail.messages[-1]
+            await deliver_email(
+                db,
+                account_id=recipient.id,
+                recipient=recipient.email,
+                content=support_ticket_reply_email(
+                    ticket_code=detail.code,
+                    subject=detail.subject,
+                    recipient_name=recipient.display_name,
+                    author_name=account.display_name,
+                    message=reply.message,
+                ),
+                idempotency_key=email_idempotency_key("support-reply", reply.id),
+                tags={"category": "support_reply"},
+                raise_on_failure=False,
+            )
+            await db.commit()
+        await notify_enterprise_ticket_update(
             db,
-            account_id=recipient.id,
-            recipient=recipient.email,
-            content=support_ticket_reply_email(
-                ticket_code=detail.code,
-                subject=detail.subject,
-                recipient_name=recipient.display_name,
-                author_name=account.display_name,
-                message=reply.message,
-            ),
-            idempotency_key=email_idempotency_key("support-reply", reply.id),
-            tags={"category": "support_reply"},
-            raise_on_failure=False,
+            ticket=detail,
+            actor=account,
+            title=f"IT replied to support ticket {detail.code}.",
+            message=f"IT replied to {detail.code}: {detail.subject}.",
+            notification_type="Support Ticket Reply",
+            severity="Info",
         )
-        await db.commit()
-    await notify_enterprise_ticket_update(
-        db,
-        ticket=detail,
-        actor=account,
-        title=f"IT replied to support ticket {detail.code}.",
-        message=f"IT replied to {detail.code}: {detail.subject}.",
-        notification_type="Support Ticket Reply",
-        severity="Info",
-    )
+    else:
+        notifications = await create_role_notifications(
+            db,
+            recipient_roles=support_ticket_notification_roles(detail.category),
+            title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
+            message=f"New enterprise response on {detail.code}: {detail.subject}.",
+            notification_type="Enterprise Support Reply",
+            severity="Info",
+            actor=account,
+            source_type="support.ticket",
+            source_id=detail.id,
+        )
+        for notification in notifications:
+            await operational_ws_manager.broadcast(
+                OperationalWebSocketEnvelope(
+                    type="notification.created",
+                    data=notification.model_dump(mode="json"),
+                )
+            )
+    actor_role = "IT Personnel" if account.role == AccountRole.IT else "Enterprise Account"
+    activity_category = "IT Activity" if account.role == AccountRole.IT else "Enterprise Activity"
     await record_operational_log(
         db,
-        category="IT Activity",
+        category=activity_category,
         severity="Success",
         actor=account.display_name,
-        actor_role="IT Personnel",
+        actor_role=actor_role,
         action="Reply Support Ticket",
         target=detail.code,
         summary=f"{account.display_name} replied to {detail.code} from {detail.enterpriseName}.",

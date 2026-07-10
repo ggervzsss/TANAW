@@ -47,11 +47,6 @@ class ForgotPasswordResetRequest(BaseModel):
         return validate_password_policy(value)
 
 
-class SupportInfoResponse(BaseModel):
-    supportEmail: str | None
-    message: str
-
-
 class SupportRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr

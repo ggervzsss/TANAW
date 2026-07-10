@@ -40,9 +40,9 @@ def test_hsts_header_is_set_for_https_non_local_requests() -> None:
 def test_auth_routes_are_not_cached() -> None:
     client = TestClient(app)
 
-    response = client.get("/auth/support-info")
+    response = client.get("/auth/system-settings")
 
-    assert response.status_code == 200
+    assert response.status_code == 401
     assert response.headers["cache-control"] == "no-cache, no-store, must-revalidate, private"
     assert response.headers["pragma"] == "no-cache"
     assert response.headers["expires"] == "0"

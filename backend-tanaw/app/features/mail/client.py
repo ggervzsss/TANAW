@@ -13,19 +13,6 @@ class SentEmail:
     id: str
 
 
-@dataclass(frozen=True)
-class ReceivedEmail:
-    id: str
-    sender: str
-    recipients: tuple[str, ...]
-    subject: str
-    text: str | None
-    html: str | None
-    message_id: str | None
-    headers: dict[str, str]
-    attachment_count: int
-
-
 class ResendClient:
     def __init__(self, api_key: str, *, base_url: str, timeout_seconds: float) -> None:
         self._api_key = api_key
@@ -40,7 +27,6 @@ class ResendClient:
         subject: str,
         text: str,
         html: str,
-        reply_to: str | None,
         idempotency_key: str,
         tags: dict[str, str] | None = None,
     ) -> SentEmail:
@@ -51,8 +37,6 @@ class ResendClient:
             "text": text,
             "html": html,
         }
-        if reply_to:
-            payload["reply_to"] = reply_to
         if tags:
             payload["tags"] = [{"name": name, "value": value} for name, value in tags.items()]
 
@@ -66,33 +50,6 @@ class ResendClient:
         if not isinstance(message_id, str) or not message_id:
             raise ResendAPIError("Resend returned an invalid send response.")
         return SentEmail(id=message_id)
-
-    async def get_received_email(self, email_id: str) -> ReceivedEmail:
-        response = await self._request("GET", f"/emails/receiving/{email_id}")
-        sender = response.get("from")
-        recipients = response.get("to")
-        subject = response.get("subject")
-        if not isinstance(sender, str) or not isinstance(recipients, list):
-            raise ResendAPIError("Resend returned invalid received-email metadata.")
-        headers = response.get("headers")
-        attachments = response.get("attachments")
-        return ReceivedEmail(
-            id=str(response.get("id") or email_id),
-            sender=sender,
-            recipients=tuple(item for item in recipients if isinstance(item, str)),
-            subject=subject if isinstance(subject, str) else "(No subject)",
-            text=response.get("text") if isinstance(response.get("text"), str) else None,
-            html=response.get("html") if isinstance(response.get("html"), str) else None,
-            message_id=(
-                response.get("message_id") if isinstance(response.get("message_id"), str) else None
-            ),
-            headers={
-                key.lower(): value
-                for key, value in (headers.items() if isinstance(headers, dict) else ())
-                if isinstance(key, str) and isinstance(value, str)
-            },
-            attachment_count=len(attachments) if isinstance(attachments, list) else 0,
-        )
 
     async def _request(
         self,

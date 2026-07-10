@@ -1,7 +1,7 @@
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, ArrowRight, Check, Clipboard, ExternalLink, Eye, EyeOff, Headphones, Lock, User, X } from "lucide-react";
+import { AlertCircle, ArrowRight, Check, ExternalLink, Eye, EyeOff, Headphones, Lock, User, X } from "lucide-react";
 import { motion } from "motion/react";
 import { isAxiosError } from "axios";
 import { apiClient } from "@/shared/lib/apiClient";
@@ -16,10 +16,6 @@ type LoginFormProps = {
 
 type DialogMode = "forgot" | "support" | null;
 type RecoveryStep = "email" | "code" | "password" | "success";
-type SupportInfo = {
-  supportEmail: string | null;
-  message: string;
-};
 type ApiErrorPayload = { detail?: string | { msg?: string }[] };
 
 const validateIdentifier = (value: string) => {
@@ -89,14 +85,12 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
   const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
   const [isRecoverySubmitting, setIsRecoverySubmitting] = useState(false);
-  const [supportInfo, setSupportInfo] = useState<SupportInfo | null>(null);
   const [supportName, setSupportName] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   const [supportMessage, setSupportMessage] = useState("");
   const [supportError, setSupportError] = useState("");
   const [supportSubmitted, setSupportSubmitted] = useState(false);
   const [isSupportSubmitting, setIsSupportSubmitting] = useState(false);
-  const [supportCopied, setSupportCopied] = useState(false);
 
   const handleIdentifierChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -154,10 +148,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
     setSupportError("");
     setSupportSubmitted(false);
     setIsSupportSubmitting(false);
-    setSupportCopied(false);
-    if (dialog === "support") {
-      void loadSupportInfo();
-    }
   };
 
   const closeDialog = () => {
@@ -174,7 +164,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
     setSupportError("");
     setSupportSubmitted(false);
     setIsSupportSubmitting(false);
-    setSupportCopied(false);
   };
 
   const handleRecoveryRequest = async (event: FormEvent<HTMLFormElement>) => {
@@ -248,18 +237,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
     }
   };
 
-  const handleCopySupport = async () => {
-    const supportCopy = supportInfo?.supportEmail ? `TANAW support email: ${supportInfo.supportEmail}` : "Please contact the TANAW system administrator.";
-
-    try {
-      await navigator.clipboard.writeText(supportCopy);
-      setSupportCopied(true);
-      window.setTimeout(() => setSupportCopied(false), 2200);
-    } catch {
-      setSupportCopied(false);
-    }
-  };
-
   const handleSupportRequest = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const emailError = validateRecoveryTarget(supportEmail);
@@ -294,19 +271,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
       setIsSupportSubmitting(false);
     }
   };
-
-  async function loadSupportInfo() {
-    setSupportInfo(null);
-    try {
-      const response = await apiClient.get<SupportInfo>("/auth/support-info");
-      setSupportInfo(response.data);
-    } catch {
-      setSupportInfo({
-        supportEmail: null,
-        message: "Please contact the TANAW system administrator.",
-      });
-    }
-  }
 
   const identifierShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
     identifierError
@@ -523,13 +487,11 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
                   />
                 ) : (
                   <SupportDialogContent
-                    info={supportInfo}
                     name={supportName}
                     email={supportEmail}
                     message={supportMessage}
                     error={supportError}
                     submitted={supportSubmitted}
-                    copied={supportCopied}
                     isSubmitting={isSupportSubmitting}
                     onNameChange={(value) => {
                       setSupportName(value);
@@ -544,7 +506,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
                       if (supportError) setSupportError("");
                     }}
                     onSubmit={handleSupportRequest}
-                    onCopy={handleCopySupport}
                   />
                 )}
               </motion.div>
@@ -780,55 +741,36 @@ function RecoveryError({ message }: { message: string }) {
 }
 
 function SupportDialogContent({
-  info,
   name,
   email,
   message,
   error,
   submitted,
-  copied,
   isSubmitting,
   onNameChange,
   onEmailChange,
   onMessageChange,
   onSubmit,
-  onCopy,
 }: {
-  info: SupportInfo | null;
   name: string;
   email: string;
   message: string;
   error: string;
   submitted: boolean;
-  copied: boolean;
   isSubmitting: boolean;
   onNameChange: (value: string) => void;
   onEmailChange: (value: string) => void;
   onMessageChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onCopy: () => void;
 }) {
-  const hasSupportContact = Boolean(info?.supportEmail);
-  const supportEmailIsUsable = Boolean(info?.supportEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.supportEmail));
-  const mailtoHref = supportEmailIsUsable ? `mailto:${info?.supportEmail}?subject=${encodeURIComponent("TANAW login support request")}` : undefined;
-
   return (
     <div>
       <div className="rounded-[40px] border border-(--tanaw-border) bg-[#f8faf8] p-5">
         <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[22px] border border-(--tanaw-border) bg-white text-(--tanaw-green)">
           <Headphones className="h-6 w-6" />
         </div>
-        <p className="text-sm font-semibold text-(--tanaw-text)">{info?.message ?? "Checking support contact..."}</p>
-        {info?.supportEmail ? <p className="mt-2 text-sm text-(--tanaw-muted)">Email: {info.supportEmail}</p> : null}
-        {mailtoHref ? (
-          <a
-            href={mailtoHref}
-            className="mt-4 inline-flex items-center gap-2 rounded-[20px] bg-white px-4 py-2 text-sm font-semibold text-(--tanaw-green) shadow-sm ring-1 ring-(--tanaw-border) transition hover:ring-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
-          >
-            Email support
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        ) : null}
+        <p className="text-sm font-semibold text-(--tanaw-text)">Send your sign-in concern directly to the TANAW support queue.</p>
+        <p className="mt-2 text-sm text-(--tanaw-muted)">IT and Admin personnel will receive the request and use your registered email to follow up.</p>
       </div>
 
       {submitted ? (
@@ -865,17 +807,6 @@ function SupportDialogContent({
           </button>
         </form>
       )}
-
-      {hasSupportContact ? (
-        <button
-          type="button"
-          onClick={onCopy}
-          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-3xl border border-(--tanaw-border) bg-white px-4 py-3 font-semibold text-(--tanaw-green) transition hover:border-(--tanaw-green) hover:shadow-[0_12px_26px_rgba(6,78,47,0.12)] focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
-        >
-          {copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
-          {copied ? "Copied" : "Copy support contact"}
-        </button>
-      ) : null}
     </div>
   );
 }

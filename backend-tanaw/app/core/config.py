@@ -31,15 +31,11 @@ class Settings(BaseSettings):
     geocoder_base_url: str | None = None
     geocoder_user_agent: str = "TANAW/1.0 local-development"
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
-    support_email: str | None = None
     email_delivery_mode: str = "log"
     resend_api_key: str | None = None
-    resend_webhook_secret: str | None = None
     resend_api_base_url: str = "https://api.resend.com"
     email_from_name: str = "TANAW"
     email_from_address: str = "onboarding@resend.dev"
-    email_reply_to: str | None = None
-    email_inbound_address: str | None = None
     email_test_recipient: str | None = None
     email_request_timeout_seconds: float = 10.0
     allow_mock_data: bool = Field(
@@ -74,9 +70,6 @@ class Settings(BaseSettings):
 
     @field_validator(
         "resend_api_key",
-        "resend_webhook_secret",
-        "email_reply_to",
-        "email_inbound_address",
         "email_test_recipient",
         mode="before",
     )

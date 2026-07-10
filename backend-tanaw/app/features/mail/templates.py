@@ -26,7 +26,7 @@ def onboarding_email(account: Account, temporary_password: str) -> EmailContent:
         f"{login_lines}\n"
         f"Temporary password: {temporary_password}\n\n"
         "This temporary password expires in 7 days. You must change it on first login.\n"
-        "If you did not expect this account, reply to this email to contact TANAW support."
+        "If you did not expect this account, use Contact Support on the TANAW sign-in page."
     )
     html = _layout(
         "Your TANAW account is ready",
@@ -36,7 +36,7 @@ def onboarding_email(account: Account, temporary_password: str) -> EmailContent:
         <div class="card"><pre>{escape(login_lines)}</pre>
         <p><strong>Temporary password:</strong> <code>{escape(temporary_password)}</code></p></div>
         <p>This temporary password expires in 7 days. You must change it on first login.</p>
-        <p class="muted">If you did not expect this account, reply to this email to contact TANAW support.</p>
+        <p class="muted">If you did not expect this account, use Contact Support on the TANAW sign-in page.</p>
         """,
     )
     return EmailContent(subject="Your TANAW account credentials", text=text, html=html)
@@ -48,7 +48,7 @@ def password_reset_code_email(account: Account, code: str, expires_label: str) -
         "A TANAW password reset was requested for your account.\n"
         f"Verification code: {code}\n"
         f"This code expires at {expires_label} and can be used once.\n\n"
-        "If you did not request this reset, reply to this email or contact TANAW support."
+        "If you did not request this reset, use Contact Support on the TANAW sign-in page."
     )
     html = _layout(
         "TANAW password reset",
@@ -57,7 +57,7 @@ def password_reset_code_email(account: Account, code: str, expires_label: str) -
         <p>A TANAW password reset was requested for your account.</p>
         <div class="code">{escape(code)}</div>
         <p>This one-time code expires at <strong>{escape(expires_label)}</strong>.</p>
-        <p class="muted">If you did not request this reset, reply to this email or contact TANAW support.</p>
+        <p class="muted">If you did not request this reset, use Contact Support on the TANAW sign-in page.</p>
         """,
     )
     return EmailContent(subject="TANAW password reset verification code", text=text, html=html)
@@ -71,7 +71,7 @@ def support_ticket_reply_email(
         f"Hello {recipient_name},\n\n"
         f"{author_name} replied to your TANAW support ticket {ticket_code}:\n\n"
         f"{message}\n\n"
-        "Reply to this email to continue the conversation, or open TANAW to view the ticket."
+        "Open Support Tickets in TANAW to view and continue the conversation."
     )
     html = _layout(
         f"Support ticket {escape(ticket_code)}",
@@ -79,7 +79,7 @@ def support_ticket_reply_email(
         <p>Hello {escape(recipient_name)},</p>
         <p><strong>{escape(author_name)}</strong> replied to your TANAW support ticket.</p>
         <div class="card"><p>{escape(message)}</p></div>
-        <p class="muted">Reply to this email to continue the conversation, or open TANAW to view the ticket.</p>
+        <p class="muted">Open Support Tickets in TANAW to view and continue the conversation.</p>
         """,
     )
     return EmailContent(subject=email_subject, text=text, html=html)
@@ -90,7 +90,7 @@ def business_email_change_email(account: Account, new_email: str) -> EmailConten
         f"Hello {account.display_name},\n\n"
         "A request was submitted to change the TANAW business email for your account "
         f"to {new_email}. TANAW IT and Admin will review the request.\n\n"
-        "If you did not request this change, reply to this email immediately."
+        "If you did not request this change, submit a support request through TANAW immediately."
     )
     html = _layout(
         "TANAW business email change request",
@@ -98,7 +98,7 @@ def business_email_change_email(account: Account, new_email: str) -> EmailConten
         <p>Hello {escape(account.display_name)},</p>
         <p>A request was submitted to change the TANAW business email for your account to <strong>{escape(new_email)}</strong>.</p>
         <p>TANAW IT and Admin will review the request.</p>
-        <p class="muted">If you did not request this change, reply to this email immediately.</p>
+        <p class="muted">If you did not request this change, submit a support request through TANAW immediately.</p>
         """,
     )
     return EmailContent(subject="TANAW business email change request", text=text, html=html)
