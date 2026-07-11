@@ -32,8 +32,8 @@ export function ITLguAccountsPage() {
   const activationMutation = useMutation({
     mutationFn: (accountId: string) => resendAccountActivation(accountId),
     onSuccess: async (updatedAccount) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("Activation email sent");
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      toast.success("Activation email queued");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
       setPendingActivationResend(null);
     },
@@ -43,12 +43,12 @@ export function ITLguAccountsPage() {
   const statusMutation = useMutation({
     mutationFn: ({ accountId, nextStatus }: { accountId: string; nextStatus: LguStatusFilter }) => updateAccountStatus(accountId, nextStatus),
     onSuccess: async (updatedAccount, { nextStatus }) => {
-      const activationEmailSent = nextStatus === "active" && !updatedAccount.isActivated;
+      const activationEmailQueued = nextStatus === "active" && !updatedAccount.isActivated;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationEmailSent ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })] : []),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
-      toast.success(activationEmailSent ? "Account reactivated; activation email sent" : "Account status updated");
+      toast.success(activationEmailQueued ? "Account reactivated; activation email queued" : "Account status updated");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
       setPendingStatusChange(null);
     },

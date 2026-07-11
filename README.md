@@ -761,6 +761,11 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `EMAIL_TEST_RECIPIENT`        | Development-only recipient restriction                  |
 | `RESEND_API_BASE_URL`         | Official Resend HTTPS API endpoint                      |
 | `EMAIL_REQUEST_TIMEOUT_SECONDS` | Bounded timeout used for Resend connect/read/write/pool operations |
+| `EMAIL_SECRET_DERIVATION_KEY` | Separate stable secret used to derive queued activation and OTP values |
+| `EMAIL_OUTBOX_POLL_INTERVAL_SECONDS` | Delay between idle transactional-email queue polls |
+| `EMAIL_OUTBOX_LEASE_SECONDS` | Worker lease used to recover interrupted deliveries safely |
+| `EMAIL_OUTBOX_BATCH_SIZE` | Maximum concurrently claimed email records per worker |
+| `EMAIL_OUTBOX_MAX_ATTEMPTS` | Automatic delivery-attempt ceiling before IT review |
 | `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |

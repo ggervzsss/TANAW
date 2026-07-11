@@ -118,6 +118,7 @@ async def test_activation_completion_sets_password_and_consumes_token() -> None:
     )
     db = MagicMock()
     db.scalar = AsyncMock(side_effect=[token, account, token])
+    db.scalars = AsyncMock(return_value=[])
     db.execute = AsyncMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
@@ -171,29 +172,32 @@ async def test_invalid_expired_and_reused_activation_tokens_are_rejected(
 async def test_resending_activation_rotates_hash_without_storing_raw_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    raw_tokens = ["first-raw-activation-token", "second-raw-activation-token"]
+    token_ids = ["first-activation-source-id", "second-activation-source-id"]
     settings = SimpleNamespace(
-        jwt_secret_key="activation-test-secret",
+        email_secret_key_value="activation-test-secret",
         frontend_public_url="https://tanaw.example",
         account_activation_ttl_hours=24,
     )
-    delivery = AsyncMock()
+    enqueue = AsyncMock()
     monkeypatch.setattr(account_activation, "get_settings", lambda: settings)
     monkeypatch.setattr(
-        account_activation.secrets, "token_urlsafe", MagicMock(side_effect=raw_tokens)
+        account_activation.secrets, "token_urlsafe", MagicMock(side_effect=token_ids)
     )
-    monkeypatch.setattr(account_activation, "deliver_email", delivery)
+    monkeypatch.setattr(account_activation, "enqueue_email", enqueue)
     account = activation_account(activated_at=None)
     db = MagicMock()
     db.scalar = AsyncMock(return_value=account)
+    db.scalars = AsyncMock(return_value=[])
     db.execute = AsyncMock()
     db.flush = AsyncMock()
 
     first = await account_activation.issue_account_activation(db, account)
     second = await account_activation.issue_account_activation(db, account)
 
-    assert first.token_hash == account_activation._hash_token(raw_tokens[0])
-    assert second.token_hash == account_activation._hash_token(raw_tokens[1])
+    first_raw_token = account_activation.derive_account_activation_token(token_ids[0])
+    second_raw_token = account_activation.derive_account_activation_token(token_ids[1])
+    assert first.token_hash == account_activation._hash_token(first_raw_token)
+    assert second.token_hash == account_activation._hash_token(second_raw_token)
     assert first.token_hash != second.token_hash
     assert not hasattr(first, "token")
     assert not hasattr(first, "raw_token")
@@ -204,10 +208,11 @@ async def test_resending_activation_rotates_hash_without_storing_raw_token(
     assert all("FOR UPDATE" in str(call.args[0]) for call in db.scalar.await_args_list)
     assert db.flush.await_count == 2
     assert db.add.call_count == 2
-    assert delivery.await_count == 2
-    second_content = delivery.await_args_list[1].kwargs["content"]
-    assert raw_tokens[1] in second_content.text
-    assert raw_tokens[0] not in second_content.text
+    assert enqueue.await_count == 2
+    second_payload = enqueue.await_args_list[1].kwargs["template_payload"]
+    assert second_payload["tokenId"] == token_ids[1]
+    assert first_raw_token not in str(second_payload)
+    assert second_raw_token not in str(second_payload)
 
 
 @pytest.mark.asyncio
@@ -216,9 +221,9 @@ async def test_pending_account_is_ineligible_for_forgot_password_otp(
 ) -> None:
     account = activation_account(activated_at=None)
     lookup = AsyncMock(return_value=account)
-    delivery = AsyncMock()
+    enqueue = AsyncMock()
     monkeypatch.setattr(password_recovery, "get_account_by_email", lookup)
-    monkeypatch.setattr(password_recovery, "deliver_email", delivery)
+    monkeypatch.setattr(password_recovery, "enqueue_email", enqueue)
     db = MagicMock()
     db.scalar = AsyncMock(return_value=None)
     db.commit = AsyncMock()
@@ -226,7 +231,7 @@ async def test_pending_account_is_ineligible_for_forgot_password_otp(
     challenge = await password_recovery.request_password_reset(db, account.email)
 
     assert challenge.account_id is None
-    delivery.assert_not_awaited()
+    enqueue.assert_not_awaited()
     db.add.assert_called_once_with(challenge)
     db.commit.assert_awaited_once()
 

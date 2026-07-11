@@ -62,15 +62,15 @@ Acceptance criteria:
 
 Current risk: TANAW calls Resend before committing the account, activation token, password-reset challenge, or email-change request. Resend can accept a message whose database transaction later fails, producing a broken activation link or duplicated message on retry.
 
-- [ ] Add an outbox table that stores the message purpose, recipient, template payload, stable idempotency key, attempt count, next-attempt time, provider ID, and final status.
-- [ ] Commit the business record, activation/reset record, and outbox record in one database transaction.
-- [ ] Send queued mail only after that transaction commits.
-- [ ] Retry transient failures with exponential backoff and the same stable Resend idempotency key.
-- [ ] Distinguish retryable provider/network failures from permanent validation failures.
-- [ ] Persist failed attempts even when account creation or another business operation fails.
-- [ ] Prevent concurrent workers from sending the same outbox item twice.
-- [ ] Define a terminal failure state and an IT-visible retry action.
-- [ ] Keep activation and OTP bodies redacted from production logs.
+- [x] Add an outbox table that stores the message purpose, recipient, template payload, stable idempotency key, attempt count, next-attempt time, provider ID, and final status.
+- [x] Commit the business record, activation/reset record, and outbox record in one database transaction.
+- [x] Send queued mail only after that transaction commits.
+- [x] Retry transient failures with exponential backoff and the same stable Resend idempotency key.
+- [x] Distinguish retryable provider/network failures from permanent validation failures.
+- [x] Persist failed attempts without rolling back the account or other committed business operation.
+- [x] Prevent concurrent workers from sending the same outbox item twice.
+- [x] Define a terminal failure state and an IT-visible retry action.
+- [x] Keep activation and OTP bodies redacted from production logs.
 
 Affected flows:
 
@@ -210,11 +210,11 @@ Acceptance criteria:
 
 Current limitation: `SENT` currently means Resend accepted the API request, not that the recipient's mail server delivered it.
 
-- [ ] Rename or map the immediate provider state to `accepted`/`queued` rather than `sent` if no delivery confirmation is available.
-- [ ] Decide how TANAW will observe bounces and delivery failures without reintroducing inbound support email.
-- [ ] If keeping the outbound-only architecture, document that detailed delivery confirmation is checked in the Resend dashboard or through a narrowly scoped status-reconciliation mechanism.
-- [ ] Expose provider IDs and safe failure reasons to authorized IT users.
-- [ ] Ensure UI toasts do not promise inbox delivery when only provider acceptance is known.
+- [x] Rename or map the immediate provider state to `accepted`/`queued` rather than `sent` if no delivery confirmation is available.
+- [x] Decide how TANAW will observe bounces and delivery failures without reintroducing inbound support email.
+- [x] If keeping the outbound-only architecture, document that detailed delivery confirmation is checked in the Resend dashboard or through a narrowly scoped status-reconciliation mechanism.
+- [x] Expose provider IDs and safe failure reasons to authorized IT users.
+- [x] Ensure UI toasts do not promise inbox delivery when only provider acceptance is known.
 
 Acceptance criteria:
 
@@ -323,9 +323,9 @@ Acceptance criteria:
 - [ ] Test account creation, activation validation, activation completion, resend, email change, and password recovery against disposable PostgreSQL rather than only mocked sessions.
 - [ ] Test two concurrent activation completions and prove only one succeeds.
 - [ ] Test two concurrent OTP verifications and resets.
-- [ ] Simulate provider acceptance followed by database commit failure.
-- [ ] Simulate provider timeout before and after acceptance.
-- [ ] Test outbox retry, backoff, dead-letter handling, and stable idempotency.
+- [x] Simulate provider acceptance followed by database commit failure.
+- [x] Simulate provider timeout before and after acceptance.
+- [x] Test outbox retry, backoff, dead-letter handling, and stable idempotency.
 - [x] Test production configuration startup failures.
 - [ ] Test expired-record cleanup.
 

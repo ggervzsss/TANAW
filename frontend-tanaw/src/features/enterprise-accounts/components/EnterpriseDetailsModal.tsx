@@ -59,17 +59,17 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateEnterpriseAccountPayload) => updateEnterpriseAccount(enterprise.id, payload),
     onSuccess: async (updatedEnterprise, payload) => {
-      const activationEmailSent = !enterprise.isActivated && updatedEnterprise.status === "active" && (payload.email !== enterprise.email || enterprise.status === "inactive");
+      const activationEmailQueued = !enterprise.isActivated && updatedEnterprise.status === "active" && (payload.email !== enterprise.email || enterprise.status === "inactive");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        ...(activationEmailSent ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })] : []),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setForm(getInitialForm(updatedEnterprise));
       setConfirmMode(null);
       setPendingSave(null);
       setIsEditing(false);
-      toast.success(activationEmailSent ? "Enterprise account updated; activation email sent" : "Enterprise account updated");
+      toast.success(activationEmailQueued ? "Enterprise account updated; activation email queued" : "Enterprise account updated");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update enterprise account")),
   });
@@ -77,10 +77,10 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const activationMutation = useMutation({
     mutationFn: () => resendAccountActivation(enterprise.id),
     onSuccess: async (updatedEnterprise) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
-      toast.success("Activation email sent");
+      toast.success("Activation email queued");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to resend activation email")),
   });
@@ -88,14 +88,14 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const statusMutation = useMutation({
     mutationFn: () => updateAccountStatus(enterprise.id, nextStatus),
     onSuccess: async (updatedEnterprise) => {
-      const activationEmailSent = nextStatus === "active" && !updatedEnterprise.isActivated;
+      const activationEmailQueued = nextStatus === "active" && !updatedEnterprise.isActivated;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        ...(activationEmailSent ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })] : []),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
-      toast.success(activationEmailSent ? "Enterprise reactivated; activation email sent" : "Enterprise account status updated");
+      toast.success(activationEmailQueued ? "Enterprise reactivated; activation email queued" : "Enterprise account status updated");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update enterprise status")),
   });

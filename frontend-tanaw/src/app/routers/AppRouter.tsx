@@ -4,6 +4,7 @@ import { AdminAlertsMonitorPage, ITAlertsPage } from "@/features/alerts-monitor"
 import { StaffAnalyticsPage } from "@/features/analytics";
 import { ITDashboardPage } from "@/features/dashboard";
 import { ITDevLogPage } from "@/features/dev-log";
+import { ITEmailDeliveriesPage } from "@/features/email-deliveries";
 import { ITEnterpriseAccountsPage } from "@/features/enterprise-accounts";
 import { ITLguAccountsPage } from "@/features/lgu-accounts";
 import { ActivateAccountPage, EnterpriseAccessPage, LoginPage } from "@/features/login";
@@ -48,6 +49,7 @@ export function AppRouter() {
         <Route path="support-tickets" element={<SupportTicketsPage mode="it" />} />
         <Route path="notifications" element={<NotificationsPage role="it" />} />
         <Route path="system-logs" element={<ITSystemLogsPage />} />
+        <Route path="email-deliveries" element={<ITEmailDeliveriesPage />} />
         <Route path="dev-log" element={<ITDevLogPage />} />
         <Route path="system-settings" element={<ITSystemSettingsPage />} />
         <Route path="profile" element={<AccountProfilePage role="it" />} />

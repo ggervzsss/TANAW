@@ -3,8 +3,6 @@ import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from urllib.parse import quote
-from uuid import uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +13,13 @@ from app.core.security import hash_password
 from app.features.accounts.models import Account, AccountStatus
 from app.features.auth.challenge_service import invalidate_password_reset_challenges
 from app.features.auth.models import AccountActivationToken
-from app.features.mail.service import deliver_email, email_idempotency_key
-from app.features.mail.templates import account_activation_email
+from app.features.auth.secret_values import derive_account_activation_token
+from app.features.mail.models import EmailTemplateName
+from app.features.mail.service import (
+    cancel_pending_source_emails,
+    email_idempotency_key,
+    enqueue_email,
+)
 
 
 class AccountActivationError(ValueError):
@@ -41,15 +44,10 @@ def _as_utc(value: datetime) -> datetime:
 def _hash_token(raw_token: str) -> str:
     settings = get_settings()
     return hmac.new(
-        settings.jwt_secret_key.encode(),
+        settings.email_secret_key_value.encode(),
         f"account-activation:{raw_token}".encode(),
         hashlib.sha256,
     ).hexdigest()
-
-
-def _activation_url(raw_token: str) -> str:
-    settings = get_settings()
-    return f"{settings.frontend_public_url}/activate-account#token={quote(raw_token)}"
 
 
 async def invalidate_account_activation_tokens(
@@ -59,14 +57,24 @@ async def invalidate_account_activation_tokens(
     except_token_id: str | None = None,
     invalidated_at: datetime | None = None,
 ) -> None:
-    statement = update(AccountActivationToken).where(
+    conditions = (
         AccountActivationToken.account_id == account_id,
         AccountActivationToken.consumed_at.is_(None),
         AccountActivationToken.invalidated_at.is_(None),
     )
+    source_statement = select(AccountActivationToken.id).where(*conditions)
+    statement = update(AccountActivationToken).where(*conditions)
     if except_token_id is not None:
+        source_statement = source_statement.where(AccountActivationToken.id != except_token_id)
         statement = statement.where(AccountActivationToken.id != except_token_id)
+    source_ids = list(await db.scalars(source_statement))
     await db.execute(statement.values(invalidated_at=invalidated_at or _now()))
+    await cancel_pending_source_emails(
+        db,
+        template_name=EmailTemplateName.ACCOUNT_ACTIVATION,
+        source_ids=source_ids,
+        reason="A newer activation request replaced this email.",
+    )
 
 
 async def issue_account_activation(
@@ -89,9 +97,10 @@ async def issue_account_activation(
 
     settings = get_settings()
     now = _now()
-    raw_token = secrets.token_urlsafe(32)
+    token_id = secrets.token_urlsafe(32)
+    raw_token = derive_account_activation_token(token_id)
     token = AccountActivationToken(
-        id=str(uuid4()),
+        id=token_id,
         account_id=account.id,
         token_hash=_hash_token(raw_token),
         expires_at=now + timedelta(hours=settings.account_activation_ttl_hours),
@@ -101,17 +110,24 @@ async def issue_account_activation(
     await db.flush()
 
     expires_label = token.expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-    await deliver_email(
+    await enqueue_email(
         db,
         account_id=account.id,
+        source_id=token.id,
         recipient=account.email,
-        content=account_activation_email(
-            account,
-            _activation_url(raw_token),
-            expires_label,
-        ),
+        template_name=EmailTemplateName.ACCOUNT_ACTIVATION,
+        template_payload={
+            "tokenId": token.id,
+            "displayName": account.display_name,
+            "email": account.email,
+            "role": account.role.value,
+            "enterpriseId": account.enterprise_id or "",
+            "frontendPublicUrl": settings.frontend_public_url,
+            "expiresLabel": expires_label,
+        },
         idempotency_key=email_idempotency_key("account-activation", token.id),
         tags={"category": "account_activation"},
+        valid_until=token.expires_at,
     )
     return token
 

@@ -9,7 +9,7 @@ from app.db.session import Base
 class PasswordResetChallenge(Base):
     __tablename__ = "password_reset_challenges"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     account_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -29,7 +29,7 @@ class PasswordResetChallenge(Base):
 class AccountActivationToken(Base):
     __tablename__ = "account_activation_tokens"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     account_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("accounts.id", ondelete="CASCADE"), index=True, nullable=False
     )

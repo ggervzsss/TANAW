@@ -233,6 +233,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     const enterpriseAccounts = getItem("enterprise-accounts");
     const alerts = getItem("alerts");
     const systemLogs = getItem("system-logs");
+    const emailDeliveries = getItem("email-deliveries");
     const devLog = getItem("dev-log");
 
     const items: TopbarEntry[] = [];
@@ -252,7 +253,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       });
     }
 
-    const monitoringChildren = [alerts, systemLogs].filter(Boolean) as NavigationItem[];
+    const monitoringChildren = [alerts, systemLogs, emailDeliveries].filter(Boolean) as NavigationItem[];
     if (monitoringChildren.length) {
       items.push({
         type: "menu",

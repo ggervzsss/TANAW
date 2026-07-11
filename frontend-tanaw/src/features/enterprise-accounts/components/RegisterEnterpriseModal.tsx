@@ -81,8 +81,8 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
   const createMutation = useMutation({
     mutationFn: createEnterpriseAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("Enterprise account created; activation email sent");
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      toast.success("Enterprise account created; activation email queued");
       onClose();
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create enterprise account")),
@@ -305,7 +305,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
           <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
             <p className="text-sm leading-relaxed text-emerald-800">
-              TANAW will send a secure activation link to the registered contact email. The enterprise user will choose a private password before signing in to the TANAW Enterprise desktop application.
+              TANAW will queue a secure activation link for the registered contact email. The enterprise user will choose a private password before signing in to the TANAW Enterprise desktop application.
             </p>
           </div>
 

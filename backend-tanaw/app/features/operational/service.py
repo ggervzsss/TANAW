@@ -440,6 +440,24 @@ async def create_support_ticket_message(
     *,
     commit: bool = True,
 ) -> SupportTicketDetail:
+    detail, _ = await create_support_ticket_message_with_record(
+        db,
+        ticket,
+        author,
+        payload,
+        commit=commit,
+    )
+    return detail
+
+
+async def create_support_ticket_message_with_record(
+    db: AsyncSession,
+    ticket: SupportTicket,
+    author: Account,
+    payload: SupportTicketMessageCreate,
+    *,
+    commit: bool = True,
+) -> tuple[SupportTicketDetail, SupportTicketMessage]:
     message = SupportTicketMessage(
         ticket_id=ticket.id,
         author_account_id=author.id,
@@ -461,7 +479,7 @@ async def create_support_ticket_message(
     detail = await get_support_ticket_detail(db, author, ticket.id)
     if detail is None:
         raise RuntimeError("Support ticket detail disappeared after reply creation.")
-    return detail
+    return detail, message
 
 
 async def update_support_ticket_status(

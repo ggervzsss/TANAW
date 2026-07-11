@@ -83,6 +83,7 @@ class Account(Base):
 class DeliveryStatus(StrEnum):
     RECORDED = "recorded"
     SENT = "sent"
+    ACCEPTED = "accepted"
     FAILED = "failed"
 
 

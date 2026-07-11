@@ -4,6 +4,10 @@ from app.features.mail.client import ResendClient
 _resend_client: ResendClient | None = None
 
 
+class EmailRuntimeError(RuntimeError):
+    """Raised only when outbound email runtime configuration is unavailable."""
+
+
 async def initialize_email_runtime(settings: Settings) -> None:
     global _resend_client
     await close_email_runtime()
@@ -28,7 +32,7 @@ async def close_email_runtime() -> None:
 
 def get_resend_client() -> ResendClient:
     if _resend_client is None:
-        raise RuntimeError("The Resend HTTP client is not initialized.")
+        raise EmailRuntimeError("The Resend HTTP client is not initialized.")
     return _resend_client
 
 

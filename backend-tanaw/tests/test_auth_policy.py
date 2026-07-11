@@ -103,6 +103,7 @@ async def test_password_change_revokes_sessions_and_recovery_challenges() -> Non
     account.password_hash = hash_password("Existing1!Password")
     db = MagicMock()
     db.execute = AsyncMock()
+    db.scalars = AsyncMock(return_value=[])
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 

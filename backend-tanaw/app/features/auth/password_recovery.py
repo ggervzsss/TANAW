@@ -2,7 +2,6 @@ import hashlib
 import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +14,9 @@ from app.features.accounts.service import get_account_by_email, get_account_by_i
 from app.features.auth.account_activation import invalidate_account_activation_tokens
 from app.features.auth.challenge_service import invalidate_password_reset_challenges
 from app.features.auth.models import PasswordResetChallenge
-from app.features.mail.service import deliver_email, email_idempotency_key
-from app.features.mail.templates import password_reset_code_email
+from app.features.auth.secret_values import derive_password_reset_code
+from app.features.mail.models import EmailTemplateName
+from app.features.mail.service import email_idempotency_key, enqueue_email
 
 OTP_TTL_MINUTES = 10
 MAX_OTP_ATTEMPTS = 5
@@ -34,11 +34,7 @@ def _now() -> datetime:
 def _hash_secret(challenge_id: str, value: str, purpose: str) -> str:
     settings = get_settings()
     message = f"{purpose}:{challenge_id}:{value}".encode()
-    return hmac.new(settings.jwt_secret_key.encode(), message, hashlib.sha256).hexdigest()
-
-
-def _generate_code() -> str:
-    return "".join(secrets.choice("0123456789") for _ in range(6))
+    return hmac.new(settings.email_secret_key_value.encode(), message, hashlib.sha256).hexdigest()
 
 
 async def request_password_reset(db: AsyncSession, email: str) -> PasswordResetChallenge:
@@ -61,8 +57,8 @@ async def request_password_reset(db: AsyncSession, email: str) -> PasswordResetC
     ):
         return recent_challenge
 
-    challenge_id = str(uuid4())
-    code = _generate_code()
+    challenge_id = secrets.token_urlsafe(32)
+    code = derive_password_reset_code(challenge_id)
     expires_at = now + timedelta(minutes=OTP_TTL_MINUTES)
     account = await get_account_by_email(db, normalized_email)
     eligible_account = (
@@ -87,13 +83,23 @@ async def request_password_reset(db: AsyncSession, email: str) -> PasswordResetC
 
     if eligible_account is not None:
         expires_label = expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        await deliver_email(
+        await enqueue_email(
             db,
             account_id=eligible_account.id,
+            source_id=challenge.id,
             recipient=eligible_account.email,
-            content=password_reset_code_email(eligible_account, code, expires_label),
+            template_name=EmailTemplateName.PASSWORD_RESET,
+            template_payload={
+                "challengeId": challenge.id,
+                "displayName": eligible_account.display_name,
+                "email": eligible_account.email,
+                "role": eligible_account.role.value,
+                "enterpriseId": eligible_account.enterprise_id or "",
+                "expiresLabel": expires_label,
+            },
             idempotency_key=email_idempotency_key("password-reset", challenge.id),
             tags={"category": "password_reset"},
+            valid_until=challenge.expires_at,
         )
     await db.commit()
 

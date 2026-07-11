@@ -56,16 +56,16 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateLguAccountPayload) => updateLguAccount(account.id, payload),
     onSuccess: async (updatedAccount, payload) => {
-      const activationEmailSent = !account.isActivated && updatedAccount.status === "active" && (payload.email !== account.email || account.status === "inactive");
+      const activationEmailQueued = !account.isActivated && updatedAccount.status === "active" && (payload.email !== account.email || account.status === "inactive");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationEmailSent ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })] : []),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));
       setPendingSave(null);
       setIsEditing(false);
-      toast.success(activationEmailSent ? "LGU account updated; activation email sent" : "LGU account updated");
+      toast.success(activationEmailQueued ? "LGU account updated; activation email queued" : "LGU account updated");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update LGU account")),
   });

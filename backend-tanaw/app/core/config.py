@@ -1,3 +1,4 @@
+import hmac
 from functools import lru_cache
 from ipaddress import ip_address
 from typing import Self
@@ -91,6 +92,11 @@ class Settings(BaseSettings):
     email_from_address: EmailStr = "onboarding@resend.dev"
     email_test_recipient: EmailStr | None = None
     email_request_timeout_seconds: float = Field(default=10.0, ge=0.5, le=60.0)
+    email_secret_derivation_key: SecretStr | None = None
+    email_outbox_poll_interval_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
+    email_outbox_lease_seconds: int = Field(default=120, ge=30, le=600)
+    email_outbox_batch_size: int = Field(default=5, ge=1, le=25)
+    email_outbox_max_attempts: int = Field(default=5, ge=1, le=10)
     frontend_public_url: str = "http://localhost:5173"
     account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
     allow_mock_data: bool = Field(
@@ -125,6 +131,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "resend_api_key",
+        "email_secret_derivation_key",
         "email_test_recipient",
         "bootstrap_it_username",
         "bootstrap_it_password",
@@ -251,6 +258,22 @@ class Settings(BaseSettings):
             raise ValueError("EMAIL_DELIVERY_MODE must be 'resend' in production.")
         if self.resend_api_key is None:
             raise ValueError("RESEND_API_KEY is required in production.")
+        if self.email_secret_derivation_key is None:
+            raise ValueError("EMAIL_SECRET_DERIVATION_KEY is required in production.")
+
+        derivation_key = self.email_secret_derivation_key.get_secret_value().strip()
+        normalized_derivation_key = derivation_key.lower()
+        if (
+            len(derivation_key) < 32
+            or normalized_derivation_key.startswith(("change-this", "replace-this", "replace_with"))
+            or "<" in derivation_key
+            or ">" in derivation_key
+        ):
+            raise ValueError(
+                "EMAIL_SECRET_DERIVATION_KEY must be a unique secret of at least 32 characters."
+            )
+        if hmac.compare_digest(derivation_key, self.jwt_secret_key):
+            raise ValueError("EMAIL_SECRET_DERIVATION_KEY must be different from JWT_SECRET_KEY.")
 
         api_key = self.resend_api_key.get_secret_value().strip()
         normalized_key = api_key.lower()
@@ -300,6 +323,12 @@ class Settings(BaseSettings):
         return self.environment.strip().lower() in {"prod", "production"} or bool(
             self.render_external_url
         )
+
+    @property
+    def email_secret_key_value(self) -> str:
+        if self.email_secret_derivation_key is not None:
+            return self.email_secret_derivation_key.get_secret_value()
+        return self.jwt_secret_key
 
 
 @lru_cache

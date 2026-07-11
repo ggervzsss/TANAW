@@ -122,9 +122,9 @@ async def create_lgu_account(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Activation Link Sent",
+        action="Activation Email Queued",
         target=account.email,
-        summary=f"The system sent an account activation link to {account.display_name}.",
+        summary=f"The system queued an account activation email for {account.display_name}.",
         source_id=account.id,
     )
     return to_account_summary(account)
@@ -361,9 +361,9 @@ async def create_enterprise_account(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Activation Link Sent",
+        action="Activation Email Queued",
         target=account.email,
-        summary=f"The system sent an account activation link to enterprise {account.enterprise_name}.",
+        summary=f"The system queued an account activation email for enterprise {account.enterprise_name}.",
         source_id=account.id,
     )
     return to_account_summary(account)
@@ -541,9 +541,9 @@ async def resend_activation(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Activation Link Sent",
+        action="Activation Email Queued",
         target=account.email,
-        summary=f"The system sent a new account activation link to {account.display_name}.",
+        summary=f"The system queued a new account activation email for {account.display_name}.",
         source_id=account.id,
     )
     return to_account_summary(account)

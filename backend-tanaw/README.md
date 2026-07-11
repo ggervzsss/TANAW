@@ -166,6 +166,39 @@ and closes it during shutdown. `/health` reports API process health, while
 `/ready/email` separately reports whether outbound email infrastructure is
 initialized; deployment readiness checks should use both endpoints.
 
+Production also requires `EMAIL_SECRET_DERIVATION_KEY`, a random secret of at
+least 32 characters that is different from `JWT_SECRET_KEY`. TANAW uses it to
+derive activation links and recovery codes in worker memory after the source
+transaction commits, so raw authentication secrets never enter the outbox.
+Keep this key stable and backed up. Rotating it invalidates outstanding
+activation links and password-recovery challenges; drain or expire the outbox
+first, then issue replacement activation/recovery messages after rotation.
+
+## Transactional Email Delivery
+
+Account activation, password recovery, business-email requests, and support
+reply notifications write an `email_outbox` row in the same transaction as the
+record that caused the message. The background worker sends only committed rows,
+claims work with PostgreSQL row locks and fencing leases, and records every
+attempt separately. A provider failure never rolls back an account or support
+reply. Transient failures use bounded exponential retries with the same stable
+Resend idempotency key; permanent failures remain visible to authorized IT
+Personnel on the **Email Delivery** page.
+
+Authentication outbox payloads contain source IDs and immutable, non-secret
+template inputs—never raw activation links, OTPs, or rendered production bodies.
+The worker derives those values in memory and checks the source is still valid
+immediately before delivery. It also hashes the exact provider payload so a
+retry cannot accidentally reuse an idempotency key with changed content.
+
+An `accepted` status means Resend accepted the API request; it does not promise
+that the recipient mailbox delivered it. Use the stored provider ID in the
+Resend dashboard to inspect delivered, delayed, bounced, or suppressed events.
+TANAW remains outbound-only and does not require an inbound-email webhook. Resend
+retains idempotency keys for 24 hours, so TANAW stops automatic retries before
+that boundary and marks an ambiguous older result for provider reconciliation
+instead of risking a duplicate.
+
 ## Data Boundaries
 
 PostgreSQL stores central TANAW records: accounts, roles, telemetry snapshots,

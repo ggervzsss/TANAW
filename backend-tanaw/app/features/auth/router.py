@@ -1,7 +1,8 @@
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -81,8 +82,12 @@ from app.features.auth.service import (
     register_failed_login,
     resolve_login_lockout_policy,
 )
-from app.features.mail.service import deliver_email, email_idempotency_key
-from app.features.mail.templates import business_email_change_email
+from app.features.mail.models import EmailTemplateName
+from app.features.mail.service import (
+    cancel_pending_source_emails,
+    email_idempotency_key,
+    enqueue_email,
+)
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
@@ -692,20 +697,43 @@ async def request_business_email_change(
     if existing is not None and existing.id != account.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
 
+    requested_at = datetime.now(UTC)
+    request_id = str(uuid4())
+    previous_request = get_account_preferences(account).get(PENDING_BUSINESS_EMAIL_CHANGE_KEY)
+    if isinstance(previous_request, dict):
+        previous_request_id = previous_request.get("requestId")
+        if isinstance(previous_request_id, str) and previous_request_id:
+            await cancel_pending_source_emails(
+                db,
+                template_name=EmailTemplateName.BUSINESS_EMAIL_CHANGE,
+                source_ids=[previous_request_id],
+                reason="A newer business email change request replaced this email.",
+            )
     set_pending_account_change(
         account,
         PENDING_BUSINESS_EMAIL_CHANGE_KEY,
-        {"email": new_email, "requestedAt": datetime.now(UTC).isoformat()},
+        {
+            "email": new_email,
+            "requestId": request_id,
+            "requestedAt": requested_at.isoformat(),
+        },
     )
-    await deliver_email(
+    await enqueue_email(
         db,
         account_id=account.id,
+        source_id=request_id,
         recipient=new_email,
-        content=business_email_change_email(account, new_email),
-        idempotency_key=email_idempotency_key(
-            "business-email-change", f"{account.id}-{int(datetime.now(UTC).timestamp())}"
-        ),
+        template_name=EmailTemplateName.BUSINESS_EMAIL_CHANGE,
+        template_payload={
+            "displayName": account.display_name,
+            "email": account.email,
+            "role": account.role.value,
+            "enterpriseId": account.enterprise_id or "",
+            "newEmail": new_email,
+        },
+        idempotency_key=email_idempotency_key("business-email-change", request_id),
         tags={"category": "business_email_change"},
+        valid_until=requested_at + timedelta(hours=24),
     )
     await db.commit()
     await record_auth_log(

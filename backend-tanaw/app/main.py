@@ -16,7 +16,11 @@ from app.features.mail.runtime import (
     email_runtime_ready,
     initialize_email_runtime,
 )
-from app.features.mail.service import EmailDeliveryError
+from app.features.mail.worker import (
+    email_outbox_worker_ready,
+    start_email_outbox_worker,
+    stop_email_outbox_worker,
+)
 
 
 @asynccontextmanager
@@ -28,24 +32,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await seed_default_accounts(session)
 
     await initialize_email_runtime(settings)
+    await start_email_outbox_worker(settings)
     try:
         yield
     finally:
+        await stop_email_outbox_worker()
         await close_email_runtime()
 
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
-
-
-@app.exception_handler(EmailDeliveryError)
-async def email_delivery_error_handler(_: Request, __: EmailDeliveryError) -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={
-            "detail": "TANAW could not deliver the email. Verify the email configuration and try again."
-        },
-    )
 
 
 app.add_middleware(
@@ -78,7 +74,7 @@ async def health() -> dict[str, str]:
 @app.get("/ready/email")
 @app.head("/ready/email")
 async def email_readiness() -> JSONResponse:
-    ready = email_runtime_ready(settings)
+    ready = email_runtime_ready(settings) and email_outbox_worker_ready()
     return JSONResponse(
         status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
         content={

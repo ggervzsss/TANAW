@@ -24,8 +24,8 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
-from app.features.mail.service import deliver_email, email_idempotency_key
-from app.features.mail.templates import support_ticket_reply_email
+from app.features.mail.models import EmailTemplateName
+from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     MockDataRun,
@@ -71,6 +71,7 @@ from app.features.operational.service import (
     create_role_notifications,
     create_support_ticket,
     create_support_ticket_message,
+    create_support_ticket_message_with_record,
     create_user_notification,
     enterprise_accounts_by_identifier,
     enterprise_identifier,
@@ -721,27 +722,35 @@ async def create_ticket_message(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
         )
-    detail = await create_support_ticket_message(db, ticket, account, payload)
+    if account.role == AccountRole.IT:
+        detail, reply_record = await create_support_ticket_message_with_record(
+            db,
+            ticket,
+            account,
+            payload,
+            commit=False,
+        )
+    else:
+        detail = await create_support_ticket_message(db, ticket, account, payload)
+        reply_record = None
     if account.role == AccountRole.IT:
         recipient = await get_account_by_id(db, ticket.enterprise_account_id)
-        if recipient is not None and detail.messages:
-            reply = detail.messages[-1]
-            await deliver_email(
+        if recipient is not None and reply_record is not None:
+            await enqueue_email(
                 db,
                 account_id=recipient.id,
+                source_id=reply_record.id,
                 recipient=recipient.email,
-                content=support_ticket_reply_email(
-                    ticket_code=detail.code,
-                    subject=detail.subject,
-                    recipient_name=recipient.display_name,
-                    author_name=account.display_name,
-                    message=reply.message,
-                ),
-                idempotency_key=email_idempotency_key("support-reply", reply.id),
+                template_name=EmailTemplateName.SUPPORT_REPLY,
+                template_payload={
+                    "ticketId": ticket.id,
+                    "messageId": reply_record.id,
+                    "recipientName": recipient.display_name,
+                },
+                idempotency_key=email_idempotency_key("support-reply", reply_record.id),
                 tags={"category": "support_reply"},
-                raise_on_failure=False,
             )
-            await db.commit()
+        await db.commit()
         await notify_enterprise_ticket_update(
             db,
             ticket=detail,

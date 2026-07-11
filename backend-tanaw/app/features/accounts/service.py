@@ -13,6 +13,7 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
+    DeliveryStatus,
     DevDelivery,
 )
 from app.features.accounts.options import format_enterprise_category
@@ -175,13 +176,18 @@ def get_profile_change_requests(account: Account) -> list[AccountProfileChangeRe
 
 
 def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
+    status = (
+        DeliveryStatus.ACCEPTED.value
+        if delivery.status == DeliveryStatus.SENT
+        else delivery.status.value
+    )
     return DeliverySummary(
         id=delivery.id,
         accountId=delivery.account_id,
         recipient=delivery.recipient,
         subject=delivery.subject,
         body=delivery.body,
-        status=delivery.status.value,
+        status=status,
         createdAt=delivery.created_at,
     )
 

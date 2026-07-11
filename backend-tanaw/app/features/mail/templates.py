@@ -11,8 +11,16 @@ class EmailContent:
     html: str
 
 
+@dataclass(frozen=True)
+class EmailRecipient:
+    display_name: str
+    email: str
+    role: AccountRole
+    enterprise_id: str | None = None
+
+
 def account_activation_email(
-    account: Account, activation_url: str, expires_label: str
+    account: Account | EmailRecipient, activation_url: str, expires_label: str
 ) -> EmailContent:
     if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
         login_lines = (
@@ -46,7 +54,9 @@ def account_activation_email(
     return EmailContent(subject="Activate your TANAW account", text=text, html=html)
 
 
-def password_reset_code_email(account: Account, code: str, expires_label: str) -> EmailContent:
+def password_reset_code_email(
+    account: Account | EmailRecipient, code: str, expires_label: str
+) -> EmailContent:
     text = (
         f"Hello {account.display_name},\n\n"
         "A TANAW password reset was requested for your account.\n"
@@ -89,7 +99,7 @@ def support_ticket_reply_email(
     return EmailContent(subject=email_subject, text=text, html=html)
 
 
-def business_email_change_email(account: Account, new_email: str) -> EmailContent:
+def business_email_change_email(account: Account | EmailRecipient, new_email: str) -> EmailContent:
     text = (
         f"Hello {account.display_name},\n\n"
         "A request was submitted to change the TANAW business email for your account "

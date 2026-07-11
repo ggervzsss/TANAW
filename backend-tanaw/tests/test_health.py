@@ -33,9 +33,9 @@ def test_email_readiness_is_separate_from_basic_health() -> None:
 
     assert health_response.status_code == 200
     assert health_response.json() == {"status": "ok"}
-    assert readiness_response.status_code == 200
+    assert readiness_response.status_code == 503
     assert readiness_response.json() == {
-        "status": "ready",
+        "status": "not_ready",
         "mode": "log",
         "provider": "local",
     }

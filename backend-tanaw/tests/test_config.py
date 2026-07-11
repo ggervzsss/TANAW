@@ -13,6 +13,7 @@ PRODUCTION_SETTINGS: dict[str, Any] = {
     "jwt_secret_key": PRODUCTION_JWT_SECRET,
     "email_delivery_mode": "resend",
     "resend_api_key": "re_production_sending_key_123456789",
+    "email_secret_derivation_key": "production-email-secret-different-from-jwt-2026",
     "email_from_address": "no-reply@mail.tanaw-sanpedro.ph",
 }
 
@@ -179,6 +180,11 @@ def test_production_accepts_complete_verified_domain_email_configuration() -> No
     [
         ({"email_delivery_mode": "log"}, "EMAIL_DELIVERY_MODE"),
         ({"resend_api_key": None}, "RESEND_API_KEY"),
+        ({"email_secret_derivation_key": None}, "EMAIL_SECRET_DERIVATION_KEY"),
+        (
+            {"email_secret_derivation_key": PRODUCTION_JWT_SECRET},
+            "different from JWT_SECRET_KEY",
+        ),
         ({"resend_api_key": "replace_with_your_resend_api_key"}, "RESEND_API_KEY"),
         ({"email_from_address": "onboarding@resend.dev"}, "verified custom sending domain"),
         ({"email_from_address": "no-reply@example.com"}, "verified custom sending domain"),
