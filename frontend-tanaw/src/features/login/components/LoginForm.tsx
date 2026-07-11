@@ -392,8 +392,6 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
           <ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </motion.button>
 
-        <p className="mt-4 text-center text-xs leading-5 font-medium text-(--tanaw-muted)">New TANAW accounts must be activated using the secure link sent to the registered email.</p>
-
         <div className="tanaw-auth-divider-row my-8 flex items-center gap-4 text-sm font-semibold text-(--tanaw-muted)">
           <span className="h-px flex-1 bg-(--tanaw-border)" />
           <span>OR</span>

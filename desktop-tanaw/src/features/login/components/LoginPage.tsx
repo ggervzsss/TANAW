@@ -659,7 +659,6 @@ export function LoginPage() {
             <SampaguitaIcon className="h-4 w-4 flex-none" />
             <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
           </div>
-          <p className="mt-5 text-sm leading-6 font-medium text-(--tanaw-muted)">New enterprise accounts must be activated using the link sent to their registered email before signing in.</p>
         </div>
 
         <div className="space-y-3">
