@@ -8,6 +8,7 @@ Create Date: 2026-05-24
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -18,8 +19,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    delivery_channel = sa.Enum("EMAIL", "SMS", name="delivery_channel")
-    delivery_status = sa.Enum("RECORDED", "SENT", "FAILED", name="delivery_status")
+    delivery_channel = postgresql.ENUM("EMAIL", "SMS", name="delivery_channel", create_type=False)
+    delivery_status = postgresql.ENUM(
+        "RECORDED", "SENT", "FAILED", name="delivery_status", create_type=False
+    )
     delivery_channel.create(op.get_bind(), checkfirst=True)
     delivery_status.create(op.get_bind(), checkfirst=True)
 
@@ -90,5 +93,5 @@ def downgrade() -> None:
     op.drop_column("accounts", "enterprise_name")
     op.drop_column("accounts", "last_name")
     op.drop_column("accounts", "first_name")
-    sa.Enum(name="delivery_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="delivery_channel").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="delivery_status").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="delivery_channel").drop(op.get_bind(), checkfirst=True)

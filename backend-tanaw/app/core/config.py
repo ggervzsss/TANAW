@@ -7,6 +7,9 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_OR_PRIVATE_HOSTNAMES = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+DEVELOPMENT_JWT_SECRET = "change-this-local-development-secret"
+PLACEHOLDER_BOOTSTRAP_EMAILS = {"default@email.com", "bootstrap@example.com"}
+PLACEHOLDER_BOOTSTRAP_PASSWORDS = {"default", "change-me", "password"}
 
 
 class Settings(BaseSettings):
@@ -15,17 +18,66 @@ class Settings(BaseSettings):
         default="development", validation_alias=AliasChoices("TANAW_ENV", "ENVIRONMENT", "APP_ENV")
     )
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/tanaw_local"
-    jwt_secret_key: str = "change-this-local-development-secret"
+    jwt_secret_key: str = DEVELOPMENT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 30
-    default_it_username: str = "default@email.com"
-    default_it_password: str = "default"
-    temporary_admin_username: str = "admin@email.com"
-    temporary_admin_password: str = "admin123"
-    temporary_staff_username: str = "staff@email.com"
-    temporary_staff_password: str = "staffstaff"
-    temporary_it_username: str = "it@email.com"
-    temporary_it_password: str = "it123456"
+    bootstrap_it_username: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("BOOTSTRAP_IT_USERNAME", "DEFAULT_IT_USERNAME"),
+    )
+    bootstrap_it_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("BOOTSTRAP_IT_PASSWORD", "DEFAULT_IT_PASSWORD"),
+    )
+    seed_development_accounts: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "TANAW_SEED_DEVELOPMENT_ACCOUNTS",
+            "SEED_DEVELOPMENT_ACCOUNTS",
+        ),
+    )
+    development_admin_username: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DEVELOPMENT_ADMIN_USERNAME",
+            "TEMPORARY_ADMIN_USERNAME",
+        ),
+    )
+    development_admin_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DEVELOPMENT_ADMIN_PASSWORD",
+            "TEMPORARY_ADMIN_PASSWORD",
+        ),
+    )
+    development_staff_username: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DEVELOPMENT_STAFF_USERNAME",
+            "TEMPORARY_STAFF_USERNAME",
+        ),
+    )
+    development_staff_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DEVELOPMENT_STAFF_PASSWORD",
+            "TEMPORARY_STAFF_PASSWORD",
+        ),
+    )
+    development_it_username: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DEVELOPMENT_IT_USERNAME",
+            "TEMPORARY_IT_USERNAME",
+        ),
+    )
+    development_it_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DEVELOPMENT_IT_PASSWORD",
+            "TEMPORARY_IT_PASSWORD",
+        ),
+    )
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
     geocoder_provider: str = "nominatim"
     geocoder_api_key: str | None = None
@@ -74,6 +126,14 @@ class Settings(BaseSettings):
     @field_validator(
         "resend_api_key",
         "email_test_recipient",
+        "bootstrap_it_username",
+        "bootstrap_it_password",
+        "development_admin_username",
+        "development_admin_password",
+        "development_staff_username",
+        "development_staff_password",
+        "development_it_username",
+        "development_it_password",
         mode="before",
     )
     @classmethod
@@ -100,13 +160,66 @@ class Settings(BaseSettings):
         return normalized
 
     @model_validator(mode="after")
-    def validate_production_frontend_public_url(self) -> Self:
+    def validate_environment_safety(self) -> Self:
+        self._validate_development_account_configuration()
         if self.is_production and (
             urlsplit(self.frontend_public_url).scheme != "https"
             or is_local_or_private_origin(self.frontend_public_url)
         ):
             raise ValueError("FRONTEND_PUBLIC_URL must use a public HTTPS URL in production.")
+        if self.is_production:
+            self._validate_production_credentials()
         return self
+
+    def _validate_development_account_configuration(self) -> None:
+        values = (
+            self.development_admin_username,
+            self.development_admin_password,
+            self.development_staff_username,
+            self.development_staff_password,
+            self.development_it_username,
+            self.development_it_password,
+        )
+        if self.seed_development_accounts and any(value is None for value in values):
+            raise ValueError(
+                "All DEVELOPMENT_* account credentials are required when "
+                "TANAW_SEED_DEVELOPMENT_ACCOUNTS=true."
+            )
+
+    def _validate_production_credentials(self) -> None:
+        normalized_jwt_secret = self.jwt_secret_key.strip().lower()
+        if (
+            self.jwt_secret_key == DEVELOPMENT_JWT_SECRET
+            or len(self.jwt_secret_key) < 32
+            or normalized_jwt_secret.startswith(("change-this", "replace-this", "replace_with"))
+            or "<" in self.jwt_secret_key
+            or ">" in self.jwt_secret_key
+        ):
+            raise ValueError(
+                "JWT_SECRET_KEY must be a unique secret of at least 32 characters in production."
+            )
+        if self.seed_development_accounts:
+            raise ValueError("Development seed accounts are not allowed in production.")
+
+        bootstrap_values = (self.bootstrap_it_username, self.bootstrap_it_password)
+        if any(value is not None for value in bootstrap_values) and any(
+            value is None for value in bootstrap_values
+        ):
+            raise ValueError(
+                "BOOTSTRAP_IT_USERNAME and BOOTSTRAP_IT_PASSWORD must be configured together."
+            )
+        if self.bootstrap_it_username is not None and (
+            self.bootstrap_it_username.lower() in PLACEHOLDER_BOOTSTRAP_EMAILS
+            or self.bootstrap_it_username.lower().endswith("@example.com")
+        ):
+            raise ValueError("BOOTSTRAP_IT_USERNAME must not use a placeholder email.")
+        if self.bootstrap_it_password is not None and (
+            self.bootstrap_it_password.lower() in PLACEHOLDER_BOOTSTRAP_PASSWORDS
+            or len(self.bootstrap_it_password) < 12
+        ):
+            raise ValueError(
+                "BOOTSTRAP_IT_PASSWORD must be a unique password of at least 12 characters."
+            )
 
     @property
     def cors_origin_list(self) -> list[str]:

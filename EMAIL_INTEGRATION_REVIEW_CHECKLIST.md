@@ -33,13 +33,13 @@ Status legend:
 
 ### SEC-001 — Stop startup accounts from resetting passwords
 
-- [ ] Change startup account seeding so it creates a bootstrap account only when required.
-- [ ] Never overwrite an existing account's password during a normal backend restart.
-- [ ] Do not automatically reactivate or restore privileges to an account that administrators intentionally disabled.
-- [ ] Remove the three unnecessary temporary startup accounts from production, or gate all development-only accounts behind an explicit development setting.
-- [ ] Reject production startup when any placeholder username, password, or JWT secret is still configured.
-- [ ] Add tests proving that a password changed through TANAW remains valid after `seed_default_accounts` runs again.
-- [ ] Add tests proving that a disabled startup account is not silently re-enabled.
+- [x] Change startup account seeding so it creates a bootstrap account only when required.
+- [x] Never overwrite an existing account's password during a normal backend restart.
+- [x] Do not automatically reactivate or restore privileges to an account that administrators intentionally disabled.
+- [x] Remove the three unnecessary temporary startup accounts from production, or gate all development-only accounts behind an explicit development setting.
+- [x] Reject production startup when any placeholder username, password, or JWT secret is still configured.
+- [x] Add tests proving that a password changed through TANAW remains valid after `seed_default_accounts` runs again.
+- [x] Add tests proving that a disabled startup account is not silently re-enabled.
 
 Affected areas:
 
@@ -54,19 +54,6 @@ Acceptance criteria:
 - Restarting the backend never changes an existing user's password, activation state, role, or status.
 - Production cannot start with known development credentials.
 - There is a documented, auditable bootstrap/recovery procedure for the initial IT account.
-
-### SEC-002 — Rotate previously exposed secrets
-
-- [ ] Revoke the Resend API key that was previously shared outside a private secret store.
-- [ ] Create a replacement Resend key with `sending_access`, restricted to the TANAW sending domain when available.
-- [ ] Generate a separate strong production `JWT_SECRET_KEY`.
-- [ ] Store all real values only in local ignored `.env` files or hosting-provider secret dashboards.
-- [ ] Confirm that Git history and the current tracked tree contain no real keys.
-
-Acceptance criteria:
-
-- The old Resend key can no longer authenticate.
-- No real API key, database password, JWT secret, or bootstrap password is tracked by Git.
 
 ## P1 — High-priority reliability and security work
 

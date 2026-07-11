@@ -78,6 +78,33 @@ of hours, and are invalidated when a replacement link is issued. Set
 `FRONTEND_PUBLIC_URL` to the URL users can actually open—not the backend API URL.
 Production configuration requires this value to be a public HTTPS URL.
 
+## Startup Account Safety
+
+`BOOTSTRAP_IT_USERNAME` and `BOOTSTRAP_IT_PASSWORD` are used only when TANAW
+initializes a database that has no existing or legacy IT account. TANAW records
+that initialization and never synchronizes the account from environment values
+again. Password changes, profile changes, role changes, deactivation, activation
+state, lockouts, and session revocation therefore survive every backend restart.
+
+Optional Admin, Staff, and secondary IT development accounts are created only
+when `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`. Production rejects that switch,
+placeholder bootstrap credentials, and short or default JWT secrets. Existing
+deployments may continue using the legacy `DEFAULT_IT_*` and `TEMPORARY_*`
+environment names temporarily; the backend maps them to the new settings for
+backward compatibility, but new configuration should use `BOOTSTRAP_IT_*` and
+`DEVELOPMENT_*`.
+
+Normal IT account recovery should use the emailed password-reset OTP. If an IT
+account is inactive, another active IT account must review and reactivate it
+through Accounts Management; this produces the normal TANAW activity records.
+Keep at least two official IT accounts after deployment so recovery never
+depends on database access. The one-time bootstrap variables are not an
+emergency reset mechanism: adding or changing them after initialization has no
+effect. If every IT account and mailbox is unavailable, a database administrator
+must follow the LGU's controlled incident-recovery process, preserve an audit
+record of the authorization, and restore access explicitly rather than deleting
+the `startup-bootstrap-v1` marker or restarting TANAW with a known password.
+
 The Resend-managed development sender can deliver only to the Resend account
 email, so set `EMAIL_TEST_RECIPIENT` until a custom sending domain is verified.
 Support requests and ticket replies are submitted directly to the TANAW API and

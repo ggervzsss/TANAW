@@ -276,14 +276,15 @@ JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=480
 
-DEFAULT_IT_USERNAME=default@email.com
-DEFAULT_IT_PASSWORD=default
-TEMPORARY_ADMIN_USERNAME=admin@email.com
-TEMPORARY_ADMIN_PASSWORD=admin123
-TEMPORARY_STAFF_USERNAME=staff@email.com
-TEMPORARY_STAFF_PASSWORD=staffstaff
-TEMPORARY_IT_USERNAME=it@email.com
-TEMPORARY_IT_PASSWORD=it123456
+BOOTSTRAP_IT_USERNAME=default@email.com
+BOOTSTRAP_IT_PASSWORD=default
+TANAW_SEED_DEVELOPMENT_ACCOUNTS=true
+DEVELOPMENT_ADMIN_USERNAME=admin@email.com
+DEVELOPMENT_ADMIN_PASSWORD=admin123
+DEVELOPMENT_STAFF_USERNAME=staff@email.com
+DEVELOPMENT_STAFF_PASSWORD=staffstaff
+DEVELOPMENT_IT_USERNAME=it@email.com
+DEVELOPMENT_IT_PASSWORD=it123456
 
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
 VITE_API_BASE_URL=http://localhost:8000
@@ -323,8 +324,9 @@ Stop the services without deleting database data:
 docker compose down
 ```
 
-The first backend startup creates the current schema and seeds the protected
-default IT account plus the temporary LGU accounts if they do not already exist.
+The first backend startup creates the current schema, initializes the bootstrap
+IT account once, and optionally creates the explicitly enabled development
+accounts. Later restarts never synchronize or reset an existing account.
 
 ### 4. Install and start the enterprise desktop
 
@@ -370,9 +372,9 @@ Python 3.12 or newer and uv available. Group members cloning the repository
 should use `npm run dev`, which uses the `.venv` created by
 `uv sync --directory ml-service --frozen`.
 
-## Default and temporary accounts
+## Bootstrap and development accounts
 
-The backend automatically creates the protected bootstrap IT account on startup:
+On a fresh local database, the backend creates the bootstrap IT account once:
 
 ```text
 Role: IT Personnel
@@ -380,7 +382,8 @@ Username: default@email.com
 Password: default
 ```
 
-For now, the backend also creates these protected temporary accounts:
+When `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`, it also creates these local-only
+development accounts once:
 
 ```text
 Role: Admin
@@ -396,14 +399,19 @@ Username: it@email.com
 Password: it123456
 ```
 
-Use the default IT account or temporary IT account to create or manage LGU and
-enterprise accounts. All startup-seeded accounts accept the configured passwords
-as-is and do not require a first-login password change.
+Use the bootstrap or development IT account to create and manage LGU and
+enterprise accounts during local development. The one-time bootstrap comes from
+`BOOTSTRAP_IT_*`; optional development accounts come from the
+`DEVELOPMENT_ADMIN_*`, `DEVELOPMENT_STAFF_*`, and `DEVELOPMENT_IT_*` settings.
 
-The original bootstrap account comes from `DEFAULT_IT_*`. The temporary accounts
-come from `TEMPORARY_ADMIN_*`, `TEMPORARY_STAFF_*`, and `TEMPORARY_IT_*`. The
-backend synchronizes these startup-seeded accounts on every startup, so changing
-them takes effect after restarting the backend.
+After an account exists, changing these environment values does not modify its
+password, email, role, status, activation state, or lockout state. Production
+rejects development account seeding and placeholder JWT/bootstrap credentials.
+For a fresh production database, configure a unique bootstrap email and password
+for the first startup. After initialization, remove `BOOTSTRAP_IT_*` from the
+deployment secrets and manage the account entirely through TANAW. If an IT
+account already exists in a migrated database, no bootstrap credentials are
+required.
 
 ## Seed and simulate reports
 
@@ -718,14 +726,15 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `JWT_SECRET_KEY`              | Token-signing secret                                   |
 | `JWT_ALGORITHM`               | JWT algorithm, normally `HS256`                        |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime                                  |
-| `DEFAULT_IT_USERNAME`         | Startup-synchronized original default IT username      |
-| `DEFAULT_IT_PASSWORD`         | Startup-synchronized original default IT password      |
-| `TEMPORARY_ADMIN_USERNAME`    | Startup-synchronized temporary Admin username          |
-| `TEMPORARY_ADMIN_PASSWORD`    | Startup-synchronized temporary Admin password          |
-| `TEMPORARY_STAFF_USERNAME`    | Startup-synchronized temporary Staff username          |
-| `TEMPORARY_STAFF_PASSWORD`    | Startup-synchronized temporary Staff password          |
-| `TEMPORARY_IT_USERNAME`       | Startup-synchronized temporary IT username             |
-| `TEMPORARY_IT_PASSWORD`       | Startup-synchronized temporary IT password             |
+| `BOOTSTRAP_IT_USERNAME`       | One-time IT bootstrap email for a database with no IT account |
+| `BOOTSTRAP_IT_PASSWORD`       | One-time IT bootstrap password; never reused to reset the account |
+| `TANAW_SEED_DEVELOPMENT_ACCOUNTS` | Explicit local-only switch for development accounts |
+| `DEVELOPMENT_ADMIN_USERNAME`  | Optional local development Admin email                 |
+| `DEVELOPMENT_ADMIN_PASSWORD`  | Optional local development Admin password              |
+| `DEVELOPMENT_STAFF_USERNAME`  | Optional local development Staff email                 |
+| `DEVELOPMENT_STAFF_PASSWORD`  | Optional local development Staff password              |
+| `DEVELOPMENT_IT_USERNAME`     | Optional local development IT email                    |
+| `DEVELOPMENT_IT_PASSWORD`     | Optional local development IT password                 |
 | `CORS_ORIGINS`                | Comma-separated web/desktop origins allowed by the API |
 | `VITE_API_BASE_URL`           | API URL compiled into or used by frontend clients      |
 | `FRONTEND_PUBLIC_URL`         | Public portal URL embedded in account activation links |

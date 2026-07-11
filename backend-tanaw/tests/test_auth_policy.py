@@ -64,22 +64,23 @@ def test_password_policy_accepts_long_and_unicode_passwords_consistently() -> No
     )
 
 
-def test_default_account_credentials_are_not_subject_to_the_user_password_policy() -> None:
+def test_local_startup_credentials_are_not_subject_to_the_user_password_policy() -> None:
     settings = Settings(
-        default_it_username="default@email.com",
-        default_it_password="default",
-        temporary_admin_username="admin@email.com",
-        temporary_admin_password="admin123",
-        temporary_staff_username="staff@email.com",
-        temporary_staff_password="staffstaff",
-        temporary_it_username="it@email.com",
-        temporary_it_password="it123456",
+        bootstrap_it_username="default@email.com",
+        bootstrap_it_password="default",
+        seed_development_accounts=True,
+        development_admin_username="admin@email.com",
+        development_admin_password="admin123",
+        development_staff_username="staff@email.com",
+        development_staff_password="staffstaff",
+        development_it_username="it@email.com",
+        development_it_password="it123456",
     )
 
-    assert settings.default_it_password == "default"
-    assert settings.temporary_admin_password == "admin123"
-    assert settings.temporary_staff_password == "staffstaff"
-    assert settings.temporary_it_password == "it123456"
+    assert settings.bootstrap_it_password == "default"
+    assert settings.development_admin_password == "admin123"
+    assert settings.development_staff_password == "staffstaff"
+    assert settings.development_it_password == "it123456"
 
 
 def test_access_token_issued_after_revocation_in_same_second_stays_valid() -> None:

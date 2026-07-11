@@ -7,6 +7,7 @@ Revises: 20260710_0011
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -34,11 +35,11 @@ def upgrade() -> None:
         END $$
         """
     )
-    sa.Enum(name="delivery_channel").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="delivery_channel").drop(op.get_bind(), checkfirst=True)
 
 
 def downgrade() -> None:
-    delivery_channel = sa.Enum("EMAIL", "SMS", name="delivery_channel")
+    delivery_channel = postgresql.ENUM("EMAIL", "SMS", name="delivery_channel", create_type=False)
     delivery_channel.create(op.get_bind(), checkfirst=True)
     op.add_column(
         "dev_deliveries",

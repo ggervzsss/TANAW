@@ -6,6 +6,7 @@ from app.core.config import Settings
 
 TRUSTED_FRONTEND_ORIGIN = "https://tanaw-sanpedro.vercel.app"
 EVIL_ORIGIN = "https://evil.example"
+PRODUCTION_JWT_SECRET = "production-jwt-secret-with-at-least-32-characters"
 
 
 def build_cors_test_client() -> TestClient:
@@ -13,6 +14,7 @@ def build_cors_test_client() -> TestClient:
         environment="production",
         cors_origins=TRUSTED_FRONTEND_ORIGIN,
         frontend_public_url=TRUSTED_FRONTEND_ORIGIN,
+        jwt_secret_key=PRODUCTION_JWT_SECRET,
     )
     app = FastAPI()
     app.add_middleware(
