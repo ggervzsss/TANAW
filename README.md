@@ -324,9 +324,10 @@ Stop the services without deleting database data:
 docker compose down
 ```
 
-The first backend startup creates the current schema, initializes the bootstrap
-IT account once, and optionally creates the explicitly enabled development
-accounts. Later restarts never synchronize or reset an existing account.
+Compose applies every versioned Alembic migration before the backend starts.
+The backend validates that migration state, initializes the bootstrap IT account
+once, and optionally creates explicitly enabled development accounts. Later
+restarts never mutate the schema or synchronize or reset an existing account.
 
 ### 4. Install and start the enterprise desktop
 
@@ -639,6 +640,7 @@ Linux/macOS:
 cd backend-tanaw
 test -f .env || cp .env.example .env
 uv sync --frozen
+uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
@@ -648,6 +650,7 @@ Windows PowerShell:
 Set-Location backend-tanaw
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 uv sync --frozen
+uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
@@ -657,6 +660,7 @@ Windows Command Prompt:
 cd backend-tanaw
 if not exist .env copy .env.example .env
 uv sync --frozen
+uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
@@ -706,6 +710,7 @@ docker compose -f docker-compose.prod.yml up --build -d
 This configuration:
 
 - installs production-only backend dependencies;
+- runs a one-shot migration service and starts the API only after it succeeds;
 - runs Uvicorn without reload;
 - compiles the web portal during image creation;
 - serves the compiled frontend through Nginx;
@@ -713,6 +718,13 @@ This configuration:
 
 The Electron desktop is not containerized and must still run on the host or be
 installed from a packaged desktop build.
+
+For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
+pre-deploy or release command before replacing the backend process. TANAW refuses
+to start against an uninitialized or outdated database. Back up PostgreSQL before
+every production migration; revision `20260711_0016` is intentionally
+irreversible because rolling it back would require dropping operational and
+support data.
 
 ## Environment configuration
 

@@ -73,30 +73,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS "
-        "must_change_password BOOLEAN NOT NULL DEFAULT false"
+    raise RuntimeError(
+        "Revision 20260711_0014 cannot be downgraded safely: TANAW no longer retains "
+        "temporary passwords for pending accounts. Restore a verified pre-migration backup "
+        "or deploy a forward fix instead."
     )
-    op.execute(
-        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS "
-        "temporary_password_created_at TIMESTAMP WITH TIME ZONE"
-    )
-    op.execute(
-        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS "
-        "temporary_password_expires_at TIMESTAMP WITH TIME ZONE"
-    )
-    op.execute(
-        """
-        UPDATE accounts
-        SET must_change_password = true,
-            temporary_password_created_at = now(),
-            temporary_password_expires_at = now()
-        WHERE activated_at IS NULL
-        """
-    )
-
-    op.execute("DROP INDEX IF EXISTS ix_account_activation_tokens_expires_at")
-    op.execute("DROP INDEX IF EXISTS ix_account_activation_tokens_token_hash")
-    op.execute("DROP INDEX IF EXISTS ix_account_activation_tokens_account_id")
-    op.execute("DROP TABLE IF EXISTS account_activation_tokens")
-    op.execute("ALTER TABLE accounts DROP COLUMN IF EXISTS activated_at")

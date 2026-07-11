@@ -63,6 +63,34 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 `app/core`, `app/db`, and `app/api`; domain behavior lives under
 `app/features`.
 
+## Database Migrations
+
+Alembic is the only schema authority. Apply migrations before starting any API
+or mock-data process:
+
+```shell
+uv run alembic upgrade head
+uv run uvicorn main:app
+```
+
+Application startup validates the `alembic_version` revision and fails with an
+actionable error when the database is missing or outdated. It never creates,
+alters, or drops schema objects. Production deployments must back up PostgreSQL,
+run migrations as a separate pre-deploy/release step, and start the new API only
+after migration succeeds. Revision `20260711_0016` reconciles tables formerly
+created at runtime and is intentionally irreversible because dropping those
+tables would destroy operational and support records; recovery uses a verified
+pre-migration backup or a forward fix.
+
+The account-activation migration (`20260711_0014`) is also intentionally
+irreversible. TANAW discarded temporary passwords when activation links became
+authoritative, so a structural downgrade could not restore credentials for
+pending users. Activated and pending users remain usable on the migrated schema;
+if a release must be reverted, keep the database at the current revision and
+roll forward the application, or restore the application and database together
+from a verified pre-activation backup. Never deploy pre-activation backend code
+against the migrated database.
+
 ## Email Integration
 
 TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development

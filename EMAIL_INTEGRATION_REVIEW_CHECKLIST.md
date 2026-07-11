@@ -223,11 +223,11 @@ Acceptance criteria:
 
 ### DB-001 — Move runtime schema mutation to Alembic
 
-- [ ] Stop running destructive or compatibility DDL on every application startup.
-- [ ] Move remaining startup schema changes into versioned Alembic migrations.
-- [ ] Keep startup limited to migration-state validation and safe application initialization.
-- [ ] Define deployment ordering: migrate first, then start the application.
-- [ ] Verify that migration rollback is not immediately undone by application startup.
+- [x] Stop running destructive or compatibility DDL on every application startup.
+- [x] Move remaining startup schema changes into versioned Alembic migrations.
+- [x] Keep startup limited to migration-state validation and safe application initialization.
+- [x] Define deployment ordering: migrate first, then start the application.
+- [x] Verify that migration rollback is not immediately undone by application startup.
 
 Acceptance criteria:
 
@@ -238,10 +238,10 @@ Acceptance criteria:
 
 Current limitation: the downgrade recreates temporary-password fields but cannot restore the original temporary passwords, because those secrets no longer exist.
 
-- [ ] Mark the activation migration as operationally irreversible, or implement a safe rollback process that leaves pending accounts recoverable.
-- [ ] Document what happens to pending and activated users during rollback.
-- [ ] Add a rollback test that checks user behavior, not only schema shape.
-- [ ] Prevent deployment tooling from treating a structurally successful but functionally broken downgrade as safe.
+- [x] Mark the activation migration as operationally irreversible, or implement a safe rollback process that leaves pending accounts recoverable.
+- [x] Document what happens to pending and activated users during rollback.
+- [x] Add a rollback test that checks user behavior, not only schema shape.
+- [x] Prevent deployment tooling from treating a structurally successful but functionally broken downgrade as safe.
 
 Acceptance criteria:
 
@@ -403,10 +403,10 @@ npm run build
 
 Database changes:
 
-- [ ] Test upgrade from the current production revision.
-- [ ] Test a fresh database upgrade to the latest revision.
-- [ ] Test the documented rollback or explicitly verify that the migration is intentionally irreversible.
-- [ ] Start the backend against the migrated database and verify clean startup.
+- [x] Test upgrade from the current production revision.
+- [x] Test a fresh database upgrade to the latest revision.
+- [x] Test the documented rollback or explicitly verify that the migration is intentionally irreversible.
+- [x] Start the backend against the migrated database and verify clean startup.
 
 Final security checks:
 

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
-from app.db.base import Base
+from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import generate_enterprise_id
@@ -185,7 +185,7 @@ def main() -> None:
 
 
 async def run(args: argparse.Namespace) -> None:
-    await ensure_schema()
+    await validate_schema()
 
     if args.command == "status":
         async with AsyncSessionLocal() as db:
@@ -226,13 +226,9 @@ async def run(args: argparse.Namespace) -> None:
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
-async def ensure_schema() -> None:
-    from app.main import ensure_account_onboarding_schema, ensure_mock_reporting_schema
-
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-        await ensure_account_onboarding_schema(connection)
-        await ensure_mock_reporting_schema(connection)
+async def validate_schema() -> None:
+    async with engine.connect() as connection:
+        await validate_database_migration_head(connection)
 
 
 def require_mock_data_enabled() -> None:
