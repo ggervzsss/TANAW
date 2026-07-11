@@ -14,14 +14,14 @@ def test_delivery_records_do_not_have_a_channel_discriminator() -> None:
 async def test_account_phone_is_preserved_without_creating_an_sms_delivery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    deliver_email = AsyncMock()
-    monkeypatch.setattr(service, "deliver_email", deliver_email)
+    issue_account_activation = AsyncMock()
+    monkeypatch.setattr(service, "issue_account_activation", issue_account_activation)
     db = MagicMock()
     db.flush = AsyncMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    account = await service.create_account_with_temporary_password(
+    account = await service.create_account_with_activation(
         db,
         email="user@example.com",
         phone="+639171234567",
@@ -31,8 +31,6 @@ async def test_account_phone_is_preserved_without_creating_an_sms_delivery(
     )
 
     assert account.phone == "+639171234567"
-    deliver_email.assert_awaited_once()
-    delivery_call = deliver_email.await_args
-    assert delivery_call is not None
-    assert delivery_call.kwargs["recipient"] == "user@example.com"
+    assert account.activated_at is None
+    issue_account_activation.assert_awaited_once_with(db, account, lock_account=False)
     assert db.add.call_count == 1

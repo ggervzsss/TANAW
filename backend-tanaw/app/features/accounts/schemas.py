@@ -74,7 +74,6 @@ class AuthUser(BaseModel):
     displayName: str
     role: str
     title: str
-    mustChangePassword: bool = False
     phone: str | None = None
     firstName: str | None = None
     lastName: str | None = None
@@ -213,7 +212,7 @@ class AccountSummary(BaseModel):
     role: str
     title: str
     status: str
-    mustChangePassword: bool
+    isActivated: bool
     isProtectedDefault: bool = False
     profileChangeRequests: list[AccountProfileChangeRequest] = Field(default_factory=list)
     createdAt: datetime

@@ -41,8 +41,8 @@ export function LguAccountsToolbar({ query, role, status, onQueryChange, onRoleC
         onChange={(value) => onStatusChange(value as LguStatusFilter)}
         options={
           [
-            ["active", "Active"],
-            ["inactive", "Inactive"],
+            ["active", "Enabled"],
+            ["inactive", "Disabled"],
           ] as const
         }
       />

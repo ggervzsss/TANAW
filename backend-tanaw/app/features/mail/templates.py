@@ -11,7 +11,9 @@ class EmailContent:
     html: str
 
 
-def onboarding_email(account: Account, temporary_password: str) -> EmailContent:
+def account_activation_email(
+    account: Account, activation_url: str, expires_label: str
+) -> EmailContent:
     if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
         login_lines = (
             f"Enterprise ID: {account.enterprise_id}\n"
@@ -24,22 +26,24 @@ def onboarding_email(account: Account, temporary_password: str) -> EmailContent:
         f"Hello {account.display_name},\n\n"
         "Your TANAW account has been created.\n"
         f"{login_lines}\n"
-        f"Temporary password: {temporary_password}\n\n"
-        "This temporary password expires in 7 days. You must change it on first login.\n"
+        "Choose your password and activate your account using this secure link:\n"
+        f"{activation_url}\n\n"
+        f"This single-use link expires at {expires_label}.\n"
         "If you did not expect this account, use Contact Support on the TANAW sign-in page."
     )
     html = _layout(
-        "Your TANAW account is ready",
+        "Activate your TANAW account",
         f"""
         <p>Hello {escape(account.display_name)},</p>
         <p>Your TANAW account has been created.</p>
-        <div class="card"><pre>{escape(login_lines)}</pre>
-        <p><strong>Temporary password:</strong> <code>{escape(temporary_password)}</code></p></div>
-        <p>This temporary password expires in 7 days. You must change it on first login.</p>
+        <div class="card"><pre>{escape(login_lines)}</pre></div>
+        <p>Choose your password and activate your account:</p>
+        <p><a class="button" href="{escape(activation_url, quote=True)}">Activate account</a></p>
+        <p>This single-use link expires at <strong>{escape(expires_label)}</strong>.</p>
         <p class="muted">If you did not expect this account, use Contact Support on the TANAW sign-in page.</p>
         """,
     )
-    return EmailContent(subject="Your TANAW account credentials", text=text, html=html)
+    return EmailContent(subject="Activate your TANAW account", text=text, html=html)
 
 
 def password_reset_code_email(account: Account, code: str, expires_label: str) -> EmailContent:
@@ -113,4 +117,5 @@ body{{margin:0;background:#f1f5f9;color:#0f172a;font:16px Arial,sans-serif}}
 h1{{font-size:24px;margin:0 0 24px}}p{{line-height:1.6}}.card{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px}}
 .code{{font:700 32px monospace;letter-spacing:8px;text-align:center;background:#ecfeff;border-radius:10px;padding:18px}}
 code{{font-size:18px}}pre{{white-space:pre-wrap;font:15px Arial,sans-serif}}.muted{{color:#64748b;font-size:14px}}
+.button{{display:inline-block;background:#0f766e;color:#fff!important;text-decoration:none;font-weight:700;border-radius:8px;padding:13px 20px}}
 </style></head><body><div class="wrap"><div class="panel"><h1>{escape(title)}</h1>{body}</div></div></body></html>"""

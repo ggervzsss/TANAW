@@ -28,7 +28,7 @@ export function ITDevLogPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Dev Log" description="Temporary development log for generated email credential and recovery messages." />
+      <PageHeader title="Dev Log" description="Temporary development log for account activation and recovery email messages." />
 
       <Panel className="overflow-hidden">
         <PanelHeader title="Email Delivery Logs" icon={Inbox} />
@@ -69,7 +69,7 @@ export function ITDevLogPage() {
             <EmptyState
               icon={Inbox}
               title="No development messages"
-              description={deliveriesQuery.isLoading ? "Loading development logs..." : "Account creation and credential resets will record email messages here."}
+              description={deliveriesQuery.isLoading ? "Loading development logs..." : "Account activation and recovery emails will be recorded here."}
             />
           )}
         </div>

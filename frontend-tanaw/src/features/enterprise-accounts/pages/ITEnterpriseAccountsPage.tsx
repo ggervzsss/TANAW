@@ -29,7 +29,7 @@ export function ITEnterpriseAccountsPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Enterprise Accounts" description="Register establishments, issue temporary credentials, and manage account access." />
+      <PageHeader title="Enterprise Accounts" description="Register establishments, send secure activation links, and manage account access." />
 
       <EnterpriseAccountsMetrics accounts={accounts} />
       <EnterpriseProfileRequestsPanel accounts={accounts} canResolve onAccountUpdated={handleEnterpriseUpdated} />
@@ -49,8 +49,15 @@ export function ITEnterpriseAccountsPage() {
       </Panel>
 
       <AnimatePresence>
-        {selectedEnterprise && <EnterpriseDetailsModal enterprise={selectedEnterprise} onClose={() => setSelectedEnterprise(null)} onEnterpriseUpdated={setSelectedEnterprise} />}
-        {registerOpen && <RegisterEnterpriseModal onClose={() => setRegisterOpen(false)} />}
+        {selectedEnterprise && (
+          <EnterpriseDetailsModal
+            key={`enterprise-details-${selectedEnterprise.id}`}
+            enterprise={selectedEnterprise}
+            onClose={() => setSelectedEnterprise(null)}
+            onEnterpriseUpdated={setSelectedEnterprise}
+          />
+        )}
+        {registerOpen && <RegisterEnterpriseModal key="register-enterprise" onClose={() => setRegisterOpen(false)} />}
       </AnimatePresence>
     </PageMotion>
   );

@@ -35,9 +35,7 @@ async def ensure_account_onboarding_schema(connection: Any) -> None:
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS gateway_id VARCHAR(120)",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS gateway_status VARCHAR(40)",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS building_capacity INTEGER NOT NULL DEFAULT 100",
-        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false",
-        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS temporary_password_created_at TIMESTAMP WITH TIME ZONE",
-        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS temporary_password_expires_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS activated_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS token_invalid_before TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0",
@@ -48,6 +46,37 @@ async def ensure_account_onboarding_schema(connection: Any) -> None:
     ]
     for statement in statements:
         await connection.exec_driver_sql(statement)
+    await connection.exec_driver_sql(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'accounts'
+                  AND column_name = 'must_change_password'
+            ) THEN
+                UPDATE accounts
+                SET activated_at = COALESCE(password_changed_at, created_at, now())
+                WHERE must_change_password = false AND activated_at IS NULL;
+
+                UPDATE accounts
+                SET token_invalid_before = now()
+                WHERE must_change_password = true;
+            END IF;
+        END $$
+        """
+    )
+    await connection.exec_driver_sql(
+        "ALTER TABLE accounts DROP COLUMN IF EXISTS temporary_password_expires_at"
+    )
+    await connection.exec_driver_sql(
+        "ALTER TABLE accounts DROP COLUMN IF EXISTS temporary_password_created_at"
+    )
+    await connection.exec_driver_sql(
+        "ALTER TABLE accounts DROP COLUMN IF EXISTS must_change_password"
+    )
     await connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_accounts_enterprise_id ON accounts (enterprise_id)"
     )

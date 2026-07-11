@@ -44,7 +44,7 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
                 <StatusBadge tone="blue">{lguRoleLabel[account.role] ?? account.role}</StatusBadge>
               </td>
               <td className="px-4 py-4 whitespace-nowrap">
-                <StatusBadge tone={account.status === "active" ? "green" : "slate"}>{account.status}</StatusBadge>
+                <StatusBadge tone={account.status === "inactive" ? "slate" : account.isActivated ? "green" : "amber"}>{account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}</StatusBadge>
               </td>
               <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-500">{account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"}</td>
             </tr>
@@ -55,7 +55,7 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
                 <EmptyState
                   icon={Users}
                   title="No LGU accounts"
-                  description={isLoading ? "Loading accounts..." : accounts.length === 0 ? "Create an LGU account to generate development credentials." : "No accounts match the current filters."}
+                  description={isLoading ? "Loading accounts..." : accounts.length === 0 ? "Create an LGU account to send its activation email." : "No accounts match the current filters."}
                 />
               </td>
             </tr>

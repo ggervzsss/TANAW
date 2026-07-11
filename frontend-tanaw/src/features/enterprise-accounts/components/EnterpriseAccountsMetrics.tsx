@@ -10,7 +10,7 @@ export function EnterpriseAccountsMetrics({ accounts }: EnterpriseAccountsMetric
   return (
     <section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
       <MetricCard label="Enterprise Accounts" value={accounts.length} foot="Registered entities" color="#2563eb" icon={Building2} />
-      <MetricCard label="Active Enterprises" value={accounts.filter((enterprise) => enterprise.status === "active").length} foot="Can access TANAW" color="#065f46" icon={UserCheck} />
+      <MetricCard label="Active Enterprises" value={accounts.filter((enterprise) => enterprise.status === "active" && enterprise.isActivated).length} foot="Activated with access" color="#065f46" icon={UserCheck} />
       <MetricCard
         label="Inactive Enterprises"
         value={accounts.filter((enterprise) => enterprise.status === "inactive").length}

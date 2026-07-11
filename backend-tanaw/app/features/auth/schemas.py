@@ -18,6 +18,31 @@ class LoginResponse(BaseModel):
     user: AuthUser
 
 
+class AccountActivationValidateRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+
+
+class AccountActivationValidateResponse(BaseModel):
+    displayName: str
+    role: str
+    expiresAt: datetime
+
+
+class AccountActivationCompleteRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH)
+
+    @field_validator("newPassword")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return validate_password_policy(value)
+
+
+class AccountActivationCompleteResponse(BaseModel):
+    status: Literal["ok"]
+    role: str
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

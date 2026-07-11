@@ -2,7 +2,6 @@ import { type CSSProperties, useEffect, useMemo } from "react";
 import { MapPin } from "lucide-react";
 import { motion } from "motion/react";
 import { Navigate } from "react-router-dom";
-import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
 import { AuthThemeToggle, LoginForm } from "../components";
@@ -56,9 +55,6 @@ export function LoginPage() {
   }
 
   if (user) {
-    if (user.mustChangePassword) {
-      return <Navigate to={routes.changePassword} replace />;
-    }
     return <Navigate to={getRoleDashboardPath(user.role)} replace />;
   }
 

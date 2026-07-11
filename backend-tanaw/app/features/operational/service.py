@@ -229,6 +229,7 @@ async def create_role_notifications(
             .where(
                 Account.role.in_(recipient_roles),
                 Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
             )
             .order_by(Account.role.asc(), Account.display_name.asc())
         )
@@ -741,7 +742,11 @@ async def list_fleet_simulation_enterprises(
     enterprises = (
         await db.scalars(
             select(Account)
-            .where(Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE)
+            .where(
+                Account.role == AccountRole.ENTERPRISE,
+                Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
+            )
             .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
         )
     ).all()
@@ -770,6 +775,7 @@ async def enterprise_accounts_by_identifier(
             select(Account).where(
                 Account.role == AccountRole.ENTERPRISE,
                 Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
                 (Account.enterprise_id.in_(enterprise_ids)) | (Account.id.in_(enterprise_ids)),
             )
         )

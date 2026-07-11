@@ -32,8 +32,8 @@ export function EnterpriseAccountsToolbar({ query, status, barangay, barangays, 
         options={
           [
             ["all", "All Statuses"],
-            ["active", "Active"],
-            ["inactive", "Inactive"],
+            ["active", "Enabled"],
+            ["inactive", "Disabled"],
           ] as const
         }
       />

@@ -9,7 +9,11 @@ EVIL_ORIGIN = "https://evil.example"
 
 
 def build_cors_test_client() -> TestClient:
-    settings = Settings(environment="production", cors_origins=TRUSTED_FRONTEND_ORIGIN)
+    settings = Settings(
+        environment="production",
+        cors_origins=TRUSTED_FRONTEND_ORIGIN,
+        frontend_public_url=TRUSTED_FRONTEND_ORIGIN,
+    )
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,

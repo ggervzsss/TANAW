@@ -65,6 +65,7 @@ async def test_production_never_records_sensitive_content_in_log_mode(
     settings = Settings(
         environment="production",
         cors_origins="https://tanaw-sanpedro.vercel.app",
+        frontend_public_url="https://tanaw-sanpedro.vercel.app",
         email_delivery_mode="log",
     )
     monkeypatch.setattr("app.features.mail.service.get_settings", lambda: settings)

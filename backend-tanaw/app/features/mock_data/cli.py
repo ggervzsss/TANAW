@@ -368,7 +368,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             display_name=display_name,
             title=title,
             status=AccountStatus.ACTIVE,
-            must_change_password=False,
+            activated_at=datetime.now(UTC),
             source_kind="mock",
             mock_run_id=run_id,
         )
@@ -404,7 +404,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             display_name=enterprise.name,
             title="Enterprise Account",
             status=AccountStatus.ACTIVE,
-            must_change_password=False,
+            activated_at=datetime.now(UTC),
             source_kind="mock",
             mock_run_id=run_id,
         )
@@ -428,7 +428,9 @@ async def list_active_enterprises(db: AsyncSession) -> list[Account]:
             await db.scalars(
                 select(Account)
                 .where(
-                    Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE
+                    Account.role == AccountRole.ENTERPRISE,
+                    Account.status == AccountStatus.ACTIVE,
+                    Account.activated_at.is_not(None),
                 )
                 .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
             )
@@ -449,6 +451,7 @@ async def resolve_target_enterprise(
         select(Account).where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
             or_(
                 func.lower(Account.id) == normalized,
                 func.lower(Account.email) == normalized,

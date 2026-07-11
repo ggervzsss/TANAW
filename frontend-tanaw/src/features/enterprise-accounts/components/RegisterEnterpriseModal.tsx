@@ -82,7 +82,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
     mutationFn: createEnterpriseAccount,
     onSuccess: async () => {
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("Enterprise account created");
+      toast.success("Enterprise account created; activation email sent");
       onClose();
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create enterprise account")),
@@ -302,11 +302,18 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             )}
           </div>
 
+          <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+            <p className="text-sm leading-relaxed text-emerald-800">
+              TANAW will send a secure activation link to the registered contact email. The enterprise user will choose a private password before signing in to the TANAW Enterprise desktop application.
+            </p>
+          </div>
+
           <button
             disabled={createMutation.isPending}
             className="bg-tanaw-green rounded-xl px-5 py-3.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(5,91,37,0.22)] transition hover:-translate-y-0.5 hover:bg-[#044a1e] disabled:translate-y-0 disabled:opacity-70 md:col-span-2"
           >
-            {createMutation.isPending ? "Saving..." : "Save Enterprise"}
+            {createMutation.isPending ? "Registering..." : "Register Enterprise"}
           </button>
         </form>
       </ModalFrame>

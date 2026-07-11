@@ -21,7 +21,11 @@ def create_access_token(subject: str, claims: dict[str, Any] | None = None) -> s
     settings = get_settings()
     issued_at = datetime.now(UTC)
     expires_at = issued_at + timedelta(minutes=settings.access_token_expire_minutes)
-    payload: dict[str, Any] = {"sub": subject, "iat": issued_at, "exp": expires_at}
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "iat": issued_at.timestamp(),
+        "exp": expires_at,
+    }
     if claims:
         payload.update(claims)
 

@@ -573,7 +573,11 @@ async def list_report_enterprises(
 ) -> list[dict]:
     statement = (
         select(Account)
-        .where(Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE)
+        .where(
+            Account.role == AccountRole.ENTERPRISE,
+            Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
+        )
         .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
@@ -867,7 +871,11 @@ async def create_enterprise_notification(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserNotificationSummary:
     recipient = await get_enterprise_notification_recipient(db, payload.enterpriseId)
-    if recipient is None or recipient.status != AccountStatus.ACTIVE:
+    if (
+        recipient is None
+        or recipient.status != AccountStatus.ACTIVE
+        or recipient.activated_at is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Active enterprise account not found."
         )
@@ -917,7 +925,11 @@ async def list_map_enterprises(
     latest = {item.enterpriseId: item for item in await list_latest_telemetry(db, account)}
     statement = (
         select(Account)
-        .where(Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE)
+        .where(
+            Account.role == AccountRole.ENTERPRISE,
+            Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
+        )
         .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
@@ -1071,7 +1083,7 @@ async def authenticate_websocket_account(db: AsyncSession, token: str) -> Accoun
     if (
         account is None
         or account.status != AccountStatus.ACTIVE
-        or account.must_change_password
+        or account.activated_at is None
         or is_token_invalidated(payload, account)
     ):
         return None
@@ -1105,7 +1117,11 @@ async def notify_enterprise_ticket_update(
     severity: str,
 ) -> None:
     recipient = await get_enterprise_notification_recipient(db, ticket.enterpriseId)
-    if recipient is None or recipient.status != AccountStatus.ACTIVE:
+    if (
+        recipient is None
+        or recipient.status != AccountStatus.ACTIVE
+        or recipient.activated_at is None
+    ):
         return
     notification = await create_user_notification(
         db,

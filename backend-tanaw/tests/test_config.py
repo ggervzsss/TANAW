@@ -2,6 +2,8 @@ import pytest
 
 from app.core.config import Settings
 
+PRODUCTION_FRONTEND_URL = "https://tanaw-sanpedro.vercel.app"
+
 
 def test_database_url_uses_asyncpg_for_plain_postgresql_url() -> None:
     settings = Settings(database_url="postgresql://user:pass@example.com:5432/tanaw")
@@ -57,27 +59,47 @@ def test_cors_origins_are_trimmed_and_normalized() -> None:
 
 
 def test_wildcard_cors_origin_is_rejected_in_production() -> None:
-    settings = Settings(environment="production", cors_origins="*")
+    settings = Settings(
+        environment="production",
+        cors_origins="*",
+        frontend_public_url=PRODUCTION_FRONTEND_URL,
+    )
 
     with pytest.raises(ValueError, match="Wildcard CORS origins"):
         _ = settings.cors_origin_list
 
 
 def test_local_cors_origins_are_rejected_in_production() -> None:
-    settings = Settings(environment="production")
+    settings = Settings(
+        environment="production",
+        frontend_public_url=PRODUCTION_FRONTEND_URL,
+    )
 
     with pytest.raises(ValueError, match="Local or private CORS origins"):
         _ = settings.cors_origin_list
 
 
 def test_private_ip_cors_origins_are_rejected_in_production() -> None:
-    settings = Settings(environment="production", cors_origins="http://192.168.1.50:5173")
+    settings = Settings(
+        environment="production",
+        cors_origins="http://192.168.1.50:5173",
+        frontend_public_url=PRODUCTION_FRONTEND_URL,
+    )
 
     with pytest.raises(ValueError, match="Local or private CORS origins"):
         _ = settings.cors_origin_list
 
 
 def test_production_frontend_origin_is_allowed_in_production() -> None:
-    settings = Settings(environment="production", cors_origins="https://tanaw-sanpedro.vercel.app")
+    settings = Settings(
+        environment="production",
+        cors_origins="https://tanaw-sanpedro.vercel.app",
+        frontend_public_url=PRODUCTION_FRONTEND_URL,
+    )
 
     assert settings.cors_origin_list == ["https://tanaw-sanpedro.vercel.app"]
+
+
+def test_local_frontend_public_url_is_rejected_in_production() -> None:
+    with pytest.raises(ValueError, match="public HTTPS URL"):
+        Settings(environment="production", cors_origins=PRODUCTION_FRONTEND_URL)

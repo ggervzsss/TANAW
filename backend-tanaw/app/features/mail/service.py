@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from app.features.mail.client import ResendAPIError, ResendClient
 from app.features.mail.templates import EmailContent
 
 REDACTED_EMAIL_BODY = "[Sensitive email content is not retained in production delivery logs.]"
+logger = logging.getLogger("uvicorn.error")
 
 
 class EmailDeliveryError(RuntimeError):
@@ -41,6 +43,11 @@ async def deliver_email(
                 status=DeliveryStatus.FAILED,
             )
             db.add(delivery)
+            logger.error(
+                "Email delivery blocked account_id=%s category=%s provider=local reason=production_log_mode",
+                account_id,
+                _email_category(tags),
+            )
             if raise_on_failure:
                 raise EmailDeliveryError(delivery.error_message)
             return delivery
@@ -53,6 +60,11 @@ async def deliver_email(
             status=DeliveryStatus.RECORDED,
         )
         db.add(delivery)
+        logger.info(
+            "Email recorded locally account_id=%s category=%s provider=local",
+            account_id,
+            _email_category(tags),
+        )
         return delivery
 
     error = _validate_resend_delivery(settings, normalized_recipient)
@@ -84,6 +96,20 @@ async def deliver_email(
         status=DeliveryStatus.FAILED if error else DeliveryStatus.SENT,
     )
     db.add(delivery)
+    if error:
+        logger.error(
+            "Email delivery failed account_id=%s category=%s provider=resend reason=%s",
+            account_id,
+            _email_category(tags),
+            error,
+        )
+    else:
+        logger.info(
+            "Resend accepted email account_id=%s category=%s provider_message_id=%s",
+            account_id,
+            _email_category(tags),
+            provider_message_id,
+        )
     if error and raise_on_failure:
         raise EmailDeliveryError(error)
     return delivery
@@ -114,3 +140,7 @@ def _resend_client(settings: Settings | None = None) -> ResendClient:
 def email_idempotency_key(purpose: str, source_id: str | None = None) -> str:
     suffix = source_id or str(uuid4())
     return f"tanaw-{purpose}-{suffix}"[:256]
+
+
+def _email_category(tags: dict[str, str] | None) -> str:
+    return (tags or {}).get("category", "transactional")

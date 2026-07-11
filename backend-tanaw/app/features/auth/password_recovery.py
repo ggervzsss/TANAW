@@ -12,6 +12,8 @@ from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
 from app.features.accounts.models import Account, AccountStatus
 from app.features.accounts.service import get_account_by_email, get_account_by_id
+from app.features.auth.account_activation import invalidate_account_activation_tokens
+from app.features.auth.challenge_service import invalidate_password_reset_challenges
 from app.features.auth.models import PasswordResetChallenge
 from app.features.mail.service import deliver_email, email_idempotency_key
 from app.features.mail.templates import password_reset_code_email
@@ -64,7 +66,11 @@ async def request_password_reset(db: AsyncSession, email: str) -> PasswordResetC
     expires_at = now + timedelta(minutes=OTP_TTL_MINUTES)
     account = await get_account_by_email(db, normalized_email)
     eligible_account = (
-        account if account is not None and account.status == AccountStatus.ACTIVE else None
+        account
+        if account is not None
+        and account.status == AccountStatus.ACTIVE
+        and account.activated_at is not None
+        else None
     )
     challenge = PasswordResetChallenge(
         id=challenge_id,
@@ -148,21 +154,20 @@ async def reset_password_with_token(
         raise PasswordRecoveryError("Password reset session is invalid or expired.")
 
     account = await get_account_by_id(db, challenge.account_id)
-    if account is None or account.status != AccountStatus.ACTIVE:
+    if account is None or account.status != AccountStatus.ACTIVE or account.activated_at is None:
         raise PasswordRecoveryError("Password reset session is invalid or expired.")
 
     validate_password_policy(new_password)
     now = _now()
     account.password_hash = hash_password(new_password)
-    account.must_change_password = False
-    account.temporary_password_created_at = None
-    account.temporary_password_expires_at = None
     account.password_changed_at = now
     account.failed_login_attempts = 0
     account.locked_until = None
     account.token_invalid_before = now
     challenge.used = True
     challenge.reset_token_hash = None
+    await invalidate_account_activation_tokens(db, account.id, invalidated_at=now)
+    await invalidate_password_reset_challenges(db, account.id, invalidated_at=now)
     await db.commit()
     await db.refresh(account)
     return account

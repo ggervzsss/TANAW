@@ -1,12 +1,20 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.core.config import Settings
 from app.core.password_policy import PASSWORD_POLICY_MESSAGE, validate_password_policy
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
+from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.schemas import PasswordChangeRequest
-from app.features.accounts.service import generate_temporary_password
+from app.features.accounts.service import change_account_password
 from app.features.auth.schemas import ForgotPasswordResetRequest
 from app.features.auth.service import (
     LOGIN_ATTEMPT_LIMIT,
@@ -56,12 +64,6 @@ def test_password_policy_accepts_long_and_unicode_passwords_consistently() -> No
     )
 
 
-def test_generated_passwords_follow_policy() -> None:
-    for _ in range(20):
-        temporary_password = generate_temporary_password()
-        assert validate_password_policy(temporary_password) == temporary_password
-
-
 def test_default_account_credentials_are_not_subject_to_the_user_password_policy() -> None:
     settings = Settings(
         default_it_username="default@email.com",
@@ -78,6 +80,42 @@ def test_default_account_credentials_are_not_subject_to_the_user_password_policy
     assert settings.temporary_admin_password == "admin123"
     assert settings.temporary_staff_password == "staffstaff"
     assert settings.temporary_it_password == "it123456"
+
+
+def test_access_token_issued_after_revocation_in_same_second_stays_valid() -> None:
+    account = _account()
+    token = decode_access_token(create_access_token("account-1"))
+    issued_at = token["iat"]
+
+    assert isinstance(issued_at, float)
+    account.token_invalid_before = datetime.fromtimestamp(issued_at - 0.000001, UTC)
+    assert is_token_invalidated(token, account) is False
+
+    account.token_invalid_before = datetime.fromtimestamp(issued_at + 0.000001, UTC)
+    assert is_token_invalidated(token, account) is True
+
+
+@pytest.mark.asyncio
+async def test_password_change_revokes_sessions_and_recovery_challenges() -> None:
+    account = _account()
+    account.id = "account-1"
+    account.password_hash = hash_password("Existing1!Password")
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    changed = await change_account_password(
+        db, account, "Existing1!Password", "Replacement2!Password"
+    )
+
+    assert changed is True
+    assert verify_password("Replacement2!Password", account.password_hash)
+    assert account.password_changed_at is not None
+    assert account.token_invalid_before == account.password_changed_at
+    db.execute.assert_awaited_once()
+    db.commit.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(account)
 
 
 def test_third_failed_login_locks_account_for_five_minutes() -> None:

@@ -1,1 +1,1 @@
-export { ChangePasswordPage, EnterpriseAccessPage, LoginPage } from "./pages";
+export { ActivateAccountPage, EnterpriseAccessPage, LoginPage } from "./pages";

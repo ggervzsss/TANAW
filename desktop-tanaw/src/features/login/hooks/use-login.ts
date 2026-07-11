@@ -36,11 +36,6 @@ export function useLogin(redirectTo?: string, options?: UseLoginOptions) {
     onSuccess: (session, values) => {
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       setSession(session, values.rememberMe ?? false);
-      if (session.user.mustChangePassword) {
-        notifySuccess("Temporary credentials verified.");
-        navigate(routePaths.changePassword, { replace: true });
-        return;
-      }
       notifySuccess("Login successful");
       navigate(redirectTo ?? getLandingRoute(), { replace: true });
     },

@@ -140,7 +140,7 @@ async def authenticate_websocket_account(db: AsyncSession, token: str) -> Accoun
     if (
         account is None
         or account.status != AccountStatus.ACTIVE
-        or account.must_change_password
+        or account.activated_at is None
         or is_token_invalidated(payload, account)
     ):
         return None

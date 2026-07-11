@@ -8,7 +8,7 @@ from app.features.accounts.models import (
     SystemConfiguration,
 )
 from app.features.activity_logs.models import ActivityLog
-from app.features.auth.models import PasswordResetChallenge
+from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     EnterpriseTelemetrySnapshot,
@@ -22,6 +22,7 @@ from app.features.operational.models import (
 
 __all__ = [
     "Account",
+    "AccountActivationToken",
     "AccountRole",
     "AccountStatus",
     "ActivityLog",

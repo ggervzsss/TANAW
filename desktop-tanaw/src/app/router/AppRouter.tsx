@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { ChangePasswordPage } from "../../features/login/components/ChangePasswordPage";
 import { LoginPage } from "../../features/login/components/LoginPage";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import { EnterpriseShell } from "../layouts/EnterpriseShell";
@@ -23,10 +22,6 @@ function RequireAuth({ children }: RequireAuthProps) {
     return <Navigate to={routePaths.login} replace />;
   }
 
-  if (user.mustChangePassword) {
-    return <Navigate to={routePaths.changePassword} replace />;
-  }
-
   return children;
 }
 
@@ -35,7 +30,6 @@ export function AppRouter() {
     <Routes>
       <Route path={routePaths.home} element={<Navigate to={routePaths.enterpriseDashboard} replace />} />
       <Route path={routePaths.login} element={<LoginPage />} />
-      <Route path={routePaths.changePassword} element={<ChangePasswordPage />} />
       <Route
         path={routePaths.enterprise}
         element={

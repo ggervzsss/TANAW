@@ -34,7 +34,7 @@ export type AccountSummary = {
   role: string;
   title: string;
   status: "active" | "inactive";
-  mustChangePassword: boolean;
+  isActivated: boolean;
   isProtectedDefault: boolean;
   profileChangeRequests: AccountProfileChangeRequest[];
   createdAt: string;
@@ -170,8 +170,8 @@ export async function reverseGeocodeEnterpriseLocation(payload: EnterpriseRevers
   return response.data;
 }
 
-export async function resetAccountPassword(accountId: string) {
-  const response = await apiClient.post<AccountSummary>(`/accounts/${accountId}/reset-password`);
+export async function resendAccountActivation(accountId: string) {
+  const response = await apiClient.post<AccountSummary>(`/accounts/${accountId}/activation`);
   return response.data;
 }
 

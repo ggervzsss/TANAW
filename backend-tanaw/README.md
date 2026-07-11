@@ -67,10 +67,16 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 
 TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
 messages locally without contacting an external provider. `EMAIL_DELIVERY_MODE=resend`
-sends outbound transactional messages through Resend. Email is TANAW's only
-credential, recovery, OTP, and support-notification delivery channel. Account
+sends outbound transactional messages through Resend. New users receive a
+single-use activation link and choose their own password; TANAW never sends a
+password by email. Password recovery continues to use an emailed OTP. Account
 phone numbers remain contact/profile information and are never used for SMS
 delivery or phone-based OTPs.
+
+Activation links open the public web portal, expire after the configured number
+of hours, and are invalidated when a replacement link is issued. Set
+`FRONTEND_PUBLIC_URL` to the URL users can actually open—not the backend API URL.
+Production configuration requires this value to be a public HTTPS URL.
 
 The Resend-managed development sender can deliver only to the Resend account
 email, so set `EMAIL_TEST_RECIPIENT` until a custom sending domain is verified.
@@ -86,6 +92,8 @@ RESEND_API_KEY=replace_with_your_private_key
 EMAIL_FROM_NAME=TANAW
 EMAIL_FROM_ADDRESS=onboarding@resend.dev
 EMAIL_TEST_RECIPIENT=the-email-used-to-register-with-resend@example.com
+FRONTEND_PUBLIC_URL=http://localhost:5173
+ACCOUNT_ACTIVATION_TTL_HOURS=24
 ```
 
 When a verified LGU domain becomes available, change `EMAIL_FROM_ADDRESS` and

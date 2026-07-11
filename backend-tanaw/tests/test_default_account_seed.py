@@ -33,9 +33,7 @@ async def test_default_account_accepts_configured_password_without_forced_change
         display_name=DEFAULT_IT_DISPLAY_NAME,
         title="IT Personnel",
         status=AccountStatus.ACTIVE,
-        must_change_password=True,
-        temporary_password_created_at=datetime.now(UTC),
-        temporary_password_expires_at=datetime.now(UTC) + timedelta(days=1),
+        activated_at=None,
         failed_login_attempts=2,
         locked_until=datetime.now(UTC) + timedelta(minutes=5),
     )
@@ -55,9 +53,7 @@ async def test_default_account_accepts_configured_password_without_forced_change
 
     assert account.email == "default@email.com"
     assert verify_password("default", account.password_hash)
-    assert account.must_change_password is False
-    assert account.temporary_password_created_at is None
-    assert account.temporary_password_expires_at is None
+    assert account.activated_at is not None
     assert account.failed_login_attempts == 0
     assert account.locked_until is None
     assert account.token_invalid_before is not None
@@ -103,7 +99,7 @@ async def test_new_default_accounts_are_created_without_forced_change(
     assert accounts_by_email["staff@email.com"].display_name == "LGU Staff"
     assert accounts_by_email["it@email.com"].display_name == "IT Personnel"
     assert all("Temporary" not in account.display_name for account in session.added)
-    assert all(account.must_change_password is False for account in session.added)
+    assert all(account.activated_at is not None for account in session.added)
     assert all(account.status == AccountStatus.ACTIVE for account in session.added)
     assert session.commit_count == 1
 

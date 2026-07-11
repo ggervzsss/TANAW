@@ -76,6 +76,6 @@ def enterprise_account(*, building_capacity: int) -> Account:
         barangay="Poblacion",
         address="123 Main Street, San Pedro, Laguna 4023",
         building_capacity=building_capacity,
-        must_change_password=False,
+        activated_at=datetime(2026, 7, 3, tzinfo=UTC),
         created_at=datetime(2026, 7, 3, tzinfo=UTC),
     )

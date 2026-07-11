@@ -38,7 +38,7 @@ async def get_current_account(
         )
 
     account = await get_account_by_id(db, account_id)
-    if account is None or account.status != AccountStatus.ACTIVE:
+    if account is None or account.status != AccountStatus.ACTIVE or account.activated_at is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is not active."
         )
@@ -67,10 +67,6 @@ def is_token_invalidated(payload: dict, account: Account) -> bool:
 
 def require_roles(allowed_roles: set[str]) -> Callable[[Account], Awaitable[Account]]:
     async def dependency(account: Annotated[Account, Depends(get_current_account)]) -> Account:
-        if account.must_change_password:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Password change required."
-            )
         if account.role.value not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient account permissions."
@@ -83,8 +79,4 @@ def require_roles(allowed_roles: set[str]) -> Callable[[Account], Awaitable[Acco
 async def get_current_operational_account(
     account: Annotated[Account, Depends(get_current_account)],
 ) -> Account:
-    if account.must_change_password:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Password change required."
-        )
     return account

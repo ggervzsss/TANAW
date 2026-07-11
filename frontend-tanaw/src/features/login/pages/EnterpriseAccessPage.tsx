@@ -10,9 +10,5 @@ export function EnterpriseAccessPage() {
     return <Navigate to={routes.login} replace />;
   }
 
-  if (user.mustChangePassword) {
-    return <Navigate to={routes.changePassword} replace />;
-  }
-
   return <Navigate to={getRoleDashboardPath(user.role)} replace />;
 }

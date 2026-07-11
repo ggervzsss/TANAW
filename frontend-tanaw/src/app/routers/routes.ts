@@ -1,7 +1,7 @@
 export const routes = {
   home: "/",
   login: "/login",
-  changePassword: "/change-password",
+  activateAccount: "/activate-account",
   enterpriseAccess: "/enterprise-access",
   it: {
     root: "/it",

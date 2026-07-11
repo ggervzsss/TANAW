@@ -33,7 +33,7 @@ from app.features.accounts.schemas import (
 from app.features.accounts.service import (
     account_role_from_value,
     clear_pending_profile_change_request,
-    create_account_with_temporary_password,
+    create_account_with_activation,
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
@@ -42,13 +42,18 @@ from app.features.accounts.service import (
     is_protected_startup_account,
     list_accounts_by_roles,
     list_dev_deliveries,
-    reset_account_password,
     to_account_summary,
     to_delivery_summary,
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.auth.account_activation import (
+    AccountActivationError,
+    invalidate_account_activation_tokens,
+    issue_account_activation,
+)
+from app.features.auth.challenge_service import invalidate_password_reset_challenges
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import create_user_notification
 from app.features.operational.websocket import operational_ws_manager
@@ -90,7 +95,7 @@ async def create_lgu_account(
         AccountRole.IT: "IT Personnel",
         AccountRole.STAFF: "LGU Staff",
     }
-    account = await create_account_with_temporary_password(
+    account = await create_account_with_activation(
         db,
         email=str(payload.email),
         phone=payload.phone,
@@ -117,9 +122,9 @@ async def create_lgu_account(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Credentials Sent",
+        action="Activation Link Sent",
         target=account.email,
-        summary=f"The system recorded onboarding credentials for {account.display_name}.",
+        summary=f"The system sent an account activation link to {account.display_name}.",
         source_id=account.id,
     )
     return to_account_summary(account)
@@ -154,6 +159,9 @@ async def update_lgu_account(
     await ensure_privileged_account_remains_available(db, account, next_status)
     await ensure_unique_account_email(db, str(payload.email), account.id)
 
+    previous_email = account.email
+    previous_role = account.role
+    previous_status = account.status
     account.first_name = payload.firstName
     account.last_name = payload.lastName
     account.display_name = f"{payload.firstName} {payload.lastName}"
@@ -166,6 +174,20 @@ async def update_lgu_account(
         AccountRole.STAFF: "LGU Staff",
     }[next_role]
     account.status = next_status
+    if (
+        previous_email != account.email
+        or previous_role != account.role
+        or previous_status != account.status
+    ):
+        access_changed_at = datetime.now(UTC)
+        account.token_invalid_before = access_changed_at
+        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
+    await sync_pending_account_activation(
+        db,
+        account,
+        email_changed=previous_email != account.email,
+        previous_status=previous_status,
+    )
     await db.commit()
     await db.refresh(account)
 
@@ -295,7 +317,7 @@ async def create_enterprise_account(
             location_updated_at = datetime.now(UTC)
 
     enterprise_id = await generate_enterprise_id(db, payload.enterpriseId or payload.enterpriseName)
-    account = await create_account_with_temporary_password(
+    account = await create_account_with_activation(
         db,
         email=str(payload.email),
         phone=payload.contactNumber,
@@ -339,9 +361,9 @@ async def create_enterprise_account(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Credentials Sent",
+        action="Activation Link Sent",
         target=account.email,
-        summary=f"The system recorded onboarding credentials for enterprise {account.enterprise_name}.",
+        summary=f"The system sent an account activation link to enterprise {account.enterprise_name}.",
         source_id=account.id,
     )
     return to_account_summary(account)
@@ -361,6 +383,8 @@ async def update_enterprise_account(
         )
 
     await ensure_unique_account_email(db, str(payload.email), account.id)
+    previous_email = account.email
+    previous_status = account.status
     account.enterprise_name = payload.enterpriseName
     account.display_name = payload.enterpriseName
     account.category = payload.category
@@ -371,6 +395,16 @@ async def update_enterprise_account(
     account.address = payload.address
     account.building_capacity = payload.buildingCapacity
     account.status = AccountStatus(payload.status)
+    if previous_email != account.email or previous_status != account.status:
+        access_changed_at = datetime.now(UTC)
+        account.token_invalid_before = access_changed_at
+        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
+    await sync_pending_account_activation(
+        db,
+        account,
+        email_changed=previous_email != account.email,
+        previous_status=previous_status,
+    )
     await db.commit()
     await db.refresh(account)
 
@@ -425,6 +459,11 @@ async def resolve_enterprise_profile_change_request(
         if request_type == "businessEmail":
             await ensure_unique_account_email(db, requested_value, account.id)
             account.email = requested_value
+            access_changed_at = datetime.now(UTC)
+            account.token_invalid_before = access_changed_at
+            await invalidate_password_reset_challenges(
+                db, account.id, invalidated_at=access_changed_at
+            )
         else:
             account.phone = requested_value
 
@@ -465,8 +504,8 @@ async def resolve_enterprise_profile_change_request(
     return to_account_summary(account)
 
 
-@router.post("/{account_id}/reset-password", response_model=AccountSummary)
-async def reset_password(
+@router.post("/{account_id}/activation", response_model=AccountSummary)
+async def resend_activation(
     account_id: str,
     actor: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -474,23 +513,27 @@ async def reset_password(
     account = await get_account_by_id(db, account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
-    if is_protected_startup_account(account):
+    if account.activated_at is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Startup-seeded system accounts are protected.",
+            detail="This account is already activated. Use forgot password for recovery.",
         )
-    await ensure_credential_reset_keeps_it_access(db, account, actor)
-    updated_account = await reset_account_password(db, account)
+    try:
+        await issue_account_activation(db, account)
+    except AccountActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(account)
     await record_account_log(
         db,
         category="IT Activity",
-        severity="Warning",
+        severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
-        action="Reset Password",
-        target=updated_account.display_name,
-        summary=f"{actor.display_name} reset temporary credentials for {updated_account.display_name}.",
-        source_id=updated_account.id,
+        action="Resend Account Activation",
+        target=account.display_name,
+        summary=f"{actor.display_name} resent the activation link for {account.display_name}.",
+        source_id=account.id,
     )
     await record_account_log(
         db,
@@ -498,12 +541,12 @@ async def reset_password(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Credentials Sent",
-        target=updated_account.email,
-        summary=f"The system recorded reset credentials for {updated_account.display_name}.",
-        source_id=updated_account.id,
+        action="Activation Link Sent",
+        target=account.email,
+        summary=f"The system sent a new account activation link to {account.display_name}.",
+        source_id=account.id,
     )
-    return to_account_summary(updated_account)
+    return to_account_summary(account)
 
 
 @router.patch("/{account_id}/status", response_model=AccountSummary)
@@ -525,7 +568,18 @@ async def update_account_status(
         )
     await ensure_privileged_account_remains_available(db, account, next_status)
 
+    previous_status = account.status
     account.status = next_status
+    if previous_status != account.status:
+        access_changed_at = datetime.now(UTC)
+        account.token_invalid_before = access_changed_at
+        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
+    await sync_pending_account_activation(
+        db,
+        account,
+        email_changed=False,
+        previous_status=previous_status,
+    )
     await db.commit()
     await db.refresh(account)
     await record_account_log(
@@ -543,10 +597,30 @@ async def update_account_status(
     return to_account_summary(account)
 
 
+async def sync_pending_account_activation(
+    db: AsyncSession,
+    account: Account,
+    *,
+    email_changed: bool,
+    previous_status: AccountStatus,
+) -> None:
+    if account.activated_at is not None:
+        return
+    if account.status == AccountStatus.INACTIVE:
+        await invalidate_account_activation_tokens(db, account.id)
+        return
+    if email_changed or previous_status == AccountStatus.INACTIVE:
+        await issue_account_activation(db, account)
+
+
 async def ensure_privileged_account_remains_available(
     db: AsyncSession, account: Account, next_status: AccountStatus
 ) -> None:
-    if next_status != AccountStatus.INACTIVE or account.status != AccountStatus.ACTIVE:
+    if (
+        next_status != AccountStatus.INACTIVE
+        or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
+    ):
         return
 
     protected_role_messages = {
@@ -563,6 +637,7 @@ async def ensure_privileged_account_remains_available(
         .where(
             Account.role == account.role,
             Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
         )
     )
     if (active_count or 0) <= 1:
@@ -576,6 +651,7 @@ async def ensure_role_update_keeps_it_access(
         account.role != AccountRole.IT
         or next_role == AccountRole.IT
         or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
     ):
         return
 
@@ -585,6 +661,7 @@ async def ensure_role_update_keeps_it_access(
         .where(
             Account.role == AccountRole.IT,
             Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
         )
     )
     if (active_it_count or 0) <= 1:
@@ -602,36 +679,6 @@ async def ensure_unique_account_email(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists.",
-        )
-
-
-async def ensure_credential_reset_keeps_it_access(
-    db: AsyncSession, account: Account, actor: Account
-) -> None:
-    if account.role != AccountRole.IT:
-        return
-
-    if account.id == actor.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot reset your own IT Personnel credentials while signed in. Ask another IT Personnel account to perform the reset or use the configured recovery process.",
-        )
-
-    if account.status != AccountStatus.ACTIVE:
-        return
-
-    active_it_count = await db.scalar(
-        select(func.count())
-        .select_from(Account)
-        .where(
-            Account.role == AccountRole.IT,
-            Account.status == AccountStatus.ACTIVE,
-        )
-    )
-    if (active_it_count or 0) <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot reset credentials for the last active IT Personnel account.",
         )
 
 

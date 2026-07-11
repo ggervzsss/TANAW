@@ -29,8 +29,6 @@ type DialogMode = "forgot" | "support" | null;
 type RecoveryStep = "email" | "code" | "password" | "success";
 type ApiErrorPayload = { detail?: string | { msg?: string }[] };
 
-const getAuthenticatedRoute = (mustChangePassword?: boolean) => (mustChangePassword ? routePaths.changePassword : routePaths.enterpriseDashboard);
-
 type LoginLocationState = {
   from?: {
     pathname?: string;
@@ -377,7 +375,6 @@ const validateNewPassword = (passwordValue: string, confirmPasswordValue: string
 
 export function LoginPage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
   const location = useLocation();
   const locationState = location.state as LoginLocationState | null;
   const redirectTo = locationState?.from?.pathname ? `${locationState.from.pathname}${locationState.from.search ?? ""}` : undefined;
@@ -422,7 +419,7 @@ export function LoginPage() {
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLDivElement>();
 
   if (isAuthenticated) {
-    return <Navigate to={getAuthenticatedRoute(user?.mustChangePassword)} replace />;
+    return <Navigate to={routePaths.enterpriseDashboard} replace />;
   }
 
   const updateField = (field: keyof LoginFormValues) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -662,11 +659,12 @@ export function LoginPage() {
             <SampaguitaIcon className="h-4 w-4 flex-none" />
             <span className="tanaw-gold-shimmer h-px flex-1 bg-(--tanaw-gold)/75" />
           </div>
+          <p className="mt-5 text-sm leading-6 font-medium text-(--tanaw-muted)">New enterprise accounts must be activated using the link sent to their registered email before signing in.</p>
         </div>
 
         <div className="space-y-3">
           <label className="block">
-            <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Username</span>
+            <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Username or email</span>
             <div
               className={cn(
                 "tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
@@ -676,7 +674,7 @@ export function LoginPage() {
               <UserRound size={19} className="absolute left-5 text-[#7b8492]" />
               <input
                 className="h-full w-full rounded-xl bg-transparent px-14 pr-12 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
-                placeholder="Enter your username"
+                placeholder="Enter username or registered email"
                 value={values.username}
                 onChange={updateField("username")}
                 aria-invalid={Boolean(errors.username)}

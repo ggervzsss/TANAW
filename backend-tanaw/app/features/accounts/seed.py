@@ -59,6 +59,7 @@ async def seed_startup_account(db: AsyncSession, spec: StartupAccountSpec) -> No
             first_name=spec.first_name,
             last_name=spec.last_name,
             status=AccountStatus.ACTIVE,
+            activated_at=datetime.now(UTC),
         )
         db.add(account)
     else:
@@ -74,8 +75,6 @@ async def seed_startup_account(db: AsyncSession, spec: StartupAccountSpec) -> No
         account.last_name = spec.last_name
         account.status = AccountStatus.ACTIVE
 
-    account.must_change_password = False
-    account.temporary_password_created_at = None
-    account.temporary_password_expires_at = None
+    account.activated_at = account.activated_at or datetime.now(UTC)
     account.failed_login_attempts = 0
     account.locked_until = None

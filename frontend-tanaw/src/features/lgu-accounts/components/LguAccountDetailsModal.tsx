@@ -21,7 +21,7 @@ type LguAccountDetailsModalProps = {
   account: AccountSummary;
   onClose: () => void;
   onAccountUpdated: (account: AccountSummary) => void;
-  onResetCredentials: (account: AccountSummary) => void;
+  onResendActivation: (account: AccountSummary) => void;
   onRequestStatusChange: (account: AccountSummary, nextStatus: LguStatusFilter) => void;
 };
 
@@ -44,7 +44,7 @@ type PendingSave = {
 const allowedLguRoles = ["staff", "it", "admin"] satisfies UpdateLguAccountPayload["role"][];
 const allowedStatusValues = ["active", "inactive"] satisfies UpdateLguAccountPayload["status"][];
 
-export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResetCredentials, onRequestStatusChange }: LguAccountDetailsModalProps) {
+export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResendActivation, onRequestStatusChange }: LguAccountDetailsModalProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<LguEditState>(() => getInitialForm(account));
@@ -55,13 +55,17 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateLguAccountPayload) => updateLguAccount(account.id, payload),
-    onSuccess: async (updatedAccount) => {
-      await queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] });
+    onSuccess: async (updatedAccount, payload) => {
+      const activationEmailSent = !account.isActivated && updatedAccount.status === "active" && (payload.email !== account.email || account.status === "inactive");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        ...(activationEmailSent ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })] : []),
+      ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));
       setPendingSave(null);
       setIsEditing(false);
-      toast.success("LGU account updated");
+      toast.success(activationEmailSent ? "LGU account updated; activation email sent" : "LGU account updated");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update LGU account")),
   });
@@ -75,7 +79,7 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
       ["Status", account.status],
       ["Last Login", account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"],
       ["Created", new Date(account.createdAt).toLocaleString()],
-      ["Must Change Password", account.mustChangePassword ? "Yes" : "No"],
+      ["Activation", account.isActivated ? "Complete" : "Pending"],
     ],
     [account],
   );
@@ -114,8 +118,12 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
               <h3 className="mt-1 text-2xl font-black text-slate-950">{account.displayName}</h3>
               <p className="mt-1 text-sm font-medium text-slate-500">{account.email}</p>
             </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${account.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-              {account.status}
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-black uppercase ${
+                account.status === "inactive" ? "bg-slate-100 text-slate-600" : account.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}
             </span>
           </div>
           {isProtected && (
@@ -146,15 +154,17 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                   <Pencil size={16} />
                   Edit account information
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onResetCredentials(account)}
-                  disabled={isProtected}
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
-                >
-                  <KeyRound size={16} />
-                  Reset credentials
-                </button>
+                {!account.isActivated && account.status === "active" ? (
+                  <button
+                    type="button"
+                    onClick={() => onResendActivation(account)}
+                    disabled={isProtected}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
+                  >
+                    <KeyRound size={16} />
+                    Resend activation email
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => onRequestStatusChange(account, nextStatus)}

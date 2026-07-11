@@ -6,7 +6,7 @@ import { ITDashboardPage } from "@/features/dashboard";
 import { ITDevLogPage } from "@/features/dev-log";
 import { ITEnterpriseAccountsPage } from "@/features/enterprise-accounts";
 import { ITLguAccountsPage } from "@/features/lgu-accounts";
-import { ChangePasswordPage, EnterpriseAccessPage, LoginPage } from "@/features/login";
+import { ActivateAccountPage, EnterpriseAccessPage, LoginPage } from "@/features/login";
 import { AdminMapViewPage } from "@/features/mapview";
 import { NotificationsPage } from "@/features/notifications";
 import { StaffBatchReportsPage, StaffFinalReportsAuditPage } from "@/features/reports";
@@ -29,7 +29,7 @@ export function AppRouter() {
     <Routes>
       <Route path={routes.home} element={<RootRedirect />} />
       <Route path={routes.login} element={<LoginPage />} />
-      <Route path={routes.changePassword} element={<ChangePasswordPage />} />
+      <Route path={routes.activateAccount} element={<ActivateAccountPage />} />
       <Route path={routes.enterpriseAccess} element={<EnterpriseAccessPage />} />
 
       <Route

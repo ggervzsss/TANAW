@@ -36,7 +36,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
     mutationFn: createLguAccount,
     onSuccess: async () => {
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("LGU account created");
+      toast.success("LGU account created; activation email sent");
       onClose();
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create LGU account")),
@@ -84,8 +84,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
         <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
           <span className="bg-tanaw-green mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white shadow-sm">i</span>
           <p className="text-sm leading-relaxed text-emerald-800">
-            Once this account is saved, the system will automatically generate login credentials and send them to the registered email. The user will be required to change their password upon their
-            first login.
+            Once this account is saved, TANAW will send a secure activation link to the registered email. The user will choose a private password on the activation page before signing in.
           </p>
         </div>
         <button

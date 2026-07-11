@@ -33,11 +33,6 @@ export function useLogin() {
       const session = await loginService({ clientId, encryptionKey });
       queryClient.removeQueries({ queryKey: ["current-user"] });
       setSession(session, rememberMe);
-      if (session.user.mustChangePassword) {
-        toast.success("Temporary credentials verified");
-        navigate("/change-password", { replace: true });
-        return;
-      }
       toast.success("Login successful");
       navigate(getRoleDashboardPath(session.user.role), { replace: true });
     } catch (error) {

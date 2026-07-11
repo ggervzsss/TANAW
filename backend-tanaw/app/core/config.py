@@ -1,8 +1,9 @@
 from functools import lru_cache
 from ipaddress import ip_address
+from typing import Self
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_OR_PRIVATE_HOSTNAMES = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
@@ -38,6 +39,8 @@ class Settings(BaseSettings):
     email_from_address: str = "onboarding@resend.dev"
     email_test_recipient: str | None = None
     email_request_timeout_seconds: float = 10.0
+    frontend_public_url: str = "http://localhost:5173"
+    account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
     allow_mock_data: bool = Field(
         default=False, validation_alias=AliasChoices("TANAW_ALLOW_MOCK_DATA", "ALLOW_MOCK_DATA")
     )
@@ -79,6 +82,31 @@ class Settings(BaseSettings):
             return value
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("frontend_public_url")
+    @classmethod
+    def normalize_frontend_public_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("FRONTEND_PUBLIC_URL must be an absolute HTTP(S) URL.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_production_frontend_public_url(self) -> Self:
+        if self.is_production and (
+            urlsplit(self.frontend_public_url).scheme != "https"
+            or is_local_or_private_origin(self.frontend_public_url)
+        ):
+            raise ValueError("FRONTEND_PUBLIC_URL must use a public HTTPS URL in production.")
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

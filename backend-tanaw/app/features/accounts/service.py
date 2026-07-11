@@ -1,8 +1,7 @@
 import json
 import re
 import secrets
-import string
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import cast
 
 from sqlalchemy import select
@@ -26,8 +25,8 @@ from app.features.accounts.schemas import (
     DeliverySummary,
     ProfileChangeRequestType,
 )
-from app.features.mail.service import deliver_email, email_idempotency_key
-from app.features.mail.templates import onboarding_email
+from app.features.auth.account_activation import issue_account_activation
+from app.features.auth.challenge_service import invalidate_password_reset_challenges
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
 PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
@@ -104,7 +103,6 @@ def to_auth_user(account: Account) -> AuthUser:
         displayName=account.display_name,
         role=account.role.value,
         title=account.title,
-        mustChangePassword=account.must_change_password,
         phone=account.phone,
         firstName=account.first_name,
         lastName=account.last_name,
@@ -146,7 +144,7 @@ def to_account_summary(account: Account) -> AccountSummary:
         role=account.role.value,
         title=account.title,
         status=account.status.value,
-        mustChangePassword=account.must_change_password,
+        isActivated=account.activated_at is not None,
         isProtectedDefault=is_protected_startup_account(account),
         profileChangeRequests=get_profile_change_requests(account),
         createdAt=account.created_at,
@@ -190,16 +188,6 @@ def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
     )
 
 
-def is_temporary_password_expired(account: Account) -> bool:
-    if not account.must_change_password or account.temporary_password_expires_at is None:
-        return False
-
-    expires_at = account.temporary_password_expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-    return expires_at <= datetime.now(UTC)
-
-
 def is_protected_startup_account(account: Account) -> bool:
     settings = get_settings()
     return any(
@@ -234,19 +222,6 @@ async def record_login(db: AsyncSession, account: Account) -> None:
 async def invalidate_account_tokens(db: AsyncSession, account: Account) -> None:
     account.token_invalid_before = datetime.now(UTC)
     await db.commit()
-
-
-def generate_temporary_password(length: int = 14) -> str:
-    required = [
-        secrets.choice(string.ascii_uppercase),
-        secrets.choice(string.ascii_lowercase),
-        secrets.choice(string.digits),
-        secrets.choice("!@#$%^&*"),
-    ]
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-    required.extend(secrets.choice(alphabet) for _ in range(max(0, length - len(required))))
-    secrets.SystemRandom().shuffle(required)
-    return validate_password_policy("".join(required))
 
 
 def account_role_from_value(value: str) -> AccountRole:
@@ -289,7 +264,7 @@ async def list_accounts_by_roles(db: AsyncSession, roles: list[AccountRole]) -> 
     return list(result)
 
 
-async def create_account_with_temporary_password(
+async def create_account_with_activation(
     db: AsyncSession,
     *,
     email: str,
@@ -315,8 +290,6 @@ async def create_account_with_temporary_password(
     gateway_status: str | None = None,
     building_capacity: int = 100,
 ) -> Account:
-    temporary_password = generate_temporary_password()
-    now = datetime.now(UTC)
     account = Account(
         email=email.lower(),
         phone=phone,
@@ -337,50 +310,16 @@ async def create_account_with_temporary_password(
         gateway_id=gateway_id,
         gateway_status=gateway_status,
         building_capacity=building_capacity,
-        password_hash=hash_password(temporary_password),
+        password_hash=hash_password(secrets.token_urlsafe(48)),
         role=role,
         display_name=display_name,
         title=title,
         status=AccountStatus.ACTIVE,
-        must_change_password=True,
-        temporary_password_created_at=now,
-        temporary_password_expires_at=now + timedelta(days=7),
+        activated_at=None,
     )
     db.add(account)
     await db.flush()
-    await deliver_email(
-        db,
-        account_id=account.id,
-        recipient=account.email,
-        content=onboarding_email(account, temporary_password),
-        idempotency_key=email_idempotency_key("account-onboarding", account.id),
-        tags={"category": "account_onboarding"},
-    )
-    await db.commit()
-    await db.refresh(account)
-    return account
-
-
-async def reset_account_password(db: AsyncSession, account: Account) -> Account:
-    temporary_password = generate_temporary_password()
-    now = datetime.now(UTC)
-    account.password_hash = hash_password(temporary_password)
-    account.must_change_password = True
-    account.temporary_password_created_at = now
-    account.temporary_password_expires_at = now + timedelta(days=7)
-    account.token_invalid_before = now
-    account.failed_login_attempts = 0
-    account.locked_until = None
-    await deliver_email(
-        db,
-        account_id=account.id,
-        recipient=account.email,
-        content=onboarding_email(account, temporary_password),
-        idempotency_key=email_idempotency_key(
-            "account-password-reset", f"{account.id}-{int(now.timestamp())}"
-        ),
-        tags={"category": "account_password_reset"},
-    )
+    await issue_account_activation(db, account, lock_account=False)
     await db.commit()
     await db.refresh(account)
     return account
@@ -391,15 +330,13 @@ async def change_account_password(
 ) -> bool:
     if not verify_password(current_password, account.password_hash):
         return False
-    if is_temporary_password_expired(account):
-        return False
 
     validate_password_policy(new_password)
+    now = datetime.now(UTC)
     account.password_hash = hash_password(new_password)
-    account.must_change_password = False
-    account.temporary_password_created_at = None
-    account.temporary_password_expires_at = None
-    account.password_changed_at = datetime.now(UTC)
+    account.password_changed_at = now
+    account.token_invalid_before = now
+    await invalidate_password_reset_challenges(db, account.id, invalidated_at=now)
     await db.commit()
     await db.refresh(account)
     return True

@@ -6,7 +6,7 @@ export const loginSchema = z.object({
     .trim()
     .superRefine((value, ctx) => {
       if (!value) {
-        ctx.addIssue({ code: "custom", message: "Please enter your username." });
+        ctx.addIssue({ code: "custom", message: "Please enter your username or email." });
         return;
       }
 
@@ -14,7 +14,7 @@ export const loginSchema = z.object({
       const usernamePattern = /^[a-zA-Z0-9._-]{3,}$/;
 
       if (!emailPattern.test(value) && !usernamePattern.test(value)) {
-        ctx.addIssue({ code: "custom", message: "Enter a valid username." });
+        ctx.addIssue({ code: "custom", message: "Enter a valid username or email." });
       }
     }),
   password: z.string().superRefine((value, ctx) => {

@@ -43,6 +43,11 @@ from app.features.accounts.service import (
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log, get_actor_role_label
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.auth.account_activation import (
+    AccountActivationError,
+    complete_account_activation,
+    validate_account_activation,
+)
 from app.features.auth.password_recovery import (
     OTP_TTL_MINUTES,
     PasswordRecoveryError,
@@ -51,6 +56,10 @@ from app.features.auth.password_recovery import (
     verify_password_reset_code,
 )
 from app.features.auth.schemas import (
+    AccountActivationCompleteRequest,
+    AccountActivationCompleteResponse,
+    AccountActivationValidateRequest,
+    AccountActivationValidateResponse,
     AccountPreferences,
     ForgotPasswordRequest,
     ForgotPasswordRequestResponse,
@@ -215,16 +224,73 @@ def set_pending_account_change(account: Account, key: str, value: dict[str, str]
     set_account_preferences(account, preferences)
 
 
+@router.post(
+    "/account-activation/validate",
+    response_model=AccountActivationValidateResponse,
+)
+async def validate_activation_link(
+    payload: AccountActivationValidateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountActivationValidateResponse:
+    try:
+        activation = await validate_account_activation(db, payload.token)
+    except AccountActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return AccountActivationValidateResponse(
+        displayName=activation.display_name,
+        role=activation.role,
+        expiresAt=activation.expires_at,
+    )
+
+
+@router.post(
+    "/account-activation/complete",
+    response_model=AccountActivationCompleteResponse,
+)
+async def complete_activation(
+    payload: AccountActivationCompleteRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountActivationCompleteResponse:
+    try:
+        account = await complete_account_activation(db, payload.token, payload.newPassword)
+    except AccountActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Account Activated",
+        target=account.email,
+        summary=f"{account.display_name} activated their TANAW account.",
+        source_id=account.id,
+    )
+    return AccountActivationCompleteResponse(status="ok", role=account.role.value)
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> LoginResponse:
     candidate = await get_account_by_login_identifier(db, payload.username)
-    lockout_policy = (
-        await get_login_lockout_policy(db) if candidate is not None else LoginLockoutPolicy()
+    lockout_candidate = (
+        candidate
+        if candidate is not None
+        and candidate.status == AccountStatus.ACTIVE
+        and candidate.activated_at is not None
+        and is_login_scope_allowed(candidate, payload.loginScope)
+        else None
     )
-    if candidate is not None:
-        remaining = lockout_seconds_remaining(candidate)
+    lockout_policy = (
+        await get_login_lockout_policy(db)
+        if lockout_candidate is not None
+        else LoginLockoutPolicy()
+    )
+    if lockout_candidate is not None:
+        remaining = lockout_seconds_remaining(lockout_candidate)
         if remaining > 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -239,13 +305,14 @@ async def login(
     if (
         account is None
         or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
         or not is_login_scope_allowed(account, payload.loginScope)
     ):
-        if candidate is not None:
-            remaining = register_failed_login(candidate, policy=lockout_policy)
+        if lockout_candidate is not None:
+            remaining = register_failed_login(lockout_candidate, policy=lockout_policy)
             await db.commit()
             if remaining > 0:
-                await notify_failed_login_threshold(db, candidate)
+                await notify_failed_login_threshold(db, lockout_candidate)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
@@ -271,10 +338,7 @@ async def login(
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
     )
-    token = create_access_token(
-        account.id,
-        {"role": account.role.value, "must_change_password": account.must_change_password},
-    )
+    token = create_access_token(account.id, {"role": account.role.value})
     return LoginResponse(token=token, user=to_auth_user(account))
 
 
@@ -337,9 +401,7 @@ async def change_password(
         notification_type="Enterprise Security Updated",
         source_type="enterprise.password",
     )
-    token = create_access_token(
-        account.id, {"role": account.role.value, "must_change_password": False}
-    )
+    token = create_access_token(account.id, {"role": account.role.value})
     return LoginResponse(token=token, user=to_auth_user(account))
 
 
@@ -443,14 +505,14 @@ async def update_profile(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    existing = await get_account_by_email(db, str(payload.email))
-    if existing is not None and existing.id != account.id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
+    if str(payload.email) != account.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email changes require the dedicated verified email-change workflow.",
+        )
 
     previous_manager_name = account.manager_name
-    previous_email = account.email
     previous_phone = account.phone
-    account.email = str(payload.email)
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
         if payload.managerName is None or payload.enterpriseName is None:
@@ -496,8 +558,6 @@ async def update_profile(
         changed_fields: list[str] = []
         if account.manager_name != previous_manager_name:
             changed_fields.append("lead admin")
-        if account.email != previous_email:
-            changed_fields.append("business email")
         if account.phone != previous_phone:
             changed_fields.append("contact number")
 

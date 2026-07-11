@@ -18,7 +18,6 @@ export type AuthUser = {
   address?: string | null;
   buildingCapacity?: number;
   displayImageDataUrl?: string | null;
-  mustChangePassword?: boolean;
 };
 
 export type LoginRequest = {
