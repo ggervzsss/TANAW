@@ -89,22 +89,25 @@ Acceptance criteria:
 
 Backend audit findings from 2026-07-11:
 
-- [ ] Upgrade `pydantic-settings 2.14.1` to at least `2.14.2`.
-- [ ] Upgrade `python-multipart 0.0.29` to at least `0.0.31`.
-- [ ] Upgrade the FastAPI/Starlette dependency set so Starlette is at least `1.3.1`.
-- [ ] Regenerate `backend-tanaw/uv.lock` and run the complete backend test and type-check suite.
+- [x] Upgrade `pydantic-settings 2.14.1` to at least `2.14.2`.
+- [x] Upgrade `python-multipart 0.0.29` to at least `0.0.31`.
+- [x] Upgrade the FastAPI/Starlette dependency set so Starlette is at least `1.3.1`.
+- [x] Regenerate `backend-tanaw/uv.lock` and run the complete backend test and type-check suite.
+- [x] Pin the Desktop ML service to Starlette `1.3.1` or newer and verify its Python quality gates and dependency audit.
 
 Web audit findings:
 
-- [ ] Upgrade the dependency tree containing `form-data 4.0.5` to a patched release.
-- [ ] Upgrade Vite beyond the versions affected by the reported Windows development-server advisories.
-- [ ] Regenerate `frontend-tanaw/package-lock.json` and retest development and production builds.
+- [x] Upgrade the dependency tree containing `form-data 4.0.5` to a patched release.
+- [x] Upgrade Vite beyond the versions affected by the reported Windows development-server advisories.
+- [x] Upgrade patched transitive build dependencies, including Babel, and leave the complete npm audit clean.
+- [x] Regenerate `frontend-tanaw/package-lock.json` and retest development and production builds.
 
 Desktop audit findings:
 
-- [ ] Upgrade the dependency tree containing `form-data 4.0.5` to a patched release.
-- [ ] Upgrade the Vite/esbuild dependency set beyond the affected esbuild range.
-- [ ] Regenerate `desktop-tanaw/package-lock.json` and rebuild the Electron application.
+- [x] Upgrade the dependency tree containing `form-data 4.0.5` to a patched release.
+- [x] Upgrade the Vite/esbuild dependency set beyond the affected esbuild range.
+- [x] Upgrade patched transitive build dependencies, including Babel, js-yaml, and undici, and leave the complete npm audit clean.
+- [x] Regenerate `desktop-tanaw/package-lock.json` and rebuild the Electron application.
 
 Verification:
 
