@@ -766,6 +766,12 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `EMAIL_OUTBOX_LEASE_SECONDS` | Worker lease used to recover interrupted deliveries safely |
 | `EMAIL_OUTBOX_BATCH_SIZE` | Maximum concurrently claimed email records per worker |
 | `EMAIL_OUTBOX_MAX_ATTEMPTS` | Automatic delivery-attempt ceiling before IT review |
+| `PASSWORD_RESET_RATE_WINDOW_SECONDS` | Shared bounded window for recovery abuse controls |
+| `PASSWORD_RESET_PER_IP_LIMIT` | Maximum recovery requests per client IP and window |
+| `PASSWORD_RESET_PER_IDENTIFIER_LIMIT` | Maximum recovery requests per normalized email and window |
+| `PASSWORD_RESET_GLOBAL_LIMIT` | Global recovery-request ceiling per window |
+| `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS` | Delay before another recovery code can be requested |
+| `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS` | Minimum generic recovery-request response time |
 | `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |

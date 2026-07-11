@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import suppress
 from typing import Annotated
 
 import jwt
@@ -25,6 +27,7 @@ from app.features.activity_logs.service import (
 from app.features.activity_logs.websocket import activity_log_manager
 
 router = APIRouter(prefix="/activity-logs", tags=["activity-logs"])
+WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
 
 
 @router.get("", response_model=list[ActivityLogSummary])
@@ -117,12 +120,38 @@ async def activity_logs_websocket(
         return
 
     await activity_log_manager.connect(websocket, account.role.value)
+    receive_task: asyncio.Task[str] | None = asyncio.create_task(websocket.receive_text())
     try:
         while True:
-            message = await websocket.receive_text()
+            if receive_task is None:
+                raise RuntimeError("WebSocket receive task is unavailable.")
+            active_receive_task = receive_task
+            completed, _ = await asyncio.wait(
+                {active_receive_task},
+                timeout=WEBSOCKET_REAUTH_INTERVAL_SECONDS,
+            )
+            if not completed:
+                message = None
+            else:
+                try:
+                    message = active_receive_task.result()
+                finally:
+                    receive_task = None
+                receive_task = asyncio.create_task(websocket.receive_text())
+            async with AsyncSessionLocal() as db:
+                current_account = await authenticate_websocket_account(db, token)
+            if current_account is None:
+                await websocket.close(code=1008)
+                return
             if message == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
+        pass
+    finally:
+        if receive_task is not None:
+            receive_task.cancel()
+            with suppress(asyncio.CancelledError, WebSocketDisconnect):
+                await receive_task
         activity_log_manager.disconnect(websocket, account.role.value)
 
 

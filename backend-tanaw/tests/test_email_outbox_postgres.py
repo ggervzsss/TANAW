@@ -692,7 +692,7 @@ async def test_raw_activation_token_and_password_reset_code_are_never_persisted(
         await db.commit()
     async with postgres_runtime.sessions() as db:
         challenge = await password_recovery.request_password_reset(db, active_account.email)
-        challenge_id = challenge.id
+        challenge_id = challenge.challenge_id
 
     raw_activation_token = secret_values.derive_account_activation_token(activation_id)
     raw_reset_code = secret_values.derive_password_reset_code(challenge_id)

@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     email_outbox_lease_seconds: int = Field(default=120, ge=30, le=600)
     email_outbox_batch_size: int = Field(default=5, ge=1, le=25)
     email_outbox_max_attempts: int = Field(default=5, ge=1, le=10)
+    password_reset_rate_window_seconds: int = Field(default=900, ge=60, le=3600)
+    password_reset_per_ip_limit: int = Field(default=10, ge=1, le=100)
+    password_reset_per_identifier_limit: int = Field(default=5, ge=1, le=50)
+    password_reset_global_limit: int = Field(default=200, ge=10, le=10_000)
+    password_reset_resend_cooldown_seconds: int = Field(default=60, ge=30, le=300)
+    password_reset_response_floor_seconds: float = Field(default=0.25, ge=0.0, le=2.0)
     frontend_public_url: str = "http://localhost:5173"
     account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
     allow_mock_data: bool = Field(
@@ -305,6 +311,10 @@ class Settings(BaseSettings):
             )
         if self.resend_api_base_url != "https://api.resend.com":
             raise ValueError("RESEND_API_BASE_URL must be https://api.resend.com in production.")
+        if self.password_reset_response_floor_seconds < 0.15:
+            raise ValueError(
+                "PASSWORD_RESET_RESPONSE_FLOOR_SECONDS must be at least 0.15 in production."
+            )
 
     @property
     def cors_origin_list(self) -> list[str]:

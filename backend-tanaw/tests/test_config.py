@@ -205,6 +205,22 @@ def test_email_provider_timeout_is_positive_and_bounded(timeout: float) -> None:
         Settings(email_request_timeout_seconds=timeout)
 
 
+def test_password_recovery_abuse_controls_have_bounded_defaults() -> None:
+    settings = Settings()
+
+    assert settings.password_reset_rate_window_seconds == 900
+    assert settings.password_reset_per_ip_limit == 10
+    assert settings.password_reset_per_identifier_limit == 5
+    assert settings.password_reset_global_limit == 200
+    assert settings.password_reset_resend_cooldown_seconds == 60
+    assert settings.password_reset_response_floor_seconds == 0.25
+
+
+def test_production_requires_a_password_recovery_timing_floor() -> None:
+    with pytest.raises(ValueError, match="PASSWORD_RESET_RESPONSE_FLOOR_SECONDS"):
+        production_settings(password_reset_response_floor_seconds=0.1)
+
+
 def test_sender_and_test_recipient_must_be_valid_email_addresses() -> None:
     with pytest.raises(ValueError):
         Settings(email_from_address="not-an-email")

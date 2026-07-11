@@ -1,13 +1,16 @@
+import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from time import monotonic
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.features.accounts.dependencies import get_current_account
@@ -36,7 +39,6 @@ from app.features.accounts.service import (
     get_account_by_login_identifier,
     get_account_preferences,
     invalidate_account_tokens,
-    record_login,
     set_account_preferences,
     set_display_image_data_url,
     to_auth_user,
@@ -50,12 +52,12 @@ from app.features.auth.account_activation import (
     validate_account_activation,
 )
 from app.features.auth.password_recovery import (
-    OTP_TTL_MINUTES,
     PasswordRecoveryError,
     request_password_reset,
     reset_password_with_token,
     verify_password_reset_code,
 )
+from app.features.auth.recovery_rate_limit import PasswordResetRateLimitExceeded
 from app.features.auth.schemas import (
     AccountActivationCompleteRequest,
     AccountActivationCompleteResponse,
@@ -75,7 +77,7 @@ from app.features.auth.schemas import (
 )
 from app.features.auth.service import (
     LoginLockoutPolicy,
-    authenticate_account,
+    authenticate_loaded_account,
     clear_login_failures,
     lockout_seconds_remaining,
     login_lockout_message,
@@ -211,6 +213,12 @@ def join_changed_fields(fields: list[str]) -> str:
     return f"{', '.join(fields[:-1])}, and {fields[-1]}"
 
 
+async def _wait_for_password_reset_response_floor(started_at: float) -> None:
+    remaining = get_settings().password_reset_response_floor_seconds - (monotonic() - started_at)
+    if remaining > 0:
+        await asyncio.sleep(remaining)
+
+
 def require_enterprise_account(account: Account) -> None:
     if account.role != AccountRole.ENTERPRISE:
         raise HTTPException(
@@ -280,7 +288,7 @@ async def complete_activation(
 async def login(
     payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> LoginResponse:
-    candidate = await get_account_by_login_identifier(db, payload.username)
+    candidate = await get_account_by_login_identifier(db, payload.username, for_update=True)
     lockout_candidate = (
         candidate
         if candidate is not None
@@ -306,7 +314,7 @@ async def login(
                 headers={"Retry-After": str(remaining)},
             )
 
-    account = await authenticate_account(db, payload.username, payload.password)
+    account = authenticate_loaded_account(candidate, payload.password)
     if (
         account is None
         or account.status != AccountStatus.ACTIVE
@@ -331,7 +339,9 @@ async def login(
         )
 
     clear_login_failures(account)
-    await record_login(db, account)
+    account.last_login_at = datetime.now(UTC)
+    token = create_access_token(account.id, {"role": account.role.value})
+    await db.commit()
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -343,7 +353,6 @@ async def login(
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
     )
-    token = create_access_token(account.id, {"role": account.role.value})
     return LoginResponse(token=token, user=to_auth_user(account))
 
 
@@ -412,10 +421,46 @@ async def change_password(
 
 @router.post("/forgot-password/request", response_model=ForgotPasswordRequestResponse)
 async def forgot_password_request(
-    payload: ForgotPasswordRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ForgotPasswordRequestResponse:
-    challenge = await request_password_reset(db, str(payload.email))
-    return ForgotPasswordRequestResponse(challengeId=challenge.id, expiresInMinutes=OTP_TTL_MINUTES)
+    started_at = monotonic()
+    rate_limit_error: PasswordResetRateLimitExceeded | None = None
+    result = None
+    try:
+        result = await request_password_reset(
+            db,
+            str(payload.email),
+            client_ip=request.client.host if request.client is not None else "unavailable",
+        )
+    except PasswordResetRateLimitExceeded as exc:
+        rate_limit_error = exc
+    finally:
+        await _wait_for_password_reset_response_floor(started_at)
+
+    if rate_limit_error is not None:
+        retry_after = rate_limit_error.retry_after_seconds
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "message": "Too many recovery requests. Please wait before trying again.",
+                "retryAfterSeconds": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+    if result is None:
+        raise RuntimeError("Password recovery request completed without a result.")
+    return ForgotPasswordRequestResponse(
+        challengeId=result.challenge_id,
+        expiresInMinutes=result.expires_in_minutes,
+        resendAvailableInSeconds=result.resend_available_in_seconds,
+        message=(
+            "If an eligible TANAW account matches, check its registered inbox and use the "
+            "most recent verification code. Another code can be requested in "
+            f"{result.resend_available_in_seconds} seconds."
+        ),
+    )
 
 
 @router.post("/forgot-password/verify", response_model=ForgotPasswordVerifyResponse)

@@ -201,22 +201,24 @@ async def get_account_by_email(db: AsyncSession, email: str) -> Account | None:
     return result.first()
 
 
-async def get_account_by_login_identifier(db: AsyncSession, identifier: str) -> Account | None:
+async def get_account_by_login_identifier(
+    db: AsyncSession,
+    identifier: str,
+    *,
+    for_update: bool = False,
+) -> Account | None:
     normalized = identifier.strip().lower()
-    result = await db.scalars(
-        select(Account).where((Account.email == normalized) | (Account.enterprise_id == normalized))
+    statement = select(Account).where(
+        (Account.email == normalized) | (Account.enterprise_id == normalized)
     )
-    return result.first()
+    if for_update:
+        statement = statement.with_for_update()
+    return cast(Account | None, await db.scalar(statement))
 
 
 async def get_account_by_id(db: AsyncSession, account_id: str) -> Account | None:
     result = await db.scalars(select(Account).where(Account.id == account_id))
     return result.first()
-
-
-async def record_login(db: AsyncSession, account: Account) -> None:
-    account.last_login_at = datetime.now(UTC)
-    await db.commit()
 
 
 async def invalidate_account_tokens(db: AsyncSession, account: Account) -> None:

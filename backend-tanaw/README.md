@@ -199,6 +199,17 @@ retains idempotency keys for 24 hours, so TANAW stops automatic retries before
 that boundary and marks an ambiguous older result for provider reconciliation
 instead of risking a duplicate.
 
+Password recovery applies database-backed limits per client IP, per normalized
+email identifier, and globally within `PASSWORD_RESET_RATE_WINDOW_SECONDS`.
+Identifiers and IP addresses are HMAC-fingerprinted before being stored in rate
+buckets or security telemetry. Public request responses remain generic for
+active, pending, inactive, and unknown accounts, use a minimum response-time
+floor, and state explicitly when an existing challenge is being reused during
+the resend cooldown. Configure the limits with `PASSWORD_RESET_PER_IP_LIMIT`,
+`PASSWORD_RESET_PER_IDENTIFIER_LIMIT`, `PASSWORD_RESET_GLOBAL_LIMIT`,
+`PASSWORD_RESET_RESEND_COOLDOWN_SECONDS`, and
+`PASSWORD_RESET_RESPONSE_FLOOR_SECONDS`.
+
 ## Data Boundaries
 
 PostgreSQL stores central TANAW records: accounts, roles, telemetry snapshots,

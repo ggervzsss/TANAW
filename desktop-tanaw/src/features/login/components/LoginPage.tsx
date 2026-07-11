@@ -8,6 +8,7 @@ import { routePaths } from "../../../app/router/routePaths";
 import { staffApi } from "../../../lib/axios";
 import { cn } from "../../../utils/cn";
 import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "../../../utils/password-policy";
+import { requestPasswordRecovery, resetRecoveredPassword, verifyPasswordRecovery } from "../api/password-recovery";
 import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { useLogin } from "../hooks/use-login";
 import { loginSchema, type LoginFormValues } from "../schemas/login-schema";
@@ -56,6 +57,7 @@ function RecoveryDialogContent({
   password,
   confirmPassword,
   expiresIn,
+  notice,
   error,
   isSubmitting,
   onEmailChange,
@@ -73,6 +75,7 @@ function RecoveryDialogContent({
   password: string;
   confirmPassword: string;
   expiresIn: number;
+  notice: string;
   error: string;
   isSubmitting: boolean;
   onEmailChange: (value: string) => void;
@@ -105,7 +108,14 @@ function RecoveryDialogContent({
     return (
       <RecoveryStepFrame key="code" title="Verification Code">
         <form onSubmit={onVerify}>
-          <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Enter the 6-digit verification code sent to your registered email. The code expires in {expiresIn} minutes and can be used once.</p>
+          <p className={notice ? "mb-3 text-sm leading-6 text-(--tanaw-muted)" : "mb-5 text-sm leading-6 text-(--tanaw-muted)"}>
+            If an account matches this email, enter the 6-digit verification code sent to its registered inbox. Any issued code expires in {expiresIn} minutes and can be used once.
+          </p>
+          {notice ? (
+            <div className="mb-5 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950" role="status" aria-live="polite">
+              {notice}
+            </div>
+          ) : null}
           <label htmlFor="desktop-recovery-code" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
             Verification code
           </label>
@@ -406,6 +416,7 @@ export function LoginPage() {
   const [recoveryChallengeId, setRecoveryChallengeId] = useState("");
   const [recoveryResetToken, setRecoveryResetToken] = useState("");
   const [recoveryExpiresIn, setRecoveryExpiresIn] = useState(10);
+  const [recoveryNotice, setRecoveryNotice] = useState("");
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState("");
   const [recoveryError, setRecoveryError] = useState("");
@@ -460,6 +471,7 @@ export function LoginPage() {
     setRecoveryChallengeId("");
     setRecoveryResetToken("");
     setRecoveryExpiresIn(10);
+    setRecoveryNotice("");
     setRecoveryPassword("");
     setRecoveryPasswordConfirm("");
     setRecoveryError("");
@@ -479,6 +491,7 @@ export function LoginPage() {
     setRecoveryCode("");
     setRecoveryChallengeId("");
     setRecoveryResetToken("");
+    setRecoveryNotice("");
     setRecoveryPassword("");
     setRecoveryPasswordConfirm("");
     setRecoveryError("");
@@ -496,11 +509,12 @@ export function LoginPage() {
 
     setIsRecoverySubmitting(true);
     try {
-      const response = await staffApi.post<{ challengeId: string; expiresInMinutes: number }>("/auth/forgot-password/request", {
+      const response = await requestPasswordRecovery({
         email: recoveryTarget,
       });
-      setRecoveryChallengeId(response.data.challengeId);
-      setRecoveryExpiresIn(response.data.expiresInMinutes);
+      setRecoveryChallengeId(response.challengeId);
+      setRecoveryExpiresIn(response.expiresInMinutes);
+      setRecoveryNotice(response.message);
       setRecoveryStep("code");
       setRecoveryError("");
     } catch (error) {
@@ -518,11 +532,11 @@ export function LoginPage() {
 
     setIsRecoverySubmitting(true);
     try {
-      const response = await staffApi.post<{ resetToken: string }>("/auth/forgot-password/verify", {
+      const response = await verifyPasswordRecovery({
         challengeId: recoveryChallengeId,
         code: recoveryCode,
       });
-      setRecoveryResetToken(response.data.resetToken);
+      setRecoveryResetToken(response.resetToken);
       setRecoveryStep("password");
       setRecoveryError("");
     } catch (error) {
@@ -540,7 +554,7 @@ export function LoginPage() {
 
     setIsRecoverySubmitting(true);
     try {
-      await staffApi.post("/auth/forgot-password/reset", {
+      await resetRecoveredPassword({
         challengeId: recoveryChallengeId,
         resetToken: recoveryResetToken,
         newPassword: recoveryPassword,
@@ -811,6 +825,7 @@ export function LoginPage() {
                     password={recoveryPassword}
                     confirmPassword={recoveryPasswordConfirm}
                     expiresIn={recoveryExpiresIn}
+                    notice={recoveryNotice}
                     error={recoveryError}
                     isSubmitting={isRecoverySubmitting}
                     onEmailChange={(value) => {

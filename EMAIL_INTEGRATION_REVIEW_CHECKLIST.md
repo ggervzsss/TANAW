@@ -130,13 +130,13 @@ Acceptance criteria:
 
 ### AUTH-001 — Prevent password-reset account enumeration and abuse
 
-- [ ] Ensure password-reset requests return the same public status, response shape, and approximately equivalent behavior for existing, pending, inactive, and unknown accounts.
-- [ ] Do not expose provider/configuration failures in a way that reveals whether the requested account exists.
-- [ ] Add per-IP and per-identifier rate limits with bounded windows.
-- [ ] Add a global abuse ceiling so arbitrary unique email addresses cannot create unlimited database rows.
-- [ ] Expire or consolidate older active challenges when a new challenge is issued.
-- [ ] Record security telemetry without logging OTP values.
-- [ ] Define a user-friendly resend cooldown response rather than silently returning an old challenge with no new email.
+- [x] Ensure password-reset requests return the same public status, response shape, and approximately equivalent behavior for existing, pending, inactive, and unknown accounts.
+- [x] Do not expose provider/configuration failures in a way that reveals whether the requested account exists.
+- [x] Add per-IP and per-identifier rate limits with bounded windows.
+- [x] Add a global abuse ceiling so arbitrary unique email addresses cannot create unlimited database rows.
+- [x] Expire or consolidate older active challenges when a new challenge is issued.
+- [x] Record security telemetry without logging OTP values.
+- [x] Define a user-friendly resend cooldown response rather than silently returning an old challenge with no new email.
 
 Acceptance criteria:
 
@@ -145,11 +145,11 @@ Acceptance criteria:
 
 ### AUTH-002 — Make OTP verification and reset consumption concurrency-safe
 
-- [ ] Lock the password-reset challenge row during OTP verification.
-- [ ] Lock the challenge and account in a consistent order during password reset.
-- [ ] Atomically consume the verification code and reset token.
-- [ ] Add PostgreSQL concurrency tests proving only one verification/reset attempt can succeed.
-- [ ] Verify that failed concurrent attempts do not overwrite the valid reset token or password.
+- [x] Lock the password-reset challenge row during OTP verification.
+- [x] Lock the challenge and account in a consistent order during password reset.
+- [x] Atomically consume the verification code and reset token.
+- [x] Add PostgreSQL concurrency tests proving only one verification/reset attempt can succeed.
+- [x] Verify that failed concurrent attempts do not overwrite the valid reset token or password.
 
 Acceptance criteria:
 
@@ -301,7 +301,7 @@ Acceptance criteria:
 
 - [ ] Break the web `LoginForm.tsx` into focused login, recovery, support, and dialog components/hooks.
 - [ ] Break the desktop `LoginPage.tsx` into equivalent focused modules.
-- [ ] Centralize each client's password-recovery API calls in a typed service.
+- [x] Centralize each client's password-recovery API calls in a typed service.
 - [ ] Share behavior or generated contracts where practical so web and desktop recovery do not drift.
 - [ ] Keep desktop-specific presentation and routing independent from the web activation page.
 
@@ -322,7 +322,7 @@ Acceptance criteria:
 
 - [ ] Test account creation, activation validation, activation completion, resend, email change, and password recovery against disposable PostgreSQL rather than only mocked sessions.
 - [ ] Test two concurrent activation completions and prove only one succeeds.
-- [ ] Test two concurrent OTP verifications and resets.
+- [x] Test two concurrent OTP verifications and resets.
 - [x] Simulate provider acceptance followed by database commit failure.
 - [x] Simulate provider timeout before and after acceptance.
 - [x] Test outbox retry, backoff, dead-letter handling, and stable idempotency.

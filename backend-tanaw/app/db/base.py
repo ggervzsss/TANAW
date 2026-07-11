@@ -8,7 +8,11 @@ from app.features.accounts.models import (
     SystemConfiguration,
 )
 from app.features.activity_logs.models import ActivityLog
-from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
+from app.features.auth.models import (
+    AccountActivationToken,
+    PasswordResetChallenge,
+    PasswordResetRateLimitBucket,
+)
 from app.features.mail.models import (
     EmailDeliveryAttempt,
     EmailOutbox,
@@ -46,6 +50,7 @@ __all__ = [
     "MockDataRun",
     "OperationalAlert",
     "PasswordResetChallenge",
+    "PasswordResetRateLimitBucket",
     "SupportTicket",
     "SystemConfiguration",
     "UserNotification",

@@ -11,6 +11,10 @@ from app.features.accounts.service import get_account_by_login_identifier
 
 async def authenticate_account(db: AsyncSession, username: str, password: str) -> Account | None:
     account = await get_account_by_login_identifier(db, username)
+    return authenticate_loaded_account(account, password)
+
+
+def authenticate_loaded_account(account: Account | None, password: str) -> Account | None:
     if (
         account is None
         or account.status != AccountStatus.ACTIVE

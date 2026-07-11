@@ -50,6 +50,8 @@ class ForgotPasswordRequest(BaseModel):
 class ForgotPasswordRequestResponse(BaseModel):
     challengeId: str
     expiresInMinutes: int
+    resendAvailableInSeconds: int
+    message: str
 
 
 class ForgotPasswordVerifyRequest(BaseModel):

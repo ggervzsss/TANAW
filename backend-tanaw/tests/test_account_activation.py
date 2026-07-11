@@ -224,13 +224,27 @@ async def test_pending_account_is_ineligible_for_forgot_password_otp(
     enqueue = AsyncMock()
     monkeypatch.setattr(password_recovery, "get_account_by_email", lookup)
     monkeypatch.setattr(password_recovery, "enqueue_email", enqueue)
+    monkeypatch.setattr(
+        password_recovery,
+        "consume_password_reset_rate_limits",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        password_recovery,
+        "invalidate_password_reset_challenges_for_email",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(password_recovery, "_add_request_security_log", MagicMock())
     db = MagicMock()
     db.scalar = AsyncMock(return_value=None)
     db.commit = AsyncMock()
 
-    challenge = await password_recovery.request_password_reset(db, account.email)
+    result = await password_recovery.request_password_reset(db, account.email)
+    challenge = db.add.call_args.args[0]
 
     assert challenge.account_id is None
+    assert result.challenge_id == challenge.id
+    assert result.reused_challenge is False
     enqueue.assert_not_awaited()
     db.add.assert_called_once_with(challenge)
     db.commit.assert_awaited_once()
