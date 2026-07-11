@@ -3,7 +3,7 @@ from ipaddress import ip_address
 from typing import Self
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_OR_PRIVATE_HOSTNAMES = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
@@ -85,12 +85,12 @@ class Settings(BaseSettings):
     geocoder_user_agent: str = "TANAW/1.0 local-development"
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     email_delivery_mode: str = "log"
-    resend_api_key: str | None = None
+    resend_api_key: SecretStr | None = None
     resend_api_base_url: str = "https://api.resend.com"
     email_from_name: str = "TANAW"
-    email_from_address: str = "onboarding@resend.dev"
-    email_test_recipient: str | None = None
-    email_request_timeout_seconds: float = 10.0
+    email_from_address: EmailStr = "onboarding@resend.dev"
+    email_test_recipient: EmailStr | None = None
+    email_request_timeout_seconds: float = Field(default=10.0, ge=0.5, le=60.0)
     frontend_public_url: str = "http://localhost:5173"
     account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
     allow_mock_data: bool = Field(
@@ -159,6 +159,30 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_PUBLIC_URL must be an absolute HTTP(S) URL.")
         return normalized
 
+    @field_validator("resend_api_base_url")
+    @classmethod
+    def normalize_resend_api_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("RESEND_API_BASE_URL must be an absolute HTTP(S) URL.")
+        return normalized
+
+    @field_validator("email_from_name")
+    @classmethod
+    def normalize_email_from_name(cls, value: str) -> str:
+        normalized = " ".join(value.strip().split())
+        if not normalized or len(normalized) > 80:
+            raise ValueError("EMAIL_FROM_NAME must contain between 1 and 80 characters.")
+        return normalized
+
     @model_validator(mode="after")
     def validate_environment_safety(self) -> Self:
         self._validate_development_account_configuration()
@@ -169,6 +193,7 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_PUBLIC_URL must use a public HTTPS URL in production.")
         if self.is_production:
             self._validate_production_credentials()
+            self._validate_production_email()
         return self
 
     def _validate_development_account_configuration(self) -> None:
@@ -220,6 +245,43 @@ class Settings(BaseSettings):
             raise ValueError(
                 "BOOTSTRAP_IT_PASSWORD must be a unique password of at least 12 characters."
             )
+
+    def _validate_production_email(self) -> None:
+        if self.email_delivery_mode != "resend":
+            raise ValueError("EMAIL_DELIVERY_MODE must be 'resend' in production.")
+        if self.resend_api_key is None:
+            raise ValueError("RESEND_API_KEY is required in production.")
+
+        api_key = self.resend_api_key.get_secret_value().strip()
+        normalized_key = api_key.lower()
+        if (
+            not api_key.startswith("re_")
+            or len(api_key) < 20
+            or any(
+                placeholder in normalized_key
+                for placeholder in ("replace", "change", "example", "your_resend")
+            )
+            or "<" in api_key
+            or ">" in api_key
+        ):
+            raise ValueError("RESEND_API_KEY must be a non-placeholder Resend sending key.")
+
+        sender_domain = str(self.email_from_address).rsplit("@", 1)[1].lower()
+        if sender_domain in {
+            "resend.dev",
+            "example.com",
+            "example.net",
+            "example.org",
+        } or sender_domain.endswith((".example", ".example.com")):
+            raise ValueError(
+                "EMAIL_FROM_ADDRESS must use a verified custom sending domain in production."
+            )
+        if self.email_test_recipient is not None:
+            raise ValueError(
+                "EMAIL_TEST_RECIPIENT must be omitted in production after domain verification."
+            )
+        if self.resend_api_base_url != "https://api.resend.com":
+            raise ValueError("RESEND_API_BASE_URL must be https://api.resend.com in production.")
 
     @property
     def cors_origin_list(self) -> list[str]:

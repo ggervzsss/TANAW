@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import SecretStr
 
 from app.core.config import Settings, get_settings
 from app.features.accounts.models import DeliveryStatus
@@ -34,7 +35,7 @@ async def test_resend_mode_redacts_sensitive_delivery_body(
 ) -> None:
     settings = Settings(
         email_delivery_mode="resend",
-        resend_api_key="test-key",
+        resend_api_key=SecretStr("test-key"),
         email_test_recipient="user@example.com",
     )
     client = AsyncMock()
@@ -62,12 +63,11 @@ async def test_resend_mode_redacts_sensitive_delivery_body(
 async def test_production_never_records_sensitive_content_in_log_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = Settings(
-        environment="production",
-        cors_origins="https://tanaw-sanpedro.vercel.app",
-        frontend_public_url="https://tanaw-sanpedro.vercel.app",
-        jwt_secret_key="production-jwt-secret-with-at-least-32-characters",
-        email_delivery_mode="log",
+    settings = Settings().model_copy(
+        update={
+            "environment": "production",
+            "email_delivery_mode": "log",
+        }
     )
     monkeypatch.setattr("app.features.mail.service.get_settings", lambda: settings)
     db = MagicMock()

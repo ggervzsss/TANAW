@@ -9,6 +9,7 @@ from app.features.accounts.models import (
     DevDelivery,
 )
 from app.features.mail.client import ResendAPIError, ResendClient
+from app.features.mail.runtime import get_resend_client
 from app.features.mail.templates import EmailContent
 
 REDACTED_EMAIL_BODY = "[Sensitive email content is not retained in production delivery logs.]"
@@ -127,14 +128,11 @@ def _validate_resend_delivery(settings: Settings, recipient: str) -> str | None:
 
 
 def _resend_client(settings: Settings | None = None) -> ResendClient:
-    resolved = settings or get_settings()
-    if not resolved.resend_api_key:
-        raise EmailDeliveryError("RESEND_API_KEY is not configured.")
-    return ResendClient(
-        resolved.resend_api_key,
-        base_url=resolved.resend_api_base_url,
-        timeout_seconds=resolved.email_request_timeout_seconds,
-    )
+    _ = settings
+    try:
+        return get_resend_client()
+    except RuntimeError as exc:
+        raise EmailDeliveryError("The Resend HTTP client is not initialized.") from exc
 
 
 def email_idempotency_key(purpose: str, source_id: str | None = None) -> str:

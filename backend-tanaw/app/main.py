@@ -11,6 +11,11 @@ from app.core.http_security import apply_security_headers
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.seed import seed_default_accounts
+from app.features.mail.runtime import (
+    close_email_runtime,
+    email_runtime_ready,
+    initialize_email_runtime,
+)
 from app.features.mail.service import EmailDeliveryError
 
 
@@ -22,7 +27,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with AsyncSessionLocal() as session:
         await seed_default_accounts(session)
 
-    yield
+    await initialize_email_runtime(settings)
+    try:
+        yield
+    finally:
+        await close_email_runtime()
 
 
 settings = get_settings()
@@ -64,3 +73,17 @@ app.include_router(api_router)
 @app.head("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready/email")
+@app.head("/ready/email")
+async def email_readiness() -> JSONResponse:
+    ready = email_runtime_ready(settings)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "ready" if ready else "not_ready",
+            "mode": settings.email_delivery_mode,
+            "provider": "resend" if settings.email_delivery_mode == "resend" else "local",
+        },
+    )

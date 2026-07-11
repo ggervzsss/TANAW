@@ -759,6 +759,8 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `EMAIL_FROM_NAME`             | Display name used for TANAW transactional messages      |
 | `EMAIL_FROM_ADDRESS`          | Verified sender or Resend development sender            |
 | `EMAIL_TEST_RECIPIENT`        | Development-only recipient restriction                  |
+| `RESEND_API_BASE_URL`         | Official Resend HTTPS API endpoint                      |
+| `EMAIL_REQUEST_TIMEOUT_SECONDS` | Bounded timeout used for Resend connect/read/write/pool operations |
 | `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |

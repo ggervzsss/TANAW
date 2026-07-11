@@ -25,6 +25,22 @@ def test_health_endpoint_allows_head_checks() -> None:
     assert response.content == b""
 
 
+def test_email_readiness_is_separate_from_basic_health() -> None:
+    client = TestClient(app)
+
+    health_response = client.get("/health")
+    readiness_response = client.get("/ready/email")
+
+    assert health_response.status_code == 200
+    assert health_response.json() == {"status": "ok"}
+    assert readiness_response.status_code == 200
+    assert readiness_response.json() == {
+        "status": "ready",
+        "mode": "log",
+        "provider": "local",
+    }
+
+
 def test_hsts_header_is_set_for_https_non_local_requests() -> None:
     client = TestClient(app, base_url="https://tanaw.onrender.com")
 

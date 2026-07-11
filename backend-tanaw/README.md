@@ -157,6 +157,15 @@ ACCOUNT_ACTIVATION_TTL_HOURS=24
 When a verified LGU domain becomes available, change `EMAIL_FROM_ADDRESS` and
 remove `EMAIL_TEST_RECIPIENT`; no application code change is required.
 
+Production starts only with `EMAIL_DELIVERY_MODE=resend`, a non-placeholder
+Resend key, the official HTTPS API endpoint, a verified custom sender domain,
+no test-recipient restriction, and a bounded provider timeout. Create a Resend
+key with **Sending access** and scope it to the verified TANAW domain; TANAW does
+not need Full access. The process keeps one pooled HTTP client for its lifetime
+and closes it during shutdown. `/health` reports API process health, while
+`/ready/email` separately reports whether outbound email infrastructure is
+initialized; deployment readiness checks should use both endpoints.
+
 ## Data Boundaries
 
 PostgreSQL stores central TANAW records: accounts, roles, telemetry snapshots,

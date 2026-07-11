@@ -174,15 +174,15 @@ Acceptance criteria:
 
 ### CFG-001 — Fail fast on invalid production email settings
 
-- [ ] Require `EMAIL_DELIVERY_MODE=resend` in production.
-- [ ] Require a non-empty Resend API key in production.
-- [ ] Validate `EMAIL_FROM_ADDRESS` as an email address.
-- [ ] Reject `onboarding@resend.dev` for general production delivery.
-- [ ] Reject placeholder API keys and sender domains.
-- [ ] Warn or fail when `EMAIL_TEST_RECIPIENT` remains set with a verified custom domain.
-- [ ] Validate positive, bounded provider timeout values.
-- [ ] Add an email-readiness check that is separate from basic database/API health.
-- [ ] Change environment documentation from “full-access Resend key” to a domain-restricted `sending_access` key.
+- [x] Require `EMAIL_DELIVERY_MODE=resend` in production.
+- [x] Require a non-empty Resend API key in production.
+- [x] Validate `EMAIL_FROM_ADDRESS` as an email address.
+- [x] Reject `onboarding@resend.dev` for general production delivery.
+- [x] Reject placeholder API keys and sender domains.
+- [x] Warn or fail when `EMAIL_TEST_RECIPIENT` remains set with a verified custom domain.
+- [x] Validate positive, bounded provider timeout values.
+- [x] Add an email-readiness check that is separate from basic database/API health.
+- [x] Change environment documentation from “full-access Resend key” to a domain-restricted `sending_access` key.
 
 Acceptance criteria:
 
@@ -274,10 +274,10 @@ Acceptance criteria:
 
 ### MAIL-003 — Reuse the Resend HTTP client safely
 
-- [ ] Reuse a lifespan-managed `httpx.AsyncClient` rather than creating a new client for every email.
-- [ ] Close the client during application shutdown.
-- [ ] Configure connection, read, write, and pool timeouts explicitly.
-- [ ] Keep API keys out of exception messages and request logging.
+- [x] Reuse a lifespan-managed `httpx.AsyncClient` rather than creating a new client for every email.
+- [x] Close the client during application shutdown.
+- [x] Configure connection, read, write, and pool timeouts explicitly.
+- [x] Keep API keys out of exception messages and request logging.
 
 Acceptance criteria:
 
@@ -326,7 +326,7 @@ Acceptance criteria:
 - [ ] Simulate provider acceptance followed by database commit failure.
 - [ ] Simulate provider timeout before and after acceptance.
 - [ ] Test outbox retry, backoff, dead-letter handling, and stable idempotency.
-- [ ] Test production configuration startup failures.
+- [x] Test production configuration startup failures.
 - [ ] Test expired-record cleanup.
 
 ### TEST-002 — Web activation tests

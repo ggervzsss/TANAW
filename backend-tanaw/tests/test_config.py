@@ -1,9 +1,24 @@
+from typing import Any
+
 import pytest
 
 from app.core.config import Settings
 
 PRODUCTION_FRONTEND_URL = "https://tanaw-sanpedro.vercel.app"
 PRODUCTION_JWT_SECRET = "production-jwt-secret-with-at-least-32-characters"
+PRODUCTION_SETTINGS: dict[str, Any] = {
+    "environment": "production",
+    "cors_origins": PRODUCTION_FRONTEND_URL,
+    "frontend_public_url": PRODUCTION_FRONTEND_URL,
+    "jwt_secret_key": PRODUCTION_JWT_SECRET,
+    "email_delivery_mode": "resend",
+    "resend_api_key": "re_production_sending_key_123456789",
+    "email_from_address": "no-reply@mail.tanaw-sanpedro.ph",
+}
+
+
+def production_settings(**overrides: Any) -> Settings:
+    return Settings(**(PRODUCTION_SETTINGS | overrides))
 
 
 def test_database_url_uses_asyncpg_for_plain_postgresql_url() -> None:
@@ -60,22 +75,15 @@ def test_cors_origins_are_trimmed_and_normalized() -> None:
 
 
 def test_wildcard_cors_origin_is_rejected_in_production() -> None:
-    settings = Settings(
-        environment="production",
-        cors_origins="*",
-        frontend_public_url=PRODUCTION_FRONTEND_URL,
-        jwt_secret_key=PRODUCTION_JWT_SECRET,
-    )
+    settings = production_settings(cors_origins="*")
 
     with pytest.raises(ValueError, match="Wildcard CORS origins"):
         _ = settings.cors_origin_list
 
 
 def test_local_cors_origins_are_rejected_in_production() -> None:
-    settings = Settings(
-        environment="production",
-        frontend_public_url=PRODUCTION_FRONTEND_URL,
-        jwt_secret_key=PRODUCTION_JWT_SECRET,
+    settings = production_settings(
+        cors_origins="http://localhost:5173",
     )
 
     with pytest.raises(ValueError, match="Local or private CORS origins"):
@@ -83,11 +91,8 @@ def test_local_cors_origins_are_rejected_in_production() -> None:
 
 
 def test_private_ip_cors_origins_are_rejected_in_production() -> None:
-    settings = Settings(
-        environment="production",
+    settings = production_settings(
         cors_origins="http://192.168.1.50:5173",
-        frontend_public_url=PRODUCTION_FRONTEND_URL,
-        jwt_secret_key=PRODUCTION_JWT_SECRET,
     )
 
     with pytest.raises(ValueError, match="Local or private CORS origins"):
@@ -95,23 +100,14 @@ def test_private_ip_cors_origins_are_rejected_in_production() -> None:
 
 
 def test_production_frontend_origin_is_allowed_in_production() -> None:
-    settings = Settings(
-        environment="production",
-        cors_origins="https://tanaw-sanpedro.vercel.app",
-        frontend_public_url=PRODUCTION_FRONTEND_URL,
-        jwt_secret_key=PRODUCTION_JWT_SECRET,
-    )
+    settings = production_settings()
 
     assert settings.cors_origin_list == ["https://tanaw-sanpedro.vercel.app"]
 
 
 def test_local_frontend_public_url_is_rejected_in_production() -> None:
     with pytest.raises(ValueError, match="public HTTPS URL"):
-        Settings(
-            environment="production",
-            cors_origins=PRODUCTION_FRONTEND_URL,
-            jwt_secret_key=PRODUCTION_JWT_SECRET,
-        )
+        production_settings(frontend_public_url="http://localhost:5173")
 
 
 @pytest.mark.parametrize(
@@ -128,21 +124,12 @@ def test_production_rejects_default_short_or_placeholder_jwt_secrets(
     jwt_secret: str,
 ) -> None:
     with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
-        Settings(
-            environment="production",
-            cors_origins=PRODUCTION_FRONTEND_URL,
-            frontend_public_url=PRODUCTION_FRONTEND_URL,
-            jwt_secret_key=jwt_secret,
-        )
+        production_settings(jwt_secret_key=jwt_secret)
 
 
 def test_production_rejects_development_seed_accounts() -> None:
     with pytest.raises(ValueError, match="Development seed accounts"):
-        Settings(
-            environment="production",
-            cors_origins=PRODUCTION_FRONTEND_URL,
-            frontend_public_url=PRODUCTION_FRONTEND_URL,
-            jwt_secret_key=PRODUCTION_JWT_SECRET,
+        production_settings(
             seed_development_accounts=True,
             development_admin_username="admin@tanaw.local",
             development_admin_password="AdminDevelopment2!",
@@ -165,26 +152,58 @@ def test_production_rejects_placeholder_bootstrap_credentials(
     username: str, password: str, message: str
 ) -> None:
     with pytest.raises(ValueError, match=message):
-        Settings(
-            environment="production",
-            cors_origins=PRODUCTION_FRONTEND_URL,
-            frontend_public_url=PRODUCTION_FRONTEND_URL,
-            jwt_secret_key=PRODUCTION_JWT_SECRET,
+        production_settings(
             bootstrap_it_username=username,
             bootstrap_it_password=password,
         )
 
 
 def test_production_allows_bootstrap_credentials_to_be_removed_after_initialization() -> None:
-    settings = Settings(
-        environment="production",
-        cors_origins=PRODUCTION_FRONTEND_URL,
-        frontend_public_url=PRODUCTION_FRONTEND_URL,
-        jwt_secret_key=PRODUCTION_JWT_SECRET,
-    )
+    settings = production_settings()
 
     assert settings.bootstrap_it_username is None
     assert settings.bootstrap_it_password is None
+
+
+def test_production_accepts_complete_verified_domain_email_configuration() -> None:
+    settings = production_settings()
+
+    assert settings.email_delivery_mode == "resend"
+    assert settings.resend_api_key is not None
+    assert settings.resend_api_key.get_secret_value().startswith("re_")
+    assert str(settings.email_from_address) == "no-reply@mail.tanaw-sanpedro.ph"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"email_delivery_mode": "log"}, "EMAIL_DELIVERY_MODE"),
+        ({"resend_api_key": None}, "RESEND_API_KEY"),
+        ({"resend_api_key": "replace_with_your_resend_api_key"}, "RESEND_API_KEY"),
+        ({"email_from_address": "onboarding@resend.dev"}, "verified custom sending domain"),
+        ({"email_from_address": "no-reply@example.com"}, "verified custom sending domain"),
+        ({"email_test_recipient": "owner@example.com"}, "EMAIL_TEST_RECIPIENT"),
+        ({"resend_api_base_url": "https://api.example.com"}, "RESEND_API_BASE_URL"),
+    ],
+)
+def test_production_rejects_incomplete_or_placeholder_email_configuration(
+    overrides: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        production_settings(**overrides)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 61])
+def test_email_provider_timeout_is_positive_and_bounded(timeout: float) -> None:
+    with pytest.raises(ValueError, match="email_request_timeout_seconds"):
+        Settings(email_request_timeout_seconds=timeout)
+
+
+def test_sender_and_test_recipient_must_be_valid_email_addresses() -> None:
+    with pytest.raises(ValueError):
+        Settings(email_from_address="not-an-email")
+    with pytest.raises(ValueError):
+        Settings(email_test_recipient="not-an-email")
 
 
 def test_development_seed_accounts_require_complete_credentials() -> None:
