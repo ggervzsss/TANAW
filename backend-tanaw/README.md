@@ -82,9 +82,12 @@ Production configuration requires this value to be a public HTTPS URL.
 
 `BOOTSTRAP_IT_USERNAME` and `BOOTSTRAP_IT_PASSWORD` are used only when TANAW
 initializes a database that has no existing or legacy IT account. TANAW records
-that initialization and never synchronizes the account from environment values
-again. Password changes, profile changes, role changes, deactivation, activation
-state, lockouts, and session revocation therefore survive every backend restart.
+that initialization, persists the bootstrap account's protected identity in the
+database, and never synchronizes the account from environment values again.
+Removing the bootstrap variables after initialization does not remove that
+protection. Password changes, activation state, lockouts, and session revocation
+survive every backend restart, while account-management operations cannot edit,
+reassign, deactivate, or delete the protected bootstrap identity.
 
 Optional Admin, Staff, and secondary IT development accounts are created only
 when `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`. Production rejects that switch,

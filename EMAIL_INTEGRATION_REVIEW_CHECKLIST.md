@@ -38,6 +38,7 @@ Status legend:
 - [x] Do not automatically reactivate or restore privileges to an account that administrators intentionally disabled.
 - [x] Remove the three unnecessary temporary startup accounts from production, or gate all development-only accounts behind an explicit development setting.
 - [x] Reject production startup when any placeholder username, password, or JWT secret is still configured.
+- [x] Persist the protected bootstrap identity so removing one-time environment credentials cannot make the backup account editable or deactivatable.
 - [x] Add tests proving that a password changed through TANAW remains valid after `seed_default_accounts` runs again.
 - [x] Add tests proving that a disabled startup account is not silently re-enabled.
 

@@ -40,6 +40,7 @@ async def ensure_account_onboarding_schema(connection: Any) -> None:
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS token_invalid_before TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_protected_system_account BOOLEAN NOT NULL DEFAULT false",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS preferences_json TEXT",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS source_kind VARCHAR(20) NOT NULL DEFAULT 'real'",
         "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mock_run_id VARCHAR(36)",
@@ -76,6 +77,18 @@ async def ensure_account_onboarding_schema(connection: Any) -> None:
     )
     await connection.exec_driver_sql(
         "ALTER TABLE accounts DROP COLUMN IF EXISTS must_change_password"
+    )
+    await connection.exec_driver_sql(
+        """
+        UPDATE accounts
+        SET is_protected_system_account = true
+        WHERE id IN (
+            SELECT jsonb_array_elements_text(values_json::jsonb -> 'accountIds')
+            FROM system_configuration
+            WHERE id = 'startup-bootstrap-v1'
+              AND jsonb_typeof(values_json::jsonb -> 'accountIds') = 'array'
+        )
+        """
     )
     await connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_accounts_enterprise_id ON accounts (enterprise_id)"

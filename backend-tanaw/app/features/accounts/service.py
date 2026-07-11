@@ -7,10 +7,8 @@ from typing import cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password, verify_password
-from app.features.accounts.defaults import get_startup_account_specs
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -189,11 +187,7 @@ def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
 
 
 def is_protected_startup_account(account: Account) -> bool:
-    settings = get_settings()
-    return any(
-        account.role == spec.role and account.email.lower() == spec.email
-        for spec in get_startup_account_specs(settings)
-    )
+    return account.is_protected_system_account is True
 
 
 async def get_account_by_email(db: AsyncSession, email: str) -> Account | None:

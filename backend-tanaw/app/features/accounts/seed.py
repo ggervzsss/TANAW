@@ -58,9 +58,11 @@ async def initialize_bootstrap_account(
             )
         account = await get_account_by_email(db, configured_spec.email)
         if account is None:
-            account = create_startup_account(configured_spec)
+            account = create_startup_account(configured_spec, protected=True)
             db.add(account)
             await db.flush()
+
+    account.is_protected_system_account = True
 
     db.add(build_seed_state(BOOTSTRAP_STATE_ID, [account]))
 
@@ -129,7 +131,7 @@ async def find_legacy_development_account(
     return result.first()
 
 
-def create_startup_account(spec: StartupAccountSpec) -> Account:
+def create_startup_account(spec: StartupAccountSpec, *, protected: bool = False) -> Account:
     return Account(
         id=str(uuid4()),
         email=spec.email,
@@ -140,6 +142,7 @@ def create_startup_account(spec: StartupAccountSpec) -> Account:
         first_name=spec.first_name,
         last_name=spec.last_name,
         status=AccountStatus.ACTIVE,
+        is_protected_system_account=protected,
         activated_at=datetime.now(UTC),
     )
 

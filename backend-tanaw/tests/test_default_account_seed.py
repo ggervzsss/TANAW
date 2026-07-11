@@ -67,6 +67,12 @@ async def test_fresh_database_creates_bootstrap_and_opt_in_development_accounts_
     assert verify_password("it123456", accounts_by_email["it@email.com"].password_hash)
     assert all(account.activated_at is not None for account in added_accounts)
     assert all(account.status == AccountStatus.ACTIVE for account in added_accounts)
+    assert accounts_by_email["default@email.com"].is_protected_system_account is True
+    assert all(
+        not account.is_protected_system_account
+        for email, account in accounts_by_email.items()
+        if email != "default@email.com"
+    )
     assert db.flush.await_count == 4
     db.commit.assert_awaited_once()
 
@@ -137,6 +143,7 @@ async def test_existing_bootstrap_account_is_adopted_without_resetting_security_
         account.locked_until,
     ) == original_values
     assert verify_password("OwnerChanged2!Password", account.password_hash)
+    assert account.is_protected_system_account is True
     db.flush.assert_not_awaited()
     db.commit.assert_awaited_once()
 

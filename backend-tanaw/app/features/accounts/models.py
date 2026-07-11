@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, Float, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -55,6 +55,9 @@ class Account(Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[AccountStatus] = mapped_column(
         Enum(AccountStatus, name="account_status"), nullable=False, default=AccountStatus.ACTIVE
+    )
+    is_protected_system_account: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
     )
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     password_changed_at: Mapped[datetime | None] = mapped_column(

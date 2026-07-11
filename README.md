@@ -409,9 +409,10 @@ password, email, role, status, activation state, or lockout state. Production
 rejects development account seeding and placeholder JWT/bootstrap credentials.
 For a fresh production database, configure a unique bootstrap email and password
 for the first startup. After initialization, remove `BOOTSTRAP_IT_*` from the
-deployment secrets and manage the account entirely through TANAW. If an IT
-account already exists in a migrated database, no bootstrap credentials are
-required.
+deployment secrets. TANAW persists the bootstrap account's protected identity in
+the database, so removing those variables never makes the account editable or
+deactivatable. If an IT account already exists in a migrated database, no
+bootstrap credentials are required.
 
 ## Seed and simulate reports
 
