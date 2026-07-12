@@ -21,6 +21,11 @@ from app.features.mail.worker import (
     start_email_outbox_worker,
     stop_email_outbox_worker,
 )
+from app.features.maintenance.runtime import (
+    retention_cleanup_worker_ready,
+    start_retention_cleanup_worker,
+    stop_retention_cleanup_worker,
+)
 
 
 @asynccontextmanager
@@ -33,9 +38,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     await initialize_email_runtime(settings)
     await start_email_outbox_worker(settings)
+    await start_retention_cleanup_worker(settings)
     try:
         yield
     finally:
+        await stop_retention_cleanup_worker()
         await stop_email_outbox_worker()
         await close_email_runtime()
 
@@ -48,7 +55,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=False,
-    allow_methods=["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -82,4 +89,14 @@ async def email_readiness() -> JSONResponse:
             "mode": settings.email_delivery_mode,
             "provider": "resend" if settings.email_delivery_mode == "resend" else "local",
         },
+    )
+
+
+@app.get("/ready/maintenance")
+@app.head("/ready/maintenance")
+async def maintenance_readiness() -> JSONResponse:
+    ready = retention_cleanup_worker_ready()
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "ready" if ready else "not_ready"},
     )

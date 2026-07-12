@@ -41,6 +41,23 @@ def test_email_readiness_is_separate_from_basic_health() -> None:
     }
 
 
+def test_maintenance_readiness_is_separate_from_basic_health() -> None:
+    client = TestClient(app)
+
+    response = client.get("/ready/maintenance")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready"}
+
+
+def test_retention_metrics_require_authentication() -> None:
+    client = TestClient(app)
+
+    response = client.get("/maintenance/retention")
+
+    assert response.status_code == 401
+
+
 def test_hsts_header_is_set_for_https_non_local_requests() -> None:
     client = TestClient(app, base_url="https://tanaw.onrender.com")
 

@@ -216,6 +216,41 @@ def test_password_recovery_abuse_controls_have_bounded_defaults() -> None:
     assert settings.password_reset_response_floor_seconds == 0.25
 
 
+def test_retention_cleanup_has_bounded_documented_defaults() -> None:
+    settings = Settings()
+
+    assert settings.retention_cleanup_interval_seconds == 3600
+    assert settings.retention_cleanup_batch_size == 500
+    assert settings.activation_token_retention_days == 30
+    assert settings.password_reset_retention_days == 30
+    assert settings.password_reset_rate_bucket_retention_days == 2
+    assert settings.account_email_change_retention_days == 180
+    assert settings.development_delivery_retention_days == 7
+    assert settings.email_outbox_retention_days == 180
+    assert settings.failed_email_outbox_retention_days == 365
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("retention_cleanup_interval_seconds", 59),
+        ("retention_cleanup_interval_seconds", 86_401),
+        ("retention_cleanup_batch_size", 9),
+        ("retention_cleanup_batch_size", 5001),
+        ("activation_token_retention_days", 0),
+        ("password_reset_retention_days", 0),
+        ("password_reset_rate_bucket_retention_days", 0),
+        ("account_email_change_retention_days", 29),
+        ("development_delivery_retention_days", 0),
+        ("email_outbox_retention_days", 29),
+        ("failed_email_outbox_retention_days", 29),
+    ],
+)
+def test_retention_cleanup_settings_reject_unsafe_bounds(name: str, value: int) -> None:
+    with pytest.raises(ValueError, match=name):
+        Settings.model_validate({name: value})
+
+
 def test_production_requires_a_password_recovery_timing_floor() -> None:
     with pytest.raises(ValueError, match="PASSWORD_RESET_RESPONSE_FLOOR_SECONDS"):
         production_settings(password_reset_response_floor_seconds=0.1)

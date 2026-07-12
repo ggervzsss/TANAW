@@ -774,6 +774,15 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS` | Minimum generic recovery-request response time |
 | `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
 | `ACCOUNT_EMAIL_CHANGE_TTL_HOURS` | Lifetime of a proposed-address ownership verification link |
+| `RETENTION_CLEANUP_INTERVAL_SECONDS` | Delay between bounded authentication/email cleanup passes |
+| `RETENTION_CLEANUP_BATCH_SIZE` | Maximum rows claimed per record family and cleanup pass |
+| `ACTIVATION_TOKEN_RETENTION_DAYS` | Retention for consumed, invalidated, or expired activation-token metadata |
+| `PASSWORD_RESET_RETENTION_DAYS` | Retention for used, invalidated, or expired recovery challenges |
+| `PASSWORD_RESET_RATE_BUCKET_RETENTION_DAYS` | Retention for inactive recovery abuse-control buckets |
+| `ACCOUNT_EMAIL_CHANGE_RETENTION_DAYS` | Retention for resolved email-ownership requests |
+| `DEVELOPMENT_DELIVERY_RETENTION_DAYS` | Short retention for local delivery bodies that can contain development secrets |
+| `EMAIL_OUTBOX_RETENTION_DAYS` | Retention for ordinary terminal transactional-email records |
+| `FAILED_EMAIL_OUTBOX_RETENTION_DAYS` | Longer audit retention for terminal failure and reconciliation records |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |

@@ -106,6 +106,15 @@ class Settings(BaseSettings):
     frontend_public_url: str = "http://localhost:5173"
     account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
     account_email_change_ttl_hours: int = Field(default=24, ge=1, le=168)
+    retention_cleanup_interval_seconds: int = Field(default=3600, ge=60, le=86_400)
+    retention_cleanup_batch_size: int = Field(default=500, ge=10, le=5000)
+    activation_token_retention_days: int = Field(default=30, ge=1, le=3650)
+    password_reset_retention_days: int = Field(default=30, ge=1, le=3650)
+    password_reset_rate_bucket_retention_days: int = Field(default=2, ge=1, le=90)
+    account_email_change_retention_days: int = Field(default=180, ge=30, le=3650)
+    development_delivery_retention_days: int = Field(default=7, ge=1, le=90)
+    email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
+    failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
     allow_mock_data: bool = Field(
         default=False, validation_alias=AliasChoices("TANAW_ALLOW_MOCK_DATA", "ALLOW_MOCK_DATA")
     )

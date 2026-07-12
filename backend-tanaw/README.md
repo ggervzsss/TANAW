@@ -228,6 +228,31 @@ the resend cooldown. Configure the limits with `PASSWORD_RESET_PER_IP_LIMIT`,
 `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS`, and
 `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS`.
 
+## Authentication and Email Data Retention
+
+The backend runs one bounded retention batch immediately after startup and then
+every `RETENTION_CLEANUP_INTERVAL_SECONDS`. Each record family is claimed with
+`FOR UPDATE SKIP LOCKED`, limited by `RETENTION_CLEANUP_BATCH_SIZE`, and committed
+separately so cleanup does not hold a long transaction or block another backend
+instance. Queued, leased, and retry-scheduled email is never age-deleted.
+
+The default policy retains consumed, invalidated, or expired activation tokens
+and password-reset challenges for 30 days; password-reset rate buckets for 2
+days; local development delivery bodies for 7 days; completed email-change
+requests and normal terminal outbox records for 180 days; and terminal failures
+or reconciliation records for 365 days. Active expired email-change requests
+are first invalidated and their unsent verification messages are cancelled.
+Production outbox rows never contain raw OTPs or activation/email-change links;
+local `DevDelivery` bodies are the only debugging records that can contain a raw
+secret, which is why they have the shortest retention period.
+
+`GET /maintenance/retention` exposes safe per-process counts and the most recent
+run to IT Personnel. `POST /maintenance/retention/run` starts the same serialized
+bounded cleanup manually and writes an activity log. `/ready/maintenance`
+reports whether the scheduler is running. Set the retention environment values
+only after the LGU confirms its records policy; increasing a period preserves
+more audit metadata, while decreasing it is irreversible after the next batch.
+
 ## Password Policy
 
 TANAW uses a passphrase-first policy aligned with NIST SP 800-63B-4 for its

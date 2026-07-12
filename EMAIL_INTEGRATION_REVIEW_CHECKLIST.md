@@ -249,12 +249,12 @@ Acceptance criteria:
 
 ### DB-003 — Add retention and cleanup policies
 
-- [ ] Define retention periods for consumed, invalidated, and expired activation tokens.
-- [ ] Define retention periods for password-reset challenges.
-- [ ] Define retention periods for development and production delivery records.
-- [ ] Schedule batched cleanup that avoids long locks.
-- [ ] Preserve only the audit metadata required by policy; never retain production OTPs or raw activation links.
-- [ ] Add cleanup metrics and tests.
+- [x] Define retention periods for consumed, invalidated, and expired activation tokens.
+- [x] Define retention periods for password-reset challenges.
+- [x] Define retention periods for development and production delivery records.
+- [x] Schedule batched cleanup that avoids long locks.
+- [x] Preserve only the audit metadata required by policy; never retain production OTPs or raw activation links.
+- [x] Add cleanup metrics and tests.
 
 Acceptance criteria:
 
@@ -327,7 +327,7 @@ Acceptance criteria:
 - [x] Simulate provider timeout before and after acceptance.
 - [x] Test outbox retry, backoff, dead-letter handling, and stable idempotency.
 - [x] Test production configuration startup failures.
-- [ ] Test expired-record cleanup.
+- [x] Test expired-record cleanup.
 
 ### TEST-002 — Web activation tests
 
