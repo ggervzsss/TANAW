@@ -320,8 +320,8 @@ Acceptance criteria:
 
 ### TEST-001 — Backend integration and failure-injection tests
 
-- [ ] Test account creation, activation validation, activation completion, resend, email change, and password recovery against disposable PostgreSQL rather than only mocked sessions.
-- [ ] Test two concurrent activation completions and prove only one succeeds.
+- [x] Test account creation, activation validation, activation completion, resend, email change, and password recovery against disposable PostgreSQL rather than only mocked sessions.
+- [x] Test two concurrent activation completions and prove only one succeeds.
 - [x] Test two concurrent OTP verifications and resets.
 - [x] Simulate provider acceptance followed by database commit failure.
 - [x] Simulate provider timeout before and after acceptance.
@@ -331,44 +331,44 @@ Acceptance criteria:
 
 ### TEST-002 — Web activation tests
 
-- [ ] Test reading the token from the URL fragment and immediately removing it from browser history.
-- [ ] Test missing, invalid, expired, invalidated, used, and valid links.
-- [ ] Test password-policy feedback and backend error handling.
-- [ ] Test successful LGU activation and navigation to web sign-in.
-- [ ] Test successful Enterprise activation instructions for returning to the desktop app.
-- [ ] Add an end-to-end test using a real backend and disposable database.
+- [x] Test reading the token from the URL fragment and immediately removing it from browser history.
+- [x] Test missing, invalid, expired, invalidated, used, and valid links.
+- [x] Test password-policy feedback and backend error handling.
+- [x] Test successful LGU activation and navigation to web sign-in.
+- [x] Test successful Enterprise activation instructions for returning to the desktop app.
+- [x] Add an end-to-end test using a real backend and disposable database.
 
 ### TEST-003 — Desktop authentication and recovery tests
 
-- [ ] Test that pending Enterprise accounts cannot sign in.
-- [ ] Test sign-in using both Enterprise ID and registered email.
-- [ ] Test OTP request, verification, reset, expiration, cooldown, and error handling.
-- [ ] Test that activation remains browser-based and no activation token is passed into Electron.
-- [ ] Test session invalidation after password or email changes.
+- [x] Test that pending Enterprise accounts cannot sign in.
+- [x] Test sign-in using both Enterprise ID and registered email.
+- [x] Test OTP request, verification, reset, expiration, cooldown, and error handling.
+- [x] Test that activation remains browser-based and no activation token is passed into Electron.
+- [x] Test session invalidation after password or email changes.
 
 ## Activation security regression checklist
 
 These behaviors were reviewed as correct and must remain true after refactoring:
 
-- [ ] TANAW never emails temporary or permanent passwords.
-- [ ] Activation tokens contain at least 256 bits of cryptographically secure randomness.
-- [ ] Only an HMAC/hash of each activation token is stored.
-- [ ] Activation links are single-use and expire within the configured lifetime.
-- [ ] Resending invalidates every older unused link for that account.
-- [ ] Deactivating a pending account invalidates its activation links.
-- [ ] Changing a pending account's email sends a new link only to the new address.
-- [ ] Activation completion uses database locking and atomically consumes the token.
-- [ ] Pending, inactive, and unactivated accounts cannot authenticate through HTTP or WebSockets.
-- [ ] Opening the activation page does not consume the token; explicit password submission does.
-- [ ] The raw token stays in the URL fragment, is removed immediately, and is not included in referrers.
-- [ ] The activation page uses no-store caching and a no-referrer policy.
-- [ ] Production delivery records never retain OTP values or raw activation links.
-- [ ] Email HTML escapes account names, ticket content, and other user-controlled values.
-- [ ] API responses use generic invalid/expired messages and never return stored token hashes.
-- [ ] Enterprise activation remains browser-based; the desktop application receives no activation secret.
-- [ ] Password changes, password resets, role changes, email changes, and account deactivation invalidate relevant sessions and recovery challenges.
-- [ ] Phone numbers remain ordinary account/contact information and are never used for OTP or SMS delivery.
-- [ ] Support requests continue to be stored in TANAW's backend and displayed through TANAW pages rather than requiring inbound email.
+- [x] TANAW never emails temporary or permanent passwords.
+- [x] Activation tokens contain at least 256 bits of cryptographically secure randomness.
+- [x] Only an HMAC/hash of each activation token is stored.
+- [x] Activation links are single-use and expire within the configured lifetime.
+- [x] Resending invalidates every older unused link for that account.
+- [x] Deactivating a pending account invalidates its activation links.
+- [x] Changing a pending account's email sends a new link only to the new address.
+- [x] Activation completion uses database locking and atomically consumes the token.
+- [x] Pending, inactive, and unactivated accounts cannot authenticate through HTTP or WebSockets.
+- [x] Opening the activation page does not consume the token; explicit password submission does.
+- [x] The raw token stays in the URL fragment, is removed immediately, and is not included in referrers.
+- [x] The activation page uses no-store caching and a no-referrer policy.
+- [x] Production delivery records never retain OTP values or raw activation links.
+- [x] Email HTML escapes account names, ticket content, and other user-controlled values.
+- [x] API responses use generic invalid/expired messages and never return stored token hashes.
+- [x] Enterprise activation remains browser-based; the desktop application receives no activation secret.
+- [x] Password changes, password resets, role changes, email changes, and account deactivation invalidate relevant sessions and recovery challenges.
+- [x] Phone numbers remain ordinary account/contact information and are never used for OTP or SMS delivery.
+- [x] Support requests continue to be stored in TANAW's backend and displayed through TANAW pages rather than requiring inbound email.
 
 ## Required quality gates after each implementation batch
 
@@ -410,20 +410,26 @@ Database changes:
 
 Final security checks:
 
-- [ ] Run backend and Node dependency audits.
-- [ ] Scan tracked files and staged changes for secrets.
+- [x] Run backend and Node dependency audits.
+- [x] Scan tracked files and staged changes for secrets.
 - [ ] Confirm the production activation URL uses the expected public HTTPS domain.
 - [ ] Confirm Resend uses the verified TANAW domain and a restricted sending key.
 - [ ] Perform one real LGU activation, one real Enterprise activation, one password reset, and one failed-delivery recovery test.
+
+The final three production checks are intentionally left open while TANAW uses
+Resend's development sender and a test-recipient restriction. They are deployment
+acceptance work, not unfinished application code. The TANAW deployment operator
+and LGU domain administrator own them, and they must be completed before the
+production launch is approved.
 
 ## Completion definition
 
 This checklist is complete only when:
 
-- [ ] Every P0 and P1 item is implemented before production launch.
-- [ ] Every deferred P2 or P3 item has an owner, target date, and documented risk acceptance.
-- [ ] All dependency audits and quality gates pass.
-- [ ] Real PostgreSQL concurrency and failure-path tests pass.
-- [ ] Web and desktop end-to-end authentication tests pass.
+- [x] Every P0 and P1 item is implemented before production launch.
+- [x] Every deferred P2 or P3 item has an owner, target date, and documented risk acceptance.
+- [x] All dependency audits and quality gates pass.
+- [x] Real PostgreSQL concurrency and failure-path tests pass.
+- [x] Web and desktop end-to-end authentication tests pass.
 - [ ] Deployment documentation matches the final domain, Resend, CORS, CSP, and secret configuration.
-- [ ] A final security review confirms that no resolved risk was reintroduced.
+- [x] A final security review confirms that no resolved risk was reintroduced.

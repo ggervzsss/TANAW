@@ -90,11 +90,7 @@ export function ActivateAccountPage() {
   };
 
   return (
-    <section
-      ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
-      style={stageGlowStyle}
-    >
+    <section ref={stageRef} className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)" style={stageGlowStyle}>
       <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
@@ -105,7 +101,9 @@ export function ActivateAccountPage() {
         <section className="tanaw-auth-hero relative hidden min-h-[min(42rem,calc(100svh-2rem))] items-end px-2 pb-10 text-white lg:flex xl:pb-14">
           <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
             <ShieldCheck className="mb-5 h-9 w-9 text-(--tanaw-gold)" aria-hidden="true" />
-            <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">Secure your TANAW account</h2>
+            <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
+              Secure your TANAW account
+            </h2>
             <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
             <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
               Confirm your registered email and create a private password before accessing TANAW.
@@ -260,12 +258,26 @@ function SuccessState({ details }: { details: AccountActivationDetails }) {
   );
 }
 
-function PasswordField({ label, name, value, error, onChange }: { label: string; name: keyof PasswordValues; value: string; error?: string; onChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
+function PasswordField({
+  label,
+  name,
+  value,
+  error,
+  onChange,
+}: {
+  label: string;
+  name: keyof PasswordValues;
+  value: string;
+  error?: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
   const [isVisible, setIsVisible] = useState(false);
   const errorId = `${name}-error`;
   return (
-    <label className="mb-3 block">
-      <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">{label}</span>
+    <div className="mb-3 block">
+      <label htmlFor={name} className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
+        {label}
+      </label>
       <div
         className={`tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
           error
@@ -275,6 +287,7 @@ function PasswordField({ label, name, value, error, onChange }: { label: string;
       >
         <LockKeyhole className="pointer-events-none absolute left-5 h-5 w-5 text-[#7b8492]" aria-hidden="true" />
         <input
+          id={name}
           name={name}
           type={isVisible ? "text" : "password"}
           value={value}
@@ -302,7 +315,7 @@ function PasswordField({ label, name, value, error, onChange }: { label: string;
       <div id={errorId} className="mt-1 min-h-4" aria-live="polite">
         {error ? <p className="text-xs font-medium text-(--tanaw-error)">{error}</p> : null}
       </div>
-    </label>
+    </div>
   );
 }
 

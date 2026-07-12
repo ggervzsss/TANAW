@@ -18,7 +18,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import Settings
-from app.core.security import hash_password
+from app.core.security import create_access_token, decode_access_token, hash_password
+from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import (
     Account,
     AccountEmailChangeRequest,
@@ -417,6 +418,7 @@ async def test_approval_requires_verification_and_invalidates_recovery_state(
         actor=account,
         requested_email=requested_email,
     )
+    stale_session = decode_access_token(create_access_token(account.id))
     challenge_id = f"email-change-challenge-{uuid4().hex}"
     async with postgres_runtime.sessions() as db:
         db.add(
@@ -452,6 +454,7 @@ async def test_approval_requires_verification_and_invalidates_recovery_state(
         )
         assert updated.email == requested_email
         assert updated.token_invalid_before is not None
+        assert is_token_invalidated(stale_session, updated) is True
         assert resolved.status == AccountEmailChangeStatus.APPROVED.value
 
     async with postgres_runtime.sessions() as db:
@@ -492,6 +495,7 @@ async def test_deactivation_invalidates_pending_email_change(
         actor=account,
         requested_email=requested_email,
     )
+    stale_session = decode_access_token(create_access_token(account.id))
 
     async with postgres_runtime.sessions() as db:
         actor = await db.get(Account, it.id)
@@ -506,14 +510,63 @@ async def test_deactivation_invalidates_pending_email_change(
         assert response.profileChangeRequests == []
 
     async with postgres_runtime.sessions() as db:
+        stored_account = await db.get(Account, account.id)
         request = await db.get(AccountEmailChangeRequest, request_id)
+        assert stored_account is not None
         assert request is not None
+        assert is_token_invalidated(stale_session, stored_account) is True
         assert request.status == AccountEmailChangeStatus.CANCELLED.value
         assert request.token_hash is None
         outboxes = list(
             await db.scalars(select(EmailOutbox).where(EmailOutbox.source_id == request_id))
         )
         assert {outbox.status for outbox in outboxes} == {EmailOutboxStatus.CANCELLED.value}
+
+
+@pytest.mark.asyncio
+async def test_role_change_invalidates_sessions_and_recovery_challenges(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    target = await _create_account(postgres_runtime, label="role-target", role=AccountRole.STAFF)
+    it = await _create_account(postgres_runtime, label="role-it", role=AccountRole.IT)
+    stale_session = decode_access_token(create_access_token(target.id))
+    challenge_id = f"role-change-challenge-{uuid4().hex}"
+
+    async with postgres_runtime.sessions() as db:
+        db.add(
+            PasswordResetChallenge(
+                id=challenge_id,
+                email=target.email,
+                account_id=target.id,
+                code_hash="0" * 64,
+                expires_at=datetime.now(UTC) + timedelta(hours=1),
+            )
+        )
+        await db.commit()
+        actor = await db.get(Account, it.id)
+        assert actor is not None
+        response = await update_lgu_account(
+            target.id,
+            LguAccountUpdate(
+                firstName="Test",
+                lastName="Role",
+                email=target.email,
+                phone="+639123456789",
+                role="admin",
+                status="active",
+            ),
+            actor,
+            db,
+        )
+        assert response.role == AccountRole.ADMIN.value
+
+    async with postgres_runtime.sessions() as db:
+        stored_account = await db.get(Account, target.id)
+        challenge = await db.get(PasswordResetChallenge, challenge_id)
+        assert stored_account is not None
+        assert challenge is not None
+        assert is_token_invalidated(stale_session, stored_account) is True
+        assert challenge.invalidated_at is not None
 
 
 @pytest.mark.asyncio

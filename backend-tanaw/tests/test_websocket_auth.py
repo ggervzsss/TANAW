@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import WebSocket
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import URL
 
 from app.core.http_security import websocket_security_headers
@@ -147,3 +148,48 @@ async def test_activity_log_websocket_closes_when_session_is_invalidated(
     websocket.send_text.assert_not_awaited()
     assert authenticate.await_count == 2
     manager.disconnect.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_websocket_authentication_rejects_pending_and_inactive_accounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        operational_router,
+        "decode_access_token",
+        lambda _token: {"sub": "websocket-account-1"},
+    )
+    monkeypatch.setattr(
+        activity_logs_router,
+        "decode_access_token",
+        lambda _token: {"sub": "websocket-account-1"},
+    )
+
+    pending = active_it_account()
+    pending.activated_at = None
+    inactive = active_it_account()
+    inactive.status = AccountStatus.INACTIVE
+
+    for account in (pending, inactive):
+        monkeypatch.setattr(
+            operational_router,
+            "get_account_by_id",
+            AsyncMock(return_value=account),
+        )
+        monkeypatch.setattr(
+            activity_logs_router,
+            "get_account_by_id",
+            AsyncMock(return_value=account),
+        )
+        assert (
+            await operational_router.authenticate_websocket_account(
+                cast(AsyncSession, MagicMock()), "access-token"
+            )
+            is None
+        )
+        assert (
+            await activity_logs_router.authenticate_websocket_account(
+                cast(AsyncSession, MagicMock()), "access-token"
+            )
+            is None
+        )

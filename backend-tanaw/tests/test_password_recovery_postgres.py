@@ -18,7 +18,13 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import Settings
-from app.core.security import hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
+from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.models import ActivityLog
 from app.features.auth import password_recovery, recovery_rate_limit, secret_values
@@ -644,6 +650,7 @@ async def test_two_concurrent_password_resets_have_exactly_one_winner(
         postgres_runtime,
         label="concurrent-reset",
     )
+    stale_session = decode_access_token(create_access_token(account.id))
     async with postgres_runtime.sessions() as db:
         reset_token = await password_recovery.verify_password_reset_code(
             db,
@@ -690,6 +697,7 @@ async def test_two_concurrent_password_resets_have_exactly_one_winner(
     assert challenge.used is True
     assert challenge.used_at is not None
     assert challenge.reset_token_hash is None
+    assert is_token_invalidated(stale_session, stored_account) is True
 
 
 @pytest.mark.asyncio

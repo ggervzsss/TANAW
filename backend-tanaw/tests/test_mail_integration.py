@@ -5,8 +5,15 @@ import pytest
 from pydantic import SecretStr
 
 from app.core.config import Settings
+from app.features.accounts.models import AccountRole
 from app.features.mail.models import EmailOutboxStatus, EmailTemplateName
 from app.features.mail.service import REDACTED_EMAIL_BODY, enqueue_email
+from app.features.mail.templates import (
+    EmailRecipient,
+    account_activation_email,
+    account_email_change_verification_email,
+    support_ticket_reply_email,
+)
 
 
 @pytest.mark.asyncio
@@ -76,3 +83,40 @@ async def test_resend_outbox_snapshots_sender_and_redacts_future_delivery_logs(
     assert REDACTED_EMAIL_BODY == (
         "[Sensitive email content is not retained in production delivery logs.]"
     )
+
+
+def test_transactional_email_html_escapes_user_controlled_values() -> None:
+    malicious_name = '<img src=x onerror="alert(1)">'
+    malicious_value = '"><script>alert("tanaw")</script>'
+    recipient = EmailRecipient(
+        display_name=malicious_name,
+        email="recipient@example.com",
+        role=AccountRole.ENTERPRISE,
+        enterprise_id=malicious_value,
+    )
+
+    activation = account_activation_email(
+        recipient,
+        f"https://tanaw.example/activate-account#token={malicious_value}",
+        malicious_value,
+    )
+    support = support_ticket_reply_email(
+        ticket_code=malicious_value,
+        subject="Support request",
+        recipient_name=malicious_name,
+        author_name=malicious_value,
+        message=malicious_value,
+    )
+    email_change = account_email_change_verification_email(
+        recipient,
+        old_email=malicious_value,
+        new_email=malicious_value,
+        verification_url=f"https://tanaw.example/verify-email-change#token={malicious_value}",
+        expires_label=malicious_value,
+    )
+
+    for content in (activation, support, email_change):
+        assert malicious_name not in content.html
+        assert "<script>" not in content.html
+        assert "&lt;" in content.html
+        assert "&gt;" in content.html

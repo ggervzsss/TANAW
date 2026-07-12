@@ -12,7 +12,8 @@
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
     "preview": "vite preview",
     "prettier": "prettier --write .",
-    "test": "vitest run",
+    "test": "vitest run --exclude=e2e/**",
+    "test:e2e": "playwright test",
     "type": "tsc -b",
     "pp": "tsc -b && vite build && vite preview"
   },
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/node": "^4.3.0",
     "@tailwindcss/oxide": "^4.3.0",
     "@types/geojson": "^7946.0.16",
