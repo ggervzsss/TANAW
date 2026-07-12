@@ -22,6 +22,11 @@ class AccountProfileChangeRequest(BaseModel):
     label: str
     requestedValue: str
     requestedAt: str | None = None
+    requestId: str | None = None
+    status: Literal["pending_verification", "verified", "pending_review", "expired"]
+    isVerified: bool
+    canApprove: bool
+    expiresAt: datetime | None = None
 
 
 def normalize_email_value(value: str) -> str:
@@ -220,6 +225,10 @@ class AccountSummary(BaseModel):
 
 
 class EnterpriseProfileChangeRequestResolution(BaseModel):
+    action: Literal["approve", "decline"]
+
+
+class AccountEmailChangeRequestResolution(BaseModel):
     action: Literal["approve", "decline"]
 
 

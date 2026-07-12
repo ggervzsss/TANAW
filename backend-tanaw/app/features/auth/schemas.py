@@ -43,6 +43,24 @@ class AccountActivationCompleteResponse(BaseModel):
     role: str
 
 
+class AccountEmailChangeVerifyRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+
+
+class AccountEmailChangeVerifyResponse(BaseModel):
+    displayName: str
+    requestedEmail: EmailStr
+    status: Literal["verified"]
+
+
+class AccountEmailChangeStatusResponse(BaseModel):
+    requestId: str
+    requestedEmail: EmailStr
+    status: Literal["pending_verification", "verified", "expired"]
+    isVerified: bool
+    expiresAt: datetime
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

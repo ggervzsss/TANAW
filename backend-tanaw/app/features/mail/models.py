@@ -35,6 +35,10 @@ class EmailTemplateName(StrEnum):
     ACCOUNT_ACTIVATION = "account_activation"
     PASSWORD_RESET = "password_reset"
     BUSINESS_EMAIL_CHANGE = "business_email_change"
+    ACCOUNT_EMAIL_CHANGE_VERIFICATION = "account_email_change_verification"
+    ACCOUNT_EMAIL_CHANGE_REQUEST_NOTICE = "account_email_change_request_notice"
+    ACCOUNT_EMAIL_CHANGE_APPROVED_OLD = "account_email_change_approved_old"
+    ACCOUNT_EMAIL_CHANGE_APPROVED_NEW = "account_email_change_approved_new"
     SUPPORT_REPLY = "support_reply"
 
 

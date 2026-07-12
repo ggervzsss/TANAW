@@ -44,6 +44,7 @@ async def test_uninitialized_database_is_rejected() -> None:
         "20260711_0014_account_activation.py",
         "20260711_0016_reconcile_runtime_schema.py",
         "20260711_0017_transactional_email_outbox.py",
+        "20260712_0019_verified_email_changes.py",
     ),
 )
 def test_irreversible_migrations_block_unsafe_downgrades(migration_filename: str) -> None:

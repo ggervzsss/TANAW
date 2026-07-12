@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     password_reset_response_floor_seconds: float = Field(default=0.25, ge=0.0, le=2.0)
     frontend_public_url: str = "http://localhost:5173"
     account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
+    account_email_change_ttl_hours: int = Field(default=24, ge=1, le=168)
     allow_mock_data: bool = Field(
         default=False, validation_alias=AliasChoices("TANAW_ALLOW_MOCK_DATA", "ALLOW_MOCK_DATA")
     )

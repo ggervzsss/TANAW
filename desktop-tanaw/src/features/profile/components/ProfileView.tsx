@@ -1,9 +1,18 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
-import { Check, Pencil, RefreshCw, Save, Shield, Upload, X } from "lucide-react";
+import { Check, MailCheck, Pencil, RefreshCw, Save, Shield, Upload, X } from "lucide-react";
 import { Card } from "../../../components/Card";
 import { ModalPortal } from "../../../components/ModalPortal";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { requestBusinessEmailChange, requestContactNumberChange, updateBuildingCapacity, updateLeadAdminName, updateProfileImage } from "../../login/api/login";
+import {
+  type BusinessEmailChangeStatus,
+  cancelBusinessEmailChange,
+  getBusinessEmailChangeStatus,
+  requestBusinessEmailChange,
+  requestContactNumberChange,
+  updateBuildingCapacity,
+  updateLeadAdminName,
+  updateProfileImage,
+} from "../../login/api/login";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { readProfileImageFile } from "../../../utils/image-upload";
 import { normalizeEmail, normalizeName, toPhilippineLocalDigits, validateEmail, validateName, validatePhilippineContactNumber } from "../../../utils/form-validation";
@@ -26,6 +35,8 @@ export function ProfileView() {
   const [modalError, setModalError] = useState("");
   const [isModalSaving, setIsModalSaving] = useState(false);
   const [accountChangeStatus, setAccountChangeStatus] = useState<AccountChangeStatus | null>(null);
+  const [pendingEmailChange, setPendingEmailChange] = useState<BusinessEmailChangeStatus | null>(null);
+  const [isEmailChangeCancelling, setIsEmailChangeCancelling] = useState(false);
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? user?.name ?? "Enterprise Account";
   const managerName = user?.managerName ?? user?.name ?? user?.displayName ?? "Not provided";
   const businessEmail = user?.email ?? "Not provided";
@@ -40,6 +51,21 @@ export function ProfileView() {
     setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
     setDisplayImageFileName("");
   }, [user?.buildingCapacity, user?.displayImageDataUrl, user?.email, user?.managerName, user?.phone]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let isCurrent = true;
+    void getBusinessEmailChangeStatus()
+      .then((status) => {
+        if (isCurrent) setPendingEmailChange(status);
+      })
+      .catch(() => {
+        if (isCurrent) setPendingEmailChange(null);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [user?.id]);
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -131,6 +157,33 @@ export function ProfileView() {
               {accountChangeStatus.message}
             </div>
           )}
+
+          {pendingEmailChange ? (
+            <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-950 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                <div>
+                  <p className="text-sm font-bold">Business email change pending</p>
+                  <p className="mt-1 text-sm leading-6 text-amber-900/80">
+                    Proposed address: <strong className="wrap-break-word">{pendingEmailChange.requestedEmail}</strong>.{" "}
+                    {pendingEmailChange.status === "verified"
+                      ? "Ownership is verified and TANAW IT can now review it."
+                      : pendingEmailChange.status === "expired"
+                        ? "The verification link expired. Cancel this request and submit a new address."
+                        : "Open the verification link sent to that address before IT can approve it."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isEmailChangeCancelling}
+                onClick={() => void handleCancelEmailChange()}
+                className="shrink-0 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+              >
+                {isEmailChangeCancelling ? "Cancelling..." : "Cancel request"}
+              </button>
+            </div>
+          ) : null}
 
           <form onSubmit={handleSave} noValidate className="space-y-6">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -246,8 +299,9 @@ export function ProfileView() {
         notifySuccess("Lead admin name updated.");
       } else if (activeModal === "email") {
         const response = await requestBusinessEmailChange(normalizeEmail(modalValue));
+        setPendingEmailChange(await getBusinessEmailChangeStatus());
         setAccountChangeStatus({ message: response.message, tone: "info" });
-        notifySuccess("Business email change request recorded.");
+        notifySuccess("Email ownership verification queued.");
       } else if (activeModal === "phone") {
         const response = await requestContactNumberChange(`+63${modalPhoneLocal}`);
         setAccountChangeStatus({ message: response.message, tone: "info" });
@@ -262,6 +316,20 @@ export function ProfileView() {
     } catch (error) {
       setIsModalSaving(false);
       setModalError(getRequestErrorMessage(error, "Unable to save this change."));
+    }
+  }
+
+  async function handleCancelEmailChange() {
+    setIsEmailChangeCancelling(true);
+    try {
+      const response = await cancelBusinessEmailChange();
+      setPendingEmailChange(null);
+      setAccountChangeStatus({ message: response.message, tone: "info" });
+      notifySuccess("Business email change request cancelled.");
+    } catch (error) {
+      notifyError(getRequestErrorMessage(error, "Unable to cancel this email change."));
+    } finally {
+      setIsEmailChangeCancelling(false);
     }
   }
 }
@@ -333,7 +401,7 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
     field === "managerName"
       ? "This updates the primary enterprise contact name after validation."
       : field === "email"
-        ? "This sends a business email change request to IT and Admin for review."
+        ? "TANAW sends a single-use verification link to the proposed address and a warning to your current address. IT can approve the change only after ownership is verified."
         : field === "phone"
           ? "This sends a contact number change request to IT and Admin for review."
           : "This updates the occupancy capacity used by TANAW alerts and simulation defaults.";

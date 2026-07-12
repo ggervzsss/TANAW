@@ -750,7 +750,7 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `DEVELOPMENT_IT_PASSWORD`     | Optional local development IT password                 |
 | `CORS_ORIGINS`                | Comma-separated web/desktop origins allowed by the API |
 | `VITE_API_BASE_URL`           | API URL compiled into or used by frontend clients      |
-| `FRONTEND_PUBLIC_URL`         | Public portal URL embedded in account activation links |
+| `FRONTEND_PUBLIC_URL`         | Public portal URL embedded in activation and email-verification links |
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |
 | `FRONTEND_PORT`               | Host port mapped to the portal; defaults to `5173`     |
 | `TANAW_ALLOW_MOCK_DATA`       | Explicit simulation safety switch; false by default    |
@@ -773,6 +773,7 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS` | Delay before another recovery code can be requested |
 | `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS` | Minimum generic recovery-request response time |
 | `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
+| `ACCOUNT_EMAIL_CHANGE_TTL_HOURS` | Lifetime of a proposed-address ownership verification link |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |

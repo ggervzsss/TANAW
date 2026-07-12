@@ -118,6 +118,101 @@ def business_email_change_email(account: Account | EmailRecipient, new_email: st
     return EmailContent(subject="TANAW business email change request", text=text, html=html)
 
 
+def account_email_change_verification_email(
+    account: Account | EmailRecipient,
+    *,
+    old_email: str,
+    new_email: str,
+    verification_url: str,
+    expires_label: str,
+) -> EmailContent:
+    text = (
+        f"Hello {account.display_name},\n\n"
+        "Confirm that you own this proposed TANAW account email address.\n"
+        f"Current email: {old_email}\n"
+        f"Proposed email: {new_email}\n"
+        f"Verify ownership: {verification_url}\n\n"
+        f"This single-use link expires at {expires_label}. IT cannot apply the change until "
+        "ownership is verified. If you did not request this, do not open the link and contact "
+        "TANAW support."
+    )
+    html = _layout(
+        "Verify your proposed TANAW email",
+        f"""
+        <p>Hello {escape(account.display_name)},</p>
+        <p>Confirm that you own this proposed TANAW account email address.</p>
+        <div class="card"><p><strong>Current email:</strong> {escape(old_email)}</p><p><strong>Proposed email:</strong> {escape(new_email)}</p></div>
+        <p><a class="button" href="{escape(verification_url, quote=True)}">Verify email ownership</a></p>
+        <p>This single-use link expires at <strong>{escape(expires_label)}</strong>. IT cannot apply the change until ownership is verified.</p>
+        <p class="muted">If you did not request this, do not open the link and contact TANAW support.</p>
+        """,
+    )
+    return EmailContent(
+        subject="Verify your proposed TANAW email address",
+        text=text,
+        html=html,
+    )
+
+
+def account_email_change_request_notice_email(
+    account: Account | EmailRecipient,
+    *,
+    new_email: str,
+    expires_label: str,
+) -> EmailContent:
+    text = (
+        f"Hello {account.display_name},\n\n"
+        f"A request was made to change your TANAW account email to {new_email}. "
+        f"The proposed address must be verified before {expires_label}, and TANAW IT must "
+        "approve it before your sign-in or recovery email changes.\n\n"
+        "If you did not request this, contact TANAW support immediately. Your current email "
+        "remains active until approval."
+    )
+    html = _layout(
+        "TANAW email change requested",
+        f"""
+        <p>Hello {escape(account.display_name)},</p>
+        <p>A request was made to change your TANAW account email to <strong>{escape(new_email)}</strong>.</p>
+        <p>The proposed address must be verified before <strong>{escape(expires_label)}</strong>, and TANAW IT must approve it before your sign-in or recovery email changes.</p>
+        <p class="muted">If you did not request this, contact TANAW support immediately. Your current email remains active until approval.</p>
+        """,
+    )
+    return EmailContent(subject="TANAW account email change requested", text=text, html=html)
+
+
+def account_email_change_approved_email(
+    account: Account | EmailRecipient,
+    *,
+    old_email: str,
+    new_email: str,
+    sent_to_old_address: bool,
+) -> EmailContent:
+    destination_note = (
+        "This notice was sent to your previous address for security."
+        if sent_to_old_address
+        else "This is now the registered email for TANAW sign-in and password recovery."
+    )
+    text = (
+        f"Hello {account.display_name},\n\n"
+        "TANAW IT approved the account email change.\n"
+        f"Previous email: {old_email}\n"
+        f"New email: {new_email}\n\n"
+        f"{destination_note}\n"
+        "All earlier sessions and password-recovery challenges were invalidated."
+    )
+    html = _layout(
+        "TANAW account email changed",
+        f"""
+        <p>Hello {escape(account.display_name)},</p>
+        <p>TANAW IT approved the account email change.</p>
+        <div class="card"><p><strong>Previous email:</strong> {escape(old_email)}</p><p><strong>New email:</strong> {escape(new_email)}</p></div>
+        <p>{escape(destination_note)}</p>
+        <p class="muted">All earlier sessions and password-recovery challenges were invalidated.</p>
+        """,
+    )
+    return EmailContent(subject="Your TANAW account email was changed", text=text, html=html)
+
+
 def _layout(title: str, body: str) -> str:
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">

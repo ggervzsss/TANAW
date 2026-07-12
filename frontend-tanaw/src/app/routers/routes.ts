@@ -2,6 +2,7 @@ export const routes = {
   home: "/",
   login: "/login",
   activateAccount: "/activate-account",
+  verifyEmailChange: "/verify-email-change",
   enterpriseAccess: "/enterprise-access",
   it: {
     root: "/it",

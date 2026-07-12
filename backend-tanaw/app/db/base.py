@@ -1,6 +1,8 @@
 from app.db.session import Base
 from app.features.accounts.models import (
     Account,
+    AccountEmailChangeRequest,
+    AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
     DeliveryStatus,
@@ -32,6 +34,8 @@ from app.features.operational.models import (
 
 __all__ = [
     "Account",
+    "AccountEmailChangeRequest",
+    "AccountEmailChangeStatus",
     "AccountActivationToken",
     "AccountRole",
     "AccountStatus",

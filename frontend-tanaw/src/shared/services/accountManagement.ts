@@ -8,6 +8,11 @@ export type AccountProfileChangeRequest = {
   label: string;
   requestedValue: string;
   requestedAt: string | null;
+  requestId: string | null;
+  status: "pending_verification" | "verified" | "pending_review" | "expired";
+  isVerified: boolean;
+  canApprove: boolean;
+  expiresAt: string | null;
 };
 
 export type AccountSummary = {
@@ -176,6 +181,11 @@ export async function updateEnterpriseAccount(accountId: string, payload: Update
 
 export async function resolveEnterpriseProfileChangeRequest(accountId: string, requestType: ProfileChangeRequestType, action: "approve" | "decline") {
   const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}/profile-change-requests/${requestType}`, { action });
+  return response.data;
+}
+
+export async function resolveAccountEmailChangeRequest(accountId: string, action: "approve" | "decline") {
+  const response = await apiClient.patch<AccountSummary>(`/accounts/${accountId}/email-change-request`, { action });
   return response.data;
 }
 

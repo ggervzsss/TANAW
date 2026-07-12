@@ -60,16 +60,23 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
     mutationFn: (payload: UpdateEnterpriseAccountPayload) => updateEnterpriseAccount(enterprise.id, payload),
     onSuccess: async (updatedEnterprise, payload) => {
       const activationEmailQueued = !enterprise.isActivated && updatedEnterprise.status === "active" && (payload.email !== enterprise.email || enterprise.status === "inactive");
+      const emailVerificationQueued = enterprise.isActivated && payload.email !== enterprise.email && updatedEnterprise.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setForm(getInitialForm(updatedEnterprise));
       setConfirmMode(null);
       setPendingSave(null);
       setIsEditing(false);
-      toast.success(activationEmailQueued ? "Enterprise account updated; activation email queued" : "Enterprise account updated");
+      toast.success(
+        activationEmailQueued
+          ? "Enterprise account updated; activation email queued"
+          : emailVerificationQueued
+            ? "Enterprise account updated; email verification queued"
+            : "Enterprise account updated",
+      );
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update enterprise account")),
   });

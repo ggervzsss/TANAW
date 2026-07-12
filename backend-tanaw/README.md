@@ -91,6 +91,11 @@ roll forward the application, or restore the application and database together
 from a verified pre-activation backup. Never deploy pre-activation backend code
 against the migrated database.
 
+The verified-email-change migration (`20260712_0019`) is intentionally
+irreversible as well. Its request history is security audit evidence and can
+contain an outstanding ownership proof. Roll forward or restore the application
+and database together from a verified backup instead of dropping that state.
+
 ## Email Integration
 
 TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
@@ -100,6 +105,17 @@ single-use activation link and choose their own password; TANAW never sends a
 password by email. Password recovery continues to use an emailed OTP. Account
 phone numbers remain contact/profile information and are never used for SMS
 delivery or phone-based OTPs.
+
+Changing an activated account's registered email never updates the account
+directly. TANAW sends a single-use, expiring ownership link to the proposed
+address and a warning to the current address. Only after verification can a
+different IT Personnel account approve the request. Approval atomically changes
+the sign-in/recovery address, invalidates active sessions and password-recovery
+challenges, and queues notices to both the old and new addresses. Replacing,
+rejecting, cancelling, expiring, or deactivating the account invalidates the
+pending request. An unactivated account's typo can still be corrected directly;
+TANAW invalidates its old activation link and queues a new one to the corrected
+address.
 
 Activation links open the public web portal, expire after the configured number
 of hours, and are invalidated when a replacement link is issued. Set
@@ -152,6 +168,7 @@ EMAIL_FROM_ADDRESS=onboarding@resend.dev
 EMAIL_TEST_RECIPIENT=the-email-used-to-register-with-resend@example.com
 FRONTEND_PUBLIC_URL=http://localhost:5173
 ACCOUNT_ACTIVATION_TTL_HOURS=24
+ACCOUNT_EMAIL_CHANGE_TTL_HOURS=24
 ```
 
 When a verified LGU domain becomes available, change `EMAIL_FROM_ADDRESS` and
@@ -171,8 +188,9 @@ least 32 characters that is different from `JWT_SECRET_KEY`. TANAW uses it to
 derive activation links and recovery codes in worker memory after the source
 transaction commits, so raw authentication secrets never enter the outbox.
 Keep this key stable and backed up. Rotating it invalidates outstanding
-activation links and password-recovery challenges; drain or expire the outbox
-first, then issue replacement activation/recovery messages after rotation.
+activation links, password-recovery challenges, and outstanding email-change
+verification links; drain or expire the outbox first, then issue replacements
+after rotation.
 
 ## Transactional Email Delivery
 

@@ -1,3 +1,4 @@
+import hmac
 import json
 from datetime import UTC, datetime
 from urllib.parse import quote
@@ -5,17 +6,28 @@ from urllib.parse import quote
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import (
+    Account,
+    AccountEmailChangeRequest,
+    AccountEmailChangeStatus,
+    AccountRole,
+    AccountStatus,
+)
 from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
 from app.features.auth.secret_values import (
     derive_account_activation_token,
+    derive_account_email_change_token,
     derive_password_reset_code,
+    hash_account_email_change_token,
 )
 from app.features.mail.models import EmailOutbox, EmailTemplateName
 from app.features.mail.templates import (
     EmailContent,
     EmailRecipient,
     account_activation_email,
+    account_email_change_approved_email,
+    account_email_change_request_notice_email,
+    account_email_change_verification_email,
     business_email_change_email,
     password_reset_code_email,
     support_ticket_reply_email,
@@ -44,6 +56,15 @@ async def render_outbox_email(db: AsyncSession, outbox: EmailOutbox) -> EmailCon
         return await _render_password_reset(db, outbox, payload)
     if template_name == EmailTemplateName.BUSINESS_EMAIL_CHANGE:
         return await _render_business_email_change(db, outbox, payload)
+    if template_name == EmailTemplateName.ACCOUNT_EMAIL_CHANGE_VERIFICATION:
+        return await _render_account_email_change_verification(db, outbox, payload)
+    if template_name == EmailTemplateName.ACCOUNT_EMAIL_CHANGE_REQUEST_NOTICE:
+        return await _render_account_email_change_request_notice(db, outbox, payload)
+    if template_name in {
+        EmailTemplateName.ACCOUNT_EMAIL_CHANGE_APPROVED_OLD,
+        EmailTemplateName.ACCOUNT_EMAIL_CHANGE_APPROVED_NEW,
+    }:
+        return await _render_account_email_change_approved(db, outbox, payload)
     if template_name == EmailTemplateName.SUPPORT_REPLY:
         return await _render_support_reply(db, outbox, payload)
     raise EmailRenderCancelled("Unknown email template.")
@@ -118,6 +139,107 @@ async def _render_business_email_change(
     if account is None or new_email != outbox.recipient:
         raise EmailRenderCancelled("The business email request is no longer valid.")
     return business_email_change_email(_recipient_from_payload(payload), new_email)
+
+
+async def _render_account_email_change_verification(
+    db: AsyncSession,
+    outbox: EmailOutbox,
+    payload: dict[str, str],
+) -> EmailContent:
+    request, account = await _email_change_source(db, outbox, payload)
+    now = datetime.now(UTC)
+    if (
+        request.status != AccountEmailChangeStatus.PENDING_VERIFICATION.value
+        or request.token_hash is None
+        or _as_utc(request.expires_at) <= now
+        or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
+        or account.email.lower() != request.old_email
+        or outbox.recipient != request.requested_email
+    ):
+        raise EmailRenderCancelled("The email ownership request is no longer valid.")
+    raw_token = derive_account_email_change_token(request.id)
+    if not hmac.compare_digest(
+        request.token_hash,
+        hash_account_email_change_token(raw_token),
+    ):
+        raise EmailRenderCancelled("The email ownership request is no longer valid.")
+    frontend_public_url = _required(payload, "frontendPublicUrl").rstrip("/")
+    verification_url = f"{frontend_public_url}/verify-email-change#token={quote(raw_token)}"
+    return account_email_change_verification_email(
+        _recipient_from_payload(payload),
+        old_email=request.old_email,
+        new_email=request.requested_email,
+        verification_url=verification_url,
+        expires_label=_required(payload, "expiresLabel"),
+    )
+
+
+async def _render_account_email_change_request_notice(
+    db: AsyncSession,
+    outbox: EmailOutbox,
+    payload: dict[str, str],
+) -> EmailContent:
+    request, account = await _email_change_source(db, outbox, payload)
+    if (
+        request.status
+        not in {
+            AccountEmailChangeStatus.PENDING_VERIFICATION.value,
+            AccountEmailChangeStatus.VERIFIED.value,
+        }
+        or account.email.lower() != request.old_email
+        or outbox.recipient != request.old_email
+    ):
+        raise EmailRenderCancelled("The email ownership request is no longer valid.")
+    return account_email_change_request_notice_email(
+        _recipient_from_payload(payload),
+        new_email=request.requested_email,
+        expires_label=_required(payload, "expiresLabel"),
+    )
+
+
+async def _render_account_email_change_approved(
+    db: AsyncSession,
+    outbox: EmailOutbox,
+    payload: dict[str, str],
+) -> EmailContent:
+    request, _ = await _email_change_source(db, outbox, payload)
+    sent_to_old_address = (
+        outbox.template_name == EmailTemplateName.ACCOUNT_EMAIL_CHANGE_APPROVED_OLD.value
+    )
+    expected_recipient = request.old_email if sent_to_old_address else request.requested_email
+    if (
+        request.status != AccountEmailChangeStatus.APPROVED.value
+        or outbox.recipient != expected_recipient
+    ):
+        raise EmailRenderCancelled("The approved email-change notice is no longer valid.")
+    return account_email_change_approved_email(
+        _recipient_from_payload(payload),
+        old_email=request.old_email,
+        new_email=request.requested_email,
+        sent_to_old_address=sent_to_old_address,
+    )
+
+
+async def _email_change_source(
+    db: AsyncSession,
+    outbox: EmailOutbox,
+    payload: dict[str, str],
+) -> tuple[AccountEmailChangeRequest, Account]:
+    request_id = _required(payload, "requestId")
+    request = await db.scalar(
+        select(AccountEmailChangeRequest).where(AccountEmailChangeRequest.id == request_id)
+    )
+    account = await db.scalar(select(Account).where(Account.id == outbox.account_id))
+    if (
+        request is None
+        or account is None
+        or request.account_id != account.id
+        or request.old_email != _required(payload, "oldEmail").lower()
+        or request.requested_email != _required(payload, "newEmail").lower()
+    ):
+        raise EmailRenderCancelled("The email ownership request is no longer valid.")
+    return request, account
 
 
 async def _render_support_reply(

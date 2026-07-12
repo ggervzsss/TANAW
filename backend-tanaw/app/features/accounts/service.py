@@ -2,7 +2,7 @@ import json
 import re
 import secrets
 from datetime import UTC, datetime
-from typing import cast
+from typing import Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,8 @@ from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password, verify_password
 from app.features.accounts.models import (
     Account,
+    AccountEmailChangeRequest,
+    AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
     DeliveryStatus,
@@ -26,6 +28,9 @@ from app.features.accounts.schemas import (
 )
 from app.features.auth.account_activation import issue_account_activation
 from app.features.auth.challenge_service import invalidate_password_reset_challenges
+from app.features.auth.email_change import (
+    ACTIVE_EMAIL_CHANGE_STATUSES,
+)
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
 PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
@@ -118,7 +123,11 @@ def to_auth_user(account: Account) -> AuthUser:
     )
 
 
-def to_account_summary(account: Account) -> AccountSummary:
+def to_account_summary(
+    account: Account,
+    *,
+    email_change_request: AccountEmailChangeRequest | None = None,
+) -> AccountSummary:
     return AccountSummary(
         id=account.id,
         email=account.email,
@@ -145,18 +154,55 @@ def to_account_summary(account: Account) -> AccountSummary:
         status=account.status.value,
         isActivated=account.activated_at is not None,
         isProtectedDefault=is_protected_startup_account(account),
-        profileChangeRequests=get_profile_change_requests(account),
+        profileChangeRequests=get_profile_change_requests(
+            account,
+            email_change_request=email_change_request,
+        ),
         createdAt=account.created_at,
         lastLoginAt=account.last_login_at,
     )
 
 
-def get_profile_change_requests(account: Account) -> list[AccountProfileChangeRequest]:
-    if account.role != AccountRole.ENTERPRISE:
-        return []
-
+def get_profile_change_requests(
+    account: Account,
+    *,
+    email_change_request: AccountEmailChangeRequest | None = None,
+) -> list[AccountProfileChangeRequest]:
     requests: list[AccountProfileChangeRequest] = []
+    if email_change_request is not None:
+        expires_at = email_change_request.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        is_expired = expires_at <= datetime.now(UTC)
+        is_verified = (
+            email_change_request.status == AccountEmailChangeStatus.VERIFIED.value
+            and not is_expired
+        )
+        requests.append(
+            AccountProfileChangeRequest(
+                type="businessEmail",
+                label="Business Email" if account.role == AccountRole.ENTERPRISE else "Email",
+                requestedValue=email_change_request.requested_email,
+                requestedAt=email_change_request.created_at.isoformat(),
+                requestId=email_change_request.id,
+                status=(
+                    "expired"
+                    if is_expired
+                    else cast(
+                        Literal["pending_verification", "verified"],
+                        email_change_request.status,
+                    )
+                ),
+                isVerified=is_verified,
+                canApprove=is_verified,
+                expiresAt=email_change_request.expires_at,
+            )
+        )
+    if account.role != AccountRole.ENTERPRISE:
+        return requests
     for request_type, (_, label, value_key) in PROFILE_CHANGE_REQUEST_CONFIG.items():
+        if request_type == "businessEmail":
+            continue
         pending_request = get_pending_profile_change_request(account, request_type)
         if pending_request is None:
             continue
@@ -170,9 +216,46 @@ def get_profile_change_requests(account: Account) -> list[AccountProfileChangeRe
                 label=label,
                 requestedValue=requested_value,
                 requestedAt=requested_at,
+                status="pending_review",
+                isVerified=False,
+                canApprove=True,
             )
         )
     return requests
+
+
+async def to_account_summaries_with_requests(
+    db: AsyncSession,
+    accounts: list[Account],
+) -> list[AccountSummary]:
+    account_ids = [account.id for account in accounts]
+    email_requests = (
+        list(
+            await db.scalars(
+                select(AccountEmailChangeRequest).where(
+                    AccountEmailChangeRequest.account_id.in_(account_ids),
+                    AccountEmailChangeRequest.status.in_(ACTIVE_EMAIL_CHANGE_STATUSES),
+                )
+            )
+        )
+        if account_ids
+        else []
+    )
+    requests_by_account = {request.account_id: request for request in email_requests}
+    return [
+        to_account_summary(
+            account,
+            email_change_request=requests_by_account.get(account.id),
+        )
+        for account in accounts
+    ]
+
+
+async def to_account_summary_with_requests(
+    db: AsyncSession,
+    account: Account,
+) -> AccountSummary:
+    return (await to_account_summaries_with_requests(db, [account]))[0]
 
 
 def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
@@ -216,9 +299,16 @@ async def get_account_by_login_identifier(
     return cast(Account | None, await db.scalar(statement))
 
 
-async def get_account_by_id(db: AsyncSession, account_id: str) -> Account | None:
-    result = await db.scalars(select(Account).where(Account.id == account_id))
-    return result.first()
+async def get_account_by_id(
+    db: AsyncSession,
+    account_id: str,
+    *,
+    for_update: bool = False,
+) -> Account | None:
+    statement = select(Account).where(Account.id == account_id)
+    if for_update:
+        statement = statement.with_for_update()
+    return cast(Account | None, await db.scalar(statement))
 
 
 async def invalidate_account_tokens(db: AsyncSession, account: Account) -> None:

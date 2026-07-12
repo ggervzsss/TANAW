@@ -158,14 +158,14 @@ Acceptance criteria:
 
 ### AUTH-003 — Verify ownership of a requested business email
 
-- [ ] Replace the informational email-change message with a single-use verification token sent to the proposed new address.
-- [ ] Store only a hash of the verification token.
-- [ ] Give the token an explicit expiration and invalidate earlier requests when a new request is submitted.
-- [ ] Notify the current/old address that a change was requested.
-- [ ] Require successful ownership verification before IT can approve or apply the new address.
-- [ ] Notify both old and new addresses after approval.
-- [ ] Invalidate active sessions and password-reset challenges when the address changes.
-- [ ] Handle typo correction, rejection, expiration, and cancellation explicitly.
+- [x] Replace the informational email-change message with a single-use verification token sent to the proposed new address.
+- [x] Store only a hash of the verification token.
+- [x] Give the token an explicit expiration and invalidate earlier requests when a new request is submitted.
+- [x] Notify the current/old address that a change was requested.
+- [x] Require successful ownership verification before IT can approve or apply the new address.
+- [x] Notify both old and new addresses after approval.
+- [x] Invalidate active sessions and password-reset challenges when the address changes.
+- [x] Handle typo correction, rejection, expiration, and cancellation explicitly.
 
 Acceptance criteria:
 

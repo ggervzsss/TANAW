@@ -1,10 +1,10 @@
 import asyncio
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+import logging
+from datetime import UTC, datetime
 from time import monotonic
 from typing import Annotated
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -32,10 +32,8 @@ from app.features.accounts.schemas import (
     ProfileUpdate,
 )
 from app.features.accounts.service import (
-    PENDING_BUSINESS_EMAIL_CHANGE_KEY,
     PENDING_CONTACT_NUMBER_CHANGE_KEY,
     change_account_password,
-    get_account_by_email,
     get_account_by_login_identifier,
     get_account_preferences,
     invalidate_account_tokens,
@@ -51,6 +49,13 @@ from app.features.auth.account_activation import (
     complete_account_activation,
     validate_account_activation,
 )
+from app.features.auth.email_change import (
+    AccountEmailChangeError,
+    cancel_account_email_change,
+    get_active_account_email_change_request,
+    request_account_email_change,
+    verify_account_email_change,
+)
 from app.features.auth.password_recovery import (
     PasswordRecoveryError,
     request_password_reset,
@@ -63,6 +68,9 @@ from app.features.auth.schemas import (
     AccountActivationCompleteResponse,
     AccountActivationValidateRequest,
     AccountActivationValidateResponse,
+    AccountEmailChangeStatusResponse,
+    AccountEmailChangeVerifyRequest,
+    AccountEmailChangeVerifyResponse,
     AccountPreferences,
     ForgotPasswordRequest,
     ForgotPasswordRequestResponse,
@@ -84,12 +92,6 @@ from app.features.auth.service import (
     register_failed_login,
     resolve_login_lockout_policy,
 )
-from app.features.mail.models import EmailTemplateName
-from app.features.mail.service import (
-    cancel_pending_source_emails,
-    email_idempotency_key,
-    enqueue_email,
-)
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
@@ -101,6 +103,7 @@ from app.features.operational.service import (
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
@@ -284,6 +287,40 @@ async def complete_activation(
     return AccountActivationCompleteResponse(status="ok", role=account.role.value)
 
 
+@router.post(
+    "/email-change/verify",
+    response_model=AccountEmailChangeVerifyResponse,
+)
+async def verify_email_change_link(
+    payload: AccountEmailChangeVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountEmailChangeVerifyResponse:
+    try:
+        verification = await verify_account_email_change(db, payload.token, commit=False)
+    except AccountEmailChangeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email verification link is invalid or expired.",
+        ) from exc
+
+    await record_auth_log(
+        db,
+        category="System",
+        severity="Success",
+        actor=verification.display_name,
+        actor_role="Account Email Owner",
+        action="Verify Proposed Account Email",
+        target=verification.requested_email,
+        summary=f"{verification.display_name} verified ownership of a proposed email address.",
+        source_id=verification.account_id,
+    )
+    return AccountEmailChangeVerifyResponse(
+        displayName=verification.display_name,
+        requestedEmail=verification.requested_email,
+        status="verified",
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
@@ -341,7 +378,6 @@ async def login(
     clear_login_failures(account)
     account.last_login_at = datetime.now(UTC)
     token = create_access_token(account.id, {"role": account.role.value})
-    await db.commit()
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -733,54 +769,20 @@ async def request_business_email_change(
 ) -> AccountChangeRequestResponse:
     require_enterprise_account(account)
     new_email = str(payload.email)
-    if new_email == account.email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This business email is already active.",
+    try:
+        _, email_request = await request_account_email_change(
+            db,
+            account_id=account.id,
+            requested_email=new_email,
+            requested_by=account,
         )
-    existing = await get_account_by_email(db, new_email)
-    if existing is not None and existing.id != account.id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
-
-    requested_at = datetime.now(UTC)
-    request_id = str(uuid4())
-    previous_request = get_account_preferences(account).get(PENDING_BUSINESS_EMAIL_CHANGE_KEY)
-    if isinstance(previous_request, dict):
-        previous_request_id = previous_request.get("requestId")
-        if isinstance(previous_request_id, str) and previous_request_id:
-            await cancel_pending_source_emails(
-                db,
-                template_name=EmailTemplateName.BUSINESS_EMAIL_CHANGE,
-                source_ids=[previous_request_id],
-                reason="A newer business email change request replaced this email.",
-            )
-    set_pending_account_change(
-        account,
-        PENDING_BUSINESS_EMAIL_CHANGE_KEY,
-        {
-            "email": new_email,
-            "requestId": request_id,
-            "requestedAt": requested_at.isoformat(),
-        },
-    )
-    await enqueue_email(
-        db,
-        account_id=account.id,
-        source_id=request_id,
-        recipient=new_email,
-        template_name=EmailTemplateName.BUSINESS_EMAIL_CHANGE,
-        template_payload={
-            "displayName": account.display_name,
-            "email": account.email,
-            "role": account.role.value,
-            "enterpriseId": account.enterprise_id or "",
-            "newEmail": new_email,
-        },
-        idempotency_key=email_idempotency_key("business-email-change", request_id),
-        tags={"category": "business_email_change"},
-        valid_until=requested_at + timedelta(hours=24),
-    )
-    await db.commit()
+    except AccountEmailChangeError as exc:
+        response_status = (
+            status.HTTP_409_CONFLICT
+            if "already" in str(exc).lower() or "pending" in str(exc).lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=response_status, detail=str(exc)) from exc
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -789,21 +791,118 @@ async def request_business_email_change(
         actor_role=get_actor_role_label(account),
         action="Request Business Email Change",
         target=account.email,
-        summary=f"{account.display_name} requested a business email change.",
+        summary=f"{account.display_name} requested verified ownership of a new business email.",
         source_id=account.id,
+        metadata={
+            "requestId": email_request.id,
+            "requestedEmail": email_request.requested_email,
+            "status": email_request.status,
+        },
     )
     enterprise = enterprise_label(account)
-    await notify_enterprise_account_change(
-        db,
-        account,
-        title=f"{enterprise} requested a business email change.",
-        message=f"{enterprise} requested a business email change to {new_email}. IT review is required.",
-        notification_type="Enterprise Profile Change Request",
-        source_type="enterprise.profile.email",
-    )
+    notification_account_id = account.id
+    notification_request_id = email_request.id
+    try:
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} requested a business email change.",
+            message=(
+                f"{enterprise} requested a business email change to {new_email}. The proposed "
+                "address must be verified before IT can approve it."
+            ),
+            notification_type="Enterprise Profile Change Request",
+            source_type="enterprise.profile.email",
+        )
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Failed to publish email-change request notifications account_id=%s request_id=%s",
+            notification_account_id,
+            notification_request_id,
+        )
     return AccountChangeRequestResponse(
-        status="pending",
-        message="Business email change request sent to IT and Admin for review.",
+        status="pending_verification",
+        message=(
+            "Verification emails were queued for the proposed and current addresses. "
+            "IT can approve the change only after ownership is verified."
+        ),
+    )
+
+
+@router.get(
+    "/profile/business-email-change",
+    response_model=AccountEmailChangeStatusResponse | None,
+)
+async def get_business_email_change_status(
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountEmailChangeStatusResponse | None:
+    require_enterprise_account(account)
+    request = await get_active_account_email_change_request(db, account.id)
+    if request is None:
+        return None
+    expires_at = request.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    expired = expires_at <= datetime.now(UTC)
+    return AccountEmailChangeStatusResponse(
+        requestId=request.id,
+        requestedEmail=request.requested_email,
+        status="expired" if expired else request.status,  # type: ignore[arg-type]
+        isVerified=request.status == "verified" and not expired,
+        expiresAt=request.expires_at,
+    )
+
+
+@router.delete("/profile/business-email-change", response_model=AccountChangeRequestResponse)
+async def cancel_business_email_change(
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountChangeRequestResponse:
+    require_enterprise_account(account)
+    try:
+        request = await cancel_account_email_change(
+            db,
+            account_id=account.id,
+            commit=False,
+        )
+    except AccountEmailChangeError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Info",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Cancel Business Email Change",
+        target=account.email,
+        summary=f"{account.display_name} cancelled a pending business email change.",
+        source_id=account.id,
+        metadata={"requestId": request.id, "requestedEmail": request.requested_email},
+    )
+    enterprise = enterprise_label(account)
+    notification_account_id = account.id
+    notification_request_id = request.id
+    try:
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} cancelled a business email change request.",
+            message=f"{enterprise} cancelled its pending business email change request.",
+            notification_type="Enterprise Profile Change Request",
+            source_type="enterprise.profile.email",
+        )
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Failed to publish email-change cancellation notifications account_id=%s request_id=%s",
+            notification_account_id,
+            notification_request_id,
+        )
+    return AccountChangeRequestResponse(
+        status="cancelled",
+        message="The pending email change request was cancelled.",
     )
 
 

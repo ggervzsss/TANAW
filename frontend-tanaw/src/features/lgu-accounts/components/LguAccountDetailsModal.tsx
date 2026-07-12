@@ -1,9 +1,9 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, KeyRound, Pencil, ShieldCheck, UserCheck, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, KeyRound, Mail, Pencil, ShieldCheck, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
-import { type AccountSummary, type UpdateLguAccountPayload, updateLguAccount } from "@/shared/services/accountManagement";
+import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import {
   normalizeEmail,
@@ -52,22 +52,47 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const isProtected = account.isProtectedDefault;
   const nextStatus = account.status === "active" ? "inactive" : "active";
+  const emailChangeRequest = account.profileChangeRequests.find((request) => request.type === "businessEmail");
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateLguAccountPayload) => updateLguAccount(account.id, payload),
     onSuccess: async (updatedAccount, payload) => {
       const activationEmailQueued = !account.isActivated && updatedAccount.status === "active" && (payload.email !== account.email || account.status === "inactive");
+      const emailVerificationQueued = account.isActivated && payload.email !== account.email && updatedAccount.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));
       setPendingSave(null);
       setIsEditing(false);
-      toast.success(activationEmailQueued ? "LGU account updated; activation email queued" : "LGU account updated");
+      toast.success(
+        activationEmailQueued
+          ? "LGU account updated; activation email queued"
+          : emailVerificationQueued
+            ? "LGU account updated; email verification queued"
+            : "LGU account updated",
+      );
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update LGU account")),
+  });
+
+  const emailResolutionMutation = useMutation({
+    mutationFn: (action: "approve" | "decline") => resolveAccountEmailChangeRequest(account.id, action),
+    onSuccess: async (updatedAccount, action) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
+      onAccountUpdated(updatedAccount);
+      setForm(getInitialForm(updatedAccount));
+      toast.success(`Email change request ${action === "approve" ? "approved" : "declined"}.`);
+    },
+    onError: async (error) => {
+      await queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] });
+      toast.error(getApiErrorMessage(error, "Unable to resolve email change request"));
+    },
   });
 
   const details = useMemo(
@@ -141,6 +166,47 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                 <DetailCard key={label} label={label} value={value} />
               ))}
             </div>
+
+            {emailChangeRequest ? (
+              <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                    <Mail size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-black text-amber-950">Email change requested</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${emailChangeRequest.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {emailChangeRequest.canApprove ? "Ownership verified" : "Awaiting verification"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-amber-900/80">
+                      Proposed address: <strong className="wrap-break-word">{emailChangeRequest.requestedValue}</strong>
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800">The registered address remains {account.email} until approval.</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={emailResolutionMutation.isPending}
+                        onClick={() => emailResolutionMutation.mutate("decline")}
+                        className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 disabled:opacity-60"
+                      >
+                        <XCircle size={14} /> Decline
+                      </button>
+                      <button
+                        type="button"
+                        disabled={emailResolutionMutation.isPending || !emailChangeRequest.canApprove}
+                        onClick={() => emailResolutionMutation.mutate("approve")}
+                        title={!emailChangeRequest.canApprove ? "The proposed owner must open the verification link first." : undefined}
+                        className="bg-tanaw-green inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={14} /> Approve verified email
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="mb-3 text-xs font-black tracking-wide text-slate-500 uppercase">Account Actions</p>

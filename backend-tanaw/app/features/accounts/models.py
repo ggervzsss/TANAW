@@ -2,7 +2,20 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -18,6 +31,16 @@ class AccountRole(StrEnum):
 class AccountStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
+
+
+class AccountEmailChangeStatus(StrEnum):
+    PENDING_VERIFICATION = "pending_verification"
+    VERIFIED = "verified"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+    REPLACED = "replaced"
+    EXPIRED = "expired"
 
 
 class Account(Base):
@@ -78,6 +101,66 @@ class Account(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AccountEmailChangeRequest(Base):
+    __tablename__ = "account_email_change_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending_verification', 'verified', 'approved', 'rejected', "
+            "'cancelled', 'replaced', 'expired')",
+            name="ck_account_email_change_status",
+        ),
+        Index(
+            "uq_account_email_change_active_account",
+            "account_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending_verification', 'verified')"),
+            sqlite_where=text("status IN ('pending_verification', 'verified')"),
+        ),
+        Index(
+            "uq_account_email_change_active_email",
+            "requested_email",
+            unique=True,
+            postgresql_where=text("status IN ('pending_verification', 'verified')"),
+            sqlite_where=text("status IN ('pending_verification', 'verified')"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    old_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    requested_email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    token_hash: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True, nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(30),
+        index=True,
+        nullable=False,
+        default=AccountEmailChangeStatus.PENDING_VERIFICATION,
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True, nullable=False
+    )
+    requested_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    requested_by_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    requested_by_role: Mapped[str] = mapped_column(String(40), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    resolved_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    invalidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class DeliveryStatus(StrEnum):
