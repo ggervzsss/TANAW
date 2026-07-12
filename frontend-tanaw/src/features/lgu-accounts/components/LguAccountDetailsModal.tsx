@@ -1,7 +1,7 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, KeyRound, Mail, Pencil, ShieldCheck, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";

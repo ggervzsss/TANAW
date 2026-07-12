@@ -4,6 +4,11 @@ export interface ApiBaseUrlOptions {
   publicDeployment: boolean;
 }
 
+export interface ContentSecurityPolicyOptions {
+  upgradeInsecureRequests?: boolean;
+  inlineElementNonce?: string;
+}
+
 export interface CoordinatedDeploymentInput {
   apiBaseUrl: string;
   frontendPublicUrl: string;
@@ -38,12 +43,22 @@ export function deriveConnectSources(apiBaseUrl: string): string[] {
   return ["'self'", apiUrl.origin, websocketUrl.origin];
 }
 
-export function buildContentSecurityPolicy(apiBaseUrl: string, { upgradeInsecureRequests = false }: { upgradeInsecureRequests?: boolean } = {}): string {
+export function buildContentSecurityPolicy(
+  apiBaseUrl: string,
+  { upgradeInsecureRequests = false, inlineElementNonce }: ContentSecurityPolicyOptions = {},
+): string {
+  const scriptSources = ["'self'"];
+  const styleSources = ["'self'"];
+  if (inlineElementNonce) {
+    const nonceSource = `'nonce-${inlineElementNonce}'`;
+    scriptSources.push(nonceSource);
+    styleSources.push(nonceSource);
+  }
   const directives = [
     "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self'",
-    "style-src-elem 'self'",
+    `script-src ${scriptSources.join(" ")}`,
+    `style-src ${styleSources.join(" ")}`,
+    `style-src-elem ${styleSources.join(" ")}`,
     "style-src-attr 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https://upload.wikimedia.org https://a.basemaps.cartocdn.com https://b.basemaps.cartocdn.com https://c.basemaps.cartocdn.com",

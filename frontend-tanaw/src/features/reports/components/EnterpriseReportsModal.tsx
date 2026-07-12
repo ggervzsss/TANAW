@@ -1,6 +1,6 @@
 import { Bell, FileText } from "lucide-react";
 import { useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { DetailField, EmptyState, ModalFrame } from "@/shared/components/ui";
 import { notifyEnterprise } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";

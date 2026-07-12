@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Layers, LocateFixed, MapPin, Maximize2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import type { BarangayPointResolution } from "@/features/mapview/utils";
 import { ContactNumberField, FormField, ModalFrame, ModalPortal, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";

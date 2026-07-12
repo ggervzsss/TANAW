@@ -1,7 +1,7 @@
 import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Pencil, RefreshCw, Save, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";

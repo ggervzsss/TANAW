@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { ModalFrame, PageMotion } from "@/shared/components/ui";
 import { SettingsDetailPanel } from "../components";

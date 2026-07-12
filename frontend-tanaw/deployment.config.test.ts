@@ -47,6 +47,26 @@ describe("deployment origin configuration", () => {
     expect(() => resolveApiBaseUrl("http://localhost:8000", { publicDeployment: true })).toThrow("public HTTPS URL");
   });
 
+  it("uses a nonce for Vite development styles without weakening production styles", () => {
+    const developmentPolicy = buildContentSecurityPolicy(LOCAL_API_BASE_URL, {
+      inlineElementNonce: "development-test-nonce",
+    });
+    const productionPolicy = buildContentSecurityPolicy("https://tanaw.onrender.com", {
+      upgradeInsecureRequests: true,
+    });
+
+    expect(developmentPolicy).toContain(
+      "style-src-elem 'self' 'nonce-development-test-nonce'",
+    );
+    expect(developmentPolicy).toContain(
+      "script-src 'self' 'nonce-development-test-nonce'",
+    );
+    expect(developmentPolicy).not.toContain("style-src-elem 'self' 'unsafe-inline'");
+    expect(productionPolicy).toContain("style-src-elem 'self'");
+    expect(productionPolicy).not.toContain("nonce-");
+    expect(productionPolicy).not.toContain("style-src-elem 'self' 'unsafe-inline'");
+  });
+
   it("rejects a frontend origin missing from backend CORS", () => {
     expect(() =>
       validateCoordinatedDeployment({

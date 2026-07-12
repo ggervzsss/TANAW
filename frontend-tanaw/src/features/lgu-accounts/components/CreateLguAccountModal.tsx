@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField } from "@/shared/components/ui";
 import { type CreateLguAccountPayload, createLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";

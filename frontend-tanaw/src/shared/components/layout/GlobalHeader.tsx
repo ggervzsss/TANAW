@@ -2,7 +2,7 @@ import { Bell, ChevronDown, LogOut, Shield, User } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";

@@ -2,7 +2,7 @@ import { AnimatePresence } from "motion/react";
 import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";

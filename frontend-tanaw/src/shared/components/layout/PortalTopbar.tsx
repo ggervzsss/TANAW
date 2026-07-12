@@ -2,7 +2,7 @@ import { Activity, ChevronDown, LogOut, Menu, Moon, Settings, Shield, Sun, Ticke
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";

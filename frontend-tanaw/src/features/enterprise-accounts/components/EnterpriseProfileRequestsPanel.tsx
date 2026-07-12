@@ -1,6 +1,6 @@
 import { Check, Clock, Mail, Phone, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import {
   type AccountProfileChangeRequest,
   type AccountSummary,

@@ -2,7 +2,7 @@ import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";

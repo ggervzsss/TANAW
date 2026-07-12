@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Clock3, Inbox, RefreshCw, Search } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { EmptyState, PageMotion } from "@/shared/components/ui";

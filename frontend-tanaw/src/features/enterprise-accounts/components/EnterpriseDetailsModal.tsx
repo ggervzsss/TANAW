@@ -2,7 +2,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { AlertTriangle, Building2, CheckCircle2, KeyRound, Pencil, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";

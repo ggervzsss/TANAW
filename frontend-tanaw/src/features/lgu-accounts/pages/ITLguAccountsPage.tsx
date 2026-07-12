@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, KeyRound } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { ModalFrame, PageMotion } from "@/shared/components/ui";

@@ -1,7 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { CircleAlert, CircleCheckBig, LoaderCircle } from "lucide-react";
 import { BrowserRouter, useLocation } from "react-router-dom";
-import { Toaster, type DefaultToastOptions } from "react-hot-toast";
+import {
+  resolveValue,
+  useToaster,
+  type DefaultToastOptions,
+  type Toast,
+} from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { TOAST_DURATION_MS } from "@/shared/config/app.config";
 import { OperationalSyncBridge } from "@/shared/hooks/useOperationalSync";
@@ -58,16 +64,44 @@ export function AppProviders({ children }: AppProvidersProps) {
 
 function TanawToaster() {
   const { pathname } = useLocation();
+  const { toasts, handlers } = useToaster(tanawToastOptions);
   const hasPortalTopbar = portalRoutePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   const containerClassName = hasPortalTopbar ? "tanaw-toast-viewport tanaw-toast-viewport--portal" : "tanaw-toast-viewport tanaw-toast-viewport--auth";
 
   return (
-    <Toaster
-      position="top-center"
-      gutter={10}
-      containerClassName={containerClassName}
-      containerStyle={hasPortalTopbar ? portalToastContainerStyle : authToastContainerStyle}
-      toastOptions={tanawToastOptions}
-    />
+    <div
+      data-rht-toaster=""
+      className={containerClassName}
+      style={hasPortalTopbar ? portalToastContainerStyle : authToastContainerStyle}
+      onMouseEnter={handlers.startPause}
+      onMouseLeave={handlers.endPause}
+    >
+      {toasts.map((toast) => (
+        <TanawToast key={toast.id} toast={toast} />
+      ))}
+    </div>
   );
+}
+
+function TanawToast({ toast }: { toast: Toast }) {
+  const className = [toast.className ?? "tanaw-toast", toast.visible ? "" : "tanaw-toast--leaving"]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div className={className} style={toast.style} {...toast.ariaProps}>
+      <span className="tanaw-toast__icon" aria-hidden="true">
+        {resolveToastIcon(toast)}
+      </span>
+      <div className="tanaw-toast__message">{resolveValue(toast.message, toast)}</div>
+    </div>
+  );
+}
+
+function resolveToastIcon(toast: Toast): ReactNode {
+  if (toast.icon) return toast.icon;
+  if (toast.type === "success") return <CircleCheckBig className="h-5 w-5" />;
+  if (toast.type === "error") return <CircleAlert className="h-5 w-5" />;
+  if (toast.type === "loading") return <LoaderCircle className="h-5 w-5 animate-spin" />;
+  return null;
 }

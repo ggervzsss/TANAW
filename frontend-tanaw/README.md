@@ -81,6 +81,12 @@ and Nginx continue to provide the non-dynamic response security headers. The
 static site intentionally sends no `Access-Control-Allow-Origin` header because
 only the backend API is a cross-origin resource server.
 
+The Vite development server generates a fresh CSP nonce for its injected HMR
+scripts and compiled Tailwind style element. Production builds keep the stricter
+external-script and external-style policy. TANAW renders notifications through
+the headless toast API and maintained application CSS, so production does not
+depend on runtime CSS-in-JS style injection.
+
 Vercel sets `VERCEL=1`, which makes the build fail if `VITE_API_BASE_URL` is
 missing, local/private, non-HTTPS, or malformed. For another public static or
 Docker host, set `TANAW_PUBLIC_DEPLOYMENT=true` in the build environment to

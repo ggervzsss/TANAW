@@ -1,6 +1,6 @@
 import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Printer, X } from "lucide-react";
 import { motion } from "motion/react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useState } from "react";
