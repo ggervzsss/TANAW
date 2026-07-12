@@ -10,17 +10,35 @@ export const PASSWORD_COMMON_MESSAGE = passwordPolicyData.commonMessage;
 
 const COMMON_PASSWORD_BLOCKLIST = buildCommonPasswordBlocklist();
 
+export type PasswordRequirementStatus = {
+  characterCount: number;
+  hasValue: boolean;
+  isLengthValid: boolean;
+  isNotCommon: boolean;
+};
+
 export function normalizePassword(value: string) {
   return value.normalize("NFC");
 }
 
 export function validatePasswordPolicy(value: string) {
-  const normalized = normalizePassword(value);
-  const length = Array.from(normalized).length;
-  if (length < PASSWORD_MIN_LENGTH) return PASSWORD_TOO_SHORT_MESSAGE;
-  if (length > PASSWORD_MAX_LENGTH) return PASSWORD_TOO_LONG_MESSAGE;
-  if (!normalized.trim() || COMMON_PASSWORD_BLOCKLIST.has(normalized.toLowerCase())) return PASSWORD_COMMON_MESSAGE;
+  const status = getPasswordRequirementStatus(value);
+  if (status.characterCount < PASSWORD_MIN_LENGTH) return PASSWORD_TOO_SHORT_MESSAGE;
+  if (status.characterCount > PASSWORD_MAX_LENGTH) return PASSWORD_TOO_LONG_MESSAGE;
+  if (!status.isNotCommon) return PASSWORD_COMMON_MESSAGE;
   return "";
+}
+
+export function getPasswordRequirementStatus(value: string): PasswordRequirementStatus {
+  const normalized = normalizePassword(value);
+  const characterCount = Array.from(normalized).length;
+  const hasValue = characterCount > 0;
+  return {
+    characterCount,
+    hasValue,
+    isLengthValid: characterCount >= PASSWORD_MIN_LENGTH && characterCount <= PASSWORD_MAX_LENGTH,
+    isNotCommon: hasValue && Boolean(normalized.trim()) && !COMMON_PASSWORD_BLOCKLIST.has(normalized.toLowerCase()),
+  };
 }
 
 function buildCommonPasswordBlocklist() {

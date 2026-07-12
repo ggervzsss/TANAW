@@ -88,13 +88,30 @@ test("shows password-policy feedback and safe backend activation errors", async 
   await page.goto(`/activate-account#token=${validToken}`);
   await expect(page.getByText("Welcome, Sample Staff")).toBeVisible();
 
+  const lengthRequirement = page.locator("li", {
+    hasText: "Between 15 and 128 characters",
+  });
+  const commonPasswordRequirement = page.locator("li", {
+    hasText: "Not a common or easily guessed password",
+  });
+  await expect(lengthRequirement).toHaveAttribute("data-state", "idle");
+  await expect(commonPasswordRequirement).toHaveAttribute("data-state", "idle");
+
   await page.getByLabel("New Password", { exact: true }).fill("too short");
   await page.getByLabel("Confirm Password", { exact: true }).fill("too short");
+  await expect(lengthRequirement).toHaveAttribute("data-state", "unmet");
+  await expect(commonPasswordRequirement).toHaveAttribute("data-state", "met");
+  await expect(page.locator("li", { hasText: "Passwords match" })).toHaveAttribute("data-state", "met");
   await page.getByRole("button", { name: "Activate Account" }).click();
   await expect(page.getByText("Password must contain at least 15 characters.")).toBeVisible();
   expect(completionRequests).toBe(0);
 
-  await completeActivationForm(page);
+  await page.getByLabel("New Password", { exact: true }).fill(validPassword);
+  await expect(lengthRequirement).toHaveAttribute("data-state", "met");
+  await expect(page.locator("li", { hasText: "Passwords do not match" })).toHaveAttribute("data-state", "unmet");
+  await page.getByLabel("Confirm Password", { exact: true }).fill(validPassword);
+  await expect(page.locator("li", { hasText: "Passwords match" })).toHaveAttribute("data-state", "met");
+  await page.getByRole("button", { name: "Activate Account" }).click();
   await expect(page.getByText("Activation link is invalid or expired.")).toBeVisible();
   expect(completionRequests).toBe(1);
 });
@@ -186,9 +203,7 @@ test("activates and signs in an LGU account through a real backend and PostgreSQ
   await completeActivationForm(page, "Real browser activation passphrase 2026");
   await page.getByRole("link", { name: "Continue to sign in" }).click();
   await page.getByLabel("Email", { exact: true }).fill(email);
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill("Real browser activation passphrase 2026");
+  await page.getByLabel("Password", { exact: true }).fill("Real browser activation passphrase 2026");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/staff\/analytics$/);
 });

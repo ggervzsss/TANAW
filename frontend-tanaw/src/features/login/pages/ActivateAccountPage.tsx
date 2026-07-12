@@ -4,8 +4,9 @@ import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
+import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { completeAccountActivation, type AccountActivationDetails, validateAccountActivation } from "../services";
@@ -211,8 +212,9 @@ function ActivationForm({
       </div>
 
       <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
+      <PasswordRequirements password={values.newPassword} />
       <PasswordField label="Confirm Password" name="confirmPassword" value={values.confirmPassword} error={errors.confirmPassword} onChange={onChange("confirmPassword")} />
-      <p className="-mt-1 mb-4 text-xs leading-5 font-medium text-(--tanaw-muted)">{PASSWORD_POLICY_MESSAGE}</p>
+      <PasswordMatchIndicator password={values.newPassword} confirmation={values.confirmPassword} />
 
       {pageMessage ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">

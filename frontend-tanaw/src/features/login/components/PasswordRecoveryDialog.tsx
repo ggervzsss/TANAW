@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { Check, Eye, EyeOff } from "lucide-react";
 import { motion } from "motion/react";
+import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { usePasswordRecoveryFlow } from "../hooks/usePasswordRecoveryFlow";
-import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE } from "@/shared/utils/passwordPolicy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "@/shared/utils/passwordPolicy";
 import { AuthDialogShell } from "./AuthDialogShell";
 
 export function PasswordRecoveryDialog({ onClose }: { onClose: () => void }) {
@@ -69,17 +70,22 @@ export function PasswordRecoveryDialog({ onClose }: { onClose: () => void }) {
         <RecoveryStepFrame title="Set New Password">
           <form onSubmit={flow.resetPassword}>
             <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Create a new private password for {flow.email}.</p>
-            <p className="-mt-3 mb-5 text-xs leading-5 font-medium text-(--tanaw-muted)">{PASSWORD_POLICY_MESSAGE}</p>
             <div className="space-y-4">
-              <RecoveryPasswordInput id="recovery-new-password" label="New password" value={flow.password} onChange={flow.updatePassword} placeholder="Enter new password" error={flow.error} />
-              <RecoveryPasswordInput
-                id="recovery-confirm-password"
-                label="Confirm password"
-                value={flow.confirmation}
-                onChange={flow.updateConfirmation}
-                placeholder="Confirm new password"
-                error={flow.error}
-              />
+              <div>
+                <RecoveryPasswordInput id="recovery-new-password" label="New password" value={flow.password} onChange={flow.updatePassword} placeholder="Enter new password" error={flow.error} />
+                <PasswordRequirements password={flow.password} />
+              </div>
+              <div>
+                <RecoveryPasswordInput
+                  id="recovery-confirm-password"
+                  label="Confirm password"
+                  value={flow.confirmation}
+                  onChange={flow.updateConfirmation}
+                  placeholder="Confirm new password"
+                  error={flow.error}
+                />
+                <PasswordMatchIndicator password={flow.password} confirmation={flow.confirmation} />
+              </div>
             </div>
             <RecoveryError message={flow.error} />
             <RecoverySubmitButton busy={flow.isSubmitting} busyLabel="Updating...">

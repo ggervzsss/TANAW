@@ -119,8 +119,16 @@ test("completes OTP recovery and displays the resend cooldown notice", async ({ 
   await expect(page.getByText("A code was already sent. Try again in 60 seconds.")).toBeVisible();
   await page.getByLabel("Verification code", { exact: true }).fill("123456");
   await page.getByRole("button", { name: "Verify code" }).click();
+  const lengthRequirement = page.locator("li", {
+    hasText: "Between 15 and 128 characters",
+  });
+  await expect(lengthRequirement).toHaveAttribute("data-state", "idle");
   await page.getByLabel("New password", { exact: true }).fill("Recovered enterprise passphrase 2026");
+  await expect(lengthRequirement).toHaveAttribute("data-state", "met");
+  await page.getByLabel("Confirm password", { exact: true }).fill("Not the same enterprise passphrase");
+  await expect(page.locator("li", { hasText: "Passwords do not match" })).toHaveAttribute("data-state", "unmet");
   await page.getByLabel("Confirm password", { exact: true }).fill("Recovered enterprise passphrase 2026");
+  await expect(page.locator("li", { hasText: "Passwords match" })).toHaveAttribute("data-state", "met");
   await page.getByRole("button", { name: "Reset password" }).click();
 
   await expect(page.getByText("Password updated.")).toBeVisible();

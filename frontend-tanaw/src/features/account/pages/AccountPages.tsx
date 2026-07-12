@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
+import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
@@ -11,7 +12,7 @@ import type { UserRole } from "@/shared/types/role.types";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { normalizePersonName, normalizePhilippineContactNumber, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
-import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
 
 type AccountPageProps = {
@@ -202,6 +203,8 @@ export function AccountSecurityPage() {
   const setSession = useAuthStore((state) => state.setSession);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
 
   const handlePasswordUpdate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -230,6 +233,8 @@ export function AccountSecurityPage() {
       toast.success("Password updated.");
       window.setTimeout(() => setIsPasswordSuccess(false), 2600);
       form.reset();
+      setNewPassword("");
+      setPasswordConfirmation("");
     } catch {
       toast.error("Unable to update password. Check your current password and try again.");
     } finally {
@@ -246,11 +251,34 @@ export function AccountSecurityPage() {
           <PanelHeader title="Change Password" icon={Key} />
           <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
             <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="Current password" type="password" maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="New Password" name="newPassword" defaultValue="" placeholder="Use a long passphrase" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
-              <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="Repeat the passphrase" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
+            <div className="grid items-start gap-4 md:grid-cols-2">
+              <div>
+                <Field
+                  label="New Password"
+                  name="newPassword"
+                  defaultValue=""
+                  placeholder="Use a long passphrase"
+                  type="password"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
+                  onValueChange={setNewPassword}
+                />
+                <PasswordRequirements password={newPassword} />
+              </div>
+              <div>
+                <Field
+                  label="Confirm New Password"
+                  name="confirmPassword"
+                  defaultValue=""
+                  placeholder="Repeat the passphrase"
+                  type="password"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
+                  onValueChange={setPasswordConfirmation}
+                />
+                <PasswordMatchIndicator password={newPassword} confirmation={passwordConfirmation} />
+              </div>
             </div>
-            <p className="text-xs leading-5 font-medium text-slate-500">{PASSWORD_POLICY_MESSAGE}</p>
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
@@ -303,6 +331,7 @@ function Field({
   placeholder,
   minLength,
   maxLength,
+  onValueChange,
 }: {
   label: string;
   defaultValue: string;
@@ -312,6 +341,7 @@ function Field({
   placeholder?: string;
   minLength?: number;
   maxLength?: number;
+  onValueChange?: (value: string) => void;
 }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -331,6 +361,7 @@ function Field({
       placeholder={placeholder}
       minLength={minLength}
       maxLength={maxLength}
+      onChange={(event) => onValueChange?.(event.target.value)}
       required={isPassword}
       readOnly={isReadOnly}
       aria-readonly={isReadOnly}
@@ -351,7 +382,7 @@ function Field({
             type="button"
             tabIndex={-1}
             onClick={() => setIsPasswordVisible((current) => !current)}
-            className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-emerald-50 hover:text-tanaw-green focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none"
+            className="hover:text-tanaw-green focus-visible:ring-tanaw-green/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-emerald-50 focus-visible:ring-2 focus-visible:outline-none"
             aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
           >
             {isPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -375,8 +406,8 @@ function Field({
                   inputRef.current?.select();
                 });
               }}
-              className={`absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:ring-2 focus-visible:ring-tanaw-green/30 focus-visible:outline-none ${
-                isEditing ? "bg-emerald-50 text-tanaw-green" : "text-slate-400 hover:bg-emerald-50 hover:text-tanaw-green"
+              className={`focus-visible:ring-tanaw-green/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition focus-visible:ring-2 focus-visible:outline-none ${
+                isEditing ? "text-tanaw-green bg-emerald-50" : "hover:text-tanaw-green text-slate-400 hover:bg-emerald-50"
               }`}
               aria-label={isEditing ? `Lock ${label.toLowerCase()}` : `Edit ${label.toLowerCase()}`}
               aria-pressed={isEditing}
