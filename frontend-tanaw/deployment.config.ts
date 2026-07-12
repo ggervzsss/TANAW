@@ -1,3 +1,5 @@
+import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
+
 export const LOCAL_API_BASE_URL = "http://localhost:8000";
 
 export interface ApiBaseUrlOptions {
@@ -43,10 +45,7 @@ export function deriveConnectSources(apiBaseUrl: string): string[] {
   return ["'self'", apiUrl.origin, websocketUrl.origin];
 }
 
-export function buildContentSecurityPolicy(
-  apiBaseUrl: string,
-  { upgradeInsecureRequests = false, inlineElementNonce }: ContentSecurityPolicyOptions = {},
-): string {
+export function buildContentSecurityPolicy(apiBaseUrl: string, { upgradeInsecureRequests = false, inlineElementNonce }: ContentSecurityPolicyOptions = {}): string {
   const scriptSources = ["'self'"];
   const styleSources = ["'self'"];
   if (inlineElementNonce) {
@@ -61,7 +60,7 @@ export function buildContentSecurityPolicy(
     `style-src-elem ${styleSources.join(" ")}`,
     "style-src-attr 'unsafe-inline'",
     "font-src 'self' data:",
-    "img-src 'self' data: blob: https://upload.wikimedia.org https://a.basemaps.cartocdn.com https://b.basemaps.cartocdn.com https://c.basemaps.cartocdn.com",
+    `img-src 'self' data: blob: https://upload.wikimedia.org ${CARTO_TILE_IMAGE_SOURCES.join(" ")}`,
     `connect-src ${deriveConnectSources(apiBaseUrl).join(" ")}`,
     "object-src 'none'",
     "base-uri 'self'",

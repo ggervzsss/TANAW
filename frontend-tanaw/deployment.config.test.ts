@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
 import { LOCAL_API_BASE_URL, buildContentSecurityPolicy, resolveApiBaseUrl, validateCoordinatedDeployment } from "./deployment.config";
 
 type VercelHeaderRule = {
@@ -55,16 +56,20 @@ describe("deployment origin configuration", () => {
       upgradeInsecureRequests: true,
     });
 
-    expect(developmentPolicy).toContain(
-      "style-src-elem 'self' 'nonce-development-test-nonce'",
-    );
-    expect(developmentPolicy).toContain(
-      "script-src 'self' 'nonce-development-test-nonce'",
-    );
+    expect(developmentPolicy).toContain("style-src-elem 'self' 'nonce-development-test-nonce'");
+    expect(developmentPolicy).toContain("script-src 'self' 'nonce-development-test-nonce'");
     expect(developmentPolicy).not.toContain("style-src-elem 'self' 'unsafe-inline'");
     expect(productionPolicy).toContain("style-src-elem 'self'");
     expect(productionPolicy).not.toContain("nonce-");
     expect(productionPolicy).not.toContain("style-src-elem 'self' 'unsafe-inline'");
+  });
+
+  it("allows every CARTO tile subdomain used by Leaflet", () => {
+    const policy = buildContentSecurityPolicy(LOCAL_API_BASE_URL);
+
+    for (const source of CARTO_TILE_IMAGE_SOURCES) {
+      expect(policy).toContain(source);
+    }
   });
 
   it("rejects a frontend origin missing from backend CORS", () => {

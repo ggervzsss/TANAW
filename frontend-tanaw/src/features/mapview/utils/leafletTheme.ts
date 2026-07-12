@@ -1,4 +1,5 @@
 import L from "leaflet";
+import { CARTO_TILE_SUBDOMAIN_SEQUENCE } from "../../../../map-tiles.config";
 
 export type LeafletMapTheme = "light" | "dark";
 
@@ -43,7 +44,7 @@ export function mountLeafletThemeLayer(map: L.Map, onThemeChange?: (theme: Leafl
     const definition = tileLayers[nextTheme];
     tileLayer = L.tileLayer(definition.url, {
       maxZoom: 19,
-      subdomains: "abcd",
+      subdomains: CARTO_TILE_SUBDOMAIN_SEQUENCE,
       attribution: definition.attribution,
     }).addTo(map);
     onThemeChange?.(nextTheme);
@@ -61,4 +62,3 @@ export function mountLeafletThemeLayer(map: L.Map, onThemeChange?: (theme: Leafl
     delete container.dataset.mapTheme;
   };
 }
-
