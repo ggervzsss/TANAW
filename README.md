@@ -495,7 +495,7 @@ shows them in the **Reporting Month** selector.
 All generated accounts use:
 
 ```text
-Password: TanawTest123!
+Password: Visitor simulation access phrase 2026
 ```
 
 LGU accounts:
@@ -518,7 +518,7 @@ Enterprise accounts:
 
 Archie's Event Place is not a generated account. Sign in with
 `archies@email.com` and the password selected during its account onboarding,
-not `TanawTest123!`.
+not `Visitor simulation access phrase 2026`.
 
 ### Complete the end-to-end report simulation
 
@@ -531,7 +531,7 @@ not `TanawTest123!`.
 4. Wait for the current-period prepared counts to load, then complete and
    submit the current report.
 5. Sign in to the web portal as `reports.staff@tanaw.test` with
-   `TanawTest123!`.
+   `Visitor simulation access phrase 2026`.
 6. Open **Batch Reports** for the relevant reporting periods.
 7. Review the target submissions and accept them as **Ready to Consolidate**.
 8. Generate the final report once all participating enterprises are ready.

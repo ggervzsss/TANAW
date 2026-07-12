@@ -11,6 +11,7 @@
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
     "preview": "vite preview",
     "prettier": "prettier --write .",
+    "test": "vitest run",
     "type": "tsc -b",
     "pp": "tsc -b && vite build && vite preview"
   },
@@ -53,6 +54,7 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.1.4"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }

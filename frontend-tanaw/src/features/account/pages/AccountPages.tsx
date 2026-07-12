@@ -11,7 +11,7 @@ import type { UserRole } from "@/shared/types/role.types";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { normalizePersonName, normalizePhilippineContactNumber, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
-import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
 
 type AccountPageProps = {
@@ -211,7 +211,7 @@ export function AccountSecurityPage() {
     const newPassword = String(formData.get("newPassword") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-    if (newPassword !== confirmPassword) {
+    if (normalizePassword(newPassword) !== normalizePassword(confirmPassword)) {
       toast.error("New passwords do not match.");
       return;
     }
@@ -245,11 +245,12 @@ export function AccountSecurityPage() {
         <Panel className="overflow-hidden">
           <PanelHeader title="Change Password" icon={Key} />
           <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
-            <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="********" type="password" />
+            <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="Current password" type="password" maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="New Password" name="newPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
-              <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="******" type="password" minLength={PASSWORD_MIN_LENGTH} />
+              <Field label="New Password" name="newPassword" defaultValue="" placeholder="Use a long passphrase" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
+              <Field label="Confirm New Password" name="confirmPassword" defaultValue="" placeholder="Repeat the passphrase" type="password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
             </div>
+            <p className="text-xs leading-5 font-medium text-slate-500">{PASSWORD_POLICY_MESSAGE}</p>
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
@@ -301,6 +302,7 @@ function Field({
   type = "text",
   placeholder,
   minLength,
+  maxLength,
 }: {
   label: string;
   defaultValue: string;
@@ -309,6 +311,7 @@ function Field({
   type?: string;
   placeholder?: string;
   minLength?: number;
+  maxLength?: number;
 }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -327,6 +330,7 @@ function Field({
       defaultValue={defaultValue}
       placeholder={placeholder}
       minLength={minLength}
+      maxLength={maxLength}
       required={isPassword}
       readOnly={isReadOnly}
       aria-readonly={isReadOnly}

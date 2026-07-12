@@ -108,7 +108,7 @@ async def test_invalid_reset_tokens_are_bounded_and_invalidate_the_challenge(
                 db,
                 challenge_id=challenge_id,
                 reset_token="wrong-reset-token",
-                new_password="New1!Password",
+                new_password="New recovery passphrase 2026",
             )
 
     assert challenge.reset_attempts == password_recovery.MAX_RESET_TOKEN_ATTEMPTS

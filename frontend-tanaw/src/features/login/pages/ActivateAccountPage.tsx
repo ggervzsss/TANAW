@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { completeAccountActivation, type AccountActivationDetails, validateAccountActivation } from "../services";
@@ -282,6 +282,7 @@ function PasswordField({ label, name, value, error, onChange }: { label: string;
           placeholder={label}
           autoComplete="new-password"
           minLength={PASSWORD_MIN_LENGTH}
+          maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
           required
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
@@ -310,7 +311,7 @@ function validatePasswordValues(values: PasswordValues) {
   const policyError = validatePasswordPolicy(values.newPassword);
   if (policyError) errors.newPassword = policyError;
   if (!values.confirmPassword) errors.confirmPassword = "Please confirm your password.";
-  else if (values.confirmPassword !== values.newPassword) errors.confirmPassword = "Passwords do not match.";
+  else if (normalizePassword(values.confirmPassword) !== normalizePassword(values.newPassword)) errors.confirmPassword = "Passwords do not match.";
   return errors;
 }
 

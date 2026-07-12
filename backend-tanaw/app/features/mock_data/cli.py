@@ -28,7 +28,7 @@ from app.features.operational.models import (
 )
 from app.features.operational.service import generate_final_report_code
 
-TEST_ACCOUNT_PASSWORD = "TanawTest123!"
+TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
 DEFAULT_SEED = "tanaw-testing-v2"
 REPORTING_STAFF_NAME = "Carla Mendoza"

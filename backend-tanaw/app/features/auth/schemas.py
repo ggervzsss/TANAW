@@ -3,13 +3,17 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.core.password_policy import PASSWORD_MIN_LENGTH, validate_password_policy
+from app.core.password_policy import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    validate_password_policy,
+)
 from app.features.accounts.schemas import AuthUser
 
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1)
-    password: str
+    password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
     loginScope: Literal["web", "enterprise"] = "web"
 
 
@@ -30,12 +34,12 @@ class AccountActivationValidateResponse(BaseModel):
 
 class AccountActivationCompleteRequest(BaseModel):
     token: str = Field(min_length=20, max_length=512)
-    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH)
+    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
-    @field_validator("newPassword")
+    @field_validator("newPassword", mode="before")
     @classmethod
-    def validate_new_password(cls, value: str) -> str:
-        return validate_password_policy(value)
+    def validate_new_password(cls, value: object) -> object:
+        return validate_password_policy(value) if isinstance(value, str) else value
 
 
 class AccountActivationCompleteResponse(BaseModel):
@@ -84,12 +88,12 @@ class ForgotPasswordVerifyResponse(BaseModel):
 class ForgotPasswordResetRequest(BaseModel):
     challengeId: str = Field(min_length=1)
     resetToken: str = Field(min_length=1)
-    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH)
+    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
-    @field_validator("newPassword")
+    @field_validator("newPassword", mode="before")
     @classmethod
-    def validate_new_password(cls, value: str) -> str:
-        return validate_password_policy(value)
+    def validate_new_password(cls, value: object) -> object:
+        return validate_password_policy(value) if isinstance(value, str) else value
 
 
 class SupportRequest(BaseModel):

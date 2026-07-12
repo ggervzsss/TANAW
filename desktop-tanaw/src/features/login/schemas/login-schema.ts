@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PASSWORD_MAX_LENGTH } from "../../../utils/password-policy";
 
 export const loginSchema = z.object({
   username: z
@@ -21,6 +22,9 @@ export const loginSchema = z.object({
     if (!value.trim()) {
       ctx.addIssue({ code: "custom", message: "Please enter your password." });
       return;
+    }
+    if (Array.from(value.normalize("NFC")).length > PASSWORD_MAX_LENGTH) {
+      ctx.addIssue({ code: "custom", message: `Password must contain no more than ${PASSWORD_MAX_LENGTH} characters.` });
     }
   }),
 });

@@ -5,7 +5,7 @@ import { AlertCircle, ArrowRight, Check, ExternalLink, Eye, EyeOff, Headphones, 
 import { motion } from "motion/react";
 import { isAxiosError } from "axios";
 import { apiClient } from "@/shared/lib/apiClient";
-import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { requestPasswordRecovery, resetRecoveredPassword, verifyPasswordRecovery } from "../services";
 
 type LoginFormProps = {
@@ -55,10 +55,10 @@ const validateVerificationCode = (value: string) => {
 };
 
 const validateNewPassword = (passwordValue: string, confirmPasswordValue: string) => {
-  if (!passwordValue.trim()) return "Please enter a new password.";
+  if (!passwordValue) return "Please enter a new password.";
   const policyError = validatePasswordPolicy(passwordValue);
   if (policyError) return policyError;
-  if (passwordValue !== confirmPasswordValue) return "Passwords do not match.";
+  if (normalizePassword(passwordValue) !== normalizePassword(confirmPasswordValue)) return "Passwords do not match.";
   return "";
 };
 
@@ -337,6 +337,7 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
               }}
               placeholder="Enter your password"
               autoComplete="current-password"
+              maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
               aria-invalid={Boolean(passwordError)}
               aria-describedby={passwordError ? "login-password-error" : undefined}
               className="h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
@@ -627,6 +628,7 @@ function RecoveryDialogContent({
       <RecoveryStepFrame key="password" title="Set New Password">
         <form onSubmit={onReset}>
           <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Create a new private password for {email}.</p>
+          <p className="-mt-3 mb-5 text-xs leading-5 font-medium text-(--tanaw-muted)">{PASSWORD_POLICY_MESSAGE}</p>
           <div className="space-y-4">
             <RecoveryPasswordInput id="recovery-new-password" label="New password" value={password} onChange={onPasswordChange} placeholder="Enter new password" error={error} />
             <RecoveryPasswordInput
@@ -717,6 +719,7 @@ function RecoveryPasswordInput({
           placeholder={placeholder}
           autoComplete="new-password"
           minLength={PASSWORD_MIN_LENGTH}
+          maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
           required
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "recovery-error" : undefined}

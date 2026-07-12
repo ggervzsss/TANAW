@@ -4,7 +4,11 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.core.password_policy import PASSWORD_MIN_LENGTH, validate_password_policy
+from app.core.password_policy import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    validate_password_policy,
+)
 from app.features.accounts.options import (
     ENTERPRISE_CATEGORIES,
     SAN_PEDRO_ADDRESS_SUFFIX,
@@ -337,13 +341,13 @@ class DeliverySummary(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    currentPassword: str = Field(min_length=1)
-    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH)
+    currentPassword: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
-    @field_validator("newPassword")
+    @field_validator("newPassword", mode="before")
     @classmethod
-    def validate_new_password(cls, value: str) -> str:
-        return validate_password_policy(value)
+    def validate_new_password(cls, value: object) -> object:
+        return validate_password_policy(value) if isinstance(value, str) else value
 
 
 class ProfileUpdate(BaseModel):

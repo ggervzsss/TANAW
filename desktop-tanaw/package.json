@@ -22,6 +22,7 @@
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",
     "prettier": "prettier --write .",
+    "test": "vitest run",
     "type": "tsc --noEmit"
   },
   "dependencies": {
@@ -57,7 +58,8 @@
     "typescript": "^5.5.4",
     "vite": "^7.3.6",
     "vite-plugin-electron": "^0.28.6",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.1.10"
   },
   "main": "dist-electron/main.js"
 }

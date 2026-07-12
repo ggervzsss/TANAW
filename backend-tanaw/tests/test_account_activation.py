@@ -123,7 +123,8 @@ async def test_activation_completion_sets_password_and_consumes_token() -> None:
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    activated = await account_activation.complete_account_activation(db, raw_token, "New1!Password")
+    new_password = "New account passphrase 2026"
+    activated = await account_activation.complete_account_activation(db, raw_token, new_password)
 
     assert activated is account
     assert account.activated_at is not None
@@ -131,7 +132,7 @@ async def test_activation_completion_sets_password_and_consumes_token() -> None:
     assert account.token_invalid_before == account.activated_at
     assert account.failed_login_attempts == 0
     assert account.locked_until is None
-    assert verify_password("New1!Password", account.password_hash)
+    assert verify_password(new_password, account.password_hash)
     assert token.consumed_at == account.activated_at
     db.commit.assert_awaited_once()
     db.refresh.assert_awaited_once_with(account)

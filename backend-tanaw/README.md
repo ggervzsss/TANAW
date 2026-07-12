@@ -228,6 +228,25 @@ the resend cooldown. Configure the limits with `PASSWORD_RESET_PER_IP_LIMIT`,
 `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS`, and
 `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS`.
 
+## Password Policy
+
+TANAW uses a passphrase-first policy aligned with NIST SP 800-63B-4 for its
+single-factor account passwords. New and changed passwords must contain 15 to
+128 Unicode code points. Spaces, password-manager output, and Unicode are
+accepted; mandatory uppercase, lowercase, number, and symbol mixtures are not
+used. TANAW normalizes new passwords to Unicode NFC before hashing and accepts
+the canonically equivalent form during sign-in.
+
+The backend is authoritative and rejects exact matches from TANAW's bundled
+common, compromised, and context-specific blocklist. The web and desktop
+clients use the same versioned blocklist data and messages for immediate
+feedback. Existing passwords remain usable until their owner activates,
+recovers, or changes the account password; this avoids silently locking out
+seeded development users during rollout. One-time bootstrap and explicitly
+enabled local development credentials remain operational configuration secrets,
+not user-selected passwords, but normal password changes on those accounts use
+the same policy.
+
 ## Data Boundaries
 
 PostgreSQL stores central TANAW records: accounts, roles, telemetry snapshots,

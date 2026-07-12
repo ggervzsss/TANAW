@@ -193,13 +193,13 @@ Acceptance criteria:
 
 ### AUTH-004 — Replace the six-character composition password policy
 
-- [ ] Choose and document the final TANAW password policy.
-- [ ] For password-only authentication, use a substantially longer minimum; current NIST guidance specifies 15 characters.
-- [ ] Permit long passphrases and a maximum length of at least 64 characters.
-- [ ] Remove mandatory uppercase/lowercase/number/symbol composition rules.
-- [ ] Add a compromised/common-password blocklist check.
-- [ ] Keep backend, web, and desktop validation behavior and messages synchronized.
-- [ ] Add boundary, Unicode, whitespace, and common-password tests.
+- [x] Choose and document the final TANAW password policy.
+- [x] For password-only authentication, use a substantially longer minimum; current NIST guidance specifies 15 characters.
+- [x] Permit long passphrases and a maximum length of at least 64 characters.
+- [x] Remove mandatory uppercase/lowercase/number/symbol composition rules.
+- [x] Add a compromised/common-password blocklist check.
+- [x] Keep backend, web, and desktop validation behavior and messages synchronized.
+- [x] Add boundary, Unicode, whitespace, and common-password tests.
 
 Acceptance criteria:
 

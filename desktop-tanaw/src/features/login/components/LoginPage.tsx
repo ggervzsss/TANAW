@@ -7,7 +7,7 @@ import { AlertCircle, ArrowRight, Check, ExternalLink, Eye, EyeOff, Headphones, 
 import { routePaths } from "../../../app/router/routePaths";
 import { staffApi } from "../../../lib/axios";
 import { cn } from "../../../utils/cn";
-import { PASSWORD_MIN_LENGTH, validatePasswordPolicy } from "../../../utils/password-policy";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, PASSWORD_POLICY_MESSAGE, normalizePassword, validatePasswordPolicy } from "../../../utils/password-policy";
 import { requestPasswordRecovery, resetRecoveredPassword, verifyPasswordRecovery } from "../api/password-recovery";
 import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { useLogin } from "../hooks/use-login";
@@ -149,6 +149,7 @@ function RecoveryDialogContent({
       <RecoveryStepFrame key="password" title="Set New Password">
         <form onSubmit={onReset}>
           <p className="mb-5 text-sm leading-6 text-(--tanaw-muted)">Create a new private password for {email}.</p>
+          <p className="-mt-3 mb-5 text-xs leading-5 font-medium text-(--tanaw-muted)">{PASSWORD_POLICY_MESSAGE}</p>
           <div className="space-y-4">
             <RecoveryPasswordInput id="desktop-recovery-new-password" label="New password" value={password} onChange={onPasswordChange} placeholder="Enter new password" error={error} />
             <RecoveryPasswordInput
@@ -239,6 +240,7 @@ function RecoveryPasswordInput({
           placeholder={placeholder}
           autoComplete="new-password"
           minLength={PASSWORD_MIN_LENGTH}
+          maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
           required
         />
         <button
@@ -376,10 +378,10 @@ const validateVerificationCode = (value: string) => {
 };
 
 const validateNewPassword = (passwordValue: string, confirmPasswordValue: string) => {
-  if (!passwordValue.trim()) return "Please enter a new password.";
+  if (!passwordValue) return "Please enter a new password.";
   const policyError = validatePasswordPolicy(passwordValue);
   if (policyError) return policyError;
-  if (passwordValue !== confirmPasswordValue) return "Passwords do not match.";
+  if (normalizePassword(passwordValue) !== normalizePassword(confirmPasswordValue)) return "Passwords do not match.";
   return "";
 };
 
@@ -712,6 +714,7 @@ export function LoginPage() {
                 placeholder="Enter your password"
                 value={values.password}
                 onChange={updateField("password")}
+                maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
                 aria-invalid={Boolean(errors.password)}
               />
               {errors.password ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} /> : null}
