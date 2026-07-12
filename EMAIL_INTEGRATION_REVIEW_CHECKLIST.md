@@ -263,10 +263,10 @@ Acceptance criteria:
 
 ### DEPLOY-001 — Remove hard-coded deployment origins
 
-- [ ] Make the web Content Security Policy API and WebSocket origins derive from the selected deployment environment or generated deployment configuration.
-- [ ] Remove the unnecessary static-site `Access-Control-Allow-Origin` header unless a specific consumer requires it.
-- [ ] Document coordinated changes for `VITE_API_BASE_URL`, backend CORS, `FRONTEND_PUBLIC_URL`, CSP `connect-src`, and WebSocket origins.
-- [ ] Test the future custom TANAW domain and current Vercel domain configurations.
+- [x] Make the web Content Security Policy API and WebSocket origins derive from the selected deployment environment or generated deployment configuration.
+- [x] Remove the unnecessary static-site `Access-Control-Allow-Origin` header unless a specific consumer requires it.
+- [x] Document coordinated changes for `VITE_API_BASE_URL`, backend CORS, `FRONTEND_PUBLIC_URL`, CSP `connect-src`, and WebSocket origins.
+- [x] Test the future custom TANAW domain and current Vercel domain configurations.
 
 Acceptance criteria:
 

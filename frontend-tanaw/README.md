@@ -70,6 +70,48 @@ Runtime API configuration is controlled through `VITE_API_BASE_URL`. The root
 Docker Compose and TL;DR guide document the expected local value and startup
 flow.
 
+## Deployment Origins And CSP
+
+The API URL is compiled into the browser bundle. Vite derives the Content
+Security Policy `connect-src` entries from that same value, including the
+matching `wss://` origin used by TANAW's operational and activity-log sockets.
+There is no separate hard-coded Render or Vercel origin to update. The policy is
+injected as an early HTML `<meta http-equiv="Content-Security-Policy">`; Vercel
+and Nginx continue to provide the non-dynamic response security headers. The
+static site intentionally sends no `Access-Control-Allow-Origin` header because
+only the backend API is a cross-origin resource server.
+
+Vercel sets `VERCEL=1`, which makes the build fail if `VITE_API_BASE_URL` is
+missing, local/private, non-HTTPS, or malformed. For another public static or
+Docker host, set `TANAW_PUBLIC_DEPLOYMENT=true` in the build environment to
+enable the same guard. Local development and the production-like local Compose
+stack may leave this flag false and use `http://localhost:8000`.
+
+These values form one deployment unit and must change together:
+
+| Configuration                 | Current hosted deployment           | Future custom-domain example    |
+| ----------------------------- | ----------------------------------- | ------------------------------- |
+| Portal URL                    | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
+| Frontend `VITE_API_BASE_URL`  | `https://tanaw.onrender.com`        | `https://api.tanaw-sanpedro.ph` |
+| Backend `FRONTEND_PUBLIC_URL` | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
+| Backend `CORS_ORIGINS`        | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
+| Generated CSP sockets         | `wss://tanaw.onrender.com`          | `wss://api.tanaw-sanpedro.ph`   |
+
+Before a deployment, validate the three operator-controlled values from this
+directory:
+
+```shell
+VITE_API_BASE_URL=https://tanaw.onrender.com \
+FRONTEND_PUBLIC_URL=https://tanaw-sanpedro.vercel.app \
+CORS_ORIGINS=https://tanaw-sanpedro.vercel.app \
+npm run deployment:validate
+```
+
+Then rebuild the frontend and redeploy the backend. `FRONTEND_PUBLIC_URL`
+controls activation and email-ownership links, `CORS_ORIGINS` authorizes the
+browser origin at the API, and `VITE_API_BASE_URL` controls REST, WebSocket, and
+CSP destinations. A DNS change alone is therefore not sufficient.
+
 ## UI And State Model
 
 The app uses React Router for navigation, TanStack Query for server state,

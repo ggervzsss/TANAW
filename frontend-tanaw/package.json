@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "deployment:validate": "node scripts/validate-deployment-config.ts",
     "lint": "eslint . && npm run lint:tailwind",
     "lint:tailwind": "node scripts/lint-tailwind-canonical.mjs",
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
