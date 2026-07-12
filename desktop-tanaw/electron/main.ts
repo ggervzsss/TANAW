@@ -690,10 +690,6 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     win = null;
   });
 
-  win.webContents.on("did-finish-load", () => {
-    win?.webContents.send("main-process-message", new Date().toLocaleString());
-  });
-
   if (showSplash && loadSplashScreen()) {
     return;
   }

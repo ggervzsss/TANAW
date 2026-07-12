@@ -287,23 +287,23 @@ Acceptance criteria:
 
 ### CLEAN-001 — Remove stale tracked review output
 
-- [ ] Remove `last-respone.md` or move still-useful guidance into maintained documentation.
-- [ ] Confirm no documentation references the deleted forced-password-change pages.
+- [x] Remove `last-respone.md` or move still-useful guidance into maintained documentation.
+- [x] Confirm no documentation references the deleted forced-password-change pages.
 
 ### CLEAN-002 — Remove the unused Electron timestamp IPC debug path
 
-- [ ] Remove the `main-process-message` send in `desktop-tanaw/electron/main.ts`.
-- [ ] Remove `tanawAppEvents` from the Electron preload bridge and type declarations.
-- [ ] Remove the renderer `console.log` subscription in `desktop-tanaw/src/main.tsx`.
-- [ ] Confirm no other feature consumes this event.
+- [x] Remove the `main-process-message` send in `desktop-tanaw/electron/main.ts`.
+- [x] Remove `tanawAppEvents` from the Electron preload bridge and type declarations.
+- [x] Remove the renderer `console.log` subscription in `desktop-tanaw/src/main.tsx`.
+- [x] Confirm no other feature consumes this event.
 
 ### CLEAN-003 — Split and share authentication UI logic
 
-- [ ] Break the web `LoginForm.tsx` into focused login, recovery, support, and dialog components/hooks.
-- [ ] Break the desktop `LoginPage.tsx` into equivalent focused modules.
+- [x] Break the web `LoginForm.tsx` into focused login, recovery, support, and dialog components/hooks.
+- [x] Break the desktop `LoginPage.tsx` into equivalent focused modules.
 - [x] Centralize each client's password-recovery API calls in a typed service.
-- [ ] Share behavior or generated contracts where practical so web and desktop recovery do not drift.
-- [ ] Keep desktop-specific presentation and routing independent from the web activation page.
+- [x] Share behavior or generated contracts where practical so web and desktop recovery do not drift.
+- [x] Keep desktop-specific presentation and routing independent from the web activation page.
 
 Acceptance criteria:
 
@@ -312,9 +312,9 @@ Acceptance criteria:
 
 ### CLEAN-004 — Address existing build warnings
 
-- [ ] Resolve the desktop `loading-page-poster.jpg` runtime-resolution warning.
-- [ ] Add route-level code splitting for the web and desktop bundles.
-- [ ] Recheck bundle sizes after authentication modules are separated.
+- [x] Resolve the desktop `loading-page-poster.jpg` runtime-resolution warning.
+- [x] Add route-level code splitting for the web and desktop bundles.
+- [x] Recheck bundle sizes after authentication modules are separated.
 
 ## Automated test work
 

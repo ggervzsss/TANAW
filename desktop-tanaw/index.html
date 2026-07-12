@@ -33,12 +33,7 @@
         place-items: center;
         background: #f7f7f3;
         color: #10241b;
-        font-family:
-          "Bai Jamjuree",
-          "Montserrat",
-          ui-sans-serif,
-          system-ui,
-          sans-serif;
+        font-family: "Bai Jamjuree", "Montserrat", ui-sans-serif, system-ui, sans-serif;
       }
 
       .tanaw-boot-splash::before {
@@ -46,7 +41,7 @@
         position: absolute;
         inset: -12vmax;
         z-index: 0;
-        background: url("./media/loading-page-poster.jpg") center / cover no-repeat;
+        background: url("/media/loading-page-poster.jpg") center / cover no-repeat;
         opacity: 0.22;
         filter: blur(32px) saturate(0.86);
         transform: scale(1.04);
@@ -71,7 +66,7 @@
         position: absolute;
         inset: 0;
         z-index: 1;
-        background: url("./media/loading-page-poster.jpg") center / cover no-repeat;
+        background: url("/media/loading-page-poster.jpg") center / cover no-repeat;
       }
 
       .tanaw-boot-card video {
@@ -113,8 +108,7 @@
         transform: translateX(-50%);
         border: 1px solid rgb(215 179 90 / 0.46);
         border-radius: 999px;
-        background:
-          radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.98), rgb(247 247 243 / 0.96) 62%, rgb(247 247 243 / 0.9) 100%);
+        background: radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.98), rgb(247 247 243 / 0.96) 62%, rgb(247 247 243 / 0.9) 100%);
         box-shadow:
           0 12px 28px rgb(15 23 42 / 0.08),
           0 0 0 6px rgb(247 247 243 / 0.36);
@@ -155,16 +149,8 @@
     <div id="root">
       <div class="tanaw-boot-splash" aria-label="TANAW loading">
         <div class="tanaw-boot-card">
-          <video
-            autoplay
-            loop
-            muted
-            playsinline
-            poster="./media/loading-page-poster.jpg"
-            aria-label="TANAW startup splash"
-            onerror="document.documentElement.dataset.bootVideoState='fallback'"
-          >
-            <source src="./media/loading-page.mp4" type="video/mp4" />
+          <video autoplay loop muted playsinline poster="/media/loading-page-poster.jpg" aria-label="TANAW startup splash" onerror="document.documentElement.dataset.bootVideoState = 'fallback'">
+            <source src="/media/loading-page.mp4" type="video/mp4" />
           </video>
           <div class="tanaw-boot-active-loader" aria-hidden="true"></div>
         </div>
