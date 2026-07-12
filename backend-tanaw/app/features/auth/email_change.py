@@ -73,7 +73,7 @@ async def get_active_account_email_change_request(
         .limit(1)
     )
     if lock:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     return cast(AccountEmailChangeRequest | None, await db.scalar(statement))
 
 
@@ -84,7 +84,12 @@ async def request_account_email_change(
     requested_email: str,
     requested_by: Account,
 ) -> tuple[Account, AccountEmailChangeRequest]:
-    account = await db.scalar(select(Account).where(Account.id == account_id).with_for_update())
+    account = await db.scalar(
+        select(Account)
+        .where(Account.id == account_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if account is None or account.status != AccountStatus.ACTIVE or account.activated_at is None:
         raise AccountEmailChangeError(
             "Only active, activated accounts can request a verified email change."
@@ -208,12 +213,16 @@ async def verify_account_email_change(
         raise AccountEmailChangeError("Email verification link is invalid or expired.")
 
     account = await db.scalar(
-        select(Account).where(Account.id == candidate.account_id).with_for_update()
+        select(Account)
+        .where(Account.id == candidate.account_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     request = await db.scalar(
         select(AccountEmailChangeRequest)
         .where(AccountEmailChangeRequest.id == candidate.id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     now = _now()
     if (
@@ -261,7 +270,12 @@ async def resolve_account_email_change(
     approve: bool,
     commit: bool = True,
 ) -> tuple[Account, AccountEmailChangeRequest]:
-    account = await db.scalar(select(Account).where(Account.id == account_id).with_for_update())
+    account = await db.scalar(
+        select(Account)
+        .where(Account.id == account_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if account is None:
         raise AccountEmailChangeError("Account not found.")
     request = await get_active_account_email_change_request(db, account.id, lock=True)
@@ -379,7 +393,12 @@ async def cancel_account_email_change(
     account_id: str,
     commit: bool = True,
 ) -> AccountEmailChangeRequest:
-    account = await db.scalar(select(Account).where(Account.id == account_id).with_for_update())
+    account = await db.scalar(
+        select(Account)
+        .where(Account.id == account_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if account is None:
         raise AccountEmailChangeError("Account not found.")
     request = await get_active_account_email_change_request(db, account.id, lock=True)

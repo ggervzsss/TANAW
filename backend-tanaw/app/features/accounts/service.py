@@ -295,7 +295,7 @@ async def get_account_by_login_identifier(
         (Account.email == normalized) | (Account.enterprise_id == normalized)
     )
     if for_update:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     return cast(Account | None, await db.scalar(statement))
 
 
@@ -307,7 +307,7 @@ async def get_account_by_id(
 ) -> Account | None:
     statement = select(Account).where(Account.id == account_id)
     if for_update:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     return cast(Account | None, await db.scalar(statement))
 
 
