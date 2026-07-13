@@ -1,20 +1,19 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { isAxiosError } from "axios";
 import { AlertTriangle, KeyRound } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { ModalFrame, PageMotion } from "@/shared/components/ui";
-import { type AccountSummary, listLguAccounts, resetAccountPassword, updateAccountStatus } from "@/shared/services/accountManagement";
+import { type AccountSummary, listLguAccounts, resendAccountActivation, updateAccountStatus } from "@/shared/services/accountManagement";
+import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { CreateLguAccountModal, LguAccountDetailsModal, LguAccountsMetrics, LguAccountsTable, LguAccountsToolbar } from "../components";
 import type { LguRoleFilter, LguStatusFilter } from "../types";
 import { filterLguAccounts } from "../utils";
 
 const EMPTY_ACCOUNTS: AccountSummary[] = [];
 type PendingStatusChange = { account: AccountSummary; nextStatus: LguStatusFilter };
-type ApiErrorPayload = { detail?: string };
 
 export function ITLguAccountsPage() {
   const queryClient = useQueryClient();
@@ -23,38 +22,42 @@ export function ITLguAccountsPage() {
   const [status, setStatus] = useState<LguStatusFilter>("active");
   const [selectedAccount, setSelectedAccount] = useState<AccountSummary | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<PendingStatusChange | null>(null);
-  const [pendingPasswordReset, setPendingPasswordReset] = useState<AccountSummary | null>(null);
+  const [pendingActivationResend, setPendingActivationResend] = useState<AccountSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   const accountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
   const filteredAccounts = useMemo(() => filterLguAccounts(accounts, query, role, status), [accounts, query, role, status]);
 
-  const resetMutation = useMutation({
-    mutationFn: (accountId: string) => resetAccountPassword(accountId),
+  const activationMutation = useMutation({
+    mutationFn: (accountId: string) => resendAccountActivation(accountId),
     onSuccess: async (updatedAccount) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("Temporary credentials recorded in Dev Log");
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      toast.success("Activation email queued");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
-      setPendingPasswordReset(null);
+      setPendingActivationResend(null);
     },
-    onError: (error) => toast.error(getStatusErrorMessage(error)),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to resend activation email")),
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ accountId, nextStatus }: { accountId: string; nextStatus: LguStatusFilter }) => updateAccountStatus(accountId, nextStatus),
-    onSuccess: async (updatedAccount) => {
-      await queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] });
-      toast.success("Account status updated");
+    onSuccess: async (updatedAccount, { nextStatus }) => {
+      const activationEmailQueued = nextStatus === "active" && !updatedAccount.isActivated;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+      ]);
+      toast.success(activationEmailQueued ? "Account reactivated; activation email queued" : "Account status updated");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
       setPendingStatusChange(null);
     },
-    onError: (error) => toast.error(getStatusErrorMessage(error)),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update account status")),
   });
 
   return (
     <PageMotion>
-      <PageHeader title="LGU Accounts" description="Create personnel accounts, issue temporary credentials, and manage access status." />
+      <PageHeader title="LGU Accounts" description="Create personnel accounts, send secure activation links, and manage access status." />
 
       <LguAccountsMetrics accounts={accounts} />
 
@@ -64,26 +67,29 @@ export function ITLguAccountsPage() {
       </Panel>
 
       <AnimatePresence>
-        {createOpen && <CreateLguAccountModal onClose={() => setCreateOpen(false)} />}
+        {createOpen && <CreateLguAccountModal key="create-lgu-account" onClose={() => setCreateOpen(false)} />}
         {selectedAccount && (
           <LguAccountDetailsModal
+            key={`lgu-account-details-${selectedAccount.id}`}
             account={selectedAccount}
             onClose={() => setSelectedAccount(null)}
             onAccountUpdated={setSelectedAccount}
-            onResetCredentials={setPendingPasswordReset}
+            onResendActivation={setPendingActivationResend}
             onRequestStatusChange={(account, nextStatus) => setPendingStatusChange({ account, nextStatus })}
           />
         )}
-        {pendingPasswordReset && (
-          <ConfirmPasswordResetModal
-            account={pendingPasswordReset}
-            isPending={resetMutation.isPending}
-            onClose={() => setPendingPasswordReset(null)}
-            onConfirm={() => resetMutation.mutate(pendingPasswordReset.id)}
+        {pendingActivationResend && (
+          <ConfirmActivationResendModal
+            key={`lgu-activation-resend-${pendingActivationResend.id}`}
+            account={pendingActivationResend}
+            isPending={activationMutation.isPending}
+            onClose={() => setPendingActivationResend(null)}
+            onConfirm={() => activationMutation.mutate(pendingActivationResend.id)}
           />
         )}
         {pendingStatusChange && (
           <ConfirmAccountStatusModal
+            key={`lgu-status-change-${pendingStatusChange.account.id}`}
             pendingStatusChange={pendingStatusChange}
             isPending={statusMutation.isPending}
             onClose={() => setPendingStatusChange(null)}
@@ -95,18 +101,18 @@ export function ITLguAccountsPage() {
   );
 }
 
-function ConfirmPasswordResetModal({ account, isPending, onClose, onConfirm }: { account: AccountSummary; isPending: boolean; onClose: () => void; onConfirm: () => void }) {
+function ConfirmActivationResendModal({ account, isPending, onClose, onConfirm }: { account: AccountSummary; isPending: boolean; onClose: () => void; onConfirm: () => void }) {
   return (
-    <ModalFrame title="Reset Credentials" onClose={onClose} maxWidthClassName="max-w-lg">
+    <ModalFrame title="Resend Activation Email" onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
         <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
             <KeyRound size={20} />
           </span>
           <div>
-            <p className="font-bold">This will generate new temporary credentials.</p>
+            <p className="font-bold">This will issue a new activation link.</p>
             <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
-              The current password for {account.displayName} will stop working. New temporary credentials will be recorded in Dev Log and the user will need to change the password after signing in.
+              Any previous activation link for {account.displayName} will stop working. TANAW will email a new single-use link so the user can create their password securely.
             </p>
           </div>
         </div>
@@ -115,11 +121,6 @@ function ConfirmPasswordResetModal({ account, isPending, onClose, onConfirm }: {
           <p className="mt-1 font-bold text-slate-900">{account.displayName}</p>
           <p className="text-sm text-slate-600">{account.email}</p>
         </div>
-        {account.role === "it" && (
-          <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
-            TANAW blocks self-resets and last-active IT resets so this action cannot silently lock out the IT Personnel role.
-          </p>
-        )}
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
@@ -134,7 +135,7 @@ function ConfirmPasswordResetModal({ account, isPending, onClose, onConfirm }: {
             onClick={onConfirm}
             className="rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-700 focus:ring-4 focus:ring-amber-200 focus:outline-none disabled:translate-y-0 disabled:opacity-70"
           >
-            {isPending ? "Resetting..." : "Reset Credentials"}
+            {isPending ? "Sending..." : "Resend Activation Email"}
           </button>
         </div>
       </div>
@@ -168,7 +169,9 @@ function ConfirmAccountStatusModal({
             <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
               {isDeactivating
                 ? `${pendingStatusChange.account.displayName} will not be able to sign in until the account is reactivated.`
-                : `${pendingStatusChange.account.displayName} will be able to sign in again if their credentials are valid.`}
+                : pendingStatusChange.account.isActivated
+                  ? `${pendingStatusChange.account.displayName} will regain access using their existing password.`
+                  : `${pendingStatusChange.account.displayName} will be enabled again, and TANAW will send a new activation email to the registered address.`}
             </p>
           </div>
         </div>
@@ -199,11 +202,4 @@ function ConfirmAccountStatusModal({
       </div>
     </ModalFrame>
   );
-}
-
-function getStatusErrorMessage(error: unknown) {
-  if (isAxiosError<ApiErrorPayload>(error)) {
-    return error.response?.data?.detail ?? "Unable to update account status";
-  }
-  return "Unable to update account status";
 }

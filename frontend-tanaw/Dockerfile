@@ -15,8 +15,10 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
 FROM base AS build
 
-ARG VITE_API_BASE_URL=https://tanaw.onrender.com
+ARG VITE_API_BASE_URL
+ARG TANAW_PUBLIC_DEPLOYMENT=false
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV TANAW_PUBLIC_DEPLOYMENT=$TANAW_PUBLIC_DEPLOYMENT
 
 COPY . .
 RUN npm run build

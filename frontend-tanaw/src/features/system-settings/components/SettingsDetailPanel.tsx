@@ -1,7 +1,7 @@
 import { RotateCcw, Save } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { Panel } from "@/shared/components/panel";
 import type { SettingField, SettingSection, SettingValue } from "../types";
 

@@ -62,7 +62,9 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
                 </span>
               </td>
               <td className="px-4 py-4 whitespace-nowrap">
-                <StatusBadge tone={enterprise.status === "active" ? "green" : "slate"}>{enterprise.status}</StatusBadge>
+                <StatusBadge tone={enterprise.status === "inactive" ? "slate" : enterprise.isActivated ? "green" : "amber"}>
+                  {enterprise.status === "inactive" ? "inactive" : enterprise.isActivated ? "active" : "pending activation"}
+                </StatusBadge>
               </td>
               <td className="px-4 py-4 text-sm whitespace-nowrap text-gray-500">
                 <span title={enterprise.email} className="block max-w-full truncate">
@@ -78,7 +80,7 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
                 <EmptyState
                   icon={Building2}
                   title="No enterprise accounts"
-                  description={isLoading ? "Loading accounts..." : accounts.length === 0 ? "Register an enterprise to generate development credentials." : "No enterprises match the current filters."}
+                  description={isLoading ? "Loading accounts..." : accounts.length === 0 ? "Register an enterprise to send its activation email." : "No enterprises match the current filters."}
                 />
               </td>
             </tr>

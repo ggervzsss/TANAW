@@ -1,7 +1,8 @@
 export const routes = {
   home: "/",
   login: "/login",
-  changePassword: "/change-password",
+  activateAccount: "/activate-account",
+  verifyEmailChange: "/verify-email-change",
   enterpriseAccess: "/enterprise-access",
   it: {
     root: "/it",
@@ -12,6 +13,7 @@ export const routes = {
     supportTickets: "/it/support-tickets",
     notifications: "/it/notifications",
     systemLogs: "/it/system-logs",
+    emailDeliveries: "/it/email-deliveries",
     devLog: "/it/dev-log",
     systemSettings: "/it/system-settings",
     profile: "/it/profile",

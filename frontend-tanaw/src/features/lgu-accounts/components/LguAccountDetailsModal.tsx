@@ -1,9 +1,9 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, KeyRound, Pencil, ShieldCheck, UserCheck, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, KeyRound, Mail, Pencil, ShieldCheck, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
-import { type AccountSummary, type UpdateLguAccountPayload, updateLguAccount } from "@/shared/services/accountManagement";
+import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import {
   normalizeEmail,
@@ -21,7 +21,7 @@ type LguAccountDetailsModalProps = {
   account: AccountSummary;
   onClose: () => void;
   onAccountUpdated: (account: AccountSummary) => void;
-  onResetCredentials: (account: AccountSummary) => void;
+  onResendActivation: (account: AccountSummary) => void;
   onRequestStatusChange: (account: AccountSummary, nextStatus: LguStatusFilter) => void;
 };
 
@@ -44,7 +44,7 @@ type PendingSave = {
 const allowedLguRoles = ["staff", "it", "admin"] satisfies UpdateLguAccountPayload["role"][];
 const allowedStatusValues = ["active", "inactive"] satisfies UpdateLguAccountPayload["status"][];
 
-export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResetCredentials, onRequestStatusChange }: LguAccountDetailsModalProps) {
+export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResendActivation, onRequestStatusChange }: LguAccountDetailsModalProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<LguEditState>(() => getInitialForm(account));
@@ -52,18 +52,47 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const isProtected = account.isProtectedDefault;
   const nextStatus = account.status === "active" ? "inactive" : "active";
+  const emailChangeRequest = account.profileChangeRequests.find((request) => request.type === "businessEmail");
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateLguAccountPayload) => updateLguAccount(account.id, payload),
-    onSuccess: async (updatedAccount) => {
-      await queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] });
+    onSuccess: async (updatedAccount, payload) => {
+      const activationEmailQueued = !account.isActivated && updatedAccount.status === "active" && (payload.email !== account.email || account.status === "inactive");
+      const emailVerificationQueued = account.isActivated && payload.email !== account.email && updatedAccount.profileChangeRequests.some((request) => request.type === "businessEmail");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+      ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));
       setPendingSave(null);
       setIsEditing(false);
-      toast.success("LGU account updated");
+      toast.success(
+        activationEmailQueued
+          ? "LGU account updated; activation email queued"
+          : emailVerificationQueued
+            ? "LGU account updated; email verification queued"
+            : "LGU account updated",
+      );
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update LGU account")),
+  });
+
+  const emailResolutionMutation = useMutation({
+    mutationFn: (action: "approve" | "decline") => resolveAccountEmailChangeRequest(account.id, action),
+    onSuccess: async (updatedAccount, action) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
+      onAccountUpdated(updatedAccount);
+      setForm(getInitialForm(updatedAccount));
+      toast.success(`Email change request ${action === "approve" ? "approved" : "declined"}.`);
+    },
+    onError: async (error) => {
+      await queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] });
+      toast.error(getApiErrorMessage(error, "Unable to resolve email change request"));
+    },
   });
 
   const details = useMemo(
@@ -75,7 +104,7 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
       ["Status", account.status],
       ["Last Login", account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"],
       ["Created", new Date(account.createdAt).toLocaleString()],
-      ["Must Change Password", account.mustChangePassword ? "Yes" : "No"],
+      ["Activation", account.isActivated ? "Complete" : "Pending"],
     ],
     [account],
   );
@@ -114,8 +143,12 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
               <h3 className="mt-1 text-2xl font-black text-slate-950">{account.displayName}</h3>
               <p className="mt-1 text-sm font-medium text-slate-500">{account.email}</p>
             </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${account.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-              {account.status}
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-black uppercase ${
+                account.status === "inactive" ? "bg-slate-100 text-slate-600" : account.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}
             </span>
           </div>
           {isProtected && (
@@ -134,6 +167,47 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
               ))}
             </div>
 
+            {emailChangeRequest ? (
+              <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                    <Mail size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-black text-amber-950">Email change requested</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${emailChangeRequest.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {emailChangeRequest.canApprove ? "Ownership verified" : "Awaiting verification"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-amber-900/80">
+                      Proposed address: <strong className="wrap-break-word">{emailChangeRequest.requestedValue}</strong>
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800">The registered address remains {account.email} until approval.</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={emailResolutionMutation.isPending}
+                        onClick={() => emailResolutionMutation.mutate("decline")}
+                        className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 disabled:opacity-60"
+                      >
+                        <XCircle size={14} /> Decline
+                      </button>
+                      <button
+                        type="button"
+                        disabled={emailResolutionMutation.isPending || !emailChangeRequest.canApprove}
+                        onClick={() => emailResolutionMutation.mutate("approve")}
+                        title={!emailChangeRequest.canApprove ? "The proposed owner must open the verification link first." : undefined}
+                        className="bg-tanaw-green inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={14} /> Approve verified email
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="mb-3 text-xs font-black tracking-wide text-slate-500 uppercase">Account Actions</p>
               <div className="flex flex-wrap gap-3">
@@ -146,15 +220,17 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                   <Pencil size={16} />
                   Edit account information
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onResetCredentials(account)}
-                  disabled={isProtected}
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
-                >
-                  <KeyRound size={16} />
-                  Reset credentials
-                </button>
+                {!account.isActivated && account.status === "active" ? (
+                  <button
+                    type="button"
+                    onClick={() => onResendActivation(account)}
+                    disabled={isProtected}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
+                  >
+                    <KeyRound size={16} />
+                    Resend activation email
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => onRequestStatusChange(account, nextStatus)}

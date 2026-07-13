@@ -22,6 +22,8 @@
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",
     "prettier": "prettier --write .",
+    "test": "vitest run --exclude=e2e/**",
+    "test:e2e": "playwright test",
     "type": "tsc --noEmit"
   },
   "dependencies": {
@@ -40,6 +42,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/node": "^4.3.0",
     "@tailwindcss/oxide": "^4.3.0",
     "@types/react": "^18.2.64",
@@ -55,9 +58,10 @@
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "^5.5.4",
-    "vite": "^7.3.5",
+    "vite": "^7.3.6",
     "vite-plugin-electron": "^0.28.6",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.1.10"
   },
   "main": "dist-electron/main.js"
 }

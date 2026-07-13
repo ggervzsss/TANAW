@@ -12,6 +12,8 @@ dist
 dist-electron
 release
 dist-ssr
+playwright-report
+test-results
 *.local
 
 # Python

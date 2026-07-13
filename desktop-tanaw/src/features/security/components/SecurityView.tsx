@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { validatePasswordPolicy } from "../../../utils/password-policy";
+import { normalizePassword, validatePasswordPolicy } from "../../../utils/password-policy";
 import { changePassword } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
@@ -21,7 +21,7 @@ export function SecurityView() {
     const newPassword = String(formData.get("newPassword") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-    if (newPassword !== confirmPassword) {
+    if (normalizePassword(newPassword) !== normalizePassword(confirmPassword)) {
       notifyError("New passwords do not match.");
       return;
     }

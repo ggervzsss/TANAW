@@ -46,7 +46,4 @@ interface Window {
     load: (scope: string) => Promise<Record<string, { password?: string; username?: string }>>;
     save: (scope: string, records: Record<string, { password?: string; username?: string }>) => Promise<Record<string, { password?: string; username?: string }>>;
   };
-  tanawAppEvents?: {
-    onMainProcessMessage: (listener: (message: string) => void) => () => void;
-  };
 }

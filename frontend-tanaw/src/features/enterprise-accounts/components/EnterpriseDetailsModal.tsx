@@ -2,10 +2,10 @@ import { type FormEvent, useMemo, useState } from "react";
 import { AlertTriangle, Building2, CheckCircle2, KeyRound, Pencil, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
-import { type AccountSummary, type UpdateEnterpriseAccountPayload, resetAccountPassword, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
+import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import {
   normalizeEmail,
@@ -36,7 +36,7 @@ type EnterpriseEditState = {
 };
 
 type EnterpriseEditErrors = Partial<Record<keyof EnterpriseEditState, string>>;
-type ConfirmMode = null | "save" | "reset" | "status";
+type ConfirmMode = null | "activation" | "save" | "status";
 
 type PendingSave = {
   payload: UpdateEnterpriseAccountPayload;
@@ -58,36 +58,51 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateEnterpriseAccountPayload) => updateEnterpriseAccount(enterprise.id, payload),
-    onSuccess: async (updatedEnterprise) => {
-      await queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] });
+    onSuccess: async (updatedEnterprise, payload) => {
+      const activationEmailQueued = !enterprise.isActivated && updatedEnterprise.status === "active" && (payload.email !== enterprise.email || enterprise.status === "inactive");
+      const emailVerificationQueued = enterprise.isActivated && payload.email !== enterprise.email && updatedEnterprise.profileChangeRequests.some((request) => request.type === "businessEmail");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
+        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+      ]);
       onEnterpriseUpdated(updatedEnterprise);
       setForm(getInitialForm(updatedEnterprise));
       setConfirmMode(null);
       setPendingSave(null);
       setIsEditing(false);
-      toast.success("Enterprise account updated");
+      toast.success(
+        activationEmailQueued
+          ? "Enterprise account updated; activation email queued"
+          : emailVerificationQueued
+            ? "Enterprise account updated; email verification queued"
+            : "Enterprise account updated",
+      );
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update enterprise account")),
   });
 
-  const resetMutation = useMutation({
-    mutationFn: () => resetAccountPassword(enterprise.id),
+  const activationMutation = useMutation({
+    mutationFn: () => resendAccountActivation(enterprise.id),
     onSuccess: async (updatedEnterprise) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
-      toast.success("Temporary credentials recorded in Dev Log");
+      toast.success("Activation email queued");
     },
-    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to reset credentials")),
+    onError: (error) => toast.error(getApiErrorMessage(error, "Unable to resend activation email")),
   });
 
   const statusMutation = useMutation({
     mutationFn: () => updateAccountStatus(enterprise.id, nextStatus),
     onSuccess: async (updatedEnterprise) => {
-      await queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] });
+      const activationEmailQueued = nextStatus === "active" && !updatedEnterprise.isActivated;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+      ]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
-      toast.success("Enterprise account status updated");
+      toast.success(activationEmailQueued ? "Enterprise reactivated; activation email queued" : "Enterprise account status updated");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update enterprise status")),
   });
@@ -106,7 +121,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       ["Map Location", enterprise.latitude !== null && enterprise.longitude !== null ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}` : "Not pinned"],
       ["Status", enterprise.status],
       ["Created", new Date(enterprise.createdAt).toLocaleString()],
-      ["Must Change Password", enterprise.mustChangePassword ? "Yes" : "No"],
+      ["Activation", enterprise.isActivated ? "Complete" : "Pending"],
     ],
     [enterprise],
   );
@@ -156,8 +171,12 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                   <p className="mt-1 text-sm font-medium text-slate-500">{enterprise.email}</p>
                 </div>
               </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-black uppercase ${enterprise.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                {enterprise.status}
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black uppercase ${
+                  enterprise.status === "inactive" ? "bg-slate-100 text-slate-600" : enterprise.isActivated ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {enterprise.status === "inactive" ? "inactive" : enterprise.isActivated ? "active" : "pending activation"}
               </span>
             </div>
           </section>
@@ -181,14 +200,16 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                     <Pencil size={16} />
                     Edit account information
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmMode("reset")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none"
-                  >
-                    <KeyRound size={16} />
-                    Reset credentials
-                  </button>
+                  {!enterprise.isActivated && enterprise.status === "active" ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode("activation")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-amber-100 focus:outline-none"
+                    >
+                      <KeyRound size={16} />
+                      Resend activation email
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => setConfirmMode("status")}
@@ -284,16 +305,18 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
         </div>
       </ModalFrame>
       <AnimatePresence>
-        {confirmMode === "reset" && (
-          <ConfirmEnterprisePasswordResetModal
+        {confirmMode === "activation" && (
+          <ConfirmEnterpriseActivationModal
+            key={`enterprise-activation-${enterprise.id}`}
             enterprise={enterprise}
-            isPending={resetMutation.isPending}
+            isPending={activationMutation.isPending}
             onClose={() => setConfirmMode(null)}
-            onConfirm={() => resetMutation.mutate()}
+            onConfirm={() => activationMutation.mutate()}
           />
         )}
         {confirmMode === "status" && (
           <ConfirmEnterpriseStatusModal
+            key={`enterprise-status-${enterprise.id}`}
             enterprise={enterprise}
             nextStatus={nextStatus}
             isPending={statusMutation.isPending}
@@ -313,20 +336,20 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   }
 }
 
-function ConfirmEnterprisePasswordResetModal({ enterprise, isPending, onClose, onConfirm }: { enterprise: AccountSummary; isPending: boolean; onClose: () => void; onConfirm: () => void }) {
+function ConfirmEnterpriseActivationModal({ enterprise, isPending, onClose, onConfirm }: { enterprise: AccountSummary; isPending: boolean; onClose: () => void; onConfirm: () => void }) {
   const enterpriseName = enterprise.enterpriseName ?? enterprise.displayName;
 
   return (
-    <ModalFrame title="Reset Credentials" onClose={onClose} maxWidthClassName="max-w-lg">
+    <ModalFrame title="Resend Activation Email" onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
         <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
             <KeyRound size={20} />
           </span>
           <div>
-            <p className="font-bold">This will generate new temporary credentials.</p>
+            <p className="font-bold">This will issue a new activation link.</p>
             <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
-              The current password for {enterpriseName} will stop working. New temporary credentials will be recorded in Dev Log and the enterprise user will need to change the password after signing in.
+              Any previous activation link for {enterpriseName} will stop working. TANAW will email a new single-use link so the enterprise user can create their password securely.
             </p>
           </div>
         </div>
@@ -345,7 +368,7 @@ function ConfirmEnterprisePasswordResetModal({ enterprise, isPending, onClose, o
             onClick={onConfirm}
             className="rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-700 focus:ring-4 focus:ring-amber-200 focus:outline-none disabled:translate-y-0 disabled:opacity-70"
           >
-            {isPending ? "Resetting..." : "Reset Credentials"}
+            {isPending ? "Sending..." : "Resend Activation Email"}
           </button>
         </div>
       </div>
@@ -382,7 +405,9 @@ function ConfirmEnterpriseStatusModal({
             <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
               {isDeactivating
                 ? `${enterpriseName} will not be able to sign in until the account is reactivated.`
-                : `${enterpriseName} will be able to sign in again if their credentials are valid.`}
+                : enterprise.isActivated
+                  ? `${enterpriseName} will regain access using the existing account password.`
+                  : `${enterpriseName} will be enabled again, and TANAW will send a new activation email to the registered address.`}
             </p>
           </div>
         </div>

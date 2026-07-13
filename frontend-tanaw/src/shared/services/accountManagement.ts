@@ -8,6 +8,11 @@ export type AccountProfileChangeRequest = {
   label: string;
   requestedValue: string;
   requestedAt: string | null;
+  requestId: string | null;
+  status: "pending_verification" | "verified" | "pending_review" | "expired";
+  isVerified: boolean;
+  canApprove: boolean;
+  expiresAt: string | null;
 };
 
 export type AccountSummary = {
@@ -34,7 +39,7 @@ export type AccountSummary = {
   role: string;
   title: string;
   status: "active" | "inactive";
-  mustChangePassword: boolean;
+  isActivated: boolean;
   isProtectedDefault: boolean;
   profileChangeRequests: AccountProfileChangeRequest[];
   createdAt: string;
@@ -44,12 +49,30 @@ export type AccountSummary = {
 export type DevDelivery = {
   id: string;
   accountId: string;
-  channel: "email" | "sms";
   recipient: string;
   subject: string;
   body: string;
   status: string;
   createdAt: string;
+};
+
+export type EmailDelivery = {
+  id: string;
+  purpose: string;
+  recipient: string;
+  provider: string;
+  status: "queued" | "processing" | "retry_scheduled" | "accepted" | "recorded" | "terminal_failed" | "cancelled" | "expired" | "reconciliation_required";
+  attemptCount: number;
+  maxAttempts: number;
+  manualRetryCount: number;
+  nextAttemptAt: string | null;
+  providerMessageId: string | null;
+  errorCode: string | null;
+  failureReason: string | null;
+  outcomeUncertain: boolean;
+  canRetry: boolean;
+  createdAt: string;
+  acceptedAt: string | null;
 };
 
 export type CreateLguAccountPayload = {
@@ -161,6 +184,11 @@ export async function resolveEnterpriseProfileChangeRequest(accountId: string, r
   return response.data;
 }
 
+export async function resolveAccountEmailChangeRequest(accountId: string, action: "approve" | "decline") {
+  const response = await apiClient.patch<AccountSummary>(`/accounts/${accountId}/email-change-request`, { action });
+  return response.data;
+}
+
 export async function geocodeEnterpriseAddress(payload: EnterpriseGeocodePayload) {
   const response = await apiClient.post<EnterpriseGeocodeResult>("/accounts/enterprises/geocode", payload);
   return response.data;
@@ -171,8 +199,8 @@ export async function reverseGeocodeEnterpriseLocation(payload: EnterpriseRevers
   return response.data;
 }
 
-export async function resetAccountPassword(accountId: string) {
-  const response = await apiClient.post<AccountSummary>(`/accounts/${accountId}/reset-password`);
+export async function resendAccountActivation(accountId: string) {
+  const response = await apiClient.post<AccountSummary>(`/accounts/${accountId}/activation`);
   return response.data;
 }
 
@@ -183,6 +211,16 @@ export async function updateAccountStatus(accountId: string, status: "active" | 
 
 export async function listDevDeliveries() {
   const response = await apiClient.get<DevDelivery[]>("/dev/deliveries");
+  return response.data;
+}
+
+export async function listEmailDeliveries() {
+  const response = await apiClient.get<EmailDelivery[]>("/mail/deliveries");
+  return response.data;
+}
+
+export async function retryEmailDelivery(deliveryId: string) {
+  const response = await apiClient.post<EmailDelivery>(`/mail/deliveries/${deliveryId}/retry`);
   return response.data;
 }
 

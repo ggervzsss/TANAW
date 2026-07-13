@@ -1,6 +1,8 @@
+import asyncio
 import base64
 import binascii
 import json
+from contextlib import suppress
 from typing import Annotated
 
 import jwt
@@ -24,6 +26,8 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.mail.models import EmailTemplateName
+from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     MockDataRun,
@@ -69,6 +73,7 @@ from app.features.operational.service import (
     create_role_notifications,
     create_support_ticket,
     create_support_ticket_message,
+    create_support_ticket_message_with_record,
     create_user_notification,
     enterprise_accounts_by_identifier,
     enterprise_identifier,
@@ -100,11 +105,13 @@ from app.features.operational.service import (
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/operational", tags=["operational"])
+WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
 
 OperationalReadAccount = Annotated[
     Account, Depends(require_roles({"admin", "it", "staff", "enterprise"}))
 ]
 TicketReadAccount = Annotated[Account, Depends(require_roles({"admin", "it", "enterprise"}))]
+TicketMessageAccount = Annotated[Account, Depends(require_roles({"it", "enterprise"}))]
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
@@ -570,7 +577,11 @@ async def list_report_enterprises(
 ) -> list[dict]:
     statement = (
         select(Account)
-        .where(Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE)
+        .where(
+            Account.role == AccountRole.ENTERPRISE,
+            Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
+        )
         .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
@@ -706,7 +717,7 @@ async def create_enterprise_support_ticket(
 async def create_ticket_message(
     ticket_id: str,
     payload: SupportTicketMessageCreate,
-    account: ITAccount,
+    account: TicketMessageAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketDetail:
     ticket = await get_support_ticket_for_account(db, account, ticket_id)
@@ -714,22 +725,71 @@ async def create_ticket_message(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
         )
-    detail = await create_support_ticket_message(db, ticket, account, payload)
-    await notify_enterprise_ticket_update(
-        db,
-        ticket=detail,
-        actor=account,
-        title=f"IT replied to support ticket {detail.code}.",
-        message=f"IT replied to {detail.code}: {detail.subject}.",
-        notification_type="Support Ticket Reply",
-        severity="Info",
-    )
+    if account.role == AccountRole.IT:
+        detail, reply_record = await create_support_ticket_message_with_record(
+            db,
+            ticket,
+            account,
+            payload,
+            commit=False,
+        )
+    else:
+        detail = await create_support_ticket_message(db, ticket, account, payload)
+        reply_record = None
+    if account.role == AccountRole.IT:
+        recipient = await get_account_by_id(db, ticket.enterprise_account_id)
+        if recipient is not None and reply_record is not None:
+            await enqueue_email(
+                db,
+                account_id=recipient.id,
+                source_id=reply_record.id,
+                recipient=recipient.email,
+                template_name=EmailTemplateName.SUPPORT_REPLY,
+                template_payload={
+                    "ticketId": ticket.id,
+                    "messageId": reply_record.id,
+                    "recipientName": recipient.display_name,
+                },
+                idempotency_key=email_idempotency_key("support-reply", reply_record.id),
+                tags={"category": "support_reply"},
+            )
+        await db.commit()
+        await notify_enterprise_ticket_update(
+            db,
+            ticket=detail,
+            actor=account,
+            title=f"IT replied to support ticket {detail.code}.",
+            message=f"IT replied to {detail.code}: {detail.subject}.",
+            notification_type="Support Ticket Reply",
+            severity="Info",
+        )
+    else:
+        notifications = await create_role_notifications(
+            db,
+            recipient_roles=support_ticket_notification_roles(detail.category),
+            title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
+            message=f"New enterprise response on {detail.code}: {detail.subject}.",
+            notification_type="Enterprise Support Reply",
+            severity="Info",
+            actor=account,
+            source_type="support.ticket",
+            source_id=detail.id,
+        )
+        for notification in notifications:
+            await operational_ws_manager.broadcast(
+                OperationalWebSocketEnvelope(
+                    type="notification.created",
+                    data=notification.model_dump(mode="json"),
+                )
+            )
+    actor_role = "IT Personnel" if account.role == AccountRole.IT else "Enterprise Account"
+    activity_category = "IT Activity" if account.role == AccountRole.IT else "Enterprise Activity"
     await record_operational_log(
         db,
-        category="IT Activity",
+        category=activity_category,
         severity="Success",
         actor=account.display_name,
-        actor_role="IT Personnel",
+        actor_role=actor_role,
         action="Reply Support Ticket",
         target=detail.code,
         summary=f"{account.display_name} replied to {detail.code} from {detail.enterpriseName}.",
@@ -823,7 +883,11 @@ async def create_enterprise_notification(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserNotificationSummary:
     recipient = await get_enterprise_notification_recipient(db, payload.enterpriseId)
-    if recipient is None or recipient.status != AccountStatus.ACTIVE:
+    if (
+        recipient is None
+        or recipient.status != AccountStatus.ACTIVE
+        or recipient.activated_at is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Active enterprise account not found."
         )
@@ -873,7 +937,11 @@ async def list_map_enterprises(
     latest = {item.enterpriseId: item for item in await list_latest_telemetry(db, account)}
     statement = (
         select(Account)
-        .where(Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE)
+        .where(
+            Account.role == AccountRole.ENTERPRISE,
+            Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
+        )
         .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
@@ -1004,12 +1072,38 @@ async def operational_websocket(
         account.id,
         enterprise_identifier(account) if account.role == AccountRole.ENTERPRISE else None,
     )
+    receive_task: asyncio.Task[str] | None = asyncio.create_task(websocket.receive_text())
     try:
         while True:
-            message = await websocket.receive_text()
+            if receive_task is None:
+                raise RuntimeError("WebSocket receive task is unavailable.")
+            active_receive_task = receive_task
+            completed, _ = await asyncio.wait(
+                {active_receive_task},
+                timeout=WEBSOCKET_REAUTH_INTERVAL_SECONDS,
+            )
+            if not completed:
+                message = None
+            else:
+                try:
+                    message = active_receive_task.result()
+                finally:
+                    receive_task = None
+                receive_task = asyncio.create_task(websocket.receive_text())
+            async with AsyncSessionLocal() as db:
+                current_account = await authenticate_websocket_account(db, token)
+            if current_account is None:
+                await websocket.close(code=1008)
+                return
             if message == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
+        pass
+    finally:
+        if receive_task is not None:
+            receive_task.cancel()
+            with suppress(asyncio.CancelledError, WebSocketDisconnect):
+                await receive_task
         operational_ws_manager.disconnect(websocket, account.role.value)
 
 
@@ -1027,7 +1121,7 @@ async def authenticate_websocket_account(db: AsyncSession, token: str) -> Accoun
     if (
         account is None
         or account.status != AccountStatus.ACTIVE
-        or account.must_change_password
+        or account.activated_at is None
         or is_token_invalidated(payload, account)
     ):
         return None
@@ -1061,7 +1155,11 @@ async def notify_enterprise_ticket_update(
     severity: str,
 ) -> None:
     recipient = await get_enterprise_notification_recipient(db, ticket.enterpriseId)
-    if recipient is None or recipient.status != AccountStatus.ACTIVE:
+    if (
+        recipient is None
+        or recipient.status != AccountStatus.ACTIVE
+        or recipient.activated_at is None
+    ):
         return
     notification = await create_user_notification(
         db,

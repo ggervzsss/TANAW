@@ -1,9 +1,12 @@
+import asyncio
+import hashlib
 import json
+import logging
 from datetime import UTC, datetime
+from time import monotonic
 from typing import Annotated
-from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,9 +18,6 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    DeliveryChannel,
-    DeliveryStatus,
-    DevDelivery,
     SystemConfiguration,
 )
 from app.features.accounts.schemas import (
@@ -32,14 +32,11 @@ from app.features.accounts.schemas import (
     ProfileUpdate,
 )
 from app.features.accounts.service import (
-    PENDING_BUSINESS_EMAIL_CHANGE_KEY,
     PENDING_CONTACT_NUMBER_CHANGE_KEY,
     change_account_password,
-    get_account_by_email,
     get_account_by_login_identifier,
     get_account_preferences,
     invalidate_account_tokens,
-    record_login,
     set_account_preferences,
     set_display_image_data_url,
     to_auth_user,
@@ -47,14 +44,33 @@ from app.features.accounts.service import (
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log, get_actor_role_label
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.auth.account_activation import (
+    AccountActivationError,
+    complete_account_activation,
+    validate_account_activation,
+)
+from app.features.auth.email_change import (
+    AccountEmailChangeError,
+    cancel_account_email_change,
+    get_active_account_email_change_request,
+    request_account_email_change,
+    verify_account_email_change,
+)
 from app.features.auth.password_recovery import (
-    OTP_TTL_MINUTES,
     PasswordRecoveryError,
     request_password_reset,
     reset_password_with_token,
     verify_password_reset_code,
 )
+from app.features.auth.recovery_rate_limit import PasswordResetRateLimitExceeded
 from app.features.auth.schemas import (
+    AccountActivationCompleteRequest,
+    AccountActivationCompleteResponse,
+    AccountActivationValidateRequest,
+    AccountActivationValidateResponse,
+    AccountEmailChangeStatusResponse,
+    AccountEmailChangeVerifyRequest,
+    AccountEmailChangeVerifyResponse,
     AccountPreferences,
     ForgotPasswordRequest,
     ForgotPasswordRequestResponse,
@@ -64,13 +80,12 @@ from app.features.auth.schemas import (
     LoginRequest,
     LoginResponse,
     StatusResponse,
-    SupportInfoResponse,
     SupportRequest,
     SystemSettingsPayload,
 )
 from app.features.auth.service import (
     LoginLockoutPolicy,
-    authenticate_account,
+    authenticate_loaded_account,
     clear_login_failures,
     lockout_seconds_remaining,
     login_lockout_message,
@@ -88,7 +103,7 @@ from app.features.operational.service import (
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-settings = get_settings()
+logger = logging.getLogger(__name__)
 SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
@@ -201,6 +216,12 @@ def join_changed_fields(fields: list[str]) -> str:
     return f"{', '.join(fields[:-1])}, and {fields[-1]}"
 
 
+async def _wait_for_password_reset_response_floor(started_at: float) -> None:
+    remaining = get_settings().password_reset_response_floor_seconds - (monotonic() - started_at)
+    if remaining > 0:
+        await asyncio.sleep(remaining)
+
+
 def require_enterprise_account(account: Account) -> None:
     if account.role != AccountRole.ENTERPRISE:
         raise HTTPException(
@@ -219,16 +240,107 @@ def set_pending_account_change(account: Account, key: str, value: dict[str, str]
     set_account_preferences(account, preferences)
 
 
+@router.post(
+    "/account-activation/validate",
+    response_model=AccountActivationValidateResponse,
+)
+async def validate_activation_link(
+    payload: AccountActivationValidateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountActivationValidateResponse:
+    try:
+        activation = await validate_account_activation(db, payload.token)
+    except AccountActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return AccountActivationValidateResponse(
+        displayName=activation.display_name,
+        role=activation.role,
+        expiresAt=activation.expires_at,
+    )
+
+
+@router.post(
+    "/account-activation/complete",
+    response_model=AccountActivationCompleteResponse,
+)
+async def complete_activation(
+    payload: AccountActivationCompleteRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountActivationCompleteResponse:
+    try:
+        account = await complete_account_activation(db, payload.token, payload.newPassword)
+    except AccountActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Account Activated",
+        target=account.email,
+        summary=f"{account.display_name} activated their TANAW account.",
+        source_id=account.id,
+    )
+    return AccountActivationCompleteResponse(status="ok", role=account.role.value)
+
+
+@router.post(
+    "/email-change/verify",
+    response_model=AccountEmailChangeVerifyResponse,
+)
+async def verify_email_change_link(
+    payload: AccountEmailChangeVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountEmailChangeVerifyResponse:
+    try:
+        verification = await verify_account_email_change(db, payload.token, commit=False)
+    except AccountEmailChangeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email verification link is invalid or expired.",
+        ) from exc
+
+    await record_auth_log(
+        db,
+        category="System",
+        severity="Success",
+        actor=verification.display_name,
+        actor_role="Account Email Owner",
+        action="Verify Proposed Account Email",
+        target=verification.requested_email,
+        summary=f"{verification.display_name} verified ownership of a proposed email address.",
+        source_id=verification.account_id,
+    )
+    return AccountEmailChangeVerifyResponse(
+        displayName=verification.display_name,
+        requestedEmail=verification.requested_email,
+        status="verified",
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> LoginResponse:
-    candidate = await get_account_by_login_identifier(db, payload.username)
-    lockout_policy = (
-        await get_login_lockout_policy(db) if candidate is not None else LoginLockoutPolicy()
+    candidate = await get_account_by_login_identifier(db, payload.username, for_update=True)
+    lockout_candidate = (
+        candidate
+        if candidate is not None
+        and candidate.status == AccountStatus.ACTIVE
+        and candidate.activated_at is not None
+        and is_login_scope_allowed(candidate, payload.loginScope)
+        else None
     )
-    if candidate is not None:
-        remaining = lockout_seconds_remaining(candidate)
+    lockout_policy = (
+        await get_login_lockout_policy(db)
+        if lockout_candidate is not None
+        else LoginLockoutPolicy()
+    )
+    if lockout_candidate is not None:
+        remaining = lockout_seconds_remaining(lockout_candidate)
         if remaining > 0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -239,17 +351,18 @@ async def login(
                 headers={"Retry-After": str(remaining)},
             )
 
-    account = await authenticate_account(db, payload.username, payload.password)
+    account = authenticate_loaded_account(candidate, payload.password)
     if (
         account is None
         or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
         or not is_login_scope_allowed(account, payload.loginScope)
     ):
-        if candidate is not None:
-            remaining = register_failed_login(candidate, policy=lockout_policy)
+        if lockout_candidate is not None:
+            remaining = register_failed_login(lockout_candidate, policy=lockout_policy)
             await db.commit()
             if remaining > 0:
-                await notify_failed_login_threshold(db, candidate)
+                await notify_failed_login_threshold(db, lockout_candidate)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={
@@ -263,7 +376,8 @@ async def login(
         )
 
     clear_login_failures(account)
-    await record_login(db, account)
+    account.last_login_at = datetime.now(UTC)
+    token = create_access_token(account.id, {"role": account.role.value})
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -274,10 +388,6 @@ async def login(
         target=account.email,
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
-    )
-    token = create_access_token(
-        account.id,
-        {"role": account.role.value, "must_change_password": account.must_change_password},
     )
     return LoginResponse(token=token, user=to_auth_user(account))
 
@@ -341,26 +451,61 @@ async def change_password(
         notification_type="Enterprise Security Updated",
         source_type="enterprise.password",
     )
-    token = create_access_token(
-        account.id, {"role": account.role.value, "must_change_password": False}
-    )
+    token = create_access_token(account.id, {"role": account.role.value})
     return LoginResponse(token=token, user=to_auth_user(account))
 
 
 @router.post("/forgot-password/request", response_model=ForgotPasswordRequestResponse)
 async def forgot_password_request(
-    payload: ForgotPasswordRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ForgotPasswordRequestResponse:
-    challenge = await request_password_reset(db, str(payload.email))
-    return ForgotPasswordRequestResponse(challengeId=challenge.id, expiresInMinutes=OTP_TTL_MINUTES)
+    started_at = monotonic()
+    rate_limit_error: PasswordResetRateLimitExceeded | None = None
+    result = None
+    try:
+        result = await request_password_reset(
+            db,
+            str(payload.email),
+            client_ip=request.client.host if request.client is not None else "unavailable",
+        )
+    except PasswordResetRateLimitExceeded as exc:
+        rate_limit_error = exc
+    finally:
+        await _wait_for_password_reset_response_floor(started_at)
+
+    if rate_limit_error is not None:
+        retry_after = rate_limit_error.retry_after_seconds
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "message": "Too many recovery requests. Please wait before trying again.",
+                "retryAfterSeconds": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+    if result is None:
+        raise RuntimeError("Password recovery request completed without a result.")
+    return ForgotPasswordRequestResponse(
+        challengeId=result.challenge_id,
+        expiresInMinutes=result.expires_in_minutes,
+        resendAvailableInSeconds=result.resend_available_in_seconds,
+        message=(
+            "If an eligible TANAW account matches, check its registered inbox and use the "
+            "most recent verification code. Another code can be requested in "
+            f"{result.resend_available_in_seconds} seconds."
+        ),
+    )
 
 
 @router.post("/forgot-password/verify", response_model=ForgotPasswordVerifyResponse)
 async def forgot_password_verify(
     payload: ForgotPasswordVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ForgotPasswordVerifyResponse:
     try:
-        reset_token = verify_password_reset_code(payload.challengeId, payload.code)
+        reset_token = await verify_password_reset_code(db, payload.challengeId, payload.code)
     except PasswordRecoveryError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -395,54 +540,48 @@ async def forgot_password_reset(
     return StatusResponse(status="ok")
 
 
-@router.get("/support-info", response_model=SupportInfoResponse)
-async def get_support_info() -> SupportInfoResponse:
-    has_contact = bool(settings.support_email or settings.support_phone)
-    return SupportInfoResponse(
-        supportEmail=settings.support_email,
-        supportPhone=settings.support_phone,
-        message=(
-            "Use the configured support contact below."
-            if has_contact
-            else "Please contact the TANAW system administrator."
-        ),
-    )
-
-
 @router.post("/support-request", response_model=StatusResponse)
 async def create_support_request(
     payload: SupportRequest, db: Annotated[AsyncSession, Depends(get_db)]
 ) -> StatusResponse:
-    recipient = settings.support_email or "TANAW system administrator"
-    db.add(
-        DevDelivery(
-            account_id=str(uuid4()),
-            channel=DeliveryChannel.EMAIL,
-            recipient=recipient,
-            subject="TANAW login support request",
-            body=(
-                "A login support request was recorded.\n\n"
-                f"Name: {payload.name.strip()}\n"
-                f"Email: {payload.email}\n\n"
-                f"Message:\n{payload.message.strip()}\n\n"
-                "No external email was sent by the local development logger."
-            ),
-            status=DeliveryStatus.RECORDED,
-        ),
-    )
-    await db.commit()
-    await create_operational_alert(
+    requester_name = payload.name.strip()
+    requester_email = str(payload.email).strip().lower()
+    alert = await create_operational_alert(
         db,
         alert_type="Maintenance Request",
         severity="Warning",
-        requester=payload.name.strip(),
+        requester=f"{requester_name} <{requester_email}>",
         summary=payload.message.strip(),
-        required_action="Review the login support request and contact the requester.",
+        required_action=f"Review the login support request and contact {requester_email}.",
         resolution_mode="Remote Review",
         owner="IT",
         enterprise=None,
-        source_id=f"support:{payload.email}:{payload.message.strip()}",
+        source_id=f"login-support:{hashlib.sha256(requester_email.encode()).hexdigest()}",
     )
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(
+            type="alert.created",
+            data=to_operational_alert_summary(alert).model_dump(mode="json"),
+        )
+    )
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.ADMIN],
+        title=f"Login support requested by {requester_name}.",
+        message=f"{requester_email}: {payload.message.strip()}",
+        notification_type="Login Support Request",
+        severity="Warning",
+        actor=None,
+        source_type="operational.alert",
+        source_id=alert.id,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
     return StatusResponse(status="ok")
 
 
@@ -452,14 +591,14 @@ async def update_profile(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    existing = await get_account_by_email(db, str(payload.email))
-    if existing is not None and existing.id != account.id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
+    if str(payload.email) != account.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email changes require the dedicated verified email-change workflow.",
+        )
 
     previous_manager_name = account.manager_name
-    previous_email = account.email
     previous_phone = account.phone
-    account.email = str(payload.email)
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
         if payload.managerName is None or payload.enterpriseName is None:
@@ -505,8 +644,6 @@ async def update_profile(
         changed_fields: list[str] = []
         if account.manager_name != previous_manager_name:
             changed_fields.append("lead admin")
-        if account.email != previous_email:
-            changed_fields.append("business email")
         if account.phone != previous_phone:
             changed_fields.append("contact number")
 
@@ -632,35 +769,20 @@ async def request_business_email_change(
 ) -> AccountChangeRequestResponse:
     require_enterprise_account(account)
     new_email = str(payload.email)
-    if new_email == account.email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This business email is already active.",
-        )
-    existing = await get_account_by_email(db, new_email)
-    if existing is not None and existing.id != account.id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already in use.")
-
-    set_pending_account_change(
-        account,
-        PENDING_BUSINESS_EMAIL_CHANGE_KEY,
-        {"email": new_email, "requestedAt": datetime.now(UTC).isoformat()},
-    )
-    db.add(
-        DevDelivery(
+    try:
+        _, email_request = await request_account_email_change(
+            db,
             account_id=account.id,
-            channel=DeliveryChannel.EMAIL,
-            recipient=new_email,
-            subject="TANAW business email change request",
-            body=(
-                f"{enterprise_label(account)} requested a business email change.\n\n"
-                "Email verification is not configured in this environment. "
-                "No verification token was generated or sent."
-            ),
-            status=DeliveryStatus.RECORDED,
+            requested_email=new_email,
+            requested_by=account,
         )
-    )
-    await db.commit()
+    except AccountEmailChangeError as exc:
+        response_status = (
+            status.HTTP_409_CONFLICT
+            if "already" in str(exc).lower() or "pending" in str(exc).lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=response_status, detail=str(exc)) from exc
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -669,21 +791,118 @@ async def request_business_email_change(
         actor_role=get_actor_role_label(account),
         action="Request Business Email Change",
         target=account.email,
-        summary=f"{account.display_name} requested a business email change.",
+        summary=f"{account.display_name} requested verified ownership of a new business email.",
         source_id=account.id,
+        metadata={
+            "requestId": email_request.id,
+            "requestedEmail": email_request.requested_email,
+            "status": email_request.status,
+        },
     )
     enterprise = enterprise_label(account)
-    await notify_enterprise_account_change(
-        db,
-        account,
-        title=f"{enterprise} requested a business email change.",
-        message=f"{enterprise} requested a business email change to {new_email}. IT review is required.",
-        notification_type="Enterprise Profile Change Request",
-        source_type="enterprise.profile.email",
-    )
+    notification_account_id = account.id
+    notification_request_id = email_request.id
+    try:
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} requested a business email change.",
+            message=(
+                f"{enterprise} requested a business email change to {new_email}. The proposed "
+                "address must be verified before IT can approve it."
+            ),
+            notification_type="Enterprise Profile Change Request",
+            source_type="enterprise.profile.email",
+        )
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Failed to publish email-change request notifications account_id=%s request_id=%s",
+            notification_account_id,
+            notification_request_id,
+        )
     return AccountChangeRequestResponse(
-        status="pending",
-        message="Business email change request sent to IT and Admin for review.",
+        status="pending_verification",
+        message=(
+            "Verification emails were queued for the proposed and current addresses. "
+            "IT can approve the change only after ownership is verified."
+        ),
+    )
+
+
+@router.get(
+    "/profile/business-email-change",
+    response_model=AccountEmailChangeStatusResponse | None,
+)
+async def get_business_email_change_status(
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountEmailChangeStatusResponse | None:
+    require_enterprise_account(account)
+    request = await get_active_account_email_change_request(db, account.id)
+    if request is None:
+        return None
+    expires_at = request.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    expired = expires_at <= datetime.now(UTC)
+    return AccountEmailChangeStatusResponse(
+        requestId=request.id,
+        requestedEmail=request.requested_email,
+        status="expired" if expired else request.status,  # type: ignore[arg-type]
+        isVerified=request.status == "verified" and not expired,
+        expiresAt=request.expires_at,
+    )
+
+
+@router.delete("/profile/business-email-change", response_model=AccountChangeRequestResponse)
+async def cancel_business_email_change(
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountChangeRequestResponse:
+    require_enterprise_account(account)
+    try:
+        request = await cancel_account_email_change(
+            db,
+            account_id=account.id,
+            commit=False,
+        )
+    except AccountEmailChangeError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Info",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Cancel Business Email Change",
+        target=account.email,
+        summary=f"{account.display_name} cancelled a pending business email change.",
+        source_id=account.id,
+        metadata={"requestId": request.id, "requestedEmail": request.requested_email},
+    )
+    enterprise = enterprise_label(account)
+    notification_account_id = account.id
+    notification_request_id = request.id
+    try:
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} cancelled a business email change request.",
+            message=f"{enterprise} cancelled its pending business email change request.",
+            notification_type="Enterprise Profile Change Request",
+            source_type="enterprise.profile.email",
+        )
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Failed to publish email-change cancellation notifications account_id=%s request_id=%s",
+            notification_account_id,
+            notification_request_id,
+        )
+    return AccountChangeRequestResponse(
+        status="cancelled",
+        message="The pending email change request was cancelled.",
     )
 
 
@@ -704,20 +923,6 @@ async def request_contact_number_change(
         account,
         PENDING_CONTACT_NUMBER_CHANGE_KEY,
         {"phone": payload.phone, "requestedAt": datetime.now(UTC).isoformat()},
-    )
-    db.add(
-        DevDelivery(
-            account_id=account.id,
-            channel=DeliveryChannel.SMS,
-            recipient=payload.phone,
-            subject="TANAW contact number change request",
-            body=(
-                f"{enterprise_label(account)} requested a contact number change.\n\n"
-                "Contact verification is not configured in this environment. "
-                "No OTP code was generated or sent."
-            ),
-            status=DeliveryStatus.RECORDED,
-        )
     )
     await db.commit()
     await record_auth_log(

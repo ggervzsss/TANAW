@@ -1,26 +1,66 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
-import { CameraManagementView } from "../../features/camera/components/CameraManagementView";
-import { SimulationLab } from "../../features/camera/components/SimulationLab";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
-import { DashboardView } from "../../features/dashboard/components/DashboardView";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
-import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listNotifications, updateNotificationRead, type BackendNotification, type OperationalNotificationEnvelope } from "../../features/notifications/services/notifications";
-import { NotificationsView } from "../../features/notifications/components/NotificationsView";
-import { ProfileView } from "../../features/profile/components/ProfileView";
-import { ReportsView } from "../../features/reports/components/ReportsView";
-import { SecurityView } from "../../features/security/components/SecurityView";
+import {
+  createWebSocketAuthMessage,
+  getOperationalWebSocketUrl,
+  listNotifications,
+  updateNotificationRead,
+  type BackendNotification,
+  type OperationalNotificationEnvelope,
+} from "../../features/notifications/services/notifications";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
-import { TicketsView } from "../../features/tickets/components/TicketsView";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
 import { routePaths } from "../router/routePaths";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
+
+const CameraManagementView = lazy(() =>
+  import("../../features/camera/components/CameraManagementView").then((module) => ({
+    default: module.CameraManagementView,
+  })),
+);
+const SimulationLab = lazy(() =>
+  import("../../features/camera/components/SimulationLab").then((module) => ({
+    default: module.SimulationLab,
+  })),
+);
+const DashboardView = lazy(() =>
+  import("../../features/dashboard/components/DashboardView").then((module) => ({
+    default: module.DashboardView,
+  })),
+);
+const NotificationsView = lazy(() =>
+  import("../../features/notifications/components/NotificationsView").then((module) => ({
+    default: module.NotificationsView,
+  })),
+);
+const ProfileView = lazy(() =>
+  import("../../features/profile/components/ProfileView").then((module) => ({
+    default: module.ProfileView,
+  })),
+);
+const ReportsView = lazy(() =>
+  import("../../features/reports/components/ReportsView").then((module) => ({
+    default: module.ReportsView,
+  })),
+);
+const SecurityView = lazy(() =>
+  import("../../features/security/components/SecurityView").then((module) => ({
+    default: module.SecurityView,
+  })),
+);
+const TicketsView = lazy(() =>
+  import("../../features/tickets/components/TicketsView").then((module) => ({
+    default: module.TicketsView,
+  })),
+);
 
 type EnterpriseShellProps = {
   initialView?: EnterpriseView;
@@ -387,24 +427,28 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
           className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-[#0f172a] ${activeView === "cameras" || activeView === "simulation" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" || activeView === "simulation" ? "h-full min-h-0" : ""}`}>
-            {activeView === "dashboard" && mlContextReady && <DashboardView />}
-            {activeView === "cameras" && mlContextReady && <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />}
-            {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
-            {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultBuildingCapacity={buildingCapacity} />}
-            {activeView === "profile" && <ProfileView />}
-            {activeView === "security" && <SecurityView />}
-            {activeView === "tickets" && <TicketsView />}
-            {activeView === "notifications" && (
-              <NotificationsView
-                notifications={notifications}
-                unreadCount={unreadCount}
-                onMarkAllRead={() => markNotificationsRead(notifications)}
-                onSelectNotification={(notification) => {
-                  markNotificationsRead([notification]);
-                  navigateToView(notification.target);
-                }}
-              />
-            )}
+            <Suspense fallback={<EnterpriseViewLoadingFallback />}>
+              {activeView === "dashboard" && mlContextReady && <DashboardView />}
+              {activeView === "cameras" && mlContextReady && (
+                <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
+              )}
+              {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
+              {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultBuildingCapacity={buildingCapacity} />}
+              {activeView === "profile" && <ProfileView />}
+              {activeView === "security" && <SecurityView />}
+              {activeView === "tickets" && <TicketsView />}
+              {activeView === "notifications" && (
+                <NotificationsView
+                  notifications={notifications}
+                  unreadCount={unreadCount}
+                  onMarkAllRead={() => markNotificationsRead(notifications)}
+                  onSelectNotification={(notification) => {
+                    markNotificationsRead([notification]);
+                    navigateToView(notification.target);
+                  }}
+                />
+              )}
+            </Suspense>
           </div>
         </div>
       </main>
@@ -418,7 +462,14 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         }}
         onDismiss={(toastId) => setToasts(toasts.filter((toast) => toast.id !== toastId))}
       />
+    </div>
+  );
+}
 
+function EnterpriseViewLoadingFallback() {
+  return (
+    <div className="grid min-h-64 place-items-center text-sm font-semibold text-[#047857] dark:text-emerald-300" role="status">
+      Loading view…
     </div>
   );
 }

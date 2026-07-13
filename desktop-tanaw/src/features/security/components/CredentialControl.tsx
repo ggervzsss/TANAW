@@ -1,7 +1,8 @@
 import { Check, Eye, EyeOff, Key, RefreshCw } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Card } from "../../../components/Card";
-import { PASSWORD_MIN_LENGTH } from "../../../utils/password-policy";
+import { PasswordMatchIndicator, PasswordRequirements } from "../../../components/PasswordRequirements";
+import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH } from "../../../utils/password-policy";
 
 type CredentialControlProps = {
   isLoading: boolean;
@@ -10,6 +11,8 @@ type CredentialControlProps = {
 };
 
 export function CredentialControl({ isLoading, isSuccess, onSubmit }: CredentialControlProps) {
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [visiblePasswords, setVisiblePasswords] = useState({
     confirm: false,
     current: false,
@@ -17,6 +20,12 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
   });
   const inputClassName =
     "w-full rounded-xl border border-gray-200 bg-white p-3.5 pr-12 font-mono text-sm text-[#111827] shadow-sm outline-none transition-colors focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12";
+
+  useEffect(() => {
+    if (!isSuccess) return;
+    setNewPassword("");
+    setPasswordConfirmation("");
+  }, [isSuccess]);
 
   return (
     <Card className="rounded-[28px] border-emerald-100/80 p-6 shadow-[0_18px_44px_rgba(15,23,42,0.07)]">
@@ -34,6 +43,7 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
             className={inputClassName}
             isVisible={visiblePasswords.current}
             name="currentPassword"
+            maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
             onToggle={() => setVisiblePasswords((current) => ({ ...current, current: !current.current }))}
           />
         </div>
@@ -45,9 +55,13 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
               className={inputClassName}
               isVisible={visiblePasswords.next}
               minLength={PASSWORD_MIN_LENGTH}
+              maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
               name="newPassword"
+              value={newPassword}
+              onChange={setNewPassword}
               onToggle={() => setVisiblePasswords((current) => ({ ...current, next: !current.next }))}
             />
+            <PasswordRequirements password={newPassword} />
           </div>
           <div>
             <label className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase">Confirm New Password</label>
@@ -56,9 +70,13 @@ export function CredentialControl({ isLoading, isSuccess, onSubmit }: Credential
               className={inputClassName}
               isVisible={visiblePasswords.confirm}
               minLength={PASSWORD_MIN_LENGTH}
+              maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
               name="confirmPassword"
+              value={passwordConfirmation}
+              onChange={setPasswordConfirmation}
               onToggle={() => setVisiblePasswords((current) => ({ ...current, confirm: !current.confirm }))}
             />
+            <PasswordMatchIndicator password={newPassword} confirmation={passwordConfirmation} />
           </div>
         </div>
         <div className="flex justify-end pt-2">
@@ -81,16 +99,29 @@ type PasswordInputProps = {
   className: string;
   isVisible: boolean;
   minLength?: number;
+  maxLength?: number;
   name: string;
+  onChange?: (value: string) => void;
   onToggle: () => void;
+  value?: string;
 };
 
-function PasswordInput({ ariaLabel, className, isVisible, minLength, name, onToggle }: PasswordInputProps) {
+function PasswordInput({ ariaLabel, className, isVisible, maxLength, minLength, name, onChange, onToggle, value }: PasswordInputProps) {
   const Icon = isVisible ? EyeOff : Eye;
 
   return (
     <div className="relative">
-      <input name={name} type={isVisible ? "text" : "password"} minLength={minLength} placeholder="******" className={className} required />
+      <input
+        name={name}
+        type={isVisible ? "text" : "password"}
+        minLength={minLength}
+        maxLength={maxLength}
+        placeholder="Use a long passphrase"
+        className={className}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        required
+      />
       <button
         type="button"
         tabIndex={-1}

@@ -4,7 +4,11 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.core.password_policy import PASSWORD_MIN_LENGTH, validate_password_policy
+from app.core.password_policy import (
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    validate_password_policy,
+)
 from app.features.accounts.options import (
     ENTERPRISE_CATEGORIES,
     SAN_PEDRO_ADDRESS_SUFFIX,
@@ -22,6 +26,11 @@ class AccountProfileChangeRequest(BaseModel):
     label: str
     requestedValue: str
     requestedAt: str | None = None
+    requestId: str | None = None
+    status: Literal["pending_verification", "verified", "pending_review", "expired"]
+    isVerified: bool
+    canApprove: bool
+    expiresAt: datetime | None = None
 
 
 def normalize_email_value(value: str) -> str:
@@ -74,7 +83,6 @@ class AuthUser(BaseModel):
     displayName: str
     role: str
     title: str
-    mustChangePassword: bool = False
     phone: str | None = None
     firstName: str | None = None
     lastName: str | None = None
@@ -213,7 +221,7 @@ class AccountSummary(BaseModel):
     role: str
     title: str
     status: str
-    mustChangePassword: bool
+    isActivated: bool
     isProtectedDefault: bool = False
     profileChangeRequests: list[AccountProfileChangeRequest] = Field(default_factory=list)
     createdAt: datetime
@@ -221,6 +229,10 @@ class AccountSummary(BaseModel):
 
 
 class EnterpriseProfileChangeRequestResolution(BaseModel):
+    action: Literal["approve", "decline"]
+
+
+class AccountEmailChangeRequestResolution(BaseModel):
     action: Literal["approve", "decline"]
 
 
@@ -321,7 +333,6 @@ class EnterpriseAccountUpdate(BaseModel):
 class DeliverySummary(BaseModel):
     id: str
     accountId: str
-    channel: str
     recipient: str
     subject: str
     body: str
@@ -330,13 +341,13 @@ class DeliverySummary(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    currentPassword: str = Field(min_length=1)
-    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH)
+    currentPassword: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
+    newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
-    @field_validator("newPassword")
+    @field_validator("newPassword", mode="before")
     @classmethod
-    def validate_new_password(cls, value: str) -> str:
-        return validate_password_policy(value)
+    def validate_new_password(cls, value: object) -> object:
+        return validate_password_policy(value) if isinstance(value, str) else value
 
 
 class ProfileUpdate(BaseModel):

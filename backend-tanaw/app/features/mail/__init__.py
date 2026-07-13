@@ -1,0 +1,1 @@
+"""Outbound transactional email integration."""

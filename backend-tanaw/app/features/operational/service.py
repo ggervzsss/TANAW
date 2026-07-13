@@ -229,6 +229,7 @@ async def create_role_notifications(
             .where(
                 Account.role.in_(recipient_roles),
                 Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
             )
             .order_by(Account.role.asc(), Account.display_name.asc())
         )
@@ -397,7 +398,11 @@ async def get_support_ticket_detail(
 
 
 async def create_support_ticket(
-    db: AsyncSession, account: Account, payload: SupportTicketCreate
+    db: AsyncSession,
+    account: Account,
+    payload: SupportTicketCreate,
+    *,
+    commit: bool = True,
 ) -> SupportTicketSummary:
     ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
     ticket = SupportTicket(
@@ -419,7 +424,10 @@ async def create_support_ticket(
         else None,
     )
     db.add(ticket)
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(ticket)
     return to_support_ticket_summary(ticket)
 
@@ -429,7 +437,27 @@ async def create_support_ticket_message(
     ticket: SupportTicket,
     author: Account,
     payload: SupportTicketMessageCreate,
+    *,
+    commit: bool = True,
 ) -> SupportTicketDetail:
+    detail, _ = await create_support_ticket_message_with_record(
+        db,
+        ticket,
+        author,
+        payload,
+        commit=commit,
+    )
+    return detail
+
+
+async def create_support_ticket_message_with_record(
+    db: AsyncSession,
+    ticket: SupportTicket,
+    author: Account,
+    payload: SupportTicketMessageCreate,
+    *,
+    commit: bool = True,
+) -> tuple[SupportTicketDetail, SupportTicketMessage]:
     message = SupportTicketMessage(
         ticket_id=ticket.id,
         author_account_id=author.id,
@@ -438,15 +466,20 @@ async def create_support_ticket_message(
         message=payload.message,
     )
     db.add(message)
-    if ticket.status == "Open":
+    if author.role == AccountRole.ENTERPRISE and ticket.status == "Resolved":
+        ticket.status = "Open"
+    elif author.role == AccountRole.IT and ticket.status == "Open":
         ticket.status = "In Review"
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(ticket)
     await db.refresh(message)
     detail = await get_support_ticket_detail(db, author, ticket.id)
     if detail is None:
         raise RuntimeError("Support ticket detail disappeared after reply creation.")
-    return detail
+    return detail, message
 
 
 async def update_support_ticket_status(
@@ -727,7 +760,11 @@ async def list_fleet_simulation_enterprises(
     enterprises = (
         await db.scalars(
             select(Account)
-            .where(Account.role == AccountRole.ENTERPRISE, Account.status == AccountStatus.ACTIVE)
+            .where(
+                Account.role == AccountRole.ENTERPRISE,
+                Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
+            )
             .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
         )
     ).all()
@@ -756,6 +793,7 @@ async def enterprise_accounts_by_identifier(
             select(Account).where(
                 Account.role == AccountRole.ENTERPRISE,
                 Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
                 (Account.enterprise_id.in_(enterprise_ids)) | (Account.id.in_(enterprise_ids)),
             )
         )

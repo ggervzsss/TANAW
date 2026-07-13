@@ -1,81 +1,160 @@
+import json
 from datetime import UTC, datetime
+from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password
 from app.features.accounts.defaults import (
+    BOOTSTRAP_IT_DISPLAY_NAME,
     StartupAccountSpec,
-    get_startup_account_specs,
+    get_bootstrap_account_spec,
+    get_development_account_specs,
 )
-from app.features.accounts.models import Account, AccountStatus
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    SystemConfiguration,
+)
 from app.features.accounts.service import get_account_by_email
 
+BOOTSTRAP_STATE_ID = "startup-bootstrap-v1"
+DEVELOPMENT_STATE_ID = "startup-development-v1"
+STARTUP_SEED_LOCK_ID = 8_412_026_071_100
 
-async def get_seeded_account(db: AsyncSession, spec: StartupAccountSpec) -> Account | None:
+
+async def seed_default_accounts(db: AsyncSession) -> None:
+    """Initialize startup accounts once without synchronizing existing accounts."""
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:lock_id)"),
+        {"lock_id": STARTUP_SEED_LOCK_ID},
+    )
+    settings = get_settings()
+    await initialize_bootstrap_account(db, get_bootstrap_account_spec(settings))
+
+    development_specs = get_development_account_specs(settings)
+    if development_specs:
+        await initialize_development_accounts(db, development_specs)
+    await db.commit()
+
+
+async def initialize_bootstrap_account(
+    db: AsyncSession, configured_spec: StartupAccountSpec | None
+) -> None:
+    if await get_seed_state(db, BOOTSTRAP_STATE_ID) is not None:
+        return
+
+    account = await find_legacy_bootstrap_account(db)
+    if account is None:
+        account = await find_existing_it_account(db)
+    if account is None:
+        if configured_spec is None:
+            raise RuntimeError(
+                "No IT account exists. Configure BOOTSTRAP_IT_USERNAME and "
+                "BOOTSTRAP_IT_PASSWORD for the one-time bootstrap."
+            )
+        account = await get_account_by_email(db, configured_spec.email)
+        if account is None:
+            account = create_startup_account(configured_spec, protected=True)
+            db.add(account)
+            await db.flush()
+
+    account.is_protected_system_account = True
+
+    db.add(build_seed_state(BOOTSTRAP_STATE_ID, [account]))
+
+
+async def initialize_development_accounts(
+    db: AsyncSession, specs: tuple[StartupAccountSpec, ...]
+) -> None:
+    if await get_seed_state(db, DEVELOPMENT_STATE_ID) is not None:
+        return
+
+    configured_emails = {spec.email for spec in specs}
+    if len(configured_emails) != len(specs):
+        raise RuntimeError("Development account usernames must be unique.")
+
+    accounts: list[Account] = []
+    for spec in specs:
+        account = await get_account_by_email(db, spec.email)
+        if account is None:
+            account = await find_legacy_development_account(db, spec)
+        if account is None:
+            account = create_startup_account(spec)
+            db.add(account)
+            await db.flush()
+        accounts.append(account)
+
+    db.add(build_seed_state(DEVELOPMENT_STATE_ID, accounts))
+
+
+async def get_seed_state(db: AsyncSession, state_id: str) -> SystemConfiguration | None:
+    result = await db.scalars(select(SystemConfiguration).where(SystemConfiguration.id == state_id))
+    return result.first()
+
+
+async def find_legacy_bootstrap_account(db: AsyncSession) -> Account | None:
     result = await db.scalars(
-        select(Account).where(
-            Account.role == spec.role,
-            Account.display_name == spec.display_name,
-        )
+        select(Account)
+        .where(Account.display_name == BOOTSTRAP_IT_DISPLAY_NAME)
+        .order_by(Account.created_at.asc())
+        .limit(1)
     )
     return result.first()
 
 
-async def seed_default_accounts(db: AsyncSession) -> None:
-    specs = get_startup_account_specs(get_settings())
-    configured_emails = {spec.email for spec in specs}
-    if len(configured_emails) != len(specs):
-        raise RuntimeError("Startup-seeded account usernames must be unique.")
-
-    for spec in specs:
-        await seed_startup_account(db, spec)
-
-    await db.commit()
+async def find_existing_it_account(db: AsyncSession) -> Account | None:
+    result = await db.scalars(
+        select(Account)
+        .where(Account.role == AccountRole.IT)
+        .order_by(Account.created_at.asc())
+        .limit(1)
+    )
+    return result.first()
 
 
-async def seed_startup_account(db: AsyncSession, spec: StartupAccountSpec) -> None:
-    account = await get_seeded_account(db, spec)
-    configured_account = await get_account_by_email(db, spec.email)
-
-    if (
-        account is not None
-        and configured_account is not None
-        and account.id != configured_account.id
-    ):
-        raise RuntimeError(f"{spec.username_setting} is already assigned to a different account.")
-
-    if account is None:
-        account = configured_account
-
-    if account is None:
-        account = Account(
-            email=spec.email,
-            password_hash=hash_password(spec.password),
-            role=spec.role,
-            display_name=spec.display_name,
-            title=spec.title,
-            first_name=spec.first_name,
-            last_name=spec.last_name,
-            status=AccountStatus.ACTIVE,
+async def find_legacy_development_account(
+    db: AsyncSession, spec: StartupAccountSpec
+) -> Account | None:
+    result = await db.scalars(
+        select(Account)
+        .where(
+            Account.role == spec.role,
+            Account.display_name == spec.display_name,
         )
-        db.add(account)
-    else:
-        if not verify_password(spec.password, account.password_hash):
-            account.password_hash = hash_password(spec.password)
-            account.token_invalid_before = datetime.now(UTC)
+        .order_by(Account.created_at.asc())
+        .limit(1)
+    )
+    return result.first()
 
-        account.email = spec.email
-        account.role = spec.role
-        account.display_name = spec.display_name
-        account.title = spec.title
-        account.first_name = spec.first_name
-        account.last_name = spec.last_name
-        account.status = AccountStatus.ACTIVE
 
-    account.must_change_password = False
-    account.temporary_password_created_at = None
-    account.temporary_password_expires_at = None
-    account.failed_login_attempts = 0
-    account.locked_until = None
+def create_startup_account(spec: StartupAccountSpec, *, protected: bool = False) -> Account:
+    return Account(
+        id=str(uuid4()),
+        email=spec.email,
+        password_hash=hash_password(spec.password),
+        role=spec.role,
+        display_name=spec.display_name,
+        title=spec.title,
+        first_name=spec.first_name,
+        last_name=spec.last_name,
+        status=AccountStatus.ACTIVE,
+        is_protected_system_account=protected,
+        activated_at=datetime.now(UTC),
+    )
+
+
+def build_seed_state(state_id: str, accounts: list[Account]) -> SystemConfiguration:
+    return SystemConfiguration(
+        id=state_id,
+        values_json=json.dumps(
+            {
+                "accountIds": [account.id for account in accounts],
+                "initializedAt": datetime.now(UTC).isoformat(),
+            },
+            sort_keys=True,
+        ),
+    )

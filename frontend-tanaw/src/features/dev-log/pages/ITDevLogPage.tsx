@@ -1,4 +1,4 @@
-import { Inbox, Mail, MessageSquareText, Search } from "lucide-react";
+import { Inbox, Mail, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/shared/components/layout";
@@ -6,12 +6,10 @@ import { Panel, PanelHeader } from "@/shared/components/panel";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { listDevDeliveries, type DevDelivery } from "@/shared/services/accountManagement";
 
-type ChannelFilter = "all" | "email" | "sms";
 const EMPTY_DELIVERIES: DevDelivery[] = [];
 
 export function ITDevLogPage() {
   const [query, setQuery] = useState("");
-  const [channel, setChannel] = useState<ChannelFilter>("all");
   const deliveriesQuery = useQuery({
     queryKey: ["dev-deliveries"],
     queryFn: listDevDeliveries,
@@ -23,17 +21,17 @@ export function ITDevLogPage() {
     () =>
       deliveries.filter((delivery) => {
         const haystack = `${delivery.recipient} ${delivery.subject} ${delivery.body}`.toLowerCase();
-        return haystack.includes(query.trim().toLowerCase()) && (channel === "all" || delivery.channel === channel);
+        return haystack.includes(query.trim().toLowerCase());
       }),
-    [channel, deliveries, query],
+    [deliveries, query],
   );
 
   return (
     <PageMotion>
-      <PageHeader title="Dev Log" description="Temporary development log for generated SMS and email credential messages." />
+      <PageHeader title="Dev Log" description="Temporary development log for account activation and recovery email messages." />
 
       <Panel className="overflow-hidden">
-        <PanelHeader title="SMS / Email Credential Logs" icon={Inbox} />
+        <PanelHeader title="Email Delivery Logs" icon={Inbox} />
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 p-4">
           <div className="relative min-w-0 flex-1 sm:min-w-80">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
@@ -44,25 +42,15 @@ export function ITDevLogPage() {
               className="focus:ring-tgreen-dark w-full rounded-lg border border-slate-300 bg-white py-2 pr-4 pl-9 text-sm text-slate-900 transition outline-none focus:ring-1"
             />
           </div>
-          <select
-            value={channel}
-            onChange={(event) => setChannel(event.target.value as ChannelFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none"
-          >
-            <option value="all">All Channels</option>
-            <option value="email">Email</option>
-            <option value="sms">SMS</option>
-          </select>
         </div>
 
         <div className="divide-y divide-slate-100">
           {filteredDeliveries.map((delivery) => {
-            const Icon = delivery.channel === "email" ? Mail : MessageSquareText;
             return (
               <article key={delivery.id} className="grid gap-4 p-5 lg:grid-cols-[220px_minmax(0,1fr)]">
                 <aside className="space-y-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">
-                    <Icon size={13} /> {delivery.channel}
+                    <Mail size={13} /> Email
                   </span>
                   <div>
                     <p className="text-sm font-black text-slate-950">{delivery.recipient}</p>
@@ -81,7 +69,7 @@ export function ITDevLogPage() {
             <EmptyState
               icon={Inbox}
               title="No development messages"
-              description={deliveriesQuery.isLoading ? "Loading development logs..." : "Account creation and credential resets will record SMS/email messages here."}
+              description={deliveriesQuery.isLoading ? "Loading development logs..." : "Account activation and recovery emails will be recorded here."}
             />
           )}
         </div>

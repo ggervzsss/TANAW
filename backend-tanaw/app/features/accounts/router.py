@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -16,6 +17,7 @@ from app.features.accounts.geocoding import (
 )
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.schemas import (
+    AccountEmailChangeRequestResolution,
     AccountStatusUpdate,
     AccountSummary,
     DeliverySummary,
@@ -33,7 +35,7 @@ from app.features.accounts.schemas import (
 from app.features.accounts.service import (
     account_role_from_value,
     clear_pending_profile_change_request,
-    create_account_with_temporary_password,
+    create_account_with_activation,
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
@@ -42,19 +44,32 @@ from app.features.accounts.service import (
     is_protected_startup_account,
     list_accounts_by_roles,
     list_dev_deliveries,
-    reset_account_password,
-    to_account_summary,
+    to_account_summaries_with_requests,
+    to_account_summary_with_requests,
     to_delivery_summary,
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.auth.account_activation import (
+    AccountActivationError,
+    invalidate_account_activation_tokens,
+    issue_account_activation,
+)
+from app.features.auth.challenge_service import invalidate_password_reset_challenges
+from app.features.auth.email_change import (
+    AccountEmailChangeError,
+    invalidate_account_email_change_requests,
+    request_account_email_change,
+    resolve_account_email_change,
+)
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import create_user_notification
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 dev_router = APIRouter(prefix="/dev", tags=["dev"])
+logger = logging.getLogger(__name__)
 
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 EnterpriseReadAccount = Annotated[Account, Depends(require_roles({"it", "admin"}))]
@@ -68,7 +83,7 @@ async def list_lgu_accounts(
     accounts = await list_accounts_by_roles(
         db, [AccountRole.IT, AccountRole.ADMIN, AccountRole.STAFF]
     )
-    return [to_account_summary(account) for account in accounts]
+    return await to_account_summaries_with_requests(db, accounts)
 
 
 @router.post("/lgu", response_model=AccountSummary, status_code=status.HTTP_201_CREATED)
@@ -90,7 +105,7 @@ async def create_lgu_account(
         AccountRole.IT: "IT Personnel",
         AccountRole.STAFF: "LGU Staff",
     }
-    account = await create_account_with_temporary_password(
+    account = await create_account_with_activation(
         db,
         email=str(payload.email),
         phone=payload.phone,
@@ -117,12 +132,12 @@ async def create_lgu_account(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Credentials Sent",
+        action="Activation Email Queued",
         target=account.email,
-        summary=f"The system recorded onboarding credentials for {account.display_name}.",
+        summary=f"The system queued an account activation email for {account.display_name}.",
         source_id=account.id,
     )
-    return to_account_summary(account)
+    return await to_account_summary_with_requests(db, account)
 
 
 @router.patch("/lgu/{account_id}", response_model=AccountSummary)
@@ -132,7 +147,7 @@ async def update_lgu_account(
     actor: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountSummary:
-    account = await get_account_by_id(db, account_id)
+    account = await get_account_by_id(db, account_id, for_update=True)
     if account is None or account.role == AccountRole.ENTERPRISE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="LGU account not found.")
     if is_protected_startup_account(account):
@@ -152,12 +167,21 @@ async def update_lgu_account(
         )
     await ensure_role_update_keeps_it_access(db, account, next_role)
     await ensure_privileged_account_remains_available(db, account, next_status)
-    await ensure_unique_account_email(db, str(payload.email), account.id)
+    requested_email = str(payload.email)
+    await ensure_unique_account_email(db, requested_email, account.id)
 
+    previous_email = account.email
+    previous_role = account.role
+    previous_status = account.status
+    email_changed = previous_email != requested_email
+    if account.activated_at is not None and email_changed and next_status != AccountStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keep the account active while verifying a new email address.",
+        )
     account.first_name = payload.firstName
     account.last_name = payload.lastName
     account.display_name = f"{payload.firstName} {payload.lastName}"
-    account.email = str(payload.email)
     account.phone = payload.phone
     account.role = next_role
     account.title = {
@@ -166,6 +190,38 @@ async def update_lgu_account(
         AccountRole.STAFF: "LGU Staff",
     }[next_role]
     account.status = next_status
+    email_change_requested = False
+    if email_changed:
+        if account.activated_at is None:
+            account.email = requested_email
+        else:
+            try:
+                await request_account_email_change(
+                    db,
+                    account_id=account.id,
+                    requested_email=requested_email,
+                    requested_by=actor,
+                )
+            except AccountEmailChangeError as exc:
+                raise email_change_http_exception(exc) from exc
+            email_change_requested = True
+    if previous_role != account.role or previous_status != account.status:
+        access_changed_at = datetime.now(UTC)
+        account.token_invalid_before = access_changed_at
+        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
+    if account.status == AccountStatus.INACTIVE:
+        await invalidate_account_email_change_requests(
+            db,
+            account.id,
+            invalidated_at=datetime.now(UTC),
+            reason="The account was deactivated before the email change was completed.",
+        )
+    await sync_pending_account_activation(
+        db,
+        account,
+        email_changed=email_changed and account.activated_at is None,
+        previous_status=previous_status,
+    )
     await db.commit()
     await db.refresh(account)
 
@@ -179,8 +235,12 @@ async def update_lgu_account(
         target=account.email,
         summary=f"{actor.display_name} updated LGU account {account.display_name}.",
         source_id=account.id,
+        metadata={
+            "emailChangeRequested": email_change_requested,
+            "requestedEmail": requested_email if email_change_requested else None,
+        },
     )
-    return to_account_summary(account)
+    return await to_account_summary_with_requests(db, account)
 
 
 @router.get("/enterprises", response_model=list[AccountSummary])
@@ -189,7 +249,7 @@ async def list_enterprise_accounts(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[AccountSummary]:
     accounts = await list_accounts_by_roles(db, [AccountRole.ENTERPRISE])
-    return [to_account_summary(account) for account in accounts]
+    return await to_account_summaries_with_requests(db, accounts)
 
 
 @router.post("/enterprises/geocode", response_model=EnterpriseGeocodeResult)
@@ -295,7 +355,7 @@ async def create_enterprise_account(
             location_updated_at = datetime.now(UTC)
 
     enterprise_id = await generate_enterprise_id(db, payload.enterpriseId or payload.enterpriseName)
-    account = await create_account_with_temporary_password(
+    account = await create_account_with_activation(
         db,
         email=str(payload.email),
         phone=payload.contactNumber,
@@ -339,12 +399,12 @@ async def create_enterprise_account(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Credentials Sent",
+        action="Activation Email Queued",
         target=account.email,
-        summary=f"The system recorded onboarding credentials for enterprise {account.enterprise_name}.",
+        summary=f"The system queued an account activation email for enterprise {account.enterprise_name}.",
         source_id=account.id,
     )
-    return to_account_summary(account)
+    return await to_account_summary_with_requests(db, account)
 
 
 @router.patch("/enterprises/{account_id}", response_model=AccountSummary)
@@ -354,23 +414,64 @@ async def update_enterprise_account(
     actor: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountSummary:
-    account = await get_account_by_id(db, account_id)
+    account = await get_account_by_id(db, account_id, for_update=True)
     if account is None or account.role != AccountRole.ENTERPRISE:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
 
-    await ensure_unique_account_email(db, str(payload.email), account.id)
+    requested_email = str(payload.email)
+    await ensure_unique_account_email(db, requested_email, account.id)
+    previous_email = account.email
+    previous_status = account.status
+    next_status = AccountStatus(payload.status)
+    email_changed = previous_email != requested_email
+    if account.activated_at is not None and email_changed and next_status != AccountStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Keep the account active while verifying a new email address.",
+        )
     account.enterprise_name = payload.enterpriseName
     account.display_name = payload.enterpriseName
     account.category = payload.category
     account.manager_name = payload.managerName
-    account.email = str(payload.email)
     account.phone = payload.contactNumber
     account.barangay = payload.barangay
     account.address = payload.address
     account.building_capacity = payload.buildingCapacity
-    account.status = AccountStatus(payload.status)
+    account.status = next_status
+    email_change_requested = False
+    if email_changed:
+        if account.activated_at is None:
+            account.email = requested_email
+        else:
+            try:
+                await request_account_email_change(
+                    db,
+                    account_id=account.id,
+                    requested_email=requested_email,
+                    requested_by=actor,
+                )
+            except AccountEmailChangeError as exc:
+                raise email_change_http_exception(exc) from exc
+            email_change_requested = True
+    if previous_status != account.status:
+        access_changed_at = datetime.now(UTC)
+        account.token_invalid_before = access_changed_at
+        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
+    if account.status == AccountStatus.INACTIVE:
+        await invalidate_account_email_change_requests(
+            db,
+            account.id,
+            invalidated_at=datetime.now(UTC),
+            reason="The account was deactivated before the email change was completed.",
+        )
+    await sync_pending_account_activation(
+        db,
+        account,
+        email_changed=email_changed and account.activated_at is None,
+        previous_status=previous_status,
+    )
     await db.commit()
     await db.refresh(account)
 
@@ -389,9 +490,11 @@ async def update_enterprise_account(
             "barangay": account.barangay,
             "buildingCapacity": account.building_capacity,
             "status": account.status.value,
+            "emailChangeRequested": email_change_requested,
+            "requestedEmail": requested_email if email_change_requested else None,
         },
     )
-    return to_account_summary(account)
+    return await to_account_summary_with_requests(db, account)
 
 
 @router.patch(
@@ -411,6 +514,14 @@ async def resolve_enterprise_profile_change_request(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
 
+    if request_type == "businessEmail":
+        return await resolve_verified_email_change_request(
+            db,
+            account_id=account.id,
+            actor=actor,
+            action=payload.action,
+        )
+
     pending_request = get_pending_profile_change_request(account, request_type)
     if pending_request is None:
         raise HTTPException(
@@ -422,11 +533,7 @@ async def resolve_enterprise_profile_change_request(
     requested_value = get_profile_request_requested_value(pending_request, request_type)
 
     if payload.action == "approve":
-        if request_type == "businessEmail":
-            await ensure_unique_account_email(db, requested_value, account.id)
-            account.email = requested_value
-        else:
-            account.phone = requested_value
+        account.phone = requested_value
 
     clear_pending_profile_change_request(account, request_type)
     await db.commit()
@@ -462,11 +569,26 @@ async def resolve_enterprise_profile_change_request(
         requested_value=requested_value,
         approved=payload.action == "approve",
     )
-    return to_account_summary(account)
+    return await to_account_summary_with_requests(db, account)
 
 
-@router.post("/{account_id}/reset-password", response_model=AccountSummary)
-async def reset_password(
+@router.patch("/{account_id}/email-change-request", response_model=AccountSummary)
+async def resolve_verified_account_email_change_request(
+    account_id: str,
+    payload: AccountEmailChangeRequestResolution,
+    actor: ITAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountSummary:
+    return await resolve_verified_email_change_request(
+        db,
+        account_id=account_id,
+        actor=actor,
+        action=payload.action,
+    )
+
+
+@router.post("/{account_id}/activation", response_model=AccountSummary)
+async def resend_activation(
     account_id: str,
     actor: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -474,23 +596,27 @@ async def reset_password(
     account = await get_account_by_id(db, account_id)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
-    if is_protected_startup_account(account):
+    if account.activated_at is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Startup-seeded system accounts are protected.",
+            detail="This account is already activated. Use forgot password for recovery.",
         )
-    await ensure_credential_reset_keeps_it_access(db, account, actor)
-    updated_account = await reset_account_password(db, account)
+    try:
+        await issue_account_activation(db, account)
+    except AccountActivationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(account)
     await record_account_log(
         db,
         category="IT Activity",
-        severity="Warning",
+        severity="Success",
         actor=actor.display_name,
         actor_role="IT Personnel",
-        action="Reset Password",
-        target=updated_account.display_name,
-        summary=f"{actor.display_name} reset temporary credentials for {updated_account.display_name}.",
-        source_id=updated_account.id,
+        action="Resend Account Activation",
+        target=account.display_name,
+        summary=f"{actor.display_name} resent the activation link for {account.display_name}.",
+        source_id=account.id,
     )
     await record_account_log(
         db,
@@ -498,12 +624,12 @@ async def reset_password(
         severity="Info",
         actor="TANAW System",
         actor_role="System",
-        action="Credentials Sent",
-        target=updated_account.email,
-        summary=f"The system recorded reset credentials for {updated_account.display_name}.",
-        source_id=updated_account.id,
+        action="Activation Email Queued",
+        target=account.email,
+        summary=f"The system queued a new account activation email for {account.display_name}.",
+        source_id=account.id,
     )
-    return to_account_summary(updated_account)
+    return await to_account_summary_with_requests(db, account)
 
 
 @router.patch("/{account_id}/status", response_model=AccountSummary)
@@ -513,7 +639,7 @@ async def update_account_status(
     actor: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountSummary:
-    account = await get_account_by_id(db, account_id)
+    account = await get_account_by_id(db, account_id, for_update=True)
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
 
@@ -525,7 +651,25 @@ async def update_account_status(
         )
     await ensure_privileged_account_remains_available(db, account, next_status)
 
+    previous_status = account.status
     account.status = next_status
+    if previous_status != account.status:
+        access_changed_at = datetime.now(UTC)
+        account.token_invalid_before = access_changed_at
+        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
+        if account.status == AccountStatus.INACTIVE:
+            await invalidate_account_email_change_requests(
+                db,
+                account.id,
+                invalidated_at=access_changed_at,
+                reason="The account was deactivated before the email change was completed.",
+            )
+    await sync_pending_account_activation(
+        db,
+        account,
+        email_changed=False,
+        previous_status=previous_status,
+    )
     await db.commit()
     await db.refresh(account)
     await record_account_log(
@@ -540,13 +684,33 @@ async def update_account_status(
         source_id=account.id,
         metadata={"status": account.status.value},
     )
-    return to_account_summary(account)
+    return await to_account_summary_with_requests(db, account)
+
+
+async def sync_pending_account_activation(
+    db: AsyncSession,
+    account: Account,
+    *,
+    email_changed: bool,
+    previous_status: AccountStatus,
+) -> None:
+    if account.activated_at is not None:
+        return
+    if account.status == AccountStatus.INACTIVE:
+        await invalidate_account_activation_tokens(db, account.id)
+        return
+    if email_changed or previous_status == AccountStatus.INACTIVE:
+        await issue_account_activation(db, account)
 
 
 async def ensure_privileged_account_remains_available(
     db: AsyncSession, account: Account, next_status: AccountStatus
 ) -> None:
-    if next_status != AccountStatus.INACTIVE or account.status != AccountStatus.ACTIVE:
+    if (
+        next_status != AccountStatus.INACTIVE
+        or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
+    ):
         return
 
     protected_role_messages = {
@@ -563,6 +727,7 @@ async def ensure_privileged_account_remains_available(
         .where(
             Account.role == account.role,
             Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
         )
     )
     if (active_count or 0) <= 1:
@@ -576,6 +741,7 @@ async def ensure_role_update_keeps_it_access(
         account.role != AccountRole.IT
         or next_role == AccountRole.IT
         or account.status != AccountStatus.ACTIVE
+        or account.activated_at is None
     ):
         return
 
@@ -585,6 +751,7 @@ async def ensure_role_update_keeps_it_access(
         .where(
             Account.role == AccountRole.IT,
             Account.status == AccountStatus.ACTIVE,
+            Account.activated_at.is_not(None),
         )
     )
     if (active_it_count or 0) <= 1:
@@ -605,36 +772,6 @@ async def ensure_unique_account_email(
         )
 
 
-async def ensure_credential_reset_keeps_it_access(
-    db: AsyncSession, account: Account, actor: Account
-) -> None:
-    if account.role != AccountRole.IT:
-        return
-
-    if account.id == actor.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot reset your own IT Personnel credentials while signed in. Ask another IT Personnel account to perform the reset or use the configured recovery process.",
-        )
-
-    if account.status != AccountStatus.ACTIVE:
-        return
-
-    active_it_count = await db.scalar(
-        select(func.count())
-        .select_from(Account)
-        .where(
-            Account.role == AccountRole.IT,
-            Account.status == AccountStatus.ACTIVE,
-        )
-    )
-    if (active_it_count or 0) <= 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot reset credentials for the last active IT Personnel account.",
-        )
-
-
 def get_profile_request_requested_value(
     pending_request: dict[str, str], request_type: ProfileChangeRequestType
 ) -> str:
@@ -651,6 +788,93 @@ def get_profile_request_current_value(
 
 def profile_request_label(request_type: ProfileChangeRequestType) -> str:
     return "Business Email" if request_type == "businessEmail" else "Contact Number"
+
+
+def email_change_http_exception(exc: AccountEmailChangeError) -> HTTPException:
+    detail = str(exc)
+    if detail in {"Account not found.", "Email change request not found."}:
+        response_status = status.HTTP_404_NOT_FOUND
+    elif "already" in detail.lower() or "pending" in detail.lower():
+        response_status = status.HTTP_409_CONFLICT
+    else:
+        response_status = status.HTTP_400_BAD_REQUEST
+    return HTTPException(status_code=response_status, detail=detail)
+
+
+async def resolve_verified_email_change_request(
+    db: AsyncSession,
+    *,
+    account_id: str,
+    actor: Account,
+    action: str,
+) -> AccountSummary:
+    try:
+        account, request = await resolve_account_email_change(
+            db,
+            account_id=account_id,
+            actor=actor,
+            approve=action == "approve",
+            commit=False,
+        )
+    except AccountEmailChangeError as exc:
+        raise email_change_http_exception(exc) from exc
+
+    approved = action == "approve"
+    resolution_label = "approved" if approved else "declined"
+    await record_account_log(
+        db,
+        category="IT Activity",
+        severity="Success" if approved else "Info",
+        actor=actor.display_name,
+        actor_role="IT Personnel",
+        action=f"{action.title()} Verified Email Change",
+        target=account.display_name,
+        summary=(
+            f"{actor.display_name} {resolution_label} {account.display_name}'s verified "
+            "email change request."
+        ),
+        source_id=account.id,
+        metadata={
+            "requestId": request.id,
+            "previousEmail": request.old_email,
+            "requestedEmail": request.requested_email,
+            "resolution": action,
+            "ownershipVerified": request.verified_at is not None,
+        },
+    )
+    await db.refresh(account)
+    notification_account_id = account.id
+    notification_request_id = request.id
+    try:
+        notification = await create_user_notification(
+            db,
+            recipient=account,
+            title=f"Email change request {resolution_label}.",
+            message=(
+                f"IT {resolution_label} your verified email change request"
+                f"{f' to {request.requested_email}' if approved else ''}."
+            ),
+            notification_type="Account Email Change Request",
+            severity="Success" if approved else "Info",
+            actor=actor,
+            source_type="account.profile.email",
+            source_id=request.id,
+        )
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+    except Exception:
+        await db.rollback()
+        logger.exception(
+            "Failed to publish email-change resolution notification account_id=%s request_id=%s",
+            notification_account_id,
+            notification_request_id,
+        )
+        await db.refresh(account)
+    return await to_account_summary_with_requests(db, account)
 
 
 async def notify_enterprise_profile_change_resolution(

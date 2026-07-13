@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Layers, LocateFixed, MapPin, Maximize2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import type { BarangayPointResolution } from "@/features/mapview/utils";
 import { ContactNumberField, FormField, ModalFrame, ModalPortal, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
@@ -81,8 +81,8 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
   const createMutation = useMutation({
     mutationFn: createEnterpriseAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] })]);
-      toast.success("Enterprise account created");
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      toast.success("Enterprise account created; activation email queued");
       onClose();
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to create enterprise account")),
@@ -302,11 +302,18 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             )}
           </div>
 
+          <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+            <p className="text-sm leading-relaxed text-emerald-800">
+              TANAW will queue a secure activation link for the registered contact email. The enterprise user will choose a private password before signing in to the TANAW Enterprise desktop application.
+            </p>
+          </div>
+
           <button
             disabled={createMutation.isPending}
             className="bg-tanaw-green rounded-xl px-5 py-3.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(5,91,37,0.22)] transition hover:-translate-y-0.5 hover:bg-[#044a1e] disabled:translate-y-0 disabled:opacity-70 md:col-span-2"
           >
-            {createMutation.isPending ? "Saving..." : "Save Enterprise"}
+            {createMutation.isPending ? "Registering..." : "Register Enterprise"}
           </button>
         </form>
       </ModalFrame>

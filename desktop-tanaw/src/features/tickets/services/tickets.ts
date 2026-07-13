@@ -70,6 +70,11 @@ export async function createSupportTicket(payload: SupportTicketCreatePayload) {
   return response.data;
 }
 
+export async function replyToSupportTicket(ticketId: string, message: string) {
+  const response = await staffApi.post<SupportTicketDetail>(`/operational/tickets/${ticketId}/messages`, { message });
+  return response.data;
+}
+
 export function getSupportTicketAttachmentUrl(attachment: SupportTicketAttachment) {
   if (attachment.dataUrl) {
     return attachment.dataUrl;

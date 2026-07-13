@@ -276,14 +276,15 @@ JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=480
 
-DEFAULT_IT_USERNAME=default@email.com
-DEFAULT_IT_PASSWORD=default
-TEMPORARY_ADMIN_USERNAME=admin@email.com
-TEMPORARY_ADMIN_PASSWORD=admin123
-TEMPORARY_STAFF_USERNAME=staff@email.com
-TEMPORARY_STAFF_PASSWORD=staffstaff
-TEMPORARY_IT_USERNAME=it@email.com
-TEMPORARY_IT_PASSWORD=it123456
+BOOTSTRAP_IT_USERNAME=default@email.com
+BOOTSTRAP_IT_PASSWORD=default
+TANAW_SEED_DEVELOPMENT_ACCOUNTS=true
+DEVELOPMENT_ADMIN_USERNAME=admin@email.com
+DEVELOPMENT_ADMIN_PASSWORD=admin123
+DEVELOPMENT_STAFF_USERNAME=staff@email.com
+DEVELOPMENT_STAFF_PASSWORD=staffstaff
+DEVELOPMENT_IT_USERNAME=it@email.com
+DEVELOPMENT_IT_PASSWORD=it123456
 
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
 VITE_API_BASE_URL=http://localhost:8000
@@ -323,8 +324,10 @@ Stop the services without deleting database data:
 docker compose down
 ```
 
-The first backend startup creates the current schema and seeds the protected
-default IT account plus the temporary LGU accounts if they do not already exist.
+Compose applies every versioned Alembic migration before the backend starts.
+The backend validates that migration state, initializes the bootstrap IT account
+once, and optionally creates explicitly enabled development accounts. Later
+restarts never mutate the schema or synchronize or reset an existing account.
 
 ### 4. Install and start the enterprise desktop
 
@@ -370,9 +373,9 @@ Python 3.12 or newer and uv available. Group members cloning the repository
 should use `npm run dev`, which uses the `.venv` created by
 `uv sync --directory ml-service --frozen`.
 
-## Default and temporary accounts
+## Bootstrap and development accounts
 
-The backend automatically creates the protected bootstrap IT account on startup:
+On a fresh local database, the backend creates the bootstrap IT account once:
 
 ```text
 Role: IT Personnel
@@ -380,7 +383,8 @@ Username: default@email.com
 Password: default
 ```
 
-For now, the backend also creates these protected temporary accounts:
+When `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`, it also creates these local-only
+development accounts once:
 
 ```text
 Role: Admin
@@ -396,14 +400,20 @@ Username: it@email.com
 Password: it123456
 ```
 
-Use the default IT account or temporary IT account to create or manage LGU and
-enterprise accounts. All startup-seeded accounts accept the configured passwords
-as-is and do not require a first-login password change.
+Use the bootstrap or development IT account to create and manage LGU and
+enterprise accounts during local development. The one-time bootstrap comes from
+`BOOTSTRAP_IT_*`; optional development accounts come from the
+`DEVELOPMENT_ADMIN_*`, `DEVELOPMENT_STAFF_*`, and `DEVELOPMENT_IT_*` settings.
 
-The original bootstrap account comes from `DEFAULT_IT_*`. The temporary accounts
-come from `TEMPORARY_ADMIN_*`, `TEMPORARY_STAFF_*`, and `TEMPORARY_IT_*`. The
-backend synchronizes these startup-seeded accounts on every startup, so changing
-them takes effect after restarting the backend.
+After an account exists, changing these environment values does not modify its
+password, email, role, status, activation state, or lockout state. Production
+rejects development account seeding and placeholder JWT/bootstrap credentials.
+For a fresh production database, configure a unique bootstrap email and password
+for the first startup. After initialization, remove `BOOTSTRAP_IT_*` from the
+deployment secrets. TANAW persists the bootstrap account's protected identity in
+the database, so removing those variables never makes the account editable or
+deactivatable. If an IT account already exists in a migrated database, no
+bootstrap credentials are required.
 
 ## Seed and simulate reports
 
@@ -485,7 +495,7 @@ shows them in the **Reporting Month** selector.
 All generated accounts use:
 
 ```text
-Password: TanawTest123!
+Password: Visitor simulation access phrase 2026
 ```
 
 LGU accounts:
@@ -508,7 +518,7 @@ Enterprise accounts:
 
 Archie's Event Place is not a generated account. Sign in with
 `archies@email.com` and the password selected during its account onboarding,
-not `TanawTest123!`.
+not `Visitor simulation access phrase 2026`.
 
 ### Complete the end-to-end report simulation
 
@@ -521,7 +531,7 @@ not `TanawTest123!`.
 4. Wait for the current-period prepared counts to load, then complete and
    submit the current report.
 5. Sign in to the web portal as `reports.staff@tanaw.test` with
-   `TanawTest123!`.
+   `Visitor simulation access phrase 2026`.
 6. Open **Batch Reports** for the relevant reporting periods.
 7. Review the target submissions and accept them as **Ready to Consolidate**.
 8. Generate the final report once all participating enterprises are ready.
@@ -630,6 +640,7 @@ Linux/macOS:
 cd backend-tanaw
 test -f .env || cp .env.example .env
 uv sync --frozen
+uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
@@ -639,6 +650,7 @@ Windows PowerShell:
 Set-Location backend-tanaw
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 uv sync --frozen
+uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
@@ -648,6 +660,7 @@ Windows Command Prompt:
 cd backend-tanaw
 if not exist .env copy .env.example .env
 uv sync --frozen
+uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
@@ -697,6 +710,7 @@ docker compose -f docker-compose.prod.yml up --build -d
 This configuration:
 
 - installs production-only backend dependencies;
+- runs a one-shot migration service and starts the API only after it succeeds;
 - runs Uvicorn without reload;
 - compiles the web portal during image creation;
 - serves the compiled frontend through Nginx;
@@ -704,6 +718,13 @@ This configuration:
 
 The Electron desktop is not containerized and must still run on the host or be
 installed from a packaged desktop build.
+
+For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
+pre-deploy or release command before replacing the backend process. TANAW refuses
+to start against an uninitialized or outdated database. Back up PostgreSQL before
+every production migration; revision `20260711_0016` is intentionally
+irreversible because rolling it back would require dropping operational and
+support data.
 
 ## Environment configuration
 
@@ -718,19 +739,51 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `JWT_SECRET_KEY`              | Token-signing secret                                   |
 | `JWT_ALGORITHM`               | JWT algorithm, normally `HS256`                        |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime                                  |
-| `DEFAULT_IT_USERNAME`         | Startup-synchronized original default IT username      |
-| `DEFAULT_IT_PASSWORD`         | Startup-synchronized original default IT password      |
-| `TEMPORARY_ADMIN_USERNAME`    | Startup-synchronized temporary Admin username          |
-| `TEMPORARY_ADMIN_PASSWORD`    | Startup-synchronized temporary Admin password          |
-| `TEMPORARY_STAFF_USERNAME`    | Startup-synchronized temporary Staff username          |
-| `TEMPORARY_STAFF_PASSWORD`    | Startup-synchronized temporary Staff password          |
-| `TEMPORARY_IT_USERNAME`       | Startup-synchronized temporary IT username             |
-| `TEMPORARY_IT_PASSWORD`       | Startup-synchronized temporary IT password             |
+| `BOOTSTRAP_IT_USERNAME`       | One-time IT bootstrap email for a database with no IT account |
+| `BOOTSTRAP_IT_PASSWORD`       | One-time IT bootstrap password; never reused to reset the account |
+| `TANAW_SEED_DEVELOPMENT_ACCOUNTS` | Explicit local-only switch for development accounts |
+| `DEVELOPMENT_ADMIN_USERNAME`  | Optional local development Admin email                 |
+| `DEVELOPMENT_ADMIN_PASSWORD`  | Optional local development Admin password              |
+| `DEVELOPMENT_STAFF_USERNAME`  | Optional local development Staff email                 |
+| `DEVELOPMENT_STAFF_PASSWORD`  | Optional local development Staff password              |
+| `DEVELOPMENT_IT_USERNAME`     | Optional local development IT email                    |
+| `DEVELOPMENT_IT_PASSWORD`     | Optional local development IT password                 |
 | `CORS_ORIGINS`                | Comma-separated web/desktop origins allowed by the API |
 | `VITE_API_BASE_URL`           | API URL compiled into or used by frontend clients      |
+| `FRONTEND_PUBLIC_URL`         | Public portal URL embedded in activation and email-verification links |
+| `TANAW_PUBLIC_DEPLOYMENT`     | Frontend build guard for non-Vercel public deployments; requires a public HTTPS API URL |
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |
 | `FRONTEND_PORT`               | Host port mapped to the portal; defaults to `5173`     |
 | `TANAW_ALLOW_MOCK_DATA`       | Explicit simulation safety switch; false by default    |
+| `EMAIL_DELIVERY_MODE`         | `log` locally or `resend` for real email delivery       |
+| `RESEND_API_KEY`              | Backend-only Resend API credential                      |
+| `EMAIL_FROM_NAME`             | Display name used for TANAW transactional messages      |
+| `EMAIL_FROM_ADDRESS`          | Verified sender or Resend development sender            |
+| `EMAIL_TEST_RECIPIENT`        | Development-only recipient restriction                  |
+| `RESEND_API_BASE_URL`         | Official Resend HTTPS API endpoint                      |
+| `EMAIL_REQUEST_TIMEOUT_SECONDS` | Bounded timeout used for Resend connect/read/write/pool operations |
+| `EMAIL_SECRET_DERIVATION_KEY` | Separate stable secret used to derive queued activation and OTP values |
+| `EMAIL_OUTBOX_POLL_INTERVAL_SECONDS` | Delay between idle transactional-email queue polls |
+| `EMAIL_OUTBOX_LEASE_SECONDS` | Worker lease used to recover interrupted deliveries safely |
+| `EMAIL_OUTBOX_BATCH_SIZE` | Maximum concurrently claimed email records per worker |
+| `EMAIL_OUTBOX_MAX_ATTEMPTS` | Automatic delivery-attempt ceiling before IT review |
+| `PASSWORD_RESET_RATE_WINDOW_SECONDS` | Shared bounded window for recovery abuse controls |
+| `PASSWORD_RESET_PER_IP_LIMIT` | Maximum recovery requests per client IP and window |
+| `PASSWORD_RESET_PER_IDENTIFIER_LIMIT` | Maximum recovery requests per normalized email and window |
+| `PASSWORD_RESET_GLOBAL_LIMIT` | Global recovery-request ceiling per window |
+| `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS` | Delay before another recovery code can be requested |
+| `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS` | Minimum generic recovery-request response time |
+| `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
+| `ACCOUNT_EMAIL_CHANGE_TTL_HOURS` | Lifetime of a proposed-address ownership verification link |
+| `RETENTION_CLEANUP_INTERVAL_SECONDS` | Delay between bounded authentication/email cleanup passes |
+| `RETENTION_CLEANUP_BATCH_SIZE` | Maximum rows claimed per record family and cleanup pass |
+| `ACTIVATION_TOKEN_RETENTION_DAYS` | Retention for consumed, invalidated, or expired activation-token metadata |
+| `PASSWORD_RESET_RETENTION_DAYS` | Retention for used, invalidated, or expired recovery challenges |
+| `PASSWORD_RESET_RATE_BUCKET_RETENTION_DAYS` | Retention for inactive recovery abuse-control buckets |
+| `ACCOUNT_EMAIL_CHANGE_RETENTION_DAYS` | Retention for resolved email-ownership requests |
+| `DEVELOPMENT_DELIVERY_RETENTION_DAYS` | Short retention for local delivery bodies that can contain development secrets |
+| `EMAIL_OUTBOX_RETENTION_DAYS` | Retention for ordinary terminal transactional-email records |
+| `FAILED_EMAIL_OUTBOX_RETENTION_DAYS` | Longer audit retention for terminal failure and reconciliation records |
 | `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
 | `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |

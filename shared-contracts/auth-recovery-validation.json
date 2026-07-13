@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "emails": [
+    { "value": "", "message": "Please enter your registered email." },
+    { "value": "not-an-email", "message": "Enter a valid registered email." },
+    { "value": "enterprise@example.com", "message": "" }
+  ],
+  "codes": [
+    { "value": "", "message": "Please enter the verification code." },
+    { "value": "12345", "message": "Enter the 6-digit verification code." },
+    { "value": "12345a", "message": "Enter the 6-digit verification code." },
+    { "value": "123456", "message": "" }
+  ],
+  "passwords": [
+    {
+      "password": "",
+      "confirmation": "",
+      "message": "Please enter a new password."
+    },
+    {
+      "password": "short phrase",
+      "confirmation": "short phrase",
+      "message": "Password must contain at least 15 characters."
+    },
+    {
+      "password": "Enterprise recovery passphrase 2026",
+      "confirmation": "Different recovery passphrase 2026",
+      "message": "Passwords do not match."
+    },
+    {
+      "password": "Enterprise recovery passphrase 2026",
+      "confirmation": "Enterprise recovery passphrase 2026",
+      "message": ""
+    }
+  ]
+}

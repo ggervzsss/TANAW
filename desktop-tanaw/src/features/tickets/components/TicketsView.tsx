@@ -9,6 +9,7 @@ import {
   getSupportTicket,
   getSupportTicketAttachmentUrl,
   listSupportTickets,
+  replyToSupportTicket,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
@@ -380,6 +381,10 @@ export function TicketsView() {
             setPreviewPhoto(null);
           }}
           onPreviewPhoto={setPreviewPhoto}
+          onTicketUpdated={(ticket) => {
+            setSelectedTicket(ticket);
+            setTickets((current) => current.map((item) => (item.id === ticket.id ? ticket : item)));
+          }}
         />
       )}
 
@@ -417,10 +422,38 @@ type TicketDetailModalProps = {
   isLoading: boolean;
   onClose: () => void;
   onPreviewPhoto: (photo: SupportTicketAttachment) => void;
+  onTicketUpdated: (ticket: SupportTicketDetail) => void;
   ticket: SupportTicketDetail | null;
 };
 
-function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, ticket }: TicketDetailModalProps) {
+function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicketUpdated, ticket }: TicketDetailModalProps) {
+  const [reply, setReply] = useState("");
+  const [replyError, setReplyError] = useState("");
+  const [isReplying, setIsReplying] = useState(false);
+
+  async function handleReply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = reply.trim();
+    if (!ticket || !message) {
+      setReplyError("Write a message before sending your reply.");
+      return;
+    }
+    setIsReplying(true);
+    setReplyError("");
+    try {
+      const updatedTicket = await replyToSupportTicket(ticket.id, message);
+      onTicketUpdated(updatedTicket);
+      setReply("");
+      notifySuccess(`Reply added to ${updatedTicket.code}.`);
+    } catch (requestError) {
+      const messageText = getRequestErrorMessage(requestError, "Unable to send the ticket reply.");
+      setReplyError(messageText);
+      notifyError(messageText);
+    } finally {
+      setIsReplying(false);
+    }
+  }
+
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-1100 flex items-center justify-center overflow-y-auto bg-[#03140c]/70 p-4 backdrop-blur-md" onPointerDown={onClose}>
@@ -536,9 +569,33 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, ticket }
                       <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} />
                     ))}
                   </div>
-                  <p className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-semibold leading-relaxed text-[#065f46] dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100">
-                    IT responses appear here after personnel review this ticket in the portal.
-                  </p>
+                  <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Reply in TANAW</span>
+                      <textarea
+                        value={reply}
+                        maxLength={2000}
+                        onChange={(event) => {
+                          setReply(event.target.value);
+                          if (replyError) setReplyError("");
+                        }}
+                        className="min-h-24 w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:focus:border-emerald-300/40"
+                        placeholder="Add information or respond to IT"
+                      />
+                    </label>
+                    {replyError ? <p className="text-xs font-semibold text-red-700 dark:text-red-200">{replyError}</p> : null}
+                    <button
+                      type="submit"
+                      disabled={isReplying}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#065f46] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#044a36] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isReplying ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
+                      {isReplying ? "Sending..." : "Send Reply"}
+                    </button>
+                    {ticket.status === "Resolved" ? (
+                      <p className="text-center text-[11px] font-semibold text-gray-500 dark:text-slate-300">Replying will reopen this resolved ticket.</p>
+                    ) : null}
+                  </form>
                 </section>
               </div>
             )}

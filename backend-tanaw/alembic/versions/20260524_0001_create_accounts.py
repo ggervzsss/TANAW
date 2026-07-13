@@ -8,6 +8,7 @@ Create Date: 2026-05-24
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -18,8 +19,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    account_role = sa.Enum("IT", "ADMIN", "STAFF", "ENTERPRISE", name="account_role")
-    account_status = sa.Enum("ACTIVE", "INACTIVE", name="account_status")
+    account_role = postgresql.ENUM(
+        "IT", "ADMIN", "STAFF", "ENTERPRISE", name="account_role", create_type=False
+    )
+    account_status = postgresql.ENUM("ACTIVE", "INACTIVE", name="account_status", create_type=False)
     account_role.create(op.get_bind(), checkfirst=True)
     account_status.create(op.get_bind(), checkfirst=True)
 
@@ -53,5 +56,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index(op.f("ix_accounts_email"), table_name="accounts")
     op.drop_table("accounts")
-    sa.Enum(name="account_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="account_role").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="account_status").drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name="account_role").drop(op.get_bind(), checkfirst=True)

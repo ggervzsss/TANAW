@@ -11,6 +11,18 @@ services:
       timeout: 5s
       retries: 12
 
+  migrate:
+    build:
+      context: ./backend-tanaw
+      target: production
+    env_file:
+      - .env
+    command: uv run alembic upgrade head
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build:
       context: ./backend-tanaw
@@ -20,8 +32,8 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     build:
@@ -29,6 +41,7 @@ services:
       target: production
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        TANAW_PUBLIC_DEPLOYMENT: ${TANAW_PUBLIC_DEPLOYMENT:-false}
     ports:
       - "${FRONTEND_PORT:-5173}:80"
     depends_on:

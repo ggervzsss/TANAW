@@ -106,14 +106,14 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
         title="Support Tickets"
         description={
           isItResponder
-            ? "Technical queue for enterprise-submitted tickets, photo attachments, and IT responses."
-            : "Read-only supervision view for enterprise support tickets, IT responses, and ticket status."
+            ? "Technical inbox for TANAW support requests, attachments, and IT responses."
+            : "Read-only supervision for TANAW support requests, IT responses, and ticket status."
         }
       />
 
       {!isItResponder && (
         <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
-          IT personnel handle enterprise responses. Admin can monitor ticket status, attachments, and communication.
+          IT personnel handle user responses. Admin can monitor ticket status, attachments, and communication.
         </div>
       )}
 
@@ -277,7 +277,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
           <EmptyState
             icon={detailQuery.isLoading ? RefreshCw : AlertCircle}
             title={detailQuery.isLoading ? "Loading ticket details" : "Ticket unavailable"}
-            description={detailQuery.isLoading ? "Fetching enterprise ticket data." : "This ticket could not be loaded."}
+            description={detailQuery.isLoading ? "Fetching support ticket data." : "This ticket could not be loaded."}
           />
         )}
 
@@ -299,8 +299,8 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <DetailField label="Enterprise" value={ticket.enterpriseName} />
-                <DetailField label="Enterprise ID" value={ticket.enterpriseId} />
+                <DetailField label="Requester" value={ticket.enterpriseName} />
+                <DetailField label="Account ID" value={ticket.enterpriseId} />
                 <DetailField label="Category" value={<CategoryBadge category={ticket.category} />} />
                 <DetailField label="Submitted" value={formatTicketTime(ticket.createdAt)} />
                 <DetailField label="Affected Area" value={ticket.affectedArea || "Not specified"} />
@@ -376,7 +376,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                 <div className="mt-4 space-y-3">
                   <ConversationItem
                     authorName={ticket.submittedBy}
-                    authorRole="enterprise"
+                    authorRole="requester"
                     createdAt={ticket.createdAt}
                     message={ticket.description}
                   />
@@ -396,7 +396,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                           setReplyError("");
                         }}
                         rows={4}
-                        placeholder="Write a response for the enterprise..."
+                        placeholder="Write a response for the requester..."
                         className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
                       />
                     </label>
@@ -516,9 +516,9 @@ function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
 }
 
 function ConversationItem({ authorName, authorRole, createdAt, message }: { authorName: string; authorRole: string; createdAt: string; message: string }) {
-  const isEnterprise = authorRole === "enterprise";
+  const isRequester = authorRole === "enterprise" || authorRole === "requester";
   return (
-    <article className={`rounded-2xl border p-3 ${isEnterprise ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}>
+    <article className={`rounded-2xl border p-3 ${isRequester ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-black text-slate-950">{authorName}</p>
         <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
@@ -558,6 +558,7 @@ function authorRoleLabel(role: string) {
   if (role === "admin") return "Admin";
   if (role === "staff") return "Staff";
   if (role === "enterprise") return "Enterprise";
+  if (role === "requester") return "Requester";
   return role;
 }
 

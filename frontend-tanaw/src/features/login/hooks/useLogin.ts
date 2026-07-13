@@ -2,7 +2,7 @@ import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
@@ -33,11 +33,6 @@ export function useLogin() {
       const session = await loginService({ clientId, encryptionKey });
       queryClient.removeQueries({ queryKey: ["current-user"] });
       setSession(session, rememberMe);
-      if (session.user.mustChangePassword) {
-        toast.success("Temporary credentials verified");
-        navigate("/change-password", { replace: true });
-        return;
-      }
       toast.success("Login successful");
       navigate(getRoleDashboardPath(session.user.role), { replace: true });
     } catch (error) {

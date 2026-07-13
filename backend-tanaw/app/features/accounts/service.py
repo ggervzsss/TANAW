@@ -1,22 +1,20 @@
 import json
 import re
 import secrets
-import string
-from datetime import UTC, datetime, timedelta
-from typing import cast
+from datetime import UTC, datetime
+from typing import Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password, verify_password
-from app.features.accounts.defaults import get_startup_account_specs
 from app.features.accounts.models import (
     Account,
+    AccountEmailChangeRequest,
+    AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryChannel,
     DeliveryStatus,
     DevDelivery,
 )
@@ -27,6 +25,11 @@ from app.features.accounts.schemas import (
     AuthUser,
     DeliverySummary,
     ProfileChangeRequestType,
+)
+from app.features.auth.account_activation import issue_account_activation
+from app.features.auth.challenge_service import invalidate_password_reset_challenges
+from app.features.auth.email_change import (
+    ACTIVE_EMAIL_CHANGE_STATUSES,
 )
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
@@ -104,7 +107,6 @@ def to_auth_user(account: Account) -> AuthUser:
         displayName=account.display_name,
         role=account.role.value,
         title=account.title,
-        mustChangePassword=account.must_change_password,
         phone=account.phone,
         firstName=account.first_name,
         lastName=account.last_name,
@@ -121,7 +123,11 @@ def to_auth_user(account: Account) -> AuthUser:
     )
 
 
-def to_account_summary(account: Account) -> AccountSummary:
+def to_account_summary(
+    account: Account,
+    *,
+    email_change_request: AccountEmailChangeRequest | None = None,
+) -> AccountSummary:
     return AccountSummary(
         id=account.id,
         email=account.email,
@@ -146,20 +152,57 @@ def to_account_summary(account: Account) -> AccountSummary:
         role=account.role.value,
         title=account.title,
         status=account.status.value,
-        mustChangePassword=account.must_change_password,
+        isActivated=account.activated_at is not None,
         isProtectedDefault=is_protected_startup_account(account),
-        profileChangeRequests=get_profile_change_requests(account),
+        profileChangeRequests=get_profile_change_requests(
+            account,
+            email_change_request=email_change_request,
+        ),
         createdAt=account.created_at,
         lastLoginAt=account.last_login_at,
     )
 
 
-def get_profile_change_requests(account: Account) -> list[AccountProfileChangeRequest]:
-    if account.role != AccountRole.ENTERPRISE:
-        return []
-
+def get_profile_change_requests(
+    account: Account,
+    *,
+    email_change_request: AccountEmailChangeRequest | None = None,
+) -> list[AccountProfileChangeRequest]:
     requests: list[AccountProfileChangeRequest] = []
+    if email_change_request is not None:
+        expires_at = email_change_request.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        is_expired = expires_at <= datetime.now(UTC)
+        is_verified = (
+            email_change_request.status == AccountEmailChangeStatus.VERIFIED.value
+            and not is_expired
+        )
+        requests.append(
+            AccountProfileChangeRequest(
+                type="businessEmail",
+                label="Business Email" if account.role == AccountRole.ENTERPRISE else "Email",
+                requestedValue=email_change_request.requested_email,
+                requestedAt=email_change_request.created_at.isoformat(),
+                requestId=email_change_request.id,
+                status=(
+                    "expired"
+                    if is_expired
+                    else cast(
+                        Literal["pending_verification", "verified"],
+                        email_change_request.status,
+                    )
+                ),
+                isVerified=is_verified,
+                canApprove=is_verified,
+                expiresAt=email_change_request.expires_at,
+            )
+        )
+    if account.role != AccountRole.ENTERPRISE:
+        return requests
     for request_type, (_, label, value_key) in PROFILE_CHANGE_REQUEST_CONFIG.items():
+        if request_type == "businessEmail":
+            continue
         pending_request = get_pending_profile_change_request(account, request_type)
         if pending_request is None:
             continue
@@ -173,40 +216,67 @@ def get_profile_change_requests(account: Account) -> list[AccountProfileChangeRe
                 label=label,
                 requestedValue=requested_value,
                 requestedAt=requested_at,
+                status="pending_review",
+                isVerified=False,
+                canApprove=True,
             )
         )
     return requests
 
 
+async def to_account_summaries_with_requests(
+    db: AsyncSession,
+    accounts: list[Account],
+) -> list[AccountSummary]:
+    account_ids = [account.id for account in accounts]
+    email_requests = (
+        list(
+            await db.scalars(
+                select(AccountEmailChangeRequest).where(
+                    AccountEmailChangeRequest.account_id.in_(account_ids),
+                    AccountEmailChangeRequest.status.in_(ACTIVE_EMAIL_CHANGE_STATUSES),
+                )
+            )
+        )
+        if account_ids
+        else []
+    )
+    requests_by_account = {request.account_id: request for request in email_requests}
+    return [
+        to_account_summary(
+            account,
+            email_change_request=requests_by_account.get(account.id),
+        )
+        for account in accounts
+    ]
+
+
+async def to_account_summary_with_requests(
+    db: AsyncSession,
+    account: Account,
+) -> AccountSummary:
+    return (await to_account_summaries_with_requests(db, [account]))[0]
+
+
 def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
+    status = (
+        DeliveryStatus.ACCEPTED.value
+        if delivery.status == DeliveryStatus.SENT
+        else delivery.status.value
+    )
     return DeliverySummary(
         id=delivery.id,
         accountId=delivery.account_id,
-        channel=delivery.channel.value,
         recipient=delivery.recipient,
         subject=delivery.subject,
         body=delivery.body,
-        status=delivery.status.value,
+        status=status,
         createdAt=delivery.created_at,
     )
 
 
-def is_temporary_password_expired(account: Account) -> bool:
-    if not account.must_change_password or account.temporary_password_expires_at is None:
-        return False
-
-    expires_at = account.temporary_password_expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-    return expires_at <= datetime.now(UTC)
-
-
 def is_protected_startup_account(account: Account) -> bool:
-    settings = get_settings()
-    return any(
-        account.role == spec.role and account.email.lower() == spec.email
-        for spec in get_startup_account_specs(settings)
-    )
+    return account.is_protected_system_account is True
 
 
 async def get_account_by_email(db: AsyncSession, email: str) -> Account | None:
@@ -214,40 +284,36 @@ async def get_account_by_email(db: AsyncSession, email: str) -> Account | None:
     return result.first()
 
 
-async def get_account_by_login_identifier(db: AsyncSession, identifier: str) -> Account | None:
+async def get_account_by_login_identifier(
+    db: AsyncSession,
+    identifier: str,
+    *,
+    for_update: bool = False,
+) -> Account | None:
     normalized = identifier.strip().lower()
-    result = await db.scalars(
-        select(Account).where((Account.email == normalized) | (Account.enterprise_id == normalized))
+    statement = select(Account).where(
+        (Account.email == normalized) | (Account.enterprise_id == normalized)
     )
-    return result.first()
+    if for_update:
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    return cast(Account | None, await db.scalar(statement))
 
 
-async def get_account_by_id(db: AsyncSession, account_id: str) -> Account | None:
-    result = await db.scalars(select(Account).where(Account.id == account_id))
-    return result.first()
-
-
-async def record_login(db: AsyncSession, account: Account) -> None:
-    account.last_login_at = datetime.now(UTC)
-    await db.commit()
+async def get_account_by_id(
+    db: AsyncSession,
+    account_id: str,
+    *,
+    for_update: bool = False,
+) -> Account | None:
+    statement = select(Account).where(Account.id == account_id)
+    if for_update:
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    return cast(Account | None, await db.scalar(statement))
 
 
 async def invalidate_account_tokens(db: AsyncSession, account: Account) -> None:
     account.token_invalid_before = datetime.now(UTC)
     await db.commit()
-
-
-def generate_temporary_password(length: int = 14) -> str:
-    required = [
-        secrets.choice(string.ascii_uppercase),
-        secrets.choice(string.ascii_lowercase),
-        secrets.choice(string.digits),
-        secrets.choice("!@#$%^&*"),
-    ]
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-    required.extend(secrets.choice(alphabet) for _ in range(max(0, length - len(required))))
-    secrets.SystemRandom().shuffle(required)
-    return validate_password_policy("".join(required))
 
 
 def account_role_from_value(value: str) -> AccountRole:
@@ -290,36 +356,7 @@ async def list_accounts_by_roles(db: AsyncSession, roles: list[AccountRole]) -> 
     return list(result)
 
 
-def create_onboarding_delivery(
-    account: Account, temporary_password: str, channel: DeliveryChannel, recipient: str
-) -> DevDelivery:
-    subject = "Your TANAW account credentials"
-    if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
-        login_details = (
-            f"Enterprise ID: {account.enterprise_id}\n"
-            f"Contact email: {account.email}\n"
-            "You may sign in with either your Enterprise ID or contact email.\n"
-        )
-    else:
-        login_details = f"Username: {account.email}\n"
-    body = (
-        f"Hello {account.display_name},\n\n"
-        "Your TANAW account has been created.\n"
-        f"{login_details}"
-        f"Temporary password: {temporary_password}\n\n"
-        "Use this temporary password to log in. You will be required to change it before accessing the system."
-    )
-    return DevDelivery(
-        account_id=account.id,
-        channel=channel,
-        recipient=recipient,
-        subject=subject,
-        body=body,
-        status=DeliveryStatus.RECORDED,
-    )
-
-
-async def create_account_with_temporary_password(
+async def create_account_with_activation(
     db: AsyncSession,
     *,
     email: str,
@@ -345,8 +382,6 @@ async def create_account_with_temporary_password(
     gateway_status: str | None = None,
     building_capacity: int = 100,
 ) -> Account:
-    temporary_password = generate_temporary_password()
-    now = datetime.now(UTC)
     account = Account(
         email=email.lower(),
         phone=phone,
@@ -367,50 +402,16 @@ async def create_account_with_temporary_password(
         gateway_id=gateway_id,
         gateway_status=gateway_status,
         building_capacity=building_capacity,
-        password_hash=hash_password(temporary_password),
+        password_hash=hash_password(secrets.token_urlsafe(48)),
         role=role,
         display_name=display_name,
         title=title,
         status=AccountStatus.ACTIVE,
-        must_change_password=True,
-        temporary_password_created_at=now,
-        temporary_password_expires_at=now + timedelta(days=7),
+        activated_at=None,
     )
     db.add(account)
     await db.flush()
-    db.add(
-        create_onboarding_delivery(
-            account, temporary_password, DeliveryChannel.EMAIL, account.email
-        )
-    )
-    if phone:
-        db.add(create_onboarding_delivery(account, temporary_password, DeliveryChannel.SMS, phone))
-    await db.commit()
-    await db.refresh(account)
-    return account
-
-
-async def reset_account_password(db: AsyncSession, account: Account) -> Account:
-    temporary_password = generate_temporary_password()
-    now = datetime.now(UTC)
-    account.password_hash = hash_password(temporary_password)
-    account.must_change_password = True
-    account.temporary_password_created_at = now
-    account.temporary_password_expires_at = now + timedelta(days=7)
-    account.token_invalid_before = now
-    account.failed_login_attempts = 0
-    account.locked_until = None
-    db.add(
-        create_onboarding_delivery(
-            account, temporary_password, DeliveryChannel.EMAIL, account.email
-        )
-    )
-    if account.phone:
-        db.add(
-            create_onboarding_delivery(
-                account, temporary_password, DeliveryChannel.SMS, account.phone
-            )
-        )
+    await issue_account_activation(db, account, lock_account=False)
     await db.commit()
     await db.refresh(account)
     return account
@@ -421,15 +422,13 @@ async def change_account_password(
 ) -> bool:
     if not verify_password(current_password, account.password_hash):
         return False
-    if is_temporary_password_expired(account):
-        return False
 
     validate_password_policy(new_password)
+    now = datetime.now(UTC)
     account.password_hash = hash_password(new_password)
-    account.must_change_password = False
-    account.temporary_password_created_at = None
-    account.temporary_password_expires_at = None
-    account.password_changed_at = datetime.now(UTC)
+    account.password_changed_at = now
+    account.token_invalid_before = now
+    await invalidate_password_reset_challenges(db, account.id, invalidated_at=now)
     await db.commit()
     await db.refresh(account)
     return True

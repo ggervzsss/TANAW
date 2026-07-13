@@ -51,6 +51,7 @@ app/
     accounts/          # LGU/enterprise accounts, dependencies, services, APIs
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
+    mail/              # Outbound Resend delivery and email templates
     mock_data/         # Explicit CLI-driven test-data tooling
     operational/       # Telemetry, sync, intake reports, and final reports
 alembic/               # Database migration files
@@ -61,6 +62,215 @@ main.py                # FastAPI application entry point
 The backend follows a feature-oriented layout. Shared infrastructure lives in
 `app/core`, `app/db`, and `app/api`; domain behavior lives under
 `app/features`.
+
+## Database Migrations
+
+Alembic is the only schema authority. Apply migrations before starting any API
+or mock-data process:
+
+```shell
+uv run alembic upgrade head
+uv run uvicorn main:app
+```
+
+Application startup validates the `alembic_version` revision and fails with an
+actionable error when the database is missing or outdated. It never creates,
+alters, or drops schema objects. Production deployments must back up PostgreSQL,
+run migrations as a separate pre-deploy/release step, and start the new API only
+after migration succeeds. Revision `20260711_0016` reconciles tables formerly
+created at runtime and is intentionally irreversible because dropping those
+tables would destroy operational and support records; recovery uses a verified
+pre-migration backup or a forward fix.
+
+The account-activation migration (`20260711_0014`) is also intentionally
+irreversible. TANAW discarded temporary passwords when activation links became
+authoritative, so a structural downgrade could not restore credentials for
+pending users. Activated and pending users remain usable on the migrated schema;
+if a release must be reverted, keep the database at the current revision and
+roll forward the application, or restore the application and database together
+from a verified pre-activation backup. Never deploy pre-activation backend code
+against the migrated database.
+
+The verified-email-change migration (`20260712_0019`) is intentionally
+irreversible as well. Its request history is security audit evidence and can
+contain an outstanding ownership proof. Roll forward or restore the application
+and database together from a verified backup instead of dropping that state.
+
+## Email Integration
+
+TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
+messages locally without contacting an external provider. `EMAIL_DELIVERY_MODE=resend`
+sends outbound transactional messages through Resend. New users receive a
+single-use activation link and choose their own password; TANAW never sends a
+password by email. Password recovery continues to use an emailed OTP. Account
+phone numbers remain contact/profile information and are never used for SMS
+delivery or phone-based OTPs.
+
+Changing an activated account's registered email never updates the account
+directly. TANAW sends a single-use, expiring ownership link to the proposed
+address and a warning to the current address. Only after verification can a
+different IT Personnel account approve the request. Approval atomically changes
+the sign-in/recovery address, invalidates active sessions and password-recovery
+challenges, and queues notices to both the old and new addresses. Replacing,
+rejecting, cancelling, expiring, or deactivating the account invalidates the
+pending request. An unactivated account's typo can still be corrected directly;
+TANAW invalidates its old activation link and queues a new one to the corrected
+address.
+
+Activation links open the public web portal, expire after the configured number
+of hours, and are invalidated when a replacement link is issued. Set
+`FRONTEND_PUBLIC_URL` to the URL users can actually open—not the backend API URL.
+Production configuration requires this value to be a public HTTPS URL.
+
+## Startup Account Safety
+
+`BOOTSTRAP_IT_USERNAME` and `BOOTSTRAP_IT_PASSWORD` are used only when TANAW
+initializes a database that has no existing or legacy IT account. TANAW records
+that initialization, persists the bootstrap account's protected identity in the
+database, and never synchronizes the account from environment values again.
+Removing the bootstrap variables after initialization does not remove that
+protection. Password changes, activation state, lockouts, and session revocation
+survive every backend restart, while account-management operations cannot edit,
+reassign, deactivate, or delete the protected bootstrap identity.
+
+Optional Admin, Staff, and secondary IT development accounts are created only
+when `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`. Production rejects that switch,
+placeholder bootstrap credentials, and short or default JWT secrets. Existing
+deployments may continue using the legacy `DEFAULT_IT_*` and `TEMPORARY_*`
+environment names temporarily; the backend maps them to the new settings for
+backward compatibility, but new configuration should use `BOOTSTRAP_IT_*` and
+`DEVELOPMENT_*`.
+
+Normal IT account recovery should use the emailed password-reset OTP. If an IT
+account is inactive, another active IT account must review and reactivate it
+through Accounts Management; this produces the normal TANAW activity records.
+Keep at least two official IT accounts after deployment so recovery never
+depends on database access. The one-time bootstrap variables are not an
+emergency reset mechanism: adding or changing them after initialization has no
+effect. If every IT account and mailbox is unavailable, a database administrator
+must follow the LGU's controlled incident-recovery process, preserve an audit
+record of the authorization, and restore access explicitly rather than deleting
+the `startup-bootstrap-v1` marker or restarting TANAW with a known password.
+
+The Resend-managed development sender can deliver only to the Resend account
+email, so set `EMAIL_TEST_RECIPIENT` until a custom sending domain is verified.
+Support requests and ticket replies are submitted directly to the TANAW API and
+stored in the Support Tickets queue. TANAW does not receive or parse inbound
+email.
+
+Secrets belong only in a private `.env` or deployment secret store:
+
+```dotenv
+EMAIL_DELIVERY_MODE=resend
+RESEND_API_KEY=replace_with_your_private_key
+EMAIL_FROM_NAME=TANAW
+EMAIL_FROM_ADDRESS=onboarding@resend.dev
+EMAIL_TEST_RECIPIENT=the-email-used-to-register-with-resend@example.com
+FRONTEND_PUBLIC_URL=http://localhost:5173
+ACCOUNT_ACTIVATION_TTL_HOURS=24
+ACCOUNT_EMAIL_CHANGE_TTL_HOURS=24
+```
+
+When a verified LGU domain becomes available, change `EMAIL_FROM_ADDRESS` and
+remove `EMAIL_TEST_RECIPIENT`; no application code change is required.
+
+Production starts only with `EMAIL_DELIVERY_MODE=resend`, a non-placeholder
+Resend key, the official HTTPS API endpoint, a verified custom sender domain,
+no test-recipient restriction, and a bounded provider timeout. Create a Resend
+key with **Sending access** and scope it to the verified TANAW domain; TANAW does
+not need Full access. The process keeps one pooled HTTP client for its lifetime
+and closes it during shutdown. `/health` reports API process health, while
+`/ready/email` separately reports whether outbound email infrastructure is
+initialized; deployment readiness checks should use both endpoints.
+
+Production also requires `EMAIL_SECRET_DERIVATION_KEY`, a random secret of at
+least 32 characters that is different from `JWT_SECRET_KEY`. TANAW uses it to
+derive activation links and recovery codes in worker memory after the source
+transaction commits, so raw authentication secrets never enter the outbox.
+Keep this key stable and backed up. Rotating it invalidates outstanding
+activation links, password-recovery challenges, and outstanding email-change
+verification links; drain or expire the outbox first, then issue replacements
+after rotation.
+
+## Transactional Email Delivery
+
+Account activation, password recovery, business-email requests, and support
+reply notifications write an `email_outbox` row in the same transaction as the
+record that caused the message. The background worker sends only committed rows,
+claims work with PostgreSQL row locks and fencing leases, and records every
+attempt separately. A provider failure never rolls back an account or support
+reply. Transient failures use bounded exponential retries with the same stable
+Resend idempotency key; permanent failures remain visible to authorized IT
+Personnel on the **Email Delivery** page.
+
+Authentication outbox payloads contain source IDs and immutable, non-secret
+template inputs—never raw activation links, OTPs, or rendered production bodies.
+The worker derives those values in memory and checks the source is still valid
+immediately before delivery. It also hashes the exact provider payload so a
+retry cannot accidentally reuse an idempotency key with changed content.
+
+An `accepted` status means Resend accepted the API request; it does not promise
+that the recipient mailbox delivered it. Use the stored provider ID in the
+Resend dashboard to inspect delivered, delayed, bounced, or suppressed events.
+TANAW remains outbound-only and does not require an inbound-email webhook. Resend
+retains idempotency keys for 24 hours, so TANAW stops automatic retries before
+that boundary and marks an ambiguous older result for provider reconciliation
+instead of risking a duplicate.
+
+Password recovery applies database-backed limits per client IP, per normalized
+email identifier, and globally within `PASSWORD_RESET_RATE_WINDOW_SECONDS`.
+Identifiers and IP addresses are HMAC-fingerprinted before being stored in rate
+buckets or security telemetry. Public request responses remain generic for
+active, pending, inactive, and unknown accounts, use a minimum response-time
+floor, and state explicitly when an existing challenge is being reused during
+the resend cooldown. Configure the limits with `PASSWORD_RESET_PER_IP_LIMIT`,
+`PASSWORD_RESET_PER_IDENTIFIER_LIMIT`, `PASSWORD_RESET_GLOBAL_LIMIT`,
+`PASSWORD_RESET_RESEND_COOLDOWN_SECONDS`, and
+`PASSWORD_RESET_RESPONSE_FLOOR_SECONDS`.
+
+## Authentication and Email Data Retention
+
+The backend runs one bounded retention batch immediately after startup and then
+every `RETENTION_CLEANUP_INTERVAL_SECONDS`. Each record family is claimed with
+`FOR UPDATE SKIP LOCKED`, limited by `RETENTION_CLEANUP_BATCH_SIZE`, and committed
+separately so cleanup does not hold a long transaction or block another backend
+instance. Queued, leased, and retry-scheduled email is never age-deleted.
+
+The default policy retains consumed, invalidated, or expired activation tokens
+and password-reset challenges for 30 days; password-reset rate buckets for 2
+days; local development delivery bodies for 7 days; completed email-change
+requests and normal terminal outbox records for 180 days; and terminal failures
+or reconciliation records for 365 days. Active expired email-change requests
+are first invalidated and their unsent verification messages are cancelled.
+Production outbox rows never contain raw OTPs or activation/email-change links;
+local `DevDelivery` bodies are the only debugging records that can contain a raw
+secret, which is why they have the shortest retention period.
+
+`GET /maintenance/retention` exposes safe per-process counts and the most recent
+run to IT Personnel. `POST /maintenance/retention/run` starts the same serialized
+bounded cleanup manually and writes an activity log. `/ready/maintenance`
+reports whether the scheduler is running. Set the retention environment values
+only after the LGU confirms its records policy; increasing a period preserves
+more audit metadata, while decreasing it is irreversible after the next batch.
+
+## Password Policy
+
+TANAW uses a passphrase-first policy aligned with NIST SP 800-63B-4 for its
+single-factor account passwords. New and changed passwords must contain 15 to
+128 Unicode code points. Spaces, password-manager output, and Unicode are
+accepted; mandatory uppercase, lowercase, number, and symbol mixtures are not
+used. TANAW normalizes new passwords to Unicode NFC before hashing and accepts
+the canonically equivalent form during sign-in.
+
+The backend is authoritative and rejects exact matches from TANAW's bundled
+common, compromised, and context-specific blocklist. The web and desktop
+clients use the same versioned blocklist data and messages for immediate
+feedback. Existing passwords remain usable until their owner activates,
+recovers, or changes the account password; this avoids silently locking out
+seeded development users during rollout. One-time bootstrap and explicitly
+enabled local development credentials remain operational configuration secrets,
+not user-selected passwords, but normal password changes on those accounts use
+the same policy.
 
 ## Data Boundaries
 

@@ -16,9 +16,5 @@ export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) 
     return <Navigate to={routes.login} replace />;
   }
 
-  if (user.mustChangePassword) {
-    return <Navigate to={routes.changePassword} replace />;
-  }
-
   return children;
 }

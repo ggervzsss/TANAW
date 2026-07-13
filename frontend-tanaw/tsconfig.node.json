@@ -20,5 +20,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["deployment.config.ts", "deployment.config.test.ts", "scripts/validate-deployment-config.ts", "vite.config.ts"]
 }

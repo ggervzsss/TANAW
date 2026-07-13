@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import toast from "react-hot-toast";
+import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import {
   createWebSocketAuthMessage,
@@ -86,12 +86,28 @@ function useOperationalSyncSocket() {
       reconnectTimer = window.setTimeout(connect, delay);
     };
 
+    const closeSocket = () => {
+      const currentSocket = socket;
+      socket = null;
+      if (!currentSocket) return;
+
+      currentSocket.onmessage = null;
+      currentSocket.onclose = null;
+      currentSocket.onerror = null;
+      if (currentSocket.readyState === WebSocket.CONNECTING) {
+        currentSocket.onopen = () => currentSocket.close();
+        return;
+      }
+      currentSocket.onopen = null;
+      if (currentSocket.readyState === WebSocket.OPEN) {
+        currentSocket.close();
+      }
+    };
+
     const connect = () => {
       clearHeartbeat();
       if (socket) {
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.close();
+        closeSocket();
       }
 
       socket = new WebSocket(getOperationalWebSocketUrl());
@@ -123,15 +139,16 @@ function useOperationalSyncSocket() {
       };
     };
 
-    connect();
+    const initialConnectTimer = window.setTimeout(connect, 0);
 
     return () => {
       closedByEffect = true;
       clearHeartbeat();
+      window.clearTimeout(initialConnectTimer);
       if (reconnectTimer !== undefined) {
         window.clearTimeout(reconnectTimer);
       }
-      socket?.close();
+      closeSocket();
     };
   }, [queryClient, token]);
 }

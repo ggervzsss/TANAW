@@ -57,6 +57,24 @@ export async function requestBusinessEmailChange(email: string) {
   return response.data;
 }
 
+export type BusinessEmailChangeStatus = {
+  requestId: string;
+  requestedEmail: string;
+  status: "pending_verification" | "verified" | "expired";
+  isVerified: boolean;
+  expiresAt: string;
+};
+
+export async function getBusinessEmailChangeStatus() {
+  const response = await staffApi.get<BusinessEmailChangeStatus | null>("/auth/profile/business-email-change");
+  return response.data;
+}
+
+export async function cancelBusinessEmailChange() {
+  const response = await staffApi.delete<{ status: string; message: string }>("/auth/profile/business-email-change");
+  return response.data;
+}
+
 export async function requestContactNumberChange(phone: string) {
   const response = await staffApi.post<{ status: string; message: string }>("/auth/profile/contact-number-change", { phone });
   return response.data;

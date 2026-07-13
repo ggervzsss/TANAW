@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "deployment:validate": "node scripts/validate-deployment-config.ts",
     "lint": "eslint . && npm run lint:tailwind",
     "lint:tailwind": "node scripts/lint-tailwind-canonical.mjs",
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
     "preview": "vite preview",
     "prettier": "prettier --write .",
-    "type": "tsc --noEmit",
+    "test": "vitest run --exclude=e2e/**",
+    "test:e2e": "playwright test",
+    "type": "tsc -b",
     "pp": "tsc -b && vite build && vite preview"
   },
   "dependencies": {
@@ -36,6 +39,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/node": "^4.3.0",
     "@tailwindcss/oxide": "^4.3.0",
     "@types/geojson": "^7946.0.16",
@@ -53,6 +57,7 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.10"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }
