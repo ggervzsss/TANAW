@@ -9,100 +9,19 @@ import { EmptyState, PageMotion, stagger } from "@/shared/components/ui";
 import { useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
+import {
+  getAcceptedReports,
+  getAnalyticsPeriods,
+  getBarangayCoverageRows,
+  getCurrentAnalyticsPeriod,
+  getEnterpriseReportRows,
+  getTrendLabel,
+  sumMetric,
+  type BarangayCoverageRow,
+} from "../utils/reportAnalytics";
 
-const MONTH_ORDER = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_INTAKE_REPORTS: IntakeReport[] = [];
-
-type AnalyticsPeriod = {
-  key: string;
-  label: string;
-  monthIndex: number;
-  reports: IntakeReport[];
-  year: string;
-};
-
-type EnterpriseReportRow = {
-  enterprise: ReportEnterprise;
-  reports: IntakeReport[];
-  submitted: boolean;
-};
-
-type BarangayComplianceRow = {
-  barangay: string;
-  complete: number;
-  pending: number;
-  total: number;
-};
-
-function getReportYear(report: IntakeReport) {
-  const periodYear = report.period.match(/\d{4}/)?.[0];
-  if (periodYear) return periodYear;
-
-  const submittedAtYear = getDateYear(report.submittedAt);
-  if (submittedAtYear) return submittedAtYear;
-
-  return getDateYear(report.submitted);
-}
-
-function getAnalyticsPeriods(reports: IntakeReport[], currentPeriod: AnalyticsPeriod) {
-  const periodMap = new Map<string, AnalyticsPeriod>();
-  periodMap.set(currentPeriod.key, currentPeriod);
-
-  reports.forEach((report) => {
-    const year = getReportYear(report);
-    const monthIndex = MONTH_ORDER.indexOf(report.month);
-    if (!year || monthIndex === -1) return;
-
-    const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-    const period = periodMap.get(key) ?? {
-      key,
-      label: `${report.month} ${year}`,
-      monthIndex,
-      reports: [],
-      year,
-    };
-
-    period.reports.push(report);
-    periodMap.set(key, period);
-  });
-
-  return Array.from(periodMap.values()).sort((a, b) => Number(b.year) - Number(a.year) || b.monthIndex - a.monthIndex);
-}
-
-function sumMetric(reports: IntakeReport[], metric: "entry" | "unique") {
-  return reports.reduce((total, report) => total + report.metrics[metric], 0);
-}
-
-function reportHasSubmission(report: IntakeReport) {
-  return report.submitted !== "Not submitted";
-}
-
-function getCurrentAnalyticsPeriod(date = new Date()): AnalyticsPeriod {
-  const monthIndex = date.getMonth();
-  const month = MONTH_ORDER[monthIndex];
-  const year = String(date.getFullYear());
-
-  return {
-    key: `${year}-${String(monthIndex + 1).padStart(2, "0")}`,
-    label: `${month} ${year}`,
-    monthIndex,
-    reports: [],
-    year,
-  };
-}
-
-function getTrendLabel(activeReports: IntakeReport[], comparisonPeriod?: AnalyticsPeriod) {
-  if (!comparisonPeriod) return "No earlier reporting period";
-
-  const activeEntries = sumMetric(activeReports, "entry");
-  const comparisonEntries = sumMetric(comparisonPeriod.reports, "entry");
-  if (comparisonEntries === 0) return `Compared with ${comparisonPeriod.label}`;
-
-  const difference = Math.round(((activeEntries - comparisonEntries) / comparisonEntries) * 100);
-  const sign = difference > 0 ? "+" : "";
-  return `${sign}${difference}% vs ${comparisonPeriod.label}`;
-}
 
 export function StaffAnalyticsPage() {
   const reportsQuery = useOperationalReports();
@@ -118,19 +37,20 @@ export function StaffAnalyticsPage() {
     0,
   );
   const activePeriod = periods[activePeriodIndex];
-  const activeReports = activePeriod?.reports ?? EMPTY_INTAKE_REPORTS;
-  const enterpriseRows = useMemo(() => getEnterpriseReportRows(reportEnterprises, activeReports), [activeReports, reportEnterprises]);
-  const submittedRows = enterpriseRows.filter((row) => row.submitted);
+  const activePeriodReports = activePeriod?.reports ?? EMPTY_INTAKE_REPORTS;
+  const activeReports = useMemo(() => getAcceptedReports(activePeriodReports), [activePeriodReports]);
+  const enterpriseRows = useMemo(() => getEnterpriseReportRows(reportEnterprises, activePeriodReports), [activePeriodReports, reportEnterprises]);
+  const acceptedRows = enterpriseRows.filter((row) => row.accepted);
   const totalReports = reportEnterprises.length;
-  const submissionRate = totalReports === 0 ? 0 : Math.round((submittedRows.length / totalReports) * 100);
+  const acceptanceRate = totalReports === 0 ? 0 : Math.round((acceptedRows.length / totalReports) * 100);
   const comparisonPeriod = periods[activePeriodIndex + 1];
-  const chartData = enterpriseRows.map(({ enterprise, reports, submitted }) => ({
+  const chartData = enterpriseRows.map(({ enterprise, reports, accepted }) => ({
     name: enterprise.name,
     entries: sumMetric(reports, "entry"),
     unique: sumMetric(reports, "unique"),
-    status: submitted ? "Submitted" : "Missing",
+    status: accepted ? "Accepted" : "Awaiting acceptance",
   }));
-  const complianceRows = useMemo(() => getBarangayComplianceRows(enterpriseRows), [enterpriseRows]);
+  const coverageRows = useMemo(() => getBarangayCoverageRows(enterpriseRows), [enterpriseRows]);
 
   return (
     <PageMotion>
@@ -145,12 +65,12 @@ export function StaffAnalyticsPage() {
           footClassName="text-tgreen-light"
           icon={Activity}
         />
-        <MetricCard color="#2563eb" label="Est. Unique People" value={sumMetric(activeReports, "unique")} foot="From reporting submissions" icon={Users} />
+        <MetricCard color="#2563eb" label="Sum of Venue Estimates" value={sumMetric(activeReports, "unique")} foot="Not a distinct-person count" icon={Users} />
         <MetricCard
           color="#f59e0b"
-          label="Reports Compliance"
-          value={`${submittedRows.length} / ${totalReports}`}
-          foot={`${submissionRate}% Submission Rate`}
+          label="Accepted Report Coverage"
+          value={`${acceptedRows.length} / ${totalReports}`}
+          foot={`${acceptanceRate}% of current registry`}
           footClassName="text-yellow-600"
           icon={ClipboardCheck}
         />
@@ -208,7 +128,7 @@ export function StaffAnalyticsPage() {
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
                   <Bar dataKey="entries" name="Total Entries" fill="#065f46" radius={[2, 2, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="unique" name="Unique Pax" fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="unique" name="Venue-local visitor estimate" fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -217,64 +137,40 @@ export function StaffAnalyticsPage() {
 
         <section className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Compliance Status</h3>
+            <h3 className="text-sm font-semibold text-gray-900">Accepted-report coverage</h3>
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
             </span>
           </div>
           <div className="max-h-75 space-y-4 overflow-y-auto pr-1">
-            {complianceRows.map((row) => (
-              <BarangayComplianceItem key={row.barangay} row={row} />
+            {coverageRows.map((row) => (
+              <BarangayCoverageItem key={row.barangay} row={row} />
             ))}
             {reportEnterprisesQuery.isLoading && <EmptyState icon={ClipboardCheck} title="Loading registry" description="Fetching registered enterprise accounts." minHeightClassName="min-h-45" />}
             {!reportEnterprisesQuery.isLoading && reportsQuery.isLoading && (
               <EmptyState icon={ClipboardCheck} title="Loading submissions" description="Fetching synchronized report intake records." minHeightClassName="min-h-45" />
             )}
-            {!reportEnterprisesQuery.isLoading && complianceRows.length === 0 && (
-              <EmptyState icon={ClipboardCheck} title="No registered enterprises" description="Compliance status will appear once enterprise accounts are registered." minHeightClassName="min-h-45" />
+            {!reportEnterprisesQuery.isLoading && coverageRows.length === 0 && (
+              <EmptyState
+                icon={ClipboardCheck}
+                title="No registered enterprises"
+                description="Accepted-report coverage will appear once enterprise accounts are registered."
+                minHeightClassName="min-h-45"
+              />
             )}
           </div>
+          <p className="mt-4 text-[11px] leading-relaxed text-gray-500">
+            Coverage currently uses the active enterprise registry. Historical compliance remains unavailable until period-specific reporting obligations are supplied by the backend.
+          </p>
         </section>
       </div>
     </PageMotion>
   );
 }
 
-function getEnterpriseReportRows(enterprises: ReportEnterprise[], reports: IntakeReport[]): EnterpriseReportRow[] {
-  const reportsByEnterprise = reports.reduce<Map<string, IntakeReport[]>>((map, report) => {
-    const enterpriseReports = map.get(report.enterpriseId) ?? [];
-    enterpriseReports.push(report);
-    map.set(report.enterpriseId, enterpriseReports);
-    return map;
-  }, new Map());
-
-  return enterprises.map((enterprise) => ({
-    enterprise,
-    reports: reportsByEnterprise.get(enterprise.id) ?? [],
-    submitted: (reportsByEnterprise.get(enterprise.id) ?? []).some(reportHasSubmission),
-  }));
-}
-
-function getBarangayComplianceRows(rows: EnterpriseReportRow[]): BarangayComplianceRow[] {
-  const rowsByBarangay = rows.reduce<Map<string, BarangayComplianceRow>>((map, row) => {
-    const barangay = row.enterprise.barangay || "Unassigned";
-    const current = map.get(barangay) ?? { barangay, complete: 0, pending: 0, total: 0 };
-    current.total += 1;
-    if (row.submitted) {
-      current.complete += 1;
-    } else {
-      current.pending += 1;
-    }
-    map.set(barangay, current);
-    return map;
-  }, new Map());
-
-  return Array.from(rowsByBarangay.values()).sort((left, right) => left.barangay.localeCompare(right.barangay));
-}
-
-function BarangayComplianceItem({ row }: { row: BarangayComplianceRow }) {
-  const complete = row.pending === 0;
+function BarangayCoverageItem({ row }: { row: BarangayCoverageRow }) {
+  const complete = row.awaitingAcceptance === 0;
 
   return (
     <div className={`rounded-lg border p-3.5 transition hover:shadow-sm ${complete ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
@@ -284,23 +180,19 @@ function BarangayComplianceItem({ row }: { row: BarangayComplianceRow }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-md border border-emerald-100 bg-white/60 px-2 py-1.5">
-          <p className="text-[10px] font-bold tracking-wide text-emerald-700 uppercase">Complete</p>
-          <p className="font-mono text-lg font-black text-emerald-800">{row.complete}</p>
+          <p className="text-[10px] font-bold tracking-wide text-emerald-700 uppercase">Accepted</p>
+          <p className="font-mono text-lg font-black text-emerald-800">{row.accepted}</p>
         </div>
         <div className="rounded-md border border-amber-100 bg-white/60 px-2 py-1.5">
-          <p className="text-[10px] font-bold tracking-wide text-amber-700 uppercase">Pending</p>
-          <p className="font-mono text-lg font-black text-amber-800">{row.pending}</p>
+          <p className="text-[10px] font-bold tracking-wide text-amber-700 uppercase">Awaiting acceptance</p>
+          <p className="font-mono text-lg font-black text-amber-800">{row.awaitingAcceptance}</p>
         </div>
       </div>
       <p className={`mt-2 text-xs leading-normal ${complete ? "text-emerald-700" : "text-amber-700"}`}>
-        {complete ? "All registered enterprises submitted for this period." : `${row.pending} enterprise${row.pending === 1 ? "" : "s"} still pending for this period.`}
+        {complete
+          ? "All current registered enterprises have an accepted report for this period."
+          : `${row.awaitingAcceptance} enterprise${row.awaitingAcceptance === 1 ? "" : "s"} do not yet have an accepted report for this period.`}
       </p>
     </div>
   );
-}
-
-function getDateYear(value: string | undefined) {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? String(new Date(timestamp).getFullYear()) : null;
 }
