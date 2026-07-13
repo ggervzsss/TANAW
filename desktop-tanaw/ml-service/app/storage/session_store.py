@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.session_credentials import scrub_session_snapshot
 
 
 class SessionStore:
@@ -21,8 +22,11 @@ class SessionStore:
         self._session_path = self._root / "active_session.json"
         self._events_path = self._root / "events.jsonl"
         self._metrics_store = LocalMetricsStore(app_data_dir, enterprise_id)
+        self._retire_legacy_event_log()
+        self._scrub_legacy_session_credentials()
 
     def load_session(self) -> dict[str, Any] | None:
+        self._scrub_session_file()
         if not self._session_path.exists():
             return None
 
@@ -46,20 +50,33 @@ class SessionStore:
             json.dump(serializable, file, indent=2, sort_keys=True)
 
         temporary_path.replace(self._session_path)
-        self._metrics_store.save_count_snapshot(serializable, serializable["updated_at"])
 
     def append_event(self, payload: dict[str, Any]) -> None:
-        self._root.mkdir(parents=True, exist_ok=True)
         event = {
             **payload,
             "recorded_at": datetime.now(UTC).isoformat(),
         }
-
-        with self._events_path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(event, sort_keys=True))
-            file.write("\n")
-
         self._metrics_store.append_count_event(event, event["recorded_at"])
+
+    def start_monitoring_session(self, **values: Any) -> None:
+        self._metrics_store.start_monitoring_session(**values)
+
+    def mark_monitoring_connected(
+        self, monitoring_session_id: str, connected_at: str | None = None
+    ) -> None:
+        self._metrics_store.mark_monitoring_connected(monitoring_session_id, connected_at)
+
+    def record_coverage_gap(self, **values: Any) -> str:
+        return self._metrics_store.record_coverage_gap(**values)
+
+    def end_monitoring_session(self, monitoring_session_id: str, **values: Any) -> None:
+        self._metrics_store.end_monitoring_session(monitoring_session_id, **values)
+
+    def monitoring_coverage(self, period_id: str, *, as_of: str | None = None) -> dict[str, Any]:
+        return self._metrics_store.monitoring_coverage(period_id, as_of=as_of)
+
+    def record_persistence_error(self, **values: Any) -> str:
+        return self._metrics_store.record_persistence_error(**values)
 
     def upsert_visitor_identity(
         self,
@@ -219,13 +236,56 @@ class SessionStore:
         )
 
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
-        return self._metrics_store.purge_report_raw_events(report_id)
+        result = self._metrics_store.purge_report_raw_events(report_id)
+        self._retire_legacy_event_log()
+        return result
 
     def prepare_mock_counts(self, **values: Any) -> dict[str, int | str | None]:
         return self._metrics_store.prepare_mock_counts(**values)
 
     def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
         return self._metrics_store.remove_mock_data(mock_run_id)
+
+    def _retire_legacy_event_log(self) -> None:
+        if not self._events_path.exists():
+            return
+        try:
+            lines = self._events_path.read_text(encoding="utf-8").splitlines()
+            for line in lines:
+                if not line.strip():
+                    continue
+                payload = json.loads(line)
+                if not isinstance(payload, dict):
+                    raise ValueError("Legacy event log contains a non-object record.")
+                self._metrics_store.import_legacy_event_if_missing(payload)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return
+        self._events_path.unlink(missing_ok=True)
+
+    def _scrub_legacy_session_credentials(self) -> None:
+        self._scrub_session_file()
+        self._metrics_store.scrub_legacy_session_snapshot_credentials()
+
+    def _scrub_session_file(self) -> None:
+        if not self._session_path.exists():
+            return
+        try:
+            payload = json.loads(self._session_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(payload, dict):
+            return
+        scrubbed, changed = scrub_session_snapshot(payload)
+        if not changed:
+            return
+        temporary_path = self._session_path.with_suffix(".tmp")
+        try:
+            with temporary_path.open("w", encoding="utf-8") as file:
+                json.dump(scrubbed, file, indent=2, sort_keys=True)
+            temporary_path.replace(self._session_path)
+        except OSError:
+            temporary_path.unlink(missing_ok=True)
+            raise
 
 
 def _safe_scope(value: str | None) -> str:

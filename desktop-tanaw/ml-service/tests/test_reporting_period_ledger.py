@@ -164,16 +164,17 @@ class LocalReportingLedgerTest(unittest.TestCase):
                     "sync_outbox_items": 1,
                 },
             )
-            self.assertEqual([row["version"] for row in migrations], [1, 2, 3])
+            self.assertEqual([row["version"] for row in migrations], [1, 2, 3, 4])
             self.assertEqual(user_version, LOCAL_SCHEMA_VERSION)
             self.assertEqual(foreign_key_failures, [])
 
     def test_unclassifiable_legacy_event_blocks_official_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = _create_legacy_database(Path(directory))
-            with sqlite3.connect(database_path) as connection:
+            with closing(sqlite3.connect(database_path)) as connection:
                 connection.execute("update count_events set recorded_at = 'not-a-timestamp'")
                 connection.execute("delete from report_submissions")
+                connection.commit()
 
             store = LocalMetricsStore(directory)
 
@@ -183,7 +184,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
     def test_noncontiguous_legacy_camera_membership_is_dead_lettered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = _create_legacy_database(Path(directory))
-            with sqlite3.connect(database_path) as connection:
+            with closing(sqlite3.connect(database_path)) as connection:
                 for event_id, recorded_at, submitted_report_id in (
                     ("interleaved-event", "2026-06-30T15:59:59.100000+00:00", None),
                     ("second-report-event", "2026-06-30T15:59:59.900000+00:00", "legacy-report"),
@@ -206,6 +207,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
                         """,
                         (event_id, recorded_at, submitted_report_id),
                     )
+                connection.commit()
 
             store = LocalMetricsStore(directory)
             self.assertEqual(store.list_ready_sync_outbox_items(), [])
@@ -314,7 +316,7 @@ def _create_legacy_database(root: Path) -> Path:
     database_root = root / "ml-service"
     database_root.mkdir(parents=True)
     database_path = database_root / "tanaw_metrics.sqlite3"
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.executescript(
             """
             create table count_events (
@@ -383,6 +385,7 @@ def _create_legacy_database(root: Path) -> Path:
                     1, 0, 1, 1, '{}')
             """
         )
+        connection.commit()
     return database_path
 
 

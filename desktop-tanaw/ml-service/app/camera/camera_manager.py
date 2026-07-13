@@ -3,6 +3,7 @@ import os
 import random
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -15,6 +16,14 @@ import cv2
 import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
+from app.camera.reconnect import (
+    CameraConnectionState,
+    CameraConnectionStateMachine,
+    CameraFailureKind,
+    CameraStreamFailure,
+    ReconnectPolicy,
+    classify_camera_failure,
+)
 from app.camera.stream_reader import (
     build_ip_webcam_snapshot_url,
     is_mjpeg_http_stream,
@@ -32,6 +41,7 @@ from app.identity import UniqueVisitorRegistry, VisitorDecision
 from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
 from app.reid.person_reid import get_reid_model_availability
 from app.runtime.hardware import get_runtime_capabilities
+from app.storage.session_credentials import persisted_camera_config_has_credentials
 from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack, TrackIdentityResolver
 
@@ -89,6 +99,7 @@ class ProcessingSession:
     session_id: int
     config: CameraStartRequest
     stop_event: threading.Event
+    monitoring_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -101,7 +112,14 @@ class PendingEntryEvent:
 
 
 class CameraProcessingManager:
-    def __init__(self, app_data_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        app_data_dir: str | None = None,
+        *,
+        reconnect_policy: ReconnectPolicy | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
+        utc_now: Callable[[], datetime] | None = None,
+    ) -> None:
         self._app_data_dir = app_data_dir
         self._lock = threading.RLock()
         self._active_session: ProcessingSession | None = None
@@ -118,6 +136,10 @@ class CameraProcessingManager:
         self._latest_stream_frame_id = 0
         self._latest_tracks: list[DisplayTrack] = []
         self._state = RuntimeState()
+        self._connection_state = CameraConnectionStateMachine()
+        self._reconnect_policy = reconnect_policy or ReconnectPolicy()
+        self._monotonic = monotonic
+        self._utc_now = utc_now or (lambda: datetime.now(UTC))
         self._config: CameraStartRequest | None = None
         self._counter = TripwireCounter()
         self._tracker = YoloPersonTracker()
@@ -239,7 +261,11 @@ class CameraProcessingManager:
     def start(self, config: CameraStartRequest) -> None:
         ok, message = self._validate_config_stream(config)
         if not ok:
-            raise ValueError(message)
+            failure = classify_camera_failure(
+                CameraStreamFailure(message, reason="initial_connect")
+            )
+            if failure.kind is CameraFailureKind.NONRECOVERABLE:
+                raise ValueError(failure.message)
 
         self.stop()
 
@@ -291,6 +317,8 @@ class CameraProcessingManager:
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             self._state = RuntimeState(running=False, status="starting", error=None)
+            self._connection_state.reset()
+            self._connection_state.transition(CameraConnectionState.CONNECTING)
             self._persist_session_locked()
 
         try:
@@ -313,7 +341,10 @@ class CameraProcessingManager:
         with self._lock:
             self._next_session_id += 1
             session = ProcessingSession(
-                session_id=self._next_session_id, config=config, stop_event=threading.Event()
+                session_id=self._next_session_id,
+                config=config,
+                stop_event=threading.Event(),
+                monitoring_session_id=str(uuid4()),
             )
             self._reid_worker.begin_session(session.session_id)
             self._quality_reid_worker.begin_session(session.session_id)
@@ -324,11 +355,28 @@ class CameraProcessingManager:
             self._latest_jpeg = self._build_status_frame("Starting camera processing...")
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id = 0
-            self._state = RuntimeState(running=True, status="running", error=None)
+            self._state = RuntimeState(running=True, status="connecting", error=None)
             self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
             self._latest_raw_frame_captured_at = None
             self._latest_tracks = []
+            try:
+                self._start_monitoring_coverage(session)
+            except Exception as exc:
+                session.stop_event.set()
+                self._end_monitoring_coverage(
+                    session,
+                    reason="coverage_ledger_unavailable",
+                    error=True,
+                )
+                self._active_session = None
+                self._connection_state.transition(CameraConnectionState.NONRECOVERABLE)
+                safe_message = redact_stream_credentials(
+                    f"Monitoring cannot start because local coverage evidence could not be "
+                    f"created: {exc}"
+                )
+                self._state = RuntimeState(running=False, status="error", error=safe_message)
+                raise RuntimeError(safe_message) from exc
             self._reader_thread = threading.Thread(
                 target=self._capture_loop, args=(session,), name="tanaw-camera-reader", daemon=True
             )
@@ -363,6 +411,8 @@ class CameraProcessingManager:
             if session is not None:
                 session.stop_event.set()
                 self._flush_pending_entry_events(session, time.monotonic(), force=True)
+            if self._connection_state.state is not CameraConnectionState.STOPPED:
+                self._connection_state.transition(CameraConnectionState.STOPPED)
             self._active_session = None
             self._raw_frame_condition.notify_all()
 
@@ -891,8 +941,13 @@ class CameraProcessingManager:
         if not isinstance(camera_config, dict):
             self._restore_saved_snapshot(payload)
             return False
-        if camera_config.get("password_redacted") or camera_config.get(
-            "stream_url_credentials_redacted"
+        if persisted_camera_config_has_credentials(camera_config):
+            self._restore_saved_snapshot(payload)
+            return False
+        if (
+            camera_config.get("password_redacted")
+            or camera_config.get("stream_url_credentials_redacted")
+            or camera_config.get("username_redacted")
         ):
             self._restore_saved_snapshot(payload)
             return False
@@ -1059,7 +1114,8 @@ class CameraProcessingManager:
         }
         try:
             self._session_store.append_event(payload)
-        except OSError:
+        except Exception as exc:
+            self._record_persistence_failure("append_mock_event", exc)
             return False
 
         with self._lock:
@@ -1133,10 +1189,79 @@ class CameraProcessingManager:
         return self._build_status_frame("No camera stream available."), last_frame_id
 
     def _capture_loop(self, session: ProcessingSession) -> None:
-        config = session.config
         if not self._is_current_session(session):
             return
 
+        reconnect_attempt = 0
+        terminal_error = False
+        close_reason = "operator_stopped"
+        try:
+            while not session.stop_event.is_set() and self._is_current_session(session):
+                try:
+                    self._capture_once(session)
+                    break
+                except Exception as exc:
+                    if session.stop_event.is_set() or not self._is_current_session(session):
+                        break
+                    failure = classify_camera_failure(exc)
+                    safe_message = redact_stream_credentials(failure.message)
+                    if failure.kind is CameraFailureKind.NONRECOVERABLE:
+                        terminal_error = True
+                        close_reason = failure.reason
+                        self._record_coverage_gap(
+                            session,
+                            reason=failure.reason,
+                            recoverable=False,
+                            detail=safe_message,
+                        )
+                        with self._lock:
+                            if self._is_current_session_locked(session):
+                                self._connection_state.transition(
+                                    CameraConnectionState.NONRECOVERABLE
+                                )
+                        self._set_session_error(
+                            session,
+                            f"Camera configuration requires attention: {safe_message}",
+                        )
+                        break
+
+                    if self._connection_state.state is CameraConnectionState.RUNNING:
+                        reconnect_attempt = 0
+                    reconnect_attempt += 1
+                    delay = self._reconnect_policy.delay_for_attempt(reconnect_attempt)
+                    self._record_coverage_gap(
+                        session,
+                        reason=failure.reason,
+                        recoverable=True,
+                        detail=safe_message,
+                    )
+                    self._set_session_reconnecting(session, safe_message, delay)
+                    if session.stop_event.wait(delay):
+                        break
+                    with self._lock:
+                        if not self._is_current_session_locked(session):
+                            break
+                        self._connection_state.transition(CameraConnectionState.CONNECTING)
+                        self._state.status = "connecting"
+                        self._state.error = None
+        finally:
+            with self._lock:
+                stopped_with_error = (
+                    terminal_error
+                    or self._connection_state.state is CameraConnectionState.NONRECOVERABLE
+                )
+            self._end_monitoring_coverage(
+                session,
+                reason=(
+                    close_reason
+                    if terminal_error or not stopped_with_error
+                    else "processing_failure"
+                ),
+                error=stopped_with_error,
+            )
+
+    def _capture_once(self, session: ProcessingSession) -> None:
+        config = session.config
         runtime_stream_url = self._runtime_stream_url(config)
         snapshot_url = (
             build_ip_webcam_snapshot_url(runtime_stream_url)
@@ -1144,13 +1269,12 @@ class CameraProcessingManager:
             else None
         )
         if snapshot_url is not None:
-            self._ip_webcam_snapshot_capture_loop(session, snapshot_url)
+            self._ip_webcam_snapshot_capture_once(session, snapshot_url)
             return
-
         if is_mjpeg_http_stream(runtime_stream_url):
-            self._mjpeg_capture_loop(session, runtime_stream_url)
-        else:
-            self._opencv_capture_loop(session, runtime_stream_url)
+            self._mjpeg_capture_once(session, runtime_stream_url)
+            return
+        self._opencv_capture_once(session, runtime_stream_url)
 
     def _validate_config_stream(self, config: CameraStartRequest) -> tuple[bool, str]:
         runtime_stream_url = self._runtime_stream_url(config)
@@ -1169,7 +1293,7 @@ class CameraProcessingManager:
     def _runtime_stream_url(self, config: CameraStartRequest) -> str:
         return build_authenticated_stream_url(config.stream_url, config.username, config.password)
 
-    def _ip_webcam_snapshot_capture_loop(
+    def _ip_webcam_snapshot_capture_once(
         self, session: ProcessingSession, snapshot_url: str
     ) -> None:
         config = session.config
@@ -1177,109 +1301,183 @@ class CameraProcessingManager:
         last_error = "Camera snapshot endpoint stopped returning frames."
         frame_interval = 1.0 / self._processing_fps(config)
 
-        try:
-            while not session.stop_event.is_set() and self._is_current_session(session):
-                started_at = time.monotonic()
-
-                try:
-                    frame = read_http_jpeg_frame(snapshot_url)
-                except Exception as exc:
-                    frame = None
-                    last_error = str(exc)
-
-                if frame is None:
-                    failed_reads += 1
-                    if failed_reads >= 30:
-                        self._set_session_error(
-                            session,
-                            redact_stream_credentials(
-                                f"Camera snapshot endpoint stopped returning frames: {last_error}"
-                            ),
-                        )
-                        return
-                else:
-                    failed_reads = 0
-                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                    self._publish_raw_frame(session, frame)
-
-                elapsed = time.monotonic() - started_at
-                remaining = frame_interval - elapsed
-                if remaining > 0:
-                    session.stop_event.wait(remaining)
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
-        finally:
-            with self._lock:
-                if (
-                    self._is_current_session_locked(session)
-                    and not session.stop_event.is_set()
-                    and self._state.status != "error"
-                ):
-                    self._state.status = "stopped"
-
-    def _mjpeg_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
-        config = session.config
-        try:
-            for frame in iter_mjpeg_frames(stream_url, session.stop_event):
-                if session.stop_event.is_set() or not self._is_current_session(session):
-                    break
-
+        while not session.stop_event.is_set() and self._is_current_session(session):
+            started_at = self._monotonic()
+            try:
+                frame = read_http_jpeg_frame(snapshot_url)
+            except Exception as exc:
+                frame = None
+                last_error = str(exc)
+            if frame is None:
+                failed_reads += 1
+                if failed_reads >= 30:
+                    raise CameraStreamFailure(
+                        f"Camera snapshot endpoint stopped returning frames: {last_error}",
+                        reason="snapshot_unavailable",
+                    )
+            else:
+                failed_reads = 0
                 frame = self._resize_for_processing(frame, self._max_frame_width(config))
                 self._publish_raw_frame(session, frame)
+            elapsed = self._monotonic() - started_at
+            remaining = frame_interval - elapsed
+            if remaining > 0:
+                session.stop_event.wait(remaining)
 
-            if not session.stop_event.is_set() and self._is_current_session(session):
-                self._set_session_error(session, "Camera stream stopped returning MJPEG frames.")
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
-        finally:
-            with self._lock:
-                if self._is_current_session_locked(session) and self._state.status != "error":
-                    self._state.status = "stopped"
+    def _mjpeg_capture_once(self, session: ProcessingSession, stream_url: str) -> None:
+        config = session.config
+        for frame in iter_mjpeg_frames(stream_url, session.stop_event):
+            if session.stop_event.is_set() or not self._is_current_session(session):
+                return
+            frame = self._resize_for_processing(frame, self._max_frame_width(config))
+            self._publish_raw_frame(session, frame)
+        if not session.stop_event.is_set() and self._is_current_session(session):
+            raise CameraStreamFailure(
+                "Camera stream stopped returning MJPEG frames.",
+                reason="mjpeg_stream_ended",
+            )
 
-    def _opencv_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
+    def _opencv_capture_once(self, session: ProcessingSession, stream_url: str) -> None:
         config = session.config
         capture = open_capture(stream_url)
         failed_reads = 0
 
         try:
             if not capture.isOpened():
-                self._set_session_error(session, "Camera stream could not be opened.")
-                return
+                raise CameraStreamFailure(
+                    "Camera stream could not be opened.", reason="stream_open_failed"
+                )
 
             while not session.stop_event.is_set() and self._is_current_session(session):
                 ok, frame = capture.read()
                 if not ok or frame is None:
                     failed_reads += 1
                     if failed_reads >= 90:
-                        self._set_session_error(session, "Camera stream stopped returning frames.")
-                        return
+                        raise CameraStreamFailure(
+                            "Camera stream stopped returning frames.",
+                            reason="frame_read_timeout",
+                        )
                     session.stop_event.wait(0.05)
                     continue
 
                 failed_reads = 0
                 frame = self._resize_for_processing(frame, self._max_frame_width(config))
                 self._publish_raw_frame(session, frame)
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
         finally:
             capture.release()
-            with self._lock:
-                if self._is_current_session_locked(session) and self._state.status != "error":
-                    self._state.status = "stopped"
 
     def _publish_raw_frame(
         self, session: ProcessingSession, frame: np.ndarray, captured_at: float | None = None
     ) -> None:
+        with self._lock:
+            should_mark_connected = (
+                self._is_current_session_locked(session)
+                and self._connection_state.state is not CameraConnectionState.RUNNING
+            )
+        if should_mark_connected and session.monitoring_session_id is not None:
+            self._session_store.mark_monitoring_connected(
+                session.monitoring_session_id,
+                self._utc_now().isoformat(),
+            )
         with self._raw_frame_condition:
             if not self._is_current_session_locked(session):
                 return
+            if self._connection_state.state is not CameraConnectionState.RUNNING:
+                if self._connection_state.state is CameraConnectionState.STOPPED:
+                    self._connection_state.transition(CameraConnectionState.CONNECTING)
+                self._connection_state.transition(CameraConnectionState.RUNNING)
             self._latest_raw_frame = frame
             self._latest_raw_frame_id += 1
             self._latest_raw_frame_captured_at = (
-                captured_at if captured_at is not None else time.monotonic()
+                captured_at if captured_at is not None else self._monotonic()
             )
             self._state.status = "running"
             self._state.error = None
+            self._raw_frame_condition.notify_all()
+
+    def _start_monitoring_coverage(self, session: ProcessingSession) -> None:
+        if session.monitoring_session_id is None:
+            return
+        started_at = self._utc_now().isoformat()
+        config = session.config
+        self._session_store.start_monitoring_session(
+            monitoring_session_id=session.monitoring_session_id,
+            camera_id=config.camera_id,
+            camera_name=config.camera_name,
+            central_camera_id=getattr(config, "central_camera_id", None),
+            started_at=started_at,
+        )
+        self._session_store.record_coverage_gap(
+            monitoring_session_id=session.monitoring_session_id,
+            camera_id=config.camera_id,
+            camera_name=config.camera_name,
+            central_camera_id=getattr(config, "central_camera_id", None),
+            started_at=started_at,
+            reason="initial_connection",
+            recoverable=True,
+            detail="Waiting for the first valid camera frame.",
+        )
+
+    def _record_coverage_gap(
+        self,
+        session: ProcessingSession,
+        *,
+        reason: str,
+        recoverable: bool,
+        detail: str,
+    ) -> None:
+        if session.monitoring_session_id is None:
+            return
+        config = session.config
+        try:
+            self._session_store.record_coverage_gap(
+                monitoring_session_id=session.monitoring_session_id,
+                camera_id=config.camera_id,
+                camera_name=config.camera_name,
+                central_camera_id=getattr(config, "central_camera_id", None),
+                started_at=self._utc_now().isoformat(),
+                reason=reason,
+                recoverable=recoverable,
+                detail=detail,
+            )
+        except Exception as exc:
+            logger.error("Unable to persist camera coverage gap: %s", exc)
+
+    def _end_monitoring_coverage(
+        self, session: ProcessingSession, *, reason: str, error: bool
+    ) -> None:
+        if session.monitoring_session_id is None:
+            return
+        try:
+            self._session_store.end_monitoring_session(
+                session.monitoring_session_id,
+                ended_at=self._utc_now().isoformat(),
+                reason=reason,
+                error=error,
+            )
+        except Exception as exc:
+            logger.error("Unable to close camera monitoring session: %s", exc)
+
+    def _set_session_reconnecting(
+        self, session: ProcessingSession, message: str, delay_seconds: float
+    ) -> None:
+        with self._raw_frame_condition:
+            if not self._is_current_session_locked(session):
+                return
+            self._connection_state.transition(CameraConnectionState.BACKOFF)
+            safe_message = redact_stream_credentials(message)
+            status_message = (
+                f"Camera stream interrupted; reconnecting in {delay_seconds:.1f}s. {safe_message}"
+            )
+            self._state = RuntimeState(
+                running=True,
+                status="reconnecting",
+                error=status_message,
+            )
+            self._latest_jpeg = self._build_status_frame(status_message)
+            self._latest_stream_jpeg = self._latest_jpeg
+            self._latest_stream_frame_id += 1
+            self._persist_session_locked()
             self._raw_frame_condition.notify_all()
 
     def _processing_loop(self, session: ProcessingSession) -> None:
@@ -2078,6 +2276,10 @@ class CameraProcessingManager:
                 return
 
             safe_message = redact_stream_credentials(message)
+            if self._connection_state.state is not CameraConnectionState.NONRECOVERABLE:
+                if self._connection_state.state is CameraConnectionState.STOPPED:
+                    self._connection_state.transition(CameraConnectionState.CONNECTING)
+                self._connection_state.transition(CameraConnectionState.NONRECOVERABLE)
             self._state = RuntimeState(running=False, status="error", error=safe_message)
             self._latest_jpeg = self._build_status_frame(safe_message)
             self._latest_stream_jpeg = self._latest_jpeg
@@ -2143,8 +2345,12 @@ class CameraProcessingManager:
                         "counts": counts,
                     }
                 )
-            except OSError:
-                pass
+            except Exception as exc:
+                self._record_persistence_failure("append_count_event", exc, session=session)
+                raise RuntimeError(
+                    "A camera count could not be durably recorded; monitoring was stopped "
+                    "to prevent an inaccurate report."
+                ) from exc
             self._persist_session_locked()
 
     def _persist_session_locked(self) -> None:
@@ -2169,8 +2375,40 @@ class CameraProcessingManager:
             self._session_store.save_session(payload)
             saved_payload = self._session_store.load_session()
             self._session_updated_at = saved_payload.get("updated_at") if saved_payload else None
-        except OSError:
+        except Exception as exc:
+            self._record_persistence_failure("save_session_snapshot", exc)
             return
+
+    def _record_persistence_failure(
+        self,
+        operation: str,
+        error: BaseException,
+        *,
+        session: ProcessingSession | None = None,
+    ) -> None:
+        attempt_count = getattr(error, "attempts", 1)
+        safe_detail = redact_stream_credentials(str(error))
+        try:
+            self._session_store.record_persistence_error(
+                operation=operation,
+                reason="sqlite_write_failed",
+                detail=safe_detail,
+                attempt_count=attempt_count,
+                occurred_at=self._utc_now().isoformat(),
+            )
+        except Exception as diagnostic_error:
+            logger.error(
+                "Local persistence failed and its diagnostic could not be recorded: %s",
+                diagnostic_error,
+            )
+        active_session = session or self._active_session
+        if active_session is not None:
+            self._record_coverage_gap(
+                active_session,
+                reason="persistence_failure",
+                recoverable=False,
+                detail=safe_detail,
+            )
 
     def _public_config_dump(self) -> dict:
         if self._config is None:
@@ -2184,12 +2422,14 @@ class CameraProcessingManager:
             return {}
 
         payload = self._config.model_dump(mode="json")
+        username = payload.get("username")
         password = payload.get("password")
+        payload["username"] = None
+        payload["username_redacted"] = bool(username)
         payload["password"] = None
         payload["password_redacted"] = bool(password)
         payload["stream_url"] = redact_stream_credentials(str(payload.get("stream_url", "")))
-        if "***:***@" in payload["stream_url"]:
-            payload["stream_url_credentials_redacted"] = True
+        payload["stream_url_credentials_redacted"] = "***:***@" in payload["stream_url"]
         return payload
 
     def _restore_saved_snapshot(self, payload: dict | None) -> None:

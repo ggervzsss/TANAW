@@ -53,8 +53,6 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             )
 
             self.assertEqual(failed["status"], "dead_letter")
-            self.assertFalse(hasattr(manager, "mark_report_synced"))
-            self.assertFalse(hasattr(manager, "mark_events_synced"))
 
     def test_virtual_simulation_runs_without_camera_and_records_manual_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

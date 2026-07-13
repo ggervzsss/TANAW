@@ -518,6 +518,9 @@ class ReportSubmissionRequest(BaseModel):
 
 class ReportSubmissionResponse(MetricsSummaryResponse):
     report_id: str
+    revision_id: str
+    outbox_item_id: str
+    payload_hash: str
     submitted_at: str
     sync_status: str
 
@@ -611,6 +614,9 @@ class MockReportRequest(BaseModel):
 
 class ReportSubmissionRecordResponse(BaseModel):
     report_id: str
+    revision_id: str
+    outbox_item_id: str
+    payload_hash: str
     period: str
     submitted_at: str
     entries: int
@@ -630,10 +636,6 @@ class ReportRawDataPurgeResponse(BaseModel):
     report_id: str
     purged_events: int
     raw_purged_at: str | None = None
-
-
-class SyncMarkResponse(BaseModel):
-    updated: int
 
 
 def _path_points(line: TripwireLine) -> list[TripwirePoint]:

@@ -11,7 +11,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from app.storage.reporting_periods import monthly_period_from_id, monthly_period_from_label
 
 REPORT_OUTBOX_ENDPOINT = "/operational/desktop/report-submissions/v2"
-REPORT_OUTBOX_CONTRACT_VERSION = "report-submission.v2"
+REPORT_OUTBOX_CONTRACT_VERSION = 2
 
 
 def canonical_json(value: Any) -> str:
@@ -356,7 +356,7 @@ def _transform_legacy_reports(connection: sqlite3.Connection) -> None:
                 command_id,
                 outbox_idempotency_key,
                 REPORT_OUTBOX_ENDPOINT,
-                REPORT_OUTBOX_CONTRACT_VERSION,
+                "report-submission.v2",
                 revision_payload_json,
                 payload_hash,
                 status,
@@ -393,6 +393,7 @@ def _revision_document(
     source_kind: str,
     mock_run_id: Any,
     source_batches: list[dict[str, Any]],
+    coverage_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if period_id is None:
         source_window = {"start": submitted_at, "end": submitted_at}
@@ -404,17 +405,23 @@ def _revision_document(
             "start": _utc_contract_timestamp(period.starts_at_utc),
             "end": _utc_contract_timestamp(period.ends_at_utc),
         }
-    coverage: dict[str, Any] = {
+    local_coverage = coverage_evidence or {
         "evidenceStatus": "not_recorded",
         "monitoredSeconds": None,
         "expectedSeconds": None,
-        "gaps": [],
-    }
-    metric_coverage: dict[str, Any] = {
-        "evidenceStatus": "not_recorded",
-        "monitoredSeconds": None,
-        "expectedSeconds": None,
+        "coverageRatio": None,
         "gapCount": None,
+        "gaps": [],
+        "warnings": ["No monitoring-session evidence was recorded for this reporting period."],
+    }
+    coverage = _contract_coverage(local_coverage)
+    metric_coverage: dict[str, Any] = {
+        "evidenceStatus": coverage.get("evidenceStatus", "not_recorded"),
+        "monitoredSeconds": coverage.get("monitoredSeconds"),
+        "expectedSeconds": coverage.get("expectedSeconds"),
+        "gapCount": (
+            len(coverage.get("gaps", [])) if coverage.get("evidenceStatus") == "recorded" else None
+        ),
     }
     metric_provenance = "system_derived" if source_kind == "mock" else "camera_derived"
     metrics = [
@@ -470,6 +477,48 @@ def _revision_document(
     }
 
 
+def _contract_coverage(coverage: dict[str, Any]) -> dict[str, Any]:
+    if coverage.get("evidenceStatus") != "recorded":
+        return {
+            "evidenceStatus": "not_recorded",
+            "monitoredSeconds": None,
+            "expectedSeconds": None,
+            "gaps": [],
+        }
+
+    source_gaps = coverage.get("gaps")
+    normalized_gaps: list[tuple[str, int]] = []
+    if isinstance(source_gaps, list):
+        for source_gap in source_gaps:
+            if not isinstance(source_gap, dict):
+                continue
+            duration = source_gap.get("durationSeconds")
+            if not isinstance(duration, (int, float)) or duration <= 0:
+                continue
+            reason = str(source_gap.get("reason") or "monitoring_gap").strip()[:120]
+            normalized_gaps.append((reason or "monitoring_gap", max(1, round(duration))))
+
+    raw_expected = coverage.get("expectedSeconds")
+    expected = max(
+        len(normalized_gaps),
+        1,
+        round(raw_expected) if isinstance(raw_expected, (int, float)) else 1,
+    )
+    remaining = expected
+    contract_gaps: list[dict[str, Any]] = []
+    for index, (reason, requested_duration) in enumerate(normalized_gaps):
+        remaining_gaps = len(normalized_gaps) - index - 1
+        duration = min(requested_duration, max(1, remaining - remaining_gaps))
+        contract_gaps.append({"reason": reason, "durationSeconds": duration})
+        remaining -= duration
+    return {
+        "evidenceStatus": "recorded",
+        "monitoredSeconds": max(0, remaining),
+        "expectedSeconds": expected,
+        "gaps": contract_gaps,
+    }
+
+
 def _metric_command(
     definition: str,
     value: int,
@@ -478,6 +527,11 @@ def _metric_command(
     provenance: str,
     coverage: dict[str, Any],
 ) -> dict[str, Any]:
+    quality = (
+        "degraded"
+        if coverage.get("evidenceStatus") == "recorded" and coverage.get("gapCount", 0) > 0
+        else "estimated"
+    )
     return {
         "definition": definition,
         "definitionVersion": 1,
@@ -488,7 +542,7 @@ def _metric_command(
         "windowEnd": source_window["end"],
         "timezone": "Asia/Manila",
         "provenance": provenance,
-        "quality": "estimated",
+        "quality": quality,
         "coverage": coverage,
     }
 

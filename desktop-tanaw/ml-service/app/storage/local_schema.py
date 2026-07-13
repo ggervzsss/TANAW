@@ -13,8 +13,9 @@ from app.storage.reporting_periods import (
     monthly_period_from_label,
     parse_captured_at,
 )
+from app.storage.resilience_schema import migrate_resilience_ledger_v4
 
-LOCAL_SCHEMA_VERSION = 3
+LOCAL_SCHEMA_VERSION = 4
 SQLITE_BUSY_TIMEOUT_MS = 5_000
 
 _Migration = Callable[[sqlite3.Connection], None]
@@ -58,6 +59,7 @@ def initialize_local_database(database_path: Path) -> None:
             (1, "baseline_local_metrics_ledger", _migrate_baseline),
             (2, "canonical_reporting_periods", _migrate_reporting_periods),
             (3, "immutable_report_revisions_and_sync_outbox", migrate_report_ledger_v3),
+            (4, "camera_resilience_coverage_and_rollups", migrate_resilience_ledger_v4),
         )
         for version, name, migration in migrations:
             if _migration_is_applied(connection, version):

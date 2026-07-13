@@ -79,7 +79,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(purged["report_id"], "REP-001")
             self.assertEqual(purged["purged_events"], 2)
             self.assertIsNotNone(purged["raw_purged_at"])
-            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 0)
+            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 1)
             reports = store.list_report_submissions()
             self.assertEqual(len(reports), 1)
             self.assertEqual(reports[0]["entries"], 1)

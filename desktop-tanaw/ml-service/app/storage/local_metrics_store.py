@@ -3,12 +3,12 @@ import os
 import random
 import sqlite3
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Lock
+from threading import Lock, RLock
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -36,6 +36,27 @@ from app.storage.reporting_periods import (
     monthly_period_from_label,
     parse_captured_at,
 )
+from app.storage.resilience_store import (
+    SQLiteRetryPolicy,
+    record_metric_rollups,
+    run_sqlite_write,
+)
+from app.storage.resilience_store import (
+    coverage_summary as build_coverage_summary,
+)
+from app.storage.resilience_store import (
+    end_monitoring_session as close_monitoring_session,
+)
+from app.storage.resilience_store import (
+    mark_monitoring_connected as mark_session_connected,
+)
+from app.storage.resilience_store import (
+    open_coverage_gap as insert_coverage_gap,
+)
+from app.storage.resilience_store import (
+    start_monitoring_session as insert_monitoring_session,
+)
+from app.storage.session_credentials import scrub_snapshot_table_credentials
 
 _REPORT_SUBMISSION_SELECT = """
 select
@@ -73,6 +94,8 @@ _REPORT_REVISION_SELECT = _REPORT_SUBMISSION_SELECT.replace(
     "on revision.revision_id = report.current_revision_id",
     "on revision.report_id = report.report_id",
 )
+_DATABASE_LOCKS: dict[Path, RLock] = {}
+_DATABASE_LOCKS_GUARD = Lock()
 
 
 @dataclass
@@ -96,9 +119,23 @@ class _MetricsBucket:
         self.peak_occupancy = max(self.peak_occupancy, occupancy)
         self.current_occupancy = occupancy
 
+    def add_rollup(self, row: sqlite3.Row) -> None:
+        self.entries += _safe_int(row["entries"])
+        self.exits += _safe_int(row["exits"])
+        self.unique += _safe_int(row["unique_entries"])
+        self.peak_occupancy = max(self.peak_occupancy, _safe_int(row["peak_occupancy"]))
+        self.current_occupancy = _safe_int(row["last_occupancy"])
+
 
 class LocalMetricsStore:
-    def __init__(self, app_data_dir: str | None = None, enterprise_id: str | None = None) -> None:
+    def __init__(
+        self,
+        app_data_dir: str | None = None,
+        enterprise_id: str | None = None,
+        *,
+        sqlite_retry_policy: SQLiteRetryPolicy | None = None,
+        retry_sleep: Callable[[float], None] | None = None,
+    ) -> None:
         base_dir = app_data_dir or os.environ.get("TANAW_APP_DATA_DIR")
         if base_dir:
             root = Path(base_dir) / "ml-service"
@@ -110,6 +147,10 @@ class LocalMetricsStore:
         self._database_path = self._root / "tanaw_metrics.sqlite3"
         self._initialized = False
         self._initialize_lock = Lock()
+        with _DATABASE_LOCKS_GUARD:
+            self._connection_lock = _DATABASE_LOCKS.setdefault(self._database_path, RLock())
+        self._sqlite_retry_policy = sqlite_retry_policy or SQLiteRetryPolicy()
+        self._retry_sleep = retry_sleep
 
     def append_count_event(self, payload: dict[str, Any], recorded_at: str | None = None) -> str:
         event_id = str(uuid4())
@@ -124,13 +165,14 @@ class LocalMetricsStore:
         if is_unique_entry is None:
             is_unique_entry = direction == "entry"
 
-        with self._connection() as connection:
+        camera_key = local_camera_key(
+            payload.get("camera_id"),
+            payload.get("camera_name"),
+            payload.get("central_camera_id", payload.get("centralCameraId")),
+        )
+
+        def write_event(connection: sqlite3.Connection) -> None:
             upsert_reporting_period(connection, reporting_period)
-            camera_key = local_camera_key(
-                payload.get("camera_id"),
-                payload.get("camera_name"),
-                payload.get("central_camera_id", payload.get("centralCameraId")),
-            )
             camera_event_sequence = allocate_camera_event_sequences(connection, camera_key)
             connection.execute(
                 """
@@ -183,8 +225,178 @@ class LocalMetricsStore:
                     payload.get("mock_run_id"),
                 ),
             )
+            record_metric_rollups(
+                connection,
+                event={**payload, "is_unique_entry": is_unique_entry},
+                captured_at=captured_at,
+                reporting_period=reporting_period,
+                business_date=business_date,
+                camera_key=camera_key,
+            )
+
+        self._write("append_count_event", write_event)
 
         return event_id
+
+    def import_legacy_event_if_missing(self, payload: dict[str, Any]) -> bool:
+        recorded_at = payload.get("recorded_at")
+        if not isinstance(recorded_at, str):
+            raise ValueError("Legacy event is missing its recorded_at timestamp.")
+        with self._connection() as connection:
+            exists = connection.execute(
+                "select 1 from count_events where recorded_at = ? limit 1",
+                (parse_captured_at(recorded_at).isoformat(),),
+            ).fetchone()
+        if exists is not None:
+            return False
+        event = {key: value for key, value in payload.items() if key != "recorded_at"}
+        self.append_count_event(event, recorded_at)
+        return True
+
+    def start_monitoring_session(
+        self,
+        *,
+        monitoring_session_id: str,
+        camera_id: Any,
+        camera_name: str | None,
+        central_camera_id: Any = None,
+        started_at: str | None = None,
+    ) -> None:
+        started_at = parse_captured_at(started_at or _utc_now()).isoformat()
+        camera_key = local_camera_key(camera_id, camera_name, central_camera_id)
+        normalized_central_id = (
+            str(UUID(str(central_camera_id))) if central_camera_id is not None else None
+        )
+
+        def write_session(connection: sqlite3.Connection) -> None:
+            insert_monitoring_session(
+                connection,
+                monitoring_session_id=monitoring_session_id,
+                camera_key=camera_key,
+                central_camera_id=normalized_central_id,
+                camera_name=camera_name,
+                started_at=started_at,
+            )
+
+        self._write("start_monitoring_session", write_session)
+
+    def mark_monitoring_connected(
+        self, monitoring_session_id: str, connected_at: str | None = None
+    ) -> None:
+        connected_at = parse_captured_at(connected_at or _utc_now()).isoformat()
+        self._write(
+            "mark_monitoring_connected",
+            lambda connection: mark_session_connected(
+                connection, monitoring_session_id, connected_at
+            ),
+        )
+
+    def record_coverage_gap(
+        self,
+        *,
+        monitoring_session_id: str,
+        camera_id: Any,
+        camera_name: str | None,
+        central_camera_id: Any = None,
+        started_at: str | None = None,
+        reason: str,
+        recoverable: bool,
+        detail: str | None = None,
+    ) -> str:
+        captured_at = parse_captured_at(started_at or _utc_now())
+        period = monthly_period_for_captured_at(captured_at)
+        camera_key = local_camera_key(camera_id, camera_name, central_camera_id)
+        result: list[str] = []
+
+        def write_gap(connection: sqlite3.Connection) -> None:
+            upsert_reporting_period(connection, period)
+            result.append(
+                insert_coverage_gap(
+                    connection,
+                    monitoring_session_id=monitoring_session_id,
+                    camera_key=camera_key,
+                    started_at=captured_at.isoformat(),
+                    reason=reason,
+                    recoverable=recoverable,
+                    detail=detail,
+                )
+            )
+
+        self._write("record_coverage_gap", write_gap)
+        return result[0]
+
+    def end_monitoring_session(
+        self,
+        monitoring_session_id: str,
+        *,
+        ended_at: str | None = None,
+        reason: str = "operator_stopped",
+        error: bool = False,
+    ) -> None:
+        ended_at = parse_captured_at(ended_at or _utc_now()).isoformat()
+        self._write(
+            "end_monitoring_session",
+            lambda connection: close_monitoring_session(
+                connection,
+                monitoring_session_id,
+                ended_at=ended_at,
+                reason=reason,
+                error=error,
+            ),
+        )
+
+    def monitoring_coverage(self, period_id: str, *, as_of: str | None = None) -> dict[str, Any]:
+        period = monthly_period_from_id(period_id)
+        if period is None:
+            raise ValueError(f"Invalid canonical reporting period: {period_id}")
+        with self._connection() as connection:
+            return build_coverage_summary(
+                connection,
+                period=period,
+                as_of=as_of or _utc_now(),
+            )
+
+    def record_persistence_error(
+        self,
+        *,
+        operation: str,
+        reason: str,
+        detail: str,
+        attempt_count: int,
+        occurred_at: str | None = None,
+    ) -> str:
+        error_id = str(uuid4())
+        occurred_at = parse_captured_at(occurred_at or _utc_now()).isoformat()
+
+        def write_error(connection: sqlite3.Connection) -> None:
+            connection.execute(
+                """
+                insert into local_persistence_errors (
+                    persistence_error_id,
+                    operation,
+                    reason,
+                    detail,
+                    attempt_count,
+                    occurred_at
+                )
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (error_id, operation, reason, detail, attempt_count, occurred_at),
+            )
+
+        self._write("record_persistence_error", write_error)
+        return error_id
+
+    def list_persistence_errors(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                select *
+                from local_persistence_errors
+                order by occurred_at, persistence_error_id
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def upsert_visitor_identity(
         self,
@@ -450,6 +662,14 @@ class LocalMetricsStore:
                 ),
             )
 
+    def scrub_legacy_session_snapshot_credentials(self) -> int:
+        scrubbed_rows: list[int] = []
+        self._write(
+            "scrub_legacy_session_credentials",
+            lambda connection: scrubbed_rows.append(scrub_snapshot_table_credentials(connection)),
+        )
+        return scrubbed_rows[0]
+
     def record_occupancy_correction(
         self,
         *,
@@ -552,7 +772,7 @@ class LocalMetricsStore:
         self,
         include_submitted: bool = False,
         period_id: str | None = None,
-    ) -> dict[str, int | str | None]:
+    ) -> dict[str, Any]:
         with self._connection() as connection:
             return self._metrics_summary(
                 connection,
@@ -566,7 +786,7 @@ class LocalMetricsStore:
         *,
         include_submitted: bool,
         period_id: str | None,
-    ) -> dict[str, int | str | None]:
+    ) -> dict[str, Any]:
         selected_period = _resolve_summary_period(
             connection,
             include_submitted=include_submitted,
@@ -595,39 +815,66 @@ class LocalMetricsStore:
         event_filter = scope_filter
         if not include_submitted:
             event_filter = f"{_open_event_filter()} and {scope_filter}"
-        row = connection.execute(
-            f"""
-            select
-                count(*) as total_events,
-                sum(case when direction = 'entry' then 1 else 0 end) as entries,
-                sum(case when direction = 'exit' then 1 else 0 end) as exits,
-                sum(case when direction = 'entry' and is_unique_entry = 1 then 1 else 0 end)
-                    as unique_entries,
-                sum(
-                    case
-                        when direction = 'entry'
-                         and is_unique_entry = 1
-                         and visitor_id is not null
-                         and visitor_id != ''
-                        then 1 else 0
-                    end
-                ) as confirmed_unique_entries,
-                sum(
-                    case
-                        when direction = 'entry'
-                         and is_unique_entry = 1
-                         and (visitor_id is null or visitor_id = '')
-                        then 1 else 0
-                    end
-                ) as degraded_unique_entries,
-                max(occupancy_count) as peak_occupancy,
-                min(recorded_at) as first_event_at,
-                max(recorded_at) as last_event_at
-            from count_events
-            where {event_filter}
-            """,
-            params,
-        ).fetchone()
+        if include_submitted:
+            rollup_conditions = ["grain = 'hour'"]
+            rollup_params: list[str] = []
+            if selected_period is None:
+                rollup_conditions.append("0 = 1")
+            else:
+                rollup_conditions.append("reporting_period_id = ?")
+                rollup_params.append(selected_period.period_id)
+            rollup_filter = " and ".join(rollup_conditions)
+            row = connection.execute(
+                f"""
+                select
+                    sum(event_count) as total_events,
+                    sum(entries) as entries,
+                    sum(exits) as exits,
+                    sum(unique_entries) as unique_entries,
+                    sum(confirmed_unique_entries) as confirmed_unique_entries,
+                    sum(degraded_unique_entries) as degraded_unique_entries,
+                    max(peak_occupancy) as peak_occupancy,
+                    min(first_event_at) as first_event_at,
+                    max(last_event_at) as last_event_at
+                from metric_rollups
+                where {rollup_filter}
+                """,
+                rollup_params,
+            ).fetchone()
+        else:
+            row = connection.execute(
+                f"""
+                select
+                    count(*) as total_events,
+                    sum(case when direction = 'entry' then 1 else 0 end) as entries,
+                    sum(case when direction = 'exit' then 1 else 0 end) as exits,
+                    sum(case when direction = 'entry' and is_unique_entry = 1 then 1 else 0 end)
+                        as unique_entries,
+                    sum(
+                        case
+                            when direction = 'entry'
+                             and is_unique_entry = 1
+                             and visitor_id is not null
+                             and visitor_id != ''
+                            then 1 else 0
+                        end
+                    ) as confirmed_unique_entries,
+                    sum(
+                        case
+                            when direction = 'entry'
+                             and is_unique_entry = 1
+                             and (visitor_id is null or visitor_id = '')
+                            then 1 else 0
+                        end
+                    ) as degraded_unique_entries,
+                    max(occupancy_count) as peak_occupancy,
+                    min(recorded_at) as first_event_at,
+                    max(recorded_at) as last_event_at
+                from count_events
+                where {event_filter}
+                """,
+                params,
+            ).fetchone()
         unsubmitted_count = connection.execute(
             f"""
             select count(*)
@@ -653,14 +900,24 @@ class LocalMetricsStore:
         unclassified_count = connection.execute(
             "select count(*) from count_events where reporting_period_id is null"
         ).fetchone()[0]
-        source_rows = connection.execute(
-            f"""
-            select distinct source_kind, mock_run_id
-            from count_events
-            where {event_filter}
-            """,
-            params,
-        ).fetchall()
+        if include_submitted:
+            source_rows = connection.execute(
+                f"""
+                select distinct source_kind, nullif(mock_run_key, '') as mock_run_id
+                from metric_rollups
+                where {rollup_filter}
+                """,
+                rollup_params,
+            ).fetchall()
+        else:
+            source_rows = connection.execute(
+                f"""
+                select distinct source_kind, mock_run_id
+                from count_events
+                where {event_filter}
+                """,
+                params,
+            ).fetchall()
         if selected_period is None:
             correction_delta = 0
         else:
@@ -749,15 +1006,39 @@ class LocalMetricsStore:
                         selected_period.ends_at_utc.isoformat(),
                     ]
                 )
-            rows = connection.execute(
-                f"""
-                select recorded_at, direction, occupancy_count, is_unique_entry
-                from count_events
-                where {" and ".join(conditions) or "1 = 1"}
-                order by recorded_at asc
-                """,
-                params,
-            ).fetchall()
+            if include_submitted:
+                rollup_conditions = ["grain = 'hour'"]
+                rollup_params: list[str] = []
+                if selected_period is None:
+                    rollup_conditions.append("0 = 1")
+                else:
+                    rollup_conditions.append("reporting_period_id = ?")
+                    rollup_params.append(selected_period.period_id)
+                rows = connection.execute(
+                    f"""
+                    select
+                        bucket_start_at as recorded_at,
+                        entries,
+                        exits,
+                        unique_entries,
+                        peak_occupancy,
+                        last_occupancy
+                    from metric_rollups
+                    where {" and ".join(rollup_conditions)}
+                    order by bucket_start_at asc
+                    """,
+                    rollup_params,
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    f"""
+                    select recorded_at, direction, occupancy_count, is_unique_entry
+                    from count_events
+                    where {" and ".join(conditions) or "1 = 1"}
+                    order by recorded_at asc
+                    """,
+                    params,
+                ).fetchall()
 
         hourly_buckets = [_MetricsBucket() for _ in range(24)]
         today_buckets = [_MetricsBucket() for _ in range(24)]
@@ -769,14 +1050,15 @@ class LocalMetricsStore:
             if recorded_at < month_start or recorded_at > now:
                 continue
 
-            month_buckets[(recorded_at.date() - month_start.date()).days].add_event(row)
+            add_row = _MetricsBucket.add_rollup if include_submitted else _MetricsBucket.add_event
+            add_row(month_buckets[(recorded_at.date() - month_start.date()).days], row)
 
             if recorded_at >= week_start:
-                week_buckets[(recorded_at.date() - week_start.date()).days].add_event(row)
+                add_row(week_buckets[(recorded_at.date() - week_start.date()).days], row)
 
             if recorded_at.date() == today_start.date():
-                hourly_buckets[recorded_at.hour].add_event(row)
-                today_buckets[recorded_at.hour].add_event(row)
+                add_row(hourly_buckets[recorded_at.hour], row)
+                add_row(today_buckets[recorded_at.hour], row)
 
         return {
             "hourly_density": [
@@ -817,7 +1099,7 @@ class LocalMetricsStore:
         *,
         idempotency_key: str | None = None,
         command_id: str | None = None,
-    ) -> dict[str, int | str | None]:
+    ) -> dict[str, Any]:
         submitted_at = _utc_now()
         report_payload = payload or {}
         payload_status = (
@@ -1018,6 +1300,11 @@ class LocalMetricsStore:
                 period_id=reporting_period.period_id,
                 event_rows=selected_events,
             )
+            coverage = build_coverage_summary(
+                connection,
+                period=reporting_period,
+                as_of=submitted_at,
+            )
             revision_document = build_revision_document(
                 revision_id=revision_id,
                 report_id=report_id,
@@ -1037,6 +1324,7 @@ class LocalMetricsStore:
                 source_kind=resolved_source_kind,
                 mock_run_id=resolved_mock_run_id,
                 source_batches=[batch["document"] for batch in source_batches],
+                coverage_evidence=coverage,
             )
             canonical_payload = canonical_json(revision_document)
             payload_hash = canonical_payload_hash(revision_document["payload"])
@@ -1181,6 +1469,7 @@ class LocalMetricsStore:
             "payload_hash": payload_hash,
             "submitted_at": submitted_at,
             "sync_status": "pending_cloud_sync",
+            "coverage": coverage,
         }
 
     def list_ready_sync_outbox_items(
@@ -1322,15 +1611,19 @@ class LocalMetricsStore:
 
             event_rows = connection.execute(
                 """
-                select distinct membership.event_id
+                select distinct membership.event_id, event.visitor_id
                 from local_report_event_memberships as membership
                 join local_report_revisions as revision
                   on revision.revision_id = membership.report_revision_id
+                join count_events as event on event.event_id = membership.event_id
                 where revision.report_id = ?
                 """,
                 (report_id,),
             ).fetchall()
             event_ids = [str(row["event_id"]) for row in event_rows]
+            visitor_ids = sorted(
+                {str(row["visitor_id"]) for row in event_rows if row["visitor_id"]}
+            )
             purged_events = 0
             if event_ids:
                 placeholders = ", ".join("?" for _ in event_ids)
@@ -1339,6 +1632,48 @@ class LocalMetricsStore:
                     event_ids,
                 )
                 purged_events = result.rowcount or 0
+            period_row = connection.execute(
+                """
+                select period.starts_at_utc, period.ends_at_utc
+                from local_reports as report
+                join reporting_periods as period
+                  on period.period_id = report.reporting_period_id
+                where report.report_id = ?
+                """,
+                (report_id,),
+            ).fetchone()
+            purged_snapshots = 0
+            if period_row is not None:
+                result = connection.execute(
+                    """
+                    delete from count_snapshots
+                    where recorded_at >= ? and recorded_at < ?
+                    """,
+                    (period_row["starts_at_utc"], period_row["ends_at_utc"]),
+                )
+                purged_snapshots = result.rowcount or 0
+            purged_sightings = 0
+            purged_identities = 0
+            if visitor_ids:
+                visitor_placeholders = ", ".join("?" for _ in visitor_ids)
+                result = connection.execute(
+                    f"delete from visitor_sightings where visitor_id in ({visitor_placeholders})",
+                    visitor_ids,
+                )
+                purged_sightings = result.rowcount or 0
+                result = connection.execute(
+                    f"""
+                    delete from visitor_identities
+                    where visitor_id in ({visitor_placeholders})
+                      and not exists (
+                          select 1
+                          from count_events
+                          where count_events.visitor_id = visitor_identities.visitor_id
+                      )
+                    """,
+                    visitor_ids,
+                )
+                purged_identities = result.rowcount or 0
             next_purged_at = (
                 purged_at
                 if purged_events > 0 or report["raw_purged_at"] is None
@@ -1352,6 +1687,9 @@ class LocalMetricsStore:
         return {
             "report_id": report_id,
             "purged_events": _safe_int(purged_events),
+            "purged_snapshots": _safe_int(purged_snapshots),
+            "purged_sightings": _safe_int(purged_sightings),
+            "purged_identities": _safe_int(purged_identities),
             "raw_purged_at": next_purged_at,
         }
 
@@ -1542,6 +1880,16 @@ class LocalMetricsStore:
                     """,
                 sequenced_rows,
             )
+            for row in sequenced_rows:
+                event_payload = json.loads(str(row[18]))
+                record_metric_rollups(
+                    connection,
+                    event=event_payload,
+                    captured_at=parse_captured_at(str(row[1])),
+                    reporting_period=reporting_period,
+                    business_date=str(row[2]),
+                    camera_key=camera_key,
+                )
         return {
             **self.metrics_summary(include_submitted=False, period_id=reporting_period.period_id),
             "prepared": True,
@@ -1555,6 +1903,10 @@ class LocalMetricsStore:
             )
             connection.execute(
                 "delete from count_snapshots where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
+                (mock_run_id,),
+            )
+            connection.execute(
+                "delete from metric_rollups where mock_run_key = ?",
                 (mock_run_id,),
             )
             connection.execute(
@@ -1625,6 +1977,15 @@ class LocalMetricsStore:
             connection.execute(f"delete from count_events where {event_filter}", params)
             connection.execute(f"delete from count_snapshots where {event_filter}", params)
             connection.execute(f"delete from occupancy_corrections where {event_filter}", params)
+            if mock_run_id:
+                connection.execute(
+                    "delete from metric_rollups where mock_run_key = ?",
+                    (mock_run_id,),
+                )
+            else:
+                connection.execute(
+                    "delete from metric_rollups where source_kind in ('mock', 'hybrid')"
+                )
 
         return {
             "count_events": _safe_int(count_events),
@@ -1699,17 +2060,44 @@ class LocalMetricsStore:
     @contextmanager
     def _connection(self, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
         self._initialize()
-        connection = connect_local_database(self._database_path)
-        try:
-            if immediate:
-                connection.execute("begin immediate")
-            yield connection
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
+        with self._connection_lock:
+            connection = connect_local_database(self._database_path)
+            try:
+                if immediate:
+                    connection.execute("begin immediate")
+                yield connection
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+            finally:
+                connection.close()
+
+    def _write(self, operation_name: str, operation: Callable[[sqlite3.Connection], None]) -> None:
+        self._initialize()
+
+        def transaction() -> None:
+            with self._connection_lock:
+                connection = connect_local_database(self._database_path)
+                try:
+                    connection.execute("begin immediate")
+                    operation(connection)
+                    connection.commit()
+                except Exception:
+                    connection.rollback()
+                    raise
+                finally:
+                    connection.close()
+
+        retry_values: dict[str, Any] = {
+            "policy": self._sqlite_retry_policy,
+        }
+        if self._retry_sleep is not None:
+            retry_values["sleep"] = self._retry_sleep
+        run_sqlite_write(operation_name, transaction, **retry_values)
+
+    def ensure_initialized(self) -> None:
+        self._initialize()
 
     def _initialize(self) -> None:
         if self._initialized:
@@ -2152,6 +2540,24 @@ def _resolve_summary_period(
         """
     ).fetchone()
     if row is None:
+        if include_submitted:
+            row = connection.execute(
+                """
+                select reporting_period_id
+                from metric_rollups
+                where grain = 'hour'
+                order by bucket_start_at desc
+                limit 1
+                """
+            ).fetchone()
+        if row is not None:
+            period = monthly_period_from_id(str(row["reporting_period_id"]))
+            if period is None:
+                raise RuntimeError(
+                    "Local rollup references an invalid reporting period: "
+                    f"{row['reporting_period_id']}"
+                )
+            return period
         correction_row = connection.execute(
             """
             select recorded_at
