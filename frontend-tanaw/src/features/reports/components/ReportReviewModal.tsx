@@ -7,6 +7,7 @@ import { DotSingleReportTable } from "./DotReportTable";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { ReportStatusBadge } from "./ReportStatusBadge";
 import { downloadIntakeReportPdf } from "../utils/pdf";
+import { recordedText } from "../utils/reportPresentation";
 
 type ReportReviewModalProps = {
   report: IntakeReport;
@@ -28,9 +29,9 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
   const canReview = report.status === "Pending Review";
   const statusMessage = reviewStatusMessage(report.status);
   const confirmDetails = [
-    { label: "Report", value: report.code },
-    { label: "Enterprise", value: report.enterprise },
-    { label: "Period", value: report.period },
+    { label: "Report", value: recordedText(report.code, "Not provided") },
+    { label: "Enterprise", value: recordedText(report.enterprise, "Not provided") },
+    { label: "Period", value: recordedText(report.period, "Not provided") },
     { label: "Remarks", value: remarks.trim() || "Default workflow remarks will be used." },
   ];
   const confirmCopy = confirmAction ? reviewConfirmCopy(confirmAction) : null;
@@ -45,7 +46,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -58,7 +59,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                   <ReportStatusBadge status={report.status} />
                 </div>
                 <p className="text-xs font-semibold text-gray-500">
-                  {report.enterprise} - {report.period}
+                  {recordedText(report.enterprise, "Not provided")} - {recordedText(report.period, "Not provided")}
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -80,36 +81,13 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               </div>
             </div>
 
-            <div className="grow overflow-y-auto bg-gray-100 p-6 print:bg-white print:p-0 dark:bg-[#0f172a]">
+            <div className="grow overflow-y-auto bg-gray-100 p-6 dark:bg-[#0f172a] print:bg-white print:p-0">
               <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm print:shadow-none">
                 <DotSingleReportTable report={report} />
               </section>
 
               <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <h4 className="text-tanaw-navy mb-4 text-sm font-semibold">Data Sources</h4>
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-[#0f172a]">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-gray-200 text-gray-500">
-                      <tr>
-                        <th className="pb-2 font-semibold">Source Node / Camera</th>
-                        <th className="pb-2 font-semibold">Last Update Time</th>
-                        <th className="pb-2 text-right font-semibold">Unique Pax Contributed</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      <tr>
-                        <td className="py-2 font-medium text-gray-800">Zone A - Main Entrance</td>
-                        <td className="py-2 font-mono text-gray-500">{report.month} 31, 23:55:01</td>
-                        <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{Math.floor(report.metrics.unique * 0.7).toLocaleString()}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 font-medium text-gray-800">Zone B - Rear Exit</td>
-                        <td className="py-2 font-mono text-gray-500">{report.month} 31, 23:58:12</td>
-                        <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{(report.metrics.unique - Math.floor(report.metrics.unique * 0.7)).toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <CameraSourceLineageNotice />
               </div>
 
               <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
@@ -179,8 +157,19 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
   );
 }
 
+export function CameraSourceLineageNotice() {
+  return (
+    <>
+      <h4 className="text-tanaw-navy mb-2 text-sm font-semibold">Camera Source Lineage</h4>
+      <p className="text-xs leading-relaxed text-gray-500">
+        Not recorded in this report payload. Camera names, per-camera timestamps, and per-camera contributions cannot be verified from the submitted data and are therefore not shown.
+      </p>
+    </>
+  );
+}
+
 function reviewStatusMessage(status: IntakeReport["status"]) {
-  if (status === "Pending Review") return "Values in the DOT form are read-only and populated directly from local camera records.";
+  if (status === "Pending Review") return "Submitted values are read-only. Demographic fields remain unavailable unless a complete set was submitted and reconciles with the visitor total.";
   if (status === "Ready to Consolidate") return "This report has already been accepted and is waiting for final report generation.";
   if (status === "Returned") return "This report has been returned to the enterprise. Wait for a revised submission before reviewing again.";
   if (status === "Consolidated") return "This report has already been included in a final batch report and is locked.";

@@ -83,9 +83,11 @@ export function StaffBatchReportsPage() {
   const consolidateMutation = useMutation({
     mutationFn: async () => {
       if (!allReady || readyReports.length === 0) throw new Error("No ready reports available for consolidation.");
+      const preparedBy = authUser?.displayName?.trim();
+      if (!preparedBy) throw new Error("An authenticated preparer identity is required before generating a final report.");
       return createFinalReport({
         reportIds: readyReports.map((report) => report.id),
-        preparedBy: authUser?.displayName ?? "LGU Staff",
+        preparedBy,
       });
     },
     onSuccess: (finalReport) => {

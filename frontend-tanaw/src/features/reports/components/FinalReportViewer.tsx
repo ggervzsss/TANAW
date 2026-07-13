@@ -12,6 +12,7 @@ import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } fr
 import { DotFinalReportTable } from "./DotReportTable";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { downloadFinalReportPdf } from "../utils/pdf";
+import { recordedActor, recordedText } from "../utils/reportPresentation";
 
 type FinalReportViewerProps = {
   report: FinalReport;
@@ -128,7 +129,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -136,7 +137,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           >
             <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:text-slate-100">
               <div>
-                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
+                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{recordedText(report.id)}</p>
                 <h3 className="text-tanaw-navy mt-1 text-lg font-bold">Official Artifact Viewer</h3>
                 <p className="text-xs font-semibold text-gray-500">LGU official format with data lineage.</p>
               </div>
@@ -209,49 +210,32 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
 
             <div className="tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
               <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
-                <ul className="space-y-2 font-mono text-xs text-gray-600">
-                  <li className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <span>v1.0 Draft aggregated by System Pipeline</span>
-                    <span>{report.generatedOn} 04:15 AM</span>
-                  </li>
-                  {report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized") ? (
-                    <li className="flex items-center justify-between pt-1">
-                      <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
-                      <span>{report.generatedOn} 09:30 AM</span>
-                    </li>
-                  ) : (
-                    <li className="flex items-center justify-between pt-1">
-                      <span>{report.status === "Returned for Revision" ? "v1.1 Returned for source report revision" : "v1.1 Awaiting final audit decision"}</span>
-                      <span>{report.generatedOn} 09:30 AM</span>
-                    </li>
-                  )}
-                </ul>
+                <FinalReportAuditNotice status={report.status} />
               </div>
 
               <div className="mb-6 border-b-2 border-black pb-4 text-center">
                 <img src={CITY_SEAL} className="mx-auto mb-3 h-16 w-16 grayscale" alt="San Pedro Seal" />
                 <h1 className="font-serif text-lg font-bold tracking-widest uppercase">City Government of San Pedro</h1>
                 <p className="mt-1 text-xs tracking-wider uppercase">Tourism & Economic Development Office</p>
-                <h2 className="mt-5 text-xl font-bold underline">{report.title}</h2>
-                <p className="mt-1 font-mono text-sm">Reporting Period: {report.period}</p>
+                <h2 className="mt-5 text-xl font-bold underline">{recordedText(report.title, "Not provided")}</h2>
+                <p className="mt-1 font-mono text-sm">Reporting Period: {recordedText(report.period, "Not provided")}</p>
               </div>
 
               <p className="mb-6 text-justify text-sm leading-relaxed">
-                This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. Aggregation relies on verified local camera records from{" "}
-                {report.enterpriseCount} monitored enterprise nodes.
+                This document presents the consolidated visitor metrics in the submitted enterprise report records for the stated period. It contains {report.sources.length} source report
+                {report.sources.length === 1 ? "" : "s"}. Camera-level provenance and monitoring coverage are not asserted unless explicitly recorded in the report data.
               </p>
 
               <DotFinalReportTable report={report} />
 
               <div className="mt-auto pt-10">
                 <div className="mb-8 flex items-end justify-between">
-                  <Signature label="Prepared By" sub={report.preparedRole} />
+                  <Signature label="Prepared By" value={recordedActor(report.preparedBy)} sub={recordedText(report.preparedRole, "Role not recorded")} />
                   <div className="h-24 w-48" aria-hidden="true" />
                 </div>
                 <div className="flex items-end justify-between">
-                  <Signature label="Checked By" sub="Tourism Audit Officer" />
-                  <Signature label="Approved By" sub="Head of Department" />
+                  <Signature label="Checked By" value="Not recorded" sub="Role not recorded" />
+                  <Signature label="Approved By" value="Not recorded" sub="Role not recorded" />
                 </div>
               </div>
             </div>
@@ -302,7 +286,10 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-6 py-5 max-sm:px-5">
                 <div className="grid max-h-[38vh] gap-2 overflow-y-auto pr-1">
                   {report.sources.map((source) => (
-                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10">
+                    <label
+                      key={source.id}
+                      className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10"
+                    >
                       <span className="min-w-0">
                         <span className="block truncate font-semibold text-slate-900">{source.enterprise}</span>
                         <span className="mt-0.5 block font-mono text-xs text-slate-500">
@@ -327,7 +314,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                     onChange={(event) => setReturnRemarks(event.target.value)}
                     rows={4}
                     disabled={returnMutation.isPending}
-                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 transition outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder="Describe the discrepancy and what the enterprise needs to correct."
                   />
                 </label>
@@ -381,6 +368,15 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           details={confirmDetails}
         />
       )}
+    </>
+  );
+}
+
+export function FinalReportAuditNotice({ status }: { status: FinalReportStatus }) {
+  return (
+    <>
+      <h4 className="mb-2 text-sm font-bold text-gray-800">Recorded Audit Details</h4>
+      <p className="font-mono text-xs leading-relaxed text-gray-600">Audit events, event actors, and event timestamps are not included in this report payload. Current workflow status: {status}.</p>
     </>
   );
 }
@@ -461,10 +457,10 @@ function finalReportConfirmDetails({
   ];
 }
 
-function Signature({ label, sub }: { label: string; sub: string }) {
+function Signature({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="w-56 text-center">
-      <div className="flex h-8 items-end justify-center border-b border-black" />
+      <div className="flex h-8 items-end justify-center border-b border-black text-xs font-semibold">{value}</div>
       <p className="mt-2 text-xs font-bold tracking-wide uppercase">{label}</p>
       <p className="mt-1 text-[10px] text-gray-500">{sub}</p>
     </div>

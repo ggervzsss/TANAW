@@ -1,5 +1,6 @@
 import type { FinalReport, FinalReportSource, IntakeReport } from "@/shared/types";
-import { getDotDemographics } from "./dotDemographics";
+import { combineDotDemographics, dotDemographicValue, getDotDemographics, type DotDemographicsResult } from "./dotDemographics";
+import { recordedActor, recordedText } from "./reportPresentation";
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
@@ -21,45 +22,44 @@ type TableCell = {
 };
 
 export function downloadIntakeReportPdf(report: IntakeReport) {
+  downloadPdf(buildIntakeReportPdf(report), `${report.id}.pdf`);
+}
+
+export function buildIntakeReportPdf(report: IntakeReport) {
   const demographics = getDotDemographics(report.metrics.unique, report.demographics ?? report.payload?.demo);
   const rows: TableCell[][] = [
     [
-      { value: `${report.enterprise}\n${report.month}`, align: "left", bold: true },
-      { value: report.code },
-      { value: demographics.provMale },
-      { value: demographics.provFemale },
-      { value: demographics.provTotal, bold: true },
-      { value: demographics.otherMale },
-      { value: demographics.otherFemale },
-      { value: demographics.otherTotal, bold: true },
-      { value: demographics.foreignMale },
-      { value: demographics.foreignFemale },
-      { value: demographics.foreignTotal, bold: true },
-      { value: demographics.grandMale, bold: true },
-      { value: demographics.grandFemale, bold: true },
+      { value: `${recordedText(report.enterprise, "Not provided")}\n${recordedText(report.month, "Not provided")}`, align: "left", bold: true },
+      { value: recordedText(report.code, "Not provided") },
+      ...buildDemographicCells(demographics),
       { value: report.metrics.unique, bold: true },
     ],
   ];
 
   const commands: PdfCommand[] = [];
-  drawTitle(commands, "TANAW - DOT Visitor Attraction Report", report.id);
+  drawTitle(commands, "TANAW - DOT Visitor Attraction Report", recordedText(report.id, "Not recorded"));
   drawMetadata(commands, [
-    ["Enterprise", report.enterprise],
-    ["Category", report.category],
-    ["Barangay", report.barangay],
-    ["Reporting Period", report.period],
-    ["Submitted", report.submittedAt ?? report.submitted],
-    ["Review Status", report.status],
+    ["Enterprise", recordedText(report.enterprise, "Not provided")],
+    ["Category", recordedText(report.category, "Not provided")],
+    ["Barangay", recordedText(report.barangay, "Not provided")],
+    ["Reporting Period", recordedText(report.period, "Not provided")],
+    ["Submitted", recordedText(report.submittedAt ?? report.submitted)],
+    ["Review Status", recordedText(report.status)],
   ]);
   drawDotTable(commands, 222, rows);
   drawText(commands, "Live Count Summary", MARGIN, 120, 11, true);
-  drawText(commands, `Entries: ${formatNumber(report.metrics.entry)}   Exits: ${formatNumber(report.metrics.exit)}   Peak Occupancy: ${report.metrics.peak}`, MARGIN, 102, 9);
-  drawText(commands, `Remarks: ${report.remarks || report.notes || "None recorded."}`, MARGIN, 86, 9);
+  drawText(commands, `Entries: ${formatNumber(report.metrics.entry)}   Exits: ${formatNumber(report.metrics.exit)}   Peak Occupancy: ${recordedText(report.metrics.peak)}`, MARGIN, 102, 9);
+  drawText(commands, `Remarks: ${recordedText(report.remarks || report.notes)}`, MARGIN, 86, 9);
+  drawText(commands, "Place-of-residence values are submitted data only; missing or inconsistent fields are not estimated.", MARGIN, 70, 8);
 
-  downloadPdf([commands.join("\n")], `${report.id}.pdf`);
+  return buildPdf([commands.join("\n")]);
 }
 
 export function downloadFinalReportPdf(report: FinalReport) {
+  downloadPdf(buildFinalReportPdf(report), `${report.id}.pdf`);
+}
+
+export function buildFinalReportPdf(report: FinalReport) {
   const sourceRows = report.sources.map((source) => buildFinalReportSourceRow(source));
   const totalRows = buildFinalReportTotalRow(report);
   const pages: string[] = [];
@@ -71,91 +71,53 @@ export function downloadFinalReportPdf(report: FinalReport) {
     const pageRows = sourceRows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
     const isLastPage = pageIndex === pageCount - 1;
 
-    drawTitle(commands, "TANAW - Consolidated DOT Visitor Attraction Report", report.id);
+    drawTitle(commands, "TANAW - Consolidated DOT Visitor Attraction Report", recordedText(report.id, "Not recorded"));
     drawMetadata(commands, [
-      ["Report Title", report.title],
-      ["Reporting Period", report.period],
-      ["Generated On", report.generatedOn],
-      ["Prepared By", `${report.preparedBy} (${report.preparedRole})`],
-      ["Audit Status", report.status],
-      ["Registered Sources", String(report.enterpriseCount)],
+      ["Report Title", recordedText(report.title, "Not provided")],
+      ["Reporting Period", recordedText(report.period, "Not provided")],
+      ["Generated On", recordedText(report.generatedOn)],
+      ["Prepared By", `${recordedActor(report.preparedBy)} (${recordedText(report.preparedRole, "Role not recorded")})`],
+      ["Audit Status", recordedText(report.status)],
+      ["Source Reports", String(report.sources.length)],
     ]);
     drawDotTable(commands, 222, isLastPage ? [...pageRows, totalRows] : pageRows);
     drawText(commands, `Page ${pageIndex + 1}`, PAGE_WIDTH - MARGIN - 40, 28, 8);
     pages.push(commands.join("\n"));
   }
 
-  downloadPdf(pages, `${report.id}.pdf`);
+  return buildPdf(pages);
 }
 
 function buildFinalReportSourceRow(source: FinalReportSource): TableCell[] {
   const demographics = getDotDemographics(source.unique, source.demographics);
   return [
-    { value: source.enterprise, align: "left", bold: true },
-    { value: source.code },
-    { value: demographics.provMale },
-    { value: demographics.provFemale },
-    { value: demographics.provTotal, bold: true },
-    { value: demographics.otherMale },
-    { value: demographics.otherFemale },
-    { value: demographics.otherTotal, bold: true },
-    { value: demographics.foreignMale },
-    { value: demographics.foreignFemale },
-    { value: demographics.foreignTotal, bold: true },
-    { value: demographics.grandMale, bold: true },
-    { value: demographics.grandFemale, bold: true },
+    { value: recordedText(source.enterprise, "Not provided"), align: "left", bold: true },
+    { value: recordedText(source.code, "Not provided") },
+    ...buildDemographicCells(demographics),
     { value: source.unique, bold: true },
   ];
 }
 
 function buildFinalReportTotalRow(report: FinalReport): TableCell[] {
-  const totals = report.sources.reduce(
-    (next, source) => {
-      const demographics = getDotDemographics(source.unique, source.demographics);
-      return {
-        provMale: next.provMale + demographics.provMale,
-        provFemale: next.provFemale + demographics.provFemale,
-        provTotal: next.provTotal + demographics.provTotal,
-        otherMale: next.otherMale + demographics.otherMale,
-        otherFemale: next.otherFemale + demographics.otherFemale,
-        otherTotal: next.otherTotal + demographics.otherTotal,
-        foreignMale: next.foreignMale + demographics.foreignMale,
-        foreignFemale: next.foreignFemale + demographics.foreignFemale,
-        foreignTotal: next.foreignTotal + demographics.foreignTotal,
-        grandMale: next.grandMale + demographics.grandMale,
-        grandFemale: next.grandFemale + demographics.grandFemale,
-      };
-    },
-    {
-      provMale: 0,
-      provFemale: 0,
-      provTotal: 0,
-      otherMale: 0,
-      otherFemale: 0,
-      otherTotal: 0,
-      foreignMale: 0,
-      foreignFemale: 0,
-      foreignTotal: 0,
-      grandMale: 0,
-      grandFemale: 0,
-    },
-  );
+  const totals = combineDotDemographics(report.sources.map((source) => getDotDemographics(source.unique, source.demographics)));
+  const visitorTotal = report.sources.length > 0 ? report.sources.reduce((total, source) => total + source.unique, 0) : "Insufficient source data";
 
+  return [{ value: "Consolidated Total", align: "left", bold: true }, { value: "" }, ...buildDemographicCells(totals), { value: visitorTotal, bold: true }];
+}
+
+function buildDemographicCells(demographics: DotDemographicsResult): TableCell[] {
   return [
-    { value: "Citywide Consolidated Total", align: "left", bold: true },
-    { value: "" },
-    { value: totals.provMale, bold: true },
-    { value: totals.provFemale, bold: true },
-    { value: totals.provTotal, bold: true },
-    { value: totals.otherMale, bold: true },
-    { value: totals.otherFemale, bold: true },
-    { value: totals.otherTotal, bold: true },
-    { value: totals.foreignMale, bold: true },
-    { value: totals.foreignFemale, bold: true },
-    { value: totals.foreignTotal, bold: true },
-    { value: totals.grandMale, bold: true },
-    { value: totals.grandFemale, bold: true },
-    { value: report.totalUnique, bold: true },
+    { value: dotDemographicValue(demographics, "provMale") },
+    { value: dotDemographicValue(demographics, "provFemale") },
+    { value: dotDemographicValue(demographics, "provTotal"), bold: true },
+    { value: dotDemographicValue(demographics, "otherMale") },
+    { value: dotDemographicValue(demographics, "otherFemale") },
+    { value: dotDemographicValue(demographics, "otherTotal"), bold: true },
+    { value: dotDemographicValue(demographics, "foreignMale") },
+    { value: dotDemographicValue(demographics, "foreignFemale") },
+    { value: dotDemographicValue(demographics, "foreignTotal"), bold: true },
+    { value: dotDemographicValue(demographics, "grandMale"), bold: true },
+    { value: dotDemographicValue(demographics, "grandFemale"), bold: true },
   ];
 }
 
@@ -207,7 +169,7 @@ function drawDotTable(commands: PdfCommand[], topY: number, rows: TableCell[][])
 
   rows.forEach((row, rowIndex) => {
     const y = topY - (rowIndex + 1) * rowHeight;
-    if (rowIndex === rows.length - 1 && row[0]?.value === "Citywide Consolidated Total") {
+    if (rowIndex === rows.length - 1 && row[0]?.value === "Consolidated Total") {
       drawFilledRect(commands, tableX, y, sumWidths(columns), rowHeight, 0.88);
     }
     let cellX = tableX;
@@ -246,8 +208,7 @@ function drawFilledRect(commands: PdfCommand[], x: number, y: number, width: num
   commands.push(`${gray} g ${x} ${y} ${width} ${height} re f 0 g`);
 }
 
-function downloadPdf(pages: string[], fileName: string) {
-  const pdf = buildPdf(pages);
+function downloadPdf(pdf: string, fileName: string) {
   const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -271,7 +232,8 @@ function buildPdf(pages: string[]) {
     const pageObjectId = 4 + index * 2;
     const contentObjectId = pageObjectId + 1;
     pageObjectIds.push(pageObjectId);
-    objects[pageObjectId - 1] = `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${FONT_ID} 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
+    objects[pageObjectId - 1] =
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${FONT_ID} 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
     objects[contentObjectId - 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
   });
 
@@ -294,24 +256,22 @@ function buildPdf(pages: string[]) {
 }
 
 function wrapText(text: string, maxChars: number) {
-  return text
-    .split("\n")
-    .flatMap((line) => {
-      const words = line.split(/\s+/).filter(Boolean);
-      const lines: string[] = [];
-      let current = "";
-      words.forEach((word) => {
-        const next = current ? `${current} ${word}` : word;
-        if (next.length > maxChars && current) {
-          lines.push(current);
-          current = word;
-        } else {
-          current = next;
-        }
-      });
-      if (current) lines.push(current);
-      return lines.length ? lines : [""];
+  return text.split("\n").flatMap((line) => {
+    const words = line.split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let current = "";
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > maxChars && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
     });
+    if (current) lines.push(current);
+    return lines.length ? lines : [""];
+  });
 }
 
 function escapePdf(value: string) {

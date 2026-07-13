@@ -7,6 +7,7 @@ import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { useOperationalFinalReports } from "@/shared/hooks/useOperationalSync";
 import type { FinalReport } from "@/shared/types";
 import { FinalReportViewer, ReportStatusBadge } from "../components";
+import { recordedActor, recordedText } from "../utils/reportPresentation";
 
 const MONTH_ORDER = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const EMPTY_FINAL_REPORTS: FinalReport[] = [];
@@ -94,13 +95,13 @@ export function StaffFinalReportsAuditPage() {
                 <tr key={report.id} onClick={() => setSelectedReport(report)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
                   <td className="group-hover:text-tgreen-dark px-6 py-4 font-mono text-xs font-bold text-gray-600 transition-colors">{report.id}</td>
                   <td className="px-6 py-4 font-medium">
-                    {report.title}
+                    {recordedText(report.title, "Not provided")}
                     <div className="mt-0.5 text-[10px] font-normal text-gray-500">
-                      Coverage: {report.period} | Aggregated from {report.enterpriseCount} nodes
+                      Reporting period: {recordedText(report.period, "Not provided")} | Source reports: {report.sources.length}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-xs">{report.generatedOn}</td>
-                  <td className="px-6 py-4 text-xs">{report.preparedBy}</td>
+                  <td className="px-6 py-4 text-xs">{recordedText(report.generatedOn)}</td>
+                  <td className="px-6 py-4 text-xs">{recordedActor(report.preparedBy)}</td>
                   <td className="px-6 py-4 font-mono text-xs">
                     <div>Entry: {report.totalEntry.toLocaleString()}</div>
                     <div>Unique: {report.totalUnique.toLocaleString()}</div>

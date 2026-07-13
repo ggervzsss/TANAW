@@ -14,14 +14,29 @@ export type DotDemographics = {
   grandFemale: number;
 };
 
+export type DotDemographicsResult =
+  | {
+      status: "recorded";
+      label: "Recorded";
+      values: DotDemographics;
+    }
+  | {
+      status: "not-provided";
+      label: "Not provided";
+      values: null;
+    }
+  | {
+      status: "incomplete";
+      label: "Incomplete";
+      values: null;
+    };
+
 const DEMOGRAPHIC_FIELDS: (keyof ReportDemographics)[] = ["thisProvMale", "thisProvFemale", "otherProvMale", "otherProvFemale", "foreignMale", "foreignFemale"];
 
-export function getDotDemographics(total: number, submitted?: Partial<Record<keyof ReportDemographics, number | string>> | null): DotDemographics {
-  return getSubmittedDotDemographics(total, submitted) ?? getEstimatedDotDemographics(total);
-}
-
-function getSubmittedDotDemographics(expectedTotal: number, submitted?: Partial<Record<keyof ReportDemographics, number | string>> | null): DotDemographics | null {
-  if (!submitted || typeof submitted !== "object") return null;
+export function getDotDemographics(total: number, submitted?: Partial<Record<keyof ReportDemographics, number | string>> | null): DotDemographicsResult {
+  if (!submitted || !DEMOGRAPHIC_FIELDS.some((field) => submitted[field] !== undefined)) {
+    return missingDemographics("not-provided");
+  }
 
   const values = DEMOGRAPHIC_FIELDS.reduce<Partial<Record<keyof ReportDemographics, number>>>((next, field) => {
     const value = nonNegativeInteger(submitted[field]);
@@ -29,7 +44,9 @@ function getSubmittedDotDemographics(expectedTotal: number, submitted?: Partial<
     return next;
   }, {});
 
-  if (!DEMOGRAPHIC_FIELDS.every((field) => typeof values[field] === "number")) return null;
+  if (!DEMOGRAPHIC_FIELDS.every((field) => typeof values[field] === "number")) {
+    return missingDemographics("incomplete");
+  }
 
   const thisProvMale = values.thisProvMale ?? 0;
   const thisProvFemale = values.thisProvFemale ?? 0;
@@ -39,46 +56,79 @@ function getSubmittedDotDemographics(expectedTotal: number, submitted?: Partial<
   const foreignFemale = values.foreignFemale ?? 0;
   const submittedTotal = thisProvMale + thisProvFemale + otherProvMale + otherProvFemale + foreignMale + foreignFemale;
 
-  if (submittedTotal !== expectedTotal) return null;
+  if (!Number.isInteger(total) || total < 0 || submittedTotal !== total) {
+    return missingDemographics("incomplete");
+  }
 
   return {
-    provMale: thisProvMale,
-    provFemale: thisProvFemale,
-    provTotal: thisProvMale + thisProvFemale,
-    otherMale: otherProvMale,
-    otherFemale: otherProvFemale,
-    otherTotal: otherProvMale + otherProvFemale,
-    foreignMale,
-    foreignFemale,
-    foreignTotal: foreignMale + foreignFemale,
-    grandMale: thisProvMale + otherProvMale + foreignMale,
-    grandFemale: thisProvFemale + otherProvFemale + foreignFemale,
+    status: "recorded",
+    label: "Recorded",
+    values: {
+      provMale: thisProvMale,
+      provFemale: thisProvFemale,
+      provTotal: thisProvMale + thisProvFemale,
+      otherMale: otherProvMale,
+      otherFemale: otherProvFemale,
+      otherTotal: otherProvMale + otherProvFemale,
+      foreignMale,
+      foreignFemale,
+      foreignTotal: foreignMale + foreignFemale,
+      grandMale: thisProvMale + otherProvMale + foreignMale,
+      grandFemale: thisProvFemale + otherProvFemale + foreignFemale,
+    },
   };
 }
 
-function getEstimatedDotDemographics(total: number): DotDemographics {
-  const provMale = Math.floor(total * 0.65 * 0.48);
-  const provFemale = Math.floor(total * 0.65 * 0.52);
-  const provTotal = provMale + provFemale;
-  const otherMale = Math.floor(total * 0.25 * 0.5);
-  const otherFemale = Math.floor(total * 0.25 * 0.5);
-  const otherTotal = otherMale + otherFemale;
-  const foreignMale = Math.floor(total * 0.1 * 0.55);
-  const foreignFemale = total - provTotal - otherTotal - foreignMale;
-  const foreignTotal = foreignMale + foreignFemale;
+export function combineDotDemographics(results: DotDemographicsResult[]): DotDemographicsResult {
+  if (results.length === 0 || results.every((result) => result.status === "not-provided")) {
+    return missingDemographics("not-provided");
+  }
 
+  if (!results.every((result): result is Extract<DotDemographicsResult, { status: "recorded" }> => result.status === "recorded")) {
+    return missingDemographics("incomplete");
+  }
+
+  const values = results.reduce<DotDemographics>(
+    (total, result) => ({
+      provMale: total.provMale + result.values.provMale,
+      provFemale: total.provFemale + result.values.provFemale,
+      provTotal: total.provTotal + result.values.provTotal,
+      otherMale: total.otherMale + result.values.otherMale,
+      otherFemale: total.otherFemale + result.values.otherFemale,
+      otherTotal: total.otherTotal + result.values.otherTotal,
+      foreignMale: total.foreignMale + result.values.foreignMale,
+      foreignFemale: total.foreignFemale + result.values.foreignFemale,
+      foreignTotal: total.foreignTotal + result.values.foreignTotal,
+      grandMale: total.grandMale + result.values.grandMale,
+      grandFemale: total.grandFemale + result.values.grandFemale,
+    }),
+    emptyDemographics(),
+  );
+
+  return { status: "recorded", label: "Recorded", values };
+}
+
+export function dotDemographicValue(result: DotDemographicsResult, field: keyof DotDemographics): number | string {
+  return result.values?.[field] ?? result.label;
+}
+
+function missingDemographics(status: "not-provided" | "incomplete"): DotDemographicsResult {
+  return status === "not-provided" ? { status, label: "Not provided", values: null } : { status, label: "Incomplete", values: null };
+}
+
+function emptyDemographics(): DotDemographics {
   return {
-    provMale,
-    provFemale,
-    provTotal,
-    otherMale,
-    otherFemale,
-    otherTotal,
-    foreignMale,
-    foreignFemale,
-    foreignTotal,
-    grandMale: provMale + otherMale + foreignMale,
-    grandFemale: provFemale + otherFemale + foreignFemale,
+    provMale: 0,
+    provFemale: 0,
+    provTotal: 0,
+    otherMale: 0,
+    otherFemale: 0,
+    otherTotal: 0,
+    foreignMale: 0,
+    foreignFemale: 0,
+    foreignTotal: 0,
+    grandMale: 0,
+    grandFemale: 0,
   };
 }
 
