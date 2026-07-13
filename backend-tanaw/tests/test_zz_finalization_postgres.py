@@ -1,0 +1,489 @@
+import asyncio
+import os
+from collections.abc import AsyncIterator, Sequence
+from datetime import UTC, datetime
+from uuid import uuid4
+
+import pytest
+import pytest_asyncio
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.events.models import DomainEvent, DomainEventDelivery
+from app.features.final_reports.envelopes import FinalizeReportsCommand
+from app.features.final_reports.models import (
+    FinalReportArtifact,
+    FinalReportCommandReceipt,
+    FinalReportEvent,
+    FinalReportItem,
+    FinalReportMetricFact,
+    FinalReportSourceClaim,
+    FinalReportVersion,
+    ReportFinalization,
+)
+from app.features.final_reports.service import (
+    FinalizationConflict,
+    FinalizationError,
+    finalize_report_command,
+)
+from app.features.reporting.contracts import monthly_reporting_period
+from app.features.reporting.models import (
+    EnterpriseReport,
+    ReportingObligation,
+    ReportingPeriod,
+    ReportMetricFact,
+    ReportRevision,
+)
+from app.features.topology.models import Enterprise, EnterpriseSite
+
+TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
+
+
+def _postgres_async_url(raw_url: str) -> str:
+    normalized = raw_url.strip()
+    if normalized.startswith("postgres://"):
+        normalized = f"postgresql://{normalized.removeprefix('postgres://')}"
+    if normalized.startswith("postgresql://"):
+        normalized = normalized.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if not normalized.startswith("postgresql+asyncpg://"):
+        raise pytest.UsageError(f"{TEST_DATABASE_ENV} must point to PostgreSQL via asyncpg.")
+    return normalized
+
+
+@pytest_asyncio.fixture
+async def finalization_session() -> AsyncIterator[AsyncSession]:
+    raw_url = os.getenv(TEST_DATABASE_ENV)
+    if not raw_url:
+        pytest.skip(f"{TEST_DATABASE_ENV} is not configured.")
+    engine = create_async_engine(_postgres_async_url(raw_url), pool_pre_ping=True)
+    async with engine.connect() as connection:
+        transaction = await connection.begin()
+        session = AsyncSession(bind=connection, expire_on_commit=False)
+        try:
+            yield session
+        finally:
+            await session.close()
+            await transaction.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_finalization_is_atomic_idempotent_and_exact(
+    finalization_session: AsyncSession,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session, barangays=["Poblacion", "Poblacion"]
+    )
+    command = _command(period.id, [source.id for source in sources])
+
+    created = await finalize_report_command(
+        finalization_session,
+        account=staff,
+        command=command,
+        acknowledged_at=period.ends_at,
+    )
+    replayed = created
+    for _ in range(100):
+        replayed = await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=command,
+            acknowledged_at=period.ends_at,
+        )
+
+    assert created.disposition == "created"
+    assert replayed.disposition == "replayed"
+    assert replayed.resource.finalReportVersionId == created.resource.finalReportVersionId
+    assert created.resource.scopeLabel == "Selected enterprises (2)"
+    assert await _count(finalization_session, ReportFinalization) == 1
+    assert await _count(finalization_session, FinalReportVersion) == 1
+    assert await _count(finalization_session, FinalReportSourceClaim) == 2
+    assert await _count(finalization_session, FinalReportItem) == 2
+    assert await _count(finalization_session, FinalReportMetricFact) == 4
+    assert await _count(finalization_session, FinalReportEvent) == 1
+    assert await _count(finalization_session, FinalReportArtifact) == 1
+    assert await _count(finalization_session, FinalReportCommandReceipt) == 1
+    assert await _count(finalization_session, DomainEvent) == 1
+    assert await _count(finalization_session, DomainEventDelivery) == 2
+    for source in sources:
+        report = await finalization_session.get(EnterpriseReport, source.enterprise_report_id)
+        assert report is not None
+        assert report.workflow_state == "consolidated"
+        assert report.logical_version == 3
+
+    conflict_payload = command.model_dump(mode="python")
+    conflict_payload["payload"]["reason"] = "A different effect"
+    with pytest.raises(FinalizationConflict, match="different payload hash"):
+        await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=FinalizeReportsCommand.model_validate(conflict_payload),
+        )
+
+    missing_command = _command(period.id, [str(uuid4())])
+    before = await _count(finalization_session, ReportFinalization)
+    with pytest.raises(FinalizationError, match="Every source revision must exist"):
+        await finalize_report_command(finalization_session, account=staff, command=missing_command)
+    assert await _count(finalization_session, ReportFinalization) == before
+
+    other_finalization = _command(period.id, [sources[0].id])
+    with pytest.raises(FinalizationConflict, match="another finalization"):
+        await finalize_report_command(
+            finalization_session, account=staff, command=other_finalization
+        )
+
+
+@pytest.mark.asyncio
+async def test_scope_completeness_and_exact_current_acceptance_are_enforced(
+    finalization_session: AsyncSession,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session, barangays=["Poblacion", "Poblacion", "San Jose"]
+    )
+    with pytest.raises(FinalizationError, match="does not exactly match"):
+        await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=_command(
+                period.id,
+                [source.id for source in sources[:2]],
+                scope_type="citywide",
+            ),
+        )
+    assert await _count(finalization_session, ReportFinalization) == 0
+    for source in sources:
+        report = await finalization_session.get(EnterpriseReport, source.enterprise_report_id)
+        assert report is not None and report.workflow_state == "accepted"
+
+    barangay = await finalize_report_command(
+        finalization_session,
+        account=staff,
+        command=_command(
+            period.id,
+            [source.id for source in sources[:2]],
+            scope_type="barangay",
+            barangay="poblacion",
+        ),
+    )
+    assert barangay.resource.scopeType == "barangay"
+    assert barangay.resource.scopeLabel == "Poblacion"
+    third_report = await finalization_session.get(EnterpriseReport, sources[2].enterprise_report_id)
+    assert third_report is not None
+    assert third_report.workflow_state == "accepted"
+
+    stale_report = third_report
+    stale_report.workflow_state = "returned"
+    stale_report.accepted_revision_id = None
+    stale_report.logical_version += 1
+    await finalization_session.flush([stale_report])
+    with pytest.raises(FinalizationConflict, match="exact accepted unconsolidated"):
+        await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=_command(period.id, [sources[2].id]),
+        )
+
+
+@pytest.mark.asyncio
+async def test_correction_reuses_owned_sources_and_intentional_omission_stays_consumed(
+    finalization_session: AsyncSession,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session, barangays=["Poblacion", "Poblacion"]
+    )
+    original = await finalize_report_command(
+        finalization_session,
+        account=staff,
+        command=_command(period.id, [source.id for source in sources]),
+    )
+    correction = _command(
+        period.id,
+        [sources[0].id],
+        expected_version=1,
+        target_finalization_id=str(original.resource.reportFinalizationId),
+        reason="Remove a source that was included in error.",
+    )
+    corrected = await finalize_report_command(
+        finalization_session, account=staff, command=correction
+    )
+
+    assert corrected.resource.logicalVersion == 2
+    assert corrected.resource.sourceCount == 1
+    versions = list(
+        await finalization_session.scalars(
+            select(FinalReportVersion).order_by(FinalReportVersion.version_number)
+        )
+    )
+    assert [item.disposition for item in versions] == ["superseded", "current"]
+    assert await _count(finalization_session, FinalReportSourceClaim) == 2
+    omitted_report = await finalization_session.get(
+        EnterpriseReport, sources[1].enterprise_report_id
+    )
+    assert omitted_report is not None
+    assert omitted_report.workflow_state == "consolidated"
+    assert omitted_report.logical_version == 3
+    with pytest.raises(FinalizationConflict, match="another finalization"):
+        await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=_command(period.id, [sources[1].id]),
+        )
+
+
+@pytest.mark.asyncio
+async def test_missing_required_final_metric_rejects_without_consuming_source(
+    finalization_session: AsyncSession,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session, barangays=["Poblacion"], omitted_metric="exits"
+    )
+    with pytest.raises(FinalizationError, match="every required final metric"):
+        await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=_command(period.id, [sources[0].id]),
+        )
+    report = await finalization_session.get(EnterpriseReport, sources[0].enterprise_report_id)
+    assert report is not None and report.workflow_state == "accepted"
+    assert await _count(finalization_session, FinalReportSourceClaim) == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_finalizations_cannot_claim_one_revision() -> None:
+    raw_url = os.getenv(TEST_DATABASE_ENV)
+    if not raw_url:
+        pytest.skip(f"{TEST_DATABASE_ENV} is not configured.")
+    engine = create_async_engine(_postgres_async_url(raw_url), pool_pre_ping=True)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as seed_session:
+        staff, period, sources = await _seed_accepted_sources(
+            seed_session, barangays=["Concurrency"]
+        )
+        await seed_session.commit()
+    commands = [_command(period.id, [sources[0].id]) for _ in range(2)]
+
+    async def run(command: FinalizeReportsCommand) -> object:
+        async with session_factory() as session:
+            try:
+                acknowledgement = await finalize_report_command(
+                    session, account=staff, command=command
+                )
+                await session.commit()
+                return acknowledgement
+            except Exception as exc:  # test captures the competing transaction outcome
+                await session.rollback()
+                return exc
+
+    outcomes = await asyncio.gather(*(run(command) for command in commands))
+    assert sum(not isinstance(item, Exception) for item in outcomes) == 1
+    assert sum(isinstance(item, FinalizationConflict) for item in outcomes) == 1
+    async with session_factory() as verification_session:
+        claim_count = await verification_session.scalar(
+            select(func.count())
+            .select_from(FinalReportSourceClaim)
+            .where(FinalReportSourceClaim.report_revision_id == sources[0].id)
+        )
+        assert claim_count == 1
+    await engine.dispose()
+
+
+async def _seed_accepted_sources(
+    db: AsyncSession,
+    *,
+    barangays: Sequence[str],
+    omitted_metric: str | None = None,
+) -> tuple[Account, ReportingPeriod, list[ReportRevision]]:
+    suffix = uuid4().hex
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    staff = Account(
+        id=str(uuid4()),
+        email=f"final-staff-{suffix}@example.test",
+        password_hash="not-used-by-finalization-test",
+        role=AccountRole.STAFF,
+        display_name="Final Report Staff",
+        title="Tourism Staff",
+        status=AccountStatus.ACTIVE,
+        activated_at=now,
+    )
+    submitter = Account(
+        id=str(uuid4()),
+        email=f"final-submitter-{suffix}@example.test",
+        password_hash="not-used-by-finalization-test",
+        role=AccountRole.ENTERPRISE,
+        display_name="Final Report Submitter",
+        title="Enterprise Manager",
+        status=AccountStatus.ACTIVE,
+        activated_at=now,
+    )
+    canonical = monthly_reporting_period(5000 + uuid4().int % 3000, 5)
+    period = ReportingPeriod(
+        id=str(uuid4()),
+        natural_key=canonical.natural_key,
+        cadence="month",
+        timezone_name=canonical.timezone,
+        local_start_date=canonical.local_start_date,
+        local_end_date=canonical.local_end_date,
+        starts_at=canonical.starts_at,
+        ends_at=canonical.ends_at,
+        submission_opens_at=canonical.ends_at,
+        label=canonical.label,
+    )
+    db.add_all([staff, submitter, period])
+    await db.flush([staff, submitter, period])
+    revisions: list[ReportRevision] = []
+    for index, barangay in enumerate(barangays):
+        enterprise = Enterprise(
+            id=str(uuid4()),
+            official_code=f"FINAL-{suffix}-{index}",
+            name=f"Finalization Enterprise {index}",
+            classification="official",
+            lifecycle_state="active",
+        )
+        site = EnterpriseSite(
+            id=str(uuid4()),
+            enterprise_id=enterprise.id,
+            classification="official",
+            site_code="PRIMARY",
+            name=f"Finalization Site {index}",
+            barangay=barangay,
+            timezone_name="Asia/Manila",
+            building_capacity=100,
+            location_version=1,
+            effective_from=now,
+        )
+        obligation = ReportingObligation(
+            id=str(uuid4()),
+            reporting_period_id=period.id,
+            enterprise_id=enterprise.id,
+            site_id=site.id,
+            classification="official",
+            eligibility_status="eligible",
+            eligibility_basis="registry_snapshot",
+            frozen_barangay=barangay,
+            timezone_name="Asia/Manila",
+            registration_effective_at=now,
+            acceptance_blocked=False,
+        )
+        report_id = str(uuid4())
+        revision_id = str(uuid4())
+        report = EnterpriseReport(
+            id=report_id,
+            reporting_obligation_id=obligation.id,
+            enterprise_id=enterprise.id,
+            site_id=site.id,
+            classification="official",
+            workflow_state="accepted",
+            current_revision_id=revision_id,
+            accepted_revision_id=revision_id,
+            logical_version=2,
+            acceptance_blocked=False,
+        )
+        revision = ReportRevision(
+            id=revision_id,
+            enterprise_report_id=report_id,
+            enterprise_id=enterprise.id,
+            site_id=site.id,
+            classification="official",
+            revision_number=1,
+            local_revision_id=f"local-{suffix}-{index}",
+            idempotency_key=f"report:test:{suffix}-{index}",
+            source_window_start=period.starts_at,
+            source_window_end=period.ends_at,
+            submitted_by_account_id=submitter.id,
+            submitted_at=period.ends_at,
+            received_at=period.ends_at,
+            payload_hash="sha256:" + f"{index + 1:064x}",
+            evidence_status="complete",
+            acceptance_blocked=False,
+            monitored_seconds=100,
+            expected_seconds=100,
+            coverage_gap_count=0,
+            coverage_details_json="[]",
+        )
+        db.add(enterprise)
+        await db.flush([enterprise])
+        db.add(site)
+        await db.flush([site])
+        db.add(obligation)
+        await db.flush([obligation])
+        db.add_all([report, revision])
+        await db.flush([report, revision])
+        metric_specs = [
+            ("entries", 10 + index, "events", "site", "confirmed"),
+            ("exits", 8 + index, "events", "site", "confirmed"),
+            ("peak_occupancy", 5 + index, "people-estimate", "site", "confirmed"),
+            (
+                "unique_visitor_estimate",
+                7 + index,
+                "visitor-estimate",
+                "site",
+                "estimated",
+            ),
+        ]
+        db.add_all(
+            [
+                ReportMetricFact(
+                    id=str(uuid4()),
+                    report_revision_id=revision.id,
+                    classification="official",
+                    definition=definition,
+                    definition_version=1,
+                    value=value,
+                    unit=unit,
+                    grain=grain,
+                    window_start=period.starts_at,
+                    window_end=period.ends_at,
+                    timezone_name="Asia/Manila",
+                    provenance="camera_derived",
+                    quality=quality,
+                    monitored_seconds=100,
+                    expected_seconds=100,
+                    coverage_gap_count=0,
+                )
+                for definition, value, unit, grain, quality in metric_specs
+                if definition != omitted_metric
+            ]
+        )
+        revisions.append(revision)
+    await db.flush()
+    return staff, period, revisions
+
+
+def _command(
+    period_id: str,
+    revision_ids: Sequence[str],
+    *,
+    scope_type: str = "enterprise_selection",
+    barangay: str | None = None,
+    expected_version: int = 0,
+    target_finalization_id: str | None = None,
+    reason: str | None = None,
+) -> FinalizeReportsCommand:
+    command_id = uuid4()
+    return FinalizeReportsCommand.model_validate(
+        {
+            "contractVersion": 2,
+            "commandId": str(command_id),
+            "idempotencyKey": f"final-report:test:{command_id}",
+            "occurredAt": datetime.now(UTC),
+            "expectedVersion": expected_version,
+            "payload": {
+                "targetFinalizationId": target_finalization_id,
+                "reportingPeriodId": period_id,
+                "scope": {"type": scope_type, "barangay": barangay},
+                "reportRevisionIds": sorted(revision_ids),
+                "reason": reason,
+            },
+        }
+    )
+
+
+async def _count(db: AsyncSession, model: type) -> int:
+    value = await db.scalar(select(func.count()).select_from(model))
+    assert isinstance(value, int)
+    return value
