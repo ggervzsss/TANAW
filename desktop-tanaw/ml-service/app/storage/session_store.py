@@ -128,11 +128,25 @@ class SessionStore:
     def cleanup_expired_visitor_metadata(self, now: str | None = None) -> int:
         return self._metrics_store.cleanup_expired_visitor_metadata(now)
 
-    def metrics_summary(self, include_submitted: bool = False) -> dict[str, int | str | None]:
-        return self._metrics_store.metrics_summary(include_submitted=include_submitted)
+    def metrics_summary(
+        self,
+        include_submitted: bool = False,
+        period_id: str | None = None,
+    ) -> dict[str, int | str | None]:
+        return self._metrics_store.metrics_summary(
+            include_submitted=include_submitted,
+            period_id=period_id,
+        )
 
-    def metrics_history(self, include_submitted: bool = False) -> dict[str, Any]:
-        return self._metrics_store.metrics_history(include_submitted=include_submitted)
+    def metrics_history(
+        self,
+        include_submitted: bool = False,
+        period_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._metrics_store.metrics_history(
+            include_submitted=include_submitted,
+            period_id=period_id,
+        )
 
     def record_occupancy_correction(self, **values: Any) -> dict[str, Any]:
         return self._metrics_store.record_occupancy_correction(**values)

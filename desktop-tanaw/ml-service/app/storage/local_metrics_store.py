@@ -7,8 +7,43 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from uuid import uuid4
+
+from app.storage.local_schema import (
+    connect_local_database,
+    initialize_local_database,
+    upsert_reporting_period,
+)
+from app.storage.reporting_periods import (
+    REPORTING_TIMEZONE,
+    ReportingPeriod,
+    monthly_period_for_captured_at,
+    monthly_period_from_id,
+    monthly_period_from_label,
+    parse_captured_at,
+)
+
+_REPORT_SUBMISSION_SELECT = """
+select
+    report_id,
+    period,
+    reporting_period_id,
+    submitted_at,
+    entries,
+    exits,
+    peak_occupancy,
+    unique_count,
+    notes,
+    payload_json,
+    sync_status,
+    source_kind,
+    mock_run_id,
+    synced_at,
+    raw_purged_at
+from report_submissions
+"""
 
 
 @dataclass
@@ -45,10 +80,14 @@ class LocalMetricsStore:
 
         self._database_path = self._root / "tanaw_metrics.sqlite3"
         self._initialized = False
+        self._initialize_lock = Lock()
 
     def append_count_event(self, payload: dict[str, Any], recorded_at: str | None = None) -> str:
         event_id = str(uuid4())
         recorded_at = recorded_at or _utc_now()
+        captured_at = parse_captured_at(recorded_at)
+        reporting_period = monthly_period_for_captured_at(captured_at)
+        business_date = captured_at.astimezone(REPORTING_TIMEZONE).date().isoformat()
         raw_counts = payload.get("counts")
         counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
         direction = payload.get("direction")
@@ -57,11 +96,14 @@ class LocalMetricsStore:
             is_unique_entry = direction == "entry"
 
         with self._connection() as connection:
+            upsert_reporting_period(connection, reporting_period)
             connection.execute(
                 """
                 insert into count_events (
                     event_id,
                     recorded_at,
+                    business_date,
+                    reporting_period_id,
                     camera_id,
                     camera_name,
                     direction,
@@ -78,11 +120,13 @@ class LocalMetricsStore:
                     source_kind,
                     mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_id,
-                    recorded_at,
+                    captured_at.isoformat(),
+                    business_date,
+                    reporting_period.period_id,
                     payload.get("camera_id"),
                     payload.get("camera_name"),
                     direction,
@@ -465,60 +509,134 @@ class LocalMetricsStore:
 
         return [dict(row) for row in rows]
 
-    def metrics_summary(self, include_submitted: bool = False) -> dict[str, int | str | None]:
-        submitted_filter = "" if include_submitted else "where submitted_report_id is null"
+    def metrics_summary(
+        self,
+        include_submitted: bool = False,
+        period_id: str | None = None,
+    ) -> dict[str, int | str | None]:
         with self._connection() as connection:
-            row = connection.execute(
-                f"""
-                select
-                    count(*) as total_events,
-                    sum(case when direction = 'entry' then 1 else 0 end) as entries,
-                    sum(case when direction = 'exit' then 1 else 0 end) as exits,
-                    sum(case when direction = 'entry' and is_unique_entry = 1 then 1 else 0 end) as unique_entries,
-                    sum(case when direction = 'entry' and is_unique_entry = 1 and visitor_id is not null and visitor_id != '' then 1 else 0 end) as confirmed_unique_entries,
-                    sum(case when direction = 'entry' and is_unique_entry = 1 and (visitor_id is null or visitor_id = '') then 1 else 0 end) as degraded_unique_entries,
-                    max(occupancy_count) as peak_occupancy,
-                    max(occupancy_count) as current_occupancy,
-                    min(recorded_at) as first_event_at,
-                    max(recorded_at) as last_event_at
-                from count_events
-                {submitted_filter}
-                """
-            ).fetchone()
+            return self._metrics_summary(
+                connection,
+                include_submitted=include_submitted,
+                period_id=period_id,
+            )
 
-            unsynced_count = connection.execute(
-                "select count(*) from count_events where synced_at is null"
-            ).fetchone()[0]
-            unsubmitted_count = connection.execute(
-                "select count(*) from count_events where submitted_report_id is null"
-            ).fetchone()[0]
-            source_rows = connection.execute(
-                f"""
-                select distinct source_kind, mock_run_id
-                from count_events
-                {submitted_filter}
+    def _metrics_summary(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        include_submitted: bool,
+        period_id: str | None,
+    ) -> dict[str, int | str | None]:
+        selected_period = _resolve_summary_period(
+            connection,
+            include_submitted=include_submitted,
+            requested_period_id=period_id,
+        )
+        scope_conditions: list[str] = []
+        params: list[str] = []
+        if selected_period is None:
+            scope_conditions.append("0 = 1")
+        else:
+            scope_conditions.extend(
+                [
+                    "reporting_period_id = ?",
+                    "recorded_at >= ?",
+                    "recorded_at < ?",
+                ]
+            )
+            params.extend(
+                [
+                    selected_period.period_id,
+                    selected_period.starts_at_utc.isoformat(),
+                    selected_period.ends_at_utc.isoformat(),
+                ]
+            )
+        scope_filter = " and ".join(scope_conditions) or "1 = 1"
+        event_filter = scope_filter
+        if not include_submitted:
+            event_filter = f"submitted_report_id is null and {scope_filter}"
+        row = connection.execute(
+            f"""
+            select
+                count(*) as total_events,
+                sum(case when direction = 'entry' then 1 else 0 end) as entries,
+                sum(case when direction = 'exit' then 1 else 0 end) as exits,
+                sum(case when direction = 'entry' and is_unique_entry = 1 then 1 else 0 end)
+                    as unique_entries,
+                sum(
+                    case
+                        when direction = 'entry'
+                         and is_unique_entry = 1
+                         and visitor_id is not null
+                         and visitor_id != ''
+                        then 1 else 0
+                    end
+                ) as confirmed_unique_entries,
+                sum(
+                    case
+                        when direction = 'entry'
+                         and is_unique_entry = 1
+                         and (visitor_id is null or visitor_id = '')
+                        then 1 else 0
+                    end
+                ) as degraded_unique_entries,
+                max(occupancy_count) as peak_occupancy,
+                min(recorded_at) as first_event_at,
+                max(recorded_at) as last_event_at
+            from count_events
+            where {event_filter}
+            """,
+            params,
+        ).fetchone()
+        unsubmitted_count = connection.execute(
+            f"""
+            select count(*)
+            from count_events
+            where submitted_report_id is null
+              and {scope_filter}
+            """,
+            params,
+        ).fetchone()[0]
+        unsynced_count = connection.execute(
+            f"""
+            select count(*)
+            from count_events
+            where synced_at is null
+              and {scope_filter}
+            """,
+            params,
+        ).fetchone()[0]
+        unclassified_count = connection.execute(
+            "select count(*) from count_events where reporting_period_id is null"
+        ).fetchone()[0]
+        source_rows = connection.execute(
+            f"""
+            select distinct source_kind, mock_run_id
+            from count_events
+            where {event_filter}
+            """,
+            params,
+        ).fetchall()
+        if selected_period is None:
+            correction_delta = 0
+        else:
+            correction_delta = connection.execute(
                 """
-            ).fetchall()
-            payload_rows = connection.execute(
-                f"""
-                select payload_json
-                from count_events
-                {submitted_filter}
-                order by recorded_at asc
-                limit 25
-                """
-            ).fetchall()
-            correction_row = connection.execute(
-                """
-                select coalesce(sum(delta), 0) as correction_delta
+                select coalesce(sum(delta), 0)
                 from occupancy_corrections
-                """
-            ).fetchone()
+                where recorded_at >= ? and recorded_at < ?
+                """,
+                (
+                    selected_period.starts_at_utc.isoformat(),
+                    selected_period.ends_at_utc.isoformat(),
+                ),
+            ).fetchone()[0]
 
         entries = _safe_int(row["entries"])
         exits = _safe_int(row["exits"])
-        correction_delta = _safe_int(correction_row["correction_delta"])
-        current_occupancy = max(0, entries - exits + correction_delta)
+        normalized_correction_delta = _safe_int(correction_delta)
+        current_occupancy = max(0, entries - exits + normalized_correction_delta)
         estimated_unique_count = _safe_int(row["unique_entries"])
         source_kind, mock_run_id = _provenance_for_rows(source_rows)
         return {
@@ -532,19 +650,30 @@ class LocalMetricsStore:
             "degraded_unique_count": _safe_int(row["degraded_unique_entries"]),
             "pending_unique_entries": 0,
             "repeat_entry_count": max(0, entries - estimated_unique_count),
-            "occupancy_correction_delta": correction_delta,
+            "occupancy_correction_delta": normalized_correction_delta,
             "total_events": _safe_int(row["total_events"]),
             "unsubmitted_events": _safe_int(unsubmitted_count),
             "unsynced_events": _safe_int(unsynced_count),
+            "unclassified_events": _safe_int(unclassified_count),
             "first_event_at": row["first_event_at"],
             "last_event_at": row["last_event_at"],
             "source_kind": source_kind,
             "mock_run_id": mock_run_id,
-            "period": _period_for_payload_rows(payload_rows),
+            "period_id": selected_period.period_id if selected_period else None,
+            "period": selected_period.label if selected_period else None,
+            "business_start_date": (
+                selected_period.business_start_date.isoformat() if selected_period else None
+            ),
+            "business_end_date_exclusive": (
+                selected_period.business_end_date_exclusive.isoformat() if selected_period else None
+            ),
         }
 
     def metrics_history(
-        self, include_submitted: bool = False, now: datetime | None = None
+        self,
+        include_submitted: bool = False,
+        now: datetime | None = None,
+        period_id: str | None = None,
     ) -> dict[str, Any]:
         now = _normalize_datetime(now or datetime.now().astimezone())
         local_timezone = now.tzinfo or UTC
@@ -553,13 +682,38 @@ class LocalMetricsStore:
         month_start = today_start - timedelta(days=29)
 
         with self._connection() as connection:
+            selected_period = _resolve_summary_period(
+                connection,
+                include_submitted=include_submitted,
+                requested_period_id=period_id,
+            )
+            conditions = [] if include_submitted else ["submitted_report_id is null"]
+            params: list[str] = []
+            if selected_period is None:
+                conditions.append("0 = 1")
+            else:
+                conditions.extend(
+                    [
+                        "reporting_period_id = ?",
+                        "recorded_at >= ?",
+                        "recorded_at < ?",
+                    ]
+                )
+                params.extend(
+                    [
+                        selected_period.period_id,
+                        selected_period.starts_at_utc.isoformat(),
+                        selected_period.ends_at_utc.isoformat(),
+                    ]
+                )
             rows = connection.execute(
                 f"""
                 select recorded_at, direction, occupancy_count, is_unique_entry
                 from count_events
-                {_submitted_filter_sql(include_submitted)}
+                where {" and ".join(conditions) or "1 = 1"}
                 order by recorded_at asc
-                """
+                """,
+                params,
             ).fetchall()
 
         hourly_buckets = [_MetricsBucket() for _ in range(24)]
@@ -619,51 +773,87 @@ class LocalMetricsStore:
         mock_run_id: str | None = None,
     ) -> dict[str, int | str | None]:
         submitted_at = _utc_now()
-        summary = self.metrics_summary(include_submitted=False)
-        existing_submission = self._report_submission(report_id)
-        existing_period_submission = self._report_submission_for_period(period)
-        if (
-            existing_period_submission is not None
-            and existing_period_submission["report_id"] != report_id
-        ):
-            raise ValueError(f"A report for {period} has already been submitted.")
-        if existing_submission is not None and metrics is None:
-            summary = {
-                **summary,
-                "entries": existing_submission["entries"],
-                "exits": existing_submission["exits"],
-                "peak_occupancy": existing_submission["peak_occupancy"],
-                "current_occupancy": max(
-                    0, existing_submission["entries"] - existing_submission["exits"]
-                ),
-                "unique_count": existing_submission["unique_count"],
-            }
-        if metrics is not None:
-            summary = _summary_with_report_metrics(summary, metrics)
         report_payload = payload or {}
         payload_status = (
             report_payload.get("status") if isinstance(report_payload.get("status"), str) else None
         )
-        should_consume_open_events = existing_submission is None and payload_status != "Resubmitted"
-        resolved_source_kind = source_kind or (
-            str(existing_submission["source_kind"])
-            if existing_submission is not None and existing_submission["source_kind"]
-            else str(summary["source_kind"])
-        )
-        resolved_mock_run_id = mock_run_id or (
-            str(existing_submission["mock_run_id"])
-            if existing_submission is not None and existing_submission["mock_run_id"]
-            else str(summary["mock_run_id"])
-            if summary["mock_run_id"]
-            else None
-        )
+        with self._connection(immediate=True) as connection:
+            existing_submission = self._report_submission_from_connection(connection, report_id)
+            reporting_period = _resolve_report_period(
+                connection,
+                period=period,
+                existing_submission=existing_submission,
+            )
+            upsert_reporting_period(connection, reporting_period)
+            existing_period_submission = self._report_submission_for_period_from_connection(
+                connection,
+                reporting_period.period_id,
+            )
+            if (
+                existing_period_submission is not None
+                and existing_period_submission["report_id"] != report_id
+            ):
+                raise ValueError(
+                    f"A report for {reporting_period.label} has already been submitted."
+                )
 
-        with self._connection() as connection:
+            summary = self._metrics_summary(
+                connection,
+                include_submitted=False,
+                period_id=reporting_period.period_id,
+            )
+            if existing_submission is not None and metrics is None:
+                summary = {
+                    **summary,
+                    "entries": existing_submission["entries"],
+                    "exits": existing_submission["exits"],
+                    "peak_occupancy": existing_submission["peak_occupancy"],
+                    "current_occupancy": max(
+                        0, existing_submission["entries"] - existing_submission["exits"]
+                    ),
+                    "unique_count": existing_submission["unique_count"],
+                }
+            if metrics is not None:
+                summary = _summary_with_report_metrics(summary, metrics)
+
+            should_consume_open_events = (
+                existing_submission is None and payload_status != "Resubmitted"
+            )
+            if should_consume_open_events:
+                unclassified_official_events = connection.execute(
+                    """
+                    select count(*)
+                    from count_events
+                    where submitted_report_id is null
+                      and reporting_period_id is null
+                      and source_kind in ('real', 'hybrid')
+                    """
+                ).fetchone()[0]
+                if unclassified_official_events:
+                    raise ValueError(
+                        "Official report submission is blocked because one or more open "
+                        "events have no reporting period. Repair or quarantine those events "
+                        "instead of assigning them to the current month."
+                    )
+
+            resolved_source_kind = source_kind or (
+                str(existing_submission["source_kind"])
+                if existing_submission is not None and existing_submission["source_kind"]
+                else str(summary["source_kind"])
+            )
+            resolved_mock_run_id = mock_run_id or (
+                str(existing_submission["mock_run_id"])
+                if existing_submission is not None and existing_submission["mock_run_id"]
+                else str(summary["mock_run_id"])
+                if summary["mock_run_id"]
+                else None
+            )
             connection.execute(
                 """
-                insert or replace into report_submissions (
+                insert into report_submissions (
                     report_id,
                     period,
+                    reporting_period_id,
                     submitted_at,
                     entries,
                     exits,
@@ -675,11 +865,26 @@ class LocalMetricsStore:
                     source_kind,
                     mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(report_id) do update set
+                    period = excluded.period,
+                    reporting_period_id = excluded.reporting_period_id,
+                    submitted_at = excluded.submitted_at,
+                    entries = excluded.entries,
+                    exits = excluded.exits,
+                    peak_occupancy = excluded.peak_occupancy,
+                    unique_count = excluded.unique_count,
+                    notes = excluded.notes,
+                    payload_json = excluded.payload_json,
+                    sync_status = excluded.sync_status,
+                    source_kind = excluded.source_kind,
+                    mock_run_id = excluded.mock_run_id,
+                    synced_at = null
                 """,
                 (
                     report_id,
-                    period,
+                    reporting_period.label,
+                    reporting_period.period_id,
                     submitted_at,
                     summary["entries"],
                     summary["exits"],
@@ -698,13 +903,23 @@ class LocalMetricsStore:
                     update count_events
                     set submitted_report_id = ?
                     where submitted_report_id is null
+                      and reporting_period_id = ?
+                      and recorded_at >= ?
+                      and recorded_at < ?
                     """,
-                    (report_id,),
+                    (
+                        report_id,
+                        reporting_period.period_id,
+                        reporting_period.starts_at_utc.isoformat(),
+                        reporting_period.ends_at_utc.isoformat(),
+                    ),
                 )
 
         return {
             **summary,
             "report_id": report_id,
+            "period_id": reporting_period.period_id,
+            "period": reporting_period.label,
             "submitted_at": submitted_at,
             "sync_status": "pending_cloud_sync",
         }
@@ -778,6 +993,13 @@ class LocalMetricsStore:
         camera_name: str | None,
         period: str,
     ) -> dict[str, int | str | None]:
+        reporting_period = monthly_period_from_label(period)
+        if reporting_period is None and period.strip().lower() == "current period":
+            reporting_period = monthly_period_for_captured_at(datetime.now(UTC))
+        if reporting_period is None:
+            raise ValueError(
+                "Simulation reporting period must identify one complete calendar month."
+            )
         with self._connection() as connection:
             existing_open_events = connection.execute(
                 """
@@ -788,31 +1010,35 @@ class LocalMetricsStore:
                 """,
                 (mock_run_id,),
             ).fetchone()[0]
-            existing_open_period = _period_for_payload_rows(
-                connection.execute(
-                    """
-                    select payload_json
-                    from count_events
-                    where mock_run_id = ?
-                      and submitted_report_id is null
-                    order by recorded_at asc
-                    limit 25
-                    """,
-                    (mock_run_id,),
-                ).fetchall()
-            )
+            existing_open_period = connection.execute(
+                """
+                select reporting_period_id
+                from count_events
+                where mock_run_id = ?
+                  and submitted_report_id is null
+                order by recorded_at desc
+                limit 1
+                """,
+                (mock_run_id,),
+            ).fetchone()
             existing_period_report = connection.execute(
                 """
                 select count(*)
                 from report_submissions
                 where mock_run_id = ?
-                  and period = ?
+                  and reporting_period_id = ?
                 """,
-                (mock_run_id, period),
+                (mock_run_id, reporting_period.period_id),
             ).fetchone()[0]
-        if existing_period_report or (existing_open_events and existing_open_period == period):
+        if existing_period_report or (
+            existing_open_events
+            and existing_open_period is not None
+            and existing_open_period["reporting_period_id"] == reporting_period.period_id
+        ):
             return {
-                **self.metrics_summary(include_submitted=False),
+                **self.metrics_summary(
+                    include_submitted=False, period_id=reporting_period.period_id
+                ),
                 "prepared": False,
             }
 
@@ -822,7 +1048,17 @@ class LocalMetricsStore:
         exit_total = max(0, min(exits, entry_total))
         unique_total = max(0, min(unique_count, entry_total))
         peak_limit = max(1, peak_occupancy)
-        start = datetime.now(UTC) - timedelta(days=20)
+        start = reporting_period.starts_at_utc + timedelta(hours=1)
+        available_seconds = max(
+            1,
+            int(
+                (
+                    reporting_period.ends_at_utc
+                    - reporting_period.starts_at_utc
+                    - timedelta(hours=2)
+                ).total_seconds()
+            ),
+        )
         total = entry_total + exit_total
         remaining_entries = entry_total
         remaining_exits = exit_total
@@ -853,9 +1089,10 @@ class LocalMetricsStore:
                 is_unique = False
                 visitor_id = None
 
-            recorded_at = (
-                start + timedelta(seconds=(index + 1) * max(1, int((20 * 86400) / max(total, 1))))
-            ).isoformat()
+            recorded_at = start + timedelta(
+                seconds=(index + 1) * max(1, int(available_seconds / max(total, 1)))
+            )
+            business_date = recorded_at.astimezone(REPORTING_TIMEZONE).date().isoformat()
             event_id = str(uuid4())
             payload = {
                 "camera_id": camera_id,
@@ -873,7 +1110,8 @@ class LocalMetricsStore:
                 else ("degraded" if is_unique else None),
                 "source_kind": "mock",
                 "mock_run_id": mock_run_id,
-                "period": period,
+                "period": reporting_period.label,
+                "period_id": reporting_period.period_id,
                 "counts": {
                     "entry": current_entries,
                     "exit": current_exits,
@@ -883,7 +1121,9 @@ class LocalMetricsStore:
             rows.append(
                 (
                     event_id,
-                    recorded_at,
+                    recorded_at.isoformat(),
+                    business_date,
+                    reporting_period.period_id,
                     camera_id,
                     camera_name,
                     direction,
@@ -903,20 +1143,22 @@ class LocalMetricsStore:
             )
 
         with self._connection() as connection:
+            upsert_reporting_period(connection, reporting_period)
             connection.executemany(
                 """
                 insert into count_events (
-                    event_id, recorded_at, camera_id, camera_name, direction, track_id,
+                    event_id, recorded_at, business_date, reporting_period_id,
+                    camera_id, camera_name, direction, track_id,
                     entry_count, exit_count, occupancy_count, visitor_id, is_unique_entry,
                     reid_score, reid_decision, identity_confidence, payload_json,
                     source_kind, mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
         return {
-            **self.metrics_summary(include_submitted=False),
+            **self.metrics_summary(include_submitted=False, period_id=reporting_period.period_id),
             "prepared": True,
         }
 
@@ -996,52 +1238,31 @@ class LocalMetricsStore:
 
     def _report_submission(self, report_id: str) -> dict[str, Any] | None:
         with self._connection() as connection:
-            row = connection.execute(
-                """
-                select
-                    report_id,
-                    period,
-                    submitted_at,
-                    entries,
-                    exits,
-                    peak_occupancy,
-                    unique_count,
-                    notes,
-                    payload_json,
-                    sync_status,
-                    source_kind,
-                    mock_run_id,
-                    synced_at,
-                    raw_purged_at
-                from report_submissions
-                where report_id = ?
-                """,
-                (report_id,),
-            ).fetchone()
+            return self._report_submission_from_connection(connection, report_id)
 
+    def _report_submission_from_connection(
+        self, connection: sqlite3.Connection, report_id: str
+    ) -> dict[str, Any] | None:
+        row = connection.execute(
+            f"""
+            {_REPORT_SUBMISSION_SELECT}
+            where report_id = ?
+            """,
+            (report_id,),
+        ).fetchone()
         return _report_submission_row(row) if row is not None else None
 
     def _report_submission_for_period(self, period: str) -> dict[str, Any] | None:
         with self._connection() as connection:
+            parsed_period = monthly_period_from_label(period)
+            if parsed_period is not None:
+                return self._report_submission_for_period_from_connection(
+                    connection, parsed_period.period_id
+                )
             row = connection.execute(
-                """
-                select
-                    report_id,
-                    period,
-                    submitted_at,
-                    entries,
-                    exits,
-                    peak_occupancy,
-                    unique_count,
-                    notes,
-                    payload_json,
-                    sync_status,
-                    source_kind,
-                    mock_run_id,
-                    synced_at,
-                    raw_purged_at
-                from report_submissions
-                where period = ?
+                f"""
+                {_REPORT_SUBMISSION_SELECT}
+                where reporting_period_id is null and period = ?
                 order by submitted_at desc
                 limit 1
                 """,
@@ -1049,27 +1270,26 @@ class LocalMetricsStore:
             ).fetchone()
         return _report_submission_row(row) if row is not None else None
 
+    def _report_submission_for_period_from_connection(
+        self, connection: sqlite3.Connection, period_id: str
+    ) -> dict[str, Any] | None:
+        row = connection.execute(
+            f"""
+            {_REPORT_SUBMISSION_SELECT}
+            where reporting_period_id = ?
+            order by submitted_at desc
+            limit 1
+            """,
+            (period_id,),
+        ).fetchone()
+        return _report_submission_row(row) if row is not None else None
+
     def list_report_submissions(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
         with self._connection() as connection:
             rows = connection.execute(
-                """
-                select
-                    report_id,
-                    period,
-                    submitted_at,
-                    entries,
-                    exits,
-                    peak_occupancy,
-                    unique_count,
-                    notes,
-                    payload_json,
-                    sync_status,
-                    source_kind,
-                    mock_run_id,
-                    synced_at,
-                    raw_purged_at
-                from report_submissions
+                f"""
+                {_REPORT_SUBMISSION_SELECT}
                 order by submitted_at desc
                 limit ?
                 """,
@@ -1079,202 +1299,29 @@ class LocalMetricsStore:
         return [_report_submission_row(row) for row in rows]
 
     @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
+    def _connection(self, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
         self._initialize()
-        connection = sqlite3.connect(self._database_path)
-        connection.row_factory = sqlite3.Row
+        connection = connect_local_database(self._database_path)
         try:
-            connection.execute("pragma foreign_keys = on")
+            if immediate:
+                connection.execute("begin immediate")
             yield connection
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
     def _initialize(self) -> None:
         if self._initialized:
             return
-
-        self._root.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self._database_path)
-        connection.row_factory = sqlite3.Row
-        try:
-            connection.executescript(
-                """
-                create table if not exists count_events (
-                    id integer primary key autoincrement,
-                    event_id text not null unique,
-                    recorded_at text not null,
-                    camera_id integer,
-                    camera_name text,
-                    direction text not null check (direction in ('entry', 'exit')),
-                    track_id integer,
-                    entry_count integer not null default 0,
-                    exit_count integer not null default 0,
-                    occupancy_count integer not null default 0,
-                    visitor_id text,
-                    is_unique_entry integer not null default 0,
-                    reid_score real,
-                    reid_decision text,
-                    identity_confidence text,
-                    source_kind text not null default 'real',
-                    mock_run_id text,
-                    payload_json text not null,
-                    submitted_report_id text,
-                    synced_at text
-                );
-
-                create index if not exists idx_count_events_recorded_at on count_events(recorded_at);
-                create index if not exists idx_count_events_submitted_report_id on count_events(submitted_report_id);
-                create index if not exists idx_count_events_synced_at on count_events(synced_at);
-
-                create table if not exists count_snapshots (
-                    id integer primary key autoincrement,
-                    recorded_at text not null,
-                    camera_id integer,
-                    camera_name text,
-                    entry_count integer not null default 0,
-                    exit_count integer not null default 0,
-                    occupancy_count integer not null default 0,
-                    running integer not null default 0,
-                    status text,
-                    error text,
-                    source_kind text not null default 'real',
-                    mock_run_id text,
-                    payload_json text not null
-                );
-
-                create index if not exists idx_count_snapshots_recorded_at on count_snapshots(recorded_at);
-
-                create table if not exists report_submissions (
-                    report_id text primary key,
-                    period text not null,
-                    submitted_at text not null,
-                    entries integer not null default 0,
-                    exits integer not null default 0,
-                    peak_occupancy integer not null default 0,
-                    unique_count integer not null default 0,
-                    notes text,
-                    payload_json text not null,
-                    sync_status text not null default 'pending_cloud_sync',
-                    source_kind text not null default 'real',
-                    mock_run_id text,
-                    synced_at text,
-                    raw_purged_at text
-                );
-
-                create table if not exists occupancy_corrections (
-                    correction_id text primary key,
-                    enterprise_id text,
-                    camera_id integer,
-                    old_occupancy integer not null default 0,
-                    new_occupancy integer not null default 0,
-                    delta integer not null default 0,
-                    reason text not null,
-                    actor_id text,
-                    actor_name text,
-                    source_kind text not null default 'real',
-                    mock_run_id text,
-                    recorded_at text not null,
-                    payload_json text not null
-                );
-
-                create index if not exists idx_occupancy_corrections_recorded_at
-                    on occupancy_corrections(recorded_at);
-                create index if not exists idx_occupancy_corrections_source
-                    on occupancy_corrections(source_kind, mock_run_id);
-
-                create table if not exists visitor_identities (
-                    visitor_id text primary key,
-                    business_date text not null,
-                    camera_id integer,
-                    first_seen_at text not null,
-                    last_seen_at text not null,
-                    representative_embedding blob not null,
-                    embedding_dim integer not null,
-                    embedding_count integer not null default 1,
-                    model_name text not null,
-                    expires_at text not null
-                );
-
-                create index if not exists idx_visitor_identities_business_date on visitor_identities(business_date);
-                create index if not exists idx_visitor_identities_expires_at on visitor_identities(expires_at);
-
-                create table if not exists visitor_model_embeddings (
-                    visitor_id text not null,
-                    model_name text not null,
-                    representative_embedding blob not null,
-                    embedding_dim integer not null,
-                    embedding_count integer not null default 1,
-                    updated_at text not null,
-                    primary key (visitor_id, model_name),
-                    foreign key (visitor_id) references visitor_identities(visitor_id) on delete cascade
-                );
-
-                create index if not exists idx_visitor_model_embeddings_model on visitor_model_embeddings(model_name);
-
-                create table if not exists visitor_sightings (
-                    sighting_id text primary key,
-                    visitor_id text not null,
-                    recorded_at text not null,
-                    business_date text not null,
-                    camera_id integer,
-                    track_id integer,
-                    direction text not null check (direction in ('entry', 'exit')),
-                    reid_score real,
-                    reid_decision text not null,
-                    identity_confidence text not null,
-                    detection_confidence real,
-                    bbox_json text,
-                    payload_json text not null,
-                    foreign key (visitor_id) references visitor_identities(visitor_id)
-                );
-
-                create index if not exists idx_visitor_sightings_business_date on visitor_sightings(business_date);
-                """
-            )
-            _ensure_column(connection, "count_events", "visitor_id", "text")
-            _ensure_column(
-                connection, "count_events", "is_unique_entry", "integer not null default 0"
-            )
-            _ensure_column(connection, "count_events", "reid_score", "real")
-            _ensure_column(connection, "count_events", "reid_decision", "text")
-            _ensure_column(connection, "count_events", "identity_confidence", "text")
-            _ensure_column(
-                connection, "count_events", "source_kind", "text not null default 'real'"
-            )
-            _ensure_column(connection, "count_events", "mock_run_id", "text")
-            _ensure_column(
-                connection, "count_snapshots", "source_kind", "text not null default 'real'"
-            )
-            _ensure_column(connection, "count_snapshots", "mock_run_id", "text")
-            _ensure_column(
-                connection, "report_submissions", "source_kind", "text not null default 'real'"
-            )
-            _ensure_column(connection, "report_submissions", "mock_run_id", "text")
-            _ensure_column(connection, "report_submissions", "raw_purged_at", "text")
-            _ensure_column(connection, "occupancy_corrections", "enterprise_id", "text")
-            _ensure_column(
-                connection,
-                "occupancy_corrections",
-                "source_kind",
-                "text not null default 'real'",
-            )
-            _ensure_column(connection, "occupancy_corrections", "mock_run_id", "text")
-            connection.execute(
-                """
-                update count_events
-                set is_unique_entry = 1
-                where direction = 'entry'
-                    and reid_decision is null
-                    and (visitor_id is null or visitor_id = '')
-                    and is_unique_entry = 0
-                """
-            )
-            connection.commit()
-        finally:
-            connection.close()
-
-        self._initialized = True
+        with self._initialize_lock:
+            if self._initialized:
+                return
+            self._root.mkdir(parents=True, exist_ok=True)
+            initialize_local_database(self._database_path)
+            self._initialized = True
 
 
 def _utc_now() -> str:
@@ -1323,20 +1370,92 @@ def _provenance_for_rows(rows: list[sqlite3.Row]) -> tuple[str, str | None]:
     return source_kind, run_ids.pop() if len(run_ids) == 1 else None
 
 
-def _period_for_payload_rows(rows: list[sqlite3.Row]) -> str | None:
-    for row in rows:
+def _resolve_summary_period(
+    connection: sqlite3.Connection,
+    *,
+    include_submitted: bool,
+    requested_period_id: str | None,
+) -> ReportingPeriod | None:
+    if requested_period_id is not None:
+        period = monthly_period_from_id(requested_period_id)
+        if period is None:
+            raise ValueError("Reporting period ID must use month:Asia/Manila:YYYY-MM.")
+        return period
+
+    submitted_filter = "" if include_submitted else "and submitted_report_id is null"
+    row = connection.execute(
+        f"""
+        select reporting_period_id
+        from count_events
+        where reporting_period_id is not null
+          {submitted_filter}
+        order by recorded_at desc
+        limit 1
+        """
+    ).fetchone()
+    if row is None:
+        correction_row = connection.execute(
+            """
+            select recorded_at
+            from occupancy_corrections
+            order by recorded_at desc
+            limit 1
+            """
+        ).fetchone()
+        if correction_row is None:
+            return None
         try:
-            payload = json.loads(str(row["payload_json"]))
-        except (json.JSONDecodeError, TypeError):
-            continue
-        period = payload.get("period") if isinstance(payload, dict) else None
-        if isinstance(period, str) and period.strip():
-            return period
-    return None
+            return monthly_period_for_captured_at(str(correction_row["recorded_at"]))
+        except ValueError:
+            return None
+    period = monthly_period_from_id(str(row["reporting_period_id"]))
+    if period is None:
+        raise RuntimeError(
+            f"Local event references an invalid reporting period: {row['reporting_period_id']}"
+        )
+    return period
 
 
-def _submitted_filter_sql(include_submitted: bool) -> str:
-    return "" if include_submitted else "where submitted_report_id is null"
+def _resolve_report_period(
+    connection: sqlite3.Connection,
+    *,
+    period: str,
+    existing_submission: dict[str, Any] | None,
+) -> ReportingPeriod:
+    parsed_period = monthly_period_from_label(period)
+    if parsed_period is not None:
+        return parsed_period
+
+    if existing_submission is not None and existing_submission.get("period_id"):
+        existing_period = monthly_period_from_id(str(existing_submission["period_id"]))
+        if existing_period is not None:
+            return existing_period
+
+    if period.strip().lower() != "current period":
+        raise ValueError(
+            "Reporting period must identify one complete calendar month; "
+            "unrecognized labels are never assigned to the current month."
+        )
+
+    rows = connection.execute(
+        """
+        select distinct reporting_period_id
+        from count_events
+        where submitted_report_id is null
+          and reporting_period_id is not null
+        order by reporting_period_id
+        """
+    ).fetchall()
+    period_ids = [str(row["reporting_period_id"]) for row in rows]
+    if len(period_ids) != 1:
+        raise ValueError(
+            "Current Period is ambiguous. Select an explicit reporting month; "
+            f"found {len(period_ids)} open reporting periods."
+        )
+    resolved = monthly_period_from_id(period_ids[0])
+    if resolved is None:
+        raise RuntimeError(f"Local event references an invalid reporting period: {period_ids[0]}")
+    return resolved
 
 
 def _safe_int(value: Any) -> int:
@@ -1347,18 +1466,6 @@ def _safe_float(value: Any) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
-
-
-def _ensure_column(
-    connection: sqlite3.Connection, table_name: str, column_name: str, definition: str
-) -> None:
-    existing_columns = {
-        row["name"] for row in connection.execute(f"pragma table_info({table_name})").fetchall()
-    }
-    if column_name in existing_columns:
-        return
-
-    connection.execute(f"alter table {table_name} add column {column_name} {definition}")
 
 
 def _parse_recorded_at(value: Any) -> datetime:
@@ -1411,6 +1518,7 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "report_id": row["report_id"],
         "period": row["period"],
+        "period_id": row["reporting_period_id"],
         "submitted_at": row["submitted_at"],
         "entries": _safe_int(row["entries"]),
         "exits": _safe_int(row["exits"]),

@@ -26,7 +26,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.record_report_submission("REP-001", "June 2026", payload={"source": "test"})
 
-            with self.assertRaisesRegex(ValueError, "June 2026"):
+            with self.assertRaisesRegex(ValueError, "Jun 1 - Jun 30, 2026"):
                 store.record_report_submission("REP-002", "June 2026", payload={"source": "test"})
 
     def test_count_events_are_summarized_and_marked_submitted(self) -> None:
@@ -160,9 +160,15 @@ class LocalMetricsStoreTest(unittest.TestCase):
     def test_resubmitting_existing_report_uses_report_metrics_not_current_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))
-            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
+            store.append_count_event(
+                _event("entry", entry=1, exit=0, occupancy=1),
+                "2026-06-15T04:00:00+00:00",
+            )
             store.record_report_submission("REP-001", "June 2026", "first", {"notes": "first"})
-            store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
+            store.append_count_event(
+                _event("entry", entry=2, exit=0, occupancy=2),
+                "2026-07-15T04:00:00+00:00",
+            )
 
             resubmission = store.record_report_submission(
                 "REP-001",
