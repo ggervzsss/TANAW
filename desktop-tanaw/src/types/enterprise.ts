@@ -23,6 +23,11 @@ export type DemoBreakdown = {
   foreignFemale: string;
 };
 
+export type DemographicEvidence = {
+  provenance: "operator_entered";
+  quality: "confirmed" | "degraded" | "estimated";
+};
+
 export type AuditEntry = {
   time: string;
   action: string;
@@ -45,6 +50,7 @@ export type ReportRecord = {
   submittedAt?: string;
   syncStatus?: string;
   demo?: DemoBreakdown;
+  demographicEvidence?: DemographicEvidence;
   notes?: string;
   auditTrail?: AuditEntry[];
   remarks?: string | null;

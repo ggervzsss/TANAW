@@ -8,13 +8,61 @@ from typing import Any
 
 from app.storage.local_metrics_store import LocalMetricsStore
 from app.storage.local_schema import connect_local_database
-from app.storage.report_ledger_schema import canonical_hash
+from app.storage.report_ledger_schema import build_revision_document, canonical_hash
 
 JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
 
 
 class LocalReportOutboxTest(unittest.TestCase):
+    def test_raw_demographic_counts_do_not_gain_invented_evidence_metadata(self) -> None:
+        document = _revision_document(
+            {
+                "demo": {
+                    "thisProvMale": "7",
+                    "thisProvFemale": "3",
+                }
+            }
+        )
+
+        self.assertEqual(document["payload"]["demographicFacts"], [])
+        self.assertNotIn("operator_entered", json.dumps(document["payload"]["demographicFacts"]))
+        self.assertNotIn("confirmed", json.dumps(document["payload"]["demographicFacts"]))
+
+    def test_explicit_demographic_evidence_is_preserved_and_unsupported_facts_are_omitted(
+        self,
+    ) -> None:
+        confirmed_fact = {
+            "dimension": "residence_sex",
+            "value": "this_province_male",
+            "count": 7,
+            "provenance": "operator_entered",
+            "quality": "confirmed",
+        }
+        estimated_fact = {
+            "dimension": "residence_sex",
+            "value": "foreign_female",
+            "count": 2,
+            "provenance": "operator_entered",
+            "quality": "estimated",
+        }
+        document = _revision_document(
+            {
+                "demographicFacts": [
+                    confirmed_fact,
+                    estimated_fact,
+                    {**confirmed_fact, "value": "other_province_male", "quality": None},
+                    {**confirmed_fact, "value": "other_province_female", "count": "4"},
+                    {**confirmed_fact, "value": "foreign_male", "count": 9_007_199_254_740_992},
+                ]
+            }
+        )
+
+        self.assertEqual(
+            document["payload"]["demographicFacts"],
+            [confirmed_fact, estimated_fact],
+        )
+
     def test_official_report_rejects_camera_without_central_uuid_binding(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
@@ -502,6 +550,29 @@ def submission_payload(row: sqlite3.Row) -> dict[str, Any]:
     value = json.loads(str(row["payload_json"]))
     assert isinstance(value, dict)
     return value
+
+
+def _revision_document(payload: dict[str, Any]) -> dict[str, Any]:
+    return build_revision_document(
+        revision_id="11111111-1111-4111-8111-111111111111",
+        report_id="REP-JUNE",
+        revision_number=1,
+        command_id="22222222-2222-4222-8222-222222222222",
+        idempotency_key=("report:REP-JUNE:11111111-1111-4111-8111-111111111111"),
+        expected_version=0,
+        period_id=JUNE_PERIOD_ID,
+        period_label="June 2026",
+        submitted_at="2026-07-01T00:00:00Z",
+        entries=10,
+        exits=2,
+        peak_occupancy=8,
+        unique_count=10,
+        notes=None,
+        payload=payload,
+        source_kind="real",
+        mock_run_id=None,
+        source_batches=[],
+    )
 
 
 def _event(

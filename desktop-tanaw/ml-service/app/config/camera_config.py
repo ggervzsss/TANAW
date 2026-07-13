@@ -430,6 +430,26 @@ class ReportSourceWindow(BaseModel):
     end: datetime
 
 
+_REPORT_DEMOGRAPHIC_FIELDS = {
+    "thisProvMale",
+    "thisProvFemale",
+    "otherProvMale",
+    "otherProvFemale",
+    "foreignMale",
+    "foreignFemale",
+}
+_REPORT_DEMOGRAPHIC_VALUES = {
+    "this_province_male",
+    "this_province_female",
+    "other_province_male",
+    "other_province_female",
+    "foreign_male",
+    "foreign_female",
+}
+_REPORT_DEMOGRAPHIC_QUALITIES = {"confirmed", "degraded", "estimated"}
+_MAX_REPORT_DEMOGRAPHIC_COUNT = 2_147_483_647
+
+
 class ReportSubmissionRequest(BaseModel):
     report_id: str = Field(..., min_length=3, max_length=80)
     period_id: str = Field(..., min_length=1, max_length=80)
@@ -448,22 +468,66 @@ class ReportSubmissionRequest(BaseModel):
         period_submission_error = reporting_period_submission_error(self.period_id)
         if period_submission_error:
             raise ValueError(period_submission_error)
-        demo = (self.payload or {}).get("demo")
-        fields = (
-            "thisProvMale",
-            "thisProvFemale",
-            "otherProvMale",
-            "otherProvFemale",
-            "foreignMale",
-            "foreignFemale",
-        )
-        if not isinstance(demo, dict) or any(
-            str(demo.get(field, "")).strip() == "" for field in fields
-        ):
-            raise ValueError("All demographics fields are required.")
-        if any(not str(demo[field]).strip().isdigit() for field in fields):
-            raise ValueError("Demographics values must be non-negative whole numbers.")
+        _validate_report_demographics(self.payload or {})
         return self
+
+
+def _validate_report_demographics(payload: dict[Any, Any]) -> None:
+    demo = payload.get("demo")
+    if demo is not None and not isinstance(demo, dict):
+        raise ValueError("Report demographics must be an object when provided.")
+    if isinstance(demo, dict):
+        for field in _REPORT_DEMOGRAPHIC_FIELDS:
+            if field not in demo or demo[field] is None or str(demo[field]).strip() == "":
+                continue
+            value = demo[field]
+            if isinstance(value, bool):
+                raise ValueError("Demographics values must be non-negative safe whole numbers.")
+            if isinstance(value, int):
+                valid_value = 0 <= value <= _MAX_REPORT_DEMOGRAPHIC_COUNT
+            elif isinstance(value, str) and value.strip().isdigit():
+                valid_value = int(value.strip()) <= _MAX_REPORT_DEMOGRAPHIC_COUNT
+            else:
+                valid_value = False
+            if not valid_value:
+                raise ValueError("Demographics values must be non-negative safe whole numbers.")
+
+    facts = payload.get("demographicFacts")
+    if facts is None:
+        return
+    if not isinstance(facts, list):
+        raise ValueError("Demographic facts must be a list when provided.")
+
+    seen: set[tuple[str, str]] = set()
+    for fact in facts:
+        if not isinstance(fact, dict):
+            raise ValueError("Each demographic fact must be an object.")
+        dimension = fact.get("dimension")
+        value = fact.get("value")
+        count = fact.get("count")
+        provenance = fact.get("provenance")
+        quality = fact.get("quality")
+        if (
+            dimension != "residence_sex"
+            or not isinstance(value, str)
+            or value not in _REPORT_DEMOGRAPHIC_VALUES
+        ):
+            raise ValueError("Demographic facts must use a supported dimension and value.")
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+            or count < 0
+            or count > _MAX_REPORT_DEMOGRAPHIC_COUNT
+        ):
+            raise ValueError("Demographic fact counts must be non-negative safe whole numbers.")
+        if provenance != "operator_entered":
+            raise ValueError("Demographic fact provenance must be explicitly operator_entered.")
+        if not isinstance(quality, str) or quality not in _REPORT_DEMOGRAPHIC_QUALITIES:
+            raise ValueError("Demographic fact quality must be confirmed, degraded, or estimated.")
+        key = ("residence_sex", value)
+        if key in seen:
+            raise ValueError("Demographic dimension/value facts must be unique.")
+        seen.add(key)
 
 
 class ReportSubmissionResponse(MetricsSummaryResponse):

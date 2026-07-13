@@ -9,12 +9,13 @@ import type { TrendFilter } from "../types/dashboard";
 import { EMPTY_LOCAL_METRICS_HISTORY } from "../../../lib/operationalDefaults";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsHistory, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
 import type { LocalMetricsHistory, LocalMetricsSummary } from "../../camera/services/ml-service";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
+import type { DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import { getDemographicEvidenceStatus } from "../../reports/utils/demographics";
 import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
 
 type DotPreviewState = {
   demo: DemoBreakdown;
+  demographicEvidence: DemographicEvidence | null;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
@@ -73,6 +74,7 @@ export function DashboardView() {
   const handlePreviewReport = (report: ReportRecord) => {
     setPreviewReport({
       demo: report.demo ?? emptyDemo(),
+      demographicEvidence: report.demographicEvidence ?? null,
       metrics: metricsFromReport(report),
       notes: report.notes ?? "",
       period: report.period ?? report.date,
@@ -85,11 +87,12 @@ export function DashboardView() {
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          demographicEvidence={previewReport.demographicEvidence}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}
           reportId={previewReport.reportId}
-          validationMessage={getDemographicAllocationStatus(previewReport.demo, previewReport.metrics.unique).validationMessage}
+          validationMessage={previewValidationMessage(previewReport.demo, previewReport.demographicEvidence)}
           onClose={() => setPreviewReport(null)}
         />
       )}
@@ -104,4 +107,13 @@ export function DashboardView() {
       </div>
     </div>
   );
+}
+
+function previewValidationMessage(demo: DemoBreakdown, evidence: DemographicEvidence | null) {
+  const status = getDemographicEvidenceStatus(demo);
+  if (status.validationMessage) return status.validationMessage;
+  if (status.hasAnyValue && !evidence) {
+    return "The entered demographic counts have no explicit provenance or quality and cannot be exported as official facts.";
+  }
+  return null;
 }

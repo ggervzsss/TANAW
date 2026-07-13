@@ -12,6 +12,7 @@ from app.storage.reporting_periods import monthly_period_from_id, monthly_period
 
 REPORT_OUTBOX_ENDPOINT = "/operational/desktop/report-submissions/v2"
 REPORT_OUTBOX_CONTRACT_VERSION = 2
+MAX_DEMOGRAPHIC_COUNT = 2_147_483_647
 
 
 def canonical_json(value: Any) -> str:
@@ -548,33 +549,52 @@ def _metric_command(
 
 
 def _demographic_facts(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    demo = payload.get("demo")
-    if not isinstance(demo, dict):
+    source_facts = payload.get("demographicFacts")
+    if not isinstance(source_facts, list):
         return []
-    facts: list[dict[str, Any]] = []
-    labels = {
-        "thisProvMale": "this_province_male",
-        "thisProvFemale": "this_province_female",
-        "otherProvMale": "other_province_male",
-        "otherProvFemale": "other_province_female",
-        "foreignMale": "foreign_male",
-        "foreignFemale": "foreign_female",
+
+    supported_values = {
+        "this_province_male",
+        "this_province_female",
+        "other_province_male",
+        "other_province_female",
+        "foreign_male",
+        "foreign_female",
     }
-    for key, value_label in labels.items():
-        raw_count = demo.get(key)
-        if isinstance(raw_count, int) and raw_count >= 0:
-            count = raw_count
-        elif isinstance(raw_count, str) and raw_count.strip().isdigit():
-            count = int(raw_count)
-        else:
+    supported_qualities = {"confirmed", "degraded", "estimated"}
+    facts: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for source_fact in source_facts:
+        if not isinstance(source_fact, dict):
             continue
+        dimension = source_fact.get("dimension")
+        value = source_fact.get("value")
+        count = source_fact.get("count")
+        provenance = source_fact.get("provenance")
+        quality = source_fact.get("quality")
+        key = (str(dimension), str(value))
+        if (
+            dimension != "residence_sex"
+            or not isinstance(value, str)
+            or value not in supported_values
+            or isinstance(count, bool)
+            or not isinstance(count, int)
+            or count < 0
+            or count > MAX_DEMOGRAPHIC_COUNT
+            or provenance != "operator_entered"
+            or not isinstance(quality, str)
+            or quality not in supported_qualities
+            or key in seen
+        ):
+            continue
+        seen.add(key)
         facts.append(
             {
-                "dimension": "residence_sex",
-                "value": value_label,
+                "dimension": dimension,
+                "value": value,
                 "count": count,
-                "provenance": "operator_entered",
-                "quality": "confirmed",
+                "provenance": provenance,
+                "quality": quality,
             }
         )
     return facts

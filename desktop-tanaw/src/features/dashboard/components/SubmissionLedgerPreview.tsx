@@ -4,8 +4,8 @@ import { Badge } from "../../../components/Badge";
 import { Card } from "../../../components/Card";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { ReportRecord } from "../../../types/enterprise";
-import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
-import { emptyDemo, metricsFromReport } from "../utils/reportLedger";
+import { getDemographicEvidenceStatus } from "../../reports/utils/demographics";
+import { emptyDemo } from "../utils/reportLedger";
 
 type SubmissionLedgerPreviewProps = {
   reports: ReportRecord[];
@@ -56,12 +56,12 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
               </div>
               <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <p className="font-bold tracking-wider text-gray-400 uppercase dark:text-slate-500">Unique Count</p>
+                  <p className="font-bold tracking-wider text-gray-400 uppercase dark:text-slate-500">Camera estimate</p>
                   <p className="mt-1 font-mono text-lg font-bold text-[#111827] dark:text-slate-100">{report.unique.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="font-bold tracking-wider text-gray-400 uppercase dark:text-slate-500">Demographics</p>
-                  <p className="mt-1 font-semibold text-gray-600 dark:text-slate-200">{allocationLabel(report)}</p>
+                  <p className="mt-1 font-semibold text-gray-600 dark:text-slate-200">{evidenceLabel(report)}</p>
                 </div>
               </div>
               <p className="mt-4 text-[11px] font-bold tracking-wider text-gray-400 uppercase dark:text-slate-400">Open DOT Preview</p>
@@ -108,9 +108,9 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
   );
 }
 
-function allocationLabel(report: ReportRecord) {
-  const status = getDemographicAllocationStatus(report.demo ?? emptyDemo(), metricsFromReport(report).unique);
-  if (status.isComplete) return "Complete";
-  if (status.isOverCap) return `${status.excess.toLocaleString()} over cap`;
-  return `${status.remaining.toLocaleString()} remaining`;
+function evidenceLabel(report: ReportRecord) {
+  const status = getDemographicEvidenceStatus(report.demo ?? emptyDemo());
+  if (status.validationMessage) return "Invalid facts";
+  if (!status.hasAnyValue) return "Not provided";
+  return report.demographicEvidence ? "Explicit operator facts" : "Evidence not confirmed";
 }

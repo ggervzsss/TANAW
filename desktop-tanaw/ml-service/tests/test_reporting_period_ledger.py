@@ -95,6 +95,60 @@ class ReportingPeriodTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ReportSubmissionRequest.model_validate(missing_period)
 
+    def test_report_submission_allows_zero_or_partial_demographic_facts(self) -> None:
+        no_facts = _report_submission_request_payload(payload={})
+        partial_facts = _report_submission_request_payload(
+            payload={
+                "demo": {"thisProvMale": "30", "foreignFemale": ""},
+                "demographicFacts": [
+                    {
+                        "dimension": "residence_sex",
+                        "value": "this_province_male",
+                        "count": 30,
+                        "provenance": "operator_entered",
+                        "quality": "confirmed",
+                    }
+                ],
+            },
+            unique_count=1,
+        )
+
+        self.assertEqual(
+            ReportSubmissionRequest.model_validate(no_facts).payload,
+            {},
+        )
+        request = ReportSubmissionRequest.model_validate(partial_facts)
+        self.assertEqual(request.metrics.unique_count if request.metrics else None, 1)
+        self.assertEqual(
+            request.payload["demographicFacts"] if request.payload else None,
+            partial_facts["payload"]["demographicFacts"],
+        )
+
+    def test_report_submission_rejects_malformed_negative_or_duplicate_demographic_facts(
+        self,
+    ) -> None:
+        valid_fact = {
+            "dimension": "residence_sex",
+            "value": "this_province_male",
+            "count": 3,
+            "provenance": "operator_entered",
+            "quality": "confirmed",
+        }
+        invalid_payloads = (
+            {"demo": {"thisProvMale": "-1"}},
+            {"demographicFacts": [{**valid_fact, "count": -1}]},
+            {"demo": {"thisProvMale": "2147483648"}},
+            {"demographicFacts": [{**valid_fact, "count": 2_147_483_648}]},
+            {"demographicFacts": [{**valid_fact, "quality": None}]},
+            {"demographicFacts": [valid_fact, dict(valid_fact)]},
+        )
+
+        for report_payload in invalid_payloads:
+            with self.subTest(payload=report_payload), self.assertRaises(ValidationError):
+                ReportSubmissionRequest.model_validate(
+                    _report_submission_request_payload(payload=report_payload)
+                )
+
     def test_mock_preparation_contract_requires_explicit_selected_period(self) -> None:
         payload = {
             "mock_run_id": "run-1",
@@ -482,6 +536,26 @@ def _event(direction: str) -> dict[str, Any]:
         "direction": direction,
         "track_id": 1,
         "counts": {"entry": 1, "exit": 0, "occupancy": 1},
+    }
+
+
+def _report_submission_request_payload(
+    *, payload: dict[str, Any], unique_count: int = 1
+) -> dict[str, Any]:
+    return {
+        "report_id": "REP-JUNE",
+        "period_id": JUNE_PERIOD_ID,
+        "source_window": {
+            "start": "2026-05-31T16:00:00Z",
+            "end": "2026-06-30T16:00:00Z",
+        },
+        "metrics": {
+            "entries": 25,
+            "exits": 2,
+            "peak_occupancy": 20,
+            "unique_count": unique_count,
+        },
+        "payload": payload,
     }
 
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { Card } from "../../../components/Card";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DemographicsBreakdown } from "./DemographicsBreakdown";
 import { ReportAuditTrail } from "./ReportAuditTrail";
 import { ReportDraftActions } from "./ReportDraftActions";
@@ -14,16 +14,17 @@ type ReportDraftPanelProps = {
   activeReport: ReportRecord | null;
   activeReportId: string | null;
   demo: DemoBreakdown;
+  demographicEvidence: DemographicEvidence | null;
   isReadOnly: boolean;
   isPeriodChanging: boolean;
   metricsError: string | null;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
-  previousDemo?: DemoBreakdown | null;
   validationError: string | null;
   onSubmitPrompt: () => void;
   setDemo: React.Dispatch<React.SetStateAction<DemoBreakdown>>;
+  setDemographicEvidence: React.Dispatch<React.SetStateAction<DemographicEvidence | null>>;
   setNotes: React.Dispatch<React.SetStateAction<string>>;
 };
 
@@ -31,16 +32,17 @@ export function ReportDraftPanel({
   activeReport,
   activeReportId,
   demo,
+  demographicEvidence,
   isReadOnly,
   isPeriodChanging,
   metricsError,
   metrics,
   notes,
   period,
-  previousDemo = null,
   validationError,
   onSubmitPrompt,
   setDemo,
+  setDemographicEvidence,
   setNotes,
 }: ReportDraftPanelProps) {
   const isCurrentReport = !activeReport;
@@ -59,8 +61,8 @@ export function ReportDraftPanel({
           label={isCurrentReport ? "Current Reporting Period" : "Report Period"}
           period={period}
         />
-        <SystemLockedMetrics demo={demo} metrics={metrics} />
-        <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} previousDemo={previousDemo} setDemo={setDemo} uniqueCap={metrics.unique} />
+        <SystemLockedMetrics demo={demo} demographicEvidence={demographicEvidence} metrics={metrics} />
+        <DemographicsBreakdown demo={demo} demographicEvidence={demographicEvidence} isReadOnly={isReadOnly} setDemo={setDemo} setDemographicEvidence={setDemographicEvidence} />
         <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
         <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onSubmitPrompt={onSubmitPrompt} />
         <ReportAuditTrail activeReport={activeReport} />

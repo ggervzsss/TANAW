@@ -13,7 +13,7 @@ export function SupplementaryNotes({ isReadOnly, notes, setNotes }: Supplementar
         onChange={(event) => setNotes(event.target.value)}
         disabled={isReadOnly}
         className="min-h-20 w-full resize-none rounded-sm border border-gray-300 p-3 text-sm text-[#111827] outline-none focus:border-[#065f46] disabled:bg-gray-50 disabled:text-gray-600"
-        placeholder="Add notes regarding events, closures, or demographic estimates..."
+        placeholder="Add factual context regarding events, closures, or evidence limitations..."
       ></textarea>
     </div>
   );

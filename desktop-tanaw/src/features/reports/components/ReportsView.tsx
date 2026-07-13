@@ -4,7 +4,7 @@ import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
-import type { CanonicalReportingPeriod, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { CanonicalReportingPeriod, DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
@@ -17,13 +17,9 @@ import {
   type BackendMockPreparationCounts,
 } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
-import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
+import { buildDemographicFacts, demographicEvidenceFromFacts, getDemographicEvidenceStatus } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
-import {
-  canonicalReportingPeriodFromSource,
-  getReportingPeriodSubmissionError,
-  UNCLASSIFIED_REPORTING_PERIOD_LABEL,
-} from "../services/reporting-period";
+import { canonicalReportingPeriodFromSource, getReportingPeriodSubmissionError, UNCLASSIFIED_REPORTING_PERIOD_LABEL } from "../services/reporting-period";
 
 type ReportsViewProps = {
   reportsHistory: ReportRecord[];
@@ -32,6 +28,7 @@ type ReportsViewProps = {
 
 type DotPreviewState = {
   demo: DemoBreakdown;
+  demographicEvidence: DemographicEvidence | null;
   metrics: Metrics;
   notes: string;
   period: SystemLogPeriod;
@@ -46,6 +43,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const [reportingPeriod, setReportingPeriod] = useState<CanonicalReportingPeriod | null>(null);
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
+  const [demographicEvidence, setDemographicEvidence] = useState<DemographicEvidence | null>(null);
 
   const [previewReport, setPreviewReport] = useState<DotPreviewState | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -60,16 +58,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
   const period = reportingPeriod?.label ?? UNCLASSIFIED_REPORTING_PERIOD_LABEL;
-  const demographicDraftStorageKey = useMemo(
-    () => getDemographicDraftStorageKey(activeReportId, reportingPeriod),
-    [activeReportId, reportingPeriod],
-  );
+  const demographicDraftStorageKey = useMemo(() => getDemographicDraftStorageKey(activeReportId, reportingPeriod), [activeReportId, reportingPeriod]);
   const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
 
-  const selectedPeriodCounts =
-    pendingPeriodCounts.find(
-      (counts) => reportingPeriodForPreparationCounts(counts).periodId === reportingPeriod?.periodId,
-    ) ?? null;
+  const selectedPeriodCounts = pendingPeriodCounts.find((counts) => reportingPeriodForPreparationCounts(counts).periodId === reportingPeriod?.periodId) ?? null;
   const displayedMetrics = activeReport
     ? metricsFromReport(activeReport)
     : reportingPeriod?.periodId === liveReportingPeriod?.periodId
@@ -79,13 +71,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         : liveMetrics;
   const currentLedgerMetrics = liveReportingPeriod ? liveMetrics : EMPTY_METRICS;
   const currentLedgerDemo =
-    !activeReport && reportingPeriod?.periodId === liveReportingPeriod?.periodId
-      ? demo
-      : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, liveReportingPeriod)) ?? emptyDemo();
+    !activeReport && reportingPeriod?.periodId === liveReportingPeriod?.periodId ? demo : (loadStoredDemographicDraft(getDemographicDraftStorageKey(null, liveReportingPeriod)) ?? emptyDemo());
+  const currentLedgerDemographicEvidence = !activeReport && reportingPeriod?.periodId === liveReportingPeriod?.periodId ? demographicEvidence : null;
   const currentLedgerNotes = !activeReport && reportingPeriod?.periodId === liveReportingPeriod?.periodId ? notes : "";
 
   const blockingMetricsError = activeReport ? null : metricsError;
-  const validationError = validateReportDraft(displayedMetrics, demo, reportingPeriod, reportsHistory, activeReportId, {
+  const validationError = validateReportDraft(demo, demographicEvidence, reportingPeriod, reportsHistory, activeReportId, {
     checkDuplicatePeriod: !(activeReport && isReadOnly),
     checkReportingPeriod: !isReadOnly,
   });
@@ -94,15 +85,15 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     () =>
       buildLedgerRows({
         currentDemo: currentLedgerDemo,
+        currentDemographicEvidence: currentLedgerDemographicEvidence,
         currentMetrics: currentLedgerMetrics,
         currentNotes: currentLedgerNotes,
         currentPeriod: liveReportingPeriod,
         pendingCounts: pendingPeriodCounts,
         reportsHistory,
       }),
-    [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, liveReportingPeriod, pendingPeriodCounts, reportsHistory],
+    [currentLedgerDemo, currentLedgerDemographicEvidence, currentLedgerMetrics, currentLedgerNotes, liveReportingPeriod, pendingPeriodCounts, reportsHistory],
   );
-  const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
 
   useEffect(() => {
     reportsHistoryRef.current = reportsHistory;
@@ -144,10 +135,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const refreshPendingPeriods = useCallback(async () => {
     try {
       const preparation = await getDesktopMockPreparation();
-      const pendingCounts =
-        preparation?.status === "active"
-          ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : [])
-          : [];
+      const pendingCounts = preparation?.status === "active" ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : [];
       pendingCounts.forEach(reportingPeriodForPreparationCounts);
       setPendingPeriodCounts(pendingCounts);
     } catch (error) {
@@ -178,11 +166,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     const storedDemo = isReadOnly ? null : loadStoredDemographicDraft(demographicDraftStorageKey);
     if (storedDemo) {
       setDemo(storedDemo);
+      setDemographicEvidence(null);
     } else if (activeReportId) {
       const report = reportsHistoryRef.current.find((item) => item.id === activeReportId);
       setDemo(report?.demo ?? emptyDemo());
+      setDemographicEvidence(report?.demographicEvidence ?? null);
     } else {
       setDemo(emptyDemo());
+      setDemographicEvidence(null);
     }
     setHydratedDemographicDraftKey(demographicDraftStorageKey);
   }, [activeReportId, demographicDraftStorageKey, isReadOnly]);
@@ -197,13 +188,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setReportingPeriod(nextPeriod);
     setNotes("");
     setDemo(emptyDemo());
+    setDemographicEvidence(null);
     setPreviewReport(null);
   };
 
   const handleDraftPeriodSelect = async (nextPeriod: CanonicalReportingPeriod) => {
-    const hasPreparedCounts = pendingPeriodCounts.some(
-      (counts) => reportingPeriodForPreparationCounts(counts).periodId === nextPeriod.periodId,
-    );
+    const hasPreparedCounts = pendingPeriodCounts.some((counts) => reportingPeriodForPreparationCounts(counts).periodId === nextPeriod.periodId);
     if (!activeReportId && nextPeriod.periodId === reportingPeriod?.periodId && (liveReportingPeriod?.periodId === nextPeriod.periodId || !hasPreparedCounts)) return;
 
     if (liveReportingPeriod?.periodId === nextPeriod.periodId && !hasPreparedCounts) {
@@ -216,6 +206,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setReportingPeriod(null);
       setNotes("");
       setDemo(emptyDemo());
+      setDemographicEvidence(null);
       setPreviewReport(null);
       return;
     }
@@ -233,6 +224,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setReportingPeriod(preparedPeriod);
       setNotes("");
       setDemo(emptyDemo());
+      setDemographicEvidence(null);
       setPreviewReport(null);
       setMetricsError(null);
       void refreshPendingPeriods();
@@ -250,6 +242,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setReportingPeriod(report.reportingPeriod ?? null);
     setNotes(report.notes || "");
     setDemo(report.demo || emptyDemo());
+    setDemographicEvidence(report.demographicEvidence ?? null);
   };
 
   const handleSelectLedgerRow = (row: ReportLedgerRow) => {
@@ -270,6 +263,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const handlePreviewReport = (report: ReportRecord) => {
     setPreviewReport({
       demo: report.demo ?? emptyDemo(),
+      demographicEvidence: report.demographicEvidence ?? null,
       metrics: metricsFromReport(report),
       notes: report.notes ?? "",
       period: report.period ?? report.date,
@@ -280,7 +274,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const handleDownloadReport = (report: ReportRecord) => {
     const reportDemo = report.demo ?? emptyDemo();
     const reportMetrics = metricsFromReport(report);
-    const exportError = validateDemographicAllocation(reportMetrics, reportDemo);
+    const exportError = validateDemographicEvidence(reportDemo, report.demographicEvidence ?? null);
     if (exportError) {
       notifyError(exportError);
       handlePreviewReport(report);
@@ -292,13 +286,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       period: report.period ?? report.date,
       metrics: reportMetrics,
       demo: reportDemo,
+      demographicEvidence: report.demographicEvidence ?? null,
       notes: report.notes ?? "",
     });
   };
 
   const executeSubmit = async () => {
     setIsSubmitting(true);
-    const submitValidationError = validateReportDraft(displayedMetrics, demo, reportingPeriod, reportsHistory, activeReportId, {
+    const submitValidationError = validateReportDraft(demo, demographicEvidence, reportingPeriod, reportsHistory, activeReportId, {
       checkDuplicatePeriod: true,
       checkReportingPeriod: true,
     });
@@ -309,44 +304,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
     const submissionPeriod = reportingPeriod;
 
-    const now = new Date().toLocaleString("en-US", {
-      hour12: true,
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    const todayDate = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-
-    const reportId = activeReportId ?? `REP-${new Date().getTime().toString().slice(-6)}`;
+    const reportId = activeReportId ?? `REP-${crypto.randomUUID()}`;
     const reportMetrics = displayedMetrics;
     const nextStatus = activeReportId ? "Resubmitted" : "Submitted";
-    const nextAuditTrail = activeReportId
-      ? [
-          ...(activeReport?.auditTrail || []),
-          {
-            time: `${todayDate} ${now}`,
-            action: "Report Resubmitted",
-            actor: "Enterprise User",
-          },
-        ]
-      : [
-          {
-            time: `${todayDate} ${now}`,
-            action: "Report Prepared",
-            actor: "Enterprise User",
-          },
-          {
-            time: `${todayDate} ${now}`,
-            action: "Report Submitted",
-            actor: "Enterprise User",
-          },
-        ];
     const reportPayload = {
-      auditTrail: nextAuditTrail,
       demo,
+      demographicFacts: buildDemographicFacts(demo, demographicEvidence),
       metrics: reportMetrics,
       notes,
       period,
@@ -406,11 +369,11 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
               period,
               reportingPeriod: submissionPeriod,
               demo,
+              demographicEvidence: demographicEvidence ?? undefined,
               notes,
               submittedAt: submission.submitted_at,
               syncStatus: submittedSyncStatus,
               remarks: null,
-              auditTrail: nextAuditTrail,
             };
           }
           return r;
@@ -428,10 +391,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         period,
         reportingPeriod: submissionPeriod,
         demo,
+        demographicEvidence: demographicEvidence ?? undefined,
         notes,
         submittedAt: submission.submitted_at,
         syncStatus: submittedSyncStatus,
-        auditTrail: nextAuditTrail,
         remarks: null,
       };
       setReportsHistory((prev) => upsertReport(prev, newReport));
@@ -466,11 +429,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          demographicEvidence={previewReport.demographicEvidence}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}
           reportId={previewReport.reportId}
-          validationMessage={validateDemographicAllocation(previewReport.metrics, previewReport.demo)}
+          validationMessage={validateDemographicEvidence(previewReport.demo, previewReport.demographicEvidence)}
           onClose={() => setPreviewReport(null)}
         />
       )}
@@ -491,16 +455,17 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           activeReport={activeReport}
           activeReportId={activeReportId}
           demo={demo}
+          demographicEvidence={demographicEvidence}
           isReadOnly={isReadOnly}
           isPeriodChanging={isPeriodChanging}
           metrics={displayedMetrics}
           metricsError={blockingMetricsError}
           notes={notes}
           period={period}
-          previousDemo={previousDemo}
           validationError={validationError}
           onSubmitPrompt={() => setShowConfirm(true)}
           setDemo={setDemo}
+          setDemographicEvidence={setDemographicEvidence}
           setNotes={setNotes}
         />
 
@@ -517,8 +482,8 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 }
 
 function validateReportDraft(
-  metrics: Metrics,
   demo: DemoBreakdown,
+  demographicEvidence: DemographicEvidence | null,
   reportingPeriod: CanonicalReportingPeriod | null,
   reports: ReportRecord[],
   activeReportId: string | null,
@@ -528,22 +493,26 @@ function validateReportDraft(
     const periodSubmissionError = getReportingPeriodSubmissionError(reportingPeriod);
     if (periodSubmissionError) return periodSubmissionError;
   }
-  const allocationError = validateDemographicAllocation(metrics, demo);
-  if (allocationError) return allocationError;
+  const evidenceError = validateDemographicEvidence(demo, demographicEvidence);
+  if (evidenceError) return evidenceError;
   if (
     options.checkDuplicatePeriod &&
     reportingPeriod &&
-    reports.some(
-      (report) => report.id !== activeReportId && report.reportingPeriod?.periodId === reportingPeriod.periodId && report.status !== "Draft",
-    )
+    reports.some((report) => report.id !== activeReportId && report.reportingPeriod?.periodId === reportingPeriod.periodId && report.status !== "Draft")
   ) {
     return `A report for ${reportingPeriod.label} has already been submitted.`;
   }
   return null;
 }
 
-function validateDemographicAllocation(metrics: Metrics, demo: DemoBreakdown) {
-  return getDemographicAllocationStatus(demo, metrics.unique).validationMessage;
+function validateDemographicEvidence(demo: DemoBreakdown, evidence: DemographicEvidence | null) {
+  const status = getDemographicEvidenceStatus(demo);
+  const factError = status.validationMessage;
+  if (factError) return factError;
+  if (status.hasAnyValue && !evidence) {
+    return "Confirm that the entered demographic counts are explicit operator-provided facts, or clear them to leave demographics Not provided.";
+  }
+  return null;
 }
 
 function metricsFromReport(report: ReportRecord): Metrics {
@@ -619,6 +588,7 @@ function removeStoredDemographicDraft(storageKey: string) {
 
 function buildLedgerRows({
   currentDemo,
+  currentDemographicEvidence,
   currentMetrics,
   currentNotes,
   currentPeriod,
@@ -626,6 +596,7 @@ function buildLedgerRows({
   reportsHistory,
 }: {
   currentDemo: DemoBreakdown;
+  currentDemographicEvidence: DemographicEvidence | null;
   currentMetrics: Metrics;
   currentNotes: string;
   currentPeriod: CanonicalReportingPeriod | null;
@@ -648,6 +619,7 @@ function buildLedgerRows({
         period: currentPeriod?.label ?? UNCLASSIFIED_REPORTING_PERIOD_LABEL,
         reportingPeriod: currentPeriod ?? undefined,
         demo: currentDemo,
+        demographicEvidence: currentDemographicEvidence ?? undefined,
         notes: currentNotes,
       },
       reportLabel: "Current Reporting Period",
@@ -710,7 +682,11 @@ function historyLedgerKey(reportId: string) {
 }
 
 function pendingReportId(period: string) {
-  const normalizedPeriod = period.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase();
+  const normalizedPeriod = period
+    .trim()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-|-$/g, "")
+    .toUpperCase();
   return normalizedPeriod ? `PENDING-${normalizedPeriod}` : "PENDING-REPORT";
 }
 
@@ -720,6 +696,7 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
   const metrics = metricsFromLocalSubmission(submission);
   const reportingPeriod = canonicalReportingPeriodFromSource(submission);
+  const demo = demoFromPayload(payload.demo);
 
   return {
     id: submission.report_id,
@@ -731,15 +708,9 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
     unique: metrics.unique,
     period: reportingPeriod.label,
     reportingPeriod,
-    demo: demoFromPayload(payload.demo),
+    demo,
+    demographicEvidence: demographicEvidenceFromFacts(payload.demographicFacts, demo) ?? undefined,
     notes: payloadNotes ?? submission.notes ?? "",
-    auditTrail: auditTrailFromPayload(payload.auditTrail) ?? [
-      {
-        time: formatAuditTime(submission.submitted_at),
-        action: payloadStatus === "Resubmitted" ? "Report Resubmitted" : "Report Submitted",
-        actor: "Enterprise User",
-      },
-    ],
     remarks: null,
     submittedAt: submission.submitted_at,
     syncStatus: submission.sync_status,
@@ -772,6 +743,7 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
   const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
   const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
   const reportingPeriod = reportingPeriodFromPayload(report.payload);
+  const demo = demoFromPayload(report.payload?.demo);
   return {
     id: report.code,
     date: report.period,
@@ -782,18 +754,12 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
     unique: report.metrics.unique,
     period: report.period,
     reportingPeriod: reportingPeriod ?? undefined,
-    demo: demoFromPayload(report.payload?.demo),
+    demo,
+    demographicEvidence: demographicEvidenceFromFacts(report.payload?.demographicFacts, demo) ?? undefined,
     notes: report.notes ?? "",
     remarks: report.remarks,
     submittedAt: report.submittedAt,
     syncStatus: "synced",
-    auditTrail: [
-      {
-        time: formatAuditTime(report.submittedAt),
-        action: status === "Consolidated" ? "Report Consolidated" : status === "Returned for Revision" ? "Report Returned" : "Report Submitted",
-        actor: status === "Submitted" ? "Enterprise User" : "LGU Staff",
-      },
-    ],
   };
 }
 
@@ -842,6 +808,7 @@ function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRe
       ...localReport,
       ...report,
       demo: localReport.demo ?? report.demo,
+      demographicEvidence: localReport.demographicEvidence ?? report.demographicEvidence,
       notes: report.notes || localReport.notes,
     });
   }
@@ -862,13 +829,8 @@ function sortReports(reports: ReportRecord[]) {
   return [...reports].sort((first, second) => reportTimestamp(second) - reportTimestamp(first));
 }
 
-function findPreviousDemo(reports: ReportRecord[], activeReportId: string | null): DemoBreakdown | null {
-  const previousReport = reports.find((report) => report.id !== activeReportId && getDemographicTotals(report.demo ?? emptyDemo()).grandTotal > 0);
-  return previousReport?.demo ?? null;
-}
-
 function reportTimestamp(report: ReportRecord) {
-  const value = report.submittedAt ?? report.auditTrail?.[report.auditTrail.length - 1]?.time ?? report.date;
+  const value = report.submittedAt ?? report.date;
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
@@ -905,40 +867,8 @@ function demoFromPayload(value: unknown): DemoBreakdown {
   };
 }
 
-function auditTrailFromPayload(value: unknown): ReportRecord["auditTrail"] | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const auditTrail = value
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") return null;
-      const candidate = entry as Record<string, unknown>;
-      if (typeof candidate.time !== "string" || typeof candidate.action !== "string" || typeof candidate.actor !== "string") return null;
-      return {
-        time: candidate.time,
-        action: candidate.action,
-        actor: candidate.actor,
-      };
-    })
-    .filter((entry): entry is NonNullable<ReportRecord["auditTrail"]>[number] => entry !== null);
-
-  return auditTrail.length > 0 ? auditTrail : undefined;
-}
-
 function isReportStatus(value: string) {
   return ["Submitted", "Resubmitted", "Consolidated", "Returned for Revision", "Draft"].includes(value);
-}
-
-function formatAuditTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-US", {
-    hour12: true,
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  });
 }
 
 function emptyDemo(): DemoBreakdown {

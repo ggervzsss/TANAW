@@ -1,11 +1,14 @@
-import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
-import { demographicCount, getDemographicTotals } from "./demographics";
+import type { DemoBreakdown, DemographicEvidence, Metrics } from "../../../types/enterprise";
+import { formatDemographicValue, getExplicitDemographicTotals, parseDemographicCount } from "./demographics";
 
 type DotReportPdf = {
+  attractionCode?: string | null;
+  attractionName?: string | null;
   reportId: string;
   period: string;
   metrics: Metrics;
   demo: DemoBreakdown;
+  demographicEvidence?: DemographicEvidence | null;
   notes: string;
 };
 
@@ -27,20 +30,21 @@ export function downloadDotReportPdf(report: DotReportPdf) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function createDotReportPdf(report: DotReportPdf) {
-  const tpm = demographicCount(report.demo.thisProvMale);
-  const tpf = demographicCount(report.demo.thisProvFemale);
-  const opm = demographicCount(report.demo.otherProvMale);
-  const opf = demographicCount(report.demo.otherProvFemale);
-  const fm = demographicCount(report.demo.foreignMale);
-  const ff = demographicCount(report.demo.foreignFemale);
-  const totals = getDemographicTotals(report.demo);
+export function createDotReportPdf(report: DotReportPdf) {
+  const hasEvidence = Boolean(report.demographicEvidence);
+  const tpm = hasEvidence ? parseDemographicCount(report.demo.thisProvMale) : null;
+  const tpf = hasEvidence ? parseDemographicCount(report.demo.thisProvFemale) : null;
+  const opm = hasEvidence ? parseDemographicCount(report.demo.otherProvMale) : null;
+  const opf = hasEvidence ? parseDemographicCount(report.demo.otherProvFemale) : null;
+  const fm = hasEvidence ? parseDemographicCount(report.demo.foreignMale) : null;
+  const ff = hasEvidence ? parseDemographicCount(report.demo.foreignFemale) : null;
+  const totals = hasEvidence ? getExplicitDemographicTotals(report.demo) : null;
   const content: string[] = [];
 
   drawText(content, "TANAW - DOT Visitor Attraction Report", 50, 550, { bold: true, size: 12 });
   drawText(content, `Report ID: ${report.reportId}`, 50, 528, { size: 10 });
   drawText(content, `Reporting Period: ${report.period}`, 50, 512, { size: 10 });
-  drawText(content, `Unique Count Cap: ${report.metrics.unique.toLocaleString()}`, 50, 496, { size: 10 });
+  drawText(content, `Camera-derived venue-local unique estimate: ${report.metrics.unique.toLocaleString()}`, 50, 496, { size: 10 });
   drawText(content, "VISITOR ATTRACTION", 50, 462, { bold: true, size: 15 });
 
   const table = {
@@ -75,12 +79,19 @@ function createDotReportPdf(report: DotReportPdf) {
   });
 
   top -= 28;
-  drawCell(content, table.x, top, table.code, 40, ["SPL-MKT-01"], { bold: true, size: 8 });
-  drawCell(content, table.x + table.code, top, table.name, 40, ["Enterprise Node", report.period], { align: "left", bold: true, size: 8 });
-  [tpm, tpf, tpm + tpf, opm, opf, opm + opf, fm, ff, fm + ff].forEach((value, index) => {
-    drawCell(content, demoX + table.demo * index, top, table.demo, 40, [value ? String(value) : ""], { bold: value > 0, size: 8 });
+  drawCell(content, table.x, top, table.code, 40, [providedText(report.attractionCode)], { bold: true, size: 7 });
+  drawCell(content, table.x + table.code, top, table.name, 40, [providedText(report.attractionName), report.period], { align: "left", bold: true, size: 8 });
+  [tpm, tpf, explicitSum(tpm, tpf), opm, opf, explicitSum(opm, opf), fm, ff, explicitSum(fm, ff)].forEach((value, index) => {
+    drawCell(content, demoX + table.demo * index, top, table.demo, 40, [formatDemographicValue(value)], {
+      bold: value !== null,
+      size: value === null ? 5.5 : 8,
+    });
   });
-  drawCell(content, grandX, top, table.grand, 40, [totals.grandTotal ? String(totals.grandTotal) : ""], { bold: true, size: 10 });
+  const grandTotal = totals?.grandTotal ?? null;
+  drawCell(content, grandX, top, table.grand, 40, [formatDemographicValue(grandTotal)], {
+    bold: grandTotal !== null,
+    size: grandTotal === null ? 6 : 10,
+  });
 
   top -= 40;
   for (let row = 0; row < 5; row += 1) {
@@ -95,9 +106,11 @@ function createDotReportPdf(report: DotReportPdf) {
 
   if (report.notes.trim()) {
     drawText(content, "Supplementary Notes", 50, 106, { bold: true, size: 10 });
-    wrapText(report.notes.trim(), 112).slice(0, 4).forEach((line, index) => {
-      drawText(content, line, 50, 90 - index * 13, { size: 9 });
-    });
+    wrapText(report.notes.trim(), 112)
+      .slice(0, 4)
+      .forEach((line, index) => {
+        drawText(content, line, 50, 90 - index * 13, { size: 9 });
+      });
   }
 
   return buildPdf(content.join("\n"));
@@ -187,4 +200,13 @@ function escapePdf(value: string) {
 
 function safeFileName(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function explicitSum(first: number | null, second: number | null) {
+  return first === null || second === null ? null : first + second;
+}
+
+function providedText(value: string | null | undefined) {
+  const normalized = value?.trim();
+  return normalized || "Not provided";
 }
