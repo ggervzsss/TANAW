@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,10 +16,16 @@ from app.features.reporting.service import (
     ReportIntakeError,
     submit_report_command,
 )
+from app.features.reporting.workflow import transition_report
+from app.features.reporting.workflow_envelopes import (
+    ReportTransitionAcknowledgement,
+    ReportTransitionCommand,
+)
 
 router = APIRouter(prefix="/operational", tags=["reporting-v2"])
 
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
+StaffAccount = Annotated[Account, Depends(require_roles({"staff"}))]
 
 
 @router.post(
@@ -48,5 +55,38 @@ async def ingest_report_submission_v2(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.post(
+    "/reports/{enterprise_report_id}/transitions/v2",
+    response_model=ReportTransitionAcknowledgement,
+)
+async def transition_enterprise_report_v2(
+    enterprise_report_id: UUID,
+    command: ReportTransitionCommand,
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReportTransitionAcknowledgement:
+    try:
+        acknowledgement = await transition_report(
+            db,
+            account=account,
+            enterprise_report_id=enterprise_report_id,
+            command=command,
+        )
+        await db.commit()
+        return acknowledgement
+    except ReportIntakeConflict as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ReportIntakeError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": exc.code, "message": exc.message},
         ) from exc

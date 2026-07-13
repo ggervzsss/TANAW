@@ -22,6 +22,8 @@ from app.features.reporting.models import (
     ReportSourceBatch,
 )
 from app.features.reporting.service import ReportIntakeConflict, submit_report_command
+from app.features.reporting.workflow import transition_report
+from app.features.reporting.workflow_envelopes import ReportTransitionCommand
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
@@ -152,6 +154,118 @@ async def test_report_intake_is_idempotent_and_hash_conflicts_fail(
             command=ReportSubmissionCommand.model_validate(reused_source_payload),
             acknowledged_at=period.ends_at + timedelta(minutes=6),
         )
+
+
+@pytest.mark.asyncio
+async def test_staff_transition_is_versioned_idempotent_and_auditable(
+    report_session: AsyncSession,
+) -> None:
+    enterprise_account, camera_id, period = await _seed_scope(report_session)
+    command = ReportSubmissionCommand.model_validate(_command(camera_id, period))
+    submitted = await submit_report_command(
+        report_session,
+        account=enterprise_account,
+        command=command,
+        acknowledged_at=period.ends_at + timedelta(minutes=3),
+    )
+    staff = Account(
+        id=str(uuid4()),
+        email=f"workflow-staff-{uuid4().hex}@example.test",
+        password_hash="not-used-by-report-workflow-test",
+        role=AccountRole.STAFF,
+        display_name="Report Workflow Staff",
+        title="Tourism Staff",
+        status=AccountStatus.ACTIVE,
+        activated_at=period.ends_at,
+    )
+    report_session.add(staff)
+    await report_session.flush([staff])
+
+    accept_command = ReportTransitionCommand.model_validate(
+        {
+            "contractVersion": 2,
+            "commandId": str(uuid4()),
+            "expectedVersion": 1,
+            "action": "accept_revision",
+            "reason": "Evidence reviewed.",
+        }
+    )
+    report_before_acceptance = await report_session.get(
+        EnterpriseReport,
+        str(submitted.resource.enterpriseReportId),
+    )
+    assert report_before_acceptance is not None
+    report_before_acceptance.acceptance_blocked = True
+    await report_session.flush([report_before_acceptance])
+    with pytest.raises(ReportIntakeConflict, match="cannot be accepted"):
+        await transition_report(
+            report_session,
+            account=staff,
+            enterprise_report_id=submitted.resource.enterpriseReportId,
+            command=accept_command,
+            acknowledged_at=period.ends_at + timedelta(minutes=4),
+        )
+    report_before_acceptance.acceptance_blocked = False
+    await report_session.flush([report_before_acceptance])
+
+    accepted = await transition_report(
+        report_session,
+        account=staff,
+        enterprise_report_id=submitted.resource.enterpriseReportId,
+        command=accept_command,
+        acknowledged_at=period.ends_at + timedelta(minutes=4),
+    )
+    replayed = await transition_report(
+        report_session,
+        account=staff,
+        enterprise_report_id=submitted.resource.enterpriseReportId,
+        command=accept_command,
+        acknowledged_at=period.ends_at + timedelta(minutes=5),
+    )
+
+    assert accepted.disposition == "applied"
+    assert replayed.disposition == "replayed"
+    assert replayed.acknowledgedAt == accepted.acknowledgedAt
+    assert accepted.resource.workflowState == "accepted"
+    assert accepted.resource.logicalVersion == 2
+    report = await report_session.get(
+        EnterpriseReport,
+        str(submitted.resource.enterpriseReportId),
+    )
+    assert report is not None
+    assert report.accepted_revision_id == str(submitted.resource.reportRevisionId)
+    assert await report_session.scalar(select(func.count()).select_from(ReportReviewEvent)) == 2
+    assert await report_session.scalar(select(func.count()).select_from(DomainEvent)) == 2
+    assert await report_session.scalar(select(func.count()).select_from(DomainEventDelivery)) == 4
+
+    stale_command = ReportTransitionCommand.model_validate(
+        {
+            "contractVersion": 2,
+            "commandId": str(uuid4()),
+            "expectedVersion": 1,
+            "action": "reopen_before_finalization",
+            "reason": "A correction is required.",
+        }
+    )
+    with pytest.raises(ReportIntakeConflict, match="current version is 2"):
+        await transition_report(
+            report_session,
+            account=staff,
+            enterprise_report_id=submitted.resource.enterpriseReportId,
+            command=stale_command,
+        )
+
+    reopen_command = stale_command.model_copy(update={"commandId": uuid4(), "expectedVersion": 2})
+    reopened = await transition_report(
+        report_session,
+        account=staff,
+        enterprise_report_id=submitted.resource.enterpriseReportId,
+        command=reopen_command,
+        acknowledged_at=period.ends_at + timedelta(minutes=6),
+    )
+    assert reopened.resource.workflowState == "returned"
+    assert reopened.resource.logicalVersion == 3
+    assert report.accepted_revision_id is None
 
 
 async def _seed_scope(
