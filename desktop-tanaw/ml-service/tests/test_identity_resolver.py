@@ -28,6 +28,22 @@ class TrackIdentityResolverTest(unittest.TestCase):
         self.assertNotEqual(second.track_id, first.track_id)
         self.assertEqual(resolver.status()["identity_splits"], 1)
 
+    def test_same_source_continuity_is_independent_of_irregular_frame_timing(self) -> None:
+        resolver = TrackIdentityResolver(max_jump_distance_fraction=0.30)
+
+        resolved = [
+            resolver.resolve([_track(10, bbox)], now, 200, 200)[0]
+            for bbox, now in (
+                ((20, 20, 60, 180), 1.0),
+                ((30, 20, 90, 180), 1.001),
+                ((80, 20, 120, 180), 1.002),
+                ((120, 20, 160, 180), 1.102),
+            )
+        ]
+
+        self.assertEqual({track.track_id for track in resolved}, {resolved[0].track_id})
+        self.assertEqual(resolver.status()["identity_splits"], 0)
+
     def test_appearance_can_merge_new_track_back_to_lost_identity(self) -> None:
         resolver = TrackIdentityResolver(
             lost_track_ttl_seconds=3.0,

@@ -12,8 +12,8 @@ native Electron behavior, local storage, ML model files, and camera/network
 access.
 
 The desktop app requires Node.js 22.12 or newer, npm, Python 3.12 or newer for
-the local ML service, and `uv`. Camera AI requires detector model assets under
-`ml-service/models/`.
+the local ML service, and `uv`. Camera AI requires detector and ReID model
+assets under `ml-service/models/`.
 
 The desktop renderer runs on port `5174` in development. Electron starts the
 local ML service on an operating-system-selected ephemeral loopback port. The
@@ -104,9 +104,9 @@ npm run preview:web
 `npm run dev` starts the Vite/Electron development flow. `npm run dist` builds
 the renderer and packages the Electron app.
 
-## Detector Model Setup
+## ML Model Setup
 
-Detector binaries are intentionally not committed to Git. Keep local assets under:
+ML model binaries are intentionally not committed to Git. Keep local assets under:
 
 ```text
 ml-service/models/
@@ -118,16 +118,20 @@ Default setup:
 npm run models:setup
 ```
 
-This prepares:
+This prepares the detector inventory and validates an existing fast ReID model
+or downloads its checkpoint and exports a fresh ONNX model when missing:
 
 - `models/yolo11n.pt` for emergency and compatibility fallback profiles
 - `models/yolo11s.pt` for the default balanced profile
 - `models/yolo11m.pt` for the high-accuracy profile
+- `models/person_reid_cpu.onnx` for fast person re-identification
 
-To download a smaller local subset for constrained testing, pass explicit model names:
+To download a smaller detector subset for constrained testing while still
+provisioning ReID, run the focused setup commands:
 
 ```bash
-npm run models:setup -- --models yolo11n yolo11s
+npm run models:setup:detector -- --models yolo11n yolo11s
+npm run models:setup:reid
 ```
 
 Generate CPU/Intel OpenVINO exports:

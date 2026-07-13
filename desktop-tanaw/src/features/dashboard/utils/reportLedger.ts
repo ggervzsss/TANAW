@@ -1,22 +1,25 @@
 import type { LocalReportSubmissionRecord } from "../../camera/services/ml-service";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { DemoBreakdown, Metrics, ReportRecord } from "../../../types/enterprise";
 import { getDemographicTotals } from "../../reports/utils/demographics";
+import { canonicalReportingPeriodFromSource } from "../../reports/services/reporting-period";
 
 export function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
   const metrics = metricsFromLocalSubmission(submission);
+  const reportingPeriod = canonicalReportingPeriodFromSource(submission);
 
   return {
     id: submission.report_id,
-    date: submission.period,
+    date: reportingPeriod.label,
     status: payloadStatus,
     entries: metrics.entries,
     exits: metrics.exits,
     peak: metrics.peak,
     unique: metrics.unique,
-    period: periodFromValue(submission.period),
+    period: reportingPeriod.label,
+    reportingPeriod,
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
     submittedAt: submission.submitted_at,
@@ -86,10 +89,6 @@ function demoFromPayload(value: unknown): DemoBreakdown {
     foreignMale: stringValue(payload.foreignMale),
     foreignFemale: stringValue(payload.foreignFemale),
   };
-}
-
-function periodFromValue(value: string): SystemLogPeriod {
-  return value || "Current Period";
 }
 
 function isReportStatus(value: string) {

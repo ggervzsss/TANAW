@@ -5,18 +5,23 @@ from pathlib import Path
 
 from app.config.camera_config import reporting_period_submission_error
 from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.reporting_periods import monthly_period_for_captured_at
+
+CURRENT_PERIOD_ID = monthly_period_for_captured_at(datetime.now(UTC)).period_id
+JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
+JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
 
 
 class LocalMetricsStoreTest(unittest.TestCase):
     def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
         self.assertIsNotNone(
             reporting_period_submission_error(
-                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
+                JULY_PERIOD_ID, datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
             )
         )
         self.assertIsNone(
             reporting_period_submission_error(
-                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
+                JULY_PERIOD_ID, datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
             )
         )
 
@@ -24,10 +29,12 @@ class LocalMetricsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            store.record_report_submission("REP-001", "June 2026", payload={"source": "test"})
+            store.record_report_submission("REP-001", JUNE_PERIOD_ID, payload={"source": "test"})
 
             with self.assertRaisesRegex(ValueError, "Jun 1 - Jun 30, 2026"):
-                store.record_report_submission("REP-002", "June 2026", payload={"source": "test"})
+                store.record_report_submission(
+                    "REP-002", JUNE_PERIOD_ID, payload={"source": "test"}
+                )
 
     def test_count_events_are_summarized_and_marked_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -43,7 +50,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(summary["unsubmitted_events"], 2)
 
             submission = store.record_report_submission(
-                "REP-001", "Current Period", "notes", {"source": "test"}
+                "REP-001", CURRENT_PERIOD_ID, "notes", {"source": "test"}
             )
             self.assertEqual(submission["report_id"], "REP-001")
             self.assertEqual(submission["sync_status"], "pending_cloud_sync")
@@ -57,7 +64,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             store.record_report_submission(
-                "REP-001", "Current Period", "notes", {"demo": {"foreignMale": "2"}}
+                "REP-001", CURRENT_PERIOD_ID, "notes", {"demo": {"foreignMale": "2"}}
             )
 
             reports = store.list_report_submissions()
@@ -72,7 +79,9 @@ class LocalMetricsStoreTest(unittest.TestCase):
             store = LocalMetricsStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
-            store.record_report_submission("REP-001", "Current Period", "notes", {"source": "test"})
+            store.record_report_submission(
+                "REP-001", CURRENT_PERIOD_ID, "notes", {"source": "test"}
+            )
 
             purged = store.purge_report_raw_events("REP-001")
 
@@ -100,7 +109,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             store.append_count_event(hybrid_event)
             store.record_report_submission(
                 "REP-260601",
-                "Current Period",
+                CURRENT_PERIOD_ID,
                 "Monthly visitor count submitted for LGU review.",
                 {"source": "hybrid"},
                 source_kind="hybrid",
@@ -126,7 +135,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             store.append_count_event(mock_event)
             store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
 
-            submission = store.record_report_submission("REP-260601", "Current Period")
+            submission = store.record_report_submission("REP-260601", CURRENT_PERIOD_ID)
             self.assertEqual(submission["source_kind"], "hybrid")
             self.assertEqual(submission["mock_run_id"], "mock-run-1")
             self.assertEqual(store.metrics_summary()["unsubmitted_events"], 0)
@@ -144,10 +153,12 @@ class LocalMetricsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            store.record_report_submission("REP-001", "Current Period", "first", {"notes": "first"})
+            store.record_report_submission(
+                "REP-001", CURRENT_PERIOD_ID, "first", {"notes": "first"}
+            )
 
             resubmission = store.record_report_submission(
-                "REP-001", "Current Period", "revised", {"notes": "revised"}
+                "REP-001", CURRENT_PERIOD_ID, "revised", {"notes": "revised"}
             )
 
             self.assertEqual(resubmission["entries"], 1)
@@ -164,7 +175,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 _event("entry", entry=1, exit=0, occupancy=1),
                 "2026-06-15T04:00:00+00:00",
             )
-            store.record_report_submission("REP-001", "June 2026", "first", {"notes": "first"})
+            store.record_report_submission("REP-001", JUNE_PERIOD_ID, "first", {"notes": "first"})
             store.append_count_event(
                 _event("entry", entry=2, exit=0, occupancy=2),
                 "2026-07-15T04:00:00+00:00",
@@ -172,7 +183,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
             resubmission = store.record_report_submission(
                 "REP-001",
-                "June 2026",
+                JUNE_PERIOD_ID,
                 "revised",
                 {"notes": "revised"},
                 metrics={
@@ -199,7 +210,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
             resubmission = store.record_report_submission(
                 "REP-CLOUD",
-                "June 2026",
+                JUNE_PERIOD_ID,
                 "revised",
                 {"status": "Resubmitted"},
                 metrics={
@@ -229,7 +240,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             store.append_count_event(
                 _event("exit", entry=2, exit=1, occupancy=1), "2026-06-11T02:10:00+00:00"
             )
-            store.record_report_submission("REP-001", "Current Period")
+            store.record_report_submission("REP-001", JUNE_PERIOD_ID)
 
             empty_history = store.metrics_history(now=datetime(2026, 6, 11, 3, 0, tzinfo=UTC))
             self.assertEqual(sum(point["entry"] for point in empty_history["hourly_density"]), 0)
@@ -401,7 +412,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period_id=JUNE_PERIOD_ID,
             )
 
             self.assertEqual(summary["entries"], 40)
@@ -422,7 +433,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period_id=JUNE_PERIOD_ID,
             )
             self.assertFalse(repeated["prepared"])
             self.assertEqual(repeated["total_events"], 71)
@@ -439,11 +450,11 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period_id=JUNE_PERIOD_ID,
             )
             self.assertTrue(first["prepared"])
 
-            store.record_report_submission("REP-JUN", "Jun 1 - Jun 30, 2026")
+            store.record_report_submission("REP-JUN", JUNE_PERIOD_ID)
 
             second = store.prepare_mock_counts(
                 mock_run_id="run-1",
@@ -453,7 +464,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=18,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jul 1 - Jul 31, 2026",
+                period_id=JULY_PERIOD_ID,
             )
 
             self.assertTrue(second["prepared"])
@@ -473,7 +484,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period_id=JUNE_PERIOD_ID,
             )
             self.assertTrue(first["prepared"])
 
@@ -485,7 +496,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=18,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jul 1 - Jul 31, 2026",
+                period_id=JULY_PERIOD_ID,
             )
 
             self.assertTrue(second["prepared"])
@@ -497,7 +508,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            submission = store.record_report_submission("REP-001", "Current Period")
+            submission = store.record_report_submission("REP-001", CURRENT_PERIOD_ID)
 
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 1)
             self.assertTrue(store.acknowledge_sync_outbox_item(str(submission["outbox_item_id"])))
@@ -518,7 +529,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 peak_occupancy=3,
                 camera_id=1,
                 camera_name="Main Entrance",
-                period="Current Period",
+                period_id=CURRENT_PERIOD_ID,
             )
             store.append_count_event(_event("entry", entry=5, exit=2, occupancy=3))
 
@@ -526,7 +537,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(summary["source_kind"], "hybrid")
             self.assertEqual(summary["mock_run_id"], "run-1")
 
-            submission = store.record_report_submission("REP-002", "Current Period")
+            submission = store.record_report_submission("REP-002", CURRENT_PERIOD_ID)
             report = store.list_report_submissions()[0]
             self.assertEqual(submission["source_kind"], "hybrid")
             self.assertEqual(submission["mock_run_id"], "run-1")

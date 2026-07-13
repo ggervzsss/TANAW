@@ -27,6 +27,7 @@ from app.features.operational.models import (
     MockDataRun,
 )
 from app.features.operational.service import generate_final_report_code
+from app.features.reporting.contracts import monthly_reporting_period
 
 TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
@@ -475,7 +476,7 @@ async def create_operational_history(
     telemetry: list[EnterpriseTelemetrySnapshot] = []
     months = month_starts(range_start, range_end)
     current_month = months[-1]
-    target_prepared_counts: list[dict[str, int | str]] = []
+    target_prepared_counts: list[dict[str, Any]] = []
 
     for month_index, month_start in enumerate(months):
         period = period_label(month_start)
@@ -500,13 +501,14 @@ async def create_operational_history(
             )
             if should_skip:
                 target_prepared_counts.append(
-                    {
-                        "entries": base_entries,
-                        "exits": exits,
-                        "uniqueCount": unique_count,
-                        "peakOccupancy": peak,
-                        "period": period,
-                    }
+                    mock_preparation_counts(
+                        month_start=month_start,
+                        entries=base_entries,
+                        exits=exits,
+                        unique_count=unique_count,
+                        peak_occupancy=peak,
+                        period_label_value=period,
+                    )
                 )
 
             demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
@@ -823,6 +825,54 @@ def period_label(month_start: datetime) -> str:
     return f"{short} 1 - {short} {last_day}, {month_start.year}"
 
 
+def mock_preparation_counts(
+    *,
+    month_start: datetime,
+    entries: int,
+    exits: int,
+    unique_count: int,
+    peak_occupancy: int,
+    period_label_value: str,
+) -> dict[str, Any]:
+    reporting_period = monthly_reporting_period(month_start.year, month_start.month)
+    return {
+        "entries": entries,
+        "exits": exits,
+        "uniqueCount": unique_count,
+        "peakOccupancy": peak_occupancy,
+        "period": period_label_value,
+        "periodKey": reporting_period.natural_key,
+        "sourceWindow": {
+            "start": _utc_contract_timestamp(reporting_period.starts_at),
+            "end": _utc_contract_timestamp(reporting_period.ends_at),
+        },
+    }
+
+
+def desktop_preparation_payload(
+    *,
+    run_id: str,
+    enterprise_id: str,
+    enterprise_name: object,
+    prepared: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "mock_run_id": run_id,
+        "enterprise_id": enterprise_id,
+        "enterprise_name": enterprise_name,
+        "entries": prepared["entries"],
+        "exits": prepared["exits"],
+        "unique_count": prepared["uniqueCount"],
+        "peak_occupancy": prepared["peakOccupancy"],
+        "period_id": prepared["periodKey"],
+        "source_window": prepared["sourceWindow"],
+    }
+
+
+def _utc_contract_timestamp(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def latest_capture_time(month_start: datetime, range_end: datetime) -> datetime:
     if month_start.year == range_end.year and month_start.month == range_end.month:
         return range_end
@@ -881,16 +931,12 @@ async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.post(
                 f"{desktop_url.rstrip('/')}/mock/prepare",
-                json={
-                    "mock_run_id": result["runId"],
-                    "enterprise_id": enterprise_id,
-                    "enterprise_name": target.get("enterpriseName"),
-                    "entries": prepared["entries"],
-                    "exits": prepared["exits"],
-                    "unique_count": prepared["uniqueCount"],
-                    "peak_occupancy": prepared["peakOccupancy"],
-                    "period": prepared["period"],
-                },
+                json=desktop_preparation_payload(
+                    run_id=result["runId"],
+                    enterprise_id=enterprise_id,
+                    enterprise_name=target.get("enterpriseName"),
+                    prepared=prepared,
+                ),
             )
             response.raise_for_status()
             result["desktop"] = response.json()

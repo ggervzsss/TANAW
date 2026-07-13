@@ -2,6 +2,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,7 +15,10 @@ from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import TrackResult
 from app.identity import UniqueVisitorRegistry
 from app.reid import PersonReIdentifier, TrackAppearanceBuffer
+from app.storage.reporting_periods import monthly_period_for_captured_at
 from app.storage.session_store import SessionStore
+
+CURRENT_PERIOD_ID = monthly_period_for_captured_at(datetime.now().astimezone()).period_id
 
 
 class CameraProcessingManagerSessionTest(unittest.TestCase):
@@ -22,7 +26,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             manager._session_store.append_event(_event_payload())
-            first = manager.record_report_submission("REP-MANAGER", "Current Period")
+            first = manager.record_report_submission("REP-MANAGER", CURRENT_PERIOD_ID)
 
             ready = manager.list_ready_sync_outbox_items()
 
@@ -40,7 +44,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 
             second = manager.record_report_submission(
                 "REP-MANAGER",
-                "Current Period",
+                CURRENT_PERIOD_ID,
                 notes="corrected",
                 idempotency_key="manager-revision-2",
             )
@@ -158,7 +162,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                 exits=15,
                 unique_count=12,
                 peak_occupancy=8,
-                period="Current Period",
+                period_id=CURRENT_PERIOD_ID,
             )
 
             self.assertEqual(result["entries"], 20)
@@ -174,7 +178,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                     exits=15,
                     unique_count=12,
                     peak_occupancy=8,
-                    period="Current Period",
+                    period_id=CURRENT_PERIOD_ID,
                 )
 
     def test_stale_session_cannot_publish_raw_frame(self) -> None:
@@ -638,7 +642,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(summary["estimated_unique_count"], 1)
             self.assertEqual(summary["degraded_unique_count"], 1)
 
-    def test_manual_occupancy_correction_updates_live_count_and_summary(self) -> None:
+    def test_manual_occupancy_correction_does_not_infer_report_period(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             manager.bind_enterprise("enterprise-a", "Enterprise A")
@@ -653,7 +657,9 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(correction["old_occupancy"], 0)
             self.assertEqual(correction["new_occupancy"], 4)
             self.assertEqual(manager.counts()["occupancy"], 4)
-            self.assertEqual(manager.metrics_summary()["current_occupancy"], 4)
+            summary = manager.metrics_summary()
+            self.assertEqual(summary["current_occupancy"], 0)
+            self.assertIsNone(summary["period_id"])
 
     def test_unconfirmed_detection_is_visible_only_above_configured_confidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -92,6 +92,24 @@ def monthly_period_from_id(period_id: str) -> ReportingPeriod | None:
     return monthly_period(int(match.group("year")), int(match.group("month")))
 
 
+def monthly_period_from_identity(
+    period_id: str,
+    starts_at_utc: datetime | str,
+    ends_at_utc: datetime | str,
+) -> ReportingPeriod:
+    period = monthly_period_from_id(period_id)
+    if period is None:
+        raise ValueError("Reporting period ID must use month:Asia/Manila:YYYY-MM.")
+    supplied_start = parse_captured_at(starts_at_utc)
+    supplied_end = parse_captured_at(ends_at_utc)
+    if supplied_start != period.starts_at_utc or supplied_end != period.ends_at_utc:
+        raise ValueError(
+            "Reporting period UTC bounds do not match the exact Asia/Manila "
+            "calendar window for the canonical period ID."
+        )
+    return period
+
+
 def monthly_period_from_label(label: str) -> ReportingPeriod | None:
     normalized = label.strip()
     canonical = monthly_period_from_id(normalized)

@@ -8,6 +8,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
+from app.config.camera_config import MockPrepareRequest, ReportSubmissionRequest
 from app.storage.local_metrics_store import LocalMetricsStore
 from app.storage.local_schema import (
     LOCAL_SCHEMA_VERSION,
@@ -51,6 +54,68 @@ class ReportingPeriodTest(unittest.TestCase):
         self.assertIsNone(monthly_period_from_label("Jun 2 - Jun 30, 2026"))
         self.assertIsNone(monthly_period_from_label("Jun 1 - Jul 31, 2026"))
         self.assertIsNone(monthly_period_from_label("Current Period"))
+
+    def test_report_submission_contract_requires_canonical_identity_and_exact_bounds(self) -> None:
+        valid_payload = {
+            "report_id": "REP-JUNE",
+            "period_id": JUNE_PERIOD_ID,
+            "source_window": {
+                "start": "2026-05-31T16:00:00Z",
+                "end": "2026-06-30T16:00:00Z",
+            },
+            "payload": {
+                "demo": {
+                    "thisProvMale": "1",
+                    "thisProvFemale": "0",
+                    "otherProvMale": "0",
+                    "otherProvFemale": "0",
+                    "foreignMale": "0",
+                    "foreignFemale": "0",
+                }
+            },
+        }
+
+        request = ReportSubmissionRequest.model_validate(valid_payload)
+
+        self.assertEqual(request.period_id, JUNE_PERIOD_ID)
+        for invalid_payload in (
+            {**valid_payload, "period_id": "Jun 1 - Jun 30, 2026"},
+            {
+                **valid_payload,
+                "source_window": {
+                    "start": "2026-05-31T16:00:00Z",
+                    "end": "2026-07-31T16:00:00Z",
+                },
+            },
+        ):
+            with self.subTest(payload=invalid_payload), self.assertRaises(ValidationError):
+                ReportSubmissionRequest.model_validate(invalid_payload)
+        missing_period = dict(valid_payload)
+        del missing_period["period_id"]
+        with self.assertRaises(ValidationError):
+            ReportSubmissionRequest.model_validate(missing_period)
+
+    def test_mock_preparation_contract_requires_explicit_selected_period(self) -> None:
+        payload = {
+            "mock_run_id": "run-1",
+            "enterprise_id": "enterprise-1",
+            "entries": 4,
+            "exits": 2,
+            "unique_count": 3,
+            "peak_occupancy": 3,
+            "period_id": JULY_PERIOD_ID,
+            "source_window": {
+                "start": "2026-06-30T16:00:00Z",
+                "end": "2026-07-31T16:00:00Z",
+            },
+        }
+
+        self.assertEqual(
+            MockPrepareRequest.model_validate(payload).period_id,
+            JULY_PERIOD_ID,
+        )
+        with self.assertRaises(ValidationError):
+            MockPrepareRequest.model_validate({**payload, "period_id": "Current Period"})
 
 
 class LocalReportingLedgerTest(unittest.TestCase):
@@ -99,21 +164,41 @@ class LocalReportingLedgerTest(unittest.TestCase):
             self.assertEqual(store.metrics_summary(period_id=JUNE_PERIOD_ID)["entries"], 1)
             self.assertEqual(store.metrics_summary(period_id=JULY_PERIOD_ID)["entries"], 1)
 
-            submission = store.record_report_submission("REP-JUNE", "June 2026")
+            submission = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
 
             self.assertEqual(submission["period_id"], JUNE_PERIOD_ID)
             self.assertEqual(submission["entries"], 1)
             self.assertEqual(store.metrics_summary(period_id=JUNE_PERIOD_ID)["entries"], 0)
             self.assertEqual(store.metrics_summary(period_id=JULY_PERIOD_ID)["entries"], 1)
 
-    def test_current_period_is_rejected_when_open_events_span_months(self) -> None:
+    def test_display_label_is_rejected_even_when_open_events_span_months(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-15T00:00:00+00:00")
             store.append_count_event(_event("entry"), "2026-07-15T00:00:00+00:00")
 
-            with self.assertRaisesRegex(ValueError, "ambiguous"):
+            with self.assertRaisesRegex(ValueError, "month:Asia/Manila:YYYY-MM"):
                 store.record_report_submission("REP-AMBIGUOUS", "Current Period")
+
+    def test_correction_only_store_remains_unclassified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(directory)
+            store.record_occupancy_correction(
+                enterprise_id=None,
+                camera_id=None,
+                old_occupancy=0,
+                new_occupancy=3,
+                reason="Manual reconciliation without classified capture evidence",
+                recorded_at="2026-06-15T00:00:00+00:00",
+            )
+
+            summary = store.metrics_summary()
+
+            self.assertIsNone(summary["period_id"])
+            self.assertIsNone(summary["starts_at_utc"])
+            self.assertEqual(summary["entries"], 0)
+            with self.assertRaisesRegex(ValueError, "month:Asia/Manila:YYYY-MM"):
+                store.record_report_submission("REP-UNCLASSIFIED", "")
 
     def test_legacy_rows_are_migrated_without_data_loss_and_rerun_safely(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -179,7 +264,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             store = LocalMetricsStore(directory)
 
             with self.assertRaisesRegex(ValueError, "no reporting period"):
-                store.record_report_submission("REP-JUNE", "June 2026")
+                store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
 
     def test_noncontiguous_legacy_camera_membership_is_dead_lettered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -235,7 +320,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             def submit_report() -> None:
                 try:
                     report_result.update(
-                        report_store.record_report_submission("REP-JUNE", "June 2026")
+                        report_store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
                     )
                 except BaseException as exc:  # pragma: no cover - assertion captures thread errors
                     errors.append(exc)

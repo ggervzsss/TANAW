@@ -181,11 +181,17 @@ export type LocalMetricsSummary = {
   total_events: number;
   unsubmitted_events: number;
   unsynced_events: number;
+  unclassified_events: number;
   first_event_at: string | null;
   last_event_at: string | null;
   source_kind: "real" | "mock" | "hybrid";
   mock_run_id: string | null;
-  period?: string | null;
+  period_id: string | null;
+  period: string | null;
+  starts_at_utc: string | null;
+  ends_at_utc: string | null;
+  business_start_date: string | null;
+  business_end_date_exclusive: string | null;
 };
 
 export type LocalHourlyDensityPoint = {
@@ -229,6 +235,9 @@ export type LocalReportSubmissionRecord = {
   outbox_item_id: string;
   payload_hash: string;
   period: string;
+  period_id: string;
+  starts_at_utc: string;
+  ends_at_utc: string;
   submitted_at: string;
   entries: number;
   exits: number;
@@ -294,7 +303,9 @@ export type MockPreparationRequest = {
   exits: number;
   uniqueCount: number;
   peakOccupancy: number;
-  period: string;
+  periodId: string;
+  startsAtUtc: string;
+  endsAtUtc: string;
 };
 
 export type SimulationScenario = "normal" | "morning-rush" | "event-opening" | "overcrowding" | "evacuation" | "custom";
@@ -439,7 +450,9 @@ export async function recordLocalReportSubmission(
   payload: {
     metrics: { entries: number; exits: number; peakOccupancy: number; uniqueCount: number };
     notes: string;
-    period: string;
+    periodId: string;
+    startsAtUtc: string;
+    endsAtUtc: string;
     reportId: string;
     reportPayload: Record<string, unknown>;
   },
@@ -454,8 +467,12 @@ export async function recordLocalReportSubmission(
     },
     notes: payload.notes || null,
     payload: payload.reportPayload,
-    period: payload.period,
+    period_id: payload.periodId,
     report_id: payload.reportId,
+    source_window: {
+      start: payload.startsAtUtc,
+      end: payload.endsAtUtc,
+    },
   });
 }
 
@@ -509,7 +526,11 @@ export async function prepareLocalMockCounts(baseUrl: string, payload: MockPrepa
     exits: payload.exits,
     unique_count: payload.uniqueCount,
     peak_occupancy: payload.peakOccupancy,
-    period: payload.period,
+    period_id: payload.periodId,
+    source_window: {
+      start: payload.startsAtUtc,
+      end: payload.endsAtUtc,
+    },
   });
 }
 

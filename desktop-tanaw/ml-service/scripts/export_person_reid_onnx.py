@@ -3,10 +3,10 @@ import argparse
 from pathlib import Path
 from tempfile import gettempdir
 
-import gdown
 import onnx
 import torch
 import torch.nn.functional as F
+from gdown.download import download
 from torch import nn
 from torchreid import models, utils
 
@@ -41,6 +41,11 @@ class NormalizedFeatureExtractor(nn.Module):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", choices=sorted(MODEL_PROFILES), default="quality")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-export even when the existing ONNX model passes validation.",
+    )
     args = parser.parse_args()
     profile = MODEL_PROFILES[args.profile]
 
@@ -53,9 +58,18 @@ def main() -> None:
     checkpoint_path = checkpoint_dir / f"{profile['model_source']}.pth"
     output_path = models_dir / profile["output_name"]
 
+    if output_path.exists() and not args.force:
+        try:
+            validate_onnx_model(output_path)
+        except (OSError, ValueError, onnx.checker.ValidationError) as exc:
+            print(f"Existing model is invalid and will be replaced: {exc}")
+        else:
+            print(f"Validated existing model at {output_path}")
+            return
+
     if not checkpoint_path.exists():
         print(f"Downloading {profile['model_source']} checkpoint...")
-        gdown.download(id=profile["google_drive_file_id"], output=str(checkpoint_path), quiet=False)
+        download(id=profile["google_drive_file_id"], output=str(checkpoint_path), quiet=False)
 
     backbone = models.build_model(
         name=profile["model_name"], num_classes=1000, pretrained=False, use_gpu=False
@@ -80,9 +94,13 @@ def main() -> None:
         external_data=False,
     )
 
-    onnx_model = onnx.load(str(output_path))
-    onnx.checker.check_model(onnx_model)
+    validate_onnx_model(output_path)
     print(f"Exported {output_path}")
+
+
+def validate_onnx_model(path: Path) -> None:
+    onnx_model = onnx.load(str(path))
+    onnx.checker.check_model(onnx_model)
 
 
 if __name__ == "__main__":

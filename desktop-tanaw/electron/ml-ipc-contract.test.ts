@@ -66,6 +66,33 @@ describe("ML IPC operation allowlist", () => {
     expect(() => resolveMlOperationRequest("reports.purgeRaw", { reportId: "x".repeat(241) })).toThrow("Invalid ML service identifier");
   });
 
+  it("allows only canonical reporting period identity and bounds on report submission", () => {
+    const canonicalBody = {
+      report_id: "REP-JUNE",
+      period_id: "month:Asia/Manila:2026-06",
+      source_window: {
+        start: "2026-05-31T16:00:00Z",
+        end: "2026-06-30T16:00:00Z",
+      },
+      metrics: null,
+      notes: null,
+      payload: {},
+    };
+
+    expect(resolveMlOperationRequest("reports.submit", canonicalBody)).toEqual({
+      method: "POST",
+      path: "/reports/local-submit",
+      body: JSON.stringify(canonicalBody),
+    });
+    expect(() =>
+      resolveMlOperationRequest("reports.submit", {
+        ...canonicalBody,
+        period_id: undefined,
+        period: "Jun 1 - Jun 30, 2026",
+      }),
+    ).toThrow("unsupported field");
+  });
+
   it("contains no generic operation capable of selecting a URL", () => {
     expect(ML_OPERATION_NAMES.some((operation) => /fetch|request|url|command|shell/i.test(operation))).toBe(false);
   });

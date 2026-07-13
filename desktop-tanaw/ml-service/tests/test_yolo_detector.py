@@ -12,6 +12,16 @@ from app.detection.yolo_detector import (
 
 
 class YoloPersonTrackerTest(unittest.TestCase):
+    def test_construction_defers_expensive_runtime_discovery(self) -> None:
+        with patch(
+            "app.detection.yolo_detector.get_runtime_capabilities",
+            side_effect=AssertionError("runtime discovery must be lazy"),
+        ):
+            tracker = YoloPersonTracker()
+
+        self.assertEqual(tracker.effective_profile, "emergency")
+        self.assertEqual(tracker.selected_runtime, "cpu")
+
     def test_default_model_path_resolves_to_local_setup_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             models_root = Path(directory)

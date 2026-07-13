@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.features.reporting.contracts import reporting_period_from_key
+
 SourceKind = Literal["real", "mock", "hybrid"]
 FleetSimulationLane = Literal["normal", "warning", "one-minute-breach"]
 REPORTING_TIME_ZONE = ZoneInfo("Asia/Manila")
@@ -276,12 +278,38 @@ class DesktopReportSubmissionIngest(BaseModel):
         return self
 
 
+class MockPreparationSourceWindow(BaseModel):
+    start: datetime
+    end: datetime
+
+
 class MockPreparationCounts(BaseModel):
     entries: int = Field(ge=0)
     exits: int = Field(ge=0)
     uniqueCount: int = Field(ge=0)
     peakOccupancy: int = Field(ge=0)
     period: str
+    periodKey: str
+    sourceWindow: MockPreparationSourceWindow
+
+    @model_validator(mode="after")
+    def validate_canonical_period(self) -> MockPreparationCounts:
+        reporting_period = reporting_period_from_key(self.periodKey)
+        if (
+            self.sourceWindow.start.tzinfo is None
+            or self.sourceWindow.start.utcoffset() is None
+            or self.sourceWindow.end.tzinfo is None
+            or self.sourceWindow.end.utcoffset() is None
+        ):
+            raise ValueError("Mock preparation source-window bounds must include a UTC offset.")
+        if (
+            self.sourceWindow.start.astimezone(UTC) != reporting_period.starts_at
+            or self.sourceWindow.end.astimezone(UTC) != reporting_period.ends_at
+        ):
+            raise ValueError(
+                "Mock preparation source window must match the canonical reporting period."
+            )
+        return self
 
 
 class MockPreparationSummary(BaseModel):

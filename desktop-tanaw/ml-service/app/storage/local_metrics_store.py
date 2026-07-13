@@ -33,7 +33,6 @@ from app.storage.reporting_periods import (
     ReportingPeriod,
     monthly_period_for_captured_at,
     monthly_period_from_id,
-    monthly_period_from_label,
     parse_captured_at,
 )
 from app.storage.resilience_store import (
@@ -63,6 +62,8 @@ select
     report.report_id,
     report.period_label as period,
     report.reporting_period_id,
+    period.starts_at_utc,
+    period.ends_at_utc,
     report.last_acknowledged_logical_version,
     revision.revision_id,
     revision.revision_number,
@@ -85,6 +86,8 @@ select
     outbox.acknowledged_at as synced_at,
     report.raw_purged_at
 from local_reports as report
+join reporting_periods as period
+  on period.period_id = report.reporting_period_id
 join local_report_revisions as revision
   on revision.revision_id = report.current_revision_id
 join sync_outbox_items as outbox
@@ -961,6 +964,10 @@ class LocalMetricsStore:
             "mock_run_id": mock_run_id,
             "period_id": selected_period.period_id if selected_period else None,
             "period": selected_period.label if selected_period else None,
+            "starts_at_utc": (
+                selected_period.starts_at_utc.isoformat() if selected_period else None
+            ),
+            "ends_at_utc": (selected_period.ends_at_utc.isoformat() if selected_period else None),
             "business_start_date": (
                 selected_period.business_start_date.isoformat() if selected_period else None
             ),
@@ -1090,7 +1097,7 @@ class LocalMetricsStore:
     def record_report_submission(
         self,
         report_id: str,
-        period: str,
+        period_id: str,
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
@@ -1108,7 +1115,7 @@ class LocalMetricsStore:
         requested_metrics = _normalized_requested_metrics(metrics)
         request_document = {
             "reportId": report_id,
-            "period": period,
+            "periodKey": period_id,
             "notes": notes,
             "metrics": requested_metrics,
             "payload": report_payload,
@@ -1126,11 +1133,9 @@ class LocalMetricsStore:
             normalized_command_id = None
         with self._connection(immediate=True) as connection:
             existing_submission = self._report_submission_from_connection(connection, report_id)
-            reporting_period = _resolve_report_period(
-                connection,
-                period=period,
-                existing_submission=existing_submission,
-            )
+            reporting_period = monthly_period_from_id(period_id)
+            if reporting_period is None:
+                raise ValueError("Reporting period ID must use month:Asia/Manila:YYYY-MM.")
             upsert_reporting_period(connection, reporting_period)
             idempotent_revision = connection.execute(
                 """
@@ -1765,15 +1770,11 @@ class LocalMetricsStore:
         peak_occupancy: int,
         camera_id: int | None,
         camera_name: str | None,
-        period: str,
+        period_id: str,
     ) -> dict[str, int | str | None]:
-        reporting_period = monthly_period_from_label(period)
-        if reporting_period is None and period.strip().lower() == "current period":
-            reporting_period = monthly_period_for_captured_at(datetime.now(UTC))
+        reporting_period = monthly_period_from_id(period_id)
         if reporting_period is None:
-            raise ValueError(
-                "Simulation reporting period must identify one complete calendar month."
-            )
+            raise ValueError("Reporting period ID must use month:Asia/Manila:YYYY-MM.")
         with self._connection() as connection:
             existing_open_events = connection.execute(
                 f"""
@@ -2073,24 +2074,6 @@ class LocalMetricsStore:
         ).fetchone()
         return _report_submission_row(row) if row is not None else None
 
-    def _report_submission_for_period(self, period: str) -> dict[str, Any] | None:
-        with self._connection() as connection:
-            parsed_period = monthly_period_from_label(period)
-            if parsed_period is not None:
-                return self._report_submission_for_period_from_connection(
-                    connection, parsed_period.period_id
-                )
-            row = connection.execute(
-                f"""
-                {_REPORT_SUBMISSION_SELECT}
-                where report.reporting_period_id is null and report.period_label = ?
-                order by revision.submitted_at desc
-                limit 1
-                """,
-                (period,),
-            ).fetchone()
-        return _report_submission_row(row) if row is not None else None
-
     def _report_submission_for_period_from_connection(
         self, connection: sqlite3.Connection, period_id: str
     ) -> dict[str, Any] | None:
@@ -2374,6 +2357,11 @@ def _submission_response_from_record(
     entries = _safe_int(record["entries"])
     exits = _safe_int(record["exits"])
     unique_count = _safe_int(record["unique_count"])
+    reporting_period = monthly_period_from_id(str(record["period_id"]))
+    if reporting_period is None:
+        raise RuntimeError(
+            f"Local report references an invalid reporting period: {record['period_id']}"
+        )
     return {
         "entries": entries,
         "exits": exits,
@@ -2396,8 +2384,10 @@ def _submission_response_from_record(
         "mock_run_id": str(record["mock_run_id"]) if record["mock_run_id"] else None,
         "period_id": str(record["period_id"]) if record["period_id"] else None,
         "period": str(record["period"]),
-        "business_start_date": None,
-        "business_end_date_exclusive": None,
+        "starts_at_utc": reporting_period.starts_at_utc.isoformat(),
+        "ends_at_utc": reporting_period.ends_at_utc.isoformat(),
+        "business_start_date": reporting_period.business_start_date.isoformat(),
+        "business_end_date_exclusive": (reporting_period.business_end_date_exclusive.isoformat()),
         "report_id": str(record["report_id"]),
         "revision_id": revision_id,
         "revision_number": _safe_int(record["revision_number"]),
@@ -2620,68 +2610,13 @@ def _resolve_summary_period(
                     f"{row['reporting_period_id']}"
                 )
             return period
-        correction_row = connection.execute(
-            """
-            select recorded_at
-            from occupancy_corrections
-            order by recorded_at desc
-            limit 1
-            """
-        ).fetchone()
-        if correction_row is None:
-            return None
-        try:
-            return monthly_period_for_captured_at(str(correction_row["recorded_at"]))
-        except ValueError:
-            return None
+        return None
     period = monthly_period_from_id(str(row["reporting_period_id"]))
     if period is None:
         raise RuntimeError(
             f"Local event references an invalid reporting period: {row['reporting_period_id']}"
         )
     return period
-
-
-def _resolve_report_period(
-    connection: sqlite3.Connection,
-    *,
-    period: str,
-    existing_submission: dict[str, Any] | None,
-) -> ReportingPeriod:
-    parsed_period = monthly_period_from_label(period)
-    if parsed_period is not None:
-        return parsed_period
-
-    if existing_submission is not None and existing_submission.get("period_id"):
-        existing_period = monthly_period_from_id(str(existing_submission["period_id"]))
-        if existing_period is not None:
-            return existing_period
-
-    if period.strip().lower() != "current period":
-        raise ValueError(
-            "Reporting period must identify one complete calendar month; "
-            "unrecognized labels are never assigned to the current month."
-        )
-
-    rows = connection.execute(
-        f"""
-        select distinct reporting_period_id
-        from count_events
-        where {_open_event_filter()}
-          and reporting_period_id is not null
-        order by reporting_period_id
-        """
-    ).fetchall()
-    period_ids = [str(row["reporting_period_id"]) for row in rows]
-    if len(period_ids) != 1:
-        raise ValueError(
-            "Current Period is ambiguous. Select an explicit reporting month; "
-            f"found {len(period_ids)} open reporting periods."
-        )
-    resolved = monthly_period_from_id(period_ids[0])
-    if resolved is None:
-        raise RuntimeError(f"Local event references an invalid reporting period: {period_ids[0]}")
-    return resolved
 
 
 def _safe_int(value: Any) -> int:
@@ -2751,6 +2686,8 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
         "payload_hash": row["payload_hash"],
         "period": row["period"],
         "period_id": row["reporting_period_id"],
+        "starts_at_utc": row["starts_at_utc"],
+        "ends_at_utc": row["ends_at_utc"],
         "submitted_at": row["submitted_at"],
         "entries": _safe_int(row["entries"]),
         "exits": _safe_int(row["exits"]),

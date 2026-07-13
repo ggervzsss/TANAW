@@ -14,6 +14,8 @@ import {
   type LocalSyncOutboxItem,
 } from "../../camera/services/ml-service";
 import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
+import { canonicalReportingPeriodFromSource } from "../../reports/services/reporting-period";
+import type { CanonicalReportingPeriod } from "../../../types/enterprise";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 
@@ -23,6 +25,11 @@ export type BackendMockPreparationCounts = {
   uniqueCount: number;
   peakOccupancy: number;
   period: string;
+  periodKey: string;
+  sourceWindow: {
+    start: string;
+    end: string;
+  };
 };
 
 export type BackendMockPreparation = {
@@ -39,7 +46,7 @@ export async function getDesktopMockPreparation() {
   return response.data;
 }
 
-export async function prepareDesktopMockCounts(period?: string) {
+export async function prepareDesktopMockCounts(periodId?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
   const simulation = await resolveOptional(() => getSimulationStatus(baseUrl));
@@ -51,15 +58,19 @@ export async function prepareDesktopMockCounts(period?: string) {
   if (preparation.status === "removed") {
     return resetLocalMockData(baseUrl, preparation.runId);
   }
-  if (!period) {
+  let selectedPeriodId = periodId;
+  if (!selectedPeriodId) {
     const currentMetrics = await getLocalMetricsSummary(baseUrl);
-    const pendingPeriods = preparation.pendingCounts?.map((counts) => counts.period) ?? (preparation.counts ? [preparation.counts.period] : []);
-    if (currentMetrics.mock_run_id === preparation.runId && currentMetrics.period && pendingPeriods.includes(currentMetrics.period) && currentMetrics.unsubmitted_events > 0) {
+    const pendingPeriodIds = preparationCounts(preparation).map((counts) => reportingPeriodForPreparationCounts(counts).periodId);
+    if (currentMetrics.mock_run_id === preparation.runId && currentMetrics.period_id && pendingPeriodIds.includes(currentMetrics.period_id) && currentMetrics.unsubmitted_events > 0) {
       return null;
     }
+    selectedPeriodId = currentMetrics.period_id ?? undefined;
   }
-  const counts = selectMockPreparationCounts(preparation, period);
+  if (!selectedPeriodId) return null;
+  const counts = selectMockPreparationCounts(preparation, selectedPeriodId);
   if (!counts) return null;
+  const reportingPeriod = reportingPeriodForPreparationCounts(counts);
 
   return prepareLocalMockCounts(baseUrl, {
     mockRunId: preparation.runId,
@@ -69,104 +80,28 @@ export async function prepareDesktopMockCounts(period?: string) {
     exits: counts.exits,
     uniqueCount: counts.uniqueCount,
     peakOccupancy: counts.peakOccupancy,
-    period: counts.period,
+    periodId: reportingPeriod.periodId,
+    startsAtUtc: reportingPeriod.startsAtUtc,
+    endsAtUtc: reportingPeriod.endsAtUtc,
   });
 }
 
-function selectMockPreparationCounts(preparation: BackendMockPreparation, period?: string) {
-  if (!period) {
-    const currentPeriod = currentReportingPeriodLabel();
-    return preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, currentPeriod)) ?? preparation.counts;
-  }
-  return (
-    preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, period)) ??
-    (preparation.counts && isSameReportingMonth(preparation.counts.period, period) ? preparation.counts : null)
-  );
+export function reportingPeriodForPreparationCounts(counts: BackendMockPreparationCounts): CanonicalReportingPeriod {
+  return canonicalReportingPeriodFromSource({
+    period_id: counts.periodKey,
+    period: counts.period,
+    starts_at_utc: counts.sourceWindow?.start,
+    ends_at_utc: counts.sourceWindow?.end,
+  });
 }
 
-function currentReportingPeriodLabel() {
-  const now = reportingDate(new Date());
-  const month = monthName(now.monthIndex);
-  const lastDay = lastDayOfMonth(now.year, now.monthIndex);
-  return `${month} 1 - ${month} ${lastDay}, ${now.year}`;
+function preparationCounts(preparation: BackendMockPreparation) {
+  return preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : [];
 }
 
-function isSameReportingMonth(first: string, second: string) {
-  return reportingMonthKey(first) === reportingMonthKey(second);
+function selectMockPreparationCounts(preparation: BackendMockPreparation, periodId: string) {
+  return preparationCounts(preparation).find((counts) => reportingPeriodForPreparationCounts(counts).periodId === periodId) ?? null;
 }
-
-function reportingMonthKey(value: string) {
-  const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
-  if (rangeMatch) {
-    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
-  }
-
-  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
-  if (monthYearMatch) {
-    return monthKey(monthYearMatch[1], monthYearMatch[2]) ?? normalizedValue.toLowerCase();
-  }
-
-  return normalizedValue.toLowerCase();
-}
-
-function monthKey(monthLabel: string, yearLabel: string) {
-  const monthIndex = monthIndexFromLabel(monthLabel);
-  const year = Number(yearLabel);
-  if (monthIndex === null || !Number.isInteger(year)) return null;
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-}
-
-type CalendarDate = {
-  day: number;
-  monthIndex: number;
-  year: number;
-};
-
-function reportingDate(value: Date): CalendarDate {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: REPORTING_TIME_ZONE,
-    year: "numeric",
-  }).formatToParts(value);
-  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-  return {
-    day: partValue("day"),
-    monthIndex: partValue("month") - 1,
-    year: partValue("year"),
-  };
-}
-
-function monthIndexFromLabel(monthLabel: string): number | null {
-  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
-  return typeof monthIndex === "number" ? monthIndex : null;
-}
-
-function lastDayOfMonth(year: number, monthIndex: number) {
-  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-}
-
-function monthName(monthIndex: number) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
-}
-
-const REPORTING_TIME_ZONE = "Asia/Manila";
-
-const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  may: 4,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11,
-};
 
 export async function syncDesktopReportSubmissions(limit = 100) {
   const serviceStatus = await getMlServiceStatus();

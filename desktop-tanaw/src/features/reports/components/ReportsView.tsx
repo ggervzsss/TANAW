@@ -4,14 +4,26 @@ import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
-import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
+import type { CanonicalReportingPeriod, DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
-import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, syncDesktopReportSubmission, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
+import {
+  DESKTOP_REPORT_SYNC_EVENT,
+  getDesktopMockPreparation,
+  prepareDesktopMockCounts,
+  reportingPeriodForPreparationCounts,
+  syncDesktopReportSubmission,
+  type BackendMockPreparationCounts,
+} from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
+import {
+  canonicalReportingPeriodFromSource,
+  getReportingPeriodSubmissionError,
+  UNCLASSIFIED_REPORTING_PERIOD_LABEL,
+} from "../services/reporting-period";
 
 type ReportsViewProps = {
   reportsHistory: ReportRecord[];
@@ -29,10 +41,9 @@ type DotPreviewState = {
 const DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics";
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
-  const currentReportingPeriod = useMemo(() => getCurrentReportingPeriod(), []);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
-  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
-  const [period, setPeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
+  const [liveReportingPeriod, setLiveReportingPeriod] = useState<CanonicalReportingPeriod | null>(null);
+  const [reportingPeriod, setReportingPeriod] = useState<CanonicalReportingPeriod | null>(null);
   const [notes, setNotes] = useState("");
   const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
 
@@ -48,47 +59,48 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
-  const demographicDraftStorageKey = useMemo(() => getDemographicDraftStorageKey(activeReportId, period), [activeReportId, period]);
+  const period = reportingPeriod?.label ?? UNCLASSIFIED_REPORTING_PERIOD_LABEL;
+  const demographicDraftStorageKey = useMemo(
+    () => getDemographicDraftStorageKey(activeReportId, reportingPeriod),
+    [activeReportId, reportingPeriod],
+  );
   const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
 
-  const selectedPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, period)) ?? null;
+  const selectedPeriodCounts =
+    pendingPeriodCounts.find(
+      (counts) => reportingPeriodForPreparationCounts(counts).periodId === reportingPeriod?.periodId,
+    ) ?? null;
   const displayedMetrics = activeReport
     ? metricsFromReport(activeReport)
-    : isSameReportingMonth(period, livePeriod)
+    : reportingPeriod?.periodId === liveReportingPeriod?.periodId
       ? liveMetrics
       : selectedPeriodCounts
         ? metricsFromPendingCounts(selectedPeriodCounts)
         : liveMetrics;
-  const currentPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, currentReportingPeriod)) ?? null;
-  const currentLedgerMetrics =
-    isSameReportingMonth(livePeriod, currentReportingPeriod)
-      ? liveMetrics
-      : currentPeriodCounts
-        ? metricsFromPendingCounts(currentPeriodCounts)
-        : EMPTY_METRICS;
+  const currentLedgerMetrics = liveReportingPeriod ? liveMetrics : EMPTY_METRICS;
   const currentLedgerDemo =
-    !activeReport && isSameReportingMonth(period, currentReportingPeriod)
+    !activeReport && reportingPeriod?.periodId === liveReportingPeriod?.periodId
       ? demo
-      : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, currentReportingPeriod)) ?? emptyDemo();
-  const currentLedgerNotes = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "";
+      : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, liveReportingPeriod)) ?? emptyDemo();
+  const currentLedgerNotes = !activeReport && reportingPeriod?.periodId === liveReportingPeriod?.periodId ? notes : "";
 
   const blockingMetricsError = activeReport ? null : metricsError;
-  const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
+  const validationError = validateReportDraft(displayedMetrics, demo, reportingPeriod, reportsHistory, activeReportId, {
     checkDuplicatePeriod: !(activeReport && isReadOnly),
     checkReportingPeriod: !isReadOnly,
   });
-  const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
+  const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(reportingPeriod);
   const ledgerRows = useMemo(
     () =>
       buildLedgerRows({
         currentDemo: currentLedgerDemo,
         currentMetrics: currentLedgerMetrics,
         currentNotes: currentLedgerNotes,
-        currentPeriod: currentReportingPeriod,
+        currentPeriod: liveReportingPeriod,
         pendingCounts: pendingPeriodCounts,
         reportsHistory,
       }),
-    [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, currentReportingPeriod, pendingPeriodCounts, reportsHistory],
+    [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, liveReportingPeriod, pendingPeriodCounts, reportsHistory],
   );
   const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
 
@@ -100,17 +112,21 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     try {
       const status = await getMlServiceStatus();
       const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      const summaryPeriod = summary.period || currentReportingPeriod;
+      const summaryPeriod = canonicalReportingPeriodFromSource(summary);
       setLiveMetrics(metricsFromSummary(summary));
-      setLivePeriod(summaryPeriod);
+      setLiveReportingPeriod(summaryPeriod);
       if (!activeReportId) {
-        setPeriod((currentPeriod) => (isSameReportingMonth(currentPeriod, summaryPeriod) ? summaryPeriod : currentPeriod));
+        setReportingPeriod(summaryPeriod);
       }
       setMetricsError(null);
     } catch (error) {
-      setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
+      const message = error instanceof Error ? error.message : "Unable to load local edge metrics.";
+      setLiveMetrics(EMPTY_METRICS);
+      setLiveReportingPeriod(null);
+      if (!activeReportId) setReportingPeriod(null);
+      setMetricsError(message);
     }
-  }, [activeReportId, currentReportingPeriod]);
+  }, [activeReportId]);
 
   const refreshLocalReports = useCallback(async () => {
     try {
@@ -132,9 +148,11 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         preparation?.status === "active"
           ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : [])
           : [];
+      pendingCounts.forEach(reportingPeriodForPreparationCounts);
       setPendingPeriodCounts(pendingCounts);
-    } catch {
+    } catch (error) {
       setPendingPeriodCounts([]);
+      setLedgerError(error instanceof Error ? error.message : "Prepared counts have no canonical reporting period.");
     }
   }, []);
 
@@ -174,26 +192,28 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     saveStoredDemographicDraft(demographicDraftStorageKey, demo);
   }, [demo, demographicDraftStorageKey, hydratedDemographicDraftKey, isReadOnly]);
 
-  const resetDraftWorkspace = (nextPeriod?: string) => {
+  const resetDraftWorkspace = (nextPeriod: CanonicalReportingPeriod | null = liveReportingPeriod) => {
     setActiveReportId(null);
-    setPeriod(nextPeriod ?? currentReportingPeriod);
+    setReportingPeriod(nextPeriod);
     setNotes("");
     setDemo(emptyDemo());
     setPreviewReport(null);
   };
 
-  const handleDraftPeriodSelect = async (nextPeriod: string) => {
-    const hasPreparedCounts = pendingPeriodCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod));
-    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && (isSameReportingMonth(livePeriod, nextPeriod) || !hasPreparedCounts)) return;
+  const handleDraftPeriodSelect = async (nextPeriod: CanonicalReportingPeriod) => {
+    const hasPreparedCounts = pendingPeriodCounts.some(
+      (counts) => reportingPeriodForPreparationCounts(counts).periodId === nextPeriod.periodId,
+    );
+    if (!activeReportId && nextPeriod.periodId === reportingPeriod?.periodId && (liveReportingPeriod?.periodId === nextPeriod.periodId || !hasPreparedCounts)) return;
 
-    if (isSameReportingMonth(nextPeriod, currentReportingPeriod) && !hasPreparedCounts) {
-      resetDraftWorkspace(currentReportingPeriod);
+    if (liveReportingPeriod?.periodId === nextPeriod.periodId && !hasPreparedCounts) {
+      resetDraftWorkspace(liveReportingPeriod);
       return;
     }
 
     if (!hasPreparedCounts) {
       setActiveReportId(null);
-      setPeriod(nextPeriod);
+      setReportingPeriod(null);
       setNotes("");
       setDemo(emptyDemo());
       setPreviewReport(null);
@@ -202,14 +222,15 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
     setIsPeriodChanging(true);
     try {
-      const prepared = await prepareDesktopMockCounts(nextPeriod);
-      if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period !== nextPeriod)) {
-        throw new Error(`No prepared count package is available for ${nextPeriod}.`);
+      const prepared = await prepareDesktopMockCounts(nextPeriod.periodId);
+      if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period_id !== nextPeriod.periodId)) {
+        throw new Error(`No prepared count package is available for ${nextPeriod.label}.`);
       }
+      const preparedPeriod = canonicalReportingPeriodFromSource(prepared);
       setActiveReportId(null);
       setLiveMetrics(metricsFromSummary(prepared));
-      setLivePeriod(prepared.period || nextPeriod);
-      setPeriod(prepared.period || nextPeriod);
+      setLiveReportingPeriod(preparedPeriod);
+      setReportingPeriod(preparedPeriod);
       setNotes("");
       setDemo(emptyDemo());
       setPreviewReport(null);
@@ -226,7 +247,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const handleViewReport = (report: ReportRecord) => {
     setActiveReportId(report.id);
-    setPeriod(report.period || report.date || getCurrentReportingPeriod());
+    setReportingPeriod(report.reportingPeriod ?? null);
     setNotes(report.notes || "");
     setDemo(report.demo || emptyDemo());
   };
@@ -237,7 +258,13 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       return;
     }
 
-    void handleDraftPeriodSelect(row.report.period ?? row.report.date);
+    if (!row.report.reportingPeriod) {
+      const message = "This ledger row has no canonical reporting period. Refresh it before preparing a report.";
+      setMetricsError(message);
+      notifyError(message);
+      return;
+    }
+    void handleDraftPeriodSelect(row.report.reportingPeriod);
   };
 
   const handlePreviewReport = (report: ReportRecord) => {
@@ -271,15 +298,16 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const executeSubmit = async () => {
     setIsSubmitting(true);
-    const submitValidationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
+    const submitValidationError = validateReportDraft(displayedMetrics, demo, reportingPeriod, reportsHistory, activeReportId, {
       checkDuplicatePeriod: true,
       checkReportingPeriod: true,
     });
-    if (submitValidationError) {
-      notifyError(submitValidationError);
+    if (submitValidationError || !reportingPeriod) {
+      notifyError(submitValidationError ?? "No canonical reporting period is selected.");
       setIsSubmitting(false);
       return;
     }
+    const submissionPeriod = reportingPeriod;
 
     const now = new Date().toLocaleString("en-US", {
       hour12: true,
@@ -322,6 +350,11 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       metrics: reportMetrics,
       notes,
       period,
+      periodKey: submissionPeriod.periodId,
+      sourceWindow: {
+        start: submissionPeriod.startsAtUtc,
+        end: submissionPeriod.endsAtUtc,
+      },
       status: nextStatus,
     };
 
@@ -336,7 +369,9 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           uniqueCount: reportMetrics.unique,
         },
         notes,
-        period,
+        periodId: submissionPeriod.periodId,
+        startsAtUtc: submissionPeriod.startsAtUtc,
+        endsAtUtc: submissionPeriod.endsAtUtc,
         reportId,
         reportPayload,
       });
@@ -348,6 +383,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     const cloudSyncError = await syncSubmittedReportToCloud(reportId, submission.outbox_item_id);
     const submittedSyncStatus = cloudSyncError ? submission.sync_status : "synced";
     const restoredWorkspaceMetrics = !cloudSyncError && !activeReportId ? await prepareNextWorkspaceMetrics() : null;
+    let restoredWorkspacePeriod: CanonicalReportingPeriod | null = null;
 
     const submittedMetrics: Metrics = {
       entries: submission.entries,
@@ -368,6 +404,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
               peak: submittedMetrics.peak,
               unique: submittedMetrics.unique,
               period,
+              reportingPeriod: submissionPeriod,
               demo,
               notes,
               submittedAt: submission.submitted_at,
@@ -389,6 +426,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         peak: submittedMetrics.peak,
         unique: submittedMetrics.unique,
         period,
+        reportingPeriod: submissionPeriod,
         demo,
         notes,
         submittedAt: submission.submitted_at,
@@ -404,7 +442,13 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     setIsSubmitting(false);
     if (restoredWorkspaceMetrics) {
       setLiveMetrics(metricsFromSummary(restoredWorkspaceMetrics));
-      setLivePeriod(restoredWorkspaceMetrics.period || currentReportingPeriod);
+      try {
+        restoredWorkspacePeriod = canonicalReportingPeriodFromSource(restoredWorkspaceMetrics);
+        setLiveReportingPeriod(restoredWorkspacePeriod);
+      } catch (error) {
+        setLiveReportingPeriod(null);
+        setMetricsError(error instanceof Error ? error.message : "The next reporting period is not classified.");
+      }
     } else {
       void refreshLocalMetrics();
     }
@@ -414,7 +458,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       notifyError(`Report saved locally, but cloud sync is still pending: ${cloudSyncError}`);
       window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
     }
-    resetDraftWorkspace();
+    resetDraftWorkspace(restoredWorkspacePeriod);
   };
 
   return (
@@ -475,19 +519,25 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 function validateReportDraft(
   metrics: Metrics,
   demo: DemoBreakdown,
-  period: string,
+  reportingPeriod: CanonicalReportingPeriod | null,
   reports: ReportRecord[],
   activeReportId: string | null,
   options: { checkDuplicatePeriod: boolean; checkReportingPeriod: boolean },
 ) {
   if (options.checkReportingPeriod) {
-    const periodSubmissionError = getReportingPeriodSubmissionError(period);
+    const periodSubmissionError = getReportingPeriodSubmissionError(reportingPeriod);
     if (periodSubmissionError) return periodSubmissionError;
   }
   const allocationError = validateDemographicAllocation(metrics, demo);
   if (allocationError) return allocationError;
-  if (options.checkDuplicatePeriod && reports.some((report) => report.id !== activeReportId && report.period === period && report.status !== "Draft")) {
-    return `A report for ${period} has already been submitted.`;
+  if (
+    options.checkDuplicatePeriod &&
+    reportingPeriod &&
+    reports.some(
+      (report) => report.id !== activeReportId && report.reportingPeriod?.periodId === reportingPeriod.periodId && report.status !== "Draft",
+    )
+  ) {
+    return `A report for ${reportingPeriod.label} has already been submitted.`;
   }
   return null;
 }
@@ -527,8 +577,8 @@ function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { pre
   return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
 }
 
-function getDemographicDraftStorageKey(activeReportId: string | null, period: string) {
-  const scope = activeReportId ? `report:${activeReportId}` : `period:${period || getCurrentReportingPeriod()}`;
+function getDemographicDraftStorageKey(activeReportId: string | null, period: CanonicalReportingPeriod | null) {
+  const scope = activeReportId ? `report:${activeReportId}` : period ? `period:${period.periodId}` : "period:unclassified";
   return `${DEMOGRAPHIC_DRAFT_STORAGE_PREFIX}:${encodeURIComponent(scope)}`;
 }
 
@@ -578,11 +628,10 @@ function buildLedgerRows({
   currentDemo: DemoBreakdown;
   currentMetrics: Metrics;
   currentNotes: string;
-  currentPeriod: SystemLogPeriod;
+  currentPeriod: CanonicalReportingPeriod | null;
   pendingCounts: BackendMockPreparationCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
-  const reportedPeriods = new Set(reportsHistory.map((report) => reportingMonthKey(report.period ?? report.date)));
   const pendingPeriods = new Set<string>();
   const rows: ReportLedgerRow[] = [
     {
@@ -590,13 +639,14 @@ function buildLedgerRows({
       kind: "current",
       report: {
         id: "TANAW-DRAFT",
-        date: currentPeriod,
+        date: currentPeriod?.label ?? UNCLASSIFIED_REPORTING_PERIOD_LABEL,
         status: "Draft",
         entries: currentMetrics.entries,
         exits: currentMetrics.exits,
         peak: currentMetrics.peak,
         unique: currentMetrics.unique,
-        period: currentPeriod,
+        period: currentPeriod?.label ?? UNCLASSIFIED_REPORTING_PERIOD_LABEL,
+        reportingPeriod: currentPeriod ?? undefined,
         demo: currentDemo,
         notes: currentNotes,
       },
@@ -607,11 +657,11 @@ function buildLedgerRows({
   ];
 
   for (const counts of pendingCounts) {
-    const countsPeriodKey = reportingMonthKey(counts.period);
-    if (isSameReportingMonth(counts.period, currentPeriod) || reportedPeriods.has(countsPeriodKey) || pendingPeriods.has(countsPeriodKey)) continue;
-    pendingPeriods.add(countsPeriodKey);
+    const pendingPeriod = reportingPeriodForPreparationCounts(counts);
+    if (pendingPeriod.periodId === currentPeriod?.periodId || pendingPeriods.has(pendingPeriod.periodId)) continue;
+    pendingPeriods.add(pendingPeriod.periodId);
     rows.push({
-      key: draftLedgerKey(counts.period),
+      key: draftLedgerKey(pendingPeriod),
       kind: "pending",
       report: reportFromPendingCounts(counts),
       reportLabel: "Pending Submission",
@@ -635,22 +685,24 @@ function buildLedgerRows({
 }
 
 function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRecord {
+  const reportingPeriod = reportingPeriodForPreparationCounts(counts);
   return {
-    id: pendingReportId(counts.period),
-    date: counts.period,
+    id: pendingReportId(reportingPeriod.periodId),
+    date: reportingPeriod.label,
     status: "Draft",
     entries: counts.entries,
     exits: counts.exits,
     peak: counts.peakOccupancy,
     unique: counts.uniqueCount,
-    period: counts.period,
-    demo: loadStoredDemographicDraft(getDemographicDraftStorageKey(null, counts.period)) ?? emptyDemo(),
+    period: reportingPeriod.label,
+    reportingPeriod,
+    demo: loadStoredDemographicDraft(getDemographicDraftStorageKey(null, reportingPeriod)) ?? emptyDemo(),
     notes: "",
   };
 }
 
-function draftLedgerKey(period: string) {
-  return `draft:${reportingMonthKey(period)}`;
+function draftLedgerKey(period: CanonicalReportingPeriod | null) {
+  return `draft:${period?.periodId ?? "unclassified"}`;
 }
 
 function historyLedgerKey(reportId: string) {
@@ -667,16 +719,18 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
   const metrics = metricsFromLocalSubmission(submission);
+  const reportingPeriod = canonicalReportingPeriodFromSource(submission);
 
   return {
     id: submission.report_id,
-    date: submission.period,
+    date: reportingPeriod.label,
     status: payloadStatus,
     entries: metrics.entries,
     exits: metrics.exits,
     peak: metrics.peak,
     unique: metrics.unique,
-    period: periodFromValue(submission.period),
+    period: reportingPeriod.label,
+    reportingPeriod,
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
     auditTrail: auditTrailFromPayload(payload.auditTrail) ?? [
@@ -717,6 +771,7 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
   const peak = typeof report.metrics.peak === "number" ? report.metrics.peak : Number(report.metrics.peak) || 0;
   const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
   const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
+  const reportingPeriod = reportingPeriodFromPayload(report.payload);
   return {
     id: report.code,
     date: report.period,
@@ -726,6 +781,7 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
     peak,
     unique: report.metrics.unique,
     period: report.period,
+    reportingPeriod: reportingPeriod ?? undefined,
     demo: demoFromPayload(report.payload?.demo),
     notes: report.notes ?? "",
     remarks: report.remarks,
@@ -817,8 +873,21 @@ function reportTimestamp(report: ReportRecord) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function periodFromValue(value: string): SystemLogPeriod {
-  return value || getCurrentReportingPeriod();
+function reportingPeriodFromPayload(payload: Record<string, unknown> | null | undefined): CanonicalReportingPeriod | null {
+  if (!payload) return null;
+  const sourceWindow = payload.sourceWindow;
+  if (!sourceWindow || typeof sourceWindow !== "object") return null;
+  const window = sourceWindow as Record<string, unknown>;
+  try {
+    return canonicalReportingPeriodFromSource({
+      period_id: payload.periodKey,
+      period: payload.period,
+      starts_at_utc: window.start,
+      ends_at_utc: window.end,
+    });
+  } catch {
+    return null;
+  }
 }
 
 function demoFromPayload(value: unknown): DemoBreakdown {
@@ -892,147 +961,3 @@ function nonNegativeInteger(value: unknown) {
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
   return null;
 }
-
-function getCurrentReportingPeriod() {
-  const now = new Date();
-  return reportingPeriodLabel(now);
-}
-
-function reportingPeriodLabel(value: Date) {
-  const reportingValue = reportingDate(value);
-  const month = monthName(reportingValue.monthIndex, "short");
-  const lastDay = lastDayOfMonth(reportingValue.year, reportingValue.monthIndex);
-  return `${month} 1 - ${month} ${lastDay}, ${reportingValue.year}`;
-}
-
-function isSameReportingMonth(first: string, second: string) {
-  return reportingMonthKey(first) === reportingMonthKey(second);
-}
-
-function getReportingPeriodSubmissionError(period: string, now = new Date()) {
-  const periodEnd = reportingPeriodEndDate(period);
-  if (!periodEnd) {
-    return "Reporting period must include a recognizable month and year before submission.";
-  }
-
-  const opensOn = addCalendarDays(periodEnd, 1);
-  if (calendarDateKey(reportingDate(now)) >= calendarDateKey(opensOn)) return null;
-
-  return `Submission opens on ${formatCalendarDate(opensOn)} after the ${monthName(periodEnd.monthIndex)} ${periodEnd.year} reporting period closes.`;
-}
-
-function reportingMonthKey(value: string) {
-  const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
-  if (rangeMatch) {
-    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
-  }
-
-  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
-  if (monthYearMatch) {
-    return monthKey(monthYearMatch[1], monthYearMatch[2]) ?? normalizedValue.toLowerCase();
-  }
-
-  return normalizedValue.toLowerCase();
-}
-
-function reportingPeriodEndDate(value: string): CalendarDate | null {
-  const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$/.exec(normalizedValue);
-  if (rangeMatch) {
-    const monthIndex = monthIndexFromLabel(rangeMatch[2] || rangeMatch[1]);
-    const day = Number(rangeMatch[3]);
-    const year = Number(rangeMatch[4]);
-    if (monthIndex === null || !isValidCalendarDate(year, monthIndex, day)) return null;
-    return { day, monthIndex, year };
-  }
-
-  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
-  if (monthYearMatch) {
-    const monthIndex = monthIndexFromLabel(monthYearMatch[1]);
-    const year = Number(monthYearMatch[2]);
-    if (monthIndex === null || !Number.isInteger(year)) return null;
-    return { day: lastDayOfMonth(year, monthIndex), monthIndex, year };
-  }
-
-  return null;
-}
-
-function monthKey(monthLabel: string, yearLabel: string) {
-  const monthIndex = monthIndexFromLabel(monthLabel);
-  const year = Number(yearLabel);
-  if (monthIndex === null || !Number.isInteger(year)) return null;
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-}
-
-type CalendarDate = {
-  day: number;
-  monthIndex: number;
-  year: number;
-};
-
-function monthIndexFromLabel(monthLabel: string): number | null {
-  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
-  return typeof monthIndex === "number" ? monthIndex : null;
-}
-
-function isValidCalendarDate(year: number, monthIndex: number, day: number) {
-  return Number.isInteger(year) && Number.isInteger(day) && day >= 1 && day <= lastDayOfMonth(year, monthIndex);
-}
-
-function lastDayOfMonth(year: number, monthIndex: number) {
-  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-}
-
-function addCalendarDays(value: CalendarDate, days: number): CalendarDate {
-  const date = new Date(Date.UTC(value.year, value.monthIndex, value.day + days));
-  return {
-    day: date.getUTCDate(),
-    monthIndex: date.getUTCMonth(),
-    year: date.getUTCFullYear(),
-  };
-}
-
-function reportingDate(value: Date): CalendarDate {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: REPORTING_TIME_ZONE,
-    year: "numeric",
-  }).formatToParts(value);
-  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-  return {
-    day: partValue("day"),
-    monthIndex: partValue("month") - 1,
-    year: partValue("year"),
-  };
-}
-
-function calendarDateKey(value: CalendarDate) {
-  return value.year * 10_000 + (value.monthIndex + 1) * 100 + value.day;
-}
-
-function formatCalendarDate(value: CalendarDate) {
-  return `${monthName(value.monthIndex, "short")} ${value.day}, ${value.year}`;
-}
-
-function monthName(monthIndex: number, format: "short" | "long" = "long") {
-  return new Intl.DateTimeFormat("en-US", { month: format, timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
-}
-
-const REPORTING_TIME_ZONE = "Asia/Manila";
-
-const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  may: 4,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11,
-};

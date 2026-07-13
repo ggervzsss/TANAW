@@ -122,8 +122,11 @@ class TrackIdentityResolver:
                 pending.append(track)
                 continue
 
-            predicted = self._predicted_centroid(state, now)
-            jump_fraction = _distance(predicted, track.centroid) / diagonal
+            # A detector-owned source ID should be split only when its observed
+            # position jumps implausibly. Extrapolating here made continuity
+            # depend on scheduler timing: a very short frame gap produced a
+            # huge velocity, then a modest pause projected the track far away.
+            jump_fraction = _distance(state.centroid, track.centroid) / diagonal
             if jump_fraction > self.max_jump_distance_fraction:
                 self._source_to_stable.pop(track.track_id, None)
                 self._split_count += 1

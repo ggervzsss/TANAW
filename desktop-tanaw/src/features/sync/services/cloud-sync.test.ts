@@ -1,8 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { post, getMlServiceStatus, listReadySyncOutboxItems, acknowledgeSyncOutboxItem, recordSyncOutboxFailure, listLocalReportSubmissions, listEnterpriseFinalReports } = vi.hoisted(() => ({
+const {
+  post,
+  get,
+  getMlServiceStatus,
+  getLocalMetricsSummary,
+  getSimulationStatus,
+  prepareLocalMockCounts,
+  resetLocalMockData,
+  listReadySyncOutboxItems,
+  acknowledgeSyncOutboxItem,
+  recordSyncOutboxFailure,
+  listLocalReportSubmissions,
+  listEnterpriseFinalReports,
+} = vi.hoisted(() => ({
   post: vi.fn(),
+  get: vi.fn(),
   getMlServiceStatus: vi.fn(),
+  getLocalMetricsSummary: vi.fn(),
+  getSimulationStatus: vi.fn(),
+  prepareLocalMockCounts: vi.fn(),
+  resetLocalMockData: vi.fn(),
   listReadySyncOutboxItems: vi.fn(),
   acknowledgeSyncOutboxItem: vi.fn(),
   recordSyncOutboxFailure: vi.fn(),
@@ -10,10 +28,14 @@ const { post, getMlServiceStatus, listReadySyncOutboxItems, acknowledgeSyncOutbo
   listEnterpriseFinalReports: vi.fn(),
 }));
 
-vi.mock("../../../lib/axios", () => ({ staffApi: { post } }));
+vi.mock("../../../lib/axios", () => ({ staffApi: { get, post } }));
 vi.mock("../../camera/services/ml-service", () => ({
   DEFAULT_ML_SERVICE_BASE_URL: "tanaw-ml://local",
   getMlServiceStatus,
+  getLocalMetricsSummary,
+  getSimulationStatus,
+  prepareLocalMockCounts,
+  resetLocalMockData,
   listReadySyncOutboxItems,
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
@@ -21,17 +43,96 @@ vi.mock("../../camera/services/ml-service", () => ({
 }));
 vi.mock("../../reports/services/report-history", () => ({ listEnterpriseFinalReports }));
 
-import { syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
+import { prepareDesktopMockCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
 
 const OUTBOX_ENDPOINT = "/operational/desktop/report-submissions/v2";
 
 beforeEach(() => {
   vi.clearAllMocks();
   getMlServiceStatus.mockResolvedValue({ baseUrl: "tanaw-ml://local", error: null, pid: 123, running: true });
+  getSimulationStatus.mockResolvedValue(null);
+  prepareLocalMockCounts.mockResolvedValue({ prepared: true });
   listLocalReportSubmissions.mockResolvedValue([]);
   listEnterpriseFinalReports.mockResolvedValue([]);
   acknowledgeSyncOutboxItem.mockResolvedValue({ acknowledged: true });
   recordSyncOutboxFailure.mockResolvedValue({ status: "retry" });
+});
+
+describe("canonical mock preparation periods", () => {
+  const juneCounts = {
+    entries: 10,
+    exits: 3,
+    uniqueCount: 8,
+    peakOccupancy: 7,
+    period: "Jun 1 - Jun 30, 2026",
+    periodKey: "month:Asia/Manila:2026-06",
+    sourceWindow: {
+      start: "2026-05-31T16:00:00Z",
+      end: "2026-06-30T16:00:00Z",
+    },
+  };
+
+  it("prepares an explicitly selected canonical period and forwards its exact bounds", async () => {
+    get.mockResolvedValue({
+      data: {
+        runId: "run-1",
+        status: "active",
+        enterpriseId: "enterprise-1",
+        enterpriseName: "Enterprise One",
+        counts: juneCounts,
+        pendingCounts: [juneCounts],
+      },
+    });
+
+    await prepareDesktopMockCounts(juneCounts.periodKey);
+
+    expect(getLocalMetricsSummary).not.toHaveBeenCalled();
+    expect(prepareLocalMockCounts).toHaveBeenCalledWith("tanaw-ml://local", {
+      mockRunId: "run-1",
+      enterpriseId: "enterprise-1",
+      enterpriseName: "Enterprise One",
+      entries: 10,
+      exits: 3,
+      uniqueCount: 8,
+      peakOccupancy: 7,
+      periodId: juneCounts.periodKey,
+      startsAtUtc: "2026-05-31T16:00:00.000Z",
+      endsAtUtc: "2026-06-30T16:00:00.000Z",
+    });
+  });
+
+  it("does not choose a device-clock month when the local ledger is unclassified", async () => {
+    get.mockResolvedValue({
+      data: {
+        runId: "run-1",
+        status: "active",
+        enterpriseId: "enterprise-1",
+        enterpriseName: "Enterprise One",
+        counts: juneCounts,
+        pendingCounts: [juneCounts],
+      },
+    });
+    getLocalMetricsSummary.mockResolvedValue({ period_id: null, period: null });
+
+    await expect(prepareDesktopMockCounts()).resolves.toBeNull();
+
+    expect(prepareLocalMockCounts).not.toHaveBeenCalled();
+  });
+
+  it("rejects prepared counts whose display label has no canonical identity", async () => {
+    get.mockResolvedValue({
+      data: {
+        runId: "run-1",
+        status: "active",
+        enterpriseId: "enterprise-1",
+        enterpriseName: "Enterprise One",
+        counts: { ...juneCounts, periodKey: undefined },
+      },
+    });
+
+    await expect(prepareDesktopMockCounts("month:Asia/Manila:2026-06")).rejects.toThrow("No canonical reporting period");
+    expect(prepareLocalMockCounts).not.toHaveBeenCalled();
+  });
 });
 
 describe("durable report outbox delivery", () => {

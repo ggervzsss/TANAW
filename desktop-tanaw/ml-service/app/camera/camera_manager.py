@@ -639,7 +639,7 @@ class CameraProcessingManager:
     def record_report_submission(
         self,
         report_id: str,
-        period: str,
+        period_id: str,
         notes: str | None = None,
         payload: dict | None = None,
         metrics: dict | None = None,
@@ -651,7 +651,7 @@ class CameraProcessingManager:
     ) -> dict:
         submission = self._session_store.record_report_submission(
             report_id=report_id,
-            period=period,
+            period_id=period_id,
             notes=notes,
             payload=payload,
             metrics=metrics,
@@ -718,7 +718,7 @@ class CameraProcessingManager:
         exits: int,
         unique_count: int,
         peak_occupancy: int,
-        period: str,
+        period_id: str,
     ) -> dict:
         with self._lock:
             if self._enterprise_id != enterprise_id:
@@ -737,13 +737,13 @@ class CameraProcessingManager:
             peak_occupancy=peak_occupancy,
             camera_id=camera_id,
             camera_name=camera_name,
-            period=period,
+            period_id=period_id,
         )
         return {
             **summary,
             "enterprise_id": enterprise_id,
             "enterprise_name": enterprise_name,
-            "period": period,
+            "period": summary["period"],
             "prepared": bool(summary.get("prepared")),
         }
 
@@ -906,7 +906,7 @@ class CameraProcessingManager:
     def generate_mock_report(
         self,
         report_id: str | None,
-        period: str,
+        period_id: str,
         notes: str | None = None,
         payload: dict | None = None,
     ) -> dict:
@@ -924,7 +924,7 @@ class CameraProcessingManager:
         }
         return self.record_report_submission(
             resolved_report_id,
-            period,
+            period_id,
             notes or "Monthly camera analytics submitted for LGU review.",
             report_payload,
             source_kind="hybrid",

@@ -116,7 +116,7 @@ const operationSpecs: Record<MlOperation, OperationSpec> = {
     method: "POST",
     path: "/reports/local-submit",
     payload: "body",
-    allowedKeys: ["metrics", "notes", "payload", "period", "report_id"],
+    allowedKeys: ["metrics", "notes", "payload", "period_id", "report_id", "source_window"],
   },
   "reports.list": { method: "GET", payload: "limit" },
   "reports.purgeRaw": { method: "POST", payload: "report-id-purge" },
@@ -129,7 +129,7 @@ const operationSpecs: Record<MlOperation, OperationSpec> = {
     method: "POST",
     path: "/mock/prepare",
     payload: "body",
-    allowedKeys: ["mock_run_id", "enterprise_id", "enterprise_name", "entries", "exits", "unique_count", "peak_occupancy", "period"],
+    allowedKeys: ["mock_run_id", "enterprise_id", "enterprise_name", "entries", "exits", "unique_count", "peak_occupancy", "period_id", "source_window"],
   },
   "simulation.start": {
     method: "POST",

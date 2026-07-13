@@ -66,7 +66,7 @@ class ResilienceLedgerTest(unittest.TestCase):
             local_coverage = store.monitoring_coverage(
                 JUNE_PERIOD_ID, as_of="2026-07-01T00:00:00+00:00"
             )
-            submission = store.record_report_submission("REP-COVERAGE", "June 2026")
+            submission = store.record_report_submission("REP-COVERAGE", JUNE_PERIOD_ID)
             outbox = store.list_ready_sync_outbox_items()[0]
             payload = outbox["payload"]["payload"]
             contract_coverage = payload["coverage"]
@@ -139,7 +139,7 @@ class ResilienceLedgerTest(unittest.TestCase):
                 },
                 "2026-06-15T04:00:01+00:00",
             )
-            store.record_report_submission("REP-PURGE", "June 2026")
+            store.record_report_submission("REP-PURGE", JUNE_PERIOD_ID)
 
             purged = store.purge_report_raw_events("REP-PURGE")
 
@@ -258,7 +258,7 @@ class ResilienceLedgerTest(unittest.TestCase):
                 _event(central_camera_id=CAMERA_UUID),
                 "2026-06-15T04:00:00+00:00",
             )
-            submission = store.record_report_submission("REP-CONTRACT", "June 2026")
+            submission = store.record_report_submission("REP-CONTRACT", JUNE_PERIOD_ID)
 
             item = store.list_ready_sync_outbox_items()[0]
             submitted_response = ReportSubmissionResponse(**submission)
@@ -289,7 +289,7 @@ class ResilienceLedgerTest(unittest.TestCase):
                     _event(central_camera_id=CAMERA_UUID),
                     "2026-06-15T04:00:00+00:00",
                 )
-                store.record_report_submission("REP-UNKNOWN-CONTRACT", "June 2026")
+                store.record_report_submission("REP-UNKNOWN-CONTRACT", JUNE_PERIOD_ID)
             with closing(sqlite3.connect(store._database_path)) as connection:
                 connection.execute(
                     "update sync_outbox_items set contract_version = 'future-contract.v9'"

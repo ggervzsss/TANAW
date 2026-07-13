@@ -174,7 +174,7 @@ class SessionStore:
     def record_report_submission(
         self,
         report_id: str,
-        period: str,
+        period_id: str,
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
@@ -186,7 +186,7 @@ class SessionStore:
     ) -> dict[str, int | str | None]:
         return self._metrics_store.record_report_submission(
             report_id=report_id,
-            period=period,
+            period_id=period_id,
             notes=notes,
             payload=payload,
             metrics=metrics,

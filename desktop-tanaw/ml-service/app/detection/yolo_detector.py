@@ -168,7 +168,11 @@ class YoloPersonTracker:
         self._inference_times_ms: deque[float] = deque(maxlen=128)
         self._last_inference_at: float | None = None
         self._inference_intervals: deque[float] = deque(maxlen=128)
-        self.configure("auto")
+
+        # Runtime discovery imports the installed inference backends and can take
+        # tens of seconds on a cold desktop launch. Keep construction lightweight;
+        # CameraProcessingManager.start() resolves the requested profile before
+        # any frame can reach the tracker.
 
     def status(self) -> dict[str, Any]:
         telemetry = self._telemetry()

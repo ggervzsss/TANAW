@@ -301,7 +301,7 @@ def record_local_report_submission(payload: ReportSubmissionRequest) -> ReportSu
         return ReportSubmissionResponse(
             **manager.record_report_submission(
                 payload.report_id,
-                payload.period,
+                payload.period_id,
                 payload.notes,
                 payload.payload,
                 metrics=payload.metrics.model_dump() if payload.metrics else None,
@@ -384,7 +384,7 @@ def prepare_mock_counts(payload: MockPrepareRequest) -> MockPrepareResponse:
                 exits=payload.exits,
                 unique_count=payload.unique_count,
                 peak_occupancy=payload.peak_occupancy,
-                period=payload.period,
+                period_id=payload.period_id,
             )
         )
     except ValueError as exc:
@@ -457,7 +457,7 @@ def generate_mock_report(payload: MockReportRequest) -> ReportSubmissionResponse
     try:
         return ReportSubmissionResponse(
             **manager.generate_mock_report(
-                payload.report_id, payload.period, payload.notes, payload.payload
+                payload.report_id, payload.period_id, payload.notes, payload.payload
             )
         )
     except ValueError as exc:

@@ -1,5 +1,12 @@
 export type SystemLogPeriod = string;
 
+export type CanonicalReportingPeriod = {
+  periodId: string;
+  label: string;
+  startsAtUtc: string;
+  endsAtUtc: string;
+};
+
 export type Metrics = {
   entries: number;
   exits: number;
@@ -31,6 +38,7 @@ export type ReportRecord = {
   peak?: number;
   unique: number;
   period?: SystemLogPeriod;
+  reportingPeriod?: CanonicalReportingPeriod;
   deadline?: string;
   dueDate?: string;
   submissionDeadline?: string;
