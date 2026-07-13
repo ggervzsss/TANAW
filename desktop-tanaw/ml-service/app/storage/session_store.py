@@ -204,6 +204,9 @@ class SessionStore:
     ) -> list[dict[str, Any]]:
         return self._metrics_store.list_ready_sync_outbox_items(limit=limit, now=now)
 
+    def sync_outbox_health(self) -> dict[str, int | str | None]:
+        return self._metrics_store.sync_outbox_health()
+
     def acknowledge_sync_outbox_item(
         self,
         outbox_item_id: str,

@@ -1493,6 +1493,68 @@ class LocalMetricsStore:
             ).fetchall()
         return [_outbox_item_row(row) for row in rows]
 
+    def sync_outbox_health(self) -> dict[str, int | str | None]:
+        """Return health derived only from durable report outbox state and attempts."""
+        with self._connection() as connection:
+            backlog = connection.execute(
+                """
+                select
+                    count(*) as pending_count,
+                    min(outbox.created_at) as oldest_pending_at
+                from sync_outbox_items as outbox
+                join local_report_revisions as revision
+                  on revision.revision_id = outbox.report_revision_id
+                where outbox.status != 'acknowledged'
+                  and revision.source_kind = 'real'
+                """
+            ).fetchone()
+            last_acknowledgement = connection.execute(
+                """
+                select max(outbox.acknowledged_at) as acknowledged_at
+                from sync_outbox_items as outbox
+                join local_report_revisions as revision
+                  on revision.revision_id = outbox.report_revision_id
+                where outbox.status = 'acknowledged'
+                  and revision.source_kind = 'real'
+                """
+            ).fetchone()
+            last_failure = connection.execute(
+                """
+                select failed_at, error_class
+                from (
+                    select attempt.completed_at as failed_at, attempt.error_class
+                    from sync_attempts as attempt
+                    join sync_outbox_items as outbox
+                      on outbox.outbox_item_id = attempt.outbox_item_id
+                    join local_report_revisions as revision
+                      on revision.revision_id = outbox.report_revision_id
+                    where attempt.outcome in ('retry', 'dead_letter')
+                      and attempt.error_class is not null
+                      and revision.source_kind = 'real'
+                    union all
+                    select coalesce(outbox.last_attempt_at, outbox.created_at) as failed_at,
+                           outbox.last_error_class as error_class
+                    from sync_outbox_items as outbox
+                    join local_report_revisions as revision
+                      on revision.revision_id = outbox.report_revision_id
+                    where outbox.last_error_class is not null
+                      and revision.source_kind = 'real'
+                )
+                order by julianday(failed_at) desc, failed_at desc
+                limit 1
+                """
+            ).fetchone()
+
+        return {
+            "pending_count": _safe_int(backlog["pending_count"]),
+            "oldest_pending_at": backlog["oldest_pending_at"],
+            "last_acknowledged_at": last_acknowledgement["acknowledged_at"],
+            "last_failure_at": last_failure["failed_at"] if last_failure is not None else None,
+            "last_failure_class": (
+                last_failure["error_class"] if last_failure is not None else None
+            ),
+        }
+
     def acknowledge_sync_outbox_item(
         self,
         outbox_item_id: str,

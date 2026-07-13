@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { subscribeMlCameraEvents, type MlCameraLiveState } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopMockCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopMockCounts, syncDesktopReportSubmissions } from "../services/cloud-sync";
 import { syncFleetSimulationTelemetry } from "../services/fleet-simulation";
+import { syncDesktopTelemetryV2 } from "../services/telemetry-v2";
 
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
 const TELEMETRY_RECONCILE_INTERVAL_MS = 30_000;
@@ -78,7 +79,7 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
       liveTelemetryRef.current.lastSyncedAt = Date.now();
 
       try {
-        await syncDesktopTelemetry();
+        await syncDesktopTelemetryV2();
       } catch {
         // The desktop should continue operating offline; the next interval retries.
       } finally {
@@ -101,6 +102,7 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
         // Report submissions are stored locally first, so transient cloud errors are retryable.
       } finally {
         syncStateRef.current.reports = false;
+        scheduleTelemetrySync();
       }
     };
 

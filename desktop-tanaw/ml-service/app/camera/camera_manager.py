@@ -671,6 +671,9 @@ class CameraProcessingManager:
     ) -> list[dict[str, Any]]:
         return self._session_store.list_ready_sync_outbox_items(limit=limit, now=now)
 
+    def sync_outbox_health(self) -> dict[str, int | str | None]:
+        return self._session_store.sync_outbox_health()
+
     def acknowledge_sync_outbox_item(
         self,
         outbox_item_id: str,

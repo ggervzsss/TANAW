@@ -23,6 +23,7 @@ describe("ML IPC operation allowlist", () => {
 
   it("maps only exact outbox acknowledgement and failure operations", () => {
     const outboxItemId = "11111111-1111-4111-8111-111111111111";
+    expect(resolveMlOperationRequest("sync.outbox.health", undefined)).toEqual({ method: "GET", path: "/sync/outbox/health" });
     expect(resolveMlOperationRequest("sync.outbox.ready", { limit: 25 })).toEqual({ method: "GET", path: "/sync/outbox/ready?limit=25" });
     expect(resolveMlOperationRequest("sync.outbox.acknowledge", { outboxItemId, acknowledgement: { contractVersion: 2 } })).toEqual({
       method: "POST",

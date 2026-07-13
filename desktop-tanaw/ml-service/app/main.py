@@ -144,6 +144,31 @@ class SyncOutboxFailureRequest(BaseModel):
     http_status: int | None = Field(default=None, ge=100, le=599)
 
 
+class SyncOutboxHealthResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pending_count: int = Field(ge=0)
+    oldest_pending_at: datetime | None
+    last_acknowledged_at: datetime | None
+    last_failure_at: datetime | None
+    last_failure_class: str | None = Field(default=None, min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_health(self) -> SyncOutboxHealthResponse:
+        for timestamp in (
+            self.oldest_pending_at,
+            self.last_acknowledged_at,
+            self.last_failure_at,
+        ):
+            if timestamp is not None and timestamp.utcoffset() is None:
+                raise ValueError("Sync outbox health timestamps must include a timezone.")
+        if (self.pending_count == 0) != (self.oldest_pending_at is None):
+            raise ValueError("The oldest pending timestamp must match the durable backlog.")
+        if (self.last_failure_at is None) != (self.last_failure_class is None):
+            raise ValueError("The last failure timestamp and class must be supplied together.")
+        return self
+
+
 app = FastAPI(
     title="TANAW Local ML Camera Service",
     version="0.1.0",
@@ -299,6 +324,11 @@ def list_ready_sync_outbox_items(
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict[str, Any]]:
     return manager.list_ready_sync_outbox_items(limit=limit)
+
+
+@app.get("/sync/outbox/health", response_model=SyncOutboxHealthResponse)
+def get_sync_outbox_health() -> SyncOutboxHealthResponse:
+    return SyncOutboxHealthResponse.model_validate(manager.sync_outbox_health())
 
 
 @app.post("/sync/outbox/{outbox_item_id}/acknowledge")

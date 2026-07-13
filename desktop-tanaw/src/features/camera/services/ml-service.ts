@@ -183,8 +183,8 @@ export type LocalMetricsSummary = {
   unsynced_events: number;
   first_event_at: string | null;
   last_event_at: string | null;
-  source_kind?: "real" | "mock" | "hybrid";
-  mock_run_id?: string | null;
+  source_kind: "real" | "mock" | "hybrid";
+  mock_run_id: string | null;
   period?: string | null;
 };
 
@@ -261,6 +261,14 @@ export type LocalSyncOutboxItem = {
   last_error_message: string | null;
   acknowledged_at: string | null;
   acknowledgement: Record<string, unknown>;
+};
+
+export type LocalSyncOutboxHealth = {
+  pending_count: number;
+  oldest_pending_at: string | null;
+  last_acknowledged_at: string | null;
+  last_failure_at: string | null;
+  last_failure_class: string | null;
 };
 
 export type OccupancyCorrection = {
@@ -459,6 +467,11 @@ export async function listLocalReportSubmissions(baseUrl: string, limit = 100): 
 export async function listReadySyncOutboxItems(baseUrl: string, limit = 100): Promise<LocalSyncOutboxItem[]> {
   void baseUrl;
   return requestMl<LocalSyncOutboxItem[]>("sync.outbox.ready", { limit });
+}
+
+export async function getSyncOutboxHealth(baseUrl: string): Promise<LocalSyncOutboxHealth> {
+  void baseUrl;
+  return requestMl<LocalSyncOutboxHealth>("sync.outbox.health");
 }
 
 export async function acknowledgeSyncOutboxItem(baseUrl: string, outboxItemId: string, acknowledgement: Record<string, unknown>): Promise<{ acknowledged: true; outbox_item_id: string }> {

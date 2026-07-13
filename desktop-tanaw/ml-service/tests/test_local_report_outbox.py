@@ -386,6 +386,16 @@ class LocalReportOutboxTest(unittest.TestCase):
                 ).fetchone()
             self.assertEqual(outbox["status"], "dead_letter")
             self.assertEqual(outbox["last_error_class"], "simulation_not_official")
+            self.assertEqual(
+                store.sync_outbox_health(),
+                {
+                    "pending_count": 0,
+                    "oldest_pending_at": None,
+                    "last_acknowledged_at": None,
+                    "last_failure_at": None,
+                    "last_failure_class": None,
+                },
+            )
 
     def test_retry_backoff_hides_only_the_failed_item_until_ready(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -411,6 +421,76 @@ class LocalReportOutboxTest(unittest.TestCase):
             self.assertEqual(
                 len(store.list_ready_sync_outbox_items(now="2026-08-01T00:00:02+00:00")),
                 1,
+            )
+
+    def test_sync_health_uses_the_complete_durable_outbox_and_attempt_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(directory)
+            store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
+            submission = store.record_report_submission("REP-JUNE", "June 2026")
+
+            pending = store.sync_outbox_health()
+
+            self.assertEqual(pending["pending_count"], 1)
+            self.assertEqual(pending["oldest_pending_at"], submission["submitted_at"])
+            self.assertIsNone(pending["last_acknowledged_at"])
+            self.assertIsNone(pending["last_failure_at"])
+            self.assertIsNone(pending["last_failure_class"])
+
+            store.record_sync_outbox_failure(
+                str(submission["outbox_item_id"]),
+                error_class="network_error",
+                error_message="Connection reset.",
+                retryable=True,
+                failed_at="2026-08-01T00:00:00+00:00",
+            )
+            failed = store.sync_outbox_health()
+
+            self.assertEqual(failed["pending_count"], 1)
+            self.assertEqual(failed["oldest_pending_at"], submission["submitted_at"])
+            self.assertEqual(failed["last_failure_at"], "2026-08-01T00:00:00+00:00")
+            self.assertEqual(failed["last_failure_class"], "network_error")
+
+            self.assertTrue(
+                store.acknowledge_sync_outbox_item(
+                    str(submission["outbox_item_id"]),
+                    acknowledged_at="2026-08-01T00:00:03+00:00",
+                )
+            )
+            recovered = LocalMetricsStore(directory).sync_outbox_health()
+
+            self.assertEqual(recovered["pending_count"], 0)
+            self.assertIsNone(recovered["oldest_pending_at"])
+            self.assertEqual(recovered["last_acknowledged_at"], "2026-08-01T00:00:03+00:00")
+            self.assertEqual(recovered["last_failure_at"], "2026-08-01T00:00:00+00:00")
+            self.assertEqual(recovered["last_failure_class"], "network_error")
+
+    def test_sync_health_counts_official_dead_letters_even_when_the_ready_page_is_empty(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(directory)
+            store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
+            submission = store.record_report_submission("REP-JUNE", "June 2026")
+            store.record_sync_outbox_failure(
+                str(submission["outbox_item_id"]),
+                error_class="validation_error",
+                error_message="Server rejected deterministic input.",
+                retryable=False,
+                http_status=422,
+                failed_at="2026-08-01T00:00:00+00:00",
+            )
+
+            self.assertEqual(store.list_ready_sync_outbox_items(), [])
+            self.assertEqual(
+                store.sync_outbox_health(),
+                {
+                    "pending_count": 1,
+                    "oldest_pending_at": submission["submitted_at"],
+                    "last_acknowledged_at": None,
+                    "last_failure_at": "2026-08-01T00:00:00+00:00",
+                    "last_failure_class": "validation_error",
+                },
             )
 
 

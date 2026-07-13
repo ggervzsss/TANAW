@@ -46,7 +46,7 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
         self.client.close()
 
     def test_missing_and_wrong_master_capabilities_fail_closed(self) -> None:
-        for path in ("/health", "/camera/health", "/counts", "/stream"):
+        for path in ("/health", "/camera/health", "/counts", "/stream", "/sync/outbox/health"):
             missing = self.client.get(path)
             wrong = self.client.get(
                 path,
@@ -231,6 +231,16 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
                 return_value=[{"outbox_item_id": outbox_item_id}],
             ) as ready,
             patch(
+                "app.main.manager.sync_outbox_health",
+                return_value={
+                    "pending_count": 1,
+                    "oldest_pending_at": "2026-07-13T08:00:00Z",
+                    "last_acknowledged_at": None,
+                    "last_failure_at": "2026-07-13T08:14:00Z",
+                    "last_failure_class": "network_error",
+                },
+            ) as health,
+            patch(
                 "app.main.manager.acknowledge_sync_outbox_item", return_value=True
             ) as acknowledge,
             patch(
@@ -238,6 +248,7 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
                 return_value={"outbox_item_id": outbox_item_id, "status": "retry"},
             ) as fail,
         ):
+            health_response = self.client.get("/sync/outbox/health", headers=headers)
             ready_response = self.client.get("/sync/outbox/ready?limit=7", headers=headers)
             acknowledge_response = self.client.post(
                 f"/sync/outbox/{outbox_item_id}/acknowledge",
@@ -255,9 +266,12 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
                 },
             )
 
+        self.assertEqual(health_response.status_code, 200)
+        self.assertEqual(health_response.json()["pending_count"], 1)
         self.assertEqual(ready_response.status_code, 200)
         self.assertEqual(acknowledge_response.status_code, 200)
         self.assertEqual(failure_response.status_code, 200)
+        health.assert_called_once_with()
         ready.assert_called_once_with(limit=7)
         acknowledge.assert_called_once_with(
             outbox_item_id,
