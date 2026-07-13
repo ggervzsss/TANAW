@@ -19,9 +19,9 @@ class MetricGrain(StrEnum):
 
 
 class MetricProvenance(StrEnum):
-    CAMERA_DERIVED = "camera-derived"
-    OPERATOR_ENTERED = "operator-entered"
-    SYSTEM_DERIVED = "system-derived"
+    CAMERA_DERIVED = "camera_derived"
+    OPERATOR_ENTERED = "operator_entered"
+    SYSTEM_DERIVED = "system_derived"
 
 
 class MetricQuality(StrEnum):

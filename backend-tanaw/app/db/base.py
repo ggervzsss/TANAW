@@ -31,6 +31,15 @@ from app.features.operational.models import (
     SupportTicket,
     UserNotification,
 )
+from app.features.topology.models import (
+    Camera,
+    EdgeDevice,
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    MembershipRole,
+    TopologyClassification,
+)
 
 __all__ = [
     "Account",
@@ -41,9 +50,14 @@ __all__ = [
     "AccountStatus",
     "ActivityLog",
     "Base",
+    "Camera",
     "DeliveryStatus",
     "DevDelivery",
+    "EdgeDevice",
+    "Enterprise",
+    "EnterpriseMembership",
     "EnterpriseReportSubmission",
+    "EnterpriseSite",
     "EnterpriseTelemetrySnapshot",
     "EmailOutbox",
     "EmailOutboxStatus",
@@ -52,10 +66,12 @@ __all__ = [
     "FinalReport",
     "FinalReportSource",
     "MockDataRun",
+    "MembershipRole",
     "OperationalAlert",
     "PasswordResetChallenge",
     "PasswordResetRateLimitBucket",
     "SupportTicket",
     "SystemConfiguration",
+    "TopologyClassification",
     "UserNotification",
 ]
