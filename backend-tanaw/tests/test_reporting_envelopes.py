@@ -81,6 +81,40 @@ def test_unknown_metric_must_not_carry_a_value() -> None:
         ReportSubmissionCommand.model_validate(payload)
 
 
+def test_missing_coverage_evidence_remains_null_instead_of_becoming_a_full_period_gap() -> None:
+    payload = _command()
+    payload["payload"]["coverage"] = {
+        "evidenceStatus": "not_recorded",
+        "monitoredSeconds": None,
+        "expectedSeconds": None,
+        "gaps": [],
+    }
+    payload["payload"]["metrics"][0]["coverage"] = {
+        "evidenceStatus": "not_recorded",
+        "monitoredSeconds": None,
+        "expectedSeconds": None,
+        "gapCount": None,
+    }
+
+    command = ReportSubmissionCommand.model_validate(payload)
+
+    assert command.payload.coverage.monitoredSeconds is None
+    assert command.payload.metrics[0].coverage.gapCount is None
+
+
+def test_unrecorded_coverage_rejects_invented_zero_duration_and_gap() -> None:
+    payload = _command()
+    payload["payload"]["coverage"] = {
+        "evidenceStatus": "not_recorded",
+        "monitoredSeconds": 0,
+        "expectedSeconds": 2_592_000,
+        "gaps": [{"reason": "coverage_not_recorded", "durationSeconds": 2_592_000}],
+    }
+
+    with pytest.raises(ValidationError, match="cannot contain invented durations"):
+        ReportSubmissionCommand.model_validate(payload)
+
+
 def _command() -> dict:
     start = "2026-05-31T16:00:00Z"
     end = "2026-06-30T16:00:00Z"
@@ -117,6 +151,7 @@ def _command() -> dict:
                     "provenance": "camera_derived",
                     "quality": "confirmed",
                     "coverage": {
+                        "evidenceStatus": "recorded",
                         "monitoredSeconds": 2592000,
                         "expectedSeconds": 2592000,
                         "gapCount": 0,
@@ -125,6 +160,7 @@ def _command() -> dict:
             ],
             "demographicFacts": [],
             "coverage": {
+                "evidenceStatus": "recorded",
                 "monitoredSeconds": 2592000,
                 "expectedSeconds": 2592000,
                 "gaps": [],

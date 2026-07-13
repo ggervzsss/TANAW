@@ -61,12 +61,19 @@ class CoverageGapCommand(ContractModel):
 
 
 class CoverageCommand(ContractModel):
-    monitoredSeconds: int = Field(ge=0)
-    expectedSeconds: int = Field(gt=0)
+    evidenceStatus: Literal["recorded", "not_recorded"]
+    monitoredSeconds: int | None = Field(default=None, ge=0)
+    expectedSeconds: int | None = Field(default=None, gt=0)
     gaps: list[CoverageGapCommand] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_duration(self) -> CoverageCommand:
+        if self.evidenceStatus == "not_recorded":
+            if self.monitoredSeconds is not None or self.expectedSeconds is not None or self.gaps:
+                raise ValueError("Unrecorded coverage cannot contain invented durations or gaps.")
+            return self
+        if self.monitoredSeconds is None or self.expectedSeconds is None:
+            raise ValueError("Recorded coverage must include monitored and expected durations.")
         if self.monitoredSeconds > self.expectedSeconds:
             raise ValueError("Monitored coverage cannot exceed expected coverage.")
         if sum(gap.durationSeconds for gap in self.gaps) > self.expectedSeconds:
@@ -75,9 +82,23 @@ class CoverageCommand(ContractModel):
 
 
 class MetricCoverageCommand(ContractModel):
-    monitoredSeconds: int = Field(ge=0)
-    expectedSeconds: int = Field(gt=0)
-    gapCount: int = Field(ge=0)
+    evidenceStatus: Literal["recorded", "not_recorded"]
+    monitoredSeconds: int | None = Field(default=None, ge=0)
+    expectedSeconds: int | None = Field(default=None, gt=0)
+    gapCount: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> MetricCoverageCommand:
+        values = (self.monitoredSeconds, self.expectedSeconds, self.gapCount)
+        if self.evidenceStatus == "not_recorded":
+            if any(value is not None for value in values):
+                raise ValueError("Unrecorded metric coverage cannot contain invented values.")
+            return self
+        if any(value is None for value in values):
+            raise ValueError("Recorded metric coverage must include all coverage values.")
+        if self.monitoredSeconds > self.expectedSeconds:
+            raise ValueError("Metric monitored coverage cannot exceed expected coverage.")
+        return self
 
 
 class ReportMetricCommand(ContractModel):

@@ -22,8 +22,8 @@ idempotency key:
 - `idempotencyKey` identifies the intended durable business effect and is stable
   across transport retries.
 - `occurredAt` is an RFC 3339 UTC instant, not server receipt time.
-- `expectedVersion` is required for mutations of an existing logical resource
-  and omitted only when the command creates a resource without a prior version.
+- `expectedVersion` is required for every command. It is `0` when creating a
+  logical resource without a prior version.
 - The receiver validates a bounded schema, canonicalizes the accepted payload,
   and stores a SHA-256 payload hash with the idempotency record.
 - Same key and hash returns the original acknowledgement. Same key and a
@@ -34,6 +34,10 @@ idempotency key:
 - Client-supplied account, role, enterprise, preparer, actor, and official versus
   simulation classification fields are rejected or ignored; they never override
   authenticated server context.
+- Coverage uses `evidenceStatus: "recorded"` with complete monitored/expected
+  durations and gap facts, or `evidenceStatus: "not_recorded"` with null
+  durations and no gaps. Missing evidence is never converted into a zero-duration
+  measurement or a fabricated full-window outage.
 
 Canonical hashing uses UTF-8 JSON with object keys sorted lexicographically,
 no insignificant whitespace, normalized RFC 3339 UTC timestamps, exact decimal
@@ -82,6 +86,7 @@ central live state until the server has acknowledged their generation.
         "provenance": "camera_derived",
         "quality": "confirmed",
         "coverage": {
+          "evidenceStatus": "recorded",
           "monitoredSeconds": 30,
           "expectedSeconds": 30,
           "gapCount": 0
@@ -163,6 +168,7 @@ The idempotency key is stable for one immutable local revision, for example
     "metrics": [],
     "demographicFacts": [],
     "coverage": {
+      "evidenceStatus": "recorded",
       "monitoredSeconds": 2419200,
       "expectedSeconds": 2592000,
       "gaps": [{ "reason": "stream_unavailable", "durationSeconds": 172800 }]
