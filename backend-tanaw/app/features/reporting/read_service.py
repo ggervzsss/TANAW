@@ -311,14 +311,14 @@ def _report_list_item(
         obligation=_obligation_resource(row.obligation),
         enterprise=ReportEnterpriseResource(
             enterpriseId=UUID(row.enterprise.id),
-            enterpriseCode=row.enterprise.official_code,
-            enterpriseName=row.enterprise.name,
+            enterpriseCode=row.obligation.enterprise_official_code,
+            enterpriseName=row.obligation.enterprise_name,
             category=row.enterprise.category,
         ),
         site=ReportSiteResource(
             siteId=UUID(row.site.id),
-            siteCode=row.site.site_code,
-            siteName=row.site.name,
+            siteCode=row.obligation.site_code,
+            siteName=row.obligation.site_name,
             frozenBarangay=row.obligation.frozen_barangay,
         ),
         currentRevision=_revision_summary(current_revision, report=report, metrics=metrics),
@@ -337,6 +337,9 @@ def _period_resource(period: ReportingPeriod) -> ReportingPeriodResource:
         startsAt=period.starts_at,
         endsAt=period.ends_at,
         submissionOpensAt=period.submission_opens_at,
+        submissionClosesAt=period.submission_closes_at,
+        status=cast(Literal["scheduled", "open", "closed"], period.status),
+        obligationsFrozenAt=period.obligations_frozen_at,
     )
 
 

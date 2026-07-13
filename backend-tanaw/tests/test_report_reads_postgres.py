@@ -483,7 +483,9 @@ async def _seed_accounts_and_period(
         local_end_date=canonical.local_end_date,
         starts_at=canonical.starts_at,
         ends_at=canonical.ends_at,
-        submission_opens_at=canonical.ends_at,
+        submission_opens_at=canonical.submission_opens_at,
+        submission_closes_at=canonical.submission_closes_at,
+        status="open",
         label=canonical.label,
     )
     db.add_all([staff, enterprise_account, period])
@@ -551,6 +553,10 @@ async def _seed_report(
         eligibility_status="eligible",
         eligibility_basis="registry_snapshot",
         frozen_barangay="Poblacion",
+        enterprise_official_code=enterprise.official_code,
+        enterprise_name=enterprise.name,
+        site_code=site.site_code,
+        site_name=site.name,
         timezone_name="Asia/Manila",
         registration_effective_at=period.starts_at,
         acceptance_blocked=False,

@@ -1,3 +1,4 @@
+import json
 import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -78,7 +79,9 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         local_end_date=canonical.local_end_date,
         starts_at=canonical.starts_at,
         ends_at=canonical.ends_at,
-        submission_opens_at=canonical.ends_at,
+        submission_opens_at=canonical.submission_opens_at,
+        submission_closes_at=canonical.submission_closes_at,
+        status="closed",
         label="June 2025",
     )
     other_canonical = monthly_reporting_period(2025, 7)
@@ -91,7 +94,9 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         local_end_date=other_canonical.local_end_date,
         starts_at=other_canonical.starts_at,
         ends_at=other_canonical.ends_at,
-        submission_opens_at=other_canonical.ends_at,
+        submission_opens_at=other_canonical.submission_opens_at,
+        submission_closes_at=other_canonical.submission_closes_at,
+        status="closed",
         label="July 2025",
     )
     staff = _account("staff", suffix, technical_now)
@@ -376,7 +381,9 @@ async def test_zero_obligation_period_is_frozen_and_cannot_expand_on_rerun(
         local_end_date=canonical.local_end_date,
         starts_at=canonical.starts_at,
         ends_at=canonical.ends_at,
-        submission_opens_at=canonical.ends_at,
+        submission_opens_at=canonical.submission_opens_at,
+        submission_closes_at=canonical.submission_closes_at,
+        status="closed",
         label="January 2024",
     )
     staff = _account("staff", suffix, now)
@@ -419,7 +426,128 @@ async def test_zero_obligation_period_is_frozen_and_cannot_expand_on_rerun(
     )
     assert rerun.disposition == "replayed"
     assert rerun.resource.summary.totalFrozen == 0
-    assert await db.scalar(select(func.count()).select_from(ReportingObligation)) == 0
+    assert (
+        await db.scalar(
+            select(func.count())
+            .select_from(ReportingObligation)
+            .where(
+                ReportingObligation.reporting_period_id == period.id,
+                ReportingObligation.classification == "official",
+            )
+        )
+        == 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registry_rows(
+    obligation_session: AsyncSession,
+) -> None:
+    db = obligation_session
+    suffix = uuid4().hex
+    frozen_at = datetime(2026, 7, 13, tzinfo=UTC)
+    canonical = monthly_reporting_period(2025, 8)
+    period = ReportingPeriod(
+        id=str(uuid4()),
+        natural_key=canonical.natural_key,
+        cadence=canonical.cadence,
+        timezone_name=canonical.timezone,
+        local_start_date=canonical.local_start_date,
+        local_end_date=canonical.local_end_date,
+        starts_at=canonical.starts_at,
+        ends_at=canonical.ends_at,
+        submission_opens_at=canonical.submission_opens_at,
+        submission_closes_at=canonical.submission_closes_at,
+        status="closed",
+        label=canonical.label,
+    )
+    staff = _account("staff", suffix, frozen_at)
+    legacy_enterprise, legacy_site = _enterprise_site(
+        suffix=f"legacy-{suffix}",
+        lifecycle="active",
+        classification="official",
+        barangay="Barangay Legacy",
+        effective_from=canonical.starts_at,
+        technical_created_at=frozen_at,
+    )
+    new_enterprise, new_site = _enterprise_site(
+        suffix=f"new-{suffix}",
+        lifecycle="active",
+        classification="official",
+        barangay="Barangay New",
+        effective_from=canonical.starts_at,
+        technical_created_at=frozen_at,
+    )
+    db.add_all([period, staff, legacy_enterprise, new_enterprise])
+    await db.flush()
+    db.add_all([legacy_site, new_site])
+    await db.flush()
+    legacy_obligation = ReportingObligation(
+        id=str(uuid4()),
+        reporting_period_id=period.id,
+        enterprise_id=legacy_enterprise.id,
+        site_id=legacy_site.id,
+        classification="official",
+        eligibility_status="unknown",
+        eligibility_basis="legacy_submission",
+        exemption_reason="Historical eligibility was not provable during migration.",
+        frozen_barangay=legacy_site.barangay,
+        enterprise_official_code=legacy_enterprise.official_code,
+        enterprise_name=legacy_enterprise.name,
+        site_code=legacy_site.site_code,
+        site_name=legacy_site.name,
+        timezone_name="Asia/Manila",
+        registration_effective_at=legacy_site.effective_from,
+        acceptance_blocked=True,
+    )
+    db.add(legacy_obligation)
+    await db.flush()
+
+    result = await freeze_period_obligations(
+        db,
+        account=staff,
+        reporting_period_id=uuid4_from(period.id),
+        command=ObligationFreezeCommand.model_validate(
+            {"contractVersion": 2, "commandId": str(uuid4())}
+        ),
+        frozen_at=frozen_at,
+    )
+
+    assert result.disposition == "created"
+    assert result.resource.frozenAt == frozen_at
+    assert result.resource.summary.totalFrozen == 2
+    assert result.resource.summary.unresolved == 1
+    assert result.resource.summary.eligibleExpected == 1
+    obligations = list(
+        await db.scalars(
+            select(ReportingObligation)
+            .where(
+                ReportingObligation.reporting_period_id == period.id,
+                ReportingObligation.classification == "official",
+            )
+            .order_by(ReportingObligation.enterprise_id, ReportingObligation.site_id)
+        )
+    )
+    assert len(obligations) == 2
+    preserved = next(item for item in obligations if item.id == legacy_obligation.id)
+    assert preserved.eligibility_status == "unknown"
+    assert preserved.eligibility_basis == "legacy_submission"
+    assert preserved.acceptance_blocked is True
+    created = next(item for item in obligations if item.site_id == new_site.id)
+    assert created.eligibility_status == "eligible"
+    assert created.eligibility_basis == "registry_snapshot"
+    assert created.acceptance_blocked is False
+
+    marker = await db.scalar(
+        select(DomainEvent).where(
+            DomainEvent.event_key == f"reporting-period:{period.id}:official-obligations-frozen:v1"
+        )
+    )
+    assert marker is not None
+    marker_payload = json.loads(marker.payload_json)
+    assert marker_payload["preservedObligationCount"] == 1
+    assert marker_payload["createdObligationCount"] == 1
+    assert set(marker_payload["obligationIds"]) == {item.id for item in obligations}
 
 
 def _account(role: str, suffix: str, activated_at: datetime) -> Account:

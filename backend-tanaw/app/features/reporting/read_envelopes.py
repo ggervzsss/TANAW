@@ -31,6 +31,9 @@ class ReportingPeriodResource(ContractModel):
     startsAt: datetime
     endsAt: datetime
     submissionOpensAt: datetime
+    submissionClosesAt: datetime
+    status: Literal["scheduled", "open", "closed"]
+    obligationsFrozenAt: datetime | None
 
 
 class ReportEnterpriseResource(ContractModel):

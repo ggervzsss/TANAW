@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -18,6 +18,8 @@ def test_monthly_period_uses_manila_half_open_utc_window() -> None:
     assert period.label == "June 2026"
     assert period.starts_at == datetime(2026, 5, 31, 16, 0, tzinfo=UTC)
     assert period.ends_at == datetime(2026, 6, 30, 16, 0, tzinfo=UTC)
+    assert period.submission_opens_at == period.ends_at
+    assert period.submission_closes_at == period.ends_at + timedelta(days=15)
     assert period.contains(datetime(2026, 6, 30, 15, 59, 59, 999999, tzinfo=UTC))
     assert not period.contains(datetime(2026, 6, 30, 16, 0, tzinfo=UTC))
 
@@ -62,6 +64,11 @@ def test_period_key_rejects_display_strings_and_noncanonical_values(invalid_key:
 def test_period_classification_rejects_naive_timestamps() -> None:
     with pytest.raises(ValueError, match="UTC offset"):
         reporting_period_for_timestamp(datetime(2026, 6, 1, 0, 0))
+
+
+def test_period_rejects_a_month_without_a_representable_exclusive_end() -> None:
+    with pytest.raises(ValueError, match="exclusive end boundary"):
+        monthly_reporting_period(9999, 12)
 
 
 def test_unique_metric_does_not_claim_citywide_distinct_people() -> None:

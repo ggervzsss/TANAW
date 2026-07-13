@@ -19,6 +19,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -43,6 +44,14 @@ class ReportingPeriod(Base):
             name="ck_reporting_periods_submission_window",
         ),
         CheckConstraint(
+            "submission_closes_at > submission_opens_at",
+            name="ck_reporting_periods_submission_close",
+        ),
+        CheckConstraint(
+            "status IN ('scheduled', 'open', 'closed')",
+            name="ck_reporting_periods_status",
+        ),
+        CheckConstraint(
             "length(trim(natural_key)) > 0 AND length(trim(label)) > 0",
             name="ck_reporting_periods_identity",
         ),
@@ -53,6 +62,19 @@ class ReportingPeriod(Base):
             "starts_at",
             "ends_at",
             name="uq_reporting_periods_canonical_bounds",
+        ),
+        ExcludeConstraint(
+            ("cadence", "="),
+            ("timezone_name", "="),
+            (text("tstzrange(starts_at, ends_at, '[)')"), "&&"),
+            name="ex_reporting_periods_no_overlap",
+            using="gist",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_reporting_periods_status_keyset",
+            "status",
+            "starts_at",
+            "id",
         ),
     )
 
@@ -67,6 +89,11 @@ class ReportingPeriod(Base):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     submission_opens_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    submission_closes_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    obligations_frozen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     label: Mapped[str] = mapped_column(String(80), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -103,6 +130,13 @@ class ReportingObligation(Base):
             "eligibility_status != 'exempt' OR "
             "(exemption_reason IS NOT NULL AND length(trim(exemption_reason)) > 0)",
             name="ck_reporting_obligations_exemption_reason",
+        ),
+        CheckConstraint(
+            "length(trim(enterprise_official_code)) > 0 "
+            "AND length(trim(enterprise_name)) > 0 "
+            "AND length(trim(site_code)) > 0 "
+            "AND length(trim(site_name)) > 0",
+            name="ck_reporting_obligations_identity_snapshots",
         ),
         UniqueConstraint(
             "enterprise_id",
@@ -157,6 +191,10 @@ class ReportingObligation(Base):
     eligibility_basis: Mapped[str] = mapped_column(String(40), nullable=False)
     exemption_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     frozen_barangay: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    enterprise_official_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    site_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    site_name: Mapped[str] = mapped_column(String(160), nullable=False)
     timezone_name: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Manila")
     registration_effective_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

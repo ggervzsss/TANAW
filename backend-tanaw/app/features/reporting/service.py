@@ -85,6 +85,11 @@ async def submit_report_command(
             "REPORTING_WINDOW_NOT_OPEN",
             "The reporting period is not open for submissions yet.",
         )
+    if acknowledged_at >= _as_utc(period.submission_closes_at):
+        raise ReportIntakeConflict(
+            "REPORTING_WINDOW_CLOSED",
+            "The reporting period submission window has closed.",
+        )
 
     site_id, classification = await _resolve_source_site(
         db,

@@ -164,6 +164,22 @@ async def test_report_intake_is_idempotent_and_hash_conflicts_fail(
 
 
 @pytest.mark.asyncio
+async def test_report_intake_rejects_the_exact_half_open_submission_close(
+    report_session: AsyncSession,
+) -> None:
+    account, camera_id, period = await _seed_scope(report_session)
+    command = ReportSubmissionCommand.model_validate(_command(camera_id, period))
+
+    with pytest.raises(ReportIntakeConflict, match="window has closed"):
+        await submit_report_command(
+            report_session,
+            account=account,
+            command=command,
+            acknowledged_at=period.submission_closes_at,
+        )
+
+
+@pytest.mark.asyncio
 async def test_staff_transition_is_versioned_idempotent_and_auditable(
     report_session: AsyncSession,
 ) -> None:
@@ -475,7 +491,9 @@ async def _seed_scope(
         local_end_date=canonical_period.local_end_date,
         starts_at=canonical_period.starts_at,
         ends_at=canonical_period.ends_at,
-        submission_opens_at=canonical_period.ends_at,
+        submission_opens_at=canonical_period.submission_opens_at,
+        submission_closes_at=canonical_period.submission_closes_at,
+        status="open",
         label=f"June 2026 {suffix}",
     )
     obligation = ReportingObligation(
@@ -487,6 +505,10 @@ async def _seed_scope(
         eligibility_status="eligible",
         eligibility_basis="registry_snapshot",
         frozen_barangay=site.barangay,
+        enterprise_official_code=enterprise.official_code,
+        enterprise_name=enterprise.name,
+        site_code=site.site_code,
+        site_name=site.name,
         timezone_name="Asia/Manila",
         registration_effective_at=now,
         acceptance_blocked=False,

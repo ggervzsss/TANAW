@@ -19,6 +19,7 @@ from app.features.reporting.obligation_envelopes import (
     EligibilityStatus,
     ObligationFreezeAcknowledgement,
     ObligationFreezeCommand,
+    ObligationResolutionCommand,
     ObligationResource,
     ObligationSummary,
     PeriodComplianceResource,
@@ -221,6 +222,22 @@ async def freeze_period_obligations(
             resource=resource,
         )
 
+    existing_obligations = list(
+        await db.scalars(
+            select(ReportingObligation)
+            .where(
+                ReportingObligation.reporting_period_id == period.id,
+                ReportingObligation.classification == "official",
+            )
+            .order_by(ReportingObligation.enterprise_id, ReportingObligation.site_id)
+            .with_for_update()
+        )
+    )
+    existing_by_scope = {
+        (obligation.enterprise_id, obligation.site_id, obligation.classification): obligation
+        for obligation in existing_obligations
+    }
+    existing_by_site = {obligation.site_id: obligation for obligation in existing_obligations}
     candidates = list(
         (
             await db.execute(
@@ -243,7 +260,8 @@ async def freeze_period_obligations(
     )
     candidate_site_ids = {site.id for site, _enterprise in candidates}
     resolutions = {str(resolution.siteId): resolution for resolution in command.resolutions}
-    unknown_sites = sorted(set(resolutions) - candidate_site_ids)
+    frozen_site_ids = candidate_site_ids | set(existing_by_site)
+    unknown_sites = sorted(set(resolutions) - frozen_site_ids)
     if unknown_sites:
         raise ObligationConflict(
             "OBLIGATION_RESOLUTION_SITE_NOT_IN_SNAPSHOT",
@@ -252,8 +270,14 @@ async def freeze_period_obligations(
         )
 
     version_counts = Counter((site.enterprise_id, site.site_code) for site, _ in candidates)
-    obligations: list[ReportingObligation] = []
+    created_obligations: list[ReportingObligation] = []
     for site, enterprise in candidates:
+        existing_obligation = existing_by_scope.get((enterprise.id, site.id, "official"))
+        if existing_obligation is not None:
+            resolution = resolutions.get(site.id)
+            if resolution is not None:
+                _apply_resolution(existing_obligation, resolution)
+            continue
         frozen_barangay = _normalized_optional(site.barangay)
         decision = derive_eligibility(
             enterprise_lifecycle_state=enterprise.lifecycle_state,
@@ -268,7 +292,7 @@ async def freeze_period_obligations(
                 reason=resolution.reason,
                 acceptance_blocked=False,
             )
-        obligations.append(
+        created_obligations.append(
             ReportingObligation(
                 id=str(uuid4()),
                 reporting_period_id=period.id,
@@ -281,6 +305,10 @@ async def freeze_period_obligations(
                 ),
                 exemption_reason=decision.reason,
                 frozen_barangay=frozen_barangay,
+                enterprise_official_code=enterprise.official_code,
+                enterprise_name=enterprise.name,
+                site_code=site.site_code,
+                site_name=site.name,
                 timezone_name=site.timezone_name,
                 # Enterprise.created_at is a target-row insertion timestamp for migrated
                 # topology. The effective-dated site is the authoritative registration fact.
@@ -288,7 +316,13 @@ async def freeze_period_obligations(
                 acceptance_blocked=decision.acceptance_blocked,
             )
         )
-    db.add_all(obligations)
+    for site_id, resolution in resolutions.items():
+        if site_id not in candidate_site_ids:
+            _apply_resolution(existing_by_site[site_id], resolution)
+
+    obligations = [*existing_obligations, *created_obligations]
+    period.obligations_frozen_at = observed_at
+    db.add_all(created_obligations)
     await db.flush()
 
     marker_payload = {
@@ -301,6 +335,8 @@ async def freeze_period_obligations(
         "requestHash": request_hash,
         "obligationIds": sorted(obligation.id for obligation in obligations),
         "obligationCount": len(obligations),
+        "preservedObligationCount": len(existing_obligations),
+        "createdObligationCount": len(created_obligations),
     }
     marker_event = _domain_event(
         event_key=_freeze_event_key(period.id),
@@ -364,7 +400,7 @@ async def read_period_compliance(
         raise ObligationNotFound(
             "REPORTING_PERIOD_NOT_FOUND", "The reporting period does not exist."
         )
-    if await _freeze_marker(db, period_id) is None:
+    if period.obligations_frozen_at is None or await _freeze_marker(db, period_id) is None:
         raise ObligationConflict(
             "PERIOD_OBLIGATIONS_NOT_FROZEN",
             "Reporting compliance is unavailable until this period's obligations are frozen.",
@@ -411,7 +447,10 @@ async def read_period_compliance(
             "startsAt": period.starts_at,
             "endsAt": period.ends_at,
             "submissionOpensAt": period.submission_opens_at,
+            "submissionClosesAt": period.submission_closes_at,
+            "status": period.status,
             "frozen": True,
+            "frozenAt": period.obligations_frozen_at,
             "summary": _summary(resources),
             "obligations": resources,
         }
@@ -540,7 +579,11 @@ async def create_reminder_intents(
             "submissionOpensAt": _as_utc(period.submission_opens_at).isoformat(),
             "obligationId": obligation.id,
             "enterpriseId": obligation.enterprise_id,
+            "enterpriseOfficialCode": obligation.enterprise_official_code,
+            "enterpriseName": obligation.enterprise_name,
             "siteId": obligation.site_id,
+            "siteCode": obligation.site_code,
+            "siteName": obligation.site_name,
             "complianceStatus": state,
             "targetPath": f"/enterprise/reports?periodId={period.id}",
         }
@@ -665,28 +708,7 @@ async def _reconcile_frozen_obligations(
 
     for resolution in command.resolutions:
         obligation = obligations_by_site[str(resolution.siteId)]
-        exact_existing = (
-            obligation.eligibility_status == resolution.eligibilityStatus
-            and obligation.exemption_reason == resolution.reason
-            and (
-                resolution.eligibilityStatus != "eligible"
-                or obligation.frozen_barangay == resolution.frozenBarangay
-            )
-        )
-        if exact_existing:
-            continue
-        if obligation.eligibility_status != "unknown":
-            raise ObligationConflict(
-                "FROZEN_OBLIGATION_CANNOT_BE_REWRITTEN",
-                "Only unresolved frozen obligations may be reconciled; established historical "
-                f"eligibility for site {obligation.site_id} is immutable.",
-            )
-        obligation.eligibility_status = resolution.eligibilityStatus
-        obligation.eligibility_basis = "manual_resolution"
-        obligation.exemption_reason = resolution.reason
-        obligation.acceptance_blocked = False
-        if resolution.eligibilityStatus == "eligible":
-            obligation.frozen_barangay = resolution.frozenBarangay
+        _apply_resolution(obligation, resolution)
 
     event_payload = {
         **request_payload,
@@ -759,6 +781,34 @@ async def _queue_event(
 
 def _freeze_event_key(period_id: str) -> str:
     return f"reporting-period:{period_id}:official-obligations-frozen:v1"
+
+
+def _apply_resolution(
+    obligation: ReportingObligation,
+    resolution: ObligationResolutionCommand,
+) -> None:
+    exact_existing = (
+        obligation.eligibility_status == resolution.eligibilityStatus
+        and obligation.exemption_reason == resolution.reason
+        and (
+            resolution.eligibilityStatus != "eligible"
+            or obligation.frozen_barangay == resolution.frozenBarangay
+        )
+    )
+    if exact_existing:
+        return
+    if obligation.eligibility_status != "unknown":
+        raise ObligationConflict(
+            "FROZEN_OBLIGATION_CANNOT_BE_REWRITTEN",
+            "Only unresolved frozen obligations may be reconciled; established historical "
+            f"eligibility for site {obligation.site_id} is immutable.",
+        )
+    obligation.eligibility_status = resolution.eligibilityStatus
+    obligation.eligibility_basis = "manual_resolution"
+    obligation.exemption_reason = resolution.reason
+    obligation.acceptance_blocked = False
+    if resolution.eligibilityStatus == "eligible":
+        obligation.frozen_barangay = resolution.frozenBarangay
 
 
 def _reminder_event_key(obligation_id: str, phase: ReminderPhase) -> str:
@@ -842,7 +892,11 @@ def _obligation_resource(
         {
             "obligationId": obligation.id,
             "enterpriseId": obligation.enterprise_id,
+            "enterpriseOfficialCode": obligation.enterprise_official_code,
+            "enterpriseName": obligation.enterprise_name,
             "siteId": obligation.site_id,
+            "siteCode": obligation.site_code,
+            "siteName": obligation.site_name,
             "classification": obligation.classification,
             "eligibilityStatus": obligation.eligibility_status,
             "eligibilityBasis": obligation.eligibility_basis,

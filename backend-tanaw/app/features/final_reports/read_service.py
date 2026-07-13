@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
@@ -282,6 +282,9 @@ def _period_resource(period: ReportingPeriod) -> ReportingPeriodResource:
         startsAt=period.starts_at,
         endsAt=period.ends_at,
         submissionOpensAt=period.submission_opens_at,
+        submissionClosesAt=period.submission_closes_at,
+        status=cast(Literal["scheduled", "open", "closed"], period.status),
+        obligationsFrozenAt=period.obligations_frozen_at,
     )
 
 

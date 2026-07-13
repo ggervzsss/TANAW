@@ -3,12 +3,13 @@ from __future__ import annotations
 import re
 from calendar import month_name
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from zoneinfo import ZoneInfo
 
 REPORTING_TIMEZONE_NAME = "Asia/Manila"
 REPORTING_TIMEZONE = ZoneInfo(REPORTING_TIMEZONE_NAME)
+REPORTING_SUBMISSION_WINDOW = timedelta(days=15)
 MONTHLY_PERIOD_KEY = re.compile(r"^month:Asia/Manila:(?P<year>[0-9]{4})-(?P<month>[0-9]{2})$")
 
 
@@ -106,6 +107,8 @@ class CanonicalReportingPeriod:
     local_end_date: date
     starts_at: datetime
     ends_at: datetime
+    submission_opens_at: datetime
+    submission_closes_at: datetime
     label: str
 
     def contains(self, timestamp: datetime) -> bool:
@@ -118,6 +121,8 @@ def monthly_reporting_period(year: int, month: int) -> CanonicalReportingPeriod:
         raise ValueError("Reporting-period year must be between 1 and 9999.")
     if month < 1 or month > 12:
         raise ValueError("Reporting-period month must be between 1 and 12.")
+    if year == 9999 and month == 12:
+        raise ValueError("December 9999 has no representable exclusive end boundary.")
 
     next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
     local_start = datetime(year, month, 1, tzinfo=REPORTING_TIMEZONE)
@@ -130,6 +135,8 @@ def monthly_reporting_period(year: int, month: int) -> CanonicalReportingPeriod:
         local_end_date=local_end.date(),
         starts_at=local_start.astimezone(UTC),
         ends_at=local_end.astimezone(UTC),
+        submission_opens_at=local_end.astimezone(UTC),
+        submission_closes_at=local_end.astimezone(UTC) + REPORTING_SUBMISSION_WINDOW,
         label=f"{month_name[month]} {year:04d}",
     )
 

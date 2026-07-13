@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -97,6 +97,10 @@ def test_obligation_rejects_cross_classification_site(sqlite_engine: Engine) -> 
                 classification="simulation",
                 eligibility_status="eligible",
                 eligibility_basis="registry_snapshot",
+                enterprise_official_code="ENT-CROSS-SCOPE",
+                enterprise_name="Cross-scope enterprise",
+                site_code="PRIMARY",
+                site_name="Primary site",
                 timezone_name="Asia/Manila",
                 acceptance_blocked=False,
             )
@@ -250,6 +254,8 @@ def _period(natural_key: str) -> ReportingPeriod:
         starts_at=starts_at,
         ends_at=ends_at,
         submission_opens_at=ends_at,
+        submission_closes_at=ends_at + timedelta(days=15),
+        status="open",
         label="June 2026",
     )
 
@@ -275,6 +281,10 @@ def _insert_report_graph(engine: Engine) -> dict[str, Any]:
             classification="official",
             eligibility_status="eligible",
             eligibility_basis="registry_snapshot",
+            enterprise_official_code="ENT-REPORTING",
+            enterprise_name="Reporting enterprise",
+            site_code="PRIMARY",
+            site_name="Primary site",
             timezone_name="Asia/Manila",
             acceptance_blocked=False,
         )

@@ -6,7 +6,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -37,6 +37,7 @@ from app.features.events.realtime import (
 )
 from app.features.operational.models import UserNotification
 from app.features.operational.schemas import OperationalWebSocketEnvelope
+from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
@@ -432,18 +433,22 @@ async def _site(runtime: ConsumerRuntime, enterprise: Enterprise) -> EnterpriseS
 
 async def _reporting_period(runtime: ConsumerRuntime, now: datetime) -> ReportingPeriod:
     suffix = str(uuid4())[:8]
-    starts_at = now - timedelta(days=31)
-    ends_at = now - timedelta(days=1)
+    canonical = monthly_reporting_period(
+        1000 + (uuid4().int + now.microsecond) % 900,
+        1 + uuid4().int % 12,
+    )
     period = ReportingPeriod(
         id=str(uuid4()),
-        natural_key=f"consumer-test:{suffix}",
+        natural_key=canonical.natural_key,
         cadence="month",
-        timezone_name="Asia/Manila",
-        local_start_date=date(2026, 6, 1),
-        local_end_date=date(2026, 7, 1),
-        starts_at=starts_at,
-        ends_at=ends_at,
-        submission_opens_at=ends_at,
+        timezone_name=canonical.timezone,
+        local_start_date=canonical.local_start_date,
+        local_end_date=canonical.local_end_date,
+        starts_at=canonical.starts_at,
+        ends_at=canonical.ends_at,
+        submission_opens_at=canonical.submission_opens_at,
+        submission_closes_at=canonical.submission_closes_at,
+        status="closed",
         label=f"Consumer Test {suffix}",
     )
     async with runtime.sessions() as db:
@@ -457,21 +462,27 @@ async def _obligation(
     site: EnterpriseSite,
     period: ReportingPeriod,
 ) -> ReportingObligation:
-    obligation = ReportingObligation(
-        id=str(uuid4()),
-        reporting_period_id=period.id,
-        enterprise_id=site.enterprise_id,
-        site_id=site.id,
-        classification=site.classification,
-        eligibility_status="eligible",
-        eligibility_basis="registry_snapshot",
-        frozen_barangay=site.barangay,
-        timezone_name="Asia/Manila",
-        registration_effective_at=site.effective_from,
-        acceptance_blocked=False,
-    )
-    runtime.obligation_ids.append(obligation.id)
     async with runtime.sessions() as db:
+        enterprise = await db.get(Enterprise, site.enterprise_id)
+        assert enterprise is not None
+        obligation = ReportingObligation(
+            id=str(uuid4()),
+            reporting_period_id=period.id,
+            enterprise_id=site.enterprise_id,
+            site_id=site.id,
+            classification=site.classification,
+            eligibility_status="eligible",
+            eligibility_basis="registry_snapshot",
+            frozen_barangay=site.barangay,
+            enterprise_official_code=enterprise.official_code,
+            enterprise_name=enterprise.name,
+            site_code=site.site_code,
+            site_name=site.name,
+            timezone_name="Asia/Manila",
+            registration_effective_at=site.effective_from,
+            acceptance_blocked=False,
+        )
+        runtime.obligation_ids.append(obligation.id)
         db.add(obligation)
         await db.commit()
     return obligation

@@ -61,7 +61,11 @@ class ObligationFreezeCommand(ContractModel):
 class ObligationResource(ContractModel):
     obligationId: UUID
     enterpriseId: UUID
+    enterpriseOfficialCode: str
+    enterpriseName: str
     siteId: UUID
+    siteCode: str
+    siteName: str
     classification: Literal["official", "simulation"]
     eligibilityStatus: EligibilityStatus
     eligibilityBasis: Literal["registry_snapshot", "legacy_submission", "manual_resolution"]
@@ -97,7 +101,10 @@ class PeriodComplianceResource(ContractModel):
     startsAt: datetime
     endsAt: datetime
     submissionOpensAt: datetime
+    submissionClosesAt: datetime
+    status: Literal["scheduled", "open", "closed"]
     frozen: Literal[True]
+    frozenAt: datetime
     summary: ObligationSummary
     obligations: list[ObligationResource]
 
