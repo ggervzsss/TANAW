@@ -48,6 +48,7 @@ async def test_uninitialized_database_is_rejected() -> None:
         "20260713_0020_normalized_enterprise_topology.py",
         "20260713_0021_versioned_reporting_foundation.py",
         "20260713_0022_sequenced_telemetry_and_domain_events.py",
+        "20260713_0023_canonical_report_source_batch_identity.py",
     ),
 )
 def test_irreversible_migrations_block_unsafe_downgrades(migration_filename: str) -> None:

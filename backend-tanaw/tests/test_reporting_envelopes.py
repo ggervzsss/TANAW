@@ -126,6 +126,51 @@ def test_unrecorded_coverage_rejects_invented_zero_duration_and_gap() -> None:
         ReportSubmissionCommand.model_validate(payload)
 
 
+def test_recorded_coverage_must_account_for_every_expected_second() -> None:
+    payload = _command()
+    payload["payload"]["coverage"]["monitoredSeconds"] = 2_591_900
+
+    with pytest.raises(ValidationError, match="full expected duration exactly"):
+        ReportSubmissionCommand.model_validate(payload)
+
+
+def test_source_batches_reject_duplicate_ids_and_overlapping_camera_ranges() -> None:
+    duplicate = _command()
+    duplicate["payload"]["sourceBatches"].append(dict(duplicate["payload"]["sourceBatches"][0]))
+    with pytest.raises(ValidationError, match="IDs must be unique"):
+        ReportSubmissionCommand.model_validate(duplicate)
+
+    overlap = _command()
+    second_batch = dict(overlap["payload"]["sourceBatches"][0])
+    second_batch.update(
+        batchId="018fbf1a-9bf0-7f5f-a70e-001122334488",
+        eventCount=5,
+        eventSequenceStart=1005,
+        eventSequenceEndExclusive=1010,
+    )
+    overlap["payload"]["sourceBatches"].append(second_batch)
+    with pytest.raises(ValidationError, match="ranges cannot overlap"):
+        ReportSubmissionCommand.model_validate(overlap)
+
+
+def test_demographic_facts_reject_duplicates_and_unknown_quality() -> None:
+    duplicate = _command()
+    fact = {
+        "dimension": "residence_sex",
+        "value": "local_female",
+        "count": 3,
+        "quality": "confirmed",
+    }
+    duplicate["payload"]["demographicFacts"] = [fact, dict(fact)]
+    with pytest.raises(ValidationError, match="dimension/value facts must be unique"):
+        ReportSubmissionCommand.model_validate(duplicate)
+
+    unknown = _command()
+    unknown["payload"]["demographicFacts"] = [{**fact, "quality": "unknown"}]
+    with pytest.raises(ValidationError, match="confirmed"):
+        ReportSubmissionCommand.model_validate(unknown)
+
+
 def _command() -> dict:
     start = "2026-05-31T16:00:00Z"
     end = "2026-06-30T16:00:00Z"

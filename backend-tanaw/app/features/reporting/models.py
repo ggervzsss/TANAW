@@ -518,20 +518,14 @@ class ReportSourceBatch(Base):
             "length(aggregate_hash) = 71 AND aggregate_hash LIKE 'sha256:%'",
             name="ck_report_source_batches_aggregate_hash",
         ),
-        UniqueConstraint(
-            "report_revision_id", "batch_key", name="uq_report_source_batches_revision_key"
-        ),
         Index("ix_report_source_batches_camera", "camera_id"),
     )
 
-    id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     report_revision_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     site_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     camera_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
-    batch_key: Mapped[str] = mapped_column(String(120), nullable=False)
     event_count: Mapped[int] = mapped_column(Integer, nullable=False)
     event_sequence_start: Mapped[int] = mapped_column(Integer, nullable=False)
     event_sequence_end_exclusive: Mapped[int] = mapped_column(Integer, nullable=False)

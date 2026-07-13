@@ -76,8 +76,11 @@ class CoverageCommand(ContractModel):
             raise ValueError("Recorded coverage must include monitored and expected durations.")
         if self.monitoredSeconds > self.expectedSeconds:
             raise ValueError("Monitored coverage cannot exceed expected coverage.")
-        if sum(gap.durationSeconds for gap in self.gaps) > self.expectedSeconds:
-            raise ValueError("Coverage gaps cannot exceed expected coverage.")
+        gap_seconds = sum(gap.durationSeconds for gap in self.gaps)
+        if self.monitoredSeconds + gap_seconds != self.expectedSeconds:
+            raise ValueError(
+                "Recorded coverage must account for the full expected duration exactly."
+            )
         return self
 
 
@@ -89,14 +92,17 @@ class MetricCoverageCommand(ContractModel):
 
     @model_validator(mode="after")
     def validate_evidence(self) -> MetricCoverageCommand:
-        values = (self.monitoredSeconds, self.expectedSeconds, self.gapCount)
+        monitored_seconds = self.monitoredSeconds
+        expected_seconds = self.expectedSeconds
+        gap_count = self.gapCount
+        values = (monitored_seconds, expected_seconds, gap_count)
         if self.evidenceStatus == "not_recorded":
             if any(value is not None for value in values):
                 raise ValueError("Unrecorded metric coverage cannot contain invented values.")
             return self
-        if any(value is None for value in values):
+        if monitored_seconds is None or expected_seconds is None or gap_count is None:
             raise ValueError("Recorded metric coverage must include all coverage values.")
-        if self.monitoredSeconds > self.expectedSeconds:
+        if monitored_seconds > expected_seconds:
             raise ValueError("Metric monitored coverage cannot exceed expected coverage.")
         return self
 
@@ -132,7 +138,11 @@ class DemographicFactCommand(ContractModel):
     value: str = Field(min_length=1, max_length=120)
     count: int = Field(ge=0)
     provenance: Literal["operator_entered"] = "operator_entered"
-    quality: MetricQuality = MetricQuality.CONFIRMED
+    quality: Literal[
+        MetricQuality.CONFIRMED,
+        MetricQuality.DEGRADED,
+        MetricQuality.ESTIMATED,
+    ] = MetricQuality.CONFIRMED
 
 
 class ReportSubmissionCommandPayload(ContractModel):
@@ -153,6 +163,23 @@ class ReportSubmissionCommandPayload(ContractModel):
         for metric in self.metrics:
             if metric.windowStart != period.starts_at or metric.windowEnd != period.ends_at:
                 raise ValueError("Report metric windows must equal the reporting period.")
+        batch_ids: set[UUID] = set()
+        camera_ranges: dict[UUID, list[tuple[int, int]]] = {}
+        for batch in self.sourceBatches:
+            if batch.batchId in batch_ids:
+                raise ValueError("Source-batch IDs must be unique within a report revision.")
+            batch_ids.add(batch.batchId)
+            ranges = camera_ranges.setdefault(batch.cameraId, [])
+            if any(
+                batch.eventSequenceStart < existing_end
+                and existing_start < batch.eventSequenceEndExclusive
+                for existing_start, existing_end in ranges
+            ):
+                raise ValueError("Source-batch event ranges cannot overlap for one camera.")
+            ranges.append((batch.eventSequenceStart, batch.eventSequenceEndExclusive))
+        demographic_keys = [(fact.dimension, fact.value) for fact in self.demographicFacts]
+        if len(demographic_keys) != len(set(demographic_keys)):
+            raise ValueError("Demographic dimension/value facts must be unique.")
         return self
 
 
