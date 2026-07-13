@@ -18,6 +18,7 @@ export type {
   LguAccountStatus,
   LogSeverity,
   MapEnterprise,
+  MapSite,
   PipelineAlert,
   PipelineHealth,
   PriorityAlert,

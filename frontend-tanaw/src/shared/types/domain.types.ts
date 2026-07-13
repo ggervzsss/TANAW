@@ -1,4 +1,4 @@
-export type EnterpriseStatus = "Normal" | "Warning" | "Critical";
+export type EnterpriseStatus = "Normal" | "Warning" | "Critical" | "No Data";
 export type CameraStatus = "Online" | "Offline" | "Unstable";
 export type GatewayStatus = "Connected" | "Sync Delayed" | "Offline" | "Not Linked" | "Closed";
 export type AlertSeverity = "Info" | "Warning" | "Critical";
@@ -6,22 +6,28 @@ export type LogSeverity = AlertSeverity | "Success";
 
 export type MapEnterprise = {
   id: string;
+  enterpriseId: string;
   name: string;
   barangay: string;
   category: string;
   fullAddress: string;
   lat: number;
   lng: number;
-  totalLiveOccupancy: number;
-  estimatedUniqueCount: number;
+  totalLiveOccupancy: number | null;
+  estimatedUniqueCount: number | null;
   status: EnterpriseStatus;
   operatingHours?: string;
   contact?: string;
   trend?: "Up" | "Stable" | "Down";
   lastSync?: string;
   gatewayStatus?: GatewayStatus;
-  sourceKind?: "real" | "mock" | "hybrid";
-  mockRunId?: string | null;
+  freshnessState?: "fresh" | "stale" | "offline";
+  topologyStatus?: "ready" | "unlinked" | "ambiguous";
+};
+
+export type MapSite = Omit<MapEnterprise, "lat" | "lng"> & {
+  lat: number | null;
+  lng: number | null;
 };
 
 export type Enterprise = {

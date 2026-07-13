@@ -14,7 +14,7 @@ import {
   type BackendNotification,
   type OperationalWebSocketEnvelope,
 } from "../services/operationalSync";
-import type { AuthUser, FinalReport, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
+import type { AuthUser, FinalReport, IntakeReport, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
 
 const RECONCILIATION_INTERVAL_MS = 30_000;
 
@@ -22,7 +22,7 @@ export const operationalSummaryQueryKey = ["operational", "summary"] as const;
 export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest"] as const;
 export const operationalReportsQueryKey = ["operational", "reports", "intake"] as const;
 export const operationalFinalReportsQueryKey = ["operational", "reports", "final"] as const;
-export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"] as const;
+export const operationalMapEnterprisesQueryKey = ["operational", "sites", "v2"] as const;
 export const operationalNotificationsQueryKey = ["operational", "notifications"] as const;
 const operationalAlertsQueryKey = ["operational-alerts"] as const;
 
@@ -87,7 +87,7 @@ export function useOperationalMapEnterprises() {
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
   const keys = createOperationalQueryKeys(user);
-  return useQuery({ queryKey: keys.mapEnterprises, queryFn: listOperationalMapEnterprises, enabled: Boolean(token && user) });
+  return useQuery({ queryKey: keys.mapEnterprises, queryFn: listOperationalMapEnterprises, enabled: Boolean(token && user), refetchInterval: RECONCILIATION_INTERVAL_MS });
 }
 
 export function useOperationalNotifications() {
@@ -223,12 +223,27 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
     return;
   }
 
+  if (envelope.type === "resource.invalidated") {
+    const resourceType = envelope.data.resource.type;
+    if (resourceType === "site_live_state") {
+      invalidate(queryClient, keys.mapEnterprises, keys.telemetry, keys.summary);
+      return;
+    }
+    if (resourceType === "enterprise_report" || resourceType === "final_report") {
+      invalidate(queryClient, operationalReportsQueryKey, operationalFinalReportsQueryKey, operationalSummaryQueryKey);
+      return;
+    }
+    if (resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {
+      invalidate(queryClient, operationalReportsQueryKey, operationalNotificationsQueryKey);
+      return;
+    }
+    return;
+  }
+
   if (envelope.type === "telemetry.snapshot") {
     const snapshot = envelope.data;
     const patchedTelemetry = patchExistingList(queryClient, keys.telemetry, snapshot, upsertTelemetrySnapshot);
-    const patchedMap = patchExistingData(queryClient, keys.mapEnterprises, (current: MapEnterprise[]) => updateMapEnterpriseTelemetry(current, snapshot));
     if (!patchedTelemetry) invalidate(queryClient, keys.telemetry);
-    if (!patchedMap) invalidate(queryClient, keys.mapEnterprises);
     return;
   }
 
@@ -348,27 +363,4 @@ function patchSummary(queryClient: QueryClient, queryKey: QueryKey, summary: Ope
   const current = queryClient.getQueryData<OperationalSummary>(queryKey);
   if (current && getTimestamp(summary.lastSyncAt) < getTimestamp(current.lastSyncAt)) return;
   queryClient.setQueryData(queryKey, summary);
-}
-
-function updateMapEnterpriseTelemetry(current: MapEnterprise[], snapshot: TelemetrySnapshot) {
-  return current.map((enterprise) => {
-    if (enterprise.id !== snapshot.enterpriseId || getTimestamp(snapshot.receivedAt) < getTimestamp(enterprise.lastSync)) return enterprise;
-
-    return {
-      ...enterprise,
-      totalLiveOccupancy: snapshot.currentOccupancy,
-      estimatedUniqueCount: snapshot.uniqueCount,
-      lastSync: snapshot.receivedAt,
-      gatewayStatus: snapshot.gatewayStatus,
-      sourceKind: snapshot.sourceKind,
-      mockRunId: snapshot.mockRunId,
-      status: getMapStatus(snapshot),
-    };
-  });
-}
-
-function getMapStatus(snapshot: TelemetrySnapshot): MapEnterprise["status"] {
-  if (snapshot.gatewayStatus === "Offline" || snapshot.error) return "Critical";
-  if (snapshot.gatewayStatus === "Sync Delayed" || snapshot.unsyncedEvents > 0) return "Warning";
-  return "Normal";
 }

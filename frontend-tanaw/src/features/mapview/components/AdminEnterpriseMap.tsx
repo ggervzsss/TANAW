@@ -1,12 +1,9 @@
 import L, { type GeoJSONOptions, type Layer } from "leaflet";
 import { Activity, ArrowLeft, Building2, ChevronDown, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
-import { listEnterpriseAccounts, type AccountSummary } from "@/shared/services/accountManagement";
-import type { MapEnterprise } from "@/shared/types";
+import type { MapEnterprise, MapSite } from "@/shared/types";
 import {
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
@@ -36,8 +33,7 @@ import {
 } from "../utils";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
 
-const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
-const EMPTY_MAP_ENTERPRISES: MapEnterprise[] = [];
+const EMPTY_MAP_SITES: MapSite[] = [];
 
 export function AdminEnterpriseMap() {
   const mapContainerId = "admin-enterprise-map";
@@ -58,13 +54,10 @@ export function AdminEnterpriseMap() {
   const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
-  const token = useAuthStore((state) => state.token);
-  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
   const mapEnterprisesQuery = useOperationalMapEnterprises();
-  const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ENTERPRISE_ACCOUNTS;
-  const rawMapEnterprises = mapEnterprisesQuery.data ?? EMPTY_MAP_ENTERPRISES;
-  const mapEnterprises = useMemo(() => rawMapEnterprises.filter((enterprise) => isPointInsideSanPedro(boundary, enterprise.lat, enterprise.lng)), [boundary, rawMapEnterprises]);
-  const unpinnedEnterprises = useMemo(() => enterpriseAccounts.filter((enterprise) => !hasUsableSanPedroCoordinates(boundary, enterprise)), [boundary, enterpriseAccounts]);
+  const registeredSites = mapEnterprisesQuery.data ?? EMPTY_MAP_SITES;
+  const mapEnterprises = useMemo(() => registeredSites.filter((site): site is MapEnterprise => hasUsableSanPedroCoordinates(boundary, site)), [boundary, registeredSites]);
+  const unpinnedEnterprises = useMemo(() => registeredSites.filter((site) => !hasUsableSanPedroCoordinates(boundary, site)), [boundary, registeredSites]);
   const unpinnedEnterpriseCount = unpinnedEnterprises.length;
 
   const boundaryFeatureCount = useMemo(() => boundary?.features.filter(isBoundaryPolygonFeature).length ?? 0, [boundary]);
@@ -429,15 +422,15 @@ export function AdminEnterpriseMap() {
                   </span>
                   <p className="mt-1 text-[9px] font-bold tracking-widest text-white/65 uppercase">
                     {selectedBarangayName
-                      ? `${selectedBarangayEnterprises.length} registered enterprises`
+                      ? `${selectedBarangayEnterprises.length} registered sites`
                       : isBoundaryLoading
                         ? "Loading refined boundaries"
                         : isBoundaryError
                           ? "Boundary layer unavailable"
-                          : enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError
+                          : mapEnterprisesQuery.isError
                             ? "Enterprise registry unavailable"
-                            : enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading
-                              ? "Loading enterprises"
+                            : mapEnterprisesQuery.isLoading
+                              ? "Loading enterprise sites"
                               : `${boundaryFeatureCount} barangay boundaries`}
                   </p>
                 </div>
@@ -537,7 +530,7 @@ export function AdminEnterpriseMap() {
                             ].join(" ")}
                           >
                             <span>All Barangays</span>
-                            <span className="rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold opacity-60">{enterpriseAccounts.length}</span>
+                            <span className="rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold opacity-60">{registeredSites.length}</span>
                           </button>
                           {barangayDirectoryItems.map((item) => (
                             <button
@@ -629,7 +622,7 @@ export function AdminEnterpriseMap() {
                             transition={{ duration: 0.22, ease: "easeOut" }}
                             className="rounded-lg border border-white/15 bg-black/20 p-6 text-center text-[10px] font-bold tracking-widest text-white/65 uppercase"
                           >
-                            {enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError ? "Unable to load enterprise registry." : "No registered enterprises found for this barangay yet."}
+                            {mapEnterprisesQuery.isError ? "Unable to load the site registry." : "No registered enterprise sites found for this barangay yet."}
                           </motion.div>
                         )}
                       </div>
@@ -656,10 +649,10 @@ export function AdminEnterpriseMap() {
                       <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
                         <h3 className="flex items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
                           <Building2 size={13} className="text-tanaw-sky" />
-                          All Enterprises
+                          All Enterprise Sites
                         </h3>
                         <span className="text-[9px] font-bold tracking-widest text-white/65 uppercase">
-                          {unpinnedEnterpriseCount > 0 ? `${mapEnterprises.length} pinned / ${unpinnedEnterpriseCount} unpinned` : enterpriseAccounts.length}
+                          {unpinnedEnterpriseCount > 0 ? `${mapEnterprises.length} pinned / ${unpinnedEnterpriseCount} unpinned` : registeredSites.length}
                         </span>
                       </div>
                       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
@@ -677,15 +670,14 @@ export function AdminEnterpriseMap() {
                         {unpinnedEnterprises.map((enterprise) => (
                           <UnpinnedEnterpriseCard key={enterprise.id} enterprise={enterprise} />
                         ))}
-                        {enterpriseAccounts.length === 0 && (
+                        {registeredSites.length === 0 && (
                           <div className="rounded-lg border border-white/15 bg-black/20 p-6 text-center text-[10px] font-bold tracking-widest text-white/65 uppercase">
-                            {enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError ? (
+                            {mapEnterprisesQuery.isError ? (
                               <div className="flex flex-col items-center gap-3">
-                                <span>Unable to load enterprise registry.</span>
+                                <span>Unable to load the site registry.</span>
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    void enterpriseAccountsQuery.refetch();
                                     void mapEnterprisesQuery.refetch();
                                   }}
                                   className="focus:ring-tanaw-sky inline-flex items-center gap-1.5 rounded border border-white/20 bg-white/10 px-2 py-1 text-[9px] font-black tracking-widest text-white transition hover:bg-white/15 focus:ring-2 focus:outline-none"
@@ -694,10 +686,10 @@ export function AdminEnterpriseMap() {
                                   Retry
                                 </button>
                               </div>
-                            ) : enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading ? (
-                              "Loading enterprises..."
+                            ) : mapEnterprisesQuery.isLoading ? (
+                              "Loading enterprise sites..."
                             ) : (
-                              "No pinned enterprise locations yet."
+                              "No registered enterprise sites yet."
                             )}
                           </div>
                         )}
@@ -756,26 +748,26 @@ function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapE
         <span className="truncate text-white/70">{enterprise.category}</span>
         <span className="flex items-center justify-end gap-1 font-bold text-white">
           <Activity size={12} className="text-tanaw-sky" />
-          {enterprise.totalLiveOccupancy.toLocaleString()}
+          {formatLiveMetric(enterprise.totalLiveOccupancy)}
         </span>
         <span className="text-white/70">Est. Unique</span>
-        <span className="text-right font-bold text-white">{enterprise.estimatedUniqueCount.toLocaleString()}</span>
+        <span className="text-right font-bold text-white">{formatLiveMetric(enterprise.estimatedUniqueCount)}</span>
       </div>
     </button>
   );
 }
 
-function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) {
-  const statusLabel = enterprise.latitude === null || enterprise.longitude === null ? "Not Pinned" : "Needs Correction";
+function UnpinnedEnterpriseCard({ enterprise }: { enterprise: MapSite }) {
+  const statusLabel = enterprise.lat === null || enterprise.lng === null ? "Not Pinned" : "Needs Correction";
 
   return (
     <div className="w-full rounded-lg border border-dashed border-white/15 bg-slate-950/25 p-3 text-left shadow-sm shadow-black/15">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
+          <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.name}</h4>
           <div className="mt-1 flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-white/70 uppercase">
             <MapPin size={10} className="shrink-0" />
-            <span className="truncate">{enterprise.address ?? enterprise.geocodedAddress ?? "Address not provided"}</span>
+            <span className="truncate">{enterprise.fullAddress}</span>
           </div>
         </div>
         <span className="flex shrink-0 items-center rounded border border-amber-400/30 bg-amber-900/35 px-1.5 py-0.5 text-[9px] font-black tracking-widest text-amber-100 uppercase">
@@ -784,14 +776,18 @@ function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) 
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/15 pt-2 font-mono text-[10px]">
-        <span className="truncate text-white/70">{enterprise.category ?? "Uncategorized"}</span>
-        <span className="truncate text-right font-bold text-white">{enterprise.barangay ?? "Unassigned"}</span>
+        <span className="truncate text-white/70">{enterprise.category}</span>
+        <span className="truncate text-right font-bold text-white">{enterprise.barangay}</span>
       </div>
     </div>
   );
 }
 
-function hasUsableSanPedroCoordinates(boundary: GeoJsonFeatureCollection | null, enterprise: AccountSummary) {
-  if (enterprise.latitude === null || enterprise.longitude === null) return false;
-  return isPointInsideSanPedro(boundary, enterprise.latitude, enterprise.longitude);
+function hasUsableSanPedroCoordinates(boundary: GeoJsonFeatureCollection | null, enterprise: MapSite): enterprise is MapEnterprise {
+  if (enterprise.lat === null || enterprise.lng === null) return false;
+  return isPointInsideSanPedro(boundary, enterprise.lat, enterprise.lng);
+}
+
+function formatLiveMetric(value: number | null) {
+  return value === null ? "Not available" : value.toLocaleString();
 }

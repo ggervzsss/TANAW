@@ -1,6 +1,5 @@
 import L from "leaflet";
-import type { AccountSummary } from "@/shared/services/accountManagement";
-import type { EnterpriseStatus, GatewayStatus, MapEnterprise } from "@/shared/types";
+import type { EnterpriseStatus, MapEnterprise } from "@/shared/types";
 import type { LeafletMapTheme } from "./leafletTheme";
 
 export type GeoJsonFeatureCollection = GeoJSON.FeatureCollection;
@@ -353,36 +352,6 @@ function pointInRing([pointLng, pointLat]: [number, number], ring: GeoJSON.Posit
   return inside;
 }
 
-export function toMapEnterprise(account: AccountSummary): MapEnterprise | null {
-  if (account.latitude === null || account.longitude === null) return null;
-
-  return {
-    id: account.id,
-    name: account.enterpriseName ?? account.displayName,
-    barangay: account.barangay ?? "Unassigned",
-    category: account.category ?? "Uncategorized",
-    fullAddress: account.address ?? account.geocodedAddress ?? "Address not provided",
-    lat: account.latitude,
-    lng: account.longitude,
-    totalLiveOccupancy: 0,
-    estimatedUniqueCount: 0,
-    status: getEnterpriseMapStatus(account),
-    contact: account.phone ?? account.email,
-    lastSync: account.locationUpdatedAt ? new Date(account.locationUpdatedAt).toLocaleString() : undefined,
-    gatewayStatus: getGatewayStatus(account.gatewayStatus),
-  };
-}
-
-function getEnterpriseMapStatus(account: AccountSummary): EnterpriseStatus {
-  if (account.status === "inactive") return "Warning";
-  return "Normal";
-}
-
-function getGatewayStatus(value: string | null): GatewayStatus {
-  const statuses: GatewayStatus[] = ["Connected", "Sync Delayed", "Offline", "Not Linked", "Closed"];
-  return statuses.find((status) => status === value) ?? "Not Linked";
-}
-
 export function fitMapToSanPedroBounds(map: L.Map, layer: L.GeoJSON | null) {
   if (!layer) return;
 
@@ -435,11 +404,16 @@ export function createBoundaryPopupHtml(featureItem: GeoJSON.Feature) {
 }
 
 export function createTooltipHtml(enterprise: MapEnterprise, color: string) {
-  const occupancyShare = Math.min(100, Math.round((enterprise.totalLiveOccupancy / Math.max(1, enterprise.estimatedUniqueCount)) * 100));
+  const occupancyShare =
+    enterprise.totalLiveOccupancy === null || enterprise.estimatedUniqueCount === null
+      ? 0
+      : Math.min(100, Math.round((enterprise.totalLiveOccupancy / Math.max(1, enterprise.estimatedUniqueCount)) * 100));
 
   return `<div class="tanaw-map-tooltip"><h4 class="tanaw-map-tooltip__title">${escapeHtml(enterprise.name)}</h4><p class="tanaw-map-tooltip__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><div class="tanaw-map-tooltip__meter"><div class="tanaw-map-tooltip__meter-fill" style="width:${occupancyShare}%;background:${color};"></div></div></div>`;
 }
 
 export function createPopupHtml(enterprise: MapEnterprise, color: string) {
-  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${escapeHtml(enterprise.name)}</h3><p class="tanaw-map-popup__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-popup__metric">${enterprise.totalLiveOccupancy.toLocaleString()} live occupancy | ${enterprise.estimatedUniqueCount.toLocaleString()} est. unique</p><span class="tanaw-map-popup__status" style="color:${color};border-color:${color};">${enterprise.status}</span></div>`;
+  const occupancy = enterprise.totalLiveOccupancy === null ? "Not available" : enterprise.totalLiveOccupancy.toLocaleString();
+  const unique = enterprise.estimatedUniqueCount === null ? "Not available" : enterprise.estimatedUniqueCount.toLocaleString();
+  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${escapeHtml(enterprise.name)}</h3><p class="tanaw-map-popup__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-popup__metric">${occupancy} live occupancy | ${unique} est. unique</p><span class="tanaw-map-popup__status" style="color:${color};border-color:${color};">${enterprise.status}</span></div>`;
 }

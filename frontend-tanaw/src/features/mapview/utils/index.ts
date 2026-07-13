@@ -27,7 +27,6 @@ export {
   sanPedroFallbackCenter,
   sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
-  toMapEnterprise,
 } from "./enterpriseMapUtils";
 export { getCurrentLeafletMapTheme, mountLeafletThemeLayer } from "./leafletTheme";
 export { getDarkStatusBadgeClass } from "./mapStatusStyles";

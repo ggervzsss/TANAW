@@ -54,6 +54,39 @@ describe("operational realtime reconciliation", () => {
     expect(client.getQueryData<TelemetrySnapshot[]>(keys.telemetry)).toEqual([newer]);
   });
 
+  it("refetches the target site registry for a version-only live-state event", () => {
+    const client = createClient();
+    const keys = createOperationalQueryKeys(user);
+    client.setQueryData(keys.mapEnterprises, []);
+    client.setQueryData(keys.telemetry, []);
+    client.setQueryData(keys.summary, createSummary());
+
+    handleOperationalEnvelope(
+      client,
+      keys,
+      JSON.stringify({
+        type: "resource.invalidated",
+        data: {
+          contractVersion: 2,
+          eventId: "event-1",
+          eventKey: "telemetry-observation:1",
+          eventType: "telemetry.observation_recorded.v2",
+          resource: { type: "site_live_state", id: "site-1", version: 4 },
+          scope: { classification: "official", enterpriseId: "enterprise-1", siteId: "site-1" },
+          invalidates: ["/operational/sites/v2"],
+          audienceRoles: ["admin", "staff"],
+          occurredAt: "2026-07-13T08:00:00Z",
+          refetchRequired: true,
+        },
+      }),
+    );
+
+    expect(client.getQueryState(keys.mapEnterprises)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys.telemetry)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys.summary)?.isInvalidated).toBe(true);
+    expect(client.getQueryData(keys.mapEnterprises)).toEqual([]);
+  });
+
   it("invalidates intake, final, summary, and report detail caches for report events", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);

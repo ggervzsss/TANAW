@@ -12,7 +12,7 @@ type EnterpriseDetailsModalProps = {
 
 export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetailsModalProps) {
   return (
-    <ModalFrame title={enterprise.name} eyebrow="Enterprise Details" onClose={onClose} maxWidthClassName="max-w-5xl">
+    <ModalFrame title={enterprise.name} eyebrow="Enterprise Site Details" onClose={onClose} maxWidthClassName="max-w-5xl">
       <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
         <section className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-500/10">
           <div className="flex items-start gap-3">
@@ -21,10 +21,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
-                {enterprise.sourceKind && enterprise.sourceKind !== "real" && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black tracking-[0.14em] text-amber-800 uppercase">Simulated Live Data</span>
-                )}
+                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Official Site Registry</p>
               </div>
               <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
                 {enterprise.category} - Barangay {enterprise.barangay}
@@ -33,8 +30,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy.toLocaleString()} />
-            <EnterpriseMetricCard icon={<Users size={16} />} label="Est. Unique Count" value={enterprise.estimatedUniqueCount.toLocaleString()} />
+            <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={formatLiveMetric(enterprise.totalLiveOccupancy)} />
+            <EnterpriseMetricCard icon={<Users size={16} />} label="Est. Unique Count" value={formatLiveMetric(enterprise.estimatedUniqueCount)} />
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Status" value={<StatusBadge status={enterprise.status} />} />
             <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={displayTrend(enterprise.trend)} />
           </div>
@@ -82,9 +79,14 @@ function StatusBadge({ status }: { status: EnterpriseStatus }) {
     Normal: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
     Warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
     Critical: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
+    "No Data": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
   };
 
   return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
+}
+
+function formatLiveMetric(value: number | null) {
+  return value === null ? "Not available" : value.toLocaleString();
 }
 
 function DesktopAppStatusBadge({ status }: { status: GatewayStatus }) {
