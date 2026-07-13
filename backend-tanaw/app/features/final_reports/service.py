@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Literal, cast
 from uuid import UUID, uuid4, uuid5
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.models import Account, AccountRole
@@ -40,6 +40,8 @@ from app.features.reporting.models import (
     ReportReviewEvent,
     ReportRevision,
 )
+from app.features.reporting.numeric import fits_numeric_20_6
+from app.features.topology.models import Enterprise, EnterpriseSite
 
 
 class FinalizationError(Exception):
@@ -58,6 +60,8 @@ class _Source:
     revision: ReportRevision
     report: EnterpriseReport
     obligation: ReportingObligation
+    enterprise: Enterprise
+    site: EnterpriseSite
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +271,11 @@ async def finalize_report_command(
                 enterprise_id=source.obligation.enterprise_id,
                 site_id=source.obligation.site_id,
                 classification="official",
+                enterprise_official_code=source.enterprise.official_code,
+                enterprise_name=source.enterprise.name,
+                enterprise_category=source.enterprise.category,
+                site_code=source.site.site_code,
+                site_name=source.site.name,
                 frozen_barangay=source.obligation.frozen_barangay,
             )
             for source in sources
@@ -305,6 +314,7 @@ async def finalize_report_command(
                 from_state="accepted",
                 to_state="consolidated",
                 actor_account_id=account.id,
+                actor_display_name=account.display_name,
                 actor_role=account.role.value,
                 reason=f"Included in final report {finalization.report_code}.",
                 command_id=str(uuid5(command.commandId, source.report.id)),
@@ -322,6 +332,7 @@ async def finalize_report_command(
             classification="official",
             event_type="version_finalized",
             actor_account_id=account.id,
+            actor_display_name=account.display_name,
             actor_role=account.role.value,
             command_id=str(command.commandId),
             expected_version=command.expectedVersion,
@@ -455,18 +466,56 @@ async def _resolve_replay(
 async def _lock_sources(db: AsyncSession, revision_ids: list[UUID]) -> list[_Source]:
     rows = (
         await db.execute(
-            select(ReportRevision, EnterpriseReport, ReportingObligation)
+            select(
+                ReportRevision,
+                EnterpriseReport,
+                ReportingObligation,
+                Enterprise,
+                EnterpriseSite,
+            )
             .join(EnterpriseReport, EnterpriseReport.id == ReportRevision.enterprise_report_id)
             .join(
                 ReportingObligation,
                 ReportingObligation.id == EnterpriseReport.reporting_obligation_id,
             )
+            .join(
+                Enterprise,
+                and_(
+                    Enterprise.id == ReportingObligation.enterprise_id,
+                    Enterprise.classification == ReportingObligation.classification,
+                ),
+            )
+            .join(
+                EnterpriseSite,
+                and_(
+                    EnterpriseSite.id == ReportingObligation.site_id,
+                    EnterpriseSite.enterprise_id == ReportingObligation.enterprise_id,
+                    EnterpriseSite.classification == ReportingObligation.classification,
+                ),
+            )
             .where(ReportRevision.id.in_([str(item) for item in revision_ids]))
             .order_by(ReportRevision.id)
-            .with_for_update(of=(ReportRevision, EnterpriseReport, ReportingObligation))
+            .with_for_update(
+                of=(
+                    ReportRevision,
+                    EnterpriseReport,
+                    ReportingObligation,
+                    Enterprise,
+                    EnterpriseSite,
+                )
+            )
         )
     ).all()
-    return [_Source(revision=row[0], report=row[1], obligation=row[2]) for row in rows]
+    return [
+        _Source(
+            revision=row[0],
+            report=row[1],
+            obligation=row[2],
+            enterprise=row[3],
+            site=row[4],
+        )
+        for row in rows
+    ]
 
 
 async def _lock_source_claims(
@@ -721,6 +770,11 @@ async def _aggregate_metrics(db: AsyncSession, revision_ids: list[str]) -> list[
             aggregate_value = (
                 max(known_values) if method == "maximum" else sum(known_values, Decimal(0))
             )
+            if not fits_numeric_20_6(aggregate_value):
+                raise FinalizationError(
+                    "FINALIZATION_METRIC_VALUE_OVERFLOW",
+                    f"Aggregated metric {definition} does not fit NUMERIC(20,6) exactly.",
+                )
         aggregates.append(
             _MetricAggregate(
                 definition=definition,
@@ -861,6 +915,20 @@ def _final_content_hash(
                     "payloadHash": source.revision.payload_hash,
                 }
                 for source in sorted(sources, key=lambda item: item.revision.id)
+            ],
+            "scopeMembers": [
+                {
+                    "reportingObligationId": source.obligation.id,
+                    "enterpriseId": source.enterprise.id,
+                    "enterpriseOfficialCode": source.enterprise.official_code,
+                    "enterpriseName": source.enterprise.name,
+                    "enterpriseCategory": source.enterprise.category,
+                    "siteId": source.site.id,
+                    "siteCode": source.site.site_code,
+                    "siteName": source.site.name,
+                    "frozenBarangay": source.obligation.frozen_barangay,
+                }
+                for source in sorted(sources, key=lambda item: item.obligation.id)
             ],
             "metrics": [
                 {

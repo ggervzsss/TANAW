@@ -2,6 +2,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -254,6 +255,64 @@ async def test_missing_required_final_metric_rejects_without_consuming_source(
 
 
 @pytest.mark.asyncio
+async def test_final_metric_aggregate_accepts_exact_numeric_20_6_upper_boundary(
+    finalization_session: AsyncSession,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session,
+        barangays=["Boundary A", "Boundary B"],
+        entries_values=[
+            Decimal("50000000000000.000000"),
+            Decimal("49999999999999.999999"),
+        ],
+    )
+
+    created = await finalize_report_command(
+        finalization_session,
+        account=staff,
+        command=_command(period.id, [source.id for source in sources]),
+    )
+    entries = await finalization_session.scalar(
+        select(FinalReportMetricFact).where(
+            FinalReportMetricFact.final_report_version_id
+            == str(created.resource.finalReportVersionId),
+            FinalReportMetricFact.definition == "entries",
+        )
+    )
+
+    assert entries is not None
+    assert entries.value == Decimal("99999999999999.999999")
+
+
+@pytest.mark.asyncio
+async def test_final_metric_aggregate_rejects_numeric_20_6_overflow_before_insert(
+    finalization_session: AsyncSession,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session,
+        barangays=["Overflow A", "Overflow B"],
+        entries_values=[
+            Decimal("99999999999999.999999"),
+            Decimal("0.000001"),
+        ],
+    )
+
+    with pytest.raises(FinalizationError, match=r"Aggregated metric entries.*NUMERIC\(20,6\)"):
+        await finalize_report_command(
+            finalization_session,
+            account=staff,
+            command=_command(period.id, [source.id for source in sources]),
+        )
+
+    assert await _count(finalization_session, FinalReportVersion) == 0
+    assert await _count(finalization_session, FinalReportSourceClaim) == 0
+    for source in sources:
+        report = await finalization_session.get(EnterpriseReport, source.enterprise_report_id)
+        assert report is not None
+        assert report.workflow_state == "accepted"
+
+
+@pytest.mark.asyncio
 async def test_concurrent_finalizations_cannot_claim_one_revision() -> None:
     raw_url = os.getenv(TEST_DATABASE_ENV)
     if not raw_url:
@@ -297,7 +356,10 @@ async def _seed_accepted_sources(
     *,
     barangays: Sequence[str],
     omitted_metric: str | None = None,
+    entries_values: Sequence[Decimal] | None = None,
 ) -> tuple[Account, ReportingPeriod, list[ReportRevision]]:
+    if entries_values is not None and len(entries_values) != len(barangays):
+        raise ValueError("entries_values must match the number of seeded source revisions.")
     suffix = uuid4().hex
     now = datetime(2026, 1, 1, tzinfo=UTC)
     staff = Account(
@@ -414,7 +476,13 @@ async def _seed_accepted_sources(
         db.add_all([report, revision])
         await db.flush([report, revision])
         metric_specs = [
-            ("entries", 10 + index, "events", "site", "confirmed"),
+            (
+                "entries",
+                entries_values[index] if entries_values is not None else 10 + index,
+                "events",
+                "site",
+                "confirmed",
+            ),
             ("exits", 8 + index, "events", "site", "confirmed"),
             ("peak_occupancy", 5 + index, "people-estimate", "site", "confirmed"),
             (

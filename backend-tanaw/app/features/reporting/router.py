@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -26,6 +26,18 @@ from app.features.reporting.obligations import (
     freeze_period_obligations,
     read_period_compliance,
 )
+from app.features.reporting.read_envelopes import (
+    EnterpriseReportDetail,
+    EnterpriseReportPage,
+    ReportWorkflowState,
+)
+from app.features.reporting.read_service import (
+    ReportReadForbidden,
+    ReportReadInvalidCursor,
+    ReportReadNotFound,
+    list_official_enterprise_reports,
+    read_official_enterprise_report,
+)
 from app.features.reporting.service import (
     ReportIntakeConflict,
     ReportIntakeError,
@@ -45,6 +57,64 @@ ComplianceReadAccount = Annotated[
     Account,
     Depends(require_roles({"staff", "admin", "enterprise"})),
 ]
+
+
+@router.get("/reports/v2", response_model=EnterpriseReportPage)
+async def list_enterprise_reports_v2(
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+    reportingPeriodId: UUID | None = None,
+    workflowState: ReportWorkflowState | None = None,
+    enterpriseId: UUID | None = None,
+    siteId: UUID | None = None,
+) -> EnterpriseReportPage:
+    try:
+        return await list_official_enterprise_reports(
+            db,
+            account=account,
+            limit=limit,
+            cursor=cursor,
+            reporting_period_id=reportingPeriodId,
+            workflow_state=workflowState,
+            enterprise_id=enterpriseId,
+            site_id=siteId,
+        )
+    except ReportReadForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ReportReadInvalidCursor as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.get("/reports/{enterprise_report_id}/v2", response_model=EnterpriseReportDetail)
+async def read_enterprise_report_v2(
+    enterprise_report_id: UUID,
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EnterpriseReportDetail:
+    try:
+        return await read_official_enterprise_report(
+            db,
+            account=account,
+            enterprise_report_id=enterprise_report_id,
+        )
+    except ReportReadForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ReportReadNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
 
 
 @router.post(

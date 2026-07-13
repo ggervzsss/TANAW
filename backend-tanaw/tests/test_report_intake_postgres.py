@@ -21,7 +21,11 @@ from app.features.reporting.models import (
     ReportRevision,
     ReportSourceBatch,
 )
-from app.features.reporting.service import ReportIntakeConflict, submit_report_command
+from app.features.reporting.service import (
+    ReportIntakeConflict,
+    ReportIntakeError,
+    submit_report_command,
+)
 from app.features.reporting.workflow import transition_report
 from app.features.reporting.workflow_envelopes import ReportTransitionCommand
 from app.features.topology.models import (
@@ -105,6 +109,9 @@ async def test_report_intake_is_idempotent_and_hash_conflicts_fail(
     assert await report_session.scalar(select(func.count()).select_from(DomainEventDelivery)) == 2
     source_batch_id = str(command.payload.sourceBatches[0].batchId)
     assert await report_session.get(ReportSourceBatch, source_batch_id) is not None
+    review_event = await report_session.scalar(select(ReportReviewEvent))
+    assert review_event is not None
+    assert review_event.actor_display_name == account.display_name
 
     report = await report_session.get(
         EnterpriseReport,
@@ -237,7 +244,15 @@ async def test_staff_transition_is_versioned_idempotent_and_auditable(
     assert await report_session.scalar(select(func.count()).select_from(ReportReviewEvent)) == 2
     assert await report_session.scalar(select(func.count()).select_from(DomainEvent)) == 2
     assert await report_session.scalar(select(func.count()).select_from(DomainEventDelivery)) == 4
-
+    review_events = list(
+        await report_session.scalars(
+            select(ReportReviewEvent).order_by(ReportReviewEvent.resulting_version)
+        )
+    )
+    assert [event.actor_display_name for event in review_events] == [
+        enterprise_account.display_name,
+        staff.display_name,
+    ]
     stale_command = ReportTransitionCommand.model_validate(
         {
             "contractVersion": 2,
@@ -268,8 +283,128 @@ async def test_staff_transition_is_versioned_idempotent_and_auditable(
     assert report.accepted_revision_id is None
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_scope",
+    (
+        "future_membership",
+        "ended_membership",
+        "ambiguous_membership",
+        "inactive_enterprise",
+        "future_site",
+        "ended_site",
+        "retired_device",
+        "retired_camera",
+    ),
+)
+async def test_report_intake_rejects_invalid_effective_topology(
+    report_session: AsyncSession,
+    invalid_scope: str,
+) -> None:
+    account, camera_id, period = await _seed_scope(report_session)
+    acknowledged_at = period.ends_at + timedelta(minutes=3)
+    membership, enterprise, site, device, camera = await _load_topology(
+        report_session,
+        account=account,
+        camera_id=camera_id,
+    )
+
+    if invalid_scope == "future_membership":
+        membership.started_at = acknowledged_at + timedelta(seconds=1)
+    elif invalid_scope == "ended_membership":
+        membership.ended_at = acknowledged_at
+    elif invalid_scope == "ambiguous_membership":
+        membership.ended_at = acknowledged_at + timedelta(days=2)
+        await report_session.flush([membership])
+        report_session.add(
+            EnterpriseMembership(
+                id=str(uuid4()),
+                enterprise_id=enterprise.id,
+                account_id=account.id,
+                classification=enterprise.classification,
+                membership_role="manager",
+                started_at=acknowledged_at - timedelta(days=1),
+                ended_at=acknowledged_at + timedelta(days=1),
+            )
+        )
+    elif invalid_scope == "inactive_enterprise":
+        enterprise.lifecycle_state = "inactive"
+    elif invalid_scope == "future_site":
+        site.effective_from = acknowledged_at + timedelta(seconds=1)
+    elif invalid_scope == "ended_site":
+        site.effective_to = acknowledged_at
+    elif invalid_scope == "retired_device":
+        device.lifecycle_state = "retired"
+    elif invalid_scope == "retired_camera":
+        camera.lifecycle_state = "retired"
+    else:  # pragma: no cover - the parameter list is intentionally exhaustive.
+        raise AssertionError(f"Unhandled topology case: {invalid_scope}")
+    await report_session.flush()
+
+    command = ReportSubmissionCommand.model_validate(_command(camera_id, period))
+    with pytest.raises(
+        ReportIntakeError,
+        match="effective|active|owned by the enterprise|exactly one enterprise membership",
+    ):
+        await submit_report_command(
+            report_session,
+            account=account,
+            command=command,
+            acknowledged_at=acknowledged_at,
+        )
+
+
+@pytest.mark.asyncio
+async def test_report_intake_rejects_source_camera_classification_mismatch(
+    report_session: AsyncSession,
+) -> None:
+    account, _camera_id, period = await _seed_scope(report_session)
+    _simulation_account, simulation_camera_id, _simulation_period = await _seed_scope(
+        report_session,
+        classification="simulation",
+        period_year=period.local_start_date.year + 1,
+    )
+    command = ReportSubmissionCommand.model_validate(_command(simulation_camera_id, period))
+
+    with pytest.raises(ReportIntakeError, match="active camera owned by the enterprise"):
+        await submit_report_command(
+            report_session,
+            account=account,
+            command=command,
+            acknowledged_at=period.ends_at + timedelta(minutes=3),
+        )
+
+
+@pytest.mark.asyncio
+async def test_report_intake_accepts_bounded_topology_effective_at_acknowledgement(
+    report_session: AsyncSession,
+) -> None:
+    account, camera_id, period = await _seed_scope(report_session)
+    acknowledged_at = period.ends_at + timedelta(minutes=3)
+    membership, _enterprise, site, _device, _camera = await _load_topology(
+        report_session,
+        account=account,
+        camera_id=camera_id,
+    )
+    membership.ended_at = acknowledged_at + timedelta(seconds=1)
+    site.effective_to = acknowledged_at + timedelta(seconds=1)
+    await report_session.flush([membership, site])
+
+    submitted = await submit_report_command(
+        report_session,
+        account=account,
+        command=ReportSubmissionCommand.model_validate(_command(camera_id, period)),
+        acknowledged_at=acknowledged_at,
+    )
+
+    assert submitted.disposition == "created"
+
+
 async def _seed_scope(
     db: AsyncSession,
+    *,
+    classification: str = "official",
+    period_year: int | None = None,
 ) -> tuple[Account, str, CanonicalReportingPeriod]:
     suffix = uuid4().hex
     now = datetime(2026, 6, 1, tzinfo=UTC)
@@ -287,13 +422,13 @@ async def _seed_scope(
         id=str(uuid4()),
         official_code=f"REPORT-INTAKE-{suffix}",
         name="Report Intake Enterprise",
-        classification="official",
+        classification=classification,
         lifecycle_state="active",
     )
     site = EnterpriseSite(
         id=str(uuid4()),
         enterprise_id=enterprise.id,
-        classification="official",
+        classification=classification,
         site_code="PRIMARY",
         name="Report Intake Site",
         barangay="Poblacion",
@@ -306,14 +441,14 @@ async def _seed_scope(
         id=str(uuid4()),
         enterprise_id=enterprise.id,
         account_id=account.id,
-        classification="official",
+        classification=classification,
         membership_role="owner",
         started_at=now,
     )
     device = EdgeDevice(
         id=str(uuid4()),
         site_id=site.id,
-        classification="official",
+        classification=classification,
         device_key=f"device-{suffix}",
         display_name="Report Intake Device",
         lifecycle_state="active",
@@ -322,12 +457,15 @@ async def _seed_scope(
         id=str(uuid4()),
         site_id=site.id,
         edge_device_id=device.id,
-        classification="official",
+        classification=classification,
         camera_key=f"camera-{suffix}",
         display_name="Report Intake Camera",
         lifecycle_state="active",
     )
-    canonical_period = monthly_reporting_period(7000 + uuid4().int % 2000, 6)
+    canonical_period = monthly_reporting_period(
+        period_year if period_year is not None else 7000 + uuid4().int % 2000,
+        6,
+    )
     period = ReportingPeriod(
         id=str(uuid4()),
         natural_key=canonical_period.natural_key,
@@ -345,7 +483,7 @@ async def _seed_scope(
         reporting_period_id=period.id,
         enterprise_id=enterprise.id,
         site_id=site.id,
-        classification="official",
+        classification=classification,
         eligibility_status="eligible",
         eligibility_basis="registry_snapshot",
         frozen_barangay=site.barangay,
@@ -362,6 +500,27 @@ async def _seed_scope(
     db.add(camera)
     await db.flush()
     return account, camera.id, canonical_period
+
+
+async def _load_topology(
+    db: AsyncSession,
+    *,
+    account: Account,
+    camera_id: str,
+) -> tuple[EnterpriseMembership, Enterprise, EnterpriseSite, EdgeDevice, Camera]:
+    membership = await db.scalar(
+        select(EnterpriseMembership).where(EnterpriseMembership.account_id == account.id)
+    )
+    camera = await db.get(Camera, camera_id)
+    assert membership is not None
+    assert camera is not None
+    enterprise = await db.get(Enterprise, membership.enterprise_id)
+    site = await db.get(EnterpriseSite, camera.site_id)
+    device = await db.get(EdgeDevice, camera.edge_device_id)
+    assert enterprise is not None
+    assert site is not None
+    assert device is not None
+    return membership, enterprise, site, device, camera
 
 
 def _command(camera_id: str, period: CanonicalReportingPeriod) -> dict:

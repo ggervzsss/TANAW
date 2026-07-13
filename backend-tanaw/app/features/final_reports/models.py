@@ -58,6 +58,13 @@ class ReportFinalization(Base):
             "reporting_period_id",
             "classification",
         ),
+        Index(
+            "ix_report_finalizations_period_current",
+            "classification",
+            "reporting_period_id",
+            "current_version_id",
+            "id",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -135,6 +142,23 @@ class FinalReportVersion(Base):
             "uq_final_report_versions_current",
             "report_finalization_id",
             unique=True,
+            postgresql_where=text("disposition = 'current'"),
+            sqlite_where=text("disposition = 'current'"),
+        ),
+        Index(
+            "ix_final_report_versions_current_keyset",
+            "classification",
+            "finalized_at",
+            "report_finalization_id",
+            postgresql_where=text("disposition = 'current'"),
+            sqlite_where=text("disposition = 'current'"),
+        ),
+        Index(
+            "ix_final_report_versions_current_scope_keyset",
+            "classification",
+            "scope_type",
+            "finalized_at",
+            "report_finalization_id",
             postgresql_where=text("disposition = 'current'"),
             sqlite_where=text("disposition = 'current'"),
         ),
@@ -229,6 +253,13 @@ class FinalReportScopeMember(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_final_report_scope_members_classification"),
+        CheckConstraint(
+            "length(trim(enterprise_official_code)) > 0 "
+            "AND length(trim(enterprise_name)) > 0 "
+            "AND length(trim(site_code)) > 0 "
+            "AND length(trim(site_name)) > 0",
+            name="ck_final_report_scope_members_identity_snapshots",
+        ),
         UniqueConstraint(
             "final_report_version_id",
             "reporting_obligation_id",
@@ -252,6 +283,11 @@ class FinalReportScopeMember(Base):
     enterprise_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     site_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
+    enterprise_official_code: Mapped[str] = mapped_column(String(120), nullable=False)
+    enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    enterprise_category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    site_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    site_name: Mapped[str] = mapped_column(String(160), nullable=False)
     frozen_barangay: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -451,6 +487,12 @@ class FinalReportEvent(Base):
             "expected_version >= 0 AND resulting_version > expected_version",
             name="ck_final_report_events_versions",
         ),
+        CheckConstraint(
+            "(actor_account_id IS NULL AND actor_display_name IS NULL) OR "
+            "(actor_account_id IS NOT NULL AND actor_display_name IS NOT NULL "
+            "AND length(trim(actor_display_name)) > 0)",
+            name="ck_final_report_events_actor_snapshot",
+        ),
         UniqueConstraint("command_id", name="uq_final_report_events_command_id"),
         Index(
             "ix_final_report_events_finalization_occurred", "report_finalization_id", "occurred_at"
@@ -467,6 +509,7 @@ class FinalReportEvent(Base):
     actor_account_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
+    actor_display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     actor_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
     command_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
     expected_version: Mapped[int] = mapped_column(Integer, nullable=False)

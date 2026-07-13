@@ -1,6 +1,7 @@
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -9,6 +10,18 @@ from app.features.accounts.models import Account
 from app.features.final_reports.envelopes import (
     FinalizationAcknowledgement,
     FinalizeReportsCommand,
+)
+from app.features.final_reports.read_envelopes import (
+    FinalReportDetail,
+    FinalReportPage,
+    FinalScopeType,
+)
+from app.features.final_reports.read_service import (
+    FinalReportReadForbidden,
+    FinalReportReadInvalidCursor,
+    FinalReportReadNotFound,
+    list_official_final_reports,
+    read_official_final_report,
 )
 from app.features.final_reports.service import (
     FinalizationConflict,
@@ -19,6 +32,65 @@ from app.features.final_reports.service import (
 router = APIRouter(prefix="/operational", tags=["final-reports-v2"])
 
 StaffAccount = Annotated[Account, Depends(require_roles({"staff"}))]
+
+
+@router.get("/reports/finalizations/v2", response_model=FinalReportPage)
+async def list_final_reports_v2(
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+    reportingPeriodId: UUID | None = None,
+    scopeType: FinalScopeType | None = None,
+) -> FinalReportPage:
+    try:
+        return await list_official_final_reports(
+            db,
+            account=account,
+            limit=limit,
+            cursor=cursor,
+            reporting_period_id=reportingPeriodId,
+            scope_type=scopeType,
+        )
+    except FinalReportReadForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except FinalReportReadInvalidCursor as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.get(
+    "/reports/finalizations/{report_finalization_id}/v2",
+    response_model=FinalReportDetail,
+)
+async def read_final_report_v2(
+    report_finalization_id: UUID,
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    versionId: UUID | None = None,
+) -> FinalReportDetail:
+    try:
+        return await read_official_final_report(
+            db,
+            account=account,
+            report_finalization_id=report_finalization_id,
+            version_id=versionId,
+        )
+    except FinalReportReadForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except FinalReportReadNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
 
 
 @router.post(

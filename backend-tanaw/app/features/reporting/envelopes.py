@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.features.reporting.contracts import (
     MetricQuality,
     reporting_period_from_key,
 )
+from app.features.reporting.numeric import fits_numeric_20_6
 
 SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -130,6 +132,8 @@ class ReportMetricCommand(ContractModel):
             raise ValueError("Unknown-quality metrics must have a null value.")
         if self.quality != MetricQuality.UNKNOWN and self.value is None:
             raise ValueError("Known-quality metrics must include a value.")
+        if self.value is not None:
+            _validate_numeric_20_6(self.value)
         return self
 
 
@@ -257,3 +261,14 @@ def _canonical_json_value(value: object) -> object:
 def _require_aware(value: datetime, field_name: str) -> None:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field_name} must include a UTC offset.")
+
+
+def _validate_numeric_20_6(value: int | float) -> None:
+    numeric = Decimal(str(value))
+    if not numeric.is_finite():
+        raise ValueError("Metric values must be finite NUMERIC(20,6) values.")
+    if not fits_numeric_20_6(numeric):
+        raise ValueError(
+            "Metric values must fit NUMERIC(20,6) without rounding "
+            "(at most 14 integer and 6 fractional digits)."
+        )

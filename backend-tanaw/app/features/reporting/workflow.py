@@ -102,6 +102,7 @@ async def transition_report(
         from_state=previous_state,
         to_state=target_state,
         actor_account_id=account.id,
+        actor_display_name=account.display_name,
         actor_role=account.role.value,
         reason=command.reason,
         command_id=str(command.commandId),

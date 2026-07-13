@@ -28,7 +28,12 @@ from app.features.reporting.models import (
     ReportRevision,
     ReportSourceBatch,
 )
-from app.features.topology.models import Camera, EnterpriseMembership, EnterpriseSite
+from app.features.topology.access import (
+    EnterpriseAccessScope,
+    EnterpriseTopologyAccessError,
+    require_effective_enterprise_access,
+)
+from app.features.topology.models import Camera, EdgeDevice, EnterpriseSite
 
 
 class ReportIntakeError(Exception):
@@ -51,11 +56,16 @@ async def submit_report_command(
 ) -> ReportSubmissionAcknowledgement:
     acknowledged_at = _as_utc(acknowledged_at or datetime.now(UTC))
     payload_hash = canonical_payload_hash(command.payload)
-    membership = await _active_membership(db, account.id)
+    access = await _enterprise_access_scope(
+        db,
+        account_id=account.id,
+        evaluated_at=acknowledged_at,
+        lock=True,
+    )
 
     replay = await _resolve_replay(
         db,
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         command=command,
         payload_hash=payload_hash,
     )
@@ -78,10 +88,12 @@ async def submit_report_command(
 
     site_id, classification = await _resolve_source_site(
         db,
-        enterprise_id=membership.enterprise_id,
+        access=access,
         source_camera_ids=[str(batch.cameraId) for batch in command.payload.sourceBatches],
+        evaluated_at=acknowledged_at,
+        lock=True,
     )
-    if classification != membership.classification:
+    if classification != access.classification:
         raise ReportIntakeError(
             "REPORT_CLASSIFICATION_MISMATCH",
             "The authenticated membership and source cameras have different classifications.",
@@ -91,7 +103,7 @@ async def submit_report_command(
         select(ReportingObligation)
         .where(
             ReportingObligation.reporting_period_id == period.id,
-            ReportingObligation.enterprise_id == membership.enterprise_id,
+            ReportingObligation.enterprise_id == access.enterprise_id,
             ReportingObligation.site_id == site_id,
             ReportingObligation.classification == classification,
         )
@@ -112,7 +124,7 @@ async def submit_report_command(
     # for the obligation lock. Recheck the durable receipt before evaluating state.
     replay = await _resolve_replay(
         db,
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         command=command,
         payload_hash=payload_hash,
     )
@@ -155,7 +167,7 @@ async def submit_report_command(
     revision = ReportRevision(
         id=revision_id,
         enterprise_report_id=report_id,
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         site_id=site_id,
         classification=classification,
         revision_number=revision_number,
@@ -192,7 +204,7 @@ async def submit_report_command(
         report = EnterpriseReport(
             id=report_id,
             reporting_obligation_id=obligation.id,
-            enterprise_id=membership.enterprise_id,
+            enterprise_id=access.enterprise_id,
             site_id=site_id,
             classification=classification,
             workflow_state="submitted",
@@ -221,12 +233,13 @@ async def submit_report_command(
             id=str(uuid4()),
             enterprise_report_id=report_id,
             report_revision_id=revision_id,
-            enterprise_id=membership.enterprise_id,
+            enterprise_id=access.enterprise_id,
             classification=classification,
             event_type="revision_submitted",
             from_state=previous_state,
             to_state="submitted",
             actor_account_id=account.id,
+            actor_display_name=account.display_name,
             actor_role=account.role.value,
             reason=None,
             command_id=str(command.commandId),
@@ -240,7 +253,7 @@ async def submit_report_command(
             id=str(uuid4()),
             enterprise_report_id=report_id,
             report_revision_id=revision_id,
-            enterprise_id=membership.enterprise_id,
+            enterprise_id=access.enterprise_id,
             classification=classification,
             receipt_kind="command",
             contract_version=2,
@@ -257,7 +270,7 @@ async def submit_report_command(
         enterprise_report_id=report_id,
         report_revision_id=revision_id,
         reporting_period_id=period.id,
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         site_id=site_id,
         classification=classification,
         actor_account_id=account.id,
@@ -293,48 +306,62 @@ async def submit_report_command(
     )
 
 
-async def _active_membership(db: AsyncSession, account_id: str) -> EnterpriseMembership:
-    memberships = list(
-        await db.scalars(
-            select(EnterpriseMembership).where(
-                EnterpriseMembership.account_id == account_id,
-                EnterpriseMembership.ended_at.is_(None),
-            )
+async def _enterprise_access_scope(
+    db: AsyncSession,
+    *,
+    account_id: str,
+    evaluated_at: datetime,
+    lock: bool,
+) -> EnterpriseAccessScope:
+    try:
+        return await require_effective_enterprise_access(
+            db,
+            account_id=account_id,
+            evaluated_at=evaluated_at,
+            lock=lock,
         )
-    )
-    if len(memberships) != 1:
-        raise ReportIntakeError(
-            "ENTERPRISE_MEMBERSHIP_INVALID",
-            "The authenticated account must have exactly one active enterprise membership.",
-        )
-    return memberships[0]
+    except EnterpriseTopologyAccessError as exc:
+        raise ReportIntakeError(exc.code, exc.message) from exc
 
 
 async def _resolve_source_site(
     db: AsyncSession,
     *,
-    enterprise_id: str,
+    access: EnterpriseAccessScope,
     source_camera_ids: list[str],
+    evaluated_at: datetime,
+    lock: bool,
 ) -> tuple[str, str]:
     unique_ids = set(source_camera_ids)
-    rows = (
-        await db.execute(
-            select(Camera.id, Camera.site_id, Camera.classification)
-            .join(EnterpriseSite, EnterpriseSite.id == Camera.site_id)
-            .where(
-                Camera.id.in_(unique_ids),
-                Camera.lifecycle_state == "active",
-                EnterpriseSite.enterprise_id == enterprise_id,
+    statement = (
+        select(Camera, EnterpriseSite, EdgeDevice)
+        .join(EnterpriseSite, EnterpriseSite.id == Camera.site_id)
+        .join(EdgeDevice, EdgeDevice.id == Camera.edge_device_id)
+        .where(
+            Camera.id.in_(unique_ids),
+            Camera.classification == access.classification,
+            Camera.lifecycle_state == "active",
+            EdgeDevice.site_id == Camera.site_id,
+            EdgeDevice.classification == access.classification,
+            EdgeDevice.lifecycle_state == "active",
+            EnterpriseSite.enterprise_id == access.enterprise_id,
+            EnterpriseSite.classification == access.classification,
+            EnterpriseSite.effective_from <= evaluated_at,
+            or_(
                 EnterpriseSite.effective_to.is_(None),
-            )
+                EnterpriseSite.effective_to > evaluated_at,
+            ),
         )
-    ).all()
+    )
+    if lock:
+        statement = statement.with_for_update(of=(Camera, EnterpriseSite, EdgeDevice))
+    rows = (await db.execute(statement)).all()
     if len(rows) != len(unique_ids):
         raise ReportIntakeError(
             "REPORT_CAMERA_LINEAGE_INVALID",
             "Every source batch must reference an active camera owned by the enterprise.",
         )
-    site_scopes = {(row.site_id, row.classification) for row in rows}
+    site_scopes = {(camera.site_id, camera.classification) for camera, _site, _device in rows}
     if len(site_scopes) != 1:
         raise ReportIntakeError(
             "REPORT_SOURCE_SCOPE_MIXED",

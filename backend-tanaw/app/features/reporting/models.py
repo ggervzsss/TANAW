@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -128,6 +129,12 @@ class ReportingObligation(Base):
             "reporting_period_id",
         ),
         Index(
+            "ix_reporting_obligations_period_classification_id",
+            "reporting_period_id",
+            "classification",
+            "id",
+        ),
+        Index(
             "ix_reporting_obligations_acceptance_blocked",
             "acceptance_blocked",
             postgresql_where=text("acceptance_blocked = true"),
@@ -238,6 +245,13 @@ class EnterpriseReport(Base):
             "workflow_state",
             "acceptance_blocked",
         ),
+        Index(
+            "ix_enterprise_reports_queue_state_current",
+            "classification",
+            "workflow_state",
+            "current_revision_id",
+            "id",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -330,6 +344,13 @@ class ReportRevision(Base):
         UniqueConstraint("id", "classification", name="uq_report_revisions_id_classification"),
         Index("ix_report_revisions_submitted_at", "submitted_at"),
         Index("ix_report_revisions_report_received", "enterprise_report_id", "received_at"),
+        Index(
+            "ix_report_revisions_queue_received",
+            "classification",
+            "received_at",
+            "enterprise_report_id",
+            "id",
+        ),
         Index(
             "ix_report_revisions_acceptance_blocked",
             "acceptance_blocked",
@@ -425,7 +446,7 @@ class ReportMetricFact(Base):
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     definition: Mapped[str] = mapped_column(String(120), nullable=False)
     definition_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    value: Mapped[float | None] = mapped_column(Numeric(20, 6), nullable=True)
+    value: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
     unit: Mapped[str] = mapped_column(String(60), nullable=False)
     grain: Mapped[str] = mapped_column(String(20), nullable=False)
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -481,7 +502,7 @@ class ReportDemographicFact(Base):
     dimension: Mapped[str] = mapped_column(String(80), nullable=False)
     value: Mapped[str] = mapped_column(String(120), nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False)
-    percentage: Mapped[float | None] = mapped_column(Numeric(7, 4), nullable=True)
+    percentage: Mapped[Decimal | None] = mapped_column(Numeric(7, 4), nullable=True)
     provenance: Mapped[str] = mapped_column(String(30), nullable=False)
     quality: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -519,6 +540,13 @@ class ReportSourceBatch(Base):
             name="ck_report_source_batches_aggregate_hash",
         ),
         Index("ix_report_source_batches_camera", "camera_id"),
+        Index(
+            "ix_report_source_batches_revision_order",
+            "report_revision_id",
+            "camera_id",
+            "event_sequence_start",
+            "id",
+        ),
     )
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
@@ -577,6 +605,12 @@ class ReportReviewEvent(Base):
             "AND resulting_version > expected_version",
             name="ck_report_review_events_versions",
         ),
+        CheckConstraint(
+            "(actor_account_id IS NULL AND actor_display_name IS NULL) OR "
+            "(actor_account_id IS NOT NULL AND actor_display_name IS NOT NULL "
+            "AND length(trim(actor_display_name)) > 0)",
+            name="ck_report_review_events_actor_snapshot",
+        ),
         UniqueConstraint("command_id", name="uq_report_review_events_command_id"),
         Index("ix_report_review_events_report_occurred", "enterprise_report_id", "occurred_at"),
     )
@@ -594,6 +628,7 @@ class ReportReviewEvent(Base):
     actor_account_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
+    actor_display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     actor_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     command_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)

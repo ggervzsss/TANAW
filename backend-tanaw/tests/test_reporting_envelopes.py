@@ -92,6 +92,36 @@ def test_unknown_metric_must_not_carry_a_value() -> None:
         ReportSubmissionCommand.model_validate(payload)
 
 
+def test_metric_value_accepts_numeric_20_6_without_changing_numeric_hash_shape() -> None:
+    payload = _command()
+    payload["payload"]["metrics"][0]["value"] = 0.1
+
+    command = ReportSubmissionCommand.model_validate(payload)
+    serialized = command.payload.model_dump(mode="json")
+
+    assert serialized["metrics"][0]["value"] == 0.1
+    assert canonical_payload_hash(command.payload) == canonical_payload_hash(serialized)
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        0.1234567,
+        100_000_000_000_000,
+        float("inf"),
+        float("nan"),
+    ),
+)
+def test_metric_value_rejects_numeric_20_6_rounding_overflow_and_nonfinite(
+    value: float | int,
+) -> None:
+    payload = _command()
+    payload["payload"]["metrics"][0]["value"] = value
+
+    with pytest.raises(ValidationError, match=r"NUMERIC\(20,6\)"):
+        ReportSubmissionCommand.model_validate(payload)
+
+
 def test_missing_coverage_evidence_remains_null_instead_of_becoming_a_full_period_gap() -> None:
     payload = _command()
     payload["payload"]["coverage"] = {
