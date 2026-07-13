@@ -39,11 +39,15 @@ from app.features.telemetry.models import (
     TelemetryMetricFact,
     TelemetryObservation,
 )
+from app.features.topology.access import (
+    EnterpriseAccessScope,
+    EnterpriseTopologyAccessError,
+    require_effective_enterprise_access,
+)
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
     Enterprise,
-    EnterpriseMembership,
     EnterpriseSite,
 )
 
@@ -74,11 +78,17 @@ async def register_epoch_command(
 ) -> EpochStartAcknowledgement:
     acknowledged_at = _as_utc(acknowledged_at or datetime.now(UTC))
     payload_hash = canonical_payload_hash(command.payload)
-    membership = await _active_membership(db, account.id)
+    access = await _enterprise_access_scope(
+        db,
+        account_id=account.id,
+        evaluated_at=acknowledged_at,
+        lock=True,
+    )
     device, site = await _owned_device_scope(
         db,
-        membership=membership,
+        access=access,
         device_id=str(command.payload.deviceId),
+        evaluated_at=acknowledged_at,
         lock=True,
     )
     await _reject_cross_kind_command_id(db, command_id=str(command.commandId), kind="epoch")
@@ -169,7 +179,7 @@ async def register_epoch_command(
         aggregate_type="device_telemetry_epoch",
         aggregate_id=epoch.id,
         aggregate_version=epoch.generation,
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         site_id=site.id,
         classification=site.classification,
         actor_account_id=account.id,
@@ -205,11 +215,17 @@ async def ingest_telemetry_command(
 ) -> TelemetryAcknowledgement:
     acknowledged_at = _as_utc(acknowledged_at or datetime.now(UTC))
     payload_hash = canonical_payload_hash(command.payload)
-    membership = await _active_membership(db, account.id)
+    access = await _enterprise_access_scope(
+        db,
+        account_id=account.id,
+        evaluated_at=acknowledged_at,
+        lock=True,
+    )
     device, site = await _owned_device_scope(
         db,
-        membership=membership,
+        access=access,
         device_id=str(command.payload.deviceId),
+        evaluated_at=acknowledged_at,
         lock=True,
     )
     await _reject_cross_kind_command_id(db, command_id=str(command.commandId), kind="observation")
@@ -278,7 +294,7 @@ async def ingest_telemetry_command(
 
     observation = TelemetryObservation(
         id=str(uuid4()),
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         site_id=site.id,
         edge_device_id=device.id,
         classification=site.classification,
@@ -310,7 +326,7 @@ async def ingest_telemetry_command(
             command=command,
             observation=observation,
             epoch=epoch,
-            enterprise_id=membership.enterprise_id,
+            enterprise_id=access.enterprise_id,
             site_id=site.id,
             classification=site.classification,
             received_at=acknowledged_at,
@@ -334,7 +350,7 @@ async def ingest_telemetry_command(
         aggregate_type="telemetry_observation",
         aggregate_id=observation.id,
         aggregate_version=1,
-        enterprise_id=membership.enterprise_id,
+        enterprise_id=access.enterprise_id,
         site_id=site.id,
         classification=site.classification,
         actor_account_id=account.id,
@@ -386,11 +402,17 @@ async def list_enterprise_live_sites(
     after_site_id: UUID | None,
     evaluated_at: datetime | None = None,
 ) -> SiteLiveStatePage:
-    membership = await _active_membership(db, account.id)
+    evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
+    access = await _enterprise_access_scope(
+        db,
+        account_id=account.id,
+        evaluated_at=evaluated_at,
+        lock=False,
+    )
     return await _list_live_sites(
         db,
-        classification=membership.classification,
-        enterprise_id=membership.enterprise_id,
+        classification=access.classification,
+        enterprise_id=access.enterprise_id,
         limit=limit,
         after_site_id=after_site_id,
         evaluated_at=evaluated_at,
@@ -445,39 +467,47 @@ async def list_enterprise_sites(
     after_site_id: UUID | None,
     evaluated_at: datetime | None = None,
 ) -> EnterpriseSitePage:
-    membership = await _active_membership(db, account.id)
+    evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
+    access = await _enterprise_access_scope(
+        db,
+        account_id=account.id,
+        evaluated_at=evaluated_at,
+        lock=False,
+    )
     return await _list_sites(
         db,
-        classification=membership.classification,
-        enterprise_id=membership.enterprise_id,
+        classification=access.classification,
+        enterprise_id=access.enterprise_id,
         limit=limit,
         after_site_id=after_site_id,
         evaluated_at=evaluated_at,
     )
 
 
-async def _active_membership(db: AsyncSession, account_id: str) -> EnterpriseMembership:
-    memberships = list(
-        await db.scalars(
-            select(EnterpriseMembership).where(
-                EnterpriseMembership.account_id == account_id,
-                EnterpriseMembership.ended_at.is_(None),
-            )
+async def _enterprise_access_scope(
+    db: AsyncSession,
+    *,
+    account_id: str,
+    evaluated_at: datetime,
+    lock: bool,
+) -> EnterpriseAccessScope:
+    try:
+        return await require_effective_enterprise_access(
+            db,
+            account_id=account_id,
+            evaluated_at=evaluated_at,
+            lock=lock,
         )
-    )
-    if len(memberships) != 1:
-        raise TelemetryIntakeError(
-            "ENTERPRISE_MEMBERSHIP_INVALID",
-            "The authenticated account must have exactly one active enterprise membership.",
-        )
-    return memberships[0]
+    except EnterpriseTopologyAccessError as exc:
+        raise TelemetryIntakeError(exc.code, exc.message) from exc
 
 
 async def _owned_device_scope(
     db: AsyncSession,
     *,
-    membership: EnterpriseMembership,
+    access: EnterpriseAccessScope,
     device_id: str,
+    evaluated_at: datetime,
     lock: bool,
 ) -> tuple[EdgeDevice, EnterpriseSite]:
     statement = (
@@ -485,10 +515,15 @@ async def _owned_device_scope(
         .join(EnterpriseSite, EnterpriseSite.id == EdgeDevice.site_id)
         .where(
             EdgeDevice.id == device_id,
+            EdgeDevice.classification == access.classification,
             EdgeDevice.lifecycle_state == "active",
-            EnterpriseSite.enterprise_id == membership.enterprise_id,
-            EnterpriseSite.classification == membership.classification,
-            EnterpriseSite.effective_to.is_(None),
+            EnterpriseSite.enterprise_id == access.enterprise_id,
+            EnterpriseSite.classification == access.classification,
+            EnterpriseSite.effective_from <= evaluated_at,
+            or_(
+                EnterpriseSite.effective_to.is_(None),
+                EnterpriseSite.effective_to > evaluated_at,
+            ),
         )
     )
     if lock:
@@ -833,14 +868,61 @@ async def _list_live_sites(
     exact_site_id: str | None = None,
 ) -> SiteLiveStatePage:
     evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
+    single_active_device_sites = (
+        select(
+            EdgeDevice.site_id.label("site_id"),
+            EdgeDevice.classification.label("classification"),
+        )
+        .where(EdgeDevice.lifecycle_state == "active")
+        .group_by(EdgeDevice.site_id, EdgeDevice.classification)
+        .having(func.count(EdgeDevice.id) == 1)
+        .subquery()
+    )
     statement = (
         select(SiteLiveState, EnterpriseSite, DeviceTelemetryEpoch.counter_epoch)
-        .join(EnterpriseSite, EnterpriseSite.id == SiteLiveState.site_id)
+        .join(
+            EnterpriseSite,
+            and_(
+                EnterpriseSite.id == SiteLiveState.site_id,
+                EnterpriseSite.enterprise_id == SiteLiveState.enterprise_id,
+                EnterpriseSite.classification == SiteLiveState.classification,
+            ),
+        )
+        .join(
+            Enterprise,
+            and_(
+                Enterprise.id == EnterpriseSite.enterprise_id,
+                Enterprise.classification == EnterpriseSite.classification,
+            ),
+        )
+        .join(
+            EdgeDevice,
+            and_(
+                EdgeDevice.id == SiteLiveState.edge_device_id,
+                EdgeDevice.site_id == SiteLiveState.site_id,
+                EdgeDevice.classification == SiteLiveState.classification,
+            ),
+        )
+        .join(
+            single_active_device_sites,
+            and_(
+                single_active_device_sites.c.site_id == SiteLiveState.site_id,
+                single_active_device_sites.c.classification == SiteLiveState.classification,
+            ),
+        )
         .join(DeviceTelemetryEpoch, DeviceTelemetryEpoch.id == SiteLiveState.telemetry_epoch_id)
         .where(
             SiteLiveState.classification == classification,
             EnterpriseSite.classification == classification,
-            EnterpriseSite.effective_to.is_(None),
+            Enterprise.classification == classification,
+            Enterprise.lifecycle_state == "active",
+            EdgeDevice.classification == classification,
+            EdgeDevice.lifecycle_state == "active",
+            EnterpriseSite.effective_from <= evaluated_at,
+            or_(
+                EnterpriseSite.effective_to.is_(None),
+                EnterpriseSite.effective_to > evaluated_at,
+            ),
         )
         .order_by(SiteLiveState.site_id)
         .limit(limit + 1)
@@ -888,8 +970,12 @@ async def _list_sites(
         .where(
             EnterpriseSite.classification == classification,
             Enterprise.classification == classification,
-            Enterprise.lifecycle_state.in_(("active", "inactive")),
-            EnterpriseSite.effective_to.is_(None),
+            Enterprise.lifecycle_state == "active",
+            EnterpriseSite.effective_from <= evaluated_at,
+            or_(
+                EnterpriseSite.effective_to.is_(None),
+                EnterpriseSite.effective_to > evaluated_at,
+            ),
         )
         .order_by(EnterpriseSite.id)
         .limit(limit + 1)
@@ -974,7 +1060,12 @@ def _site_resource(
         topology_status = "unlinked"
     live_state = (
         _live_response(state, site, counter_epoch, evaluated_at)
-        if state is not None and counter_epoch is not None
+        if (
+            topology_status == "ready"
+            and state is not None
+            and counter_epoch is not None
+            and state.edge_device_id == devices[0].id
+        )
         else None
     )
     return EnterpriseSiteResource.model_validate(

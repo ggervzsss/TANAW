@@ -24,6 +24,7 @@ from app.features.telemetry.service import (
     TelemetryIntakeError,
     ingest_telemetry_command,
     list_enterprise_live_sites,
+    list_enterprise_sites,
     list_official_live_sites,
     list_official_sites,
     register_epoch_command,
@@ -521,6 +522,300 @@ async def test_site_registry_keeps_unlinked_sites_and_nests_freshness_safe_live_
     assert offline_linked.liveState.freshnessState == "offline"
     assert offline_linked.liveState.entriesWindow is None
     assert offline_linked.liveState.syncHealth.pendingCount is None
+
+
+@pytest.mark.asyncio
+async def test_future_membership_cannot_discover_register_or_submit_telemetry(
+    telemetry_session: AsyncSession,
+) -> None:
+    scope = await _seed_scope(telemetry_session, classification="official")
+    membership = await telemetry_session.scalar(
+        select(EnterpriseMembership).where(EnterpriseMembership.account_id == scope["account"].id)
+    )
+    assert membership is not None
+
+    epoch = await register_epoch_command(
+        telemetry_session,
+        account=scope["account"],
+        command=EpochStartCommand.model_validate(_epoch_command(scope["device"], 0)),
+        acknowledged_at=BASE_TIME - timedelta(minutes=1),
+    )
+    membership.started_at = BASE_TIME + timedelta(minutes=1)
+    await telemetry_session.flush([membership])
+
+    with pytest.raises(TelemetryIntakeError, match="effective at the server evaluation time"):
+        await list_enterprise_sites(
+            telemetry_session,
+            account=scope["account"],
+            limit=10,
+            after_site_id=None,
+            evaluated_at=BASE_TIME,
+        )
+    with pytest.raises(TelemetryIntakeError, match="effective at the server evaluation time"):
+        await register_epoch_command(
+            telemetry_session,
+            account=scope["account"],
+            command=EpochStartCommand.model_validate(
+                _epoch_command(
+                    scope["device"],
+                    expected_version=1,
+                    expected_previous=str(epoch.resource.counterEpoch),
+                )
+            ),
+            acknowledged_at=BASE_TIME,
+        )
+    with pytest.raises(TelemetryIntakeError, match="effective at the server evaluation time"):
+        await ingest_telemetry_command(
+            telemetry_session,
+            account=scope["account"],
+            command=TelemetryCommand.model_validate(
+                _telemetry_command(
+                    scope,
+                    counter_epoch=str(epoch.resource.counterEpoch),
+                    generation=epoch.resource.epochGeneration,
+                    sequence=1,
+                    site_entries=1,
+                )
+            ),
+            acknowledged_at=BASE_TIME,
+        )
+
+
+@pytest.mark.asyncio
+async def test_bounded_effective_membership_can_discover_register_and_submit_telemetry(
+    telemetry_session: AsyncSession,
+) -> None:
+    scope = await _seed_scope(telemetry_session, classification="official")
+    membership = await telemetry_session.scalar(
+        select(EnterpriseMembership).where(EnterpriseMembership.account_id == scope["account"].id)
+    )
+    assert membership is not None
+    membership.ended_at = BASE_TIME + timedelta(minutes=1)
+    await telemetry_session.flush([membership])
+
+    sites = await list_enterprise_sites(
+        telemetry_session,
+        account=scope["account"],
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME,
+    )
+    assert [str(item.siteId) for item in sites.items] == [scope["site"]]
+
+    epoch = await register_epoch_command(
+        telemetry_session,
+        account=scope["account"],
+        command=EpochStartCommand.model_validate(_epoch_command(scope["device"], 0)),
+        acknowledged_at=BASE_TIME,
+    )
+    acknowledgement = await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(
+            _telemetry_command(
+                scope,
+                counter_epoch=str(epoch.resource.counterEpoch),
+                generation=epoch.resource.epochGeneration,
+                sequence=1,
+                site_entries=2,
+            )
+        ),
+        acknowledged_at=BASE_TIME + timedelta(seconds=1),
+    )
+    live = await list_enterprise_live_sites(
+        telemetry_session,
+        account=scope["account"],
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME + timedelta(seconds=2),
+    )
+
+    assert acknowledgement.disposition == "created"
+    assert acknowledgement.resource.becameCurrent is True
+    assert [(str(item.siteId), item.entriesWindow) for item in live.items] == [(scope["site"], 2)]
+
+
+@pytest.mark.asyncio
+async def test_ended_membership_and_inactive_enterprise_fail_closed(
+    telemetry_session: AsyncSession,
+) -> None:
+    ended_scope = await _seed_scope(telemetry_session, classification="official")
+    ended_membership = await telemetry_session.scalar(
+        select(EnterpriseMembership).where(
+            EnterpriseMembership.account_id == ended_scope["account"].id
+        )
+    )
+    assert ended_membership is not None
+    ended_membership.ended_at = BASE_TIME
+
+    inactive_scope = await _seed_scope(telemetry_session, classification="official")
+    inactive_enterprise = await telemetry_session.get(Enterprise, inactive_scope["enterprise"])
+    assert inactive_enterprise is not None
+    inactive_enterprise.lifecycle_state = "inactive"
+    await telemetry_session.flush([ended_membership, inactive_enterprise])
+
+    with pytest.raises(TelemetryIntakeError, match="effective at the server evaluation time"):
+        await list_enterprise_live_sites(
+            telemetry_session,
+            account=ended_scope["account"],
+            limit=10,
+            after_site_id=None,
+            evaluated_at=BASE_TIME,
+        )
+    with pytest.raises(TelemetryIntakeError, match="classification-matching active enterprise"):
+        await list_enterprise_sites(
+            telemetry_session,
+            account=inactive_scope["account"],
+            limit=10,
+            after_site_id=None,
+            evaluated_at=BASE_TIME,
+        )
+    with pytest.raises(TelemetryIntakeError, match="classification-matching active enterprise"):
+        await register_epoch_command(
+            telemetry_session,
+            account=inactive_scope["account"],
+            command=EpochStartCommand.model_validate(_epoch_command(inactive_scope["device"], 0)),
+            acknowledged_at=BASE_TIME,
+        )
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_membership_and_invalid_site_device_scope_fail_closed(
+    telemetry_session: AsyncSession,
+) -> None:
+    ambiguous = await _seed_scope(telemetry_session, classification="official")
+    first_membership = await telemetry_session.scalar(
+        select(EnterpriseMembership).where(
+            EnterpriseMembership.account_id == ambiguous["account"].id
+        )
+    )
+    assert first_membership is not None
+    first_membership.ended_at = BASE_TIME + timedelta(days=1)
+    second_enterprise_id = str(uuid4())
+    telemetry_session.add(
+        Enterprise(
+            id=second_enterprise_id,
+            official_code=f"AMB-{uuid4().hex}",
+            name="Second effective enterprise",
+            classification="official",
+            lifecycle_state="active",
+        )
+    )
+    await telemetry_session.flush()
+    telemetry_session.add(
+        EnterpriseMembership(
+            id=str(uuid4()),
+            enterprise_id=second_enterprise_id,
+            account_id=ambiguous["account"].id,
+            classification="official",
+            membership_role="manager",
+            started_at=BASE_TIME - timedelta(days=1),
+            ended_at=BASE_TIME + timedelta(days=2),
+        )
+    )
+
+    future_site = await _seed_scope(telemetry_session, classification="official")
+    future_site_epoch = await register_epoch_command(
+        telemetry_session,
+        account=future_site["account"],
+        command=EpochStartCommand.model_validate(_epoch_command(future_site["device"], 0)),
+        acknowledged_at=BASE_TIME - timedelta(seconds=2),
+    )
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=future_site["account"],
+        command=TelemetryCommand.model_validate(
+            _telemetry_command(
+                future_site,
+                counter_epoch=str(future_site_epoch.resource.counterEpoch),
+                generation=future_site_epoch.resource.epochGeneration,
+                sequence=1,
+                site_entries=3,
+            )
+        ),
+        acknowledged_at=BASE_TIME - timedelta(seconds=1),
+    )
+    future_site_row = await telemetry_session.get(EnterpriseSite, future_site["site"])
+    assert future_site_row is not None
+    future_site_row.effective_from = BASE_TIME + timedelta(seconds=1)
+
+    retired_device = await _seed_scope(telemetry_session, classification="official")
+    retired_epoch = await register_epoch_command(
+        telemetry_session,
+        account=retired_device["account"],
+        command=EpochStartCommand.model_validate(_epoch_command(retired_device["device"], 0)),
+        acknowledged_at=BASE_TIME - timedelta(seconds=2),
+    )
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=retired_device["account"],
+        command=TelemetryCommand.model_validate(
+            _telemetry_command(
+                retired_device,
+                counter_epoch=str(retired_epoch.resource.counterEpoch),
+                generation=retired_epoch.resource.epochGeneration,
+                sequence=1,
+                site_entries=4,
+            )
+        ),
+        acknowledged_at=BASE_TIME - timedelta(seconds=1),
+    )
+    retired_device_row = await telemetry_session.get(EdgeDevice, retired_device["device"])
+    assert retired_device_row is not None
+    retired_device_row.lifecycle_state = "retired"
+    await telemetry_session.flush()
+
+    with pytest.raises(TelemetryIntakeError, match="exactly one enterprise membership"):
+        await list_enterprise_sites(
+            telemetry_session,
+            account=ambiguous["account"],
+            limit=10,
+            after_site_id=None,
+            evaluated_at=BASE_TIME,
+        )
+    for scope in (future_site, retired_device):
+        with pytest.raises(TelemetryIntakeError, match="not active topology owned"):
+            await register_epoch_command(
+                telemetry_session,
+                account=scope["account"],
+                command=EpochStartCommand.model_validate(_epoch_command(scope["device"], 0)),
+                acknowledged_at=BASE_TIME,
+            )
+
+    future_sites = await list_enterprise_sites(
+        telemetry_session,
+        account=future_site["account"],
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME,
+    )
+    retired_sites = await list_enterprise_sites(
+        telemetry_session,
+        account=retired_device["account"],
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME,
+    )
+    assert future_sites.items == []
+    assert len(retired_sites.items) == 1
+    assert retired_sites.items[0].topologyStatus == "unlinked"
+    assert retired_sites.items[0].liveState is None
+    future_live = await list_enterprise_live_sites(
+        telemetry_session,
+        account=future_site["account"],
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME,
+    )
+    retired_live = await list_enterprise_live_sites(
+        telemetry_session,
+        account=retired_device["account"],
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME,
+    )
+    assert future_live.items == []
+    assert retired_live.items == []
 
 
 async def _seed_scope(db: AsyncSession, *, classification: str) -> Scope:
