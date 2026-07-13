@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
 import type { EnterpriseStatus, GatewayStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
+import { displayTrend } from "../utils/enterpriseDisplay";
 
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
@@ -35,7 +36,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
             <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy.toLocaleString()} />
             <EnterpriseMetricCard icon={<Users size={16} />} label="Est. Unique Count" value={enterprise.estimatedUniqueCount.toLocaleString()} />
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Status" value={<StatusBadge status={enterprise.status} />} />
-            <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={enterprise.trend ?? "Stable"} />
+            <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={displayTrend(enterprise.trend)} />
           </div>
         </section>
 
