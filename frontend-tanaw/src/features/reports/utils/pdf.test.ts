@@ -1,58 +1,66 @@
 import { describe, expect, it } from "vitest";
-import type { FinalReport, IntakeReport } from "@/shared/types";
-import { buildFinalReportPdf, buildIntakeReportPdf } from "./pdf";
+import { enterpriseReportDetailFixture, finalReportDetailFixture } from "../testFixtures";
+import { buildEnterpriseReportPdf, buildFinalReportSnapshotPdf } from "./pdf";
 
-describe("official report PDF content", () => {
-  it("writes explicit missing values without generating demographic ratios", () => {
-    const report: IntakeReport = {
-      id: "INTAKE-1",
-      enterpriseId: "enterprise-1",
-      enterprise: "Example Enterprise",
-      category: "Attraction",
-      barangay: "Poblacion",
-      month: "June",
-      period: "June 2026",
-      submitted: "",
-      status: "Pending Review",
-      code: "EX-1",
-      metrics: { entry: 120, exit: 90, unique: 100, peak: "" },
-      payload: null,
-      demographics: null,
-    };
+describe("authoritative report PDF content", () => {
+  it("writes report evidence, exact decimals, coverage gaps, and immutable actors", () => {
+    const pdf = buildEnterpriseReportPdf(enterpriseReportDetailFixture());
 
-    const pdf = buildIntakeReportPdf(report);
-
-    expect(pdf).toContain("(Not) Tj");
-    expect(pdf).toContain("(provided) Tj");
-    expect(pdf).toContain("(Not recorded) Tj");
-    expect(pdf).not.toContain("(31) Tj");
-    expect(pdf).not.toContain("(33) Tj");
-    expect(pdf).not.toContain("Estimated Data");
+    expect(pdf).toContain("TANAW Official Enterprise Report Evidence");
+    expect(pdf).toContain("Frozen Enterprise");
+    expect(pdf).toContain("0.100000 events");
+    expect(pdf).toContain("stream unavailable: 10 seconds");
+    expect(pdf).toContain("Recorded Staff");
+    expect(pdf).not.toContain("Estimated demographic");
   });
 
-  it("does not preserve a known placeholder actor or synthesize final-report demographics", () => {
-    const report: FinalReport = {
-      id: "FINAL-1",
-      title: "Consolidated Report",
-      period: "June 2026",
-      generatedOn: "",
-      preparedBy: "LGU Staff",
-      preparedRole: "",
-      status: "Draft",
-      totalEntry: 120,
-      totalExit: 90,
-      totalUnique: 100,
-      enterpriseCount: 1,
-      sources: [{ id: "source-1", enterprise: "Example Enterprise", code: "EX-1", unique: 100, entry: 120, exit: 90, demographics: null }],
-    };
+  it("builds a final PDF from selected-version snapshot facts and real events only", () => {
+    const report = finalReportDetailFixture();
+    const pdf = buildFinalReportSnapshotPdf(report);
 
-    const pdf = buildFinalReportPdf(report);
+    expect(pdf).toContain("TANAW Immutable Final Report Snapshot");
+    expect(pdf).toContain("Frozen Enterprise");
+    expect(pdf).toContain("Frozen Site");
+    expect(pdf).toContain("0.100000 events");
+    expect(pdf).toContain(report.selectedVersion.contentHash);
+    expect(pdf).toContain(report.selectedVersion.items[0]!.reportRevisionId);
+    expect(pdf).toContain("Recorded Staff");
+    expect(pdf).not.toContain("Checked By");
+    expect(pdf).not.toContain("Approved By");
+  });
 
-    expect(pdf).toContain("(Not) Tj");
-    expect(pdf).toContain("(provided) Tj");
-    expect(pdf).toContain(String.raw`(Not recorded \(Role not recorded\)) Tj`);
-    expect(pdf).not.toContain("(LGU Staff");
-    expect(pdf).not.toContain("(31) Tj");
-    expect(pdf).not.toContain("Citywide Consolidated Total");
+  it("keeps missing audit actors explicit in both PDFs", () => {
+    const enterpriseReport = enterpriseReportDetailFixture();
+    enterpriseReport.reviewEvents[0]!.actor = { accountId: null, displayName: null, role: null };
+    const finalReport = finalReportDetailFixture();
+    finalReport.events[0] = { ...finalReport.events[0]!, actorAccountId: null, actorDisplayName: null, actorRole: null };
+
+    const enterprisePdf = buildEnterpriseReportPdf(enterpriseReport);
+    const finalPdf = buildFinalReportSnapshotPdf(finalReport);
+
+    expect(enterprisePdf).toContain("Actor not recorded; Role not recorded");
+    expect(finalPdf).toContain("Actor not recorded; Role not recorded");
+    expect(enterprisePdf).not.toContain("System actor");
+    expect(finalPdf).not.toContain("System actor");
+  });
+
+  it("keeps each generated snapshot bound to events for its exact immutable revision or version", () => {
+    const enterpriseReport = enterpriseReportDetailFixture();
+    enterpriseReport.reviewEvents.push({
+      ...enterpriseReport.reviewEvents[0]!,
+      reviewEventId: "00000000-0000-0000-0000-000000009901",
+      reportRevisionId: "00000000-0000-0000-0000-000000009902",
+      reason: "Event from another revision must not enter this snapshot.",
+    });
+    const finalReport = finalReportDetailFixture();
+    finalReport.events.push({
+      ...finalReport.events[0]!,
+      finalReportEventId: "00000000-0000-0000-0000-000000009903",
+      finalReportVersionId: "00000000-0000-0000-0000-000000009904",
+      reason: "Event from another version must not enter this snapshot.",
+    });
+
+    expect(buildEnterpriseReportPdf(enterpriseReport)).not.toContain("another revision");
+    expect(buildFinalReportSnapshotPdf(finalReport)).not.toContain("another version");
   });
 });

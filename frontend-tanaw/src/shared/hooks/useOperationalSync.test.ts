@@ -1,7 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import type { AuthUser, FinalReport, IntakeReport, OperationalSummary, TelemetrySnapshot } from "../types";
-import { createOperationalQueryKeys, handleOperationalEnvelope, operationalFinalReportsQueryKey, operationalReportsQueryKey, operationalSummaryQueryKey } from "./useOperationalSync";
+import type { AuthUser, OperationalSummary, TelemetrySnapshot } from "../types";
+import { enterpriseReportDetailQueryKey, enterpriseReportListQueryKey, finalReportDetailQueryKey, finalReportListQueryKey, reportComplianceQueryKey } from "../services/reporting";
+import { createOperationalQueryKeys, handleOperationalEnvelope, operationalSummaryQueryKey } from "./useOperationalSync";
+import { reportingAccountScope } from "./useReportWorkflow";
 
 vi.mock("@/app/store/authStore", () => ({ useAuthStore: vi.fn() }));
 vi.mock("react-hot-toast/headless", () => ({ default: { error: vi.fn() } }));
@@ -14,20 +16,12 @@ describe("operational realtime reconciliation", () => {
     const otherAccount = createOperationalQueryKeys(createUser("account-2", "staff"));
     const otherRole = createOperationalQueryKeys(createUser("account-1", "admin"));
 
-    expect(first.reports).not.toEqual(otherAccount.reports);
-    expect(first.reports).not.toEqual(otherRole.reports);
+    expect(first.telemetry).not.toEqual(otherAccount.telemetry);
+    expect(first.telemetry).not.toEqual(otherRole.telemetry);
     expect(JSON.stringify(first)).not.toContain("secret-token");
-  });
-
-  it("invalidates an unfetched list instead of manufacturing a one-item result", () => {
-    const client = createClient();
-    const keys = createOperationalQueryKeys(user);
-    client.getQueryCache().build(client, { queryKey: keys.reports, queryFn: async () => [] });
-
-    handleOperationalEnvelope(client, keys, JSON.stringify({ type: "report.submitted", data: createReport() }));
-
-    expect(client.getQueryData(keys.reports)).toBeUndefined();
-    expect(client.getQueryState(keys.reports)?.isInvalidated).toBe(true);
+    expect(first.summary.slice(0, operationalSummaryQueryKey.length)).toEqual(operationalSummaryQueryKey);
+    expect(reportingAccountScope(user)).not.toEqual(reportingAccountScope(createUser("account-2", "staff")));
+    expect(reportingAccountScope(user)).not.toEqual(reportingAccountScope(createUser("account-1", "admin")));
   });
 
   it("does not let an older telemetry snapshot replace current enterprise state", () => {
@@ -61,25 +55,7 @@ describe("operational realtime reconciliation", () => {
     client.setQueryData(keys.telemetry, []);
     client.setQueryData(keys.summary, createSummary());
 
-    handleOperationalEnvelope(
-      client,
-      keys,
-      JSON.stringify({
-        type: "resource.invalidated",
-        data: {
-          contractVersion: 2,
-          eventId: "event-1",
-          eventKey: "telemetry-observation:1",
-          eventType: "telemetry.observation_recorded.v2",
-          resource: { type: "site_live_state", id: "site-1", version: 4 },
-          scope: { classification: "official", enterpriseId: "enterprise-1", siteId: "site-1" },
-          invalidates: ["/operational/sites/v2"],
-          audienceRoles: ["admin", "staff"],
-          occurredAt: "2026-07-13T08:00:00Z",
-          refetchRequired: true,
-        },
-      }),
-    );
+    handleOperationalEnvelope(client, keys, invalidationEnvelope("site_live_state"));
 
     expect(client.getQueryState(keys.mapEnterprises)?.isInvalidated).toBe(true);
     expect(client.getQueryState(keys.telemetry)?.isInvalidated).toBe(true);
@@ -87,145 +63,72 @@ describe("operational realtime reconciliation", () => {
     expect(client.getQueryData(keys.mapEnterprises)).toEqual([]);
   });
 
-  it("invalidates intake, final, summary, and report detail caches for report events", () => {
+  it.each(["enterprise_report", "final_report", "reporting_period_compliance", "reporting_obligation"] as const)(
+    "invalidates every v2 reporting list/detail/compliance/final query for %s without manufacturing data",
+    (resourceType) => {
+      const client = createClient();
+      const keys = createOperationalQueryKeys(user);
+      const reportingKeys = [
+        [...enterpriseReportListQueryKey, { accountId: user.id }],
+        [...enterpriseReportDetailQueryKey, { accountId: user.id }, "report-1"],
+        [...reportComplianceQueryKey, { accountId: user.id }, "period-1"],
+        [...finalReportListQueryKey, { accountId: user.id }],
+        [...finalReportDetailQueryKey, { accountId: user.id }, "final-1", "current"],
+      ];
+      for (const queryKey of reportingKeys) client.setQueryData(queryKey, { preserved: queryKey.join(":") });
+
+      handleOperationalEnvelope(client, keys, invalidationEnvelope(resourceType));
+
+      for (const queryKey of reportingKeys) {
+        expect(client.getQueryState(queryKey)?.isInvalidated).toBe(true);
+        expect(client.getQueryData(queryKey)).toEqual({ preserved: queryKey.join(":") });
+      }
+    },
+  );
+
+  it("ignores simulation invalidations in the official portal cache", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
-    const report = createReport();
-    const finalReport = createFinalReport();
-    const summary = createSummary();
-    const intakeDetailKey = [...keys.reports, "detail", report.id];
-    const finalDetailKey = [...keys.finalReports, "detail", finalReport.id];
-    client.setQueryData(keys.reports, [report]);
-    client.setQueryData(keys.finalReports, [finalReport]);
-    client.setQueryData(keys.summary, summary);
-    client.setQueryData(intakeDetailKey, report);
-    client.setQueryData(finalDetailKey, finalReport);
+    const queryKey = [...enterpriseReportListQueryKey, { accountId: user.id }];
+    client.setQueryData(queryKey, []);
 
-    handleOperationalEnvelope(client, keys, JSON.stringify({ type: "report.updated", data: { ...report, status: "Ready to Consolidate" } }));
+    handleOperationalEnvelope(client, keys, invalidationEnvelope("enterprise_report", "simulation"));
 
-    for (const queryKey of [keys.reports, keys.finalReports, keys.summary, intakeDetailKey, finalDetailKey]) {
-      expect(client.getQueryState(queryKey)?.isInvalidated).toBe(true);
-    }
+    expect(client.getQueryState(queryKey)?.isInvalidated).toBe(false);
   });
 
-  it("invalidates both report collections and summary for final-report events", () => {
-    const client = createClient();
-    const keys = createOperationalQueryKeys(user);
-    client.setQueryData(keys.reports, [createReport()]);
-    client.setQueryData(keys.finalReports, [createFinalReport()]);
-    client.setQueryData(keys.summary, createSummary());
-
-    handleOperationalEnvelope(client, keys, JSON.stringify({ type: "final_report.updated", data: { ...createFinalReport(), status: "Finalized" } }));
-
-    expect(client.getQueryState(keys.reports)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(keys.finalReports)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(keys.summary)?.isInvalidated).toBe(true);
-  });
-
-  it("keeps exported prefixes compatible with scoped list and detail invalidation", () => {
-    const keys = createOperationalQueryKeys(user);
-
-    expect(keys.reports.slice(0, operationalReportsQueryKey.length)).toEqual(operationalReportsQueryKey);
-    expect(keys.finalReports.slice(0, operationalFinalReportsQueryKey.length)).toEqual(operationalFinalReportsQueryKey);
-    expect(keys.summary.slice(0, operationalSummaryQueryKey.length)).toEqual(operationalSummaryQueryKey);
-  });
 });
+
+function invalidationEnvelope(resourceType: "site_live_state" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation", classification: "official" | "simulation" = "official") {
+  return JSON.stringify({
+    type: "resource.invalidated",
+    data: {
+      contractVersion: 2,
+      eventId: "event-1",
+      eventKey: "resource:1",
+      eventType: "resource.changed.v2",
+      resource: { type: resourceType, id: "resource-1", version: 4 },
+      scope: { classification, enterpriseId: "enterprise-1", siteId: "site-1" },
+      invalidates: ["/operational/reports/v2"],
+      audienceRoles: ["staff"],
+      occurredAt: "2026-07-13T08:00:00Z",
+      refetchRequired: true,
+    },
+  });
+}
 
 function createClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
 function createUser(id: string, role: AuthUser["role"]): AuthUser {
-  return {
-    id,
-    email: `${id}@example.test`,
-    displayName: id,
-    role,
-    title: "Operator",
-    phone: null,
-    firstName: null,
-    lastName: null,
-    enterpriseId: role === "enterprise" ? "enterprise-1" : null,
-    enterpriseName: null,
-    category: null,
-    managerName: null,
-    barangay: null,
-    address: null,
-    buildingCapacity: 0,
-    displayImageDataUrl: null,
-  };
+  return { id, email: `${id}@example.test`, displayName: id, role, title: "Operator", phone: null, firstName: null, lastName: null, enterpriseId: role === "enterprise" ? "enterprise-1" : null, enterpriseName: null, category: null, managerName: null, barangay: null, address: null, buildingCapacity: 0, displayImageDataUrl: null };
 }
 
 function createTelemetry(id: string, receivedAt: string, occupancy: number): TelemetrySnapshot {
-  return {
-    id,
-    enterpriseId: "enterprise-1",
-    enterpriseName: "Enterprise One",
-    capturedAt: receivedAt,
-    receivedAt,
-    entries: occupancy,
-    exits: 0,
-    currentOccupancy: occupancy,
-    peakOccupancy: occupancy,
-    uniqueCount: occupancy,
-    confirmedUniqueCount: occupancy,
-    degradedUniqueCount: 0,
-    totalEvents: occupancy,
-    unsubmittedEvents: 0,
-    unsyncedEvents: 0,
-    running: true,
-    status: "running",
-    gatewayStatus: "Connected",
-    sourceKind: "real",
-  };
-}
-
-function createReport(): IntakeReport {
-  return {
-    id: "report-1",
-    enterpriseId: "enterprise-1",
-    enterprise: "Enterprise One",
-    category: "Hotel",
-    barangay: "Poblacion",
-    month: "July 2026",
-    period: "July 2026",
-    submitted: "Jul 13, 2026 08:00",
-    submittedAt: "2026-07-13T08:00:00Z",
-    status: "Pending Review",
-    code: "RPT-1",
-    metrics: { entry: 10, exit: 4, unique: 8, peak: "6" },
-  };
-}
-
-function createFinalReport(): FinalReport {
-  return {
-    id: "final-1",
-    title: "July report",
-    period: "July 2026",
-    generatedOn: "2026-07-13T09:00:00Z",
-    preparedBy: "Staff User",
-    preparedRole: "LGU Staff",
-    status: "Draft",
-    totalEntry: 10,
-    totalExit: 4,
-    totalUnique: 8,
-    enterpriseCount: 1,
-    sources: [],
-  };
+  return { id, enterpriseId: "enterprise-1", enterpriseName: "Enterprise One", capturedAt: receivedAt, receivedAt, entries: occupancy, exits: 0, currentOccupancy: occupancy, peakOccupancy: occupancy, uniqueCount: occupancy, confirmedUniqueCount: occupancy, degradedUniqueCount: 0, totalEvents: occupancy, unsubmittedEvents: 0, unsyncedEvents: 0, running: true, status: "running", gatewayStatus: "Connected", sourceKind: "real" };
 }
 
 function createSummary(): OperationalSummary {
-  return {
-    enterpriseCount: 1,
-    onlineGateways: 1,
-    delayedGateways: 0,
-    offlineGateways: 0,
-    totalCurrentOccupancy: 6,
-    totalEntries: 10,
-    totalExits: 4,
-    totalUniqueCount: 8,
-    activeReports: 1,
-    pendingReports: 1,
-    lastSyncAt: "2026-07-13T09:00:00Z",
-  };
+  return { enterpriseCount: 1, onlineGateways: 1, delayedGateways: 0, offlineGateways: 0, totalCurrentOccupancy: 6, totalEntries: 10, totalExits: 4, totalUniqueCount: 8, activeReports: 1, pendingReports: 1, lastSyncAt: "2026-07-13T09:00:00Z" };
 }

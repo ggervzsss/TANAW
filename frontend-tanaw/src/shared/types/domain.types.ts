@@ -157,25 +157,9 @@ export type SystemLog = {
   metadata?: Record<string, string | number | boolean | null>;
 };
 
-export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated" | "Missing";
-export type FinalReportArchivedFromStatus = "Draft" | "Finalized" | "Returned for Revision";
-export type FinalReportStatus = FinalReportArchivedFromStatus | "Archived";
 export type LguAccountRoleLabel = "Admin" | "IT Personnel" | "LGU Staff";
 export type LguAccountStatus = "Active" | "Inactive";
 export type EnterpriseAccountStatus = "Active" | "Archived" | "Suspended";
-
-export type ReportDemographics = {
-  thisProvMale: number;
-  thisProvFemale: number;
-  otherProvMale: number;
-  otherProvFemale: number;
-  foreignMale: number;
-  foreignFemale: number;
-};
-
-export type ReportPayload = Record<string, unknown> & {
-  demo?: Partial<Record<keyof ReportDemographics, number | string>>;
-};
 
 export type LguAccount = {
   id: string;
@@ -213,62 +197,4 @@ export type EnterpriseAccount = {
   accountStatus: EnterpriseAccountStatus;
   lastSync: string;
   cameras: EnterpriseCamera[];
-};
-
-export type IntakeReport = {
-  id: string;
-  enterpriseId: string;
-  enterprise: string;
-  category: string;
-  barangay: string;
-  month: string;
-  period: string;
-  submitted: string;
-  submittedAt?: string;
-  status: ReportStatus;
-  code: string;
-  remarks?: string;
-  notes?: string;
-  metrics: {
-    entry: number;
-    exit: number;
-    unique: number;
-    peak: string;
-  };
-  payload?: ReportPayload | null;
-  demographics?: ReportDemographics | null;
-};
-
-export type ReportEnterprise = {
-  id: string;
-  name: string;
-  category: string;
-  barangay: string;
-  complianceOwner: string;
-};
-
-export type FinalReportSource = {
-  id: string;
-  enterprise: string;
-  code: string;
-  unique: number;
-  entry: number;
-  exit: number;
-  demographics?: ReportDemographics | null;
-};
-
-export type FinalReport = {
-  id: string;
-  title: string;
-  period: string;
-  generatedOn: string;
-  preparedBy: string;
-  preparedRole: string;
-  status: FinalReportStatus;
-  archivedFromStatus?: FinalReportArchivedFromStatus | null;
-  totalEntry: number;
-  totalExit: number;
-  totalUnique: number;
-  enterpriseCount: number;
-  sources: FinalReportSource[];
 };

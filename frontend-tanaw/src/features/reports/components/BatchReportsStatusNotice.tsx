@@ -1,33 +1,11 @@
-import { CheckCircle2 } from "lucide-react";
+import type { PeriodComplianceResource } from "@/shared/types";
 
-type BatchReportsStatusNoticeProps = {
-  allConsolidated: boolean;
-  allReady: boolean;
-  filteredReportCount: number;
-  readyReportCount: number;
-  enterpriseCount: number;
-};
-
-export function BatchReportsStatusNotice({ allConsolidated, allReady, filteredReportCount, readyReportCount, enterpriseCount }: BatchReportsStatusNoticeProps) {
-  if (allConsolidated) {
-    return (
-      <div className="flex items-center gap-2 border-b border-emerald-100 bg-emerald-50 px-5 py-2.5 text-xs text-emerald-700">
-        <CheckCircle2 size={14} className="shrink-0" />
-        <span>
-          <span className="font-semibold">Selected reporting cycle complete -</span> All reports have been consolidated and the final report has been generated.
-        </span>
-      </div>
-    );
+export function BatchReportsStatusNotice({ compliance }: { compliance: PeriodComplianceResource | null }) {
+  if (!compliance) {
+    return <p className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">Compliance is unavailable until TANAW can read or freeze an authoritative obligation snapshot for the selected server-returned period.</p>;
   }
-
-  if (!allReady && filteredReportCount > 0) {
-    return (
-      <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-xs text-amber-700">
-        <span className="font-semibold">Not ready to generate -</span>
-        {readyReportCount} of {enterpriseCount} enterprises are marked Ready to Consolidate. All must be ready before a final report can be generated.
-      </div>
-    );
+  if (compliance.summary.complete) {
+    return <p className="border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm text-emerald-900"><strong>Period compliance complete.</strong> All eligible obligations are accepted or consolidated and no eligibility remains unresolved.</p>;
   }
-
-  return null;
+  return <p className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900"><strong>Period compliance incomplete.</strong> {compliance.summary.notSubmitted} not submitted, {compliance.summary.submitted} awaiting review, {compliance.summary.returned} returned, and {compliance.summary.unresolved} unresolved.</p>;
 }

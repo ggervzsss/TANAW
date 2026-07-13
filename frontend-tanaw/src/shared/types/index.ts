@@ -7,12 +7,7 @@ export type {
   EnterpriseAccountStatus,
   EnterpriseCamera,
   EnterpriseStatus,
-  FinalReport,
-  FinalReportArchivedFromStatus,
-  FinalReportSource,
-  FinalReportStatus,
   GatewayStatus,
-  IntakeReport,
   LguAccount,
   LguAccountRoleLabel,
   LguAccountStatus,
@@ -26,10 +21,6 @@ export type {
   PriorityAlertResolutionMode,
   PriorityAlertStatus,
   PriorityAlertType,
-  ReportDemographics,
-  ReportEnterprise,
-  ReportPayload,
-  ReportStatus,
   SystemLog,
   SystemLogActorRole,
   SystemLogCategory,
@@ -40,3 +31,4 @@ export type {
   TelemetrySnapshot,
   OperationalSummary,
 } from "./domain.types";
+export type * from "./reporting.types";

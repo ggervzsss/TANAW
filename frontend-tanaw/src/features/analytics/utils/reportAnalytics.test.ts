@@ -1,64 +1,58 @@
 import { describe, expect, it } from "vitest";
-import type { IntakeReport, ReportEnterprise } from "@/shared/types";
-import { getAcceptedReports, getAnalyticsPeriods, getBarangayCoverageRows, getCurrentAnalyticsPeriod, getEnterpriseReportRows, sumMetric } from "./reportAnalytics";
+import { complianceFixture, enterpriseReportFixture, periodFixture } from "@/features/reports/testFixtures";
+import { getBarangayCoverageRows, getComparisonPeriod, getEnterpriseMetricRows, sumMetric } from "./reportAnalytics";
 
-describe("Staff report analytics", () => {
-  it("builds periods without mutating or duplicating the memoized current period", () => {
-    const current = getCurrentAnalyticsPeriod(new Date("2026-07-13T00:00:00Z"));
-    const reports = [report("accepted", "Ready to Consolidate", "2026-07-01T00:00:00Z")];
+describe("official report analytics", () => {
+  it("excludes submitted and returned reports and deduplicates repeated resources", () => {
+    const accepted = enterpriseReportFixture();
+    const submitted = enterpriseReportFixture({ enterpriseReportId: "submitted-report", workflowState: "submitted", includedInOfficialTotals: false, acceptedRevisionId: null, currentRevision: { ...enterpriseReportFixture().currentRevision, isAccepted: false } });
+    const returned = enterpriseReportFixture({ enterpriseReportId: "returned-report", workflowState: "returned", includedInOfficialTotals: false, acceptedRevisionId: null, currentRevision: { ...enterpriseReportFixture().currentRevision, isAccepted: false } });
 
-    const first = getAnalyticsPeriods(reports, current);
-    const second = getAnalyticsPeriods(reports, current);
+    const rows = getEnterpriseMetricRows([accepted, accepted, submitted, returned], periodFixture.reportingPeriodId);
 
-    expect(current.reports).toEqual([]);
-    expect(first[0].reports).toHaveLength(1);
-    expect(second[0].reports).toHaveLength(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.reports).toHaveLength(1);
+    expect(rows[0]?.entriesExact).toBe("0.100000");
   });
 
-  it("excludes Pending and Returned reports from accepted tourism totals", () => {
-    const accepted = report("accepted", "Ready to Consolidate", "2026-07-03T00:00:00Z", 30);
-    const consolidated = report("consolidated", "Consolidated", "2026-07-04T00:00:00Z", 40, "enterprise-2");
-    const pending = report("pending", "Pending Review", "2026-07-05T00:00:00Z", 500, "enterprise-3");
-    const returned = report("returned", "Returned", "2026-07-06T00:00:00Z", 600, "enterprise-4");
+  it("combines each accepted site report once per enterprise without losing decimal precision", () => {
+    const first = enterpriseReportFixture();
+    const second = enterpriseReportFixture({
+      enterpriseReportId: "accepted-site-2",
+      currentRevisionId: "revision-site-2",
+      acceptedRevisionId: "revision-site-2",
+      site: { ...enterpriseReportFixture().site, siteId: "site-2", siteCode: "SITE-002", siteName: "Second Site" },
+      currentRevision: {
+        ...enterpriseReportFixture().currentRevision,
+        reportRevisionId: "revision-site-2",
+        metrics: enterpriseReportFixture().currentRevision.metrics.map((metric) => (metric.definition === "entries" ? { ...metric, metricFactId: "metric-site-2", value: "0.200000" } : { ...metric, metricFactId: `${metric.metricFactId}-site-2` })),
+      },
+    });
 
-    const eligible = getAcceptedReports([accepted, consolidated, pending, returned]);
+    const rows = getEnterpriseMetricRows([first, second], periodFixture.reportingPeriodId);
 
-    expect(eligible.map((item) => item.id)).toEqual(["accepted", "consolidated"]);
-    expect(sumMetric(eligible, "entry")).toBe(70);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.reports).toHaveLength(2);
+    expect(rows[0]?.entriesExact).toBe("0.300000");
+    expect(sumMetric([first, second], "entries")).toBe("0.300000");
   });
 
-  it("uses only the latest accepted record for an enterprise and marks current-registry coverage", () => {
-    const enterprises: ReportEnterprise[] = [enterprise("enterprise-1"), enterprise("enterprise-2")];
-    const older = report("older", "Ready to Consolidate", "2026-07-01T00:00:00Z", 10);
-    const newer = report("newer", "Consolidated", "2026-07-02T00:00:00Z", 20);
+  it("discovers only server-returned period resources and never adds the current device month", () => {
+    const earlier = { ...periodFixture, reportingPeriodId: "earlier-period", naturalKey: "month:Asia/Manila:2026-06", label: "June 2026" };
+    const periods = [periodFixture, earlier];
 
-    const rows = getEnterpriseReportRows(enterprises, [newer, older]);
-    const coverage = getBarangayCoverageRows(rows);
+    expect(periods.map((period) => period.reportingPeriodId)).toEqual([periodFixture.reportingPeriodId, earlier.reportingPeriodId]);
+    expect(getComparisonPeriod(periods, periodFixture.reportingPeriodId)).toBe(earlier);
+    expect(getComparisonPeriod(periods, "device-derived-period")).toBeUndefined();
+  });
 
-    expect(rows[0].reports.map((item) => item.id)).toEqual(["newer"]);
-    expect(rows[0].accepted).toBe(true);
-    expect(rows[1].accepted).toBe(false);
-    expect(coverage).toEqual([{ barangay: "Poblacion", accepted: 1, awaitingAcceptance: 1, total: 2 }]);
+  it("derives missing coverage from frozen eligible obligations", () => {
+    const rows = getBarangayCoverageRows(complianceFixture());
+
+    expect(rows).toEqual([
+      { barangay: "Poblacion", accepted: 1, awaitingAcceptance: 0, total: 1 },
+      { barangay: "San Jose", accepted: 0, awaitingAcceptance: 1, total: 1 },
+    ]);
+    expect(getBarangayCoverageRows(null)).toEqual([]);
   });
 });
-
-function report(id: string, status: IntakeReport["status"], submittedAt: string, entry = 10, enterpriseId = "enterprise-1"): IntakeReport {
-  return {
-    id,
-    enterpriseId,
-    enterprise: enterpriseId,
-    category: "Hotel",
-    barangay: "Poblacion",
-    month: "July",
-    period: "July 2026",
-    submitted: submittedAt,
-    submittedAt,
-    status,
-    code: id,
-    metrics: { entry, exit: 0, unique: entry, peak: String(entry) },
-  };
-}
-
-function enterprise(id: string): ReportEnterprise {
-  return { id, name: id, category: "Hotel", barangay: "Poblacion", complianceOwner: "Staff" };
-}

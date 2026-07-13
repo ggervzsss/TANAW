@@ -6,22 +6,19 @@ import {
   createWebSocketAuthMessage,
   getOperationalSummary,
   getOperationalWebSocketUrl,
-  listFinalReports,
-  listIntakeReports,
   listLatestTelemetry,
   listOperationalMapEnterprises,
   listUserNotifications,
   type BackendNotification,
   type OperationalWebSocketEnvelope,
 } from "../services/operationalSync";
-import type { AuthUser, FinalReport, IntakeReport, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
+import { reportWorkflowQueryKey } from "../services/reporting";
+import type { AuthUser, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
 
 const RECONCILIATION_INTERVAL_MS = 30_000;
 
 export const operationalSummaryQueryKey = ["operational", "summary"] as const;
 export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest"] as const;
-export const operationalReportsQueryKey = ["operational", "reports", "intake"] as const;
-export const operationalFinalReportsQueryKey = ["operational", "reports", "final"] as const;
 export const operationalMapEnterprisesQueryKey = ["operational", "sites", "v2"] as const;
 export const operationalNotificationsQueryKey = ["operational", "notifications"] as const;
 const operationalAlertsQueryKey = ["operational-alerts"] as const;
@@ -29,8 +26,6 @@ const operationalAlertsQueryKey = ["operational-alerts"] as const;
 type OperationalQueryKeys = {
   summary: QueryKey;
   telemetry: QueryKey;
-  reports: QueryKey;
-  finalReports: QueryKey;
   mapEnterprises: QueryKey;
   notifications: QueryKey;
   alerts: QueryKey;
@@ -47,8 +42,6 @@ export function createOperationalQueryKeys(user: AuthUser | null): OperationalQu
   return {
     summary: [...operationalSummaryQueryKey, scope],
     telemetry: [...operationalTelemetryQueryKey, scope],
-    reports: [...operationalReportsQueryKey, scope],
-    finalReports: [...operationalFinalReportsQueryKey, scope],
     mapEnterprises: [...operationalMapEnterprisesQueryKey, scope],
     notifications: [...operationalNotificationsQueryKey, scope],
     alerts: [...operationalAlertsQueryKey, scope],
@@ -67,20 +60,6 @@ export function useOperationalTelemetry() {
   const user = useAuthStore((state) => state.user);
   const keys = createOperationalQueryKeys(user);
   return useQuery({ queryKey: keys.telemetry, queryFn: listLatestTelemetry, enabled: Boolean(token && user) });
-}
-
-export function useOperationalReports() {
-  const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
-  const keys = createOperationalQueryKeys(user);
-  return useQuery({ queryKey: keys.reports, queryFn: listIntakeReports, enabled: Boolean(token && user) });
-}
-
-export function useOperationalFinalReports() {
-  const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
-  const keys = createOperationalQueryKeys(user);
-  return useQuery({ queryKey: keys.finalReports, queryFn: listFinalReports, enabled: Boolean(token && user) });
 }
 
 export function useOperationalMapEnterprises() {
@@ -224,17 +203,14 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
   }
 
   if (envelope.type === "resource.invalidated") {
+    if (envelope.data.contractVersion !== 2 || envelope.data.refetchRequired !== true || envelope.data.scope.classification !== "official") return;
     const resourceType = envelope.data.resource.type;
     if (resourceType === "site_live_state") {
       invalidate(queryClient, keys.mapEnterprises, keys.telemetry, keys.summary);
       return;
     }
-    if (resourceType === "enterprise_report" || resourceType === "final_report") {
-      invalidate(queryClient, operationalReportsQueryKey, operationalFinalReportsQueryKey, operationalSummaryQueryKey);
-      return;
-    }
-    if (resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {
-      invalidate(queryClient, operationalReportsQueryKey, operationalNotificationsQueryKey);
+    if (resourceType === "enterprise_report" || resourceType === "final_report" || resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {
+      invalidate(queryClient, reportWorkflowQueryKey, operationalSummaryQueryKey, operationalNotificationsQueryKey);
       return;
     }
     return;
@@ -249,18 +225,6 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
 
   if (envelope.type === "summary.updated") {
     patchSummary(queryClient, keys.summary, envelope.data);
-    return;
-  }
-
-  if (envelope.type === "report.submitted" || envelope.type === "report.updated") {
-    patchExistingList(queryClient, keys.reports, envelope.data, (current, report) => sortReports(upsertById(current, report, getReportTime)));
-    invalidate(queryClient, operationalReportsQueryKey, operationalFinalReportsQueryKey, operationalSummaryQueryKey);
-    return;
-  }
-
-  if (envelope.type === "final_report.generated" || envelope.type === "final_report.updated") {
-    patchExistingList(queryClient, keys.finalReports, envelope.data, (current, report) => sortFinalReports(upsertById(current, report, getFinalReportTime)));
-    invalidate(queryClient, operationalReportsQueryKey, operationalFinalReportsQueryKey, operationalSummaryQueryKey);
     return;
   }
 
@@ -310,14 +274,6 @@ function upsertTelemetrySnapshot(items: TelemetrySnapshot[], nextItem: Telemetry
   return items.map((item) => (item.enterpriseId === nextItem.enterpriseId ? nextItem : item));
 }
 
-function sortReports(reports: IntakeReport[]) {
-  return [...reports].sort((left, right) => getReportTime(right) - getReportTime(left));
-}
-
-function sortFinalReports(reports: FinalReport[]) {
-  return [...reports].sort((left, right) => getFinalReportTime(right) - getFinalReportTime(left));
-}
-
 function sortAlerts(alerts: PriorityAlert[]) {
   return [...alerts].sort((left, right) => getAlertTime(right) - getAlertTime(left));
 }
@@ -328,14 +284,6 @@ function sortNotifications(notifications: BackendNotification[]) {
 
 function getTelemetryTime(snapshot: TelemetrySnapshot) {
   return getTimestamp(snapshot.receivedAt, snapshot.capturedAt);
-}
-
-function getReportTime(report: IntakeReport) {
-  return getTimestamp(report.submittedAt, report.submitted);
-}
-
-function getFinalReportTime(report: FinalReport) {
-  return getTimestamp(report.generatedOn);
 }
 
 function getAlertTime(alert: PriorityAlert) {

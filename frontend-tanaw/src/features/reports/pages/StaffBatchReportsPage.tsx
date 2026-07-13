@@ -1,216 +1,187 @@
-import { AnimatePresence } from "motion/react";
 import axios from "axios";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence } from "motion/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
-import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { createOperationalQueryKeys, operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
-import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
-import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
-import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, EnterpriseReportsModal, ReportActionConfirmDialog, ReportReviewModal } from "../components";
-import { getAvailableMonths, getAvailableYears, getCurrentSubmissionPeriod, getDefaultSubmissionPeriod, getEnterpriseReportRows, reportMatchesPeriod } from "../utils";
-
-const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
-const EMPTY_REPORTS: IntakeReport[] = [];
-const ALL_BARANGAYS_FILTER = "all";
+import { useEnterpriseReports, usePeriodCompliance, useReportingPeriods } from "@/shared/hooks/useReportWorkflow";
+import { createReminderIntents, finalizeReports, reportWorkflowQueryKey, runReportingPeriodLifecycle } from "@/shared/services/reporting";
+import type { FinalReportScopeType, FinalizeReportsCommand } from "@/shared/types";
+import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, ReportActionConfirmDialog, ReportReviewModal } from "../components";
+import { acceptedRevisionIds, buildComplianceRows, reportMatchesScope } from "../utils/reportWorkflow";
 
 export function StaffBatchReportsPage() {
-  const authUser = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
-  const reportEnterprisesQuery = useQuery({ queryKey: ["report-enterprises"], queryFn: listReportEnterprises });
-  const reportsQuery = useOperationalReports();
-  const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
-  const reports = reportsQuery.data ?? EMPTY_REPORTS;
-  const scopedQueryKeys = createOperationalQueryKeys(authUser);
-  const currentPeriod = getCurrentSubmissionPeriod();
-  const defaultPeriod = getDefaultSubmissionPeriod(reports, currentPeriod);
+  const periodsQuery = useReportingPeriods();
+  const periods = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
+  const [requestedPeriodId, setRequestedPeriodId] = useState("");
+  const selectedPeriodId = periods.some((period) => period.reportingPeriodId === requestedPeriodId) ? requestedPeriodId : (periods[0]?.reportingPeriodId ?? "");
+  const selectedPeriod = periods.find((period) => period.reportingPeriodId === selectedPeriodId) ?? null;
+  const reportsQuery = useEnterpriseReports({ reportingPeriodId: selectedPeriodId || undefined }, Boolean(selectedPeriodId));
+  const reports = useMemo(() => reportsQuery.data ?? [], [reportsQuery.data]);
+  const complianceQuery = usePeriodCompliance(selectedPeriodId || null);
+  const compliance = complianceQuery.data ?? null;
   const [query, setQuery] = useState("");
-  const [barangayFilter, setBarangayFilter] = useState(ALL_BARANGAYS_FILTER);
-  const [monthFilter, setMonthFilter] = useState(defaultPeriod.month);
-  const [yearFilter, setYearFilter] = useState(defaultPeriod.year);
-  const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
+  const [scopeType, setScopeType] = useState<FinalReportScopeType>("citywide");
+  const [barangay, setBarangay] = useState("");
+  const [manualSelectedReportIds, setManualSelectedReportIds] = useState<Set<string>>(() => new Set());
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
-  const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
+  const [isFinalizeConfirmOpen, setIsFinalizeConfirmOpen] = useState(false);
 
-  const availableMonths = useMemo(() => getAvailableMonths(reports, currentPeriod), [currentPeriod, reports]);
-  const availableYears = useMemo(() => getAvailableYears(reports, currentPeriod), [currentPeriod, reports]);
+  const periodReports = useMemo(() => reports.filter((report) => report.reportingPeriod.reportingPeriodId === selectedPeriodId), [reports, selectedPeriodId]);
+  const rows = useMemo(() => (compliance ? buildComplianceRows(compliance, periodReports) : []), [compliance, periodReports]);
   const availableBarangays = useMemo(
-    () => Array.from(new Set(reportEnterprises.map((enterprise) => enterprise.barangay).filter(Boolean))).sort((left, right) => left.localeCompare(right)),
-    [reportEnterprises],
+    () => Array.from(new Set(rows.map((row) => row.obligation.frozenBarangay).filter((value): value is string => Boolean(value)))).sort((left, right) => left.localeCompare(right)),
+    [rows],
   );
-  const selectedReportEnterprises = useMemo(
-    () => (barangayFilter === ALL_BARANGAYS_FILTER ? reportEnterprises : reportEnterprises.filter((enterprise) => enterprise.barangay === barangayFilter)),
-    [barangayFilter, reportEnterprises],
-  );
-  const selectedEnterpriseIds = useMemo(() => new Set(selectedReportEnterprises.map((enterprise) => enterprise.id)), [selectedReportEnterprises]);
-  const reportsForSelectedBarangay = useMemo(
-    () => (barangayFilter === ALL_BARANGAYS_FILTER ? reports : reports.filter((report) => selectedEnterpriseIds.has(report.enterpriseId))),
-    [barangayFilter, reports, selectedEnterpriseIds],
-  );
-  const filteredByPeriod = useMemo(() => reportsForSelectedBarangay.filter((report) => reportMatchesPeriod(report, monthFilter, yearFilter)), [reportsForSelectedBarangay, monthFilter, yearFilter]);
-  const nonPeriodReports = useMemo(
-    () => reportsForSelectedBarangay.filter((report) => !filteredByPeriod.includes(report) || report.status === "Consolidated"),
-    [reportsForSelectedBarangay, filteredByPeriod],
-  );
-  const readyReports = filteredByPeriod.filter((report) => report.status === "Ready to Consolidate");
-  const enterpriseRows = useMemo(
-    () => getEnterpriseReportRows(selectedReportEnterprises, filteredByPeriod, nonPeriodReports, query),
-    [filteredByPeriod, nonPeriodReports, query, selectedReportEnterprises],
-  );
-  const missingReports = enterpriseRows.filter((row) => row.status === "Missing");
-  const allReady =
-    selectedReportEnterprises.length > 0 &&
-    selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Ready to Consolidate");
-  const allConsolidated =
-    selectedReportEnterprises.length > 0 && selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Consolidated");
-  const selectedEnterprise = selectedEnterpriseId ? (reportEnterprises.find((enterprise) => enterprise.id === selectedEnterpriseId) ?? null) : null;
-  const selectedReport = selectedReportId ? (reports.find((report) => report.id === selectedReportId) ?? null) : null;
+  const filteredRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((row) => [row.enterpriseLabel, row.siteLabel, row.obligation.enterpriseId, row.obligation.siteId, row.obligation.frozenBarangay ?? "", row.obligation.obligationId].some((value) => value.toLowerCase().includes(needle)));
+  }, [query, rows]);
 
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ report, status, remarks }: { report: IntakeReport; status: Extract<ReportStatus, "Ready to Consolidate" | "Returned">; remarks: string }) =>
-      updateIntakeReportStatus(report.id, { status, remarks }),
-    onSuccess: (updatedReport) => {
-      queryClient.setQueryData<IntakeReport[]>(scopedQueryKeys.reports, (current) => current?.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
-      void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
-      setSelectedReportId(null);
-      toast.success(`${updatedReport.code} updated to ${updatedReport.status}.`);
+  const acceptedReports = useMemo(() => periodReports.filter((report) => report.workflowState === "accepted" && report.acceptedRevisionId !== null), [periodReports]);
+  const selectedReports = useMemo(() => {
+    const selectedIds = manualSelectedReportIds;
+    return acceptedReports.filter((report) => reportMatchesScope(report, { type: scopeType, barangay: scopeType === "barangay" ? barangay || null : null }, selectedIds));
+  }, [acceptedReports, barangay, manualSelectedReportIds, scopeType]);
+  const selectedReportIds = useMemo(() => new Set(selectedReports.map((report) => report.enterpriseReportId)), [selectedReports]);
+  const targetedScopeObligations = rows.filter((row) => scopeType !== "barangay" || row.obligation.frozenBarangay === barangay);
+  const targetedEligibleObligations = targetedScopeObligations.filter((row) => row.obligation.eligibilityStatus === "eligible");
+  const completeScope =
+    scopeType === "enterprise_selection" ||
+    (targetedEligibleObligations.length > 0 &&
+      !targetedScopeObligations.some((row) => row.obligation.eligibilityStatus === "unknown") &&
+      targetedEligibleObligations.every((row) => row.obligation.complianceStatus === "accepted"));
+  const canFinalize = Boolean(selectedPeriod && selectedReports.length > 0 && completeScope && !reportsQuery.isLoading && !complianceQuery.isLoading);
+  const isComplianceMissing = isNotFound(complianceQuery.error);
+
+  const lifecycleMutation = useMutation({
+    mutationFn: runReportingPeriodLifecycle,
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: reportWorkflowQueryKey });
+      toast.success(`Server lifecycle evaluated ${result.ensuredPeriodCount} periods: ${result.createdCount} created, ${result.transitionedCount} transitioned, ${result.frozenCount} frozen.`);
     },
-    onError: (error) => {
-      toast.error(apiErrorMessage(error, "Report status could not be updated. Refresh the report list and try again."));
-    },
+    onError: (error) => toast.error(apiErrorMessage(error, "The server reporting-period lifecycle could not be reconciled.")),
   });
 
-  const consolidateMutation = useMutation({
+  const reminderMutation = useMutation({
     mutationFn: async () => {
-      if (!allReady || readyReports.length === 0) throw new Error("No ready reports available for consolidation.");
-      const preparedBy = authUser?.displayName?.trim();
-      if (!preparedBy) throw new Error("An authenticated preparer identity is required before generating a final report.");
-      return createFinalReport({
-        reportIds: readyReports.map((report) => report.id),
-        preparedBy,
-      });
+      if (!selectedPeriod) throw new Error("Select a server-returned reporting period first.");
+      return createReminderIntents(selectedPeriod.reportingPeriodId, crypto.randomUUID());
     },
-    onSuccess: (finalReport) => {
-      void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
-      void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
-      setIsGenerateConfirmOpen(false);
-      toast.success(`${finalReport.id} generated for Final Reports Audit.`);
-    },
-    onError: (error) => {
-      toast.error(apiErrorMessage(error, "Final report could not be generated."));
-    },
+    onSuccess: (acknowledgement) => toast.success(`${acknowledgement.createdCount} reminder intent${acknowledgement.createdCount === 1 ? "" : "s"} created; ${acknowledgement.existingCount} already existed.`),
+    onError: (error) => toast.error(apiErrorMessage(error, "Reminder intents could not be created.")),
   });
 
-  const handleGenerate = () => {
-    if (!allReady || consolidateMutation.isPending) return;
-    setIsGenerateConfirmOpen(true);
+  const finalizationMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPeriod || !canFinalize) throw new Error("The selected scope is not ready for exact finalization.");
+      const commandId = crypto.randomUUID();
+      const revisionIds = acceptedRevisionIds(selectedReports);
+      const command: FinalizeReportsCommand = {
+        contractVersion: 2,
+        commandId,
+        idempotencyKey: `final-report:${safeIdempotencySegment(selectedPeriod.naturalKey)}:${commandId}`,
+        occurredAt: new Date().toISOString(),
+        expectedVersion: 0,
+        payload: {
+          targetFinalizationId: null,
+          reportingPeriodId: selectedPeriod.reportingPeriodId,
+          scope: { type: scopeType, barangay: scopeType === "barangay" ? barangay : null },
+          reportRevisionIds: revisionIds,
+          reason: null,
+        },
+      };
+      return finalizeReports(command);
+    },
+    onSuccess: async (acknowledgement) => {
+      await queryClient.invalidateQueries({ queryKey: reportWorkflowQueryKey });
+      setIsFinalizeConfirmOpen(false);
+      setManualSelectedReportIds(new Set());
+      toast.success(`${acknowledgement.resource.reportCode} finalized as immutable version ${acknowledgement.resource.versionNumber}.`);
+    },
+    onError: (error) => toast.error(apiErrorMessage(error, "The exact report scope could not be finalized.")),
+  });
+
+  const changeScope = (next: FinalReportScopeType) => {
+    setScopeType(next);
+    setManualSelectedReportIds(new Set());
+    if (next !== "barangay") setBarangay("");
   };
 
-  const confirmGenerate = () => {
-    if (!allReady || consolidateMutation.isPending) return;
-    consolidateMutation.mutate();
-  };
-
-  const handleAccept = (report: IntakeReport, remarks: string) => {
-    if (report.status !== "Pending Review") {
-      toast.error("Only reports pending review can be accepted.");
-      return;
-    }
-    updateStatusMutation.mutate({
-      report,
-      status: "Ready to Consolidate",
-      remarks: remarks.trim() || "Accepted for consolidation.",
+  const toggleReport = (reportId: string) => {
+    if (scopeType !== "enterprise_selection") return;
+    setManualSelectedReportIds((current) => {
+      const next = new Set(current);
+      if (next.has(reportId)) next.delete(reportId);
+      else next.add(reportId);
+      return next;
     });
   };
 
-  const handleReturn = (report: IntakeReport, remarks: string) => {
-    if (report.status !== "Pending Review") {
-      toast.error("Only reports pending review can be returned.");
-      return;
-    }
-    updateStatusMutation.mutate({
-      report,
-      status: "Returned",
-      remarks: remarks.trim() || "Returned for revision after staff review.",
-    });
-  };
-
-  const isLoadingRows = reportEnterprisesQuery.isLoading || reportsQuery.isLoading;
-  const loadError = reportEnterprisesQuery.isError || reportsQuery.isError;
+  const loadError = reportsQuery.isError || periodsQuery.isError;
 
   return (
     <PageMotion>
-      <PageHeader title="Batch Reports" description="Enterprise-level compliance review before DOT report consolidation." />
+      <PageHeader title="Batch Reports" description="Review official evidence, period obligations, and exact accepted revisions before immutable finalization." />
 
-      {loadError && <p className="mb-4 text-sm font-semibold text-red-600">Report intake data could not be loaded from the backend. Refresh or check the API connection.</p>}
+      {loadError && <Notice tone="error">Official v2 report resources could not be loaded. TANAW will not use legacy lists as a fallback.</Notice>}
+      {periods.length === 0 && !periodsQuery.isLoading && (
+        <Notice tone="warning">No official reporting period was returned by the Staff discovery endpoint. TANAW will not invent one from the browser clock. Run the server lifecycle to ensure its configured period horizon.</Notice>
+      )}
+      {selectedPeriod && isComplianceMissing && (
+        <Notice tone="warning">This official period does not yet have a readable frozen compliance snapshot. Missing submissions are blocked rather than inferred from report absence. The server lifecycle determines when the obligation snapshot is due.</Notice>
+      )}
+      {selectedPeriod && complianceQuery.isError && !isComplianceMissing && <Notice tone="error">The authoritative compliance snapshot could not be read. Missing counts and finalization completeness are blocked.</Notice>}
 
-      <BatchReportsMetrics
-        reportEnterprises={selectedReportEnterprises}
-        readyReports={readyReports}
-        missingReports={missingReports}
-        archivedReports={nonPeriodReports}
-        isLoadingRegistry={isLoadingRows}
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+        <div><strong>Server-owned period lifecycle</strong><p className="mt-0.5 text-xs text-slate-500">The backend evaluates its own clock, creates the configured horizon, advances status, and freezes due obligations. The browser sends no date, label, or period ID.</p></div>
+        <button type="button" disabled={lifecycleMutation.isPending} onClick={() => lifecycleMutation.mutate()} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800 disabled:opacity-50">{lifecycleMutation.isPending ? "Running server lifecycle…" : "Run server period lifecycle"}</button>
+      </div>
+
+      <BatchReportsMetrics compliance={compliance} loadedReportCount={periodReports.length} />
 
       <Panel className="mt-6 overflow-hidden">
         <BatchReportsToolbar
           query={query}
-          barangayFilter={barangayFilter}
-          monthFilter={monthFilter}
-          yearFilter={yearFilter}
+          periods={periods}
+          selectedPeriodId={selectedPeriodId}
+          scopeType={scopeType}
+          barangay={barangay}
           availableBarangays={availableBarangays}
-          availableMonths={availableMonths}
-          availableYears={availableYears}
-          allReady={allReady && !consolidateMutation.isPending}
+          selectedCount={selectedReports.length}
+          canFinalize={canFinalize && !finalizationMutation.isPending}
           onQueryChange={setQuery}
-          onBarangayChange={setBarangayFilter}
-          onMonthChange={setMonthFilter}
-          onYearChange={setYearFilter}
-          onGenerate={handleGenerate}
+          onPeriodChange={(value) => { setRequestedPeriodId(value); setManualSelectedReportIds(new Set()); setBarangay(""); }}
+          onScopeChange={changeScope}
+          onBarangayChange={(value) => { setBarangay(value); setManualSelectedReportIds(new Set()); }}
+          onGenerate={() => setIsFinalizeConfirmOpen(true)}
         />
-        <BatchReportsStatusNotice
-          allConsolidated={allConsolidated}
-          allReady={allReady}
-          filteredReportCount={filteredByPeriod.length}
-          readyReportCount={readyReports.length}
-          enterpriseCount={selectedReportEnterprises.length}
-        />
-        <BatchReportsTable rows={enterpriseRows} isLoading={isLoadingRows} onSelectEnterprise={(enterprise) => setSelectedEnterpriseId(enterprise.id)} />
+        <BatchReportsStatusNotice compliance={compliance} />
+        {compliance && compliance.summary.notSubmitted > 0 && (
+          <div className="flex justify-end border-b border-slate-200 bg-white px-5 py-3"><button type="button" disabled={reminderMutation.isPending} onClick={() => reminderMutation.mutate()} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 disabled:opacity-50">{reminderMutation.isPending ? "Creating reminder intents…" : "Create idempotent reminder intents"}</button></div>
+        )}
+        <BatchReportsTable rows={filteredRows} isLoading={complianceQuery.isLoading} selectedReportIds={selectedReportIds} selectionLocked={scopeType !== "enterprise_selection"} onToggleReport={toggleReport} onOpenReport={setSelectedReportId} />
       </Panel>
 
       <AnimatePresence>
-        {selectedEnterprise && (
-          <EnterpriseReportsModal
-            enterprise={selectedEnterprise}
-            reports={reports.filter((report) => report.enterpriseId === selectedEnterprise.id)}
-            onClose={() => setSelectedEnterpriseId(null)}
-            onOpenReport={(report) => setSelectedReportId(report.id)}
-          />
-        )}
-        {selectedReport && (
-          <ReportReviewModal report={selectedReport} isUpdating={updateStatusMutation.isPending} onClose={() => setSelectedReportId(null)} onAccept={handleAccept} onReturn={handleReturn} />
-        )}
-        {isGenerateConfirmOpen && (
+        {selectedReportId && <ReportReviewModal enterpriseReportId={selectedReportId} onClose={() => setSelectedReportId(null)} />}
+        {isFinalizeConfirmOpen && selectedPeriod && (
           <ReportActionConfirmDialog
-            title="Generate Final Report?"
-            eyebrow="Final batch report"
-            message="This will consolidate the accepted enterprise reports for the selected period and create a final report draft for audit. Source reports included in the batch will move forward in the workflow."
+            title="Create immutable final report?"
+            eyebrow="Exact revision finalization"
+            message="This command claims only the listed accepted revision IDs and freezes the selected explicit scope into a new immutable final-report version."
             tone="emerald"
-            confirmLabel="Generate Final Report"
-            pendingLabel="Generating..."
-            isPending={consolidateMutation.isPending}
-            isConfirmDisabled={!allReady || readyReports.length === 0}
-            onCancel={() => setIsGenerateConfirmOpen(false)}
-            onConfirm={confirmGenerate}
-            details={[
-              { label: "Period", value: `${monthFilter} ${yearFilter}` },
-              { label: "Scope", value: barangayFilter === ALL_BARANGAYS_FILTER ? "All barangays" : barangayFilter },
-              { label: "Reports", value: `${readyReports.length} ready submissions` },
-              { label: "Enterprises", value: `${selectedReportEnterprises.length} covered enterprises` },
-            ]}
+            confirmLabel="Finalize exact scope"
+            pendingLabel="Finalizing…"
+            isPending={finalizationMutation.isPending}
+            isConfirmDisabled={!canFinalize}
+            onCancel={() => setIsFinalizeConfirmOpen(false)}
+            onConfirm={() => finalizationMutation.mutate()}
+            details={[{ label: "Period", value: `${selectedPeriod.label} · ${selectedPeriod.naturalKey}` }, { label: "Scope", value: scopeType === "barangay" ? `Barangay · ${barangay}` : scopeType.replaceAll("_", " ") }, { label: "Exact revisions", value: acceptedRevisionIds(selectedReports).join(", ") }, { label: "Completeness", value: completeScope ? "Authoritative scope ready" : "Blocked by obligation status" }]}
           />
         )}
       </AnimatePresence>
@@ -218,10 +189,24 @@ export function StaffBatchReportsPage() {
   );
 }
 
+function Notice({ tone, children }: { tone: "error" | "warning"; children: React.ReactNode }) {
+  const classes = tone === "error" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-900";
+  return <p className={`mb-4 rounded-xl border px-4 py-3 text-sm ${classes}`}>{children}</p>;
+}
+
+function safeIdempotencySegment(value: string) {
+  return value.replace(/[^A-Za-z0-9._-]/g, "-");
+}
+
+function isNotFound(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
 function apiErrorMessage(error: unknown, fallback: string) {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data && typeof error.response.data === "object" ? (error.response.data as { detail?: unknown }).detail : null;
     if (typeof detail === "string" && detail.trim()) return detail;
+    if (detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string") return detail.message;
   }
   return error instanceof Error && error.message ? error.message : fallback;
 }
