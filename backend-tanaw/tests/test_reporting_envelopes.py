@@ -73,6 +73,17 @@ def test_report_command_rejects_mismatched_source_watermark() -> None:
         ReportSubmissionCommand.model_validate(payload)
 
 
+def test_report_command_rejects_an_empty_source_batch() -> None:
+    payload = _command()
+    payload["payload"]["sourceBatches"][0].update(
+        eventCount=0,
+        eventSequenceEndExclusive=1000,
+    )
+
+    with pytest.raises(ValidationError, match="greater than 0"):
+        ReportSubmissionCommand.model_validate(payload)
+
+
 def test_unknown_metric_must_not_carry_a_value() -> None:
     payload = _command()
     payload["payload"]["metrics"][0]["quality"] = "unknown"

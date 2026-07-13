@@ -39,7 +39,7 @@ class SourceWindow(ContractModel):
 class ReportSourceBatchCommand(ContractModel):
     batchId: UUID
     cameraId: UUID
-    eventCount: int = Field(ge=0)
+    eventCount: int = Field(gt=0)
     eventSequenceStart: int = Field(ge=0)
     eventSequenceEndExclusive: int = Field(ge=0)
     aggregateHash: str
