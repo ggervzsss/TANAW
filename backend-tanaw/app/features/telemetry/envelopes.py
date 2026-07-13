@@ -352,6 +352,59 @@ class SiteLiveStatePage(ContractModel):
     nextCursor: UUID | None
 
 
+class SiteCameraResource(ContractModel):
+    cameraId: UUID
+    cameraKey: str
+    displayName: str
+    lifecycleState: Literal["active"]
+
+
+class SiteDeviceResource(ContractModel):
+    deviceId: UUID
+    deviceKey: str
+    displayName: str
+    lifecycleState: Literal["active"]
+    contractVersion: int | None
+    pairedAt: datetime | None
+    lastAuthenticatedAt: datetime | None
+    cameras: list[SiteCameraResource]
+
+
+class EnterpriseSiteResource(ContractModel):
+    siteId: UUID
+    enterpriseId: UUID
+    enterpriseCode: str
+    enterpriseName: str
+    enterpriseCategory: str | None
+    enterpriseLifecycleState: Literal["active", "inactive"]
+    classification: Literal["official", "simulation"]
+    siteCode: str
+    siteName: str
+    barangay: str | None
+    address: str | None
+    geocodedAddress: str | None
+    latitude: float | None
+    longitude: float | None
+    buildingCapacity: int
+    timezone: Literal["Asia/Manila"]
+    locationVersion: int = Field(ge=1)
+    coordinatesUpdatedAt: datetime | None
+    topologyStatus: Literal["ready", "unlinked", "ambiguous"]
+    devices: list[SiteDeviceResource]
+    liveState: SiteLiveStateResponse | None
+
+
+class EnterpriseSitePage(ContractModel):
+    items: list[EnterpriseSiteResource]
+    nextCursor: UUID | None
+    evaluatedAt: datetime
+
+    @model_validator(mode="after")
+    def validate_evaluated_at(self) -> EnterpriseSitePage:
+        _require_aware(self.evaluatedAt, "evaluatedAt")
+        return self
+
+
 def canonical_payload_json(payload: BaseModel | dict[str, object]) -> str:
     raw_value = payload.model_dump(mode="python") if isinstance(payload, BaseModel) else payload
     return json.dumps(

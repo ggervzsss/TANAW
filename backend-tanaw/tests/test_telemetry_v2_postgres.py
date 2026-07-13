@@ -25,6 +25,7 @@ from app.features.telemetry.service import (
     ingest_telemetry_command,
     list_enterprise_live_sites,
     list_official_live_sites,
+    list_official_sites,
     register_epoch_command,
 )
 from app.features.topology.models import (
@@ -432,6 +433,94 @@ async def test_official_and_simulation_reads_are_isolated_and_expired_values_are
     assert stale_page.items[0].metricQuality == "unknown"
     assert offline_page.items[0].freshnessState == "offline"
     assert offline_page.items[0].serviceState == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_site_registry_keeps_unlinked_sites_and_nests_freshness_safe_live_state(
+    telemetry_session: AsyncSession,
+) -> None:
+    scope = await _seed_scope(telemetry_session, classification="official")
+    unlinked_site_id = str(uuid4())
+    telemetry_session.add(
+        EnterpriseSite(
+            id=unlinked_site_id,
+            enterprise_id=scope["enterprise"],
+            classification="official",
+            site_code=f"UNLINKED-{uuid4().hex}",
+            name="Unlinked Site",
+            barangay="Test Barangay",
+            address="No device yet",
+            timezone_name="Asia/Manila",
+            building_capacity=50,
+            latitude=14.6,
+            longitude=120.99,
+            location_version=1,
+            effective_from=BASE_TIME - timedelta(days=1),
+        )
+    )
+    await telemetry_session.flush()
+
+    before = await list_official_sites(
+        telemetry_session,
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME,
+    )
+    linked_before = next(item for item in before.items if str(item.siteId) == scope["site"])
+    unlinked = next(item for item in before.items if str(item.siteId) == unlinked_site_id)
+    assert linked_before.topologyStatus == "ready"
+    assert len(linked_before.devices) == 1
+    assert [str(camera.cameraId) for camera in linked_before.devices[0].cameras] == [
+        scope["camera"]
+    ]
+    assert linked_before.liveState is None
+    assert unlinked.topologyStatus == "unlinked"
+    assert unlinked.devices == []
+    assert unlinked.liveState is None
+
+    epoch = await register_epoch_command(
+        telemetry_session,
+        account=scope["account"],
+        command=EpochStartCommand.model_validate(_epoch_command(scope["device"], 0)),
+        acknowledged_at=BASE_TIME - timedelta(seconds=5),
+    )
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(
+            _telemetry_command(
+                scope,
+                counter_epoch=str(epoch.resource.counterEpoch),
+                generation=epoch.resource.epochGeneration,
+                sequence=1,
+                site_entries=8,
+            )
+        ),
+        acknowledged_at=BASE_TIME + timedelta(seconds=1),
+    )
+
+    fresh = await list_official_sites(
+        telemetry_session,
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME + timedelta(seconds=2),
+    )
+    fresh_linked = next(item for item in fresh.items if str(item.siteId) == scope["site"])
+    assert fresh_linked.liveState is not None
+    assert fresh_linked.liveState.freshnessState == "fresh"
+    assert fresh_linked.liveState.entriesWindow == 8
+
+    offline = await list_official_sites(
+        telemetry_session,
+        limit=10,
+        after_site_id=None,
+        evaluated_at=BASE_TIME + timedelta(minutes=6),
+    )
+    offline_linked = next(item for item in offline.items if str(item.siteId) == scope["site"])
+    assert offline_linked.liveState is not None
+    assert offline_linked.liveState.freshnessState == "offline"
+    assert offline_linked.liveState.entriesWindow is None
+    assert offline_linked.liveState.syncHealth.pendingCount is None
 
 
 async def _seed_scope(db: AsyncSession, *, classification: str) -> Scope:

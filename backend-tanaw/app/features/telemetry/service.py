@@ -17,6 +17,8 @@ from app.features.telemetry.contracts import (
 )
 from app.features.telemetry.envelopes import (
     CoverageResponse,
+    EnterpriseSitePage,
+    EnterpriseSiteResource,
     EpochAcknowledgementResource,
     EpochStartAcknowledgement,
     EpochStartCommand,
@@ -40,6 +42,7 @@ from app.features.telemetry.models import (
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
+    Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
 )
@@ -415,6 +418,42 @@ async def get_official_live_site(
             "No official sequenced live state exists for this site.",
         )
     return page.items[0]
+
+
+async def list_official_sites(
+    db: AsyncSession,
+    *,
+    limit: int,
+    after_site_id: UUID | None,
+    evaluated_at: datetime | None = None,
+) -> EnterpriseSitePage:
+    return await _list_sites(
+        db,
+        classification="official",
+        enterprise_id=None,
+        limit=limit,
+        after_site_id=after_site_id,
+        evaluated_at=evaluated_at,
+    )
+
+
+async def list_enterprise_sites(
+    db: AsyncSession,
+    *,
+    account: Account,
+    limit: int,
+    after_site_id: UUID | None,
+    evaluated_at: datetime | None = None,
+) -> EnterpriseSitePage:
+    membership = await _active_membership(db, account.id)
+    return await _list_sites(
+        db,
+        classification=membership.classification,
+        enterprise_id=membership.enterprise_id,
+        limit=limit,
+        after_site_id=after_site_id,
+        evaluated_at=evaluated_at,
+    )
 
 
 async def _active_membership(db: AsyncSession, account_id: str) -> EnterpriseMembership:
@@ -823,6 +862,168 @@ async def _list_live_sites(
     return SiteLiveStatePage(items=items, nextCursor=next_cursor)
 
 
+async def _list_sites(
+    db: AsyncSession,
+    *,
+    classification: str,
+    enterprise_id: str | None,
+    limit: int,
+    after_site_id: UUID | None,
+    evaluated_at: datetime | None,
+) -> EnterpriseSitePage:
+    evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
+    statement = (
+        select(
+            EnterpriseSite,
+            Enterprise,
+            SiteLiveState,
+            DeviceTelemetryEpoch.counter_epoch,
+        )
+        .join(Enterprise, Enterprise.id == EnterpriseSite.enterprise_id)
+        .outerjoin(SiteLiveState, SiteLiveState.site_id == EnterpriseSite.id)
+        .outerjoin(
+            DeviceTelemetryEpoch,
+            DeviceTelemetryEpoch.id == SiteLiveState.telemetry_epoch_id,
+        )
+        .where(
+            EnterpriseSite.classification == classification,
+            Enterprise.classification == classification,
+            Enterprise.lifecycle_state.in_(("active", "inactive")),
+            EnterpriseSite.effective_to.is_(None),
+        )
+        .order_by(EnterpriseSite.id)
+        .limit(limit + 1)
+    )
+    if enterprise_id is not None:
+        statement = statement.where(EnterpriseSite.enterprise_id == enterprise_id)
+    if after_site_id is not None:
+        statement = statement.where(EnterpriseSite.id > str(after_site_id))
+
+    rows = (await db.execute(statement)).all()
+    has_more = len(rows) > limit
+    selected = rows[:limit]
+    site_ids = [site.id for site, _enterprise, _state, _epoch in selected]
+    devices_by_site: dict[str, list[EdgeDevice]] = {site_id: [] for site_id in site_ids}
+    cameras_by_device: dict[str, list[Camera]] = {}
+    if site_ids:
+        devices = list(
+            await db.scalars(
+                select(EdgeDevice)
+                .where(
+                    EdgeDevice.site_id.in_(site_ids),
+                    EdgeDevice.classification == classification,
+                    EdgeDevice.lifecycle_state == "active",
+                )
+                .order_by(EdgeDevice.site_id, EdgeDevice.id)
+            )
+        )
+        for device in devices:
+            devices_by_site[device.site_id].append(device)
+            cameras_by_device[device.id] = []
+        device_ids = [device.id for device in devices]
+        if device_ids:
+            cameras = list(
+                await db.scalars(
+                    select(Camera)
+                    .where(
+                        Camera.edge_device_id.in_(device_ids),
+                        Camera.classification == classification,
+                        Camera.lifecycle_state == "active",
+                    )
+                    .order_by(Camera.edge_device_id, Camera.id)
+                )
+            )
+            for camera in cameras:
+                cameras_by_device[camera.edge_device_id].append(camera)
+
+    items = [
+        _site_resource(
+            site=site,
+            enterprise=enterprise,
+            state=state,
+            counter_epoch=counter_epoch,
+            devices=devices_by_site[site.id],
+            cameras_by_device=cameras_by_device,
+            evaluated_at=evaluated_at,
+        )
+        for site, enterprise, state, counter_epoch in selected
+    ]
+    next_cursor = UUID(selected[-1][0].id) if has_more and selected else None
+    return EnterpriseSitePage(
+        items=items,
+        nextCursor=next_cursor,
+        evaluatedAt=evaluated_at,
+    )
+
+
+def _site_resource(
+    *,
+    site: EnterpriseSite,
+    enterprise: Enterprise,
+    state: SiteLiveState | None,
+    counter_epoch: str | None,
+    devices: list[EdgeDevice],
+    cameras_by_device: dict[str, list[Camera]],
+    evaluated_at: datetime,
+) -> EnterpriseSiteResource:
+    if len(devices) == 1:
+        topology_status = "ready"
+    elif devices:
+        topology_status = "ambiguous"
+    else:
+        topology_status = "unlinked"
+    live_state = (
+        _live_response(state, site, counter_epoch, evaluated_at)
+        if state is not None and counter_epoch is not None
+        else None
+    )
+    return EnterpriseSiteResource.model_validate(
+        {
+            "siteId": site.id,
+            "enterpriseId": enterprise.id,
+            "enterpriseCode": enterprise.official_code,
+            "enterpriseName": enterprise.name,
+            "enterpriseCategory": enterprise.category,
+            "enterpriseLifecycleState": enterprise.lifecycle_state,
+            "classification": site.classification,
+            "siteCode": site.site_code,
+            "siteName": site.name,
+            "barangay": site.barangay,
+            "address": site.address,
+            "geocodedAddress": site.geocoded_address,
+            "latitude": site.latitude,
+            "longitude": site.longitude,
+            "buildingCapacity": site.building_capacity,
+            "timezone": site.timezone_name,
+            "locationVersion": site.location_version,
+            "coordinatesUpdatedAt": site.coordinates_updated_at,
+            "topologyStatus": topology_status,
+            "devices": [
+                {
+                    "deviceId": device.id,
+                    "deviceKey": device.device_key,
+                    "displayName": device.display_name,
+                    "lifecycleState": device.lifecycle_state,
+                    "contractVersion": device.contract_version,
+                    "pairedAt": device.paired_at,
+                    "lastAuthenticatedAt": device.last_authenticated_at,
+                    "cameras": [
+                        {
+                            "cameraId": camera.id,
+                            "cameraKey": camera.camera_key,
+                            "displayName": camera.display_name,
+                            "lifecycleState": camera.lifecycle_state,
+                        }
+                        for camera in cameras_by_device[device.id]
+                    ],
+                }
+                for device in devices
+            ],
+            "liveState": live_state,
+        }
+    )
+
+
 def _live_response(
     state: SiteLiveState,
     site: EnterpriseSite,
@@ -888,8 +1089,8 @@ def _live_response(
             else ("unavailable" if freshness == "offline" else "unknown"),
         ),
         syncHealth=SyncHealthResponse(
-            pendingCount=state.pending_count,
-            oldestPendingAt=_optional_utc(state.oldest_pending_at),
+            pendingCount=state.pending_count if is_fresh else None,
+            oldestPendingAt=(_optional_utc(state.oldest_pending_at) if is_fresh else None),
             lastAcknowledgedAt=_optional_utc(state.last_acknowledged_at),
             lastFailureAt=_optional_utc(state.last_failure_at),
             lastFailureClass=state.last_failure_class,
