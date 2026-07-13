@@ -52,8 +52,11 @@ class DeliveryResult:
 class DomainEventDestinationHandler(Protocol):
     """A destination that must be idempotent for the supplied event key."""
 
-    destination: str
-    consumer_name: str
+    @property
+    def destination(self) -> str: ...
+
+    @property
+    def consumer_name(self) -> str: ...
 
     async def deliver(
         self,

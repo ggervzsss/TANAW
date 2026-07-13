@@ -129,6 +129,11 @@ def to_user_notification_summary(notification: UserNotification) -> UserNotifica
         severity=notification.severity,  # type: ignore[arg-type]
         sourceType=notification.source_type,
         sourceId=notification.source_id,
+        targetPath=(
+            notification.source_id
+            if notification.source_id and notification.source_id.startswith("/")
+            else None
+        ),
         createdBy=notification.created_by_name,
         recipientRole=notification.recipient_role,
         recipientEnterpriseId=notification.recipient_enterprise_id,
@@ -566,6 +571,8 @@ async def list_operational_alerts(db: AsyncSession) -> list[OperationalAlertSumm
 
 def can_view_operational_event(role: str, event_type: str) -> bool:
     notification_events = {"notification.created", "notification.updated"}
+    if event_type == "resource.invalidated":
+        return role in {item.value for item in AccountRole}
     if role == AccountRole.ADMIN.value:
         return True
     if role == AccountRole.IT.value:

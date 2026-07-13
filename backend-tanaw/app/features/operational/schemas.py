@@ -431,6 +431,7 @@ class UserNotificationSummary(BaseModel):
     severity: NotificationSeverity
     sourceType: str | None = None
     sourceId: str | None = None
+    targetPath: str | None = None
     createdBy: str | None = None
     recipientRole: str
     recipientEnterpriseId: str | None = None
@@ -603,5 +604,6 @@ class OperationalWebSocketEnvelope(BaseModel):
         "alert.resolved",
         "notification.created",
         "notification.updated",
+        "resource.invalidated",
     ]
     data: dict

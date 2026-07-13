@@ -3,12 +3,13 @@ import base64
 import binascii
 import json
 from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -103,6 +104,7 @@ from app.features.operational.service import (
     list_final_reports as list_final_report_records,
 )
 from app.features.operational.websocket import operational_ws_manager
+from app.features.topology.models import Enterprise, EnterpriseMembership
 
 router = APIRouter(prefix="/operational", tags=["operational"])
 WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
@@ -1061,8 +1063,16 @@ async def operational_websocket(
 
     async with AsyncSessionLocal() as db:
         account = await authenticate_websocket_account(db, token)
+        topology_membership = (
+            await get_active_websocket_enterprise_membership(db, account.id)
+            if account is not None and account.role == AccountRole.ENTERPRISE
+            else None
+        )
 
     if account is None:
+        await websocket.close(code=1008)
+        return
+    if account.role == AccountRole.ENTERPRISE and topology_membership is None:
         await websocket.close(code=1008)
         return
 
@@ -1071,6 +1081,12 @@ async def operational_websocket(
         account.role.value,
         account.id,
         enterprise_identifier(account) if account.role == AccountRole.ENTERPRISE else None,
+        topology_enterprise_id=(
+            topology_membership.enterprise_id if topology_membership is not None else None
+        ),
+        classification=(
+            topology_membership.classification if topology_membership is not None else None
+        ),
     )
     receive_task: asyncio.Task[str] | None = asyncio.create_task(websocket.receive_text())
     try:
@@ -1092,7 +1108,25 @@ async def operational_websocket(
                 receive_task = asyncio.create_task(websocket.receive_text())
             async with AsyncSessionLocal() as db:
                 current_account = await authenticate_websocket_account(db, token)
+                current_membership = (
+                    await get_active_websocket_enterprise_membership(db, current_account.id)
+                    if current_account is not None
+                    and current_account.role == AccountRole.ENTERPRISE
+                    else None
+                )
             if current_account is None:
+                await websocket.close(code=1008)
+                return
+            if current_account.id != account.id or current_account.role != account.role:
+                await websocket.close(code=1008)
+                return
+            if account.role == AccountRole.ENTERPRISE and (
+                topology_membership is None
+                or current_membership is None
+                or current_membership.id != topology_membership.id
+                or current_membership.enterprise_id != topology_membership.enterprise_id
+                or current_membership.classification != topology_membership.classification
+            ):
                 await websocket.close(code=1008)
                 return
             if message == "ping":
@@ -1126,6 +1160,30 @@ async def authenticate_websocket_account(db: AsyncSession, token: str) -> Accoun
     ):
         return None
     return account
+
+
+async def get_active_websocket_enterprise_membership(
+    db: AsyncSession,
+    account_id: str,
+) -> EnterpriseMembership | None:
+    observed_at = datetime.now(UTC)
+    memberships = list(
+        await db.scalars(
+            select(EnterpriseMembership)
+            .join(Enterprise, Enterprise.id == EnterpriseMembership.enterprise_id)
+            .where(
+                EnterpriseMembership.account_id == account_id,
+                EnterpriseMembership.started_at <= observed_at,
+                or_(
+                    EnterpriseMembership.ended_at.is_(None),
+                    EnterpriseMembership.ended_at > observed_at,
+                ),
+                Enterprise.classification == EnterpriseMembership.classification,
+                Enterprise.lifecycle_state == "active",
+            )
+        )
+    )
+    return memberships[0] if len(memberships) == 1 else None
 
 
 async def broadcast_summary(db: AsyncSession) -> None:

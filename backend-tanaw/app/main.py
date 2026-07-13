@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +11,11 @@ from app.core.http_security import apply_security_headers
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.seed import seed_default_accounts
+from app.features.events.runtime import (
+    domain_event_delivery_worker_ready,
+    start_domain_event_delivery_worker,
+    stop_domain_event_delivery_worker,
+)
 from app.features.mail.runtime import (
     close_email_runtime,
     email_runtime_ready,
@@ -29,6 +34,20 @@ from app.features.maintenance.runtime import (
 
 
 @asynccontextmanager
+async def _background_runtimes() -> AsyncIterator[None]:
+    async with AsyncExitStack() as runtimes:
+        runtimes.push_async_callback(close_email_runtime)
+        await initialize_email_runtime(settings)
+        runtimes.push_async_callback(stop_email_outbox_worker)
+        await start_email_outbox_worker(settings)
+        runtimes.push_async_callback(stop_retention_cleanup_worker)
+        await start_retention_cleanup_worker(settings)
+        runtimes.push_async_callback(stop_domain_event_delivery_worker)
+        await start_domain_event_delivery_worker(settings)
+        yield
+
+
+@asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with engine.connect() as connection:
         await validate_database_migration_head(connection)
@@ -36,15 +55,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with AsyncSessionLocal() as session:
         await seed_default_accounts(session)
 
-    await initialize_email_runtime(settings)
-    await start_email_outbox_worker(settings)
-    await start_retention_cleanup_worker(settings)
-    try:
+    async with _background_runtimes():
         yield
-    finally:
-        await stop_retention_cleanup_worker()
-        await stop_email_outbox_worker()
-        await close_email_runtime()
 
 
 settings = get_settings()
@@ -96,6 +108,16 @@ async def email_readiness() -> JSONResponse:
 @app.head("/ready/maintenance")
 async def maintenance_readiness() -> JSONResponse:
     ready = retention_cleanup_worker_ready()
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "ready" if ready else "not_ready"},
+    )
+
+
+@app.get("/ready/domain-events")
+@app.head("/ready/domain-events")
+async def domain_event_readiness() -> JSONResponse:
+    ready = domain_event_delivery_worker_ready()
     return JSONResponse(
         status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"status": "ready" if ready else "not_ready"},
