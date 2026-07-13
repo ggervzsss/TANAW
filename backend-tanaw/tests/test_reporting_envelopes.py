@@ -57,6 +57,14 @@ def test_report_command_rejects_fabricated_or_unbounded_extra_fields() -> None:
         ReportSubmissionCommand.model_validate(payload)
 
 
+def test_report_command_requires_an_optimistic_logical_version() -> None:
+    payload = _command()
+    del payload["expectedVersion"]
+
+    with pytest.raises(ValidationError, match="Field required"):
+        ReportSubmissionCommand.model_validate(payload)
+
+
 def test_report_command_rejects_mismatched_source_watermark() -> None:
     payload = _command()
     payload["payload"]["sourceBatches"][0]["eventCount"] = 9

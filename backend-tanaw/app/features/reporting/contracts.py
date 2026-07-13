@@ -32,7 +32,7 @@ class MetricQuality(StrEnum):
 
 
 class ReportWorkflowState(StrEnum):
-    PENDING_REVIEW = "pending_review"
+    SUBMITTED = "submitted"
     RETURNED = "returned"
     ACCEPTED = "accepted"
     CONSOLIDATED = "consolidated"

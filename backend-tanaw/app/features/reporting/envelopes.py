@@ -144,7 +144,7 @@ class ReportSubmissionCommand(ContractModel):
         pattern=r"^report:[A-Za-z0-9._-]+:[A-Za-z0-9._-]+$",
     )
     occurredAt: datetime
-    expectedVersion: int | None = Field(default=None, ge=0)
+    expectedVersion: int = Field(ge=0)
     payload: ReportSubmissionCommandPayload
 
     @model_validator(mode="after")
