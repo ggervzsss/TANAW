@@ -7,7 +7,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
+import { createOperationalQueryKeys, operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
 import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, EnterpriseReportsModal, ReportActionConfirmDialog, ReportReviewModal } from "../components";
@@ -24,14 +24,15 @@ export function StaffBatchReportsPage() {
   const reportsQuery = useOperationalReports();
   const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
   const reports = reportsQuery.data ?? EMPTY_REPORTS;
+  const scopedQueryKeys = createOperationalQueryKeys(authUser);
   const currentPeriod = getCurrentSubmissionPeriod();
   const defaultPeriod = getDefaultSubmissionPeriod(reports, currentPeriod);
   const [query, setQuery] = useState("");
   const [barangayFilter, setBarangayFilter] = useState(ALL_BARANGAYS_FILTER);
   const [monthFilter, setMonthFilter] = useState(defaultPeriod.month);
   const [yearFilter, setYearFilter] = useState(defaultPeriod.year);
-  const [selectedEnterprise, setSelectedEnterprise] = useState<ReportEnterprise | null>(null);
-  const [selectedReport, setSelectedReport] = useState<IntakeReport | null>(null);
+  const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
 
   const availableMonths = useMemo(() => getAvailableMonths(reports, currentPeriod), [currentPeriod, reports]);
@@ -65,14 +66,16 @@ export function StaffBatchReportsPage() {
     selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Ready to Consolidate");
   const allConsolidated =
     selectedReportEnterprises.length > 0 && selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Consolidated");
+  const selectedEnterprise = selectedEnterpriseId ? (reportEnterprises.find((enterprise) => enterprise.id === selectedEnterpriseId) ?? null) : null;
+  const selectedReport = selectedReportId ? (reports.find((report) => report.id === selectedReportId) ?? null) : null;
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ report, status, remarks }: { report: IntakeReport; status: Extract<ReportStatus, "Ready to Consolidate" | "Returned">; remarks: string }) =>
       updateIntakeReportStatus(report.id, { status, remarks }),
     onSuccess: (updatedReport) => {
-      queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current = []) => current.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
+      queryClient.setQueryData<IntakeReport[]>(scopedQueryKeys.reports, (current) => current?.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
-      setSelectedReport(null);
+      setSelectedReportId(null);
       toast.success(`${updatedReport.code} updated to ${updatedReport.status}.`);
     },
     onError: (error) => {
@@ -175,7 +178,7 @@ export function StaffBatchReportsPage() {
           readyReportCount={readyReports.length}
           enterpriseCount={selectedReportEnterprises.length}
         />
-        <BatchReportsTable rows={enterpriseRows} isLoading={isLoadingRows} onSelectEnterprise={setSelectedEnterprise} />
+        <BatchReportsTable rows={enterpriseRows} isLoading={isLoadingRows} onSelectEnterprise={(enterprise) => setSelectedEnterpriseId(enterprise.id)} />
       </Panel>
 
       <AnimatePresence>
@@ -183,12 +186,12 @@ export function StaffBatchReportsPage() {
           <EnterpriseReportsModal
             enterprise={selectedEnterprise}
             reports={reports.filter((report) => report.enterpriseId === selectedEnterprise.id)}
-            onClose={() => setSelectedEnterprise(null)}
-            onOpenReport={setSelectedReport}
+            onClose={() => setSelectedEnterpriseId(null)}
+            onOpenReport={(report) => setSelectedReportId(report.id)}
           />
         )}
         {selectedReport && (
-          <ReportReviewModal report={selectedReport} isUpdating={updateStatusMutation.isPending} onClose={() => setSelectedReport(null)} onAccept={handleAccept} onReturn={handleReturn} />
+          <ReportReviewModal report={selectedReport} isUpdating={updateStatusMutation.isPending} onClose={() => setSelectedReportId(null)} onAccept={handleAccept} onReturn={handleReturn} />
         )}
         {isGenerateConfirmOpen && (
           <ReportActionConfirmDialog

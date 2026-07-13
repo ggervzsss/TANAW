@@ -18,7 +18,7 @@ export function StaffFinalReportsAuditPage() {
   const [query, setQuery] = useState("");
   const [monthFilter, setMonthFilter] = useState("All");
   const [yearFilter, setYearFilter] = useState("All");
-  const [selectedReport, setSelectedReport] = useState<FinalReport | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   // Derive unique months and years from the live store data
   const availableMonths = useMemo(() => {
@@ -43,6 +43,7 @@ export function StaffFinalReportsAuditPage() {
       }),
     [finalReports, query, monthFilter, yearFilter],
   );
+  const selectedReport = selectedReportId ? (finalReports.find((report) => report.id === selectedReportId) ?? null) : null;
 
   return (
     <PageMotion>
@@ -92,7 +93,7 @@ export function StaffFinalReportsAuditPage() {
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredReports.map((report) => (
-                <tr key={report.id} onClick={() => setSelectedReport(report)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={report.id} onClick={() => setSelectedReportId(report.id)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
                   <td className="group-hover:text-tgreen-dark px-6 py-4 font-mono text-xs font-bold text-gray-600 transition-colors">{report.id}</td>
                   <td className="px-6 py-4 font-medium">
                     {recordedText(report.title, "Not provided")}
@@ -129,7 +130,7 @@ export function StaffFinalReportsAuditPage() {
         </div>
       </Panel>
 
-      <AnimatePresence>{selectedReport && <FinalReportViewer report={selectedReport} onClose={() => setSelectedReport(null)} />}</AnimatePresence>
+      <AnimatePresence>{selectedReport && <FinalReportViewer report={selectedReport} onClose={() => setSelectedReportId(null)} />}</AnimatePresence>
     </PageMotion>
   );
 }

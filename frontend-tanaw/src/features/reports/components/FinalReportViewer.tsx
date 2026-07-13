@@ -4,9 +4,10 @@ import toast from "react-hot-toast/headless";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useState } from "react";
+import { useAuthStore } from "@/app/store/authStore";
 import { ModalPortal } from "@/shared/components/ui";
 import { CITY_SEAL } from "@/shared/constants/branding";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
+import { createOperationalQueryKeys, operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
 import { DotFinalReportTable } from "./DotReportTable";
@@ -22,7 +23,9 @@ type FinalReportViewerProps = {
 type FinalReportConfirmAction = "archive" | "finalize" | "restore" | "return" | null;
 
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
+  const authUser = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  const scopedQueryKeys = createOperationalQueryKeys(authUser);
   const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
@@ -30,7 +33,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const statusMutation = useMutation({
     mutationFn: (status: FinalReportStatus) => updateFinalReportStatus(report.id, { status }),
     onSuccess: (updatedReport) => {
-      queryClient.setQueryData<FinalReport[]>(operationalFinalReportsQueryKey, (current = []) => current.map((item) => (item.id === updatedReport.id ? updatedReport : item)));
+      queryClient.setQueryData<FinalReport[]>(scopedQueryKeys.finalReports, (current) => current?.map((item) => (item.id === updatedReport.id ? updatedReport : item)));
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
     },
   });
@@ -41,7 +44,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
         remarks: returnRemarks.trim(),
       }),
     onSuccess: (updatedReport) => {
-      queryClient.setQueryData<FinalReport[]>(operationalFinalReportsQueryKey, (current = []) => current.map((item) => (item.id === updatedReport.id ? updatedReport : item)));
+      queryClient.setQueryData<FinalReport[]>(scopedQueryKeys.finalReports, (current) => current?.map((item) => (item.id === updatedReport.id ? updatedReport : item)));
       void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
       void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
       toast.success(`${report.id} returned for source report revision.`);
