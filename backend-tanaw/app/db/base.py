@@ -15,6 +15,12 @@ from app.features.auth.models import (
     PasswordResetChallenge,
     PasswordResetRateLimitBucket,
 )
+from app.features.events.models import (
+    DomainEvent,
+    DomainEventConsumerReceipt,
+    DomainEventDelivery,
+    DomainEventDeliveryAttempt,
+)
 from app.features.mail.models import (
     EmailDeliveryAttempt,
     EmailOutbox,
@@ -43,6 +49,14 @@ from app.features.reporting.models import (
     ReportRevision,
     ReportSourceBatch,
 )
+from app.features.telemetry.models import (
+    DeviceHealthSample,
+    DeviceTelemetryEpoch,
+    SiteLiveState,
+    TelemetryMetricFact,
+    TelemetryMigrationException,
+    TelemetryObservation,
+)
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
@@ -65,6 +79,12 @@ __all__ = [
     "Camera",
     "DeliveryStatus",
     "DevDelivery",
+    "DeviceHealthSample",
+    "DeviceTelemetryEpoch",
+    "DomainEvent",
+    "DomainEventConsumerReceipt",
+    "DomainEventDelivery",
+    "DomainEventDeliveryAttempt",
     "EdgeDevice",
     "Enterprise",
     "EnterpriseMembership",
@@ -92,8 +112,12 @@ __all__ = [
     "ReportSourceBatch",
     "ReportingObligation",
     "ReportingPeriod",
+    "SiteLiveState",
     "SupportTicket",
     "SystemConfiguration",
+    "TelemetryMigrationException",
+    "TelemetryMetricFact",
+    "TelemetryObservation",
     "TopologyClassification",
     "UserNotification",
 ]
