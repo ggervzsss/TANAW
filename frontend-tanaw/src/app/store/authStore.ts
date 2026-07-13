@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+import { resetAuthenticatedQueryCache } from "@/shared/lib/queryClient";
 import type { AuthUser, UserRole } from "@/shared/types/role.types";
 
 const AUTH_STORAGE_KEY = "tanaw-auth";
@@ -33,6 +34,10 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       setSession: (session, remember = isRememberEnabled()) => {
+        const current = get();
+        if (hasAuthBoundaryChanged(current, session)) {
+          resetAuthenticatedQueryCache();
+        }
         if (remember) {
           localStorage.setItem(REMEMBER_STORAGE_KEY, "true");
           sessionStorage.removeItem(AUTH_STORAGE_KEY);
@@ -42,8 +47,14 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ token: session.token, user: session.user });
       },
-      updateUser: (user) => set({ user }),
+      updateUser: (user) => {
+        if (hasAccountScopeChanged(get().user, user)) {
+          resetAuthenticatedQueryCache();
+        }
+        set({ user });
+      },
       logout: () => {
+        resetAuthenticatedQueryCache();
         localStorage.removeItem(REMEMBER_STORAGE_KEY);
         authStorage.removeItem(AUTH_STORAGE_KEY);
         set({ token: null, user: null });
@@ -60,3 +71,11 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+function hasAuthBoundaryChanged(current: Pick<AuthState, "token" | "user">, next: { token: string; user: AuthUser }) {
+  return current.token !== next.token || hasAccountScopeChanged(current.user, next.user);
+}
+
+function hasAccountScopeChanged(current: AuthUser | null, next: AuthUser) {
+  return current?.id !== next.id || current.role !== next.role || current.enterpriseId !== next.enterpriseId;
+}

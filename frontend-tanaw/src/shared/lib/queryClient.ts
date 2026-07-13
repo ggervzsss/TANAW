@@ -9,3 +9,15 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+/**
+ * Cancels in-flight authenticated reads and removes their cached results.
+ *
+ * TANAW still has protected queries outside a single key namespace, so an auth
+ * boundary must remove the complete query cache. Mutation state is deliberately
+ * retained so an in-progress login mutation can finish normally.
+ */
+export function resetAuthenticatedQueryCache(client: QueryClient = queryClient) {
+  void client.cancelQueries();
+  client.removeQueries();
+}

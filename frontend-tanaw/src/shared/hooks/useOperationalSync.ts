@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
@@ -14,44 +14,87 @@ import {
   type BackendNotification,
   type OperationalWebSocketEnvelope,
 } from "../services/operationalSync";
-import type { FinalReport, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
+import type { AuthUser, FinalReport, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
 
-export const operationalSummaryQueryKey = ["operational", "summary"];
-export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest"];
-export const operationalReportsQueryKey = ["operational", "reports", "intake"];
-export const operationalFinalReportsQueryKey = ["operational", "reports", "final"];
-export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"];
-export const operationalNotificationsQueryKey = ["operational", "notifications"];
-const operationalAlertsQueryKey = ["operational-alerts"];
+const RECONCILIATION_INTERVAL_MS = 30_000;
+
+export const operationalSummaryQueryKey = ["operational", "summary"] as const;
+export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest"] as const;
+export const operationalReportsQueryKey = ["operational", "reports", "intake"] as const;
+export const operationalFinalReportsQueryKey = ["operational", "reports", "final"] as const;
+export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"] as const;
+export const operationalNotificationsQueryKey = ["operational", "notifications"] as const;
+const operationalAlertsQueryKey = ["operational-alerts"] as const;
+
+type OperationalQueryKeys = {
+  summary: QueryKey;
+  telemetry: QueryKey;
+  reports: QueryKey;
+  finalReports: QueryKey;
+  mapEnterprises: QueryKey;
+  notifications: QueryKey;
+  alerts: QueryKey;
+};
+
+/** Builds protected keys without placing the bearer token in React Query state. */
+export function createOperationalQueryKeys(user: AuthUser | null): OperationalQueryKeys {
+  const scope = {
+    accountId: user?.id ?? "anonymous",
+    role: user?.role ?? "anonymous",
+    enterpriseId: user?.enterpriseId ?? null,
+  } as const;
+
+  return {
+    summary: [...operationalSummaryQueryKey, scope],
+    telemetry: [...operationalTelemetryQueryKey, scope],
+    reports: [...operationalReportsQueryKey, scope],
+    finalReports: [...operationalFinalReportsQueryKey, scope],
+    mapEnterprises: [...operationalMapEnterprisesQueryKey, scope],
+    notifications: [...operationalNotificationsQueryKey, scope],
+    alerts: [...operationalAlertsQueryKey, scope],
+  };
+}
 
 export function useOperationalSummary() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalSummaryQueryKey, queryFn: getOperationalSummary, enabled: Boolean(token) });
+  const user = useAuthStore((state) => state.user);
+  const keys = createOperationalQueryKeys(user);
+  return useQuery({ queryKey: keys.summary, queryFn: getOperationalSummary, enabled: Boolean(token && user) });
 }
 
 export function useOperationalTelemetry() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalTelemetryQueryKey, queryFn: listLatestTelemetry, enabled: Boolean(token) });
+  const user = useAuthStore((state) => state.user);
+  const keys = createOperationalQueryKeys(user);
+  return useQuery({ queryKey: keys.telemetry, queryFn: listLatestTelemetry, enabled: Boolean(token && user) });
 }
 
 export function useOperationalReports() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalReportsQueryKey, queryFn: listIntakeReports, enabled: Boolean(token) });
+  const user = useAuthStore((state) => state.user);
+  const keys = createOperationalQueryKeys(user);
+  return useQuery({ queryKey: keys.reports, queryFn: listIntakeReports, enabled: Boolean(token && user) });
 }
 
 export function useOperationalFinalReports() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalFinalReportsQueryKey, queryFn: listFinalReports, enabled: Boolean(token) });
+  const user = useAuthStore((state) => state.user);
+  const keys = createOperationalQueryKeys(user);
+  return useQuery({ queryKey: keys.finalReports, queryFn: listFinalReports, enabled: Boolean(token && user) });
 }
 
 export function useOperationalMapEnterprises() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalMapEnterprisesQueryKey, queryFn: listOperationalMapEnterprises, enabled: Boolean(token) });
+  const user = useAuthStore((state) => state.user);
+  const keys = createOperationalQueryKeys(user);
+  return useQuery({ queryKey: keys.mapEnterprises, queryFn: listOperationalMapEnterprises, enabled: Boolean(token && user) });
 }
 
 export function useOperationalNotifications() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalNotificationsQueryKey, queryFn: listUserNotifications, enabled: Boolean(token), refetchInterval: 30_000 });
+  const user = useAuthStore((state) => state.user);
+  const keys = createOperationalQueryKeys(user);
+  return useQuery({ queryKey: keys.notifications, queryFn: listUserNotifications, enabled: Boolean(token && user), refetchInterval: RECONCILIATION_INTERVAL_MS });
 }
 
 export function OperationalSyncBridge() {
@@ -61,16 +104,30 @@ export function OperationalSyncBridge() {
 
 function useOperationalSyncSocket() {
   const token = useAuthStore((state) => state.token);
+  const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  const accountScope = getAccountScope(user);
 
   useEffect(() => {
-    if (!token) return undefined;
+    if (!token || !user || !accountScope) return undefined;
 
+    const keys = createOperationalQueryKeys(user);
     let socket: WebSocket | null = null;
     let reconnectTimer: number | undefined;
     let heartbeatTimer: number | undefined;
     let reconnectAttempt = 0;
     let closedByEffect = false;
+
+    const isCurrentSession = () => {
+      const current = useAuthStore.getState();
+      return current.token === token && getAccountScope(current.user) === accountScope;
+    };
+
+    const reconcile = () => {
+      void queryClient.invalidateQueries({ queryKey: ["operational"], refetchType: "active" });
+      void queryClient.invalidateQueries({ queryKey: operationalAlertsQueryKey, refetchType: "active" });
+    };
+    const reconciliationTimer = window.setInterval(reconcile, RECONCILIATION_INTERVAL_MS);
 
     const clearHeartbeat = () => {
       if (heartbeatTimer !== undefined) {
@@ -80,7 +137,7 @@ function useOperationalSyncSocket() {
     };
 
     const scheduleReconnect = () => {
-      if (closedByEffect) return;
+      if (closedByEffect || !isCurrentSession()) return;
       const delay = Math.min(1000 * 2 ** reconnectAttempt, 10_000);
       reconnectAttempt += 1;
       reconnectTimer = window.setTimeout(connect, delay);
@@ -113,9 +170,13 @@ function useOperationalSyncSocket() {
       socket = new WebSocket(getOperationalWebSocketUrl());
 
       socket.onopen = () => {
+        if (!isCurrentSession()) {
+          socket?.close();
+          return;
+        }
         reconnectAttempt = 0;
         socket?.send(createWebSocketAuthMessage(token));
-        void queryClient.invalidateQueries({ queryKey: ["operational"] });
+        reconcile();
         heartbeatTimer = window.setInterval(() => {
           if (socket?.readyState === WebSocket.OPEN) {
             socket.send("ping");
@@ -124,8 +185,8 @@ function useOperationalSyncSocket() {
       };
 
       socket.onmessage = (event) => {
-        if (event.data === "pong") return;
-        handleOperationalEnvelope(queryClient, event.data);
+        if (event.data === "pong" || !isCurrentSession()) return;
+        handleOperationalEnvelope(queryClient, keys, event.data);
       };
 
       socket.onerror = () => {
@@ -134,7 +195,7 @@ function useOperationalSyncSocket() {
 
       socket.onclose = () => {
         clearHeartbeat();
-        void queryClient.invalidateQueries({ queryKey: ["operational"] });
+        reconcile();
         scheduleReconnect();
       };
     };
@@ -144,16 +205,17 @@ function useOperationalSyncSocket() {
     return () => {
       closedByEffect = true;
       clearHeartbeat();
+      window.clearInterval(reconciliationTimer);
       window.clearTimeout(initialConnectTimer);
       if (reconnectTimer !== undefined) {
         window.clearTimeout(reconnectTimer);
       }
       closeSocket();
     };
-  }, [queryClient, token]);
+  }, [accountScope, queryClient, token, user]);
 }
 
-function handleOperationalEnvelope(queryClient: ReturnType<typeof useQueryClient>, rawData: string) {
+export function handleOperationalEnvelope(queryClient: QueryClient, keys: OperationalQueryKeys, rawData: string) {
   let envelope: OperationalWebSocketEnvelope;
   try {
     envelope = JSON.parse(rawData) as OperationalWebSocketEnvelope;
@@ -163,45 +225,74 @@ function handleOperationalEnvelope(queryClient: ReturnType<typeof useQueryClient
 
   if (envelope.type === "telemetry.snapshot") {
     const snapshot = envelope.data;
-    queryClient.setQueryData<TelemetrySnapshot[]>(operationalTelemetryQueryKey, (current = []) => upsertById(current, snapshot));
-    queryClient.setQueryData<MapEnterprise[]>(operationalMapEnterprisesQueryKey, (current) => updateMapEnterpriseTelemetry(current, snapshot));
+    const patchedTelemetry = patchExistingList(queryClient, keys.telemetry, snapshot, upsertTelemetrySnapshot);
+    const patchedMap = patchExistingData(queryClient, keys.mapEnterprises, (current: MapEnterprise[]) => updateMapEnterpriseTelemetry(current, snapshot));
+    if (!patchedTelemetry) invalidate(queryClient, keys.telemetry);
+    if (!patchedMap) invalidate(queryClient, keys.mapEnterprises);
     return;
   }
 
   if (envelope.type === "summary.updated") {
-    queryClient.setQueryData<OperationalSummary>(operationalSummaryQueryKey, envelope.data);
+    patchSummary(queryClient, keys.summary, envelope.data);
     return;
   }
 
   if (envelope.type === "report.submitted" || envelope.type === "report.updated") {
-    const report = envelope.data;
-    queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current = []) => sortReports(upsertById(current, report)));
+    patchExistingList(queryClient, keys.reports, envelope.data, (current, report) => sortReports(upsertById(current, report, getReportTime)));
+    invalidate(queryClient, operationalReportsQueryKey, operationalFinalReportsQueryKey, operationalSummaryQueryKey);
     return;
   }
 
   if (envelope.type === "final_report.generated" || envelope.type === "final_report.updated") {
-    const report = envelope.data;
-    queryClient.setQueryData<FinalReport[]>(operationalFinalReportsQueryKey, (current = []) => sortFinalReports(upsertById(current, report)));
+    patchExistingList(queryClient, keys.finalReports, envelope.data, (current, report) => sortFinalReports(upsertById(current, report, getFinalReportTime)));
+    invalidate(queryClient, operationalReportsQueryKey, operationalFinalReportsQueryKey, operationalSummaryQueryKey);
     return;
   }
 
   if (envelope.type === "alert.created" || envelope.type === "alert.updated" || envelope.type === "alert.resolved") {
     const alert = envelope.data;
-    queryClient.setQueryData<PriorityAlert[]>(operationalAlertsQueryKey, (current = []) => sortAlerts(upsertById(current, alert)));
+    patchExistingList(queryClient, keys.alerts, alert, (current, nextAlert) => sortAlerts(upsertById(current, nextAlert, getAlertTime)));
+    invalidate(queryClient, operationalAlertsQueryKey);
     if (envelope.type === "alert.created") {
       toast.error(`${alert.enterprise ?? alert.requester}: ${alert.summary}`, { id: alert.id, duration: 8000 });
     }
+    return;
   }
 
   if (envelope.type === "notification.created" || envelope.type === "notification.updated") {
-    queryClient.setQueryData<BackendNotification[]>(operationalNotificationsQueryKey, (current = []) => sortNotifications(upsertById(current, envelope.data)));
+    patchExistingList(queryClient, keys.notifications, envelope.data, (current, notification) => sortNotifications(upsertById(current, notification, getNotificationTime)));
+    invalidate(queryClient, operationalNotificationsQueryKey);
   }
 }
 
-function upsertById<TItem extends { id: string }>(items: TItem[], nextItem: TItem) {
-  const exists = items.some((item) => item.id === nextItem.id);
-  if (!exists) return [nextItem, ...items];
+function patchExistingData<TData>(queryClient: QueryClient, queryKey: QueryKey, updater: (current: TData) => TData) {
+  if (queryClient.getQueryData<TData>(queryKey) === undefined) return false;
+  queryClient.setQueryData<TData>(queryKey, (current) => (current === undefined ? current : updater(current)));
+  return true;
+}
+
+function patchExistingList<TItem>(queryClient: QueryClient, queryKey: QueryKey, nextItem: TItem, updater: (current: TItem[], next: TItem) => TItem[]) {
+  return patchExistingData(queryClient, queryKey, (current: TItem[]) => updater(current, nextItem));
+}
+
+function invalidate(queryClient: QueryClient, ...queryKeys: QueryKey[]) {
+  for (const queryKey of queryKeys) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+}
+
+function upsertById<TItem extends { id: string }>(items: TItem[], nextItem: TItem, getTime: (item: TItem) => number) {
+  const existing = items.find((item) => item.id === nextItem.id);
+  if (!existing) return [nextItem, ...items];
+  if (getTime(nextItem) < getTime(existing)) return items;
   return items.map((item) => (item.id === nextItem.id ? nextItem : item));
+}
+
+function upsertTelemetrySnapshot(items: TelemetrySnapshot[], nextItem: TelemetrySnapshot) {
+  const existing = items.find((item) => item.enterpriseId === nextItem.enterpriseId);
+  if (!existing) return [nextItem, ...items];
+  if (getTelemetryTime(nextItem) < getTelemetryTime(existing)) return items;
+  return items.map((item) => (item.enterpriseId === nextItem.enterpriseId ? nextItem : item));
 }
 
 function sortReports(reports: IntakeReport[]) {
@@ -209,26 +300,59 @@ function sortReports(reports: IntakeReport[]) {
 }
 
 function sortFinalReports(reports: FinalReport[]) {
-  return [...reports].sort((left, right) => Date.parse(right.generatedOn) - Date.parse(left.generatedOn));
+  return [...reports].sort((left, right) => getFinalReportTime(right) - getFinalReportTime(left));
 }
 
 function sortAlerts(alerts: PriorityAlert[]) {
-  return [...alerts].sort((left, right) => Date.parse(right.time) - Date.parse(left.time));
+  return [...alerts].sort((left, right) => getAlertTime(right) - getAlertTime(left));
 }
 
 function sortNotifications(notifications: BackendNotification[]) {
-  return [...notifications].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  return [...notifications].sort((left, right) => getNotificationTime(right) - getNotificationTime(left));
+}
+
+function getTelemetryTime(snapshot: TelemetrySnapshot) {
+  return getTimestamp(snapshot.receivedAt, snapshot.capturedAt);
 }
 
 function getReportTime(report: IntakeReport) {
-  return Date.parse(report.submittedAt ?? report.submitted);
+  return getTimestamp(report.submittedAt, report.submitted);
 }
 
-function updateMapEnterpriseTelemetry(current: MapEnterprise[] | undefined, snapshot: TelemetrySnapshot) {
-  if (!current) return current;
+function getFinalReportTime(report: FinalReport) {
+  return getTimestamp(report.generatedOn);
+}
 
+function getAlertTime(alert: PriorityAlert) {
+  return getTimestamp(alert.time);
+}
+
+function getNotificationTime(notification: BackendNotification) {
+  return getTimestamp(notification.createdAt);
+}
+
+function getTimestamp(...candidates: Array<string | null | undefined>) {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const timestamp = Date.parse(candidate);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return 0;
+}
+
+function getAccountScope(user: AuthUser | null) {
+  return user ? `${user.id}:${user.role}:${user.enterpriseId ?? "-"}` : null;
+}
+
+function patchSummary(queryClient: QueryClient, queryKey: QueryKey, summary: OperationalSummary) {
+  const current = queryClient.getQueryData<OperationalSummary>(queryKey);
+  if (current && getTimestamp(summary.lastSyncAt) < getTimestamp(current.lastSyncAt)) return;
+  queryClient.setQueryData(queryKey, summary);
+}
+
+function updateMapEnterpriseTelemetry(current: MapEnterprise[], snapshot: TelemetrySnapshot) {
   return current.map((enterprise) => {
-    if (enterprise.id !== snapshot.enterpriseId) return enterprise;
+    if (enterprise.id !== snapshot.enterpriseId || getTimestamp(snapshot.receivedAt) < getTimestamp(enterprise.lastSync)) return enterprise;
 
     return {
       ...enterprise,
