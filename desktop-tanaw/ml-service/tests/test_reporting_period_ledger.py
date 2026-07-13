@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -66,7 +67,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             )
 
             database_path = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
-            with connect_local_database(database_path) as connection:
+            with closing(connect_local_database(database_path)) as connection:
                 rows = connection.execute(
                     """
                     select business_date, reporting_period_id
@@ -119,12 +120,15 @@ class LocalReportingLedgerTest(unittest.TestCase):
             database_path = _create_legacy_database(Path(directory))
 
             store = LocalMetricsStore(directory)
-            summary = store.metrics_summary(period_id=JUNE_PERIOD_ID)
+            summary = store.metrics_summary(
+                include_submitted=True,
+                period_id=JUNE_PERIOD_ID,
+            )
             initialize_local_database(database_path)
 
             self.assertEqual(summary["entries"], 1)
             self.assertEqual(summary["unclassified_events"], 0)
-            with connect_local_database(database_path) as connection:
+            with closing(connect_local_database(database_path)) as connection:
                 event = connection.execute(
                     """
                     select event_id, business_date, reporting_period_id
@@ -132,17 +136,37 @@ class LocalReportingLedgerTest(unittest.TestCase):
                     """
                 ).fetchone()
                 report = connection.execute(
-                    "select report_id, reporting_period_id from report_submissions"
+                    "select report_id, reporting_period_id from local_reports"
                 ).fetchone()
+                target_counts = {
+                    table: connection.execute(f"select count(*) from {table}").fetchone()[0]
+                    for table in (
+                        "local_report_revisions",
+                        "local_report_source_batches",
+                        "local_report_event_memberships",
+                        "sync_outbox_items",
+                    )
+                }
                 migrations = connection.execute(
                     "select version from local_schema_migrations order by version"
                 ).fetchall()
                 user_version = connection.execute("pragma user_version").fetchone()[0]
+                foreign_key_failures = connection.execute("pragma foreign_key_check").fetchall()
 
             self.assertEqual(tuple(event), ("legacy-event", "2026-06-30", JUNE_PERIOD_ID))
             self.assertEqual(tuple(report), ("legacy-report", JUNE_PERIOD_ID))
-            self.assertEqual([row["version"] for row in migrations], [1, 2])
+            self.assertEqual(
+                target_counts,
+                {
+                    "local_report_revisions": 1,
+                    "local_report_source_batches": 1,
+                    "local_report_event_memberships": 1,
+                    "sync_outbox_items": 1,
+                },
+            )
+            self.assertEqual([row["version"] for row in migrations], [1, 2, 3])
             self.assertEqual(user_version, LOCAL_SCHEMA_VERSION)
+            self.assertEqual(foreign_key_failures, [])
 
     def test_unclassifiable_legacy_event_blocks_official_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -155,6 +179,45 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "no reporting period"):
                 store.record_report_submission("REP-JUNE", "June 2026")
+
+    def test_noncontiguous_legacy_camera_membership_is_dead_lettered(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = _create_legacy_database(Path(directory))
+            with sqlite3.connect(database_path) as connection:
+                for event_id, recorded_at, submitted_report_id in (
+                    ("interleaved-event", "2026-06-30T15:59:59.100000+00:00", None),
+                    ("second-report-event", "2026-06-30T15:59:59.900000+00:00", "legacy-report"),
+                ):
+                    connection.execute(
+                        """
+                        insert into count_events (
+                            event_id,
+                            recorded_at,
+                            camera_id,
+                            camera_name,
+                            direction,
+                            entry_count,
+                            occupancy_count,
+                            is_unique_entry,
+                            payload_json,
+                            submitted_report_id
+                        )
+                        values (?, ?, 1, 'Legacy Camera', 'entry', 1, 1, 1, '{}', ?)
+                        """,
+                        (event_id, recorded_at, submitted_report_id),
+                    )
+
+            store = LocalMetricsStore(directory)
+            self.assertEqual(store.list_ready_sync_outbox_items(), [])
+            with closing(connect_local_database(database_path)) as connection:
+                outbox = connection.execute("select * from sync_outbox_items").fetchone()
+                batch = connection.execute("select * from local_report_source_batches").fetchone()
+
+            self.assertEqual(outbox["status"], "dead_letter")
+            self.assertEqual(outbox["last_error_class"], "ambiguous_legacy_report_lineage")
+            self.assertEqual(batch["event_count"], 2)
+            self.assertEqual(batch["event_sequence_start"], 0)
+            self.assertEqual(batch["event_sequence_end_exclusive"], 3)
 
     def test_report_transaction_leaves_concurrent_same_period_insert_open(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -213,7 +276,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             store.metrics_summary()
             database_path = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
 
-            with connect_local_database(database_path) as connection:
+            with closing(connect_local_database(database_path)) as connection:
                 journal_mode = connection.execute("pragma journal_mode").fetchone()[0]
                 foreign_keys = connection.execute("pragma foreign_keys").fetchone()[0]
                 busy_timeout = connection.execute("pragma busy_timeout").fetchone()[0]
@@ -298,10 +361,11 @@ def _create_legacy_database(root: Path) -> Path:
         connection.execute(
             """
             insert into count_events (
-                event_id, recorded_at, direction, entry_count, occupancy_count,
-                is_unique_entry, payload_json
+                event_id, recorded_at, camera_id, camera_name,
+                direction, entry_count, occupancy_count,
+                is_unique_entry, payload_json, submitted_report_id
             )
-            values (?, ?, 'entry', 1, 1, 1, ?)
+            values (?, ?, 1, 'Legacy Camera', 'entry', 1, 1, 1, ?, 'legacy-report')
             """,
             (
                 "legacy-event",
@@ -325,6 +389,7 @@ def _create_legacy_database(root: Path) -> Path:
 def _event(direction: str) -> dict[str, Any]:
     return {
         "camera_id": 1,
+        "central_camera_id": "11111111-1111-4111-8111-111111111111",
         "camera_name": "Test Camera",
         "direction": direction,
         "track_id": 1,

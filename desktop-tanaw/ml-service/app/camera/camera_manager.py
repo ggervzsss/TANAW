@@ -595,6 +595,9 @@ class CameraProcessingManager:
         metrics: dict | None = None,
         source_kind: str | None = None,
         mock_run_id: str | None = None,
+        *,
+        idempotency_key: str | None = None,
+        command_id: str | None = None,
     ) -> dict:
         submission = self._session_store.record_report_submission(
             report_id=report_id,
@@ -604,6 +607,8 @@ class CameraProcessingManager:
             metrics=metrics,
             source_kind=source_kind,
             mock_run_id=mock_run_id,
+            idempotency_key=idempotency_key,
+            command_id=command_id,
         )
         self._visitor_registry.cleanup_expired()
         return submission
@@ -611,14 +616,44 @@ class CameraProcessingManager:
     def list_report_submissions(self, limit: int = 100) -> list[dict]:
         return self._session_store.list_report_submissions(limit=limit)
 
-    def mark_report_synced(self, report_id: str) -> bool:
-        return self._session_store.mark_report_synced(report_id)
+    def list_ready_sync_outbox_items(
+        self, limit: int = 100, now: str | None = None
+    ) -> list[dict[str, Any]]:
+        return self._session_store.list_ready_sync_outbox_items(limit=limit, now=now)
+
+    def acknowledge_sync_outbox_item(
+        self,
+        outbox_item_id: str,
+        acknowledgement: dict[str, Any] | None = None,
+        acknowledged_at: str | None = None,
+    ) -> bool:
+        return self._session_store.acknowledge_sync_outbox_item(
+            outbox_item_id,
+            acknowledgement=acknowledgement,
+            acknowledged_at=acknowledged_at,
+        )
+
+    def record_sync_outbox_failure(
+        self,
+        outbox_item_id: str,
+        *,
+        error_class: str,
+        error_message: str,
+        retryable: bool,
+        http_status: int | None = None,
+        failed_at: str | None = None,
+    ) -> dict[str, Any]:
+        return self._session_store.record_sync_outbox_failure(
+            outbox_item_id,
+            error_class=error_class,
+            error_message=error_message,
+            retryable=retryable,
+            http_status=http_status,
+            failed_at=failed_at,
+        )
 
     def purge_report_raw_events(self, report_id: str) -> dict:
         return self._session_store.purge_report_raw_events(report_id)
-
-    def mark_events_synced(self) -> int:
-        return self._session_store.mark_events_synced()
 
     def prepare_mock_counts(
         self,

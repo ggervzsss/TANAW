@@ -2,6 +2,7 @@ import json
 import os
 import random
 import sqlite3
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -9,12 +10,23 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.storage.local_schema import (
     connect_local_database,
     initialize_local_database,
     upsert_reporting_period,
+)
+from app.storage.report_ledger_schema import (
+    REPORT_OUTBOX_CONTRACT_VERSION,
+    REPORT_OUTBOX_ENDPOINT,
+    allocate_camera_event_sequences,
+    build_revision_document,
+    canonical_hash,
+    canonical_json,
+    canonical_payload_hash,
+    central_report_idempotency_key,
+    local_camera_key,
 )
 from app.storage.reporting_periods import (
     REPORTING_TIMEZONE,
@@ -27,23 +39,40 @@ from app.storage.reporting_periods import (
 
 _REPORT_SUBMISSION_SELECT = """
 select
-    report_id,
-    period,
-    reporting_period_id,
-    submitted_at,
-    entries,
-    exits,
-    peak_occupancy,
-    unique_count,
-    notes,
-    payload_json,
-    sync_status,
-    source_kind,
-    mock_run_id,
-    synced_at,
-    raw_purged_at
-from report_submissions
+    report.report_id,
+    report.period_label as period,
+    report.reporting_period_id,
+    report.last_acknowledged_logical_version,
+    revision.revision_id,
+    revision.revision_number,
+    revision.payload_hash,
+    revision.expected_version,
+    revision.submitted_at,
+    revision.entries,
+    revision.exits,
+    revision.peak_occupancy,
+    revision.unique_count,
+    revision.notes,
+    revision.payload_json,
+    case
+        when outbox.status = 'acknowledged' then 'synced'
+        else 'pending_cloud_sync'
+    end as sync_status,
+    revision.source_kind,
+    revision.mock_run_id,
+    outbox.outbox_item_id,
+    outbox.acknowledged_at as synced_at,
+    report.raw_purged_at
+from local_reports as report
+join local_report_revisions as revision
+  on revision.revision_id = report.current_revision_id
+join sync_outbox_items as outbox
+  on outbox.report_revision_id = revision.revision_id
 """
+_REPORT_REVISION_SELECT = _REPORT_SUBMISSION_SELECT.replace(
+    "on revision.revision_id = report.current_revision_id",
+    "on revision.report_id = report.report_id",
+)
 
 
 @dataclass
@@ -97,6 +126,12 @@ class LocalMetricsStore:
 
         with self._connection() as connection:
             upsert_reporting_period(connection, reporting_period)
+            camera_key = local_camera_key(
+                payload.get("camera_id"),
+                payload.get("camera_name"),
+                payload.get("central_camera_id", payload.get("centralCameraId")),
+            )
+            camera_event_sequence = allocate_camera_event_sequences(connection, camera_key)
             connection.execute(
                 """
                 insert into count_events (
@@ -104,6 +139,8 @@ class LocalMetricsStore:
                     recorded_at,
                     business_date,
                     reporting_period_id,
+                    camera_key,
+                    camera_event_sequence,
                     camera_id,
                     camera_name,
                     direction,
@@ -120,13 +157,15 @@ class LocalMetricsStore:
                     source_kind,
                     mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_id,
                     captured_at.isoformat(),
                     business_date,
                     reporting_period.period_id,
+                    camera_key,
+                    camera_event_sequence,
                     payload.get("camera_id"),
                     payload.get("camera_name"),
                     direction,
@@ -555,7 +594,7 @@ class LocalMetricsStore:
         scope_filter = " and ".join(scope_conditions) or "1 = 1"
         event_filter = scope_filter
         if not include_submitted:
-            event_filter = f"submitted_report_id is null and {scope_filter}"
+            event_filter = f"{_open_event_filter()} and {scope_filter}"
         row = connection.execute(
             f"""
             select
@@ -593,16 +632,20 @@ class LocalMetricsStore:
             f"""
             select count(*)
             from count_events
-            where submitted_report_id is null
+            where {_open_event_filter()}
               and {scope_filter}
             """,
             params,
         ).fetchone()[0]
         unsynced_count = connection.execute(
             f"""
-            select count(*)
-            from count_events
-            where synced_at is null
+            select count(distinct membership.event_id)
+            from local_report_event_memberships as membership
+            join count_events
+              on count_events.event_id = membership.event_id
+            join sync_outbox_items as outbox
+              on outbox.report_revision_id = membership.report_revision_id
+            where outbox.status != 'acknowledged'
               and {scope_filter}
             """,
             params,
@@ -687,7 +730,7 @@ class LocalMetricsStore:
                 include_submitted=include_submitted,
                 requested_period_id=period_id,
             )
-            conditions = [] if include_submitted else ["submitted_report_id is null"]
+            conditions = [] if include_submitted else [_open_event_filter()]
             params: list[str] = []
             if selected_period is None:
                 conditions.append("0 = 1")
@@ -771,12 +814,34 @@ class LocalMetricsStore:
         metrics: dict[str, Any] | None = None,
         source_kind: str | None = None,
         mock_run_id: str | None = None,
+        *,
+        idempotency_key: str | None = None,
+        command_id: str | None = None,
     ) -> dict[str, int | str | None]:
         submitted_at = _utc_now()
         report_payload = payload or {}
         payload_status = (
             report_payload.get("status") if isinstance(report_payload.get("status"), str) else None
         )
+        requested_metrics = _normalized_requested_metrics(metrics)
+        request_document = {
+            "reportId": report_id,
+            "period": period,
+            "notes": notes,
+            "metrics": requested_metrics,
+            "payload": report_payload,
+            "sourceKind": source_kind,
+            "mockRunId": mock_run_id,
+        }
+        request_hash = canonical_hash(request_document)
+        resolved_idempotency_key = idempotency_key or f"legacy:{report_id}:{request_hash}"
+        if command_id is not None:
+            try:
+                normalized_command_id = str(UUID(command_id))
+            except ValueError as exc:
+                raise ValueError("Command ID must be a valid UUID.") from exc
+        else:
+            normalized_command_id = None
         with self._connection(immediate=True) as connection:
             existing_submission = self._report_submission_from_connection(connection, report_id)
             reporting_period = _resolve_report_period(
@@ -785,6 +850,35 @@ class LocalMetricsStore:
                 existing_submission=existing_submission,
             )
             upsert_reporting_period(connection, reporting_period)
+            idempotent_revision = connection.execute(
+                """
+                select revision_id, report_id, request_hash
+                from local_report_revisions
+                where idempotency_key = ?
+                """,
+                (resolved_idempotency_key,),
+            ).fetchone()
+            if idempotent_revision is not None:
+                if (
+                    str(idempotent_revision["report_id"]) != report_id
+                    or str(idempotent_revision["request_hash"]) != request_hash
+                ):
+                    raise ValueError(
+                        "Idempotency key was already used with a different report payload."
+                    )
+                record = _report_revision_record(
+                    connection, str(idempotent_revision["revision_id"])
+                )
+                return _submission_response_from_record(connection, record)
+            if (
+                normalized_command_id is not None
+                and connection.execute(
+                    "select 1 from local_report_revisions where command_id = ?",
+                    (normalized_command_id,),
+                ).fetchone()
+            ):
+                raise ValueError("Command ID was already used by another report revision.")
+
             existing_period_submission = self._report_submission_for_period_from_connection(
                 connection,
                 reporting_period.period_id,
@@ -796,6 +890,11 @@ class LocalMetricsStore:
                 raise ValueError(
                     f"A report for {reporting_period.label} has already been submitted."
                 )
+            if (
+                existing_submission is not None
+                and existing_submission["period_id"] != reporting_period.period_id
+            ):
+                raise ValueError("A logical report cannot be moved to another reporting period.")
 
             summary = self._metrics_summary(
                 connection,
@@ -821,10 +920,10 @@ class LocalMetricsStore:
             )
             if should_consume_open_events:
                 unclassified_official_events = connection.execute(
-                    """
+                    f"""
                     select count(*)
                     from count_events
-                    where submitted_report_id is null
+                    where {_open_event_filter()}
                       and reporting_period_id is null
                       and source_kind in ('real', 'hybrid')
                     """
@@ -848,12 +947,132 @@ class LocalMetricsStore:
                 if summary["mock_run_id"]
                 else None
             )
+            if resolved_source_kind not in {"real", "mock", "hybrid"}:
+                raise ValueError("Report source kind must be real, mock, or hybrid.")
+
+            selected_events: list[sqlite3.Row] = []
+            if should_consume_open_events:
+                selected_events = connection.execute(
+                    f"""
+                    select
+                        event_id,
+                        recorded_at,
+                        camera_id,
+                        camera_name,
+                        camera_key,
+                        camera_event_sequence,
+                        source_kind,
+                        mock_run_id
+                    from count_events
+                    where {_open_event_filter()}
+                      and reporting_period_id = ?
+                      and recorded_at >= ?
+                      and recorded_at < ?
+                    order by recorded_at, event_id
+                    """,
+                    (
+                        reporting_period.period_id,
+                        reporting_period.starts_at_utc.isoformat(),
+                        reporting_period.ends_at_utc.isoformat(),
+                    ),
+                ).fetchall()
+            elif existing_submission is not None:
+                selected_events = connection.execute(
+                    """
+                    select
+                        event.event_id,
+                        event.recorded_at,
+                        event.camera_id,
+                        event.camera_name,
+                        event.source_kind,
+                        event.mock_run_id,
+                        event.camera_key,
+                        event.camera_event_sequence
+                    from count_events as event
+                    join local_report_event_memberships as membership
+                      on membership.event_id = event.event_id
+                    where membership.report_revision_id = ?
+                    order by event.recorded_at, event.event_id
+                    """,
+                    (existing_submission["revision_id"],),
+                ).fetchall()
+                if not selected_events:
+                    raise ValueError(
+                        "A new revision cannot be created after its raw source events were purged."
+                    )
+
+            revision_number = 1
+            if existing_submission is not None:
+                revision_number = int(existing_submission["revision_number"]) + 1
+            revision_id = str(uuid4())
+            resolved_command_id = normalized_command_id or str(uuid4())
+            outbox_item_id = str(uuid4())
+            expected_version = (
+                _safe_int(existing_submission["last_acknowledged_logical_version"])
+                if existing_submission is not None
+                else 0
+            )
+            outbox_idempotency_key = central_report_idempotency_key(report_id, revision_id)
+            source_batches = _source_batches_for_events(
+                revision_id=revision_id,
+                period_id=reporting_period.period_id,
+                event_rows=selected_events,
+            )
+            revision_document = build_revision_document(
+                revision_id=revision_id,
+                report_id=report_id,
+                revision_number=revision_number,
+                command_id=resolved_command_id,
+                idempotency_key=outbox_idempotency_key,
+                expected_version=expected_version,
+                period_id=reporting_period.period_id,
+                period_label=reporting_period.label,
+                submitted_at=submitted_at,
+                entries=_safe_int(summary["entries"]),
+                exits=_safe_int(summary["exits"]),
+                peak_occupancy=_safe_int(summary["peak_occupancy"]),
+                unique_count=_safe_int(summary["unique_count"]),
+                notes=notes,
+                payload=report_payload,
+                source_kind=resolved_source_kind,
+                mock_run_id=resolved_mock_run_id,
+                source_batches=[batch["document"] for batch in source_batches],
+            )
+            canonical_payload = canonical_json(revision_document)
+            payload_hash = canonical_payload_hash(revision_document["payload"])
+
+            if existing_submission is None:
+                connection.execute(
+                    """
+                    insert into local_reports (
+                        report_id,
+                        reporting_period_id,
+                        period_label,
+                        current_revision_id,
+                        created_at,
+                        updated_at
+                    )
+                    values (?, ?, ?, null, ?, ?)
+                    """,
+                    (
+                        report_id,
+                        reporting_period.period_id,
+                        reporting_period.label,
+                        submitted_at,
+                        submitted_at,
+                    ),
+                )
             connection.execute(
                 """
-                insert into report_submissions (
+                insert into local_report_revisions (
+                    revision_id,
                     report_id,
-                    period,
-                    reporting_period_id,
+                    revision_number,
+                    command_id,
+                    idempotency_key,
+                    request_hash,
+                    payload_hash,
+                    expected_version,
                     submitted_at,
                     entries,
                     exits,
@@ -861,87 +1080,237 @@ class LocalMetricsStore:
                     unique_count,
                     notes,
                     payload_json,
-                    sync_status,
+                    canonical_payload_json,
                     source_kind,
                     mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict(report_id) do update set
-                    period = excluded.period,
-                    reporting_period_id = excluded.reporting_period_id,
-                    submitted_at = excluded.submitted_at,
-                    entries = excluded.entries,
-                    exits = excluded.exits,
-                    peak_occupancy = excluded.peak_occupancy,
-                    unique_count = excluded.unique_count,
-                    notes = excluded.notes,
-                    payload_json = excluded.payload_json,
-                    sync_status = excluded.sync_status,
-                    source_kind = excluded.source_kind,
-                    mock_run_id = excluded.mock_run_id,
-                    synced_at = null
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    revision_id,
                     report_id,
-                    reporting_period.label,
-                    reporting_period.period_id,
+                    revision_number,
+                    resolved_command_id,
+                    resolved_idempotency_key,
+                    request_hash,
+                    payload_hash,
+                    expected_version,
                     submitted_at,
                     summary["entries"],
                     summary["exits"],
                     summary["peak_occupancy"],
                     summary["unique_count"],
                     notes,
-                    json.dumps(report_payload, sort_keys=True),
-                    "pending_cloud_sync",
+                    canonical_json(report_payload),
+                    canonical_payload,
                     resolved_source_kind,
                     resolved_mock_run_id,
                 ),
             )
-            if should_consume_open_events:
-                connection.execute(
-                    """
-                    update count_events
-                    set submitted_report_id = ?
-                    where submitted_report_id is null
-                      and reporting_period_id = ?
-                      and recorded_at >= ?
-                      and recorded_at < ?
-                    """,
-                    (
-                        report_id,
-                        reporting_period.period_id,
-                        reporting_period.starts_at_utc.isoformat(),
-                        reporting_period.ends_at_utc.isoformat(),
-                    ),
+            _insert_source_batches_and_memberships(
+                connection,
+                report_id=report_id,
+                revision_id=revision_id,
+                source_batches=source_batches,
+                selected_at=submitted_at,
+            )
+            if not source_batches:
+                outbox_status = "dead_letter"
+                outbox_error_class = "missing_source_lineage"
+                outbox_error_message = "Report revision has no exact camera source batch."
+            elif resolved_source_kind != "real":
+                outbox_status = "dead_letter"
+                outbox_error_class = "simulation_not_official"
+                outbox_error_message = "Simulation-derived reports cannot enter official intake."
+            else:
+                outbox_status = "ready"
+                outbox_error_class = None
+                outbox_error_message = None
+            connection.execute(
+                """
+                insert into sync_outbox_items (
+                    outbox_item_id,
+                    report_revision_id,
+                    command_id,
+                    idempotency_key,
+                    endpoint,
+                    contract_version,
+                    payload_json,
+                    payload_hash,
+                    status,
+                    created_at,
+                    next_attempt_at
+                    ,last_error_class
+                    ,last_error_message
                 )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    outbox_item_id,
+                    revision_id,
+                    resolved_command_id,
+                    outbox_idempotency_key,
+                    REPORT_OUTBOX_ENDPOINT,
+                    REPORT_OUTBOX_CONTRACT_VERSION,
+                    canonical_payload,
+                    payload_hash,
+                    outbox_status,
+                    submitted_at,
+                    submitted_at,
+                    outbox_error_class,
+                    outbox_error_message,
+                ),
+            )
+            connection.execute(
+                """
+                update local_reports
+                set current_revision_id = ?, period_label = ?, updated_at = ?
+                where report_id = ?
+                """,
+                (revision_id, reporting_period.label, submitted_at, report_id),
+            )
 
         return {
             **summary,
             "report_id": report_id,
             "period_id": reporting_period.period_id,
             "period": reporting_period.label,
+            "revision_id": revision_id,
+            "revision_number": revision_number,
+            "outbox_item_id": outbox_item_id,
+            "payload_hash": payload_hash,
             "submitted_at": submitted_at,
             "sync_status": "pending_cloud_sync",
         }
 
-    def mark_report_synced(self, report_id: str, synced_at: str | None = None) -> bool:
-        synced_at = synced_at or _utc_now()
+    def list_ready_sync_outbox_items(
+        self,
+        limit: int = 100,
+        now: str | None = None,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 500))
+        now = now or _utc_now()
         with self._connection() as connection:
-            result = connection.execute(
+            rows = connection.execute(
                 """
-                update report_submissions
-                set sync_status = 'synced', synced_at = ?
-                where report_id = ?
+                select *
+                from sync_outbox_items
+                where status in ('ready', 'retry')
+                  and next_attempt_at <= ?
+                order by next_attempt_at, created_at, outbox_item_id
+                limit ?
                 """,
-                (synced_at, report_id),
+                (now, limit),
+            ).fetchall()
+        return [_outbox_item_row(row) for row in rows]
+
+    def acknowledge_sync_outbox_item(
+        self,
+        outbox_item_id: str,
+        acknowledgement: dict[str, Any] | None = None,
+        acknowledged_at: str | None = None,
+    ) -> bool:
+        with self._connection(immediate=True) as connection:
+            return _acknowledge_outbox_item(
+                connection,
+                outbox_item_id,
+                acknowledgement=acknowledgement or {},
+                acknowledged_at=acknowledged_at or _utc_now(),
             )
-        return result.rowcount > 0
+
+    def record_sync_outbox_failure(
+        self,
+        outbox_item_id: str,
+        *,
+        error_class: str,
+        error_message: str,
+        retryable: bool,
+        http_status: int | None = None,
+        failed_at: str | None = None,
+    ) -> dict[str, Any]:
+        failed_at = failed_at or _utc_now()
+        failed_datetime = parse_captured_at(failed_at)
+        with self._connection(immediate=True) as connection:
+            row = connection.execute(
+                "select * from sync_outbox_items where outbox_item_id = ?",
+                (outbox_item_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"Unknown sync outbox item: {outbox_item_id}")
+            if row["status"] == "acknowledged":
+                raise ValueError("An acknowledged sync outbox item cannot be failed.")
+
+            attempt_number = int(row["attempt_count"]) + 1
+            if retryable:
+                delay_seconds = min(3_600, 2 ** min(attempt_number, 11))
+                next_attempt_at = (failed_datetime + timedelta(seconds=delay_seconds)).isoformat()
+                status = "retry"
+                outcome = "retry"
+            else:
+                next_attempt_at = failed_datetime.isoformat()
+                status = "dead_letter"
+                outcome = "dead_letter"
+            connection.execute(
+                """
+                update sync_outbox_items
+                set status = ?,
+                    next_attempt_at = ?,
+                    attempt_count = ?,
+                    last_attempt_at = ?,
+                    last_error_class = ?,
+                    last_error_message = ?
+                where outbox_item_id = ?
+                """,
+                (
+                    status,
+                    next_attempt_at,
+                    attempt_number,
+                    failed_datetime.isoformat(),
+                    error_class,
+                    error_message,
+                    outbox_item_id,
+                ),
+            )
+            connection.execute(
+                """
+                insert into sync_attempts (
+                    attempt_id,
+                    outbox_item_id,
+                    attempt_number,
+                    attempted_at,
+                    completed_at,
+                    outcome,
+                    error_class,
+                    error_message,
+                    http_status,
+                    next_attempt_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    outbox_item_id,
+                    attempt_number,
+                    failed_datetime.isoformat(),
+                    failed_datetime.isoformat(),
+                    outcome,
+                    error_class,
+                    error_message,
+                    http_status,
+                    next_attempt_at if retryable else None,
+                ),
+            )
+            updated = connection.execute(
+                "select * from sync_outbox_items where outbox_item_id = ?",
+                (outbox_item_id,),
+            ).fetchone()
+        return _outbox_item_row(updated)
 
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
         purged_at = _utc_now()
-        with self._connection() as connection:
+        with self._connection(immediate=True) as connection:
             report = connection.execute(
-                "select report_id, raw_purged_at from report_submissions where report_id = ?",
+                "select report_id, raw_purged_at from local_reports where report_id = ?",
                 (report_id,),
             ).fetchone()
             if report is None:
@@ -951,18 +1320,32 @@ class LocalMetricsStore:
                     "raw_purged_at": None,
                 }
 
-            result = connection.execute(
-                "delete from count_events where submitted_report_id = ?",
+            event_rows = connection.execute(
+                """
+                select distinct membership.event_id
+                from local_report_event_memberships as membership
+                join local_report_revisions as revision
+                  on revision.revision_id = membership.report_revision_id
+                where revision.report_id = ?
+                """,
                 (report_id,),
-            )
-            purged_events = result.rowcount or 0
+            ).fetchall()
+            event_ids = [str(row["event_id"]) for row in event_rows]
+            purged_events = 0
+            if event_ids:
+                placeholders = ", ".join("?" for _ in event_ids)
+                result = connection.execute(
+                    f"delete from count_events where event_id in ({placeholders})",
+                    event_ids,
+                )
+                purged_events = result.rowcount or 0
             next_purged_at = (
                 purged_at
                 if purged_events > 0 or report["raw_purged_at"] is None
                 else report["raw_purged_at"]
             )
             connection.execute(
-                "update report_submissions set raw_purged_at = ? where report_id = ?",
+                "update local_reports set raw_purged_at = ? where report_id = ?",
                 (next_purged_at, report_id),
             )
 
@@ -971,15 +1354,6 @@ class LocalMetricsStore:
             "purged_events": _safe_int(purged_events),
             "raw_purged_at": next_purged_at,
         }
-
-    def mark_events_synced(self, synced_at: str | None = None) -> int:
-        synced_at = synced_at or _utc_now()
-        with self._connection() as connection:
-            result = connection.execute(
-                "update count_events set synced_at = ? where synced_at is null",
-                (synced_at,),
-            )
-        return result.rowcount
 
     def prepare_mock_counts(
         self,
@@ -1002,20 +1376,20 @@ class LocalMetricsStore:
             )
         with self._connection() as connection:
             existing_open_events = connection.execute(
-                """
+                f"""
                 select count(*)
                 from count_events
                 where mock_run_id = ?
-                  and submitted_report_id is null
+                  and {_open_event_filter()}
                 """,
                 (mock_run_id,),
             ).fetchone()[0]
             existing_open_period = connection.execute(
-                """
+                f"""
                 select reporting_period_id
                 from count_events
                 where mock_run_id = ?
-                  and submitted_report_id is null
+                  and {_open_event_filter()}
                 order by recorded_at desc
                 limit 1
                 """,
@@ -1024,9 +1398,11 @@ class LocalMetricsStore:
             existing_period_report = connection.execute(
                 """
                 select count(*)
-                from report_submissions
-                where mock_run_id = ?
-                  and reporting_period_id = ?
+                from local_reports as report
+                join local_report_revisions as revision
+                  on revision.revision_id = report.current_revision_id
+                where revision.mock_run_id = ?
+                  and report.reporting_period_id = ?
                 """,
                 (mock_run_id, reporting_period.period_id),
             ).fetchone()[0]
@@ -1144,18 +1520,27 @@ class LocalMetricsStore:
 
         with self._connection() as connection:
             upsert_reporting_period(connection, reporting_period)
+            camera_key = local_camera_key(camera_id, camera_name)
+            sequence_start = (
+                allocate_camera_event_sequences(connection, camera_key, len(rows)) if rows else 0
+            )
+            sequenced_rows = [
+                (*row[:4], camera_key, sequence_start + index, *row[4:])
+                for index, row in enumerate(rows)
+            ]
             connection.executemany(
                 """
-                insert into count_events (
-                    event_id, recorded_at, business_date, reporting_period_id,
-                    camera_id, camera_name, direction, track_id,
+                    insert into count_events (
+                        event_id, recorded_at, business_date, reporting_period_id,
+                        camera_key, camera_event_sequence,
+                        camera_id, camera_name, direction, track_id,
                     entry_count, exit_count, occupancy_count, visitor_id, is_unique_entry,
                     reid_score, reid_decision, identity_confidence, payload_json,
                     source_kind, mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                rows,
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                sequenced_rows,
             )
         return {
             **self.metrics_summary(include_submitted=False, period_id=reporting_period.period_id),
@@ -1185,15 +1570,13 @@ class LocalMetricsStore:
         if mock_run_id:
             event_filter = "mock_run_id = ?"
             params: tuple[str, ...] = (mock_run_id,)
-            preserved_event_filter = "(mock_run_id is null or mock_run_id != ?)"
-            preserved_event_params: tuple[str, ...] = (mock_run_id,)
+            report_filter = "revision.mock_run_id = ?"
         else:
             event_filter = "source_kind in ('mock', 'hybrid')"
             params = ()
-            preserved_event_filter = "source_kind not in ('mock', 'hybrid')"
-            preserved_event_params = ()
+            report_filter = "revision.source_kind in ('mock', 'hybrid')"
 
-        with self._connection() as connection:
+        with self._connection(immediate=True) as connection:
             count_events = connection.execute(
                 f"select count(*) from count_events where {event_filter}", params
             ).fetchone()[0]
@@ -1204,28 +1587,43 @@ class LocalMetricsStore:
                 f"select count(*) from occupancy_corrections where {event_filter}", params
             ).fetchone()[0]
             report_rows = connection.execute(
-                f"select report_id from report_submissions where {event_filter}",
+                f"""
+                select report.report_id
+                from local_reports as report
+                join local_report_revisions as revision
+                  on revision.revision_id = report.current_revision_id
+                where {report_filter}
+                """,
                 params,
             ).fetchall()
             report_ids = [str(row["report_id"]) for row in report_rows]
             restored_real_events = 0
             if report_ids:
                 placeholders = ", ".join("?" for _ in report_ids)
-                restored_real_events = (
-                    connection.execute(
-                        f"""
-                    update count_events
-                    set submitted_report_id = null
-                    where submitted_report_id in ({placeholders})
-                      and {preserved_event_filter}
+                restored_real_events = connection.execute(
+                    f"""
+                    select count(distinct event.event_id)
+                    from count_events as event
+                    join local_report_event_memberships as membership
+                      on membership.event_id = event.event_id
+                    join local_report_revisions as revision
+                      on revision.revision_id = membership.report_revision_id
+                    where revision.report_id in ({placeholders})
+                      and event.source_kind not in ('mock', 'hybrid')
                     """,
-                        (*report_ids, *preserved_event_params),
-                    ).rowcount
-                    or 0
+                    report_ids,
+                ).fetchone()[0]
+                connection.execute(
+                    f"delete from local_reports where report_id in ({placeholders})",
+                    report_ids,
                 )
+                if _table_exists(connection, "report_submissions"):
+                    connection.execute(
+                        f"delete from report_submissions where report_id in ({placeholders})",
+                        report_ids,
+                    )
             connection.execute(f"delete from count_events where {event_filter}", params)
             connection.execute(f"delete from count_snapshots where {event_filter}", params)
-            connection.execute(f"delete from report_submissions where {event_filter}", params)
             connection.execute(f"delete from occupancy_corrections where {event_filter}", params)
 
         return {
@@ -1246,7 +1644,7 @@ class LocalMetricsStore:
         row = connection.execute(
             f"""
             {_REPORT_SUBMISSION_SELECT}
-            where report_id = ?
+            where report.report_id = ?
             """,
             (report_id,),
         ).fetchone()
@@ -1262,8 +1660,8 @@ class LocalMetricsStore:
             row = connection.execute(
                 f"""
                 {_REPORT_SUBMISSION_SELECT}
-                where reporting_period_id is null and period = ?
-                order by submitted_at desc
+                where report.reporting_period_id is null and report.period_label = ?
+                order by revision.submitted_at desc
                 limit 1
                 """,
                 (period,),
@@ -1276,8 +1674,8 @@ class LocalMetricsStore:
         row = connection.execute(
             f"""
             {_REPORT_SUBMISSION_SELECT}
-            where reporting_period_id = ?
-            order by submitted_at desc
+            where report.reporting_period_id = ?
+            order by revision.submitted_at desc
             limit 1
             """,
             (period_id,),
@@ -1290,7 +1688,7 @@ class LocalMetricsStore:
             rows = connection.execute(
                 f"""
                 {_REPORT_SUBMISSION_SELECT}
-                order by submitted_at desc
+                order by revision.submitted_at desc
                 limit ?
                 """,
                 (limit,),
@@ -1346,6 +1744,357 @@ def _summary_with_report_metrics(
     }
 
 
+def _normalized_requested_metrics(metrics: dict[str, Any] | None) -> dict[str, int] | None:
+    if metrics is None:
+        return None
+    entries = _safe_int(metrics.get("entries"))
+    return {
+        "entries": entries,
+        "exits": min(_safe_int(metrics.get("exits")), entries),
+        "peakOccupancy": _safe_int(metrics.get("peak_occupancy", metrics.get("peakOccupancy"))),
+        "uniqueCount": _safe_int(metrics.get("unique_count", metrics.get("uniqueCount"))),
+    }
+
+
+def _source_batches_for_events(
+    *,
+    revision_id: str,
+    period_id: str,
+    event_rows: list[sqlite3.Row],
+) -> list[dict[str, Any]]:
+    groups: defaultdict[tuple[Any, ...], list[sqlite3.Row]] = defaultdict(list)
+    for row in event_rows:
+        groups[
+            (
+                row["camera_key"],
+                row["camera_id"],
+                row["camera_name"],
+                str(row["source_kind"] or "real"),
+                row["mock_run_id"],
+            )
+        ].append(row)
+
+    batches: list[dict[str, Any]] = []
+    for key, rows in sorted(
+        groups.items(), key=lambda item: tuple(str(value or "") for value in item[0])
+    ):
+        camera_key, camera_id, camera_name, source_kind, mock_run_id = key
+        if str(camera_key).startswith("unassigned:") and source_kind in {"real", "hybrid"}:
+            raise ValueError(
+                "Official camera events are not bound to a central camera UUID. "
+                "Synchronize camera topology before report submission."
+            )
+        rows.sort(key=lambda row: int(row["camera_event_sequence"]))
+        event_ids = [str(row["event_id"]) for row in rows]
+        event_checksum = f"sha256:{canonical_hash(event_ids)}"
+        sequences = [int(row["camera_event_sequence"]) for row in rows]
+        sequence_start = min(sequences)
+        sequence_end = max(sequences) + 1
+        if sequence_end - sequence_start != len(sequences):
+            raise ValueError(
+                f"Camera event sequence for {camera_key} is not contiguous; "
+                "the report was not created."
+            )
+        batch_id = str(uuid4())
+        document = {
+            "batchId": batch_id,
+            "cameraId": str(camera_key),
+            "eventCount": len(rows),
+            "eventSequenceStart": sequence_start,
+            "eventSequenceEndExclusive": sequence_end,
+            "aggregateHash": event_checksum,
+        }
+        batches.append(
+            {
+                "batch_id": batch_id,
+                "revision_id": revision_id,
+                "period_id": period_id,
+                "camera_id": camera_id,
+                "camera_name": camera_name,
+                "camera_key": camera_key,
+                "source_kind": source_kind,
+                "mock_run_id": mock_run_id,
+                "sequence_start": sequence_start,
+                "sequence_end": sequence_end,
+                "first_event_at": rows[0]["recorded_at"],
+                "last_event_at": rows[-1]["recorded_at"],
+                "event_checksum": event_checksum,
+                "event_rows": rows,
+                "document": document,
+            }
+        )
+    return batches
+
+
+def _insert_source_batches_and_memberships(
+    connection: sqlite3.Connection,
+    *,
+    report_id: str,
+    revision_id: str,
+    source_batches: list[dict[str, Any]],
+    selected_at: str,
+) -> None:
+    for batch in source_batches:
+        document: dict[str, Any] = batch["document"]
+        connection.execute(
+            """
+            insert into local_report_source_batches (
+                batch_id,
+                report_revision_id,
+                reporting_period_id,
+                camera_id,
+                camera_name,
+                central_camera_key,
+                source_kind,
+                mock_run_id,
+                event_sequence_start,
+                event_sequence_end_exclusive,
+                first_event_at,
+                last_event_at,
+                event_count,
+                event_checksum
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                batch["batch_id"],
+                revision_id,
+                batch["period_id"],
+                batch["camera_id"],
+                batch["camera_name"],
+                batch["camera_key"],
+                batch["source_kind"],
+                batch["mock_run_id"],
+                batch["sequence_start"],
+                batch["sequence_end"],
+                batch["first_event_at"],
+                batch["last_event_at"],
+                document["eventCount"],
+                batch["event_checksum"],
+            ),
+        )
+        rows: list[sqlite3.Row] = batch["event_rows"]
+        connection.executemany(
+            """
+            insert into local_report_event_claims (event_id, report_id, claimed_at)
+            values (?, ?, ?)
+            on conflict(event_id) do nothing
+            """,
+            [(str(row["event_id"]), report_id, selected_at) for row in rows],
+        )
+        connection.executemany(
+            """
+            insert into local_report_event_memberships (
+                report_revision_id,
+                event_id,
+                batch_id,
+                selected_at
+            )
+            values (?, ?, ?, ?)
+            """,
+            [(revision_id, str(row["event_id"]), batch["batch_id"], selected_at) for row in rows],
+        )
+
+
+def _report_revision_record(connection: sqlite3.Connection, revision_id: str) -> dict[str, Any]:
+    row = connection.execute(
+        f"""
+        {_REPORT_REVISION_SELECT}
+        where revision.revision_id = ?
+        """,
+        (revision_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError(f"Local report revision disappeared: {revision_id}")
+    return _report_submission_row(row)
+
+
+def _submission_response_from_record(
+    connection: sqlite3.Connection, record: dict[str, Any]
+) -> dict[str, int | str | None]:
+    revision_id = str(record["revision_id"])
+    event_count = connection.execute(
+        """
+        select count(*)
+        from local_report_event_memberships
+        where report_revision_id = ?
+        """,
+        (revision_id,),
+    ).fetchone()[0]
+    entries = _safe_int(record["entries"])
+    exits = _safe_int(record["exits"])
+    unique_count = _safe_int(record["unique_count"])
+    return {
+        "entries": entries,
+        "exits": exits,
+        "peak_occupancy": _safe_int(record["peak_occupancy"]),
+        "current_occupancy": max(0, entries - exits),
+        "unique_count": unique_count,
+        "estimated_unique_count": unique_count,
+        "confirmed_unique_count": 0,
+        "degraded_unique_count": 0,
+        "pending_unique_entries": 0,
+        "repeat_entry_count": max(0, entries - unique_count),
+        "occupancy_correction_delta": 0,
+        "total_events": _safe_int(event_count),
+        "unsubmitted_events": 0,
+        "unsynced_events": _safe_int(event_count) if record["sync_status"] != "synced" else 0,
+        "unclassified_events": 0,
+        "first_event_at": None,
+        "last_event_at": None,
+        "source_kind": str(record["source_kind"]),
+        "mock_run_id": str(record["mock_run_id"]) if record["mock_run_id"] else None,
+        "period_id": str(record["period_id"]) if record["period_id"] else None,
+        "period": str(record["period"]),
+        "business_start_date": None,
+        "business_end_date_exclusive": None,
+        "report_id": str(record["report_id"]),
+        "revision_id": revision_id,
+        "revision_number": _safe_int(record["revision_number"]),
+        "outbox_item_id": str(record["outbox_item_id"]),
+        "payload_hash": str(record["payload_hash"]),
+        "submitted_at": str(record["submitted_at"]),
+        "sync_status": str(record["sync_status"]),
+    }
+
+
+def _acknowledge_outbox_item(
+    connection: sqlite3.Connection,
+    outbox_item_id: str,
+    *,
+    acknowledgement: dict[str, Any],
+    acknowledged_at: str,
+) -> bool:
+    row = connection.execute(
+        "select * from sync_outbox_items where outbox_item_id = ?",
+        (outbox_item_id,),
+    ).fetchone()
+    if row is None:
+        return False
+    acknowledgement_command_id = acknowledgement.get("commandId")
+    if acknowledgement_command_id is not None and str(acknowledgement_command_id) != str(
+        row["command_id"]
+    ):
+        raise ValueError("Acknowledgement command ID does not match the outbox item.")
+    acknowledgement_hash = acknowledgement.get("payloadHash")
+    if acknowledgement_hash is not None and str(acknowledgement_hash) != str(row["payload_hash"]):
+        raise ValueError("Acknowledgement payload hash does not match the outbox item.")
+    if row["status"] == "acknowledged":
+        return True
+
+    normalized_acknowledged_at = parse_captured_at(acknowledged_at).isoformat()
+    attempt_number = int(row["attempt_count"]) + 1
+    acknowledgement_json = canonical_json(acknowledgement)
+    connection.execute(
+        """
+        update sync_outbox_items
+        set status = 'acknowledged',
+            attempt_count = ?,
+            last_attempt_at = ?,
+            last_error_class = null,
+            last_error_message = null,
+            acknowledged_at = ?,
+            acknowledgement_json = ?
+        where outbox_item_id = ?
+        """,
+        (
+            attempt_number,
+            normalized_acknowledged_at,
+            normalized_acknowledged_at,
+            acknowledgement_json,
+            outbox_item_id,
+        ),
+    )
+    resource = acknowledgement.get("resource")
+    logical_version_value = resource.get("logicalVersion") if isinstance(resource, dict) else None
+    if isinstance(logical_version_value, int) and logical_version_value >= 1:
+        connection.execute(
+            """
+            update local_reports
+            set last_acknowledged_logical_version = max(
+                    last_acknowledged_logical_version,
+                    ?
+                ),
+                updated_at = ?
+            where report_id = (
+                select revision.report_id
+                from local_report_revisions as revision
+                where revision.revision_id = ?
+            )
+            """,
+            (
+                logical_version_value,
+                normalized_acknowledged_at,
+                row["report_revision_id"],
+            ),
+        )
+    connection.execute(
+        """
+        insert into sync_attempts (
+            attempt_id,
+            outbox_item_id,
+            attempt_number,
+            attempted_at,
+            completed_at,
+            outcome,
+            response_json
+        )
+        values (?, ?, ?, ?, ?, 'acknowledged', ?)
+        """,
+        (
+            str(uuid4()),
+            outbox_item_id,
+            attempt_number,
+            normalized_acknowledged_at,
+            normalized_acknowledged_at,
+            acknowledgement_json,
+        ),
+    )
+    return True
+
+
+def _outbox_item_row(row: sqlite3.Row) -> dict[str, Any]:
+    payload = _json_dict(row["payload_json"])
+    acknowledgement = _json_dict(row["acknowledgement_json"])
+    return {
+        "outbox_item_id": row["outbox_item_id"],
+        "report_revision_id": row["report_revision_id"],
+        "command_id": row["command_id"],
+        "idempotency_key": row["idempotency_key"],
+        "endpoint": row["endpoint"],
+        "contract_version": row["contract_version"],
+        "payload": payload,
+        "payload_hash": row["payload_hash"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "next_attempt_at": row["next_attempt_at"],
+        "attempt_count": _safe_int(row["attempt_count"]),
+        "last_attempt_at": row["last_attempt_at"],
+        "last_error_class": row["last_error_class"],
+        "last_error_message": row["last_error_message"],
+        "acknowledged_at": row["acknowledged_at"],
+        "acknowledgement": acknowledgement,
+    }
+
+
+def _json_dict(value: Any) -> dict[str, Any]:
+    try:
+        parsed = json.loads(str(value)) if value else {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
+    return (
+        connection.execute(
+            "select 1 from sqlite_master where type = 'table' and name = ?",
+            (table_name,),
+        ).fetchone()
+        is not None
+    )
+
+
 def _safe_scope(value: str | None) -> str:
     if not value:
         return "unbound"
@@ -1370,6 +2119,15 @@ def _provenance_for_rows(rows: list[sqlite3.Row]) -> tuple[str, str | None]:
     return source_kind, run_ids.pop() if len(run_ids) == 1 else None
 
 
+def _open_event_filter(table_alias: str = "count_events") -> str:
+    return (
+        "not exists ("
+        "select 1 from local_report_event_claims as claim "
+        f"where claim.event_id = {table_alias}.event_id"
+        ")"
+    )
+
+
 def _resolve_summary_period(
     connection: sqlite3.Connection,
     *,
@@ -1382,7 +2140,7 @@ def _resolve_summary_period(
             raise ValueError("Reporting period ID must use month:Asia/Manila:YYYY-MM.")
         return period
 
-    submitted_filter = "" if include_submitted else "and submitted_report_id is null"
+    submitted_filter = "" if include_submitted else f"and {_open_event_filter()}"
     row = connection.execute(
         f"""
         select reporting_period_id
@@ -1438,10 +2196,10 @@ def _resolve_report_period(
         )
 
     rows = connection.execute(
-        """
+        f"""
         select distinct reporting_period_id
         from count_events
-        where submitted_report_id is null
+        where {_open_event_filter()}
           and reporting_period_id is not null
         order by reporting_period_id
         """
@@ -1517,6 +2275,12 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
 
     return {
         "report_id": row["report_id"],
+        "revision_id": row["revision_id"],
+        "revision_number": _safe_int(row["revision_number"]),
+        "expected_version": _safe_int(row["expected_version"]),
+        "last_acknowledged_logical_version": _safe_int(row["last_acknowledged_logical_version"]),
+        "outbox_item_id": row["outbox_item_id"],
+        "payload_hash": row["payload_hash"],
         "period": row["period"],
         "period_id": row["reporting_period_id"],
         "submitted_at": row["submitted_at"],

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.storage.report_ledger_schema import migrate_report_ledger_v3
 from app.storage.reporting_periods import (
     REPORTING_TIMEZONE,
     ReportingPeriod,
@@ -13,7 +14,7 @@ from app.storage.reporting_periods import (
     parse_captured_at,
 )
 
-LOCAL_SCHEMA_VERSION = 2
+LOCAL_SCHEMA_VERSION = 3
 SQLITE_BUSY_TIMEOUT_MS = 5_000
 
 _Migration = Callable[[sqlite3.Connection], None]
@@ -56,6 +57,7 @@ def initialize_local_database(database_path: Path) -> None:
         migrations: tuple[tuple[int, str, _Migration], ...] = (
             (1, "baseline_local_metrics_ledger", _migrate_baseline),
             (2, "canonical_reporting_periods", _migrate_reporting_periods),
+            (3, "immutable_report_revisions_and_sync_outbox", migrate_report_ledger_v3),
         )
         for version, name, migration in migrations:
             if _migration_is_applied(connection, version):

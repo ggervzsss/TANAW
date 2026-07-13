@@ -18,6 +18,44 @@ from app.storage.session_store import SessionStore
 
 
 class CameraProcessingManagerSessionTest(unittest.TestCase):
+    def test_exact_sync_outbox_operations_are_forwarded_by_manager(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            manager._session_store.append_event(_event_payload())
+            first = manager.record_report_submission("REP-MANAGER", "Current Period")
+
+            ready = manager.list_ready_sync_outbox_items()
+
+            self.assertEqual([item["outbox_item_id"] for item in ready], [first["outbox_item_id"]])
+            self.assertTrue(
+                manager.acknowledge_sync_outbox_item(
+                    str(first["outbox_item_id"]),
+                    {
+                        "commandId": ready[0]["command_id"],
+                        "payloadHash": ready[0]["payload_hash"],
+                    },
+                )
+            )
+            self.assertEqual(manager.list_ready_sync_outbox_items(), [])
+
+            second = manager.record_report_submission(
+                "REP-MANAGER",
+                "Current Period",
+                notes="corrected",
+                idempotency_key="manager-revision-2",
+            )
+            failed = manager.record_sync_outbox_failure(
+                str(second["outbox_item_id"]),
+                error_class="validation_error",
+                error_message="Rejected by central intake.",
+                retryable=False,
+                http_status=422,
+            )
+
+            self.assertEqual(failed["status"], "dead_letter")
+            self.assertFalse(hasattr(manager, "mark_report_synced"))
+            self.assertFalse(hasattr(manager, "mark_events_synced"))
+
     def test_virtual_simulation_runs_without_camera_and_records_manual_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
@@ -742,6 +780,7 @@ class _SpyReIdentifier:
 def _event_payload() -> dict[str, Any]:
     return {
         "camera_id": 1,
+        "central_camera_id": "11111111-1111-4111-8111-111111111111",
         "camera_name": "Test Camera",
         "counts": {"entry": 1, "exit": 0, "occupancy": 1},
         "direction": "entry",

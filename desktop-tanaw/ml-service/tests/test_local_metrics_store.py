@@ -497,11 +497,10 @@ class LocalMetricsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            store.record_report_submission("REP-001", "Current Period")
+            submission = store.record_report_submission("REP-001", "Current Period")
 
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 1)
-            self.assertTrue(store.mark_report_synced("REP-001"))
-            self.assertEqual(store.mark_events_synced(), 1)
+            self.assertTrue(store.acknowledge_sync_outbox_item(str(submission["outbox_item_id"])))
 
             report = store.list_report_submissions()[0]
             self.assertEqual(report["sync_status"], "synced")
@@ -540,6 +539,7 @@ def _event(
 ) -> dict:
     payload = {
         "camera_id": 1,
+        "central_camera_id": "11111111-1111-4111-8111-111111111111",
         "camera_name": "Test Camera",
         "counts": {
             "entry": entry,
