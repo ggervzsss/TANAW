@@ -176,6 +176,12 @@ class EnterpriseSite(Base):
             "location_version",
             name="uq_enterprise_sites_code_version",
         ),
+        UniqueConstraint(
+            "id",
+            "enterprise_id",
+            "classification",
+            name="uq_enterprise_sites_identity_scope",
+        ),
         UniqueConstraint("id", "classification", name="uq_enterprise_sites_id_classification"),
         Index(
             "uq_enterprise_sites_active_code",
@@ -320,6 +326,9 @@ class Camera(Base):
             name="ck_cameras_identity",
         ),
         UniqueConstraint("edge_device_id", "camera_key", name="uq_cameras_device_camera_key"),
+        UniqueConstraint(
+            "id", "site_id", "classification", name="uq_cameras_id_site_classification"
+        ),
         Index("ix_cameras_site_lifecycle", "site_id", "lifecycle_state"),
     )
 
