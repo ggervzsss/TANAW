@@ -11,6 +11,21 @@ from app.features.reporting.envelopes import (
     ReportSubmissionAcknowledgement,
     ReportSubmissionCommand,
 )
+from app.features.reporting.obligation_envelopes import (
+    ObligationFreezeAcknowledgement,
+    ObligationFreezeCommand,
+    PeriodComplianceResource,
+    ReminderIntentAcknowledgement,
+    ReminderIntentCommand,
+)
+from app.features.reporting.obligations import (
+    ObligationConflict,
+    ObligationError,
+    ObligationNotFound,
+    create_reminder_intents,
+    freeze_period_obligations,
+    read_period_compliance,
+)
 from app.features.reporting.service import (
     ReportIntakeConflict,
     ReportIntakeError,
@@ -26,6 +41,10 @@ router = APIRouter(prefix="/operational", tags=["reporting-v2"])
 
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffAccount = Annotated[Account, Depends(require_roles({"staff"}))]
+ComplianceReadAccount = Annotated[
+    Account,
+    Depends(require_roles({"staff", "admin", "enterprise"})),
+]
 
 
 @router.post(
@@ -88,5 +107,115 @@ async def transition_enterprise_report_v2(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.post(
+    "/reporting-periods/{reporting_period_id}/obligations/freeze/v2",
+    response_model=ObligationFreezeAcknowledgement,
+)
+async def freeze_reporting_period_obligations_v2(
+    reporting_period_id: UUID,
+    command: ObligationFreezeCommand,
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ObligationFreezeAcknowledgement:
+    try:
+        acknowledgement = await freeze_period_obligations(
+            db,
+            account=account,
+            reporting_period_id=reporting_period_id,
+            command=command,
+        )
+        await db.commit()
+        return acknowledgement
+    except ObligationNotFound as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ObligationConflict as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ObligationError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.get(
+    "/reporting-periods/{reporting_period_id}/compliance/v2",
+    response_model=PeriodComplianceResource,
+)
+async def read_reporting_period_compliance_v2(
+    reporting_period_id: UUID,
+    account: ComplianceReadAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PeriodComplianceResource:
+    try:
+        return await read_period_compliance(
+            db,
+            account=account,
+            reporting_period_id=reporting_period_id,
+        )
+    except ObligationNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ObligationConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ObligationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.post(
+    "/reporting-periods/{reporting_period_id}/reminder-intents/v2",
+    response_model=ReminderIntentAcknowledgement,
+)
+async def create_reporting_period_reminder_intents_v2(
+    reporting_period_id: UUID,
+    command: ReminderIntentCommand,
+    account: StaffAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReminderIntentAcknowledgement:
+    try:
+        acknowledgement = await create_reminder_intents(
+            db,
+            account=account,
+            reporting_period_id=reporting_period_id,
+            command=command,
+        )
+        await db.commit()
+        return acknowledgement
+    except ObligationNotFound as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ObligationConflict as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ObligationError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": exc.code, "message": exc.message},
         ) from exc
