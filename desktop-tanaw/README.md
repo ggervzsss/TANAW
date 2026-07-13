@@ -15,8 +15,10 @@ The desktop app requires Node.js 22.12 or newer, npm, Python 3.12 or newer for
 the local ML service, and `uv`. Camera AI requires detector model assets under
 `ml-service/models/`.
 
-The desktop renderer runs on port `5174` in development. The local ML service
-runs on `127.0.0.1:8765` by default and is started by Electron when needed.
+The desktop renderer runs on port `5174` in development. Electron starts the
+local ML service on an operating-system-selected ephemeral loopback port. The
+port and its per-launch capability are private implementation details; there is
+no fixed or user-configurable ML port.
 
 ### Linux
 
@@ -59,27 +61,21 @@ the local Electron renderer at the Dockerized backend.
 - Dockerized web portal: `http://localhost:5173`
 - Dockerized backend API: `http://localhost:8000`
 - Desktop renderer: `http://127.0.0.1:5174`
-- Local ML service: `http://127.0.0.1:8765`
+- Local ML service: Electron-owned ephemeral `127.0.0.1` endpoint (not directly accessible)
 
-Electron starts the ML service automatically from `ml-service/main.py`. If
-another service is already listening on the ML port, the desktop attempts to
-connect to it and reports conflicts in the camera panel.
+Electron starts the ML service automatically from `ml-service/main.py`, sends a
+fresh cryptographic capability through a private bootstrap pipe, verifies the
+spawned child PID and an authenticated health challenge, and owns every local
+REST, WebSocket, and stream connection. The renderer uses validated named IPC
+operations and the controlled `tanaw-ml:` media protocol. Direct browser,
+renderer `fetch`, and `curl` access are deliberately unsupported. A process on
+an old or guessed fixed port is never trusted.
 
-Override the ML port only when needed:
-
-Linux:
-
-```bash
-TANAW_ML_SERVICE_PORT=8770 npm run dev
-```
-
-PowerShell:
-
-```powershell
-$env:TANAW_ML_SERVICE_PORT = "8770"
-npm run dev
-Remove-Item Env:TANAW_ML_SERVICE_PORT
-```
+Camera credentials are transformed into Electron's operating-system-backed
+secure store, bound to the exact camera type and stream endpoint, and never
+returned to the renderer. TANAW removes the former browser credential record
+after that one-time transform and fails closed when secure storage is
+unavailable.
 
 ### Docker Boundary
 
@@ -319,17 +315,9 @@ docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend `
   --target-enterprise "archies_001@tanaw.sanpedro"
 ```
 
-Verify the desktop state:
-
-```bash
-curl http://127.0.0.1:8765/mock/status
-```
-
-PowerShell:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8765/mock/status
-```
+Verify the prepared state in the signed-in desktop application's **Simulation
+Lab** and report-period selector. The authenticated Electron bridge is the only
+supported local service client; no direct ML-service status URL is exposed.
 
 Remove generated backend and prepared desktop data:
 

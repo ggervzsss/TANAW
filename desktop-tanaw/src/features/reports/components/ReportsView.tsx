@@ -345,7 +345,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setIsSubmitting(false);
       return;
     }
-    const cloudSyncError = await syncSubmittedReportToCloud(reportId);
+    const cloudSyncError = await syncSubmittedReportToCloud(reportId, submission.outbox_item_id);
     const submittedSyncStatus = cloudSyncError ? submission.sync_status : "synced";
     const restoredWorkspaceMetrics = !cloudSyncError && !activeReportId ? await prepareNextWorkspaceMetrics() : null;
 
@@ -741,9 +741,9 @@ function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord
   };
 }
 
-async function syncSubmittedReportToCloud(reportId: string) {
+async function syncSubmittedReportToCloud(reportId: string, outboxItemId: string) {
   try {
-    await syncDesktopReportSubmission(reportId);
+    await syncDesktopReportSubmission(reportId, outboxItemId);
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : "The backend could not be reached.";

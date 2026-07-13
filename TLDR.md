@@ -218,8 +218,11 @@ npm run models:setup
 npm run dev
 ```
 
-The last command keeps running and opens Electron. It also starts the local ML
-service at <http://127.0.0.1:8765>.
+The last command keeps running and opens Electron. Electron starts the local ML
+service on an ephemeral loopback port, transfers a fresh capability through a
+private pipe, verifies the child, and proxies all access through narrow IPC and
+the controlled `tanaw-ml:` stream protocol. There is no fixed or directly
+accessible ML URL.
 
 If PowerShell blocks `npm.ps1`, use:
 
@@ -261,17 +264,9 @@ In the web portal:
 
 ## 9. Inspect the local ML simulation
 
-Linux:
-
-```shell
-curl http://127.0.0.1:8765/mock/status
-```
-
-Windows PowerShell:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8765/mock/status
-```
+Use the signed-in desktop application's **Simulation Lab** and reporting-period
+selector. Direct browser, renderer fetch, PowerShell, and `curl` access to the
+Electron-owned ML child is intentionally unsupported.
 
 ## 10. Desktop local-data commands
 

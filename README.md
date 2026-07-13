@@ -56,9 +56,11 @@ enterprise operators. It provides:
 - current and historical metrics, occupancy, reports, notifications, profile,
   and security settings.
 
-The Electron process starts and supervises the local Python ML service on
-`127.0.0.1:8765`. A real camera is optional for the simulated reporting
-workflow.
+The Electron main process starts and supervises the local Python ML service on
+an operating-system-selected ephemeral loopback port. A fresh private
+capability authenticates every local request; the renderer uses only validated
+IPC and the controlled `tanaw-ml:` stream protocol. A real camera is optional
+for the simulated reporting workflow.
 
 ### LGU web portal
 
@@ -685,19 +687,22 @@ Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
 npm run dev
 ```
 
-### Local ML service by itself
+### Local ML service checks
 
-Electron normally supervises this service. For isolated development:
+The ML service intentionally refuses standalone/public startup because Electron
+must provide its private per-launch bootstrap and verify the spawned child. Run
+its isolated automated checks instead:
 
 ```shell
-cd desktop-tanaw
-cd ml-service
+cd desktop-tanaw/ml-service
 uv sync --frozen
-uv run python main.py
+uv run python -m unittest discover -s tests -v
 ```
 
-The service listens on <http://127.0.0.1:8765> by default. Its health endpoint
-is <http://127.0.0.1:8765/health>.
+There is no supported fixed ML port, direct health URL, renderer fetch path, or
+`curl` workflow. Electron chooses the loopback port, transfers the capability
+through a private pipe, verifies the child PID and health challenge, and owns
+all REST, WebSocket, and media access.
 
 ## Production-like Docker build
 
@@ -784,8 +789,6 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `DEVELOPMENT_DELIVERY_RETENTION_DAYS` | Short retention for local delivery bodies that can contain development secrets |
 | `EMAIL_OUTBOX_RETENTION_DAYS` | Retention for ordinary terminal transactional-email records |
 | `FAILED_EMAIL_OUTBOX_RETENTION_DAYS` | Longer audit retention for terminal failure and reconciliation records |
-| `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
-| `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |
 
 Do not permanently enable `TANAW_ALLOW_MOCK_DATA` in production. The examples
@@ -903,8 +906,9 @@ another copy:
 docker compose ps
 ```
 
-The normal ports are `5173` for the web portal, `8000` for the backend, `5174`
-for the desktop renderer, and `8765` for the local ML service.
+The normal fixed ports are `5173` for the web portal, `8000` for the backend,
+and `5174` for the desktop renderer. The Electron-owned ML child uses an
+ephemeral loopback port and never attaches to an existing listener.
 
 ### PowerShell says script execution is disabled
 
@@ -947,17 +951,9 @@ another actively synchronized folder.
 - Keep the backend and desktop running for several seconds so the authenticated
   polling cycle can complete.
 - Restart the desktop after ML-service code or dependency changes.
-- Check local state on Linux/macOS with:
-
-  ```shell
-  curl http://127.0.0.1:8765/mock/status
-  ```
-
-- On Windows PowerShell, use:
-
-  ```powershell
-  Invoke-RestMethod http://127.0.0.1:8765/mock/status
-  ```
+- Check the prepared state in the signed-in desktop **Simulation Lab** and
+  report-period selector. Direct ML-service requests are intentionally
+  unsupported.
 
 ### A simulation account already exists
 

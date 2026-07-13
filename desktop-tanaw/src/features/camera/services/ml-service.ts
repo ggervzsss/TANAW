@@ -1,4 +1,5 @@
 import type { Camera } from "../../../types/enterprise";
+import type { MlOperation } from "../../../../electron/ml-ipc-contract";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
 
 export type MlServiceStatus = {
@@ -143,7 +144,6 @@ export type MlSession = {
   error: string | null;
   camera_id: number | null;
   camera_name: string | null;
-  camera_config: Record<string, unknown> | null;
   counts: MlCounts;
   updated_at: string | null;
 };
@@ -156,6 +156,8 @@ export type MlCameraLiveState = {
 };
 
 export type MlCameraLiveEnvelope = { type: "camera.state"; data: MlCameraLiveState } | { type: "heartbeat" };
+
+export type MlCameraBridgeEvent = MlCameraLiveEnvelope | { type: "service.connection"; data: { connected: boolean } };
 
 export type MlEnterpriseContext = {
   enterprise_id: string;
@@ -214,12 +216,18 @@ export type LocalMetricsHistory = {
 
 export type LocalReportSubmission = LocalMetricsSummary & {
   report_id: string;
+  revision_id: string;
+  outbox_item_id: string;
+  payload_hash: string;
   submitted_at: string;
   sync_status: string;
 };
 
 export type LocalReportSubmissionRecord = {
   report_id: string;
+  revision_id: string;
+  outbox_item_id: string;
+  payload_hash: string;
   period: string;
   submitted_at: string;
   entries: number;
@@ -233,6 +241,26 @@ export type LocalReportSubmissionRecord = {
   mock_run_id?: string | null;
   synced_at: string | null;
   raw_purged_at?: string | null;
+};
+
+export type LocalSyncOutboxItem = {
+  outbox_item_id: string;
+  report_revision_id: string;
+  command_id: string;
+  idempotency_key: string;
+  endpoint: string;
+  contract_version: number;
+  payload: Record<string, unknown>;
+  payload_hash: string;
+  status: "ready" | "retry";
+  created_at: string;
+  next_attempt_at: string;
+  attempt_count: number;
+  last_attempt_at: string | null;
+  last_error_class: string | null;
+  last_error_message: string | null;
+  acknowledged_at: string | null;
+  acknowledgement: Record<string, unknown>;
 };
 
 export type OccupancyCorrection = {
@@ -305,7 +333,7 @@ export type CameraTestResult = {
   message: string;
 };
 
-export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
+export const DEFAULT_ML_SERVICE_BASE_URL = "tanaw-ml://local";
 
 export const EMPTY_ML_COUNTS: MlCounts = {
   entry: 0,
@@ -347,61 +375,55 @@ export async function restartMlService(): Promise<MlServiceStatus> {
 }
 
 export async function getMlHealth(baseUrl: string): Promise<MlHealth> {
-  return requestJson<MlHealth>(`${baseUrl}/health`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<MlHealth>("camera.health");
 }
 
 export async function getMlCounts(baseUrl: string): Promise<MlCounts> {
-  return requestJson<MlCounts>(`${baseUrl}/counts`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<MlCounts>("camera.counts");
 }
 
 export async function getMlSession(baseUrl: string): Promise<MlSession> {
-  return requestJson<MlSession>(`${baseUrl}/session`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<MlSession>("camera.session");
 }
 
 export async function setMlEnterpriseContext(baseUrl: string, enterpriseId: string, enterpriseName?: string | null): Promise<MlEnterpriseContext> {
-  return requestJson<MlEnterpriseContext>(
-    `${baseUrl}/context/enterprise`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        enterprise_id: enterpriseId,
-        enterprise_name: enterpriseName || null,
-      }),
-    },
-    10_000,
-  );
+  void baseUrl;
+  return requestMl<MlEnterpriseContext>("context.enterprise", {
+    enterprise_id: enterpriseId,
+    enterprise_name: enterpriseName || null,
+  });
 }
 
 export async function restoreMlSession(baseUrl: string): Promise<MlSession> {
-  return requestJson<MlSession>(`${baseUrl}/session/restore`, { method: "POST" }, 8000);
+  void baseUrl;
+  return requestMl<MlSession>("session.restore");
 }
 
 export async function getLocalMetricsSummary(baseUrl: string, options: { includeSubmitted?: boolean } = {}): Promise<LocalMetricsSummary> {
-  return requestJson<LocalMetricsSummary>(`${baseUrl}/metrics/summary${queryFromOptions(options)}`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<LocalMetricsSummary>("metrics.summary", { includeSubmitted: Boolean(options.includeSubmitted) });
 }
 
 export async function getLocalMetricsHistory(baseUrl: string, options: { includeSubmitted?: boolean } = {}): Promise<LocalMetricsHistory> {
-  return requestJson<LocalMetricsHistory>(`${baseUrl}/metrics/history${queryFromOptions(options)}`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<LocalMetricsHistory>("metrics.history", { includeSubmitted: Boolean(options.includeSubmitted) });
 }
 
 export async function recordOccupancyCorrection(
   baseUrl: string,
   payload: { newOccupancy: number; reason: string; actorId?: string | null; actorName?: string | null; cameraId?: number | null },
 ): Promise<OccupancyCorrection> {
-  return requestJson<OccupancyCorrection>(
-    `${baseUrl}/occupancy/correction`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        new_occupancy: payload.newOccupancy,
-        reason: payload.reason,
-        actor_id: payload.actorId ?? null,
-        actor_name: payload.actorName ?? null,
-        camera_id: payload.cameraId ?? null,
-      }),
-    },
-    5000,
-  );
+  void baseUrl;
+  return requestMl<OccupancyCorrection>("occupancy.correction", {
+    new_occupancy: payload.newOccupancy,
+    reason: payload.reason,
+    actor_id: payload.actorId ?? null,
+    actor_name: payload.actorName ?? null,
+    camera_id: payload.cameraId ?? null,
+  });
 }
 
 export async function recordLocalReportSubmission(
@@ -414,109 +436,114 @@ export async function recordLocalReportSubmission(
     reportPayload: Record<string, unknown>;
   },
 ): Promise<LocalReportSubmission> {
-  return requestJson<LocalReportSubmission>(
-    `${baseUrl}/reports/local-submit`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        metrics: {
-          entries: payload.metrics.entries,
-          exits: payload.metrics.exits,
-          peak_occupancy: payload.metrics.peakOccupancy,
-          unique_count: payload.metrics.uniqueCount,
-        },
-        notes: payload.notes || null,
-        payload: payload.reportPayload,
-        period: payload.period,
-        report_id: payload.reportId,
-      }),
+  void baseUrl;
+  return requestMl<LocalReportSubmission>("reports.submit", {
+    metrics: {
+      entries: payload.metrics.entries,
+      exits: payload.metrics.exits,
+      peak_occupancy: payload.metrics.peakOccupancy,
+      unique_count: payload.metrics.uniqueCount,
     },
-    5000,
-  );
+    notes: payload.notes || null,
+    payload: payload.reportPayload,
+    period: payload.period,
+    report_id: payload.reportId,
+  });
 }
 
 export async function listLocalReportSubmissions(baseUrl: string, limit = 100): Promise<LocalReportSubmissionRecord[]> {
-  const params = new URLSearchParams({ limit: String(limit) });
-  return requestJson<LocalReportSubmissionRecord[]>(`${baseUrl}/reports/local?${params.toString()}`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<LocalReportSubmissionRecord[]>("reports.list", { limit });
 }
 
-export async function markLocalReportSynced(baseUrl: string, reportId: string): Promise<{ updated: number }> {
-  return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/synced`, { method: "POST" }, 2500);
+export async function listReadySyncOutboxItems(baseUrl: string, limit = 100): Promise<LocalSyncOutboxItem[]> {
+  void baseUrl;
+  return requestMl<LocalSyncOutboxItem[]>("sync.outbox.ready", { limit });
+}
+
+export async function acknowledgeSyncOutboxItem(baseUrl: string, outboxItemId: string, acknowledgement: Record<string, unknown>): Promise<{ acknowledged: true; outbox_item_id: string }> {
+  void baseUrl;
+  return requestMl<{ acknowledged: true; outbox_item_id: string }>("sync.outbox.acknowledge", { outboxItemId, acknowledgement });
+}
+
+export async function recordSyncOutboxFailure(
+  baseUrl: string,
+  outboxItemId: string,
+  failure: { errorClass: string; errorMessage: string; retryable: boolean; httpStatus?: number | null },
+): Promise<LocalSyncOutboxItem> {
+  void baseUrl;
+  return requestMl<LocalSyncOutboxItem>("sync.outbox.failure", {
+    outboxItemId,
+    error_class: failure.errorClass,
+    error_message: failure.errorMessage,
+    retryable: failure.retryable,
+    http_status: failure.httpStatus ?? null,
+  });
 }
 
 export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string): Promise<{ report_id: string; purged_events: number; raw_purged_at: string | null }> {
-  return requestJson<{ report_id: string; purged_events: number; raw_purged_at: string | null }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/purge-raw`, { method: "POST" }, 5000);
-}
-
-export async function markLocalEventsSynced(baseUrl: string): Promise<{ updated: number }> {
-  return requestJson<{ updated: number }>(`${baseUrl}/metrics/mark-synced`, { method: "POST" }, 2500);
+  void baseUrl;
+  return requestMl<{ report_id: string; purged_events: number; raw_purged_at: string | null }>("reports.purgeRaw", { reportId });
 }
 
 export async function prepareLocalMockCounts(baseUrl: string, payload: MockPreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {
-  return requestJson<LocalMetricsSummary & { prepared: boolean }>(
-    `${baseUrl}/mock/prepare`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        mock_run_id: payload.mockRunId,
-        enterprise_id: payload.enterpriseId,
-        enterprise_name: payload.enterpriseName,
-        entries: payload.entries,
-        exits: payload.exits,
-        unique_count: payload.uniqueCount,
-        peak_occupancy: payload.peakOccupancy,
-        period: payload.period,
-      }),
-    },
-    15_000,
-  );
+  void baseUrl;
+  return requestMl<LocalMetricsSummary & { prepared: boolean }>("simulation.prepare", {
+    mock_run_id: payload.mockRunId,
+    enterprise_id: payload.enterpriseId,
+    enterprise_name: payload.enterpriseName,
+    entries: payload.entries,
+    exits: payload.exits,
+    unique_count: payload.uniqueCount,
+    peak_occupancy: payload.peakOccupancy,
+    period: payload.period,
+  });
 }
 
 export async function resetLocalMockData(baseUrl: string, mockRunId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
-  const params = new URLSearchParams({ mock_run_id: mockRunId });
-  return requestJson<{ stopped: boolean; removed: Record<string, number> }>(`${baseUrl}/mock/reset?${params.toString()}`, { method: "POST" }, 5000);
+  void baseUrl;
+  return requestMl<{ stopped: boolean; removed: Record<string, number> }>("simulation.reset", { mockRunId });
 }
 
 export async function getSimulationStatus(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/status`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<SimulationStatus>("simulation.status");
 }
 
 export async function startSimulation(baseUrl: string, payload: SimulationStartRequest): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(
-    `${baseUrl}/mock/start`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        mock_run_id: payload.runId,
-        mode: "virtual",
-        scenario: payload.scenario,
-        events_per_minute: payload.eventsPerMinute,
-        capacity: payload.capacity,
-        starting_occupancy: payload.startingOccupancy,
-        duration_minutes: payload.durationMinutes,
-        threshold_percent: payload.thresholdPercent,
-        entry_probability: payload.entryProbability,
-        unique_entry_rate: payload.uniqueEntryRate,
-      }),
-    },
-    15_000,
-  );
+  void baseUrl;
+  return requestMl<SimulationStatus>("simulation.start", {
+    mock_run_id: payload.runId,
+    mode: "virtual",
+    scenario: payload.scenario,
+    events_per_minute: payload.eventsPerMinute,
+    capacity: payload.capacity,
+    starting_occupancy: payload.startingOccupancy,
+    duration_minutes: payload.durationMinutes,
+    threshold_percent: payload.thresholdPercent,
+    entry_probability: payload.entryProbability,
+    unique_entry_rate: payload.uniqueEntryRate,
+  });
 }
 
 export async function pauseSimulation(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/pause`, { method: "POST" }, 5000);
+  void baseUrl;
+  return requestMl<SimulationStatus>("simulation.pause");
 }
 
 export async function resumeSimulation(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/resume`, { method: "POST" }, 5000);
+  void baseUrl;
+  return requestMl<SimulationStatus>("simulation.resume");
 }
 
 export async function stopSimulation(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/stop`, { method: "POST" }, 5000);
+  void baseUrl;
+  return requestMl<SimulationStatus>("simulation.stop");
 }
 
 export async function appendSimulationEvent(baseUrl: string, direction: "entry" | "exit"): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/event`, { method: "POST", body: JSON.stringify({ direction }) }, 5000);
+  void baseUrl;
+  return requestMl<SimulationStatus>("simulation.event", { direction });
 }
 
 export async function resetSimulation(baseUrl: string, runId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
@@ -524,90 +551,76 @@ export async function resetSimulation(baseUrl: string, runId: string): Promise<{
 }
 
 export async function getMlDetections(baseUrl: string): Promise<MlDetections> {
-  return requestJson<MlDetections>(`${baseUrl}/detections`, { method: "GET" }, 2500);
+  void baseUrl;
+  return requestMl<MlDetections>("camera.detections");
 }
 
-export async function testCameraConnection(baseUrl: string, camera: Camera): Promise<CameraTestResult> {
-  return requestJson<CameraTestResult>(
-    `${baseUrl}/camera/test`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        camera_type: camera.cameraType,
-        password: camera.password || null,
-        stream_url: camera.rtsp,
-        username: camera.username || null,
-      }),
+export async function testCameraConnection(baseUrl: string, camera: Camera, credentialScope: string): Promise<CameraTestResult> {
+  void baseUrl;
+  return requestMl<CameraTestResult>("camera.test", {
+    cameraId: camera.id,
+    credentialScope,
+    body: {
+      camera_type: camera.cameraType,
+      stream_url: camera.rtsp,
     },
-    8000,
-  );
+  });
 }
 
-export async function startCameraProcessing(baseUrl: string, camera: Camera): Promise<{ message: string }> {
-  return requestJson<{ message: string }>(
-    `${baseUrl}/camera/start`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        camera_name: camera.name,
-        camera_id: camera.id,
-        camera_type: camera.cameraType,
-        confidence: camera.confidence,
-        counting_confidence: camera.confidence,
-        entry_line: toMlTripwireLine(camera.config.tripwires.entry),
-        event_cooldown_seconds: 3.6,
-        exit_line: toMlTripwireLine(camera.config.tripwires.exit),
-        paired_line_max_gap_seconds: 18,
-        password: camera.password || null,
-        processing_profile: camera.processingProfile,
-        runtime_backend: "auto",
-        tracker_profile: "auto",
-        pending_reid_wait_seconds: 0.6,
-        reid_mode: camera.reidMode ?? "auto",
-        reverse_direction: camera.config.reverse,
-        roi: toMlRoi(camera.config.roi),
-        stream_fps: 24,
-        stream_url: camera.rtsp,
-        tracking_confidence: camera.trackingConfidence ?? 0.15,
-        track_ttl_seconds: 9,
-        tripwire_position: camera.config.tripwire / 100,
-        unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
-        username: camera.username || null,
-      }),
+export async function startCameraProcessing(baseUrl: string, camera: Camera, credentialScope: string): Promise<{ message: string }> {
+  void baseUrl;
+  return requestMl<{ message: string }>("camera.start", {
+    cameraId: camera.id,
+    credentialScope,
+    body: {
+      camera_name: camera.name,
+      camera_id: camera.id,
+      camera_type: camera.cameraType,
+      confidence: camera.confidence,
+      counting_confidence: camera.confidence,
+      entry_line: toMlTripwireLine(camera.config.tripwires.entry),
+      event_cooldown_seconds: 3.6,
+      exit_line: toMlTripwireLine(camera.config.tripwires.exit),
+      paired_line_max_gap_seconds: 18,
+      processing_profile: camera.processingProfile,
+      runtime_backend: "auto",
+      tracker_profile: "auto",
+      pending_reid_wait_seconds: 0.6,
+      reid_mode: camera.reidMode ?? "auto",
+      reverse_direction: camera.config.reverse,
+      roi: toMlRoi(camera.config.roi),
+      stream_fps: 24,
+      stream_url: camera.rtsp,
+      tracking_confidence: camera.trackingConfidence ?? 0.15,
+      track_ttl_seconds: 9,
+      tripwire_position: camera.config.tripwire / 100,
+      unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
     },
-    30_000,
-  );
+  });
 }
 
 export async function stopCameraProcessing(baseUrl: string): Promise<{ message: string }> {
-  return requestJson<{ message: string }>(`${baseUrl}/camera/stop`, { method: "POST" }, 5000);
+  void baseUrl;
+  return requestMl<{ message: string }>("camera.stop");
 }
 
 export function getStreamUrl(baseUrl: string, version: number, overlay = true) {
+  void baseUrl;
   const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
-  return `${baseUrl}/stream?${params.toString()}`;
+  return `tanaw-ml://stream/?${params.toString()}`;
 }
 
-export function getMlCameraWebSocketUrl(baseUrl: string) {
-  const url = new URL("/camera/ws", baseUrl);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return url.toString();
+export function subscribeMlCameraEvents(listener: (event: MlCameraBridgeEvent) => void) {
+  if (!window.tanawMlService) return () => undefined;
+  void getMlServiceStatus().then((status) => listener({ type: "service.connection", data: { connected: status.running } }));
+  return window.tanawMlService.onCameraEvent((event) => {
+    if (isMlCameraBridgeEvent(event)) listener(event);
+  });
 }
 
 export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number, isProcessing: boolean) {
-  if (isProcessing) {
-    return getStreamUrl(baseUrl, version, false);
-  }
-
-  if (camera && isNativeBrowserMjpegCamera(camera)) {
-    return camera.rtsp.trim();
-  }
-
-  return getStreamUrl(baseUrl, version);
-}
-
-function isNativeBrowserMjpegCamera(camera: Camera) {
-  return camera.cameraType === "IP_WEBCAM" && /^https?:\/\//i.test(camera.rtsp.trim());
+  void camera;
+  return getStreamUrl(baseUrl, version, !isProcessing);
 }
 
 function toMlTripwireLine(line: Camera["config"]["tripwires"]["entry"]) {
@@ -637,55 +650,36 @@ function toMlRoi(roi: Camera["config"]["roi"]) {
   };
 }
 
-function queryFromOptions(options: { includeSubmitted?: boolean }) {
-  if (!options.includeSubmitted) return "";
-  return "?include_submitted=true";
+async function requestMl<T>(operation: MlOperation, payload?: unknown): Promise<T> {
+  if (!window.tanawMlService) {
+    throw new Error("Electron ML service bridge is unavailable.");
+  }
+  return window.tanawMlService.request<T>(operation, payload);
 }
 
-async function requestJson<T>(url: string, init: RequestInit, timeoutMs: number): Promise<T> {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      ...init,
-      cache: "no-store",
-      headers: buildHeaders(init),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
-    }
-
-    return (await response.json()) as T;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The ML service did not respond in time.");
-    }
-
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
+function isMlCameraBridgeEvent(event: unknown): event is MlCameraBridgeEvent {
+  if (!event || typeof event !== "object") return false;
+  const candidate = event as { data?: unknown; type?: unknown };
+  if (candidate.type === "heartbeat") return Object.keys(candidate).length === 1;
+  if (candidate.type === "service.connection") {
+    return Boolean(candidate.data && typeof candidate.data === "object" && typeof (candidate.data as { connected?: unknown }).connected === "boolean");
   }
-}
-
-function buildHeaders(init: RequestInit) {
-  const headers = new Headers(init.headers);
-  const hasJsonBody = typeof init.body === "string";
-
-  if (hasJsonBody && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  return headers;
-}
-
-async function getErrorMessage(response: Response) {
-  try {
-    const payload = (await response.json()) as { detail?: string };
-    return payload.detail ?? `Request failed with status ${response.status}.`;
-  } catch {
-    return `Request failed with status ${response.status}.`;
-  }
+  if (candidate.type !== "camera.state" || !candidate.data || typeof candidate.data !== "object" || Array.isArray(candidate.data)) return false;
+  const data = candidate.data as Record<string, unknown>;
+  const counts = data.counts;
+  const detections = data.detections;
+  const session = data.session;
+  return Boolean(
+    Object.keys(data).sort().join("|") === "counts|detections|health|session" &&
+    counts &&
+    typeof counts === "object" &&
+    typeof (counts as { running?: unknown }).running === "boolean" &&
+    detections &&
+    typeof detections === "object" &&
+    Array.isArray((detections as { tracks?: unknown }).tracks) &&
+    session &&
+    typeof session === "object" &&
+    !("camera_config" in session) &&
+    typeof (session as { running?: unknown }).running === "boolean",
+  );
 }

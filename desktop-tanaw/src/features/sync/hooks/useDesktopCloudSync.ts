@@ -1,9 +1,5 @@
 import { useEffect, useRef } from "react";
-import {
-  getMlCameraWebSocketUrl,
-  type MlCameraLiveEnvelope,
-  type MlCameraLiveState,
-} from "../../camera/services/ml-service";
+import { subscribeMlCameraEvents, type MlCameraLiveState } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopMockCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 import { syncFleetSimulationTelemetry } from "../services/fleet-simulation";
@@ -11,7 +7,6 @@ import { syncFleetSimulationTelemetry } from "../services/fleet-simulation";
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
 const TELEMETRY_RECONCILE_INTERVAL_MS = 30_000;
 const REPORT_SYNC_INTERVAL_MS = 20_000;
-const LIVE_RECONNECT_MAX_DELAY_MS = 10_000;
 
 type LiveTelemetryState = {
   lastSignature: string | null;
@@ -129,53 +124,15 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
       scheduleTelemetrySync();
     };
 
-    let liveSocket: WebSocket | null = null;
-    let liveReconnectTimer: number | undefined;
-    let liveReconnectAttempt = 0;
-
-    const scheduleLiveReconnect = () => {
-      if (isDisposed) return;
-      const delay = Math.min(1000 * 2 ** liveReconnectAttempt, LIVE_RECONNECT_MAX_DELAY_MS);
-      liveReconnectAttempt += 1;
-      liveReconnectTimer = window.setTimeout(connectLiveSocket, delay);
-    };
-
-    const connectLiveSocket = () => {
-      if (liveSocket) {
-        liveSocket.onclose = null;
-        liveSocket.onerror = null;
-        liveSocket.close();
-      }
-
-      try {
-        liveSocket = new WebSocket(getMlCameraWebSocketUrl(mlBaseUrl));
-      } catch {
-        scheduleLiveReconnect();
+    const unsubscribeLiveEvents = subscribeMlCameraEvents((envelope) => {
+      if (envelope.type === "service.connection") {
+        if (envelope.data.connected) {
+          scheduleTelemetrySync();
+        }
         return;
       }
-
-      liveSocket.onopen = () => {
-        liveReconnectAttempt = 0;
-        scheduleTelemetrySync();
-      };
-
-      liveSocket.onmessage = (event) => {
-        if (typeof event.data !== "string") return;
-
-        const envelope = parseLiveCameraEnvelope(event.data);
-        if (envelope?.type !== "camera.state") return;
-
-        handleLiveCameraState(envelope.data);
-      };
-
-      liveSocket.onerror = () => {
-        liveSocket?.close();
-      };
-
-      liveSocket.onclose = () => {
-        scheduleLiveReconnect();
-      };
-    };
+      if (envelope.type === "camera.state") handleLiveCameraState(envelope.data);
+    });
 
     const runAllSync = () => {
       void runPreparation();
@@ -185,7 +142,6 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
     };
 
     runAllSync();
-    connectLiveSocket();
     const telemetryIntervalId = window.setInterval(scheduleTelemetrySync, TELEMETRY_RECONCILE_INTERVAL_MS);
     const fleetSimulationIntervalId = window.setInterval(runFleetSimulationSync, TELEMETRY_RECONCILE_INTERVAL_MS);
     const preparationIntervalId = window.setInterval(runPreparation, TELEMETRY_RECONCILE_INTERVAL_MS);
@@ -195,12 +151,7 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
     return () => {
       isDisposed = true;
       clearLiveTelemetryTimer();
-      if (liveReconnectTimer !== undefined) window.clearTimeout(liveReconnectTimer);
-      if (liveSocket) {
-        liveSocket.onclose = null;
-        liveSocket.onerror = null;
-        liveSocket.close();
-      }
+      unsubscribeLiveEvents();
       window.clearInterval(telemetryIntervalId);
       window.clearInterval(fleetSimulationIntervalId);
       window.clearInterval(preparationIntervalId);
@@ -208,14 +159,6 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
       window.removeEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
     };
   }, [contextReady, mlBaseUrl, role, token]);
-}
-
-function parseLiveCameraEnvelope(rawData: string): MlCameraLiveEnvelope | null {
-  try {
-    return JSON.parse(rawData) as MlCameraLiveEnvelope;
-  } catch {
-    return null;
-  }
 }
 
 function liveCameraStateSignature(state: MlCameraLiveState) {

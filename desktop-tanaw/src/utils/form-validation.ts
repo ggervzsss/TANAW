@@ -99,7 +99,10 @@ export function validateCameraStreamUrl(value: string) {
 
   try {
     const url = new URL(normalized);
-    if (["http:", "https:", "rtsp:"].includes(url.protocol)) return "";
+    if (["http:", "https:", "rtsp:"].includes(url.protocol)) {
+      if (url.username || url.password) return "Keep credentials out of the stream URL and use the separate username and password fields.";
+      return "";
+    }
   } catch {
     return "Enter a valid HTTP, HTTPS, RTSP, or numeric webcam source.";
   }

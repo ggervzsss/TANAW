@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import asyncio
 import json
+import os
+import re
+from datetime import datetime
 from time import monotonic
 from typing import Any
+from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.camera.auth import redact_stream_credentials
 from app.camera.camera_manager import CameraProcessingManager
@@ -34,9 +40,18 @@ from app.config.camera_config import (
     ReportSubmissionRequest,
     ReportSubmissionResponse,
     SessionResponse,
-    SyncMarkResponse,
 )
 from app.runtime.hardware import get_runtime_capabilities
+from app.security.local_capability import (
+    LOCAL_CONTRACT_VERSION,
+    LOCAL_RELEASE_ID,
+    LOCAL_SERVICE_NAME,
+    LocalCapabilityMiddleware,
+    SessionMintRequest,
+    SessionMintResponse,
+    get_authenticated_session,
+    get_authority,
+)
 
 CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
@@ -45,27 +60,128 @@ CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 
 manager = CameraProcessingManager()
 
-app = FastAPI(title="TANAW Local ML Camera Service", version="0.1.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "file://",
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "null",
-    ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+
+class SyncOutboxAcknowledgementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    acknowledgement: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_acknowledgement(self) -> SyncOutboxAcknowledgementRequest:
+        acknowledgement = self.acknowledgement
+        if set(acknowledgement) != {
+            "contractVersion",
+            "commandId",
+            "disposition",
+            "payloadHash",
+            "acknowledgedAt",
+            "resource",
+        }:
+            raise ValueError("The exact report acknowledgement contract is required.")
+        if acknowledgement.get("contractVersion") != 2:
+            raise ValueError("A version 2 acknowledgement is required.")
+        command_id = acknowledgement.get("commandId")
+        payload_hash = acknowledgement.get("payloadHash")
+        acknowledged_at = acknowledgement.get("acknowledgedAt")
+        resource = acknowledgement.get("resource")
+        try:
+            UUID(str(command_id))
+        except ValueError as exc:
+            raise ValueError("The exact acknowledgement command ID is required.") from exc
+        if acknowledgement.get("disposition") not in {"created", "replayed"}:
+            raise ValueError("The acknowledgement disposition is invalid.")
+        if (
+            not isinstance(payload_hash, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", payload_hash) is None
+        ):
+            raise ValueError("The exact acknowledgement payload hash is required.")
+        if not isinstance(acknowledged_at, str):
+            raise ValueError("The acknowledgement timestamp is required.")
+        try:
+            parsed_acknowledged_at = datetime.fromisoformat(acknowledged_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("The acknowledgement timestamp is invalid.") from exc
+        if parsed_acknowledged_at.tzinfo is None:
+            raise ValueError("The acknowledgement timestamp must include a timezone.")
+        if not isinstance(resource, dict) or set(resource) != {
+            "periodKey",
+            "reportingPeriodId",
+            "enterpriseReportId",
+            "reportRevisionId",
+            "revisionNumber",
+            "workflowState",
+            "logicalVersion",
+        }:
+            raise ValueError("The exact report acknowledgement resource is required.")
+        if (
+            not isinstance(resource.get("periodKey"), str)
+            or re.fullmatch(r"month:Asia/Manila:\d{4}-(?:0[1-9]|1[0-2])", resource["periodKey"])
+            is None
+        ):
+            raise ValueError("The acknowledgement reporting period is invalid.")
+        try:
+            for key in ("reportingPeriodId", "enterpriseReportId", "reportRevisionId"):
+                UUID(str(resource.get(key)))
+        except ValueError as exc:
+            raise ValueError("The acknowledgement resource IDs are invalid.") from exc
+        if (
+            not isinstance(resource.get("revisionNumber"), int)
+            or resource["revisionNumber"] < 1
+            or resource.get("workflowState") != "submitted"
+            or not isinstance(resource.get("logicalVersion"), int)
+            or resource["logicalVersion"] < 1
+        ):
+            raise ValueError("The acknowledgement resource version is invalid.")
+        return self
+
+
+class SyncOutboxFailureRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    error_class: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9_.-]+$")
+    error_message: str = Field(min_length=1, max_length=500)
+    retryable: bool
+    http_status: int | None = Field(default=None, ge=100, le=599)
+
+
+app = FastAPI(
+    title="TANAW Local ML Camera Service",
+    version="0.1.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+app.add_middleware(LocalCapabilityMiddleware)
 
 
-@app.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
+@app.get("/health")
+def health(request: Request) -> dict[str, object]:
+    authority = get_authority(request)
+    challenge = request.headers.get("x-tanaw-health-challenge")
+    if authority is None or not challenge or len(challenge) > 256:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {
+        "serviceName": LOCAL_SERVICE_NAME,
+        "localContractVersion": LOCAL_CONTRACT_VERSION,
+        "releaseId": LOCAL_RELEASE_ID,
+        "launchId": authority.launch_id,
+        "pid": os.getpid(),
+        "status": "ready",
+        "challengeResponse": authority.health_challenge_response(challenge),
+    }
+
+
+@app.get("/camera/health", response_model=HealthResponse)
+def camera_health() -> HealthResponse:
     return HealthResponse.model_validate(build_health_payload())
+
+
+@app.post("/auth/session", response_model=SessionMintResponse)
+def mint_session(payload: SessionMintRequest, request: Request) -> SessionMintResponse:
+    authority = get_authority(request)
+    if authority is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return authority.mint_session(payload.scope, payload.ttl_seconds)
 
 
 @app.get("/runtime/capabilities")
@@ -111,7 +227,11 @@ def counts() -> CountResponse:
     return CountResponse.model_validate(manager.counts())
 
 
-@app.get("/session", response_model=SessionResponse)
+@app.get(
+    "/session",
+    response_model=SessionResponse,
+    response_model_exclude={"camera_config"},
+)
 def session() -> SessionResponse:
     return SessionResponse(**manager.session())
 
@@ -174,19 +294,52 @@ def list_local_report_submissions(limit: int = 100) -> list[ReportSubmissionReco
     ]
 
 
-@app.post("/reports/local/{report_id}/synced", response_model=SyncMarkResponse)
-def mark_local_report_synced(report_id: str) -> SyncMarkResponse:
-    return SyncMarkResponse(updated=1 if manager.mark_report_synced(report_id) else 0)
+@app.get("/sync/outbox/ready")
+def list_ready_sync_outbox_items(
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict[str, Any]]:
+    return manager.list_ready_sync_outbox_items(limit=limit)
+
+
+@app.post("/sync/outbox/{outbox_item_id}/acknowledge")
+def acknowledge_sync_outbox_item(
+    outbox_item_id: str,
+    payload: SyncOutboxAcknowledgementRequest,
+) -> dict[str, object]:
+    acknowledged_at = str(payload.acknowledgement["acknowledgedAt"])
+    try:
+        acknowledged = manager.acknowledge_sync_outbox_item(
+            outbox_item_id,
+            acknowledgement=payload.acknowledgement,
+            acknowledged_at=acknowledged_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not acknowledged:
+        raise HTTPException(status_code=404, detail="Unknown sync outbox item.")
+    return {"acknowledged": True, "outbox_item_id": outbox_item_id}
+
+
+@app.post("/sync/outbox/{outbox_item_id}/failure")
+def record_sync_outbox_failure(
+    outbox_item_id: str,
+    payload: SyncOutboxFailureRequest,
+) -> dict[str, Any]:
+    try:
+        return manager.record_sync_outbox_failure(
+            outbox_item_id,
+            error_class=payload.error_class,
+            error_message=payload.error_message,
+            retryable=payload.retryable,
+            http_status=payload.http_status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/reports/local/{report_id}/purge-raw", response_model=ReportRawDataPurgeResponse)
 def purge_local_report_raw_events(report_id: str) -> ReportRawDataPurgeResponse:
     return ReportRawDataPurgeResponse(**manager.purge_report_raw_events(report_id))
-
-
-@app.post("/metrics/mark-synced", response_model=SyncMarkResponse)
-def mark_local_events_synced() -> SyncMarkResponse:
-    return SyncMarkResponse(updated=manager.mark_events_synced())
 
 
 @app.post("/mock/prepare", response_model=MockPrepareResponse)
@@ -281,7 +434,11 @@ def generate_mock_report(payload: MockReportRequest) -> ReportSubmissionResponse
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/session/restore", response_model=SessionResponse)
+@app.post(
+    "/session/restore",
+    response_model=SessionResponse,
+    response_model_exclude={"camera_config"},
+)
 def restore_session() -> SessionResponse:
     manager.restore_last_session()
     return SessionResponse(**manager.session())
@@ -294,7 +451,21 @@ def detections() -> DetectionResponse:
 
 @app.websocket("/camera/ws")
 async def camera_state_websocket(websocket: WebSocket) -> None:
-    await websocket.accept()
+    authority = get_authority(app)
+    if authority is None:
+        await websocket.close(code=4401)
+        return
+    authenticated, accepted_protocol = authority.authenticate_websocket(
+        websocket,
+        "camera-events",
+    )
+    if authenticated is None:
+        await websocket.close(code=4401)
+        return
+    if not authority.allow_request("camera-events", 30, 10.0):
+        await websocket.close(code=4429)
+        return
+    await websocket.accept(subprotocol=accepted_protocol)
     last_payload: str | None = None
     last_send_at = monotonic()
     last_health_at = 0.0
@@ -302,6 +473,9 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
 
     try:
         while True:
+            if not authority.session_is_active(authenticated):
+                await websocket.close(code=4401)
+                return
             now = monotonic()
             if health_payload is None or now - last_health_at >= CAMERA_WS_HEALTH_INTERVAL_SECONDS:
                 health_payload = await asyncio.to_thread(build_health_payload)
@@ -333,10 +507,15 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
 
 
 @app.get("/stream")
-async def stream(overlay: bool = True) -> StreamingResponse:
+async def stream(request: Request, overlay: bool = True) -> StreamingResponse:
+    authority = get_authority(request)
+    authenticated = get_authenticated_session(request)
+    if authority is None or authenticated is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     async def frames():
         last_frame_id = 0
-        while True:
+        while authority.session_is_active(authenticated):
             frame, last_frame_id = await asyncio.to_thread(
                 manager.wait_for_stream_frame, last_frame_id, 1.0, overlay
             )
@@ -380,6 +559,9 @@ def build_camera_state_envelope(health_payload: dict[str, Any]) -> dict[str, Any
                 mode="json"
             ),
             "health": health_payload,
-            "session": SessionResponse(**manager.session()).model_dump(mode="json"),
+            "session": SessionResponse(**manager.session()).model_dump(
+                mode="json",
+                exclude={"camera_config"},
+            ),
         },
     }
