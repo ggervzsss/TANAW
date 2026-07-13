@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     development_delivery_retention_days: int = Field(default=7, ge=1, le=90)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
+    telemetry_downsample_settle_seconds: int = Field(default=300, ge=60, le=86_400)
+    telemetry_raw_observation_retention_days: int = Field(default=14, ge=2, le=90)
+    telemetry_metric_fact_retention_days: int = Field(default=7, ge=1, le=90)
+    telemetry_device_health_retention_days: int = Field(default=7, ge=1, le=90)
+    telemetry_hourly_rollup_retention_days: int = Field(default=730, ge=30, le=3650)
     allow_mock_data: bool = Field(
         default=False, validation_alias=AliasChoices("TANAW_ALLOW_MOCK_DATA", "ALLOW_MOCK_DATA")
     )
@@ -213,6 +218,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_environment_safety(self) -> Self:
         self._validate_development_account_configuration()
+        self._validate_telemetry_retention_policy()
         if self.is_production and (
             urlsplit(self.frontend_public_url).scheme != "https"
             or is_local_or_private_origin(self.frontend_public_url)
@@ -222,6 +228,24 @@ class Settings(BaseSettings):
             self._validate_production_credentials()
             self._validate_production_email()
         return self
+
+    def _validate_telemetry_retention_policy(self) -> None:
+        raw_days = self.telemetry_raw_observation_retention_days
+        if self.telemetry_metric_fact_retention_days > raw_days:
+            raise ValueError(
+                "TELEMETRY_METRIC_FACT_RETENTION_DAYS must not exceed "
+                "TELEMETRY_RAW_OBSERVATION_RETENTION_DAYS."
+            )
+        if self.telemetry_device_health_retention_days > raw_days:
+            raise ValueError(
+                "TELEMETRY_DEVICE_HEALTH_RETENTION_DAYS must not exceed "
+                "TELEMETRY_RAW_OBSERVATION_RETENTION_DAYS."
+            )
+        if self.telemetry_hourly_rollup_retention_days <= raw_days:
+            raise ValueError(
+                "TELEMETRY_HOURLY_ROLLUP_RETENTION_DAYS must be greater than "
+                "TELEMETRY_RAW_OBSERVATION_RETENTION_DAYS."
+            )
 
     def _validate_development_account_configuration(self) -> None:
         values = (

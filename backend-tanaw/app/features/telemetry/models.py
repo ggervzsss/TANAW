@@ -184,6 +184,10 @@ class TelemetryObservation(Base):
             "retention_expires_at IS NULL OR retention_expires_at > received_at",
             name="ck_telemetry_observations_retention",
         ),
+        CheckConstraint(
+            "downsampled_at IS NULL OR downsampled_at >= received_at",
+            name="ck_telemetry_observations_downsampled",
+        ),
         UniqueConstraint("command_id", name="uq_telemetry_observations_command_id"),
         UniqueConstraint(
             "edge_device_id",
@@ -225,6 +229,14 @@ class TelemetryObservation(Base):
         Index("ix_telemetry_observations_site_observed", "site_id", "observed_at"),
         Index("ix_telemetry_observations_device_received", "edge_device_id", "received_at"),
         Index("ix_telemetry_observations_retention", "retention_expires_at"),
+        Index(
+            "ix_telemetry_observations_pending_downsample",
+            "classification",
+            "received_at",
+            "id",
+            postgresql_where=text("downsampled_at IS NULL"),
+            sqlite_where=text("downsampled_at IS NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -249,6 +261,7 @@ class TelemetryObservation(Base):
     retention_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    downsampled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -330,6 +343,11 @@ class TelemetryMetricFact(Base):
             "AND coverage_gap_count >= 0)",
             name="ck_telemetry_metric_facts_coverage",
         ),
+        CheckConstraint(
+            "retention_expires_at IS NULL OR (metric_window_end IS NOT NULL "
+            "AND retention_expires_at > metric_window_end)",
+            name="ck_telemetry_metric_facts_retention",
+        ),
         Index(
             "uq_telemetry_metric_facts_site_definition",
             "telemetry_observation_id",
@@ -360,6 +378,7 @@ class TelemetryMetricFact(Base):
         ),
         Index("ix_telemetry_metric_facts_site_window", "site_id", "metric_window_end"),
         Index("ix_telemetry_metric_facts_definition_window", "definition", "metric_window_end"),
+        Index("ix_telemetry_metric_facts_retention", "retention_expires_at"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -389,7 +408,143 @@ class TelemetryMetricFact(Base):
     monitored_seconds: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     expected_seconds: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     coverage_gap_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    retention_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SiteTelemetryHourlyRollup(Base):
+    """Long-lived, non-live site metric history partitioned by UTC hour in PostgreSQL."""
+
+    __tablename__ = "site_telemetry_hourly_rollups"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["site_id", "enterprise_id", "classification"],
+            [
+                "enterprise_sites.id",
+                "enterprise_sites.enterprise_id",
+                "enterprise_sites.classification",
+            ],
+            name="fk_site_telemetry_hourly_rollups_site_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            _CLASSIFICATION_CHECK,
+            name="ck_site_telemetry_hourly_rollups_classification",
+        ),
+        CheckConstraint(
+            "definition_version >= 1 AND length(trim(definition)) > 0 AND length(trim(unit)) > 0",
+            name="ck_site_telemetry_hourly_rollups_identity",
+        ),
+        CheckConstraint(
+            "provenance IN ('camera_derived', 'operator_entered', 'system_derived')",
+            name="ck_site_telemetry_hourly_rollups_provenance",
+        ),
+        CheckConstraint(
+            "(bucket_start AT TIME ZONE 'UTC') = "
+            "date_trunc('hour', bucket_start AT TIME ZONE 'UTC') "
+            "AND (bucket_end AT TIME ZONE 'UTC') = "
+            "(bucket_start AT TIME ZONE 'UTC') + INTERVAL '1 hour' "
+            "AND first_observed_at >= bucket_start AND first_observed_at < bucket_end "
+            "AND last_observed_at >= first_observed_at AND last_observed_at < bucket_end",
+            name="ck_site_telemetry_hourly_rollups_window",
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint(
+            "sample_count >= 1 AND known_sample_count >= 0 AND unknown_sample_count >= 0 "
+            "AND known_sample_count + unknown_sample_count = sample_count",
+            name="ck_site_telemetry_hourly_rollups_samples",
+        ),
+        CheckConstraint(
+            "confirmed_sample_count >= 0 AND degraded_sample_count >= 0 "
+            "AND estimated_sample_count >= 0 AND unknown_quality_sample_count >= 0 "
+            "AND confirmed_sample_count + degraded_sample_count + estimated_sample_count "
+            "+ unknown_quality_sample_count = sample_count",
+            name="ck_site_telemetry_hourly_rollups_quality_counts",
+        ),
+        CheckConstraint(
+            "(known_sample_count = 0 AND value_sum IS NULL AND value_min IS NULL "
+            "AND value_max IS NULL) OR (known_sample_count > 0 AND value_sum IS NOT NULL "
+            "AND value_min IS NOT NULL AND value_max IS NOT NULL AND value_min <= value_max)",
+            name="ck_site_telemetry_hourly_rollups_values",
+        ),
+        CheckConstraint(
+            "(last_quality = 'unknown' AND last_value IS NULL) OR "
+            "(last_quality != 'unknown' AND last_value IS NOT NULL)",
+            name="ck_site_telemetry_hourly_rollups_last_value_quality",
+        ),
+        CheckConstraint(
+            "last_quality IN ('confirmed', 'degraded', 'estimated', 'unknown')",
+            name="ck_site_telemetry_hourly_rollups_last_quality",
+        ),
+        CheckConstraint(
+            "coverage_sample_count >= 0 AND coverage_sample_count <= sample_count "
+            "AND monitored_seconds_sum >= 0 AND expected_seconds_sum >= 0 "
+            "AND monitored_seconds_sum <= expected_seconds_sum AND coverage_gap_count_sum >= 0",
+            name="ck_site_telemetry_hourly_rollups_coverage",
+        ),
+        CheckConstraint(
+            "rollup_version >= 1",
+            name="ck_site_telemetry_hourly_rollups_version",
+        ),
+        Index(
+            "ix_site_telemetry_hourly_rollups_site_bucket",
+            "site_id",
+            "classification",
+            "bucket_start",
+        ),
+        Index(
+            "ix_site_telemetry_hourly_rollups_enterprise_bucket",
+            "enterprise_id",
+            "classification",
+            "bucket_start",
+        ),
+        Index(
+            "ix_site_telemetry_hourly_rollups_definition_bucket",
+            "definition",
+            "definition_version",
+            "bucket_start",
+        ),
+    )
+
+    bucket_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), primary_key=True, nullable=False
+    )
+    enterprise_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    site_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    classification: Mapped[str] = mapped_column(String(20), primary_key=True)
+    definition: Mapped[str] = mapped_column(String(120), primary_key=True)
+    definition_version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    unit: Mapped[str] = mapped_column(String(60), primary_key=True)
+    provenance: Mapped[str] = mapped_column(String(30), primary_key=True)
+    bucket_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    known_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    unknown_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    value_sum: Mapped[Decimal | None] = mapped_column(Numeric(30, 6), nullable=True)
+    value_min: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    value_max: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    last_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    first_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_source_observation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    last_quality: Mapped[str] = mapped_column(String(20), nullable=False)
+    confirmed_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    degraded_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    estimated_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    unknown_quality_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    coverage_sample_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    monitored_seconds_sum: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    expected_seconds_sum: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    coverage_gap_count_sum: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    rollup_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
@@ -406,7 +561,7 @@ class DeviceHealthSample(Base):
                 "telemetry_observations.classification",
             ],
             name="fk_device_health_samples_observation_scope",
-            ondelete="RESTRICT",
+            ondelete="CASCADE",
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_device_health_samples_classification"),
         CheckConstraint(

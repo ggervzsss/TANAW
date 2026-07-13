@@ -51,6 +51,7 @@ async def test_uninitialized_database_is_rejected() -> None:
         "20260713_0023_canonical_report_source_batch_identity.py",
         "20260713_0024_immutable_scoped_final_reports.py",
         "20260713_0025_reporting_read_integrity.py",
+        "20260713_0026_partitioned_telemetry_rollups.py",
     ),
 )
 def test_irreversible_migrations_block_unsafe_downgrades(migration_filename: str) -> None:

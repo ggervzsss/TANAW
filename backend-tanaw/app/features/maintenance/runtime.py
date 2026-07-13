@@ -6,6 +6,7 @@ from time import monotonic
 
 from app.core.config import Settings
 from app.features.maintenance.retention import RetentionCleanupCounts, run_retention_cleanup
+from app.features.maintenance.telemetry_retention import TelemetryRetentionCounts
 
 logger = logging.getLogger("uvicorn.error")
 _worker_task: asyncio.Task[None] | None = None
@@ -113,9 +114,12 @@ async def run_retention_cleanup_now(settings: Settings) -> RetentionCleanupCount
             _metrics.last_completed_at = datetime.now(UTC)
             _metrics.last_duration_seconds = monotonic() - started_clock
             logger.info(
-                "Retention cleanup completed deleted=%d expired_email_changes=%d",
+                "Retention cleanup completed deleted=%d expired_email_changes=%d "
+                "telemetry_downsampled=%d telemetry_facts_rolled_up=%d",
                 counts.deleted_records,
                 counts.expired_email_change_requests,
+                counts.telemetry.observations_downsampled,
+                counts.telemetry.metric_facts_rolled_up,
             )
             return counts
         finally:
@@ -155,4 +159,30 @@ def _add_counts(
         email_change_requests=current.email_change_requests + addition.email_change_requests,
         development_deliveries=(current.development_deliveries + addition.development_deliveries),
         email_outbox_records=current.email_outbox_records + addition.email_outbox_records,
+        telemetry=_add_telemetry_counts(current.telemetry, addition.telemetry),
+    )
+
+
+def _add_telemetry_counts(
+    current: TelemetryRetentionCounts,
+    addition: TelemetryRetentionCounts,
+) -> TelemetryRetentionCounts:
+    return TelemetryRetentionCounts(
+        observations_downsampled=(
+            current.observations_downsampled + addition.observations_downsampled
+        ),
+        metric_facts_rolled_up=(current.metric_facts_rolled_up + addition.metric_facts_rolled_up),
+        rollup_partitions_created=(
+            current.rollup_partitions_created + addition.rollup_partitions_created
+        ),
+        rollup_partitions_dropped=(
+            current.rollup_partitions_dropped + addition.rollup_partitions_dropped
+        ),
+        metric_facts_deleted=current.metric_facts_deleted + addition.metric_facts_deleted,
+        device_health_samples_deleted=(
+            current.device_health_samples_deleted + addition.device_health_samples_deleted
+        ),
+        observations_deleted=current.observations_deleted + addition.observations_deleted,
+        hourly_rollups_deleted=current.hourly_rollups_deleted + addition.hourly_rollups_deleted,
+        observability=addition.observability,
     )

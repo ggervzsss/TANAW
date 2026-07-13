@@ -4,6 +4,7 @@ from app.features.telemetry.models import (
     DeviceHealthSample,
     DeviceTelemetryEpoch,
     SiteLiveState,
+    SiteTelemetryHourlyRollup,
     TelemetryMetricFact,
     TelemetryMigrationException,
     TelemetryObservation,
@@ -12,6 +13,7 @@ from app.features.telemetry.models import (
 __all__ = [
     "DeviceHealthSample",
     "DeviceTelemetryEpoch",
+    "SiteTelemetryHourlyRollup",
     "SiteLiveState",
     "TelemetryMetricFact",
     "TelemetryMigrationException",

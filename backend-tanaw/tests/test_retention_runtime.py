@@ -5,6 +5,11 @@ import pytest
 from app.core.config import Settings
 from app.features.maintenance import runtime
 from app.features.maintenance.retention import RetentionCleanupCounts
+from app.features.maintenance.telemetry_retention import (
+    ClassificationTelemetryObservability,
+    TelemetryRetentionCounts,
+    TelemetryRetentionObservability,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +28,17 @@ async def test_manual_cleanup_records_counts_and_safe_metrics(
         activation_tokens=2,
         password_reset_challenges=3,
         development_deliveries=1,
+        telemetry=TelemetryRetentionCounts(
+            observations_downsampled=4,
+            metric_facts_rolled_up=8,
+            metric_facts_deleted=2,
+            observability=TelemetryRetentionObservability(
+                official=ClassificationTelemetryObservability(
+                    ingestion_lag_seconds=5.0,
+                    unprocessed_observations=1,
+                )
+            ),
+        ),
     )
     cleanup = AsyncMock(return_value=expected)
     monkeypatch.setattr(runtime, "run_retention_cleanup", cleanup)
@@ -67,6 +83,42 @@ def test_retention_count_total_excludes_state_transitions() -> None:
         activation_tokens=1,
         expired_email_change_requests=5,
         email_change_requests=2,
+        telemetry=TelemetryRetentionCounts(
+            observations_downsampled=10,
+            metric_facts_deleted=4,
+            observations_deleted=2,
+        ),
     )
 
-    assert counts.deleted_records == 3
+    assert counts.deleted_records == 9
+
+
+def test_retention_totals_sum_actions_but_keep_latest_telemetry_gauges() -> None:
+    first = RetentionCleanupCounts(
+        telemetry=TelemetryRetentionCounts(
+            observations_downsampled=2,
+            observability=TelemetryRetentionObservability(
+                official=ClassificationTelemetryObservability(
+                    ingestion_lag_seconds=30,
+                    unprocessed_observations=3,
+                )
+            ),
+        )
+    )
+    second = RetentionCleanupCounts(
+        telemetry=TelemetryRetentionCounts(
+            observations_downsampled=4,
+            observability=TelemetryRetentionObservability(
+                official=ClassificationTelemetryObservability(
+                    ingestion_lag_seconds=5,
+                    unprocessed_observations=1,
+                )
+            ),
+        )
+    )
+
+    total = runtime._add_counts(first, second)
+
+    assert total.telemetry.observations_downsampled == 6
+    assert total.telemetry.observability.official.ingestion_lag_seconds == 5
+    assert total.telemetry.observability.official.unprocessed_observations == 1

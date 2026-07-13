@@ -4,6 +4,31 @@ from pydantic import BaseModel
 
 from app.features.maintenance.retention import RetentionCleanupCounts
 from app.features.maintenance.runtime import RetentionRuntimeSnapshot
+from app.features.maintenance.telemetry_retention import (
+    ClassificationTelemetryObservability,
+    TelemetryRetentionCounts,
+)
+
+
+class ClassificationTelemetryObservabilityResponse(BaseModel):
+    ingestionLagSeconds: float | None
+    unprocessedObservations: int
+    oldestUnprocessedAt: datetime | None
+    oldestUnprocessedAgeSeconds: float | None
+
+
+class TelemetryRetentionCountsResponse(BaseModel):
+    observationsDownsampled: int
+    metricFactsRolledUp: int
+    rollupPartitionsCreated: int
+    rollupPartitionsDropped: int
+    metricFactsDeleted: int
+    deviceHealthSamplesDeleted: int
+    observationsDeleted: int
+    hourlyRollupsDeleted: int
+    deletedRecords: int
+    official: ClassificationTelemetryObservabilityResponse
+    simulation: ClassificationTelemetryObservabilityResponse
 
 
 class RetentionCleanupCountsResponse(BaseModel):
@@ -14,6 +39,7 @@ class RetentionCleanupCountsResponse(BaseModel):
     emailChangeRequests: int
     developmentDeliveries: int
     emailOutboxRecords: int
+    telemetry: TelemetryRetentionCountsResponse
     deletedRecords: int
 
 
@@ -41,7 +67,37 @@ def to_counts_response(counts: RetentionCleanupCounts) -> RetentionCleanupCounts
         emailChangeRequests=counts.email_change_requests,
         developmentDeliveries=counts.development_deliveries,
         emailOutboxRecords=counts.email_outbox_records,
+        telemetry=_to_telemetry_counts_response(counts.telemetry),
         deletedRecords=counts.deleted_records,
+    )
+
+
+def _to_telemetry_counts_response(
+    counts: TelemetryRetentionCounts,
+) -> TelemetryRetentionCountsResponse:
+    return TelemetryRetentionCountsResponse(
+        observationsDownsampled=counts.observations_downsampled,
+        metricFactsRolledUp=counts.metric_facts_rolled_up,
+        rollupPartitionsCreated=counts.rollup_partitions_created,
+        rollupPartitionsDropped=counts.rollup_partitions_dropped,
+        metricFactsDeleted=counts.metric_facts_deleted,
+        deviceHealthSamplesDeleted=counts.device_health_samples_deleted,
+        observationsDeleted=counts.observations_deleted,
+        hourlyRollupsDeleted=counts.hourly_rollups_deleted,
+        deletedRecords=counts.deleted_records,
+        official=_to_classification_observability(counts.observability.official),
+        simulation=_to_classification_observability(counts.observability.simulation),
+    )
+
+
+def _to_classification_observability(
+    status: ClassificationTelemetryObservability,
+) -> ClassificationTelemetryObservabilityResponse:
+    return ClassificationTelemetryObservabilityResponse(
+        ingestionLagSeconds=status.ingestion_lag_seconds,
+        unprocessedObservations=status.unprocessed_observations,
+        oldestUnprocessedAt=status.oldest_unprocessed_at,
+        oldestUnprocessedAgeSeconds=status.oldest_unprocessed_age_seconds,
     )
 
 

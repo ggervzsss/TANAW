@@ -19,6 +19,10 @@ from app.features.auth.models import (
 )
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
 from app.features.mail.service import cancel_pending_source_emails
+from app.features.maintenance.telemetry_retention import (
+    TelemetryRetentionCounts,
+    run_telemetry_retention,
+)
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -43,6 +47,7 @@ class RetentionCleanupCounts:
     email_change_requests: int = 0
     development_deliveries: int = 0
     email_outbox_records: int = 0
+    telemetry: TelemetryRetentionCounts = TelemetryRetentionCounts()
 
     @property
     def deleted_records(self) -> int:
@@ -53,6 +58,7 @@ class RetentionCleanupCounts:
             + self.email_change_requests
             + self.development_deliveries
             + self.email_outbox_records
+            + self.telemetry.deleted_records
         )
 
 
@@ -64,6 +70,11 @@ async def run_retention_cleanup(
 ) -> RetentionCleanupCounts:
     current = _as_utc(now or datetime.now(UTC))
     batch_size = settings.retention_cleanup_batch_size
+    telemetry = await run_telemetry_retention(
+        settings,
+        now=current,
+        session_factory=session_factory,
+    )
     return RetentionCleanupCounts(
         activation_tokens=await _delete_activation_tokens(
             session_factory,
@@ -103,6 +114,7 @@ async def run_retention_cleanup(
             failed_cutoff=current - timedelta(days=settings.failed_email_outbox_retention_days),
             batch_size=batch_size,
         ),
+        telemetry=telemetry,
     )
 
 

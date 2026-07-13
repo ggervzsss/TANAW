@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.features.accounts.models import Account
 from app.features.events.models import DomainEvent, DomainEventDelivery
 from app.features.telemetry.contracts import (
@@ -53,7 +54,6 @@ from app.features.topology.models import (
 
 LIVE_FRESH_FOR = timedelta(seconds=90)
 LIVE_OFFLINE_AFTER = timedelta(minutes=5)
-TELEMETRY_RETENTION = timedelta(days=90)
 MAX_FUTURE_CLOCK_SKEW = timedelta(minutes=5)
 EVENT_DESTINATIONS = ("notification_projection", "realtime_broadcast")
 
@@ -214,6 +214,7 @@ async def ingest_telemetry_command(
     acknowledged_at: datetime | None = None,
 ) -> TelemetryAcknowledgement:
     acknowledged_at = _as_utc(acknowledged_at or datetime.now(UTC))
+    settings = get_settings()
     payload_hash = canonical_payload_hash(command.payload)
     access = await _enterprise_access_scope(
         db,
@@ -310,15 +311,31 @@ async def ingest_telemetry_command(
         received_at=acknowledged_at,
         payload_json=canonical_payload_json(command.payload),
         became_current=became_current,
-        retention_expires_at=acknowledged_at + TELEMETRY_RETENTION,
+        retention_expires_at=acknowledged_at
+        + timedelta(days=settings.telemetry_raw_observation_retention_days),
     )
     device.contract_version = 2
     device.last_authenticated_at = acknowledged_at
     db.add(observation)
     await db.flush([device, observation])
 
-    db.add_all(_metric_facts(command, observation, site.classification))
-    db.add(_health_sample(command, observation, site.classification, acknowledged_at))
+    db.add_all(
+        _metric_facts(
+            command,
+            observation,
+            site.classification,
+            retention=timedelta(days=settings.telemetry_metric_fact_retention_days),
+        )
+    )
+    db.add(
+        _health_sample(
+            command,
+            observation,
+            site.classification,
+            acknowledged_at,
+            retention=timedelta(days=settings.telemetry_device_health_retention_days),
+        )
+    )
     if became_current:
         assert live_state_version is not None
         _apply_live_state(
@@ -716,6 +733,8 @@ def _metric_facts(
     command: TelemetryCommand,
     observation: TelemetryObservation,
     classification: str,
+    *,
+    retention: timedelta,
 ) -> list[TelemetryMetricFact]:
     facts: list[TelemetryMetricFact] = []
     for metric in command.payload.metrics:
@@ -742,6 +761,7 @@ def _metric_facts(
                 monitored_seconds=metric.coverage.monitoredSeconds,
                 expected_seconds=metric.coverage.expectedSeconds,
                 coverage_gap_count=metric.coverage.gapCount,
+                retention_expires_at=observation.received_at + retention,
             )
         )
     return facts
@@ -752,6 +772,8 @@ def _health_sample(
     observation: TelemetryObservation,
     classification: str,
     received_at: datetime,
+    *,
+    retention: timedelta,
 ) -> DeviceHealthSample:
     health = command.payload.deviceHealth
     sync = command.payload.syncHealth
@@ -781,7 +803,7 @@ def _health_sample(
         last_failure_at=_optional_utc(sync.lastFailureAt),
         last_failure_class=sync.lastFailureClass,
         health_json=health_json,
-        retention_expires_at=received_at + TELEMETRY_RETENTION,
+        retention_expires_at=received_at + retention,
     )
 
 

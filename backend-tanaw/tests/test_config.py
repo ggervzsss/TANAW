@@ -228,6 +228,11 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
     assert settings.development_delivery_retention_days == 7
     assert settings.email_outbox_retention_days == 180
     assert settings.failed_email_outbox_retention_days == 365
+    assert settings.telemetry_downsample_settle_seconds == 300
+    assert settings.telemetry_raw_observation_retention_days == 14
+    assert settings.telemetry_metric_fact_retention_days == 7
+    assert settings.telemetry_device_health_retention_days == 7
+    assert settings.telemetry_hourly_rollup_retention_days == 730
 
 
 @pytest.mark.parametrize(
@@ -244,11 +249,41 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
         ("development_delivery_retention_days", 0),
         ("email_outbox_retention_days", 29),
         ("failed_email_outbox_retention_days", 29),
+        ("telemetry_downsample_settle_seconds", 59),
+        ("telemetry_downsample_settle_seconds", 86_401),
+        ("telemetry_raw_observation_retention_days", 1),
+        ("telemetry_metric_fact_retention_days", 0),
+        ("telemetry_device_health_retention_days", 0),
+        ("telemetry_hourly_rollup_retention_days", 29),
     ],
 )
 def test_retention_cleanup_settings_reject_unsafe_bounds(name: str, value: int) -> None:
     with pytest.raises(ValueError, match=name):
         Settings.model_validate({name: value})
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "telemetry_raw_observation_retention_days": 7,
+            "telemetry_metric_fact_retention_days": 8,
+        },
+        {
+            "telemetry_raw_observation_retention_days": 7,
+            "telemetry_device_health_retention_days": 8,
+        },
+        {
+            "telemetry_raw_observation_retention_days": 30,
+            "telemetry_hourly_rollup_retention_days": 30,
+        },
+    ],
+)
+def test_telemetry_retention_policy_preserves_rollups_after_raw_detail(
+    overrides: dict[str, int],
+) -> None:
+    with pytest.raises(ValueError, match="TELEMETRY_"):
+        Settings.model_validate(overrides)
 
 
 def test_production_requires_a_password_recovery_timing_floor() -> None:

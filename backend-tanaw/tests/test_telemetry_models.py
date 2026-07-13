@@ -20,6 +20,7 @@ from app.db.base import (
     Enterprise,
     EnterpriseSite,
     SiteLiveState,
+    SiteTelemetryHourlyRollup,
     TelemetryMetricFact,
     TelemetryObservation,
 )
@@ -54,12 +55,14 @@ def test_telemetry_and_event_schema_uses_native_uuid_and_creates_on_sqlite(
         "telemetry_metric_facts",
         "device_health_samples",
         "site_live_state",
+        "site_telemetry_hourly_rollups",
         "telemetry_migration_exceptions",
         "domain_events",
         "domain_event_deliveries",
         "domain_event_delivery_attempts",
         "domain_event_consumer_receipts",
     }.issubset(Base.metadata.tables)
+    assert SiteTelemetryHourlyRollup.__table__.c.bucket_start.primary_key is True
 
 
 def test_sequenced_observation_can_project_valid_live_state(sqlite_engine: Engine) -> None:
