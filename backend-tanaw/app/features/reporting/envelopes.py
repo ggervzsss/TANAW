@@ -37,8 +37,8 @@ class SourceWindow(ContractModel):
 
 
 class ReportSourceBatchCommand(ContractModel):
-    batchId: str = Field(min_length=1, max_length=120)
-    cameraId: str = Field(min_length=1, max_length=120)
+    batchId: UUID
+    cameraId: UUID
     eventCount: int = Field(ge=0)
     eventSequenceStart: int = Field(ge=0)
     eventSequenceEndExclusive: int = Field(ge=0)

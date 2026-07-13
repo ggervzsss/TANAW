@@ -130,8 +130,8 @@ def _command() -> dict:
             "sourceWindow": {"start": start, "end": end},
             "sourceBatches": [
                 {
-                    "batchId": "local-batch-22",
-                    "cameraId": "camera-1",
+                    "batchId": "018fbf1a-9bf0-7f5f-a70e-001122334466",
+                    "cameraId": "018fbf1a-9bf0-7f5f-a70e-001122334477",
                     "eventCount": 10,
                     "eventSequenceStart": 1000,
                     "eventSequenceEndExclusive": 1010,
