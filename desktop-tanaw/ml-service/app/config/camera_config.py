@@ -4,7 +4,7 @@ from datetime import datetime
 from math import hypot
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.storage.reporting_periods import (
     monthly_period_from_id,
@@ -68,10 +68,11 @@ class RegionOfInterest(BaseModel):
 
 
 class CameraStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     stream_url: str = Field(..., min_length=3)
     tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
     counting_confidence: float = Field(default=0.35, ge=0.05, le=0.95)
-    confidence: float = Field(default=0.35, ge=0.05, le=0.95)
     camera_id: int | None = None
     camera_name: str | None = Field(default=None, max_length=120)
     camera_type: CameraType = "IP_WEBCAM"
@@ -94,21 +95,6 @@ class CameraStartRequest(BaseModel):
     paired_line_max_gap_seconds: float = Field(default=18.0, ge=1.0, le=120.0)
     track_ttl_seconds: float = Field(default=9.0, ge=1.0, le=60.0)
     pending_reid_wait_seconds: float = Field(default=0.6, ge=0.1, le=2.0)
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_confidence_aliases(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-
-        normalized = {**data}
-        has_confidence = "confidence" in normalized
-        has_counting_confidence = "counting_confidence" in normalized
-        if has_confidence and not has_counting_confidence:
-            normalized["counting_confidence"] = normalized["confidence"]
-        elif has_counting_confidence and not has_confidence:
-            normalized["confidence"] = normalized["counting_confidence"]
-        return normalized
 
     @field_validator("stream_url")
     @classmethod
@@ -133,8 +119,6 @@ class CameraStartRequest(BaseModel):
             raise ValueError(
                 "tracking_confidence must be less than or equal to counting_confidence."
             )
-        self.confidence = self.counting_confidence
-
         if self.entry_line is None and self.exit_line is None:
             return self
 

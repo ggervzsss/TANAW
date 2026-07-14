@@ -73,7 +73,6 @@ const operationSpecs: Record<MlOperation, OperationSpec> = {
       "camera_name",
       "camera_id",
       "camera_type",
-      "confidence",
       "counting_confidence",
       "entry_line",
       "event_cooldown_seconds",
