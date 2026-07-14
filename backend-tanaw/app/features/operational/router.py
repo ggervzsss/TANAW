@@ -1,7 +1,6 @@
 import asyncio
 import json
 from contextlib import suppress
-from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt
@@ -19,7 +18,7 @@ from fastapi import (
 )
 from fastapi.responses import Response
 from pydantic import ValidationError
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -27,12 +26,10 @@ from app.core.security import decode_access_token
 from app.core.websocket_auth import receive_websocket_bearer_token
 from app.db.session import AsyncSessionLocal, get_db
 from app.features.accounts.dependencies import (
-    get_current_operational_account,
     is_token_invalidated,
     require_roles,
 )
 from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
@@ -53,76 +50,41 @@ from app.features.operational.models import (
     OperationalAlert,
 )
 from app.features.operational.schemas import (
-    DesktopReportSubmissionIngest,
-    DesktopTelemetryIngest,
     EnterpriseNotificationCreate,
-    FinalReportCreate,
-    FinalReportRevisionReturn,
-    FinalReportStatusUpdate,
-    FinalReportSummary,
-    IntakeReportSummary,
     MockPreparationCounts,
     MockPreparationSummary,
     NotificationReadUpdate,
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
-    OperationalSummary,
     OperationalWebSocketEnvelope,
-    ReportStatusUpdate,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
     SupportTicketStatusUpdate,
     SupportTicketSummary,
-    TelemetrySnapshotSummary,
     UserNotificationSummary,
 )
 from app.features.operational.service import (
-    NOTIFY_CAMERA_SESSION_ERROR_KEY,
-    NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
-    NOTIFY_SYNC_DELAY_KEY,
-    DuplicateReportPeriodError,
-    InvalidReportWorkflowError,
-    create_final_report,
-    create_operational_alert,
     create_role_notifications,
     create_support_ticket,
     create_support_ticket_message,
     create_support_ticket_message_with_record,
     create_user_notification,
     enterprise_identifier,
-    evaluate_telemetry_alerts,
     get_enterprise_notification_recipient,
-    get_operational_summary,
     get_support_attachment_for_account,
     get_support_ticket_detail,
     get_support_ticket_for_account,
-    ingest_report_submission,
-    ingest_telemetry,
-    list_intake_reports,
-    list_latest_telemetry,
     list_operational_alerts,
     list_support_tickets,
     list_user_notifications,
-    return_final_report_for_revision,
     set_user_notification_read,
-    system_setting_enabled,
     to_operational_alert_summary,
-    update_final_report_status,
-    update_report_status,
     update_support_ticket_status,
-)
-from app.features.operational.service import (
-    list_final_reports as list_final_report_records,
 )
 from app.features.operational.websocket import operational_ws_manager
 from app.features.reporting.models import EnterpriseReport, ReportingObligation, ReportingPeriod
-from app.features.topology.account_scope import (
-    load_account_topologies,
-    load_account_topology,
-    require_account_topology,
-)
-from app.features.topology.models import Enterprise, EnterpriseMembership
+from app.features.topology.account_scope import load_account_topology, require_account_topology
 
 router = APIRouter(prefix="/operational", tags=["operational"])
 WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
@@ -137,141 +99,6 @@ EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 AlertReadAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
-
-
-@router.post(
-    "/desktop/telemetry",
-    response_model=TelemetrySnapshotSummary,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def ingest_desktop_telemetry(
-    payload: DesktopTelemetryIngest,
-    account: EnterpriseAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> TelemetrySnapshotSummary:
-    topology = await require_account_topology(db, account)
-    snapshot = await ingest_telemetry(db, account, payload)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="telemetry.snapshot", data=snapshot.model_dump(mode="json")
-        )
-    )
-    await broadcast_summary(db)
-    for event_type, alert_summary in await evaluate_telemetry_alerts(db, account, payload):
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type=event_type,  # type: ignore[arg-type]
-                data=alert_summary.model_dump(mode="json"),
-            )
-        )
-
-    if payload.metrics.unsyncedEvents > 0 and await system_setting_enabled(
-        db, NOTIFY_SYNC_DELAY_KEY
-    ):
-        sync_alert = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Warning",
-            requester=account.display_name,
-            enterprise=topology.enterprise.name,
-            summary=(
-                f"{payload.metrics.unsyncedEvents} telemetry event"
-                f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} remain unsynced."
-            ),
-            required_action="Review cloud synchronization and retry failed telemetry sync.",
-            resolution_mode="Remote Review",
-            owner="IT",
-            source_id=f"sync-failed:{account.id}",
-        )
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="alert.updated",
-                data=to_operational_alert_summary(sync_alert).model_dump(mode="json"),
-            )
-        )
-
-    session_error_setting_key = (
-        NOTIFY_CAMERA_SESSION_ERROR_KEY
-        if payload.session.cameraId is not None or payload.session.cameraName
-        else NOTIFY_GATEWAY_SERVICE_ERROR_KEY
-    )
-    if payload.session.error and await system_setting_enabled(db, session_error_setting_key):
-        maintenance_alert = await create_operational_alert(
-            db,
-            alert_type="Maintenance Request",
-            severity="Critical",
-            requester=account.display_name,
-            enterprise=topology.enterprise.name,
-            summary=payload.session.error,
-            required_action="Review the camera or desktop app error and restore monitoring.",
-            resolution_mode="Remote Review",
-            owner="IT",
-            source_id=f"telemetry:{account.id}:{payload.session.cameraId or 'gateway'}",
-        )
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="alert.updated",
-                data=to_operational_alert_summary(maintenance_alert).model_dump(mode="json"),
-            )
-        )
-        await record_operational_log(
-            db,
-            category="Enterprise Activity",
-            severity="Warning",
-            actor=topology.enterprise.name,
-            actor_role="Enterprise Account",
-            action="Desktop App Sync Error",
-            target=topology.enterprise.name,
-            summary=f"{topology.enterprise.name} reported desktop app sync status {payload.session.status}: {payload.session.error}",
-            source_id=snapshot.id,
-            metadata={
-                "enterpriseId": snapshot.enterpriseId,
-                "cameraName": snapshot.cameraName,
-                "status": snapshot.status,
-            },
-        )
-
-    return snapshot
-
-
-@router.post(
-    "/desktop/report-submissions",
-    response_model=IntakeReportSummary,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def ingest_desktop_report_submission(
-    payload: DesktopReportSubmissionIngest,
-    account: EnterpriseAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> IntakeReportSummary:
-    topology = await require_account_topology(db, account)
-    try:
-        report = await ingest_report_submission(db, account, payload)
-    except DuplicateReportPeriodError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    envelope = OperationalWebSocketEnvelope(
-        type="report.submitted", data=report.model_dump(mode="json")
-    )
-    await operational_ws_manager.broadcast(envelope)
-    await broadcast_summary(db)
-    await notify_staff_report_submission(db, account, report)
-    await record_operational_log(
-        db,
-        category="Staff Submission",
-        severity="Success",
-        actor=topology.enterprise.name,
-        actor_role="Enterprise Account",
-        action="Submit Enterprise Report",
-        target=report.enterprise,
-        summary=f"{report.enterprise} submitted {report.code} for {report.period}.",
-        source_id=report.id,
-        metadata={
-            "enterpriseId": report.enterpriseId,
-            "period": report.period,
-            "uniqueCount": report.metrics["unique"],
-        },
-    )
-    return report
 
 
 @router.get("/desktop/simulation-preparation/v2", response_model=MockPreparationSummary | None)
@@ -340,227 +167,6 @@ async def get_desktop_mock_preparation(
         counts=pending_counts[0] if pending_counts else None,
         pendingCounts=pending_counts,
     )
-
-
-@router.get("/telemetry/latest", response_model=list[TelemetrySnapshotSummary])
-async def get_latest_telemetry(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[TelemetrySnapshotSummary]:
-    return await list_latest_telemetry(db, account)
-
-
-@router.get("/telemetry/summary", response_model=OperationalSummary)
-async def get_summary(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> OperationalSummary:
-    return await get_operational_summary(db, account)
-
-
-@router.get("/reports/intake", response_model=list[IntakeReportSummary])
-async def list_intake_report_submissions(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[IntakeReportSummary]:
-    return await list_intake_reports(db, account)
-
-
-@router.patch("/reports/intake/{report_id}/status", response_model=IntakeReportSummary)
-async def update_intake_report_status(
-    report_id: str,
-    payload: ReportStatusUpdate,
-    actor: StaffWorkflowAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> IntakeReportSummary:
-    try:
-        report = await update_report_status(db, report_id, payload)
-    except InvalidReportWorkflowError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    if report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
-
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(type="report.updated", data=report.model_dump(mode="json"))
-    )
-    await record_operational_log(
-        db,
-        category="Staff Operation",
-        severity="Warning" if payload.status == "Returned" else "Success",
-        actor=actor.display_name,
-        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action=f"Report {payload.status}",
-        target=report.enterprise,
-        summary=f"{actor.display_name} marked {report.code} from {report.enterprise} as {payload.status}.",
-        source_id=report.id,
-        metadata={
-            "enterpriseId": report.enterpriseId,
-            "period": report.period,
-            "remarks": payload.remarks,
-        },
-    )
-    return report
-
-
-@router.get("/reports/final", response_model=list[FinalReportSummary])
-async def list_final_report_submissions(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[FinalReportSummary]:
-    return await list_final_report_records(db, account)
-
-
-@router.post(
-    "/reports/final", response_model=FinalReportSummary, status_code=status.HTTP_201_CREATED
-)
-async def generate_final_report(
-    payload: FinalReportCreate,
-    actor: StaffWorkflowAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FinalReportSummary:
-    try:
-        final_report = await create_final_report(db, payload)
-    except InvalidReportWorkflowError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    if final_report is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No report submissions were found for consolidation.",
-        )
-
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="final_report.generated", data=final_report.model_dump(mode="json")
-        )
-    )
-    await broadcast_summary(db)
-    await record_operational_log(
-        db,
-        category="Staff Operation",
-        severity="Success",
-        actor=actor.display_name,
-        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action="Generate Final Report",
-        target=final_report.id,
-        summary=f"{actor.display_name} generated {final_report.id} from {len(final_report.sources)} ready submissions.",
-        source_id=final_report.id,
-        metadata={"reportCount": len(final_report.sources), "period": final_report.period},
-    )
-    return final_report
-
-
-@router.post("/reports/final/{report_id}/return-revision", response_model=FinalReportSummary)
-async def return_final_report_revision(
-    report_id: str,
-    payload: FinalReportRevisionReturn,
-    actor: StaffWorkflowAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FinalReportSummary:
-    try:
-        final_report = await return_final_report_for_revision(db, report_id, payload)
-    except InvalidReportWorkflowError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    if final_report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
-
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="final_report.updated", data=final_report.model_dump(mode="json")
-        )
-    )
-    await broadcast_summary(db)
-    await record_operational_log(
-        db,
-        category="Staff Operation",
-        severity="Warning",
-        actor=actor.display_name,
-        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action="Return Final Report for Revision",
-        target=final_report.id,
-        summary=f"{actor.display_name} returned {final_report.id} for source report revision.",
-        source_id=final_report.id,
-        metadata={
-            "period": final_report.period,
-            "sourceReportIds": ",".join(payload.sourceReportIds),
-            "remarks": payload.remarks,
-        },
-    )
-    return final_report
-
-
-@router.patch("/reports/final/{report_id}/status", response_model=FinalReportSummary)
-async def update_final_report_workflow_status(
-    report_id: str,
-    payload: FinalReportStatusUpdate,
-    actor: StaffWorkflowAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FinalReportSummary:
-    try:
-        final_report = await update_final_report_status(db, report_id, payload)
-    except InvalidReportWorkflowError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    if final_report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
-
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="final_report.updated", data=final_report.model_dump(mode="json")
-        )
-    )
-    await record_operational_log(
-        db,
-        category="Staff Operation",
-        severity="Success",
-        actor=actor.display_name,
-        actor_role="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
-        action=f"Final Report {final_report.status}",
-        target=final_report.id,
-        summary=f"{actor.display_name} changed final report {final_report.id} to {final_report.status}.",
-        source_id=final_report.id,
-        metadata={
-            "period": final_report.period,
-            "status": final_report.status,
-            "requestedStatus": payload.status,
-            "archivedFromStatus": final_report.archivedFromStatus,
-        },
-    )
-    return final_report
-
-
-@router.get("/reports/enterprises")
-async def list_report_enterprises(
-    account: Annotated[Account, Depends(get_current_operational_account)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[dict]:
-    statement = (
-        select(Account)
-        .where(
-            Account.role == AccountRole.ENTERPRISE,
-            Account.status == AccountStatus.ACTIVE,
-            Account.activated_at.is_not(None),
-        )
-        .order_by(Account.display_name.asc())
-    )
-    if account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(Account.id == account.id)
-
-    accounts = list(await db.scalars(statement))
-    topologies = [
-        topology
-        for topology in (await load_account_topologies(db, accounts)).values()
-        if topology is not None
-    ]
-    topologies.sort(key=lambda topology: topology.enterprise.name.lower())
-    return [
-        {
-            "id": topology.enterprise.official_code,
-            "name": topology.enterprise.name,
-            "category": format_enterprise_category(topology.enterprise.category) or "Uncategorized",
-            "barangay": topology.site.barangay or "Unassigned",
-            "complianceOwner": topology.account.display_name,
-        }
-        for topology in topologies
-    ]
 
 
 @router.get("/tickets", response_model=list[SupportTicketSummary])
@@ -947,65 +553,6 @@ async def create_enterprise_notification(
     return notification
 
 
-@router.get("/map-enterprises")
-async def list_map_enterprises(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[dict]:
-    latest = {item.enterpriseId: item for item in await list_latest_telemetry(db, account)}
-    statement = (
-        select(Account)
-        .where(
-            Account.role == AccountRole.ENTERPRISE,
-            Account.status == AccountStatus.ACTIVE,
-            Account.activated_at.is_not(None),
-        )
-        .order_by(Account.display_name.asc())
-    )
-    if account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(Account.id == account.id)
-
-    accounts = list(await db.scalars(statement))
-    topologies = [
-        topology
-        for topology in (await load_account_topologies(db, accounts)).values()
-        if topology is not None
-    ]
-    topologies.sort(key=lambda topology: topology.enterprise.name.lower())
-    enterprises = []
-    for topology in topologies:
-        telemetry = latest.get(enterprise_identifier(topology))
-        enterprises.append(
-            {
-                "id": topology.enterprise.official_code,
-                "name": topology.enterprise.name,
-                "barangay": topology.site.barangay or "Unassigned",
-                "category": format_enterprise_category(topology.enterprise.category)
-                or "Uncategorized",
-                "fullAddress": topology.site.address
-                or topology.site.geocoded_address
-                or "Address not provided",
-                "lat": topology.site.latitude,
-                "lng": topology.site.longitude,
-                "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
-                "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
-                "status": enterprise_status_from_telemetry(telemetry),
-                "contact": topology.account.phone or topology.account.email,
-                "lastSync": telemetry.receivedAt.isoformat() if telemetry else None,
-                "gatewayStatus": telemetry.gatewayStatus if telemetry else topology.gateway_status,
-                "sourceKind": (
-                    telemetry.sourceKind
-                    if telemetry
-                    else ("mock" if topology.enterprise.classification == "simulation" else "real")
-                ),
-                "mockRunId": (
-                    telemetry.mockRunId if telemetry else topology.enterprise.simulation_run_id
-                ),
-            }
-        )
-    return enterprises
-
-
 @router.get("/alerts", response_model=list[OperationalAlertSummary])
 async def list_alerts(
     _: AlertReadAccount,
@@ -1055,34 +602,6 @@ async def update_alert_status(
         metadata={"previousStatus": previous_status, "newStatus": payload.status},
     )
     return alert_summary
-
-
-@router.get("/system-activities")
-async def list_system_activities(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
-
-
-@router.get("/system-logs")
-async def list_system_logs(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
-
-
-@router.get("/lgu-accounts")
-async def list_lgu_accounts(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
-
-
-@router.get("/enterprise-accounts")
-async def list_enterprise_accounts(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
 
 
 @router.websocket("/ws")
@@ -1201,37 +720,6 @@ async def authenticate_websocket_account(db: AsyncSession, token: str) -> Accoun
     return account
 
 
-async def get_active_websocket_enterprise_membership(
-    db: AsyncSession,
-    account_id: str,
-) -> EnterpriseMembership | None:
-    observed_at = datetime.now(UTC)
-    memberships = list(
-        await db.scalars(
-            select(EnterpriseMembership)
-            .join(Enterprise, Enterprise.id == EnterpriseMembership.enterprise_id)
-            .where(
-                EnterpriseMembership.account_id == account_id,
-                EnterpriseMembership.started_at <= observed_at,
-                or_(
-                    EnterpriseMembership.ended_at.is_(None),
-                    EnterpriseMembership.ended_at > observed_at,
-                ),
-                Enterprise.classification == EnterpriseMembership.classification,
-                Enterprise.lifecycle_state == "active",
-            )
-        )
-    )
-    return memberships[0] if len(memberships) == 1 else None
-
-
-async def broadcast_summary(db: AsyncSession) -> None:
-    summary = await get_operational_summary(db, None)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(type="summary.updated", data=summary.model_dump(mode="json"))
-    )
-
-
 async def notify_enterprise_ticket_update(
     db: AsyncSession,
     *,
@@ -1266,39 +754,6 @@ async def notify_enterprise_ticket_update(
             data=notification.model_dump(mode="json"),
         )
     )
-
-
-async def notify_staff_report_submission(
-    db: AsyncSession, actor: Account, report: IntakeReportSummary
-) -> None:
-    is_resubmission = staff_report_notification_is_resubmission(report)
-    action_label = "resubmitted" if is_resubmission else "submitted"
-    notification_type = (
-        "Enterprise Report Resubmitted" if is_resubmission else "Enterprise Report Submitted"
-    )
-    notifications = await create_role_notifications(
-        db,
-        recipient_roles=[AccountRole.STAFF],
-        title=notification_type,
-        message=f"{report.enterprise} {action_label} {report.code} for {report.period}.",
-        notification_type=notification_type,
-        severity="Info",
-        actor=actor,
-        source_type="enterprise.report",
-        source_id=report.id,
-    )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
-
-
-def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bool:
-    payload_status = (report.payload or {}).get("status")
-    return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"
 
 
 def support_ticket_notification_roles(category: str) -> list[AccountRole]:
@@ -1336,13 +791,3 @@ async def record_operational_log(
         ),
     )
     await activity_log_manager.broadcast(log)
-
-
-def enterprise_status_from_telemetry(telemetry: TelemetrySnapshotSummary | None) -> str:
-    if telemetry is None:
-        return "Warning"
-    if telemetry.gatewayStatus == "Offline" or telemetry.error:
-        return "Critical"
-    if telemetry.gatewayStatus == "Sync Delayed" or telemetry.unsyncedEvents > 0:
-        return "Warning"
-    return "Normal"

@@ -52,10 +52,6 @@ class OperationalConnectionManager:
                 elif envelope.type in {"notification.created", "notification.updated"}:
                     if not self._is_notification_recipient(socket, envelope):
                         continue
-                elif role == "enterprise" and not self._is_enterprise_event_recipient(
-                    socket, envelope
-                ):
-                    continue
                 try:
                     await socket.send_json(envelope.model_dump(mode="json"))
                 except RuntimeError, WebSocketDisconnect:
@@ -85,18 +81,6 @@ class OperationalConnectionManager:
             and self._topology_enterprise_ids.get(socket) == scope.get("enterpriseId")
             and self._classifications.get(socket) == scope.get("classification")
         )
-
-    def _is_enterprise_event_recipient(
-        self, socket: WebSocket, envelope: OperationalWebSocketEnvelope
-    ) -> bool:
-        enterprise_id = self._enterprise_ids.get(socket)
-        if not enterprise_id:
-            return False
-        if envelope.type == "report.updated":
-            return envelope.data.get("enterpriseId") == enterprise_id
-        if envelope.type in {"notification.created", "notification.updated"}:
-            return envelope.data.get("recipientEnterpriseId") == enterprise_id
-        return False
 
     def _is_notification_recipient(
         self, socket: WebSocket, envelope: OperationalWebSocketEnvelope

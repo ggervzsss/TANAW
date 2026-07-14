@@ -1,84 +1,8 @@
-from datetime import UTC, datetime
-
-from app.features.operational.models import EnterpriseTelemetrySnapshot
-from app.features.operational.schemas import (
-    DesktopMetricsSummary,
-    DesktopTelemetryIngest,
-)
 from app.features.operational.service import (
-    NOTIFY_CAMERA_SESSION_ERROR_KEY,
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
-    NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
-    NOTIFY_SYNC_DELAY_KEY,
     can_view_operational_event,
-    gateway_status_for_snapshot,
-    occupancy_alert_condition,
     resolve_system_setting_enabled,
 )
-
-
-def test_simulation_occupancy_threshold_is_calculated_from_capacity() -> None:
-    payload = DesktopTelemetryIngest(
-        metrics=DesktopMetricsSummary(currentOccupancy=90),
-        sourceKind="mock",
-        mockRunId="simulation-run",
-        payload={
-            "simulation": {
-                "capacity": 100,
-                "thresholdPercent": 90,
-            }
-        },
-    )
-
-    condition = occupancy_alert_condition(payload)
-
-    assert condition is not None
-    assert condition.threshold_count == 90
-    assert condition.recovery_count == 80
-    assert condition.breached is True
-    assert condition.recovered is False
-
-
-def test_simulation_occupancy_alert_uses_hysteresis_for_recovery() -> None:
-    payload = DesktopTelemetryIngest(
-        metrics=DesktopMetricsSummary(currentOccupancy=79),
-        payload={
-            "simulation": {
-                "capacity": 100,
-                "thresholdPercent": 90,
-            }
-        },
-    )
-
-    condition = occupancy_alert_condition(payload)
-
-    assert condition is not None
-    assert condition.breached is False
-    assert condition.recovered is True
-
-
-def test_ordinary_telemetry_has_no_simulation_capacity_rule() -> None:
-    payload = DesktopTelemetryIngest(
-        metrics=DesktopMetricsSummary(currentOccupancy=500),
-        sourceKind="real",
-    )
-
-    assert occupancy_alert_condition(payload) is None
-
-
-def test_real_telemetry_uses_building_capacity_for_alert_condition() -> None:
-    payload = DesktopTelemetryIngest(
-        metrics=DesktopMetricsSummary(currentOccupancy=180),
-        sourceKind="real",
-    )
-
-    condition = occupancy_alert_condition(payload, building_capacity=200)
-
-    assert condition is not None
-    assert condition.capacity == 200
-    assert condition.threshold_percent == 90
-    assert condition.threshold_count == 180
-    assert condition.breached is True
 
 
 def test_it_receives_live_alert_websocket_events() -> None:
@@ -87,68 +11,43 @@ def test_it_receives_live_alert_websocket_events() -> None:
     assert can_view_operational_event("it", "alert.resolved")
 
 
-def test_unsynced_gateway_snapshot_is_reported_as_sync_delayed() -> None:
-    snapshot = EnterpriseTelemetrySnapshot(
-        enterprise_account_id="account-1",
-        enterprise_id="ent-001",
-        enterprise_name="Enterprise One",
-        captured_at=datetime.now(UTC),
-        entries=10,
-        exits=2,
-        current_occupancy=8,
-        peak_occupancy=8,
-        unique_count=8,
-        confirmed_unique_count=8,
-        degraded_unique_count=0,
-        total_events=12,
-        unsubmitted_events=0,
-        unsynced_events=3,
-        running=True,
-        status="sync_delayed",
-    )
-    snapshot.received_at = datetime.now(UTC)
-
-    assert gateway_status_for_snapshot(snapshot) == "Sync Delayed"
+def test_websocket_authorization_rejects_removed_event_contracts() -> None:
+    for event_type in (
+        "telemetry.snapshot",
+        "summary.updated",
+        "report.submitted",
+        "report.updated",
+        "final_report.generated",
+        "final_report.updated",
+    ):
+        assert not can_view_operational_event("admin", event_type)
+        assert not can_view_operational_event("staff", event_type)
+        assert not can_view_operational_event("enterprise", event_type)
 
 
-def test_notification_setting_uses_stable_key_value() -> None:
+def test_target_notifications_and_invalidations_are_role_scoped() -> None:
+    for role in ("admin", "it", "staff", "enterprise"):
+        assert can_view_operational_event(role, "notification.created")
+        assert can_view_operational_event(role, "resource.invalidated")
+    assert not can_view_operational_event("staff", "alert.created")
+    assert not can_view_operational_event("enterprise", "alert.created")
+
+
+def test_notification_setting_uses_stable_typed_key() -> None:
     assert (
         resolve_system_setting_enabled(
-            {NOTIFY_SYNC_DELAY_KEY: False},
-            NOTIFY_SYNC_DELAY_KEY,
-        )
-        is False
-    )
-
-
-def test_notification_setting_reads_legacy_label_key() -> None:
-    assert (
-        resolve_system_setting_enabled(
-            {"notifications.Notify Failed Login Threshold": False},
+            {NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: False},
             NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
         )
         is False
     )
 
 
-def test_notification_setting_prefers_stable_key_over_legacy_key() -> None:
-    assert (
-        resolve_system_setting_enabled(
-            {
-                NOTIFY_CAMERA_SESSION_ERROR_KEY: True,
-                "notifications.Notify Camera Offline": False,
-            },
-            NOTIFY_CAMERA_SESSION_ERROR_KEY,
-        )
-        is True
-    )
-
-
 def test_notification_setting_ignores_invalid_values() -> None:
     assert (
         resolve_system_setting_enabled(
-            {NOTIFY_GATEWAY_SERVICE_ERROR_KEY: "false"},
-            NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
+            {NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: "false"},
+            NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
         )
         is True
     )

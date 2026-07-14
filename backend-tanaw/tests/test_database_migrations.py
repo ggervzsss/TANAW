@@ -58,6 +58,7 @@ async def test_uninitialized_database_is_rejected() -> None:
         "20260714_0030_durable_sync_health_alerts.py",
         "20260714_0031_normalize_assets_and_preferences.py",
         "20260714_0032_durable_retention_indexes.py",
+        "20260714_0033_remove_legacy_report_runtime.py",
     ),
 )
 def test_irreversible_migrations_block_unsafe_downgrades(migration_filename: str) -> None:
