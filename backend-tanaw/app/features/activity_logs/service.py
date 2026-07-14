@@ -20,7 +20,6 @@ ROLE_LABELS = {
 SYSTEM_SETTINGS_ID = "default"
 LOG_RETENTION_DAYS = 180
 LOG_RETENTION_DAYS_SETTING_KEY = "logs.retentionDays"
-LEGACY_LOG_RETENTION_DAYS_SETTING_KEY = "logs.Log Retention Period"
 ALLOWED_LOG_RETENTION_DAYS = frozenset({90, 180, 365})
 
 
@@ -104,14 +103,6 @@ def resolve_activity_log_retention_days(values: Mapping[str, object] | None) -> 
     stable_value = values.get(LOG_RETENTION_DAYS_SETTING_KEY)
     if isinstance(stable_value, int) and not isinstance(stable_value, bool):
         return stable_value if stable_value in ALLOWED_LOG_RETENTION_DAYS else LOG_RETENTION_DAYS
-
-    legacy_value = values.get(LEGACY_LOG_RETENTION_DAYS_SETTING_KEY)
-    if isinstance(legacy_value, str):
-        try:
-            days = int(legacy_value.removesuffix(" days"))
-        except ValueError:
-            return LOG_RETENTION_DAYS
-        return days if days in ALLOWED_LOG_RETENTION_DAYS else LOG_RETENTION_DAYS
 
     return LOG_RETENTION_DAYS
 

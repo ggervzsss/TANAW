@@ -329,7 +329,6 @@ async def generate_mock_data(
         "lguAccounts": len(accounts["lgu"]),
         "generatedEnterpriseAccounts": len(accounts["enterprises"]),
         "simulationEnterprises": len(accounts["enterprises"]),
-        "targetPreparedCounts": prepared_counts[0],
         "targetPreparedReportCounts": prepared_counts,
     }
     run.generated_counts_json = json.dumps(counts, sort_keys=True)
@@ -678,7 +677,7 @@ async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
     counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
     raw_prepared_reports = counts.get("targetPreparedReportCounts")
     prepared_reports = raw_prepared_reports if isinstance(raw_prepared_reports, list) else []
-    raw_prepared = prepared_reports[0] if prepared_reports else counts.get("targetPreparedCounts")
+    raw_prepared = prepared_reports[0] if prepared_reports else None
     prepared: dict[str, Any] = raw_prepared if isinstance(raw_prepared, dict) else {}
     enterprise_id = target.get("enterpriseId")
     if not isinstance(enterprise_id, str) or not enterprise_id:

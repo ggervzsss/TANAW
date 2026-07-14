@@ -336,7 +336,7 @@ def test_development_seed_accounts_require_complete_credentials() -> None:
         Settings(seed_development_accounts=True)
 
 
-def test_legacy_startup_environment_names_remain_supported(
+def test_unregistered_environment_aliases_are_ignored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEFAULT_IT_USERNAME", "legacy-bootstrap@tanaw.local")
@@ -347,11 +347,17 @@ def test_legacy_startup_environment_names_remain_supported(
     monkeypatch.setenv("TEMPORARY_STAFF_PASSWORD", "legacy-staff-password")
     monkeypatch.setenv("TEMPORARY_IT_USERNAME", "legacy-it@tanaw.local")
     monkeypatch.setenv("TEMPORARY_IT_PASSWORD", "legacy-it-password")
-    monkeypatch.setenv("TANAW_SEED_DEVELOPMENT_ACCOUNTS", "true")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("ALLOW_MOCK_DATA", "true")
+    monkeypatch.setenv("SEED_DEVELOPMENT_ACCOUNTS", "true")
 
     settings = Settings()
 
-    assert settings.bootstrap_it_username == "legacy-bootstrap@tanaw.local"
-    assert settings.development_admin_username == "legacy-admin@tanaw.local"
-    assert settings.development_staff_username == "legacy-staff@tanaw.local"
-    assert settings.development_it_username == "legacy-it@tanaw.local"
+    assert settings.bootstrap_it_username is None
+    assert settings.development_admin_username is None
+    assert settings.development_staff_username is None
+    assert settings.development_it_username is None
+    assert settings.environment == "development"
+    assert settings.allow_mock_data is False
+    assert settings.seed_development_accounts is False

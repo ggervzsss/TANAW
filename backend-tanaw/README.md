@@ -125,7 +125,7 @@ Production configuration requires this value to be a public HTTPS URL.
 ## Startup Account Safety
 
 `BOOTSTRAP_IT_USERNAME` and `BOOTSTRAP_IT_PASSWORD` are used only when TANAW
-initializes a database that has no existing or legacy IT account. TANAW records
+initializes a database that has no existing IT account. TANAW records
 that initialization, persists the bootstrap account's protected identity in the
 database, and never synchronizes the account from environment values again.
 Removing the bootstrap variables after initialization does not remove that
@@ -135,11 +135,9 @@ reassign, deactivate, or delete the protected bootstrap identity.
 
 Optional Admin, Staff, and secondary IT development accounts are created only
 when `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`. Production rejects that switch,
-placeholder bootstrap credentials, and short or default JWT secrets. Existing
-deployments may continue using the legacy `DEFAULT_IT_*` and `TEMPORARY_*`
-environment names temporarily; the backend maps them to the new settings for
-backward compatibility, but new configuration should use `BOOTSTRAP_IT_*` and
-`DEVELOPMENT_*`.
+placeholder bootstrap credentials, and short or default JWT secrets. Only the
+documented `BOOTSTRAP_IT_*`, `DEVELOPMENT_*`, and `TANAW_*` environment names
+are accepted; compatibility aliases are intentionally not registered.
 
 Normal IT account recovery should use the emailed password-reset OTP. If an IT
 account is inactive, another active IT account must review and reactivate it
