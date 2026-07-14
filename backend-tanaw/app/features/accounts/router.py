@@ -874,6 +874,7 @@ async def resolve_verified_email_change_request(
             source_type="account.profile.email",
             source_id=request.id,
         )
+        await db.commit()
     except Exception:
         await db.rollback()
         logger.exception(
@@ -914,6 +915,7 @@ async def notify_enterprise_profile_change_resolution(
         ),
         source_id=account.id,
     )
+    await db.commit()
 
 
 async def record_account_log(
@@ -943,6 +945,7 @@ async def record_account_log(
             metadata=metadata,
         ),
     )
+    await db.commit()
     await activity_log_manager.broadcast(log)
 
 

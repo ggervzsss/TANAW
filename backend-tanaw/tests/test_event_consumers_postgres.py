@@ -298,6 +298,7 @@ async def test_notification_mutation_commits_its_realtime_delivery_atomically(
             source_type="test.resource",
             source_id=str(uuid4()),
         )
+        await db.commit()
         event = await db.scalar(
             select(DomainEvent).where(
                 DomainEvent.aggregate_type == "user_notification",

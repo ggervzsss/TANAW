@@ -76,6 +76,7 @@ async def retry_email_delivery(
             metadata={"purpose": record.purpose, "manualRetryCount": record.manual_retry_count},
         ),
     )
+    await db.commit()
     await activity_log_manager.broadcast(log)
     return to_email_delivery_summary(record)
 

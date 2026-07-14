@@ -15,8 +15,8 @@ from app.core.config import Settings
 from app.features.events import runtime
 from app.features.events.contracts import DomainEventEnvelope, JSONValue
 from app.features.events.notification_projection import ReportingNotificationProjection
+from app.features.events.operational_websocket import OperationalConnectionManager
 from app.features.events.realtime import OperationalRealtimePublisher, RealtimeBroadcastHandler
-from app.features.operational.websocket import OperationalConnectionManager
 
 
 def _event(

@@ -46,13 +46,15 @@ async def test_login_support_request_exposes_contact_and_notifies_portal(
     monkeypatch.setattr("app.features.auth.router.create_operational_alert", create_alert)
     monkeypatch.setattr("app.features.auth.router.create_role_notifications", create_notifications)
 
+    db = MagicMock()
+    db.commit = AsyncMock()
     result = await create_support_request(
         SupportRequest(
             name="  Requester  ",
             email="Requester@Example.com",
             message="  Unable to sign in to TANAW.  ",
         ),
-        MagicMock(),
+        db,
     )
 
     assert result.status == "ok"
@@ -64,6 +66,7 @@ async def test_login_support_request_exposes_contact_and_notifies_portal(
     assert alert_kwargs["required_action"].endswith("requester@example.com.")
     assert alert_kwargs["source_id"].startswith("login-support:")
     create_notifications.assert_awaited_once()
+    db.commit.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -99,6 +102,7 @@ async def test_ticket_messages_apply_role_appropriate_status(
     db = MagicMock()
     db.commit = AsyncMock()
     db.execute = AsyncMock()
+    db.flush = AsyncMock()
     db.scalar = AsyncMock(return_value=ticket)
     db.refresh = AsyncMock()
 
@@ -111,4 +115,5 @@ async def test_ticket_messages_apply_role_appropriate_status(
 
     assert result is detail
     assert ticket.status == expected_status
-    db.commit.assert_awaited_once()
+    db.flush.assert_awaited_once()
+    db.commit.assert_not_awaited()

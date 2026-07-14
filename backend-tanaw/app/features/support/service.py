@@ -135,6 +135,7 @@ async def create_support_ticket(
     storage: AssetStorage,
     images: Sequence[ValidatedImage] = (),
 ) -> SupportTicketSummary:
+    """Own the atomic database/object-storage transaction for a new ticket."""
     topology = await require_account_topology(db, account)
     ticket_sequence = await db.scalar(text("SELECT nextval('support_ticket_code_seq')"))
     if not isinstance(ticket_sequence, int):
@@ -242,15 +243,12 @@ async def create_support_ticket_message(
     ticket: SupportTicket,
     author: Account,
     payload: SupportTicketMessageCreate,
-    *,
-    commit: bool = True,
 ) -> SupportTicketDetail:
     detail, _ = await create_support_ticket_message_with_record(
         db,
         ticket,
         author,
         payload,
-        commit=commit,
     )
     return detail
 
@@ -260,8 +258,6 @@ async def create_support_ticket_message_with_record(
     ticket: SupportTicket,
     author: Account,
     payload: SupportTicketMessageCreate,
-    *,
-    commit: bool = True,
 ) -> tuple[SupportTicketDetail, SupportTicketMessage]:
     ticket = await _lock_support_ticket(db, ticket.id)
     message = SupportTicketMessage(
@@ -279,10 +275,7 @@ async def create_support_ticket_message_with_record(
         ticket.status = "In Review"
     if reopened:
         await _set_support_attachment_retention(db, ticket_id=ticket.id, expires_at=None)
-    if commit:
-        await db.commit()
-    else:
-        await db.flush()
+    await db.flush()
     await db.refresh(ticket)
     await db.refresh(message)
     detail = await get_support_ticket_detail(db, author, ticket.id)
@@ -309,7 +302,7 @@ async def update_support_ticket_status(
         ticket_id=ticket.id,
         expires_at=expires_at,
     )
-    await db.commit()
+    await db.flush([ticket])
     await db.refresh(ticket)
     detail = await get_support_ticket_detail(db, actor, ticket.id)
     if detail is None:

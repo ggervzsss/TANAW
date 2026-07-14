@@ -12,7 +12,7 @@ from app.core.http_security import websocket_security_headers
 from app.core.websocket_auth import is_websocket_origin_allowed
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs import router as activity_logs_router
-from app.features.operational import router as operational_router
+from app.features.events import operational_router
 
 TRUSTED_FRONTEND_ORIGIN = "https://tanaw-sanpedro.vercel.app"
 

@@ -74,7 +74,7 @@ async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> A
         mock_run_id=payload.mockRunId,
     )
     db.add(log)
-    await db.commit()
+    await db.flush([log])
     await db.refresh(log)
     return to_activity_log_summary(log)
 

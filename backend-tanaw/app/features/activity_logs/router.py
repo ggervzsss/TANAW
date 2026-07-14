@@ -68,6 +68,7 @@ async def purge_expired_logs(
             metadata={"deletedCount": deleted_count, "retentionDays": retention_days},
         ),
     )
+    await db.commit()
     await activity_log_manager.broadcast(log)
     return ActivityLogPurgeResponse(deletedCount=deleted_count, retentionDays=retention_days)
 
@@ -100,6 +101,7 @@ async def record_activity_log(
             actorRole=get_actor_role_label(account),  # type: ignore[arg-type]
         ),
     )
+    await db.commit()
     await activity_log_manager.broadcast(log)
     return log
 

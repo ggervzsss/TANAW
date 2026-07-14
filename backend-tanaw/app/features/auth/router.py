@@ -166,6 +166,7 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         enterprise=topology.enterprise.name if topology is not None else None,
         source_id=f"failed-login-threshold:{account.id}",
     )
+    await db.commit()
 
 
 async def notify_enterprise_account_change(
@@ -191,6 +192,7 @@ async def notify_enterprise_account_change(
         source_type=source_type,
         source_id=account.id,
     )
+    await db.commit()
 
 
 async def get_login_lockout_policy(db: AsyncSession) -> LoginLockoutPolicy:
@@ -581,6 +583,7 @@ async def create_support_request(
         source_type="operational.alert",
         source_id=alert.id,
     )
+    await db.commit()
     return StatusResponse(status="ok")
 
 
@@ -1136,4 +1139,5 @@ async def record_auth_log(
             metadata=metadata,
         ),
     )
+    await db.commit()
     await activity_log_manager.broadcast(log)

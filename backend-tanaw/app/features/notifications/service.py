@@ -107,7 +107,6 @@ async def create_user_notification(
     db.add(notification)
     await db.flush([notification])
     await _enqueue_notification_event(db, notification, "user_notification.created.v2", 1, actor)
-    await db.commit()
     await db.refresh(notification)
     return to_user_notification_summary(notification)
 
@@ -159,7 +158,6 @@ async def create_role_notifications(
         await _enqueue_notification_event(
             db, notification, "user_notification.created.v2", 1, actor
         )
-    await db.commit()
     for notification in notifications:
         await db.refresh(notification)
     return [to_user_notification_summary(notification) for notification in notifications]
@@ -188,7 +186,6 @@ async def set_user_notification_read(
     notification.read_at = datetime.now(UTC) if read else None
     await db.flush([notification])
     await _enqueue_notification_event(db, notification, "user_notification.updated.v2", 2, account)
-    await db.commit()
     await db.refresh(notification)
     return to_user_notification_summary(notification)
 

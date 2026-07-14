@@ -58,7 +58,6 @@ async def create_operational_alert(
                 payload={"operationalAlertId": existing.id},
                 actor_account_id=None,
             )
-            await db.commit()
             await db.refresh(existing)
             return existing
 
@@ -88,7 +87,6 @@ async def create_operational_alert(
         payload={"operationalAlertId": alert.id},
         actor_account_id=None,
     )
-    await db.commit()
     await db.refresh(alert)
     return alert
 

@@ -20,8 +20,8 @@ from app.features.events.contracts import (
     DomainEventEnvelope,
     JSONValue,
 )
+from app.features.events.operational_websocket import operational_ws_manager
 from app.features.events.realtime_envelopes import OperationalWebSocketEnvelope
-from app.features.operational.websocket import operational_ws_manager
 
 Broadcast = Callable[[OperationalWebSocketEnvelope], Awaitable[None]]
 REALTIME_TOPIC = "operational.resource-invalidations.v2"

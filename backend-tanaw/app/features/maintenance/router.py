@@ -64,6 +64,7 @@ async def run_retention_now(
             },
         ),
     )
+    await db.commit()
     await activity_log_manager.broadcast(log)
     return to_status_response(
         retention_runtime_snapshot(),
