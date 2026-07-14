@@ -279,10 +279,7 @@ def record_occupancy_correction(
         **manager.record_occupancy_correction(
             new_occupancy=payload.new_occupancy,
             reason=payload.reason,
-            actor_id=payload.actor_id,
-            actor_name=payload.actor_name,
             camera_id=payload.camera_id,
-            source_kind=payload.source_kind,
         )
     )
 

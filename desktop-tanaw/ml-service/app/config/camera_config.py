@@ -338,12 +338,11 @@ class MetricsSummaryResponse(BaseModel):
 
 
 class OccupancyCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     new_occupancy: int = Field(ge=0, le=100_000)
     reason: str = Field(min_length=3, max_length=500)
-    actor_id: str | None = Field(default=None, max_length=160)
-    actor_name: str | None = Field(default=None, max_length=160)
     camera_id: int | None = None
-    source_kind: SourceKind | None = None
 
 
 class OccupancyCorrectionResponse(BaseModel):

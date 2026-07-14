@@ -433,14 +433,12 @@ export async function getLocalMetricsHistory(baseUrl: string, options: { include
 
 export async function recordOccupancyCorrection(
   baseUrl: string,
-  payload: { newOccupancy: number; reason: string; actorId?: string | null; actorName?: string | null; cameraId?: number | null },
+  payload: { newOccupancy: number; reason: string; cameraId?: number | null },
 ): Promise<OccupancyCorrection> {
   void baseUrl;
   return requestMl<OccupancyCorrection>("occupancy.correction", {
     new_occupancy: payload.newOccupancy,
     reason: payload.reason,
-    actor_id: payload.actorId ?? null,
-    actor_name: payload.actorName ?? null,
     camera_id: payload.cameraId ?? null,
   });
 }

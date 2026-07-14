@@ -2,10 +2,26 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.config.camera_config import CameraStartRequest
+from app.config.camera_config import CameraStartRequest, OccupancyCorrectionRequest
 
 
 class CameraConfigValidationTest(unittest.TestCase):
+    def test_correction_rejects_client_controlled_actor_and_classification(self) -> None:
+        for privileged_field, value in (
+            ("source_kind", "real"),
+            ("actor_id", "spoofed-account"),
+            ("actor_name", "Spoofed Actor"),
+        ):
+            with self.subTest(privileged_field=privileged_field):
+                with self.assertRaisesRegex(ValidationError, privileged_field):
+                    OccupancyCorrectionRequest.model_validate(
+                        {
+                            "new_occupancy": 1,
+                            "reason": "Manual correction",
+                            privileged_field: value,
+                        }
+                    )
+
     def test_valid_roi_and_tripwire_config_is_accepted(self) -> None:
         config = CameraStartRequest.model_validate(
             {

@@ -109,7 +109,7 @@ const operationSpecs: Record<MlOperation, OperationSpec> = {
     method: "POST",
     path: "/occupancy/correction",
     payload: "body",
-    allowedKeys: ["new_occupancy", "reason", "actor_id", "actor_name", "camera_id"],
+    allowedKeys: ["new_occupancy", "reason", "camera_id"],
   },
   "reports.createRevision": {
     method: "POST",
