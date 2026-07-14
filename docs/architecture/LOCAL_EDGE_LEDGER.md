@@ -1,7 +1,7 @@
 # TANAW target local edge ledger
 
 The Enterprise desktop stores camera evidence in one versioned SQLite ledger per
-enterprise. Schema version 5 is the target runtime schema. It contains no mutable
+enterprise. Schema version 6 is the target-only runtime schema. It contains no mutable
 `report_submissions` table, raw `count_snapshots` history, or global event sync/report
 markers.
 
@@ -24,19 +24,18 @@ markers.
 7. `monitoring_sessions`, `coverage_gaps`, and `local_persistence_errors` make stream
    downtime and ledger failures explicit.
 
-## Upgrade and recovery
+## Cutover and recovery
 
-The v5 cutover first validates that every legacy report and submitted event has an
-exact target mapping. Invalid timestamps, missing canonical periods, invalid JSON, or
-missing report claims stop the upgrade. SQLite applies the schema transformation in
-one transaction with foreign keys revalidated afterward.
+The coordinated pre-cutover build transforms and reconciles existing device data,
+then removes its temporary backup only after target catalog, foreign-key, and integrity
+checks pass. The released target runtime does not package those transformation readers.
+It creates schema v6 directly for a new device and accepts only v6 thereafter. Any
+older or foreign catalog fails closed with an instruction to run the coordinated
+cutover; it is never upgraded opportunistically during normal camera operation.
 
-For an existing versioned ledger, startup checkpoints WAL and creates a temporary
-SQLite backup before cutover. An interrupted transaction rolls back to schema v4 and
-the next startup safely retries from the same backup. After the target catalog,
-foreign keys, and integrity checks pass, SQLite vacuums the live database and deletes
-the temporary backup. The accepted runtime database therefore contains only target
-tables and columns.
+Recovery before acceptance restores the complete external local-data checkpoint and
+matching pre-cutover application. After acceptance, recovery uses target-schema backups
+or a clean v6 device enrollment—never a compatibility reader or retained old table.
 
 Raw report-event purging deletes exact revision members and associated identity
 records while keeping immutable report facts, source lineage, delivery history,

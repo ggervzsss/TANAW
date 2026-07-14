@@ -10,7 +10,6 @@ from typing import Any
 APP_DIRECTORY_NAME = "desktop-tanaw"
 DATABASE_NAME = "tanaw_metrics.sqlite3"
 LEDGER_TABLES = (
-    "local_schema_migrations",
     "local_sites",
     "local_cameras",
     "local_camera_event_sequences",
@@ -33,9 +32,8 @@ LEDGER_TABLES = (
     "visitor_model_embeddings",
     "visitor_sightings",
 )
-LEGACY_FILES = (
+UNBOUND_RUNTIME_FILES = (
     "active_session.json",
-    "events.jsonl",
     DATABASE_NAME,
     f"{DATABASE_NAME}-shm",
     f"{DATABASE_NAME}-wal",
@@ -148,7 +146,7 @@ def clear_local_data(
         removed_bytes += _directory_size(enterprise_root)
         removed_paths.append(str(enterprise_root))
         shutil.rmtree(enterprise_root)
-    for name in LEGACY_FILES:
+    for name in UNBOUND_RUNTIME_FILES:
         path = ml_root / name
         if path.exists():
             removed_bytes += path.stat().st_size
@@ -200,7 +198,7 @@ def _parser() -> argparse.ArgumentParser:
     selection.add_argument(
         "--all-ledgers",
         action="store_true",
-        help="Delete every enterprise ledger and the legacy unscoped ledger.",
+        help="Delete every enterprise ledger and the target unbound startup ledger.",
     )
     selection.add_argument(
         "--full-device",
@@ -220,9 +218,9 @@ def _ledger_paths(app_data_dir: Path, enterprise_id: str | None) -> list[tuple[s
         return [(enterprise_id, ml_root / "enterprises" / scope / DATABASE_NAME)]
 
     paths: list[tuple[str, Path]] = []
-    legacy_path = ml_root / DATABASE_NAME
-    if legacy_path.exists():
-        paths.append(("legacy-unscoped", legacy_path))
+    unbound_path = ml_root / DATABASE_NAME
+    if unbound_path.exists():
+        paths.append(("unbound", unbound_path))
     enterprise_root = ml_root / "enterprises"
     if enterprise_root.exists():
         for database_path in sorted(enterprise_root.glob(f"*/{DATABASE_NAME}")):

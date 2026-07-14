@@ -17,7 +17,7 @@ from app.storage.local_schema import (
     initialize_local_database,
     upsert_reporting_period,
 )
-from app.storage.report_ledger_schema import (
+from app.storage.report_contract import (
     REPORT_OUTBOX_CONTRACT_VERSION,
     REPORT_OUTBOX_ENDPOINT,
     allocate_camera_event_sequences,
@@ -262,21 +262,6 @@ class LocalMetricsStore:
         self._write("append_count_event", write_event)
 
         return event_id
-
-    def import_legacy_event_if_missing(self, payload: dict[str, Any]) -> bool:
-        recorded_at = payload.get("recorded_at")
-        if not isinstance(recorded_at, str):
-            raise ValueError("Legacy event is missing its recorded_at timestamp.")
-        with self._connection() as connection:
-            exists = connection.execute(
-                "select 1 from count_events where recorded_at = ? limit 1",
-                (parse_captured_at(recorded_at).isoformat(),),
-            ).fetchone()
-        if exists is not None:
-            return False
-        event = {key: value for key, value in payload.items() if key != "recorded_at"}
-        self.append_count_event(event, recorded_at)
-        return True
 
     def start_monitoring_session(
         self,
@@ -1153,7 +1138,7 @@ class LocalMetricsStore:
             "mockRunId": mock_run_id,
         }
         request_hash = canonical_hash(request_document)
-        resolved_idempotency_key = idempotency_key or f"legacy:{report_id}:{request_hash}"
+        resolved_idempotency_key = idempotency_key or f"local:{report_id}:{request_hash}"
         if command_id is not None:
             try:
                 normalized_command_id = str(UUID(command_id))

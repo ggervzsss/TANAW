@@ -51,9 +51,6 @@ class LocalDataCliTest(unittest.TestCase):
             app_data_dir = Path(directory)
             store = LocalMetricsStore(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event("real", None))
-            legacy = app_data_dir / "ml-service" / "events.jsonl"
-            legacy.parent.mkdir(parents=True, exist_ok=True)
-            legacy.write_text("{}\n", encoding="utf-8")
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)
             browser_file.write_text("camera settings", encoding="utf-8")
@@ -61,7 +58,6 @@ class LocalDataCliTest(unittest.TestCase):
             clear_local_data(app_data_dir, all_ledgers=True)
 
             self.assertFalse((app_data_dir / "ml-service" / "enterprises").exists())
-            self.assertFalse(legacy.exists())
             self.assertTrue(browser_file.exists())
 
     def test_full_device_removes_browser_and_ledgers(self) -> None:

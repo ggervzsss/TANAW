@@ -8,7 +8,7 @@ from typing import Any
 
 from app.storage.local_metrics_store import LocalMetricsStore
 from app.storage.local_schema import connect_local_database
-from app.storage.report_ledger_schema import build_revision_document, canonical_hash
+from app.storage.report_contract import build_revision_document, canonical_hash
 
 JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 JULY_PERIOD_ID = "month:Asia/Manila:2026-07"

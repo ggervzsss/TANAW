@@ -1,4 +1,3 @@
-import json
 import sqlite3
 import tempfile
 import threading
@@ -19,19 +18,11 @@ from app.storage.local_schema import (
     connect_local_database,
     initialize_local_database,
 )
-from app.storage.local_schema import (
-    _migrate_baseline as migrate_local_v1,
-)
-from app.storage.local_schema import (
-    _migrate_reporting_periods as migrate_local_v2,
-)
-from app.storage.report_ledger_schema import migrate_report_ledger_v3
 from app.storage.reporting_periods import (
     monthly_period,
     monthly_period_for_captured_at,
     monthly_period_from_label,
 )
-from app.storage.resilience_schema import migrate_resilience_ledger_v4
 
 JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
@@ -263,43 +254,14 @@ class LocalReportingLedgerTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "month:Asia/Manila:YYYY-MM"):
                 store.create_local_report_revision("REP-UNCLASSIFIED", "")
 
-    def test_legacy_rows_are_migrated_without_data_loss_and_rerun_safely(self) -> None:
+    def test_target_schema_is_created_idempotently_without_superseded_objects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            database_path = _create_legacy_database(Path(directory))
+            database_path = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
 
-            store = LocalMetricsStore(directory)
-            summary = store.metrics_summary(
-                include_submitted=True,
-                period_id=JUNE_PERIOD_ID,
-            )
+            initialize_local_database(database_path)
             initialize_local_database(database_path)
 
-            self.assertEqual(summary["entries"], 1)
-            self.assertEqual(summary["unclassified_events"], 0)
             with closing(connect_local_database(database_path)) as connection:
-                event = connection.execute(
-                    """
-                    select event_id, business_date, reporting_period_id
-                    from count_events
-                    """
-                ).fetchone()
-                report = connection.execute(
-                    "select report_id, reporting_period_id from local_reports"
-                ).fetchone()
-                target_counts = {
-                    table: connection.execute(f"select count(*) from {table}").fetchone()[0]
-                    for table in (
-                        "local_report_revisions",
-                        "local_report_source_batches",
-                        "local_report_event_memberships",
-                        "sync_outbox_items",
-                    )
-                }
-                migrations = connection.execute(
-                    "select version from local_schema_migrations order by version"
-                ).fetchall()
-                user_version = connection.execute("pragma user_version").fetchone()[0]
-                foreign_key_failures = connection.execute("pragma foreign_key_check").fetchall()
                 tables = {
                     row["name"]
                     for row in connection.execute(
@@ -309,122 +271,56 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 event_columns = {
                     row["name"] for row in connection.execute("pragma table_info(count_events)")
                 }
+                user_version = connection.execute("pragma user_version").fetchone()[0]
+                foreign_key_failures = connection.execute("pragma foreign_key_check").fetchall()
 
-            self.assertEqual(tuple(event), ("legacy-event", "2026-06-30", JUNE_PERIOD_ID))
-            self.assertEqual(tuple(report), ("legacy-report", JUNE_PERIOD_ID))
-            self.assertEqual(
-                target_counts,
-                {
-                    "local_report_revisions": 1,
-                    "local_report_source_batches": 1,
-                    "local_report_event_memberships": 1,
-                    "sync_outbox_items": 1,
-                },
-            )
-            self.assertEqual([row["version"] for row in migrations], [1, 2, 3, 4, 5])
             self.assertEqual(user_version, LOCAL_SCHEMA_VERSION)
             self.assertEqual(foreign_key_failures, [])
-            self.assertTrue({"count_snapshots", "report_submissions"}.isdisjoint(tables))
+            self.assertTrue(
+                {"count_snapshots", "report_submissions", "local_schema_migrations"}.isdisjoint(
+                    tables
+                )
+            )
             self.assertTrue(
                 {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
             )
 
-    def test_interrupted_target_cutover_rolls_back_and_retry_removes_backup(self) -> None:
+    def test_pre_cutover_store_is_rejected_without_runtime_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            database_path = _create_legacy_database(Path(directory))
-            _upgrade_legacy_database_to_v4(database_path)
-            backup_path = database_path.with_name(f".{database_path.name}.schema-v4.backup")
+            database_path = Path(directory) / "ledger.sqlite3"
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute("create table report_submissions (report_id text primary key)")
+                connection.execute("pragma user_version = 5")
+                connection.commit()
 
-            with patch(
-                "app.storage.local_schema.migrate_target_ledger_v5",
-                side_effect=RuntimeError("simulated cutover interruption"),
-            ):
-                with self.assertRaisesRegex(RuntimeError, "simulated cutover interruption"):
-                    initialize_local_database(database_path)
+            with self.assertRaisesRegex(RuntimeError, "coordinated pre-cutover migration"):
+                initialize_local_database(database_path)
 
-            self.assertTrue(backup_path.exists())
-            with closing(connect_local_database(database_path)) as connection:
-                self.assertEqual(connection.execute("pragma user_version").fetchone()[0], 4)
+            with closing(sqlite3.connect(database_path)) as connection:
                 self.assertIsNotNone(
                     connection.execute(
                         "select 1 from sqlite_master where name = 'report_submissions'"
                     ).fetchone()
                 )
+                self.assertEqual(connection.execute("pragma user_version").fetchone()[0], 5)
 
-            initialize_local_database(database_path)
-
-            self.assertFalse(backup_path.exists())
-            with closing(connect_local_database(database_path)) as connection:
-                tables = {
-                    row["name"]
-                    for row in connection.execute(
-                        "select name from sqlite_master where type = 'table'"
-                    )
-                }
-                event_columns = {
-                    row["name"] for row in connection.execute("pragma table_info(count_events)")
-                }
-                report_count = connection.execute("select count(*) from local_reports").fetchone()[
-                    0
-                ]
-            self.assertTrue({"count_snapshots", "report_submissions"}.isdisjoint(tables))
-            self.assertTrue(
-                {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
-            )
-            self.assertEqual(report_count, 1)
-
-    def test_unclassifiable_legacy_event_blocks_official_submission(self) -> None:
+    def test_interrupted_target_schema_creation_rolls_back_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            database_path = _create_legacy_database(Path(directory))
+            database_path = Path(directory) / "ledger.sqlite3"
+
+            with patch(
+                "app.storage.local_schema.create_target_schema",
+                side_effect=RuntimeError("simulated target initialization interruption"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "simulated target initialization"):
+                    initialize_local_database(database_path)
+
             with closing(sqlite3.connect(database_path)) as connection:
-                connection.execute("update count_events set recorded_at = 'not-a-timestamp'")
-                connection.execute("delete from report_submissions")
-                connection.commit()
-
-            store = LocalMetricsStore(directory)
-
-            with self.assertRaisesRegex(RuntimeError, "unclassified or invalid event"):
-                store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
-
-    def test_noncontiguous_legacy_camera_membership_is_dead_lettered(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            database_path = _create_legacy_database(Path(directory))
-            with closing(sqlite3.connect(database_path)) as connection:
-                for event_id, recorded_at, submitted_report_id in (
-                    ("interleaved-event", "2026-06-30T15:59:59.100000+00:00", None),
-                    ("second-report-event", "2026-06-30T15:59:59.900000+00:00", "legacy-report"),
-                ):
-                    connection.execute(
-                        """
-                        insert into count_events (
-                            event_id,
-                            recorded_at,
-                            camera_id,
-                            camera_name,
-                            direction,
-                            entry_count,
-                            occupancy_count,
-                            is_unique_entry,
-                            payload_json,
-                            submitted_report_id
-                        )
-                        values (?, ?, 1, 'Legacy Camera', 'entry', 1, 1, 1, '{}', ?)
-                        """,
-                        (event_id, recorded_at, submitted_report_id),
-                    )
-                connection.commit()
-
-            store = LocalMetricsStore(directory)
-            self.assertEqual(store.list_ready_sync_outbox_items(), [])
-            with closing(connect_local_database(database_path)) as connection:
-                outbox = connection.execute("select * from sync_outbox_items").fetchone()
-                batch = connection.execute("select * from local_report_source_batches").fetchone()
-
-            self.assertEqual(outbox["status"], "dead_letter")
-            self.assertEqual(outbox["last_error_class"], "ambiguous_legacy_report_lineage")
-            self.assertEqual(batch["event_count"], 2)
-            self.assertEqual(batch["event_sequence_start"], 0)
-            self.assertEqual(batch["event_sequence_end_exclusive"], 3)
+                tables = connection.execute(
+                    "select name from sqlite_master where type = 'table'"
+                ).fetchall()
+                self.assertEqual(tables, [])
+                self.assertEqual(connection.execute("pragma user_version").fetchone()[0], 0)
 
     def test_report_transaction_leaves_concurrent_same_period_insert_open(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -515,113 +411,6 @@ class _BlockingReportStore(LocalMetricsStore):
             include_submitted=include_submitted,
             period_id=period_id,
         )
-
-
-def _create_legacy_database(root: Path) -> Path:
-    database_root = root / "ml-service"
-    database_root.mkdir(parents=True)
-    database_path = database_root / "tanaw_metrics.sqlite3"
-    with closing(sqlite3.connect(database_path)) as connection:
-        connection.executescript(
-            """
-            create table count_events (
-                id integer primary key autoincrement,
-                event_id text not null unique,
-                recorded_at text not null,
-                camera_id integer,
-                camera_name text,
-                direction text not null,
-                track_id integer,
-                entry_count integer not null default 0,
-                exit_count integer not null default 0,
-                occupancy_count integer not null default 0,
-                visitor_id text,
-                is_unique_entry integer not null default 0,
-                reid_score real,
-                reid_decision text,
-                identity_confidence text,
-                source_kind text not null default 'real',
-                mock_run_id text,
-                payload_json text not null,
-                submitted_report_id text,
-                synced_at text
-            );
-
-            create table report_submissions (
-                report_id text primary key,
-                period text not null,
-                submitted_at text not null,
-                entries integer not null default 0,
-                exits integer not null default 0,
-                peak_occupancy integer not null default 0,
-                unique_count integer not null default 0,
-                notes text,
-                payload_json text not null,
-                sync_status text not null default 'pending_cloud_sync',
-                source_kind text not null default 'real',
-                mock_run_id text,
-                synced_at text,
-                raw_purged_at text
-            );
-            """
-        )
-        connection.execute(
-            """
-            insert into count_events (
-                event_id, recorded_at, camera_id, camera_name,
-                direction, entry_count, occupancy_count,
-                is_unique_entry, payload_json, submitted_report_id
-            )
-            values (?, ?, 1, 'Legacy Camera', 'entry', 1, 1, 1, ?, 'legacy-report')
-            """,
-            (
-                "legacy-event",
-                "2026-06-30T15:59:59+00:00",
-                json.dumps({"direction": "entry"}),
-            ),
-        )
-        connection.execute(
-            """
-            insert into report_submissions (
-                report_id, period, submitted_at, entries, exits,
-                peak_occupancy, unique_count, payload_json
-            )
-            values ('legacy-report', 'June 2026', '2026-07-01T00:00:00+00:00',
-                    1, 0, 1, 1, '{}')
-            """
-        )
-        connection.commit()
-    return database_path
-
-
-def _upgrade_legacy_database_to_v4(database_path: Path) -> None:
-    migrations = (
-        (1, "baseline_local_metrics_ledger", migrate_local_v1),
-        (2, "canonical_reporting_periods", migrate_local_v2),
-        (3, "immutable_report_revisions_and_sync_outbox", migrate_report_ledger_v3),
-        (4, "camera_resilience_coverage_and_rollups", migrate_resilience_ledger_v4),
-    )
-    with closing(connect_local_database(database_path)) as connection:
-        connection.execute(
-            """
-            create table local_schema_migrations (
-                version integer primary key,
-                name text not null unique,
-                applied_at text not null
-            )
-            """
-        )
-        for version, name, migration in migrations:
-            migration(connection)
-            connection.execute(
-                """
-                insert into local_schema_migrations (version, name, applied_at)
-                values (?, ?, ?)
-                """,
-                (version, name, datetime.now(UTC).isoformat()),
-            )
-            connection.execute(f"pragma user_version = {version}")
-            connection.commit()
 
 
 def _event(direction: str) -> dict[str, Any]:

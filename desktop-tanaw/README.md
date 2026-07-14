@@ -247,7 +247,7 @@ It preserves other enterprise ledgers, saved camera definitions, device IDs, the
 npm run local-data -- clear --all-ledgers --yes
 ```
 
-This deletes all enterprise-scoped ledgers and the older legacy unscoped ledger. Chromium local storage and camera definitions remain.
+This deletes all enterprise-scoped ledgers and the target unbound startup ledger. Chromium local storage and camera definitions remain.
 
 ### Full Device Reset
 

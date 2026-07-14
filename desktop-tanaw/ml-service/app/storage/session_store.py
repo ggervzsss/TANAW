@@ -20,9 +20,7 @@ class SessionStore:
         self._root = root / "enterprises" / scope if enterprise_id else root
 
         self._session_path = self._root / "active_session.json"
-        self._events_path = self._root / "events.jsonl"
         self._metrics_store = LocalMetricsStore(app_data_dir, enterprise_id)
-        self._retire_legacy_event_log()
         self._scrub_session_credentials()
 
     def load_session(self) -> dict[str, Any] | None:
@@ -243,31 +241,13 @@ class SessionStore:
         )
 
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
-        result = self._metrics_store.purge_report_raw_events(report_id)
-        self._retire_legacy_event_log()
-        return result
+        return self._metrics_store.purge_report_raw_events(report_id)
 
     def prepare_mock_counts(self, **values: Any) -> dict[str, int | str | None]:
         return self._metrics_store.prepare_mock_counts(**values)
 
     def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
         return self._metrics_store.remove_mock_data(mock_run_id)
-
-    def _retire_legacy_event_log(self) -> None:
-        if not self._events_path.exists():
-            return
-        try:
-            lines = self._events_path.read_text(encoding="utf-8").splitlines()
-            for line in lines:
-                if not line.strip():
-                    continue
-                payload = json.loads(line)
-                if not isinstance(payload, dict):
-                    raise ValueError("Legacy event log contains a non-object record.")
-                self._metrics_store.import_legacy_event_if_missing(payload)
-        except (OSError, ValueError, json.JSONDecodeError):
-            return
-        self._events_path.unlink(missing_ok=True)
 
     def _scrub_session_credentials(self) -> None:
         self._scrub_session_file()

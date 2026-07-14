@@ -1,22 +1,17 @@
-import json
 import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
 from datetime import UTC, datetime
-from pathlib import Path
-from unittest.mock import patch
 
 from app.config.camera_config import LocalReportRecordResponse, LocalReportRevisionResponse
-from app.storage import resilience_schema
 from app.storage.local_metrics_store import LocalMetricsStore
-from app.storage.local_schema import connect_local_database, initialize_local_database
+from app.storage.local_schema import connect_local_database
 from app.storage.resilience_store import (
     SQLiteRetryPolicy,
     SQLiteWriteExhausted,
     run_sqlite_write,
 )
-from app.storage.session_store import SessionStore
 
 CAMERA_UUID = "b140984a-c738-4ab0-8bd0-d509bab414ba"
 JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
@@ -239,28 +234,6 @@ class ResilienceLedgerTest(unittest.TestCase):
                 ],
             )
 
-    def test_duplicate_jsonl_is_migrated_once_then_removed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            event_path = Path(directory) / "ml-service" / "events.jsonl"
-            event_path.parent.mkdir(parents=True)
-            event_path.write_text(
-                json.dumps(
-                    {
-                        **_event(),
-                        "recorded_at": "2026-06-15T04:00:00+00:00",
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            first = SessionStore(directory)
-            second = SessionStore(directory)
-
-            self.assertFalse(event_path.exists())
-            self.assertEqual(first.metrics_summary(include_submitted=True)["entries"], 1)
-            self.assertEqual(second.metrics_summary(include_submitted=True)["total_events"], 1)
-
     def test_sqlite_busy_failures_are_retried_with_a_hard_bound(self) -> None:
         attempts = 0
         sleeps: list[float] = []
@@ -334,35 +307,6 @@ class ResilienceLedgerTest(unittest.TestCase):
             self.assertEqual(listed_response.outbox_item_id, item["outbox_item_id"])
             self.assertEqual(listed_response.revision_id, item["report_revision_id"])
             self.assertEqual(listed_response.payload_hash, item["payload_hash"])
-
-    def test_unknown_legacy_outbox_contract_is_dead_lettered_during_v4_upgrade(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            with patch.object(
-                resilience_schema,
-                "_normalize_report_outbox_contract_version",
-                return_value=None,
-            ):
-                store = LocalMetricsStore(directory)
-                store.append_count_event(
-                    _event(central_camera_id=CAMERA_UUID),
-                    "2026-06-15T04:00:00+00:00",
-                )
-                store.create_local_report_revision("REP-UNKNOWN-CONTRACT", JUNE_PERIOD_ID)
-            with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.execute(
-                    "update sync_outbox_items set contract_version = 'future-contract.v9'"
-                )
-                connection.execute("delete from local_schema_migrations where version = 4")
-                connection.execute("pragma user_version = 3")
-                connection.commit()
-
-            initialize_local_database(store._database_path)
-
-            with closing(connect_local_database(store._database_path)) as connection:
-                item = connection.execute("select * from sync_outbox_items").fetchone()
-            self.assertEqual(item["contract_version"], 2)
-            self.assertEqual(item["status"], "dead_letter")
-            self.assertEqual(item["last_error_class"], "unsupported_legacy_contract_version")
 
 
 def _event(*, central_camera_id: str | None = None) -> dict:
