@@ -26,7 +26,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             manager._session_store.append_event(_event_payload())
-            first = manager.record_report_submission("REP-MANAGER", CURRENT_PERIOD_ID)
+            first = manager.create_local_report_revision("REP-MANAGER", CURRENT_PERIOD_ID)
 
             ready = manager.list_ready_sync_outbox_items()
 
@@ -42,7 +42,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             )
             self.assertEqual(manager.list_ready_sync_outbox_items(), [])
 
-            second = manager.record_report_submission(
+            second = manager.create_local_report_revision(
                 "REP-MANAGER",
                 CURRENT_PERIOD_ID,
                 notes="corrected",

@@ -5,8 +5,8 @@ import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { CanonicalReportingPeriod, DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
-import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReports, recordLocalReportRevision } from "../../camera/services/ml-service";
+import type { LocalMetricsSummary, LocalReportRevision, LocalReportRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, readEnterpriseReport, type EnterpriseReportDetail, type EnterpriseReportHistoryItem } from "../services/report-history";
 import {
   DESKTOP_REPORT_SYNC_EVENT,
@@ -122,8 +122,8 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const refreshLocalReports = useCallback(async () => {
     try {
       const status = await getMlServiceStatus();
-      const [submissions, cloudHistory] = await Promise.all([listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL), listEnterpriseReportHistory()]);
-      const localReports = submissions.map(reportFromLocalSubmission);
+      const [submissions, cloudHistory] = await Promise.all([listLocalReports(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL), listEnterpriseReportHistory()]);
+      const localReports = submissions.map(reportFromLocalRecord);
       const cloudReports = cloudHistory.map(reportFromCloudSubmission);
       setReportsHistory(mergeReportHistory(localReports, cloudReports));
       setLedgerError(null);
@@ -350,10 +350,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       status: nextStatus,
     };
 
-    let submission: LocalReportSubmission;
+    let submission: LocalReportRevision;
     try {
       const status = await getMlServiceStatus();
-      submission = await recordLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, {
+      submission = await recordLocalReportRevision(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, {
         metrics: {
           entries: reportMetrics.entries,
           exits: reportMetrics.exits,
@@ -368,7 +368,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         reportPayload,
       });
     } catch (error) {
-      setMetricsError(error instanceof Error ? error.message : "Unable to save report submission locally.");
+      setMetricsError(error instanceof Error ? error.message : "Unable to create the local report revision.");
       setIsSubmitting(false);
       return;
     }
@@ -719,11 +719,11 @@ function pendingReportId(period: string) {
   return normalizedPeriod ? `PENDING-${normalizedPeriod}` : "PENDING-REPORT";
 }
 
-function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
+function reportFromLocalRecord(submission: LocalReportRecord): ReportRecord {
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
-  const metrics = metricsFromLocalSubmission(submission);
+  const metrics = metricsFromLocalRecord(submission);
   const reportingPeriod = canonicalReportingPeriodFromSource(submission);
   const demo = demoFromPayload(payload.demo);
 
@@ -747,7 +747,7 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
   };
 }
 
-function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+function metricsFromLocalRecord(submission: LocalReportRecord): Metrics {
   const payloadMetrics = submission.payload.metrics;
   if (payloadMetrics && typeof payloadMetrics === "object") {
     const metrics = payloadMetrics as Record<string, unknown>;

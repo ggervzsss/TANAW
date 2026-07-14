@@ -1,13 +1,13 @@
-import type { LocalReportSubmissionRecord } from "../../camera/services/ml-service";
+import type { LocalReportRecord } from "../../camera/services/ml-service";
 import type { DemoBreakdown, Metrics, ReportRecord } from "../../../types/enterprise";
 import { demographicEvidenceFromFacts, getDemographicTotals } from "../../reports/utils/demographics";
 import { canonicalReportingPeriodFromSource } from "../../reports/services/reporting-period";
 
-export function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
+export function reportFromLocalRecord(submission: LocalReportRecord): ReportRecord {
   const payload = submission.payload;
   const payloadStatus = typeof payload.status === "string" && isReportStatus(payload.status) ? payload.status : "Submitted";
   const payloadNotes = typeof payload.notes === "string" ? payload.notes : undefined;
-  const metrics = metricsFromLocalSubmission(submission);
+  const metrics = metricsFromLocalRecord(submission);
   const reportingPeriod = canonicalReportingPeriodFromSource(submission);
   const demo = demoFromPayload(payload.demo);
 
@@ -29,7 +29,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
   };
 }
 
-function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+function metricsFromLocalRecord(submission: LocalReportRecord): Metrics {
   const payloadMetrics = submission.payload.metrics;
   if (payloadMetrics && typeof payloadMetrics === "object") {
     const metrics = payloadMetrics as Record<string, unknown>;

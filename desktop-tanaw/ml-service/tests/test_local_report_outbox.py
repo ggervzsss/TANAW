@@ -71,7 +71,7 @@ class LocalReportOutboxTest(unittest.TestCase):
             store.append_count_event(event, "2026-06-10T00:00:00+00:00")
 
             with self.assertRaisesRegex(ValueError, "central camera UUID"):
-                store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+                store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
             with closing(connect_local_database(_database_path(directory))) as connection:
                 self.assertEqual(
@@ -95,7 +95,7 @@ class LocalReportOutboxTest(unittest.TestCase):
                 "2026-07-01T00:00:00+00:00",
             )
 
-            submission = store.record_report_submission(
+            submission = store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
                 payload={"demo": {"source": "operator"}},
@@ -115,9 +115,9 @@ class LocalReportOutboxTest(unittest.TestCase):
                         "sync_outbox_items",
                     )
                 }
-                legacy_writes = connection.execute(
-                    "select count(*) from count_events where submitted_report_id is not null"
-                ).fetchone()[0]
+                event_columns = {
+                    row["name"] for row in connection.execute("pragma table_info(count_events)")
+                }
                 camera_sequences = connection.execute(
                     """
                     select camera_key, camera_event_sequence
@@ -137,7 +137,9 @@ class LocalReportOutboxTest(unittest.TestCase):
                     "sync_outbox_items": 1,
                 },
             )
-            self.assertEqual(legacy_writes, 0)
+            self.assertTrue(
+                {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
+            )
             self.assertEqual(
                 [tuple(row) for row in camera_sequences],
                 [
@@ -199,7 +201,7 @@ class LocalReportOutboxTest(unittest.TestCase):
                 )
 
             with self.assertRaisesRegex(sqlite3.IntegrityError, "injected outbox failure"):
-                store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+                store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
             with closing(connect_local_database(database_path)) as connection:
                 for table in (
@@ -219,7 +221,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             first_store = LocalMetricsStore(directory)
             first_store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            first = first_store.record_report_submission(
+            first = first_store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
                 notes="original",
@@ -228,7 +230,7 @@ class LocalReportOutboxTest(unittest.TestCase):
             )
 
             restarted_store = LocalMetricsStore(directory)
-            replay = restarted_store.record_report_submission(
+            replay = restarted_store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
                 notes="original",
@@ -260,7 +262,7 @@ class LocalReportOutboxTest(unittest.TestCase):
                 )
             self.assertEqual(restarted_store.list_ready_sync_outbox_items(), [])
             self.assertEqual(
-                restarted_store.list_report_submissions()[0]["sync_status"],
+                restarted_store.list_local_reports()[0]["sync_status"],
                 "synced",
             )
 
@@ -278,7 +280,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            store.record_report_submission(
+            store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
                 notes="first",
@@ -286,7 +288,7 @@ class LocalReportOutboxTest(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "different report payload"):
-                store.record_report_submission(
+                store.create_local_report_revision(
                     "REP-JUNE",
                     JUNE_PERIOD_ID,
                     notes="changed",
@@ -297,7 +299,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            first = store.record_report_submission(
+            first = store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
                 notes="first",
@@ -309,7 +311,7 @@ class LocalReportOutboxTest(unittest.TestCase):
                     {"resource": {"logicalVersion": 1}},
                 )
             )
-            second = store.record_report_submission(
+            second = store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
                 notes="corrected",
@@ -318,9 +320,9 @@ class LocalReportOutboxTest(unittest.TestCase):
 
             self.assertNotEqual(first["revision_id"], second["revision_id"])
             self.assertEqual(second["revision_number"], 2)
-            self.assertEqual(store.list_report_submissions()[0]["notes"], "corrected")
+            self.assertEqual(store.list_local_reports()[0]["notes"], "corrected")
             self.assertEqual(
-                store.list_report_submissions()[0]["sync_status"],
+                store.list_local_reports()[0]["sync_status"],
                 "pending_cloud_sync",
             )
             self.assertEqual(
@@ -362,7 +364,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            submission = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
             with closing(connect_local_database(_database_path(directory))) as connection:
                 with self.assertRaisesRegex(sqlite3.IntegrityError, "immutable"):
@@ -387,8 +389,8 @@ class LocalReportOutboxTest(unittest.TestCase):
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             store.append_count_event(_event("entry"), "2026-07-10T00:00:00+00:00")
-            june = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
-            july = store.record_report_submission("REP-JULY", JULY_PERIOD_ID)
+            june = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
+            july = store.create_local_report_revision("REP-JULY", JULY_PERIOD_ID)
 
             failed = store.record_sync_outbox_failure(
                 str(june["outbox_item_id"]),
@@ -418,7 +420,7 @@ class LocalReportOutboxTest(unittest.TestCase):
             event["mock_run_id"] = "simulation-1"
             store.append_count_event(event, "2026-06-10T00:00:00+00:00")
 
-            submission = store.record_report_submission(
+            submission = store.create_local_report_revision(
                 "REP-JUNE-SIMULATION",
                 JUNE_PERIOD_ID,
                 source_kind="hybrid",
@@ -449,7 +451,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            submission = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
             failed = store.record_sync_outbox_failure(
                 str(submission["outbox_item_id"]),
@@ -475,7 +477,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            submission = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
             pending = store.sync_outbox_health()
 
@@ -519,7 +521,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
-            submission = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
             store.record_sync_outbox_failure(
                 str(submission["outbox_item_id"]),
                 error_class="validation_error",

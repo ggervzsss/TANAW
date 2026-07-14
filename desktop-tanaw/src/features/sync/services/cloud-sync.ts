@@ -5,7 +5,7 @@ import {
   getMlServiceStatus,
   getSimulationStatus,
   acknowledgeSyncOutboxItem,
-  listLocalReportSubmissions,
+  listLocalReports,
   listReadySyncOutboxItems,
   prepareLocalMockCounts,
   purgeLocalReportRawEvents,
@@ -120,13 +120,13 @@ export async function syncDesktopReportSubmissions(limit = 100) {
 export async function syncDesktopReportSubmission(reportId: string, outboxItemId?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const submission = outboxItemId ? null : (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId);
+  const submission = outboxItemId ? null : (await listLocalReports(baseUrl, 500)).find((item) => item.report_id === reportId);
   if (submission?.sync_status === "synced") return 1;
   const exactOutboxItemId = outboxItemId ?? submission?.outbox_item_id;
   if (!exactOutboxItemId) throw new Error("The report has no exact local outbox revision to synchronize.");
   const outboxItem = (await listReadySyncOutboxItems(baseUrl, 500)).find((item) => item.outbox_item_id === exactOutboxItemId);
   if (!outboxItem) {
-    const currentSubmission = (await listLocalReportSubmissions(baseUrl, 500)).find((item) => item.report_id === reportId);
+    const currentSubmission = (await listLocalReports(baseUrl, 500)).find((item) => item.report_id === reportId);
     if (currentSubmission?.sync_status === "synced") return 1;
     throw new Error("The exact report revision remains queued for cloud synchronization.");
   }
@@ -225,11 +225,11 @@ function classifySyncFailure(error: unknown) {
 }
 
 async function purgeFinalizedLocalReportRawData(baseUrl: string) {
-  const [localSubmissions, reportHistory] = await Promise.all([listLocalReportSubmissions(baseUrl, 500), listEnterpriseReportHistory()]);
+  const [localReports, reportHistory] = await Promise.all([listLocalReports(baseUrl, 500), listEnterpriseReportHistory()]);
   const consolidatedRevisionIds = new Set(
     reportHistory.filter((report) => report.workflowState === "consolidated").map((report) => report.currentRevision.localRevisionId),
   );
-  const purgeableSubmissions = localSubmissions.filter((submission) => consolidatedRevisionIds.has(submission.revision_id) && !submission.raw_purged_at);
+  const purgeableSubmissions = localReports.filter((submission) => consolidatedRevisionIds.has(submission.revision_id) && !submission.raw_purged_at);
 
   for (const submission of purgeableSubmissions) {
     await purgeLocalReportRawEvents(baseUrl, submission.report_id);

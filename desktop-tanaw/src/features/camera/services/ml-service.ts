@@ -220,7 +220,7 @@ export type LocalMetricsHistory = {
   };
 };
 
-export type LocalReportSubmission = LocalMetricsSummary & {
+export type LocalReportRevision = LocalMetricsSummary & {
   report_id: string;
   revision_id: string;
   outbox_item_id: string;
@@ -229,7 +229,7 @@ export type LocalReportSubmission = LocalMetricsSummary & {
   sync_status: string;
 };
 
-export type LocalReportSubmissionRecord = {
+export type LocalReportRecord = {
   report_id: string;
   revision_id: string;
   outbox_item_id: string;
@@ -445,7 +445,7 @@ export async function recordOccupancyCorrection(
   });
 }
 
-export async function recordLocalReportSubmission(
+export async function recordLocalReportRevision(
   baseUrl: string,
   payload: {
     metrics: { entries: number; exits: number; peakOccupancy: number; uniqueCount: number };
@@ -456,9 +456,9 @@ export async function recordLocalReportSubmission(
     reportId: string;
     reportPayload: Record<string, unknown>;
   },
-): Promise<LocalReportSubmission> {
+): Promise<LocalReportRevision> {
   void baseUrl;
-  return requestMl<LocalReportSubmission>("reports.submit", {
+  return requestMl<LocalReportRevision>("reports.createRevision", {
     metrics: {
       entries: payload.metrics.entries,
       exits: payload.metrics.exits,
@@ -476,9 +476,9 @@ export async function recordLocalReportSubmission(
   });
 }
 
-export async function listLocalReportSubmissions(baseUrl: string, limit = 100): Promise<LocalReportSubmissionRecord[]> {
+export async function listLocalReports(baseUrl: string, limit = 100): Promise<LocalReportRecord[]> {
   void baseUrl;
-  return requestMl<LocalReportSubmissionRecord[]>("reports.list", { limit });
+  return requestMl<LocalReportRecord[]>("reports.list", { limit });
 }
 
 export async function listReadySyncOutboxItems(baseUrl: string, limit = 100): Promise<LocalSyncOutboxItem[]> {

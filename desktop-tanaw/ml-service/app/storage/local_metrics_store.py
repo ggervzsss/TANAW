@@ -55,9 +55,13 @@ from app.storage.resilience_store import (
 from app.storage.resilience_store import (
     start_monitoring_session as insert_monitoring_session,
 )
-from app.storage.session_credentials import scrub_snapshot_table_credentials
+from app.storage.target_schema import (
+    MAX_EVENT_ATTRIBUTES_BYTES,
+    upsert_camera_live_state,
+    upsert_local_camera,
+)
 
-_REPORT_SUBMISSION_SELECT = """
+_LOCAL_REPORT_SELECT = """
 select
     report.report_id,
     report.period_label as period,
@@ -93,7 +97,7 @@ join local_report_revisions as revision
 join sync_outbox_items as outbox
   on outbox.report_revision_id = revision.revision_id
 """
-_REPORT_REVISION_SELECT = _REPORT_SUBMISSION_SELECT.replace(
+_REPORT_REVISION_SELECT = _LOCAL_REPORT_SELECT.replace(
     "on revision.revision_id = report.current_revision_id",
     "on revision.report_id = report.report_id",
 )
@@ -146,6 +150,9 @@ class LocalMetricsStore:
             root = Path.home() / ".tanaw" / "ml-service"
 
         self._root = root / "enterprises" / _safe_scope(enterprise_id) if enterprise_id else root
+        self._enterprise_id = (
+            enterprise_id.strip() if enterprise_id and enterprise_id.strip() else None
+        )
 
         self._database_path = self._root / "tanaw_metrics.sqlite3"
         self._initialized = False
@@ -167,6 +174,7 @@ class LocalMetricsStore:
         is_unique_entry = payload.get("is_unique_entry")
         if is_unique_entry is None:
             is_unique_entry = direction == "entry"
+        attributes_json = _encode_event_attributes(payload)
 
         camera_key = local_camera_key(
             payload.get("camera_id"),
@@ -176,6 +184,19 @@ class LocalMetricsStore:
 
         def write_event(connection: sqlite3.Connection) -> None:
             upsert_reporting_period(connection, reporting_period)
+            central_camera_id = (
+                str(UUID(camera_key)) if not camera_key.startswith("unassigned:") else None
+            )
+            upsert_local_camera(
+                connection,
+                camera_key=camera_key,
+                central_camera_id=central_camera_id,
+                local_camera_id=payload.get("camera_id"),
+                display_name=(
+                    str(payload["camera_name"]) if payload.get("camera_name") is not None else None
+                ),
+                observed_at=captured_at.isoformat(),
+            )
             camera_event_sequence = allocate_camera_event_sequences(connection, camera_key)
             connection.execute(
                 """
@@ -198,11 +219,12 @@ class LocalMetricsStore:
                     reid_score,
                     reid_decision,
                     identity_confidence,
-                    payload_json,
+                    payload_schema_version,
+                    attributes_json,
                     source_kind,
                     mock_run_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                 """,
                 (
                     event_id,
@@ -223,7 +245,7 @@ class LocalMetricsStore:
                     _safe_float(payload.get("reid_score")),
                     payload.get("reid_decision"),
                     payload.get("identity_confidence"),
-                    json.dumps(payload, sort_keys=True),
+                    attributes_json,
                     payload.get("source_kind") or "real",
                     payload.get("mock_run_id"),
                 ),
@@ -272,6 +294,14 @@ class LocalMetricsStore:
         )
 
         def write_session(connection: sqlite3.Connection) -> None:
+            upsert_local_camera(
+                connection,
+                camera_key=camera_key,
+                central_camera_id=normalized_central_id,
+                local_camera_id=camera_id,
+                display_name=camera_name,
+                observed_at=started_at,
+            )
             insert_monitoring_session(
                 connection,
                 monitoring_session_id=monitoring_session_id,
@@ -625,53 +655,53 @@ class LocalMetricsStore:
 
         return len(visitor_ids)
 
-    def save_count_snapshot(self, payload: dict[str, Any], recorded_at: str | None = None) -> None:
+    def save_camera_live_state(
+        self, payload: dict[str, Any], recorded_at: str | None = None
+    ) -> None:
         raw_counts = payload.get("counts")
         counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
-        recorded_at = recorded_at or _utc_now()
-
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into count_snapshots (
-                    recorded_at,
-                    camera_id,
-                    camera_name,
-                    entry_count,
-                    exit_count,
-                    occupancy_count,
-                    running,
-                    status,
-                    error,
-                    payload_json,
-                    source_kind,
-                    mock_run_id
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    recorded_at,
-                    payload.get("camera_id"),
-                    payload.get("camera_name"),
-                    _safe_int(counts.get("entry")),
-                    _safe_int(counts.get("exit")),
-                    _safe_int(counts.get("occupancy")),
-                    1 if payload.get("running") else 0,
-                    payload.get("status"),
-                    payload.get("error"),
-                    json.dumps(payload, sort_keys=True),
-                    payload.get("source_kind") or "real",
-                    payload.get("mock_run_id"),
+        raw_config = payload.get("camera_config")
+        camera_config: dict[str, Any] = raw_config if isinstance(raw_config, dict) else {}
+        observed_at = parse_captured_at(recorded_at or _utc_now()).isoformat()
+        camera_key = local_camera_key(
+            payload.get("camera_id"),
+            payload.get("camera_name"),
+            payload.get(
+                "central_camera_id",
+                payload.get(
+                    "centralCameraId",
+                    camera_config.get("central_camera_id", camera_config.get("centralCameraId")),
                 ),
+            ),
+        )
+        central_camera_id = (
+            str(UUID(camera_key)) if not camera_key.startswith("unassigned:") else None
+        )
+
+        def write_state(connection: sqlite3.Connection) -> None:
+            upsert_local_camera(
+                connection,
+                camera_key=camera_key,
+                central_camera_id=central_camera_id,
+                local_camera_id=payload.get("camera_id"),
+                display_name=(
+                    str(payload["camera_name"]) if payload.get("camera_name") is not None else None
+                ),
+                observed_at=observed_at,
+            )
+            upsert_camera_live_state(
+                connection,
+                camera_key=camera_key,
+                observed_at=observed_at,
+                status=payload.get("status"),
+                running=bool(payload.get("running")),
+                entry_count=_safe_int(counts.get("entry")),
+                exit_count=_safe_int(counts.get("exit")),
+                occupancy_count=_safe_int(counts.get("occupancy")),
+                error=payload.get("error"),
             )
 
-    def scrub_legacy_session_snapshot_credentials(self) -> int:
-        scrubbed_rows: list[int] = []
-        self._write(
-            "scrub_legacy_session_credentials",
-            lambda connection: scrubbed_rows.append(scrub_snapshot_table_credentials(connection)),
-        )
-        return scrubbed_rows[0]
+        self._write("save_camera_live_state", write_state)
 
     def record_occupancy_correction(
         self,
@@ -1094,7 +1124,7 @@ class LocalMetricsStore:
             },
         }
 
-    def record_report_submission(
+    def create_local_report_revision(
         self,
         report_id: str,
         period_id: str,
@@ -1132,7 +1162,7 @@ class LocalMetricsStore:
         else:
             normalized_command_id = None
         with self._connection(immediate=True) as connection:
-            existing_submission = self._report_submission_from_connection(connection, report_id)
+            existing_report = self._local_report_from_connection(connection, report_id)
             reporting_period = monthly_period_from_id(period_id)
             if reporting_period is None:
                 raise ValueError("Reporting period ID must use month:Asia/Manila:YYYY-MM.")
@@ -1156,7 +1186,7 @@ class LocalMetricsStore:
                 record = _report_revision_record(
                     connection, str(idempotent_revision["revision_id"])
                 )
-                return _submission_response_from_record(connection, record)
+                return _revision_response_from_record(connection, record)
             if (
                 normalized_command_id is not None
                 and connection.execute(
@@ -1166,20 +1196,20 @@ class LocalMetricsStore:
             ):
                 raise ValueError("Command ID was already used by another report revision.")
 
-            existing_period_submission = self._report_submission_for_period_from_connection(
+            existing_period_report = self._local_report_for_period_from_connection(
                 connection,
                 reporting_period.period_id,
             )
             if (
-                existing_period_submission is not None
-                and existing_period_submission["report_id"] != report_id
+                existing_period_report is not None
+                and existing_period_report["report_id"] != report_id
             ):
                 raise ValueError(
                     f"A report for {reporting_period.label} has already been submitted."
                 )
             if (
-                existing_submission is not None
-                and existing_submission["period_id"] != reporting_period.period_id
+                existing_report is not None
+                and existing_report["period_id"] != reporting_period.period_id
             ):
                 raise ValueError("A logical report cannot be moved to another reporting period.")
 
@@ -1188,23 +1218,21 @@ class LocalMetricsStore:
                 include_submitted=False,
                 period_id=reporting_period.period_id,
             )
-            if existing_submission is not None and metrics is None:
+            if existing_report is not None and metrics is None:
                 summary = {
                     **summary,
-                    "entries": existing_submission["entries"],
-                    "exits": existing_submission["exits"],
-                    "peak_occupancy": existing_submission["peak_occupancy"],
+                    "entries": existing_report["entries"],
+                    "exits": existing_report["exits"],
+                    "peak_occupancy": existing_report["peak_occupancy"],
                     "current_occupancy": max(
-                        0, existing_submission["entries"] - existing_submission["exits"]
+                        0, existing_report["entries"] - existing_report["exits"]
                     ),
-                    "unique_count": existing_submission["unique_count"],
+                    "unique_count": existing_report["unique_count"],
                 }
             if metrics is not None:
                 summary = _summary_with_report_metrics(summary, metrics)
 
-            should_consume_open_events = (
-                existing_submission is None and payload_status != "Resubmitted"
-            )
+            should_consume_open_events = existing_report is None and payload_status != "Resubmitted"
             if should_consume_open_events:
                 unclassified_official_events = connection.execute(
                     f"""
@@ -1223,13 +1251,13 @@ class LocalMetricsStore:
                     )
 
             resolved_source_kind = source_kind or (
-                str(existing_submission["source_kind"])
-                if existing_submission is not None and existing_submission["source_kind"]
+                str(existing_report["source_kind"])
+                if existing_report is not None and existing_report["source_kind"]
                 else str(summary["source_kind"])
             )
             resolved_mock_run_id = mock_run_id or (
-                str(existing_submission["mock_run_id"])
-                if existing_submission is not None and existing_submission["mock_run_id"]
+                str(existing_report["mock_run_id"])
+                if existing_report is not None and existing_report["mock_run_id"]
                 else str(summary["mock_run_id"])
                 if summary["mock_run_id"]
                 else None
@@ -1263,7 +1291,7 @@ class LocalMetricsStore:
                         reporting_period.ends_at_utc.isoformat(),
                     ),
                 ).fetchall()
-            elif existing_submission is not None:
+            elif existing_report is not None:
                 selected_events = connection.execute(
                     """
                     select
@@ -1281,7 +1309,7 @@ class LocalMetricsStore:
                     where membership.report_revision_id = ?
                     order by event.recorded_at, event.event_id
                     """,
-                    (existing_submission["revision_id"],),
+                    (existing_report["revision_id"],),
                 ).fetchall()
                 if not selected_events:
                     raise ValueError(
@@ -1289,14 +1317,14 @@ class LocalMetricsStore:
                     )
 
             revision_number = 1
-            if existing_submission is not None:
-                revision_number = int(existing_submission["revision_number"]) + 1
+            if existing_report is not None:
+                revision_number = int(existing_report["revision_number"]) + 1
             revision_id = str(uuid4())
             resolved_command_id = normalized_command_id or str(uuid4())
             outbox_item_id = str(uuid4())
             expected_version = (
-                _safe_int(existing_submission["last_acknowledged_logical_version"])
-                if existing_submission is not None
+                _safe_int(existing_report["last_acknowledged_logical_version"])
+                if existing_report is not None
                 else 0
             )
             outbox_idempotency_key = central_report_idempotency_key(report_id, revision_id)
@@ -1334,7 +1362,7 @@ class LocalMetricsStore:
             canonical_payload = canonical_json(revision_document)
             payload_hash = canonical_payload_hash(revision_document["payload"])
 
-            if existing_submission is None:
+            if existing_report is None:
                 connection.execute(
                     """
                     insert into local_reports (
@@ -1699,26 +1727,6 @@ class LocalMetricsStore:
                     event_ids,
                 )
                 purged_events = result.rowcount or 0
-            period_row = connection.execute(
-                """
-                select period.starts_at_utc, period.ends_at_utc
-                from local_reports as report
-                join reporting_periods as period
-                  on period.period_id = report.reporting_period_id
-                where report.report_id = ?
-                """,
-                (report_id,),
-            ).fetchone()
-            purged_snapshots = 0
-            if period_row is not None:
-                result = connection.execute(
-                    """
-                    delete from count_snapshots
-                    where recorded_at >= ? and recorded_at < ?
-                    """,
-                    (period_row["starts_at_utc"], period_row["ends_at_utc"]),
-                )
-                purged_snapshots = result.rowcount or 0
             purged_sightings = 0
             purged_identities = 0
             if visitor_ids:
@@ -1754,7 +1762,6 @@ class LocalMetricsStore:
         return {
             "report_id": report_id,
             "purged_events": _safe_int(purged_events),
-            "purged_snapshots": _safe_int(purged_snapshots),
             "purged_sightings": _safe_int(purged_sightings),
             "purged_identities": _safe_int(purged_identities),
             "raw_purged_at": next_purged_at,
@@ -1913,7 +1920,7 @@ class LocalMetricsStore:
                     payload["reid_score"],
                     payload["reid_decision"],
                     payload["identity_confidence"],
-                    json.dumps(payload, sort_keys=True),
+                    _encode_event_attributes(payload),
                     "mock",
                     mock_run_id,
                 )
@@ -1922,6 +1929,14 @@ class LocalMetricsStore:
         with self._connection() as connection:
             upsert_reporting_period(connection, reporting_period)
             camera_key = local_camera_key(camera_id, camera_name)
+            upsert_local_camera(
+                connection,
+                camera_key=camera_key,
+                central_camera_id=None,
+                local_camera_id=camera_id,
+                display_name=camera_name,
+                observed_at=reporting_period.starts_at_utc.isoformat(),
+            )
             sequence_start = (
                 allocate_camera_event_sequences(connection, camera_key, len(rows)) if rows else 0
             )
@@ -1936,10 +1951,11 @@ class LocalMetricsStore:
                         camera_key, camera_event_sequence,
                         camera_id, camera_name, direction, track_id,
                     entry_count, exit_count, occupancy_count, visitor_id, is_unique_entry,
-                    reid_score, reid_decision, identity_confidence, payload_json,
+                    reid_score, reid_decision, identity_confidence,
+                    payload_schema_version, attributes_json,
                     source_kind, mock_run_id
                 )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                     """,
                 sequenced_rows,
             )
@@ -1962,10 +1978,6 @@ class LocalMetricsStore:
         with self._connection() as connection:
             connection.execute(
                 "delete from count_events where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
-                (mock_run_id,),
-            )
-            connection.execute(
-                "delete from count_snapshots where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
                 (mock_run_id,),
             )
             connection.execute(
@@ -1994,9 +2006,6 @@ class LocalMetricsStore:
         with self._connection(immediate=True) as connection:
             count_events = connection.execute(
                 f"select count(*) from count_events where {event_filter}", params
-            ).fetchone()[0]
-            count_snapshots = connection.execute(
-                f"select count(*) from count_snapshots where {event_filter}", params
             ).fetchone()[0]
             occupancy_corrections = connection.execute(
                 f"select count(*) from occupancy_corrections where {event_filter}", params
@@ -2032,13 +2041,7 @@ class LocalMetricsStore:
                     f"delete from local_reports where report_id in ({placeholders})",
                     report_ids,
                 )
-                if _table_exists(connection, "report_submissions"):
-                    connection.execute(
-                        f"delete from report_submissions where report_id in ({placeholders})",
-                        report_ids,
-                    )
             connection.execute(f"delete from count_events where {event_filter}", params)
-            connection.execute(f"delete from count_snapshots where {event_filter}", params)
             connection.execute(f"delete from occupancy_corrections where {event_filter}", params)
             if mock_run_id:
                 connection.execute(
@@ -2052,55 +2055,54 @@ class LocalMetricsStore:
 
         return {
             "count_events": _safe_int(count_events),
-            "count_snapshots": _safe_int(count_snapshots),
             "occupancy_corrections": _safe_int(occupancy_corrections),
-            "report_submissions": len(report_ids),
+            "local_reports": len(report_ids),
             "restored_real_events": _safe_int(restored_real_events),
         }
 
-    def _report_submission(self, report_id: str) -> dict[str, Any] | None:
+    def _local_report(self, report_id: str) -> dict[str, Any] | None:
         with self._connection() as connection:
-            return self._report_submission_from_connection(connection, report_id)
+            return self._local_report_from_connection(connection, report_id)
 
-    def _report_submission_from_connection(
+    def _local_report_from_connection(
         self, connection: sqlite3.Connection, report_id: str
     ) -> dict[str, Any] | None:
         row = connection.execute(
             f"""
-            {_REPORT_SUBMISSION_SELECT}
+            {_LOCAL_REPORT_SELECT}
             where report.report_id = ?
             """,
             (report_id,),
         ).fetchone()
-        return _report_submission_row(row) if row is not None else None
+        return _local_report_row(row) if row is not None else None
 
-    def _report_submission_for_period_from_connection(
+    def _local_report_for_period_from_connection(
         self, connection: sqlite3.Connection, period_id: str
     ) -> dict[str, Any] | None:
         row = connection.execute(
             f"""
-            {_REPORT_SUBMISSION_SELECT}
+            {_LOCAL_REPORT_SELECT}
             where report.reporting_period_id = ?
             order by revision.submitted_at desc
             limit 1
             """,
             (period_id,),
         ).fetchone()
-        return _report_submission_row(row) if row is not None else None
+        return _local_report_row(row) if row is not None else None
 
-    def list_report_submissions(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_local_reports(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
         with self._connection() as connection:
             rows = connection.execute(
                 f"""
-                {_REPORT_SUBMISSION_SELECT}
+                {_LOCAL_REPORT_SELECT}
                 order by revision.submitted_at desc
                 limit ?
                 """,
                 (limit,),
             ).fetchall()
 
-        return [_report_submission_row(row) for row in rows]
+        return [_local_report_row(row) for row in rows]
 
     @contextmanager
     def _connection(self, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
@@ -2151,12 +2153,28 @@ class LocalMetricsStore:
             if self._initialized:
                 return
             self._root.mkdir(parents=True, exist_ok=True)
-            initialize_local_database(self._database_path)
+            initialize_local_database(self._database_path, enterprise_id=self._enterprise_id)
             self._initialized = True
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _encode_event_attributes(payload: dict[str, Any]) -> str:
+    try:
+        encoded = json.dumps(
+            payload,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Count-event attributes must contain only finite JSON values.") from exc
+    if len(encoded.encode("utf-8")) > MAX_EVENT_ATTRIBUTES_BYTES:
+        raise ValueError(f"Count-event attributes exceed {MAX_EVENT_ATTRIBUTES_BYTES} bytes.")
+    return encoded
 
 
 def _summary_with_report_metrics(
@@ -2339,10 +2357,10 @@ def _report_revision_record(connection: sqlite3.Connection, revision_id: str) ->
     ).fetchone()
     if row is None:
         raise RuntimeError(f"Local report revision disappeared: {revision_id}")
-    return _report_submission_row(row)
+    return _local_report_row(row)
 
 
-def _submission_response_from_record(
+def _revision_response_from_record(
     connection: sqlite3.Connection, record: dict[str, Any]
 ) -> dict[str, int | str | None]:
     revision_id = str(record["revision_id"])
@@ -2525,16 +2543,6 @@ def _json_dict(value: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
-    return (
-        connection.execute(
-            "select 1 from sqlite_master where type = 'table' and name = ?",
-            (table_name,),
-        ).fetchone()
-        is not None
-    )
-
-
 def _safe_scope(value: str | None) -> str:
     if not value:
         return "unbound"
@@ -2670,7 +2678,7 @@ def _trend_point(label: str, bucket: _MetricsBucket) -> dict[str, int | str]:
     }
 
 
-def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
+def _local_report_row(row: sqlite3.Row) -> dict[str, Any]:
     try:
         payload = json.loads(row["payload_json"]) if row["payload_json"] else {}
     except json.JSONDecodeError:

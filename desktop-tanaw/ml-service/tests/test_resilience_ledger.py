@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from app.config.camera_config import ReportSubmissionRecordResponse, ReportSubmissionResponse
+from app.config.camera_config import LocalReportRecordResponse, LocalReportRevisionResponse
 from app.storage import resilience_schema
 from app.storage.local_metrics_store import LocalMetricsStore
 from app.storage.local_schema import connect_local_database, initialize_local_database
@@ -23,6 +23,57 @@ JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 
 
 class ResilienceLedgerTest(unittest.TestCase):
+    def test_enterprise_camera_and_current_state_are_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(directory, enterprise_id="enterprise-42")
+            store.append_count_event(
+                _event(central_camera_id=CAMERA_UUID),
+                "2026-06-15T04:00:00+00:00",
+            )
+            store.save_camera_live_state(
+                {
+                    "camera_id": 1,
+                    "camera_name": "Entrance",
+                    "central_camera_id": CAMERA_UUID,
+                    "running": True,
+                    "status": "running",
+                    "counts": {"entry": 8, "exit": 3, "occupancy": 5},
+                },
+                "2026-06-15T04:00:01+00:00",
+            )
+
+            with closing(connect_local_database(store._database_path)) as connection:
+                site = connection.execute("select * from local_sites").fetchone()
+                camera = connection.execute("select * from local_cameras").fetchone()
+                live = connection.execute("select * from camera_live_state").fetchone()
+                event = connection.execute("select * from count_events").fetchone()
+                camera_owned_tables = {
+                    table: {
+                        row["table"]
+                        for row in connection.execute(f"pragma foreign_key_list({table})")
+                    }
+                    for table in (
+                        "count_events",
+                        "local_camera_event_sequences",
+                        "monitoring_sessions",
+                        "coverage_gaps",
+                        "metric_rollups",
+                    )
+                }
+
+            self.assertEqual(site["enterprise_id"], "enterprise-42")
+            self.assertEqual(camera["local_site_id"], site["local_site_id"])
+            self.assertEqual(camera["central_camera_id"], CAMERA_UUID)
+            self.assertEqual(live["camera_key"], camera["camera_key"])
+            self.assertEqual(
+                (live["state"], live["entry_count"], live["exit_count"], live["occupancy_count"]),
+                ("running", 8, 3, 5),
+            )
+            self.assertEqual(event["camera_key"], camera["camera_key"])
+            self.assertEqual(event["payload_schema_version"], 1)
+            for owners in camera_owned_tables.values():
+                self.assertIn("local_cameras", owners)
+
     def test_coverage_gaps_are_persisted_and_projected_to_strict_report_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(directory)
@@ -66,7 +117,7 @@ class ResilienceLedgerTest(unittest.TestCase):
             local_coverage = store.monitoring_coverage(
                 JUNE_PERIOD_ID, as_of="2026-07-01T00:00:00+00:00"
             )
-            submission = store.record_report_submission("REP-COVERAGE", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-COVERAGE", JUNE_PERIOD_ID)
             outbox = store.list_ready_sync_outbox_items()[0]
             payload = outbox["payload"]["payload"]
             contract_coverage = payload["coverage"]
@@ -130,7 +181,7 @@ class ResilienceLedgerTest(unittest.TestCase):
             event = _event(central_camera_id=CAMERA_UUID)
             event["visitor_id"] = "visitor-1"
             store.append_count_event(event, "2026-06-15T04:00:00+00:00")
-            store.save_count_snapshot(
+            store.save_camera_live_state(
                 {
                     "camera_id": 1,
                     "camera_name": "Entrance",
@@ -139,12 +190,11 @@ class ResilienceLedgerTest(unittest.TestCase):
                 },
                 "2026-06-15T04:00:01+00:00",
             )
-            store.record_report_submission("REP-PURGE", JUNE_PERIOD_ID)
+            store.create_local_report_revision("REP-PURGE", JUNE_PERIOD_ID)
 
             purged = store.purge_report_raw_events("REP-PURGE")
 
             self.assertEqual(purged["purged_events"], 1)
-            self.assertEqual(purged["purged_snapshots"], 1)
             self.assertEqual(purged["purged_sightings"], 1)
             self.assertEqual(purged["purged_identities"], 1)
             self.assertEqual(
@@ -164,7 +214,7 @@ class ResilienceLedgerTest(unittest.TestCase):
                     table: connection.execute(f"select count(*) from {table}").fetchone()[0]
                     for table in (
                         "count_events",
-                        "count_snapshots",
+                        "camera_live_state",
                         "visitor_identities",
                         "visitor_sightings",
                     )
@@ -172,7 +222,15 @@ class ResilienceLedgerTest(unittest.TestCase):
                 rollups = connection.execute(
                     "select grain, entries from metric_rollups order by grain"
                 ).fetchall()
-            self.assertEqual(counts, {table: 0 for table in counts})
+            self.assertEqual(
+                counts,
+                {
+                    "count_events": 0,
+                    "camera_live_state": 1,
+                    "visitor_identities": 0,
+                    "visitor_sightings": 0,
+                },
+            )
             self.assertEqual(
                 [(row["grain"], row["entries"]) for row in rollups],
                 [
@@ -258,11 +316,11 @@ class ResilienceLedgerTest(unittest.TestCase):
                 _event(central_camera_id=CAMERA_UUID),
                 "2026-06-15T04:00:00+00:00",
             )
-            submission = store.record_report_submission("REP-CONTRACT", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-CONTRACT", JUNE_PERIOD_ID)
 
             item = store.list_ready_sync_outbox_items()[0]
-            submitted_response = ReportSubmissionResponse(**submission)
-            listed_response = ReportSubmissionRecordResponse(**store.list_report_submissions()[0])
+            submitted_response = LocalReportRevisionResponse(**submission)
+            listed_response = LocalReportRecordResponse(**store.list_local_reports()[0])
             with closing(connect_local_database(store._database_path)) as connection:
                 column = next(
                     row
@@ -289,7 +347,7 @@ class ResilienceLedgerTest(unittest.TestCase):
                     _event(central_camera_id=CAMERA_UUID),
                     "2026-06-15T04:00:00+00:00",
                 )
-                store.record_report_submission("REP-UNKNOWN-CONTRACT", JUNE_PERIOD_ID)
+                store.create_local_report_revision("REP-UNKNOWN-CONTRACT", JUNE_PERIOD_ID)
             with closing(sqlite3.connect(store._database_path)) as connection:
                 connection.execute(
                     "update sync_outbox_items set contract_version = 'future-contract.v9'"

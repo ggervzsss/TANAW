@@ -7,11 +7,11 @@ import { HistoricalTrendChart } from "./HistoricalTrendChart";
 import { SubmissionLedgerPreview } from "./SubmissionLedgerPreview";
 import type { TrendFilter } from "../types/dashboard";
 import { EMPTY_LOCAL_METRICS_HISTORY } from "../../../lib/operationalDefaults";
-import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsHistory, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsHistory, getLocalMetricsSummary, getMlServiceStatus, listLocalReports } from "../../camera/services/ml-service";
 import type { LocalMetricsHistory, LocalMetricsSummary } from "../../camera/services/ml-service";
 import type { DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { getDemographicEvidenceStatus } from "../../reports/utils/demographics";
-import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
+import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalRecord, sortReportsBySubmittedAt } from "../utils/reportLedger";
 
 type DotPreviewState = {
   demo: DemoBreakdown;
@@ -49,8 +49,8 @@ export function DashboardView() {
     try {
       const status = await getMlServiceStatus();
       const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-      const submissions = await listLocalReportSubmissions(baseUrl);
-      setLedgerReports(sortReportsBySubmittedAt(submissions.map(reportFromLocalSubmission)));
+      const submissions = await listLocalReports(baseUrl);
+      setLedgerReports(sortReportsBySubmittedAt(submissions.map(reportFromLocalRecord)));
       setLedgerError(null);
     } catch (error) {
       setLedgerError(error instanceof Error ? error.message : "Unable to load submission ledger previews.");

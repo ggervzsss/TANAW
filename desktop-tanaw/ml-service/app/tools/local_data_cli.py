@@ -10,10 +10,25 @@ from typing import Any
 APP_DIRECTORY_NAME = "desktop-tanaw"
 DATABASE_NAME = "tanaw_metrics.sqlite3"
 LEDGER_TABLES = (
+    "local_schema_migrations",
+    "local_sites",
+    "local_cameras",
+    "local_camera_event_sequences",
+    "camera_live_state",
     "count_events",
-    "count_snapshots",
+    "reporting_periods",
+    "local_reports",
+    "local_report_revisions",
+    "local_report_source_batches",
+    "local_report_event_claims",
+    "local_report_event_memberships",
+    "sync_outbox_items",
+    "sync_attempts",
+    "monitoring_sessions",
+    "coverage_gaps",
+    "metric_rollups",
+    "local_persistence_errors",
     "occupancy_corrections",
-    "report_submissions",
     "visitor_identities",
     "visitor_model_embeddings",
     "visitor_sightings",
@@ -259,7 +274,15 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                 )
             ]
             result["currentDraftEvents"] = connection.execute(
-                "select count(*) from count_events where submitted_report_id is null"
+                """
+                select count(*)
+                from count_events as event
+                where not exists (
+                    select 1
+                    from local_report_event_claims as claim
+                    where claim.event_id = event.event_id
+                )
+                """
             ).fetchone()[0]
             event_range = connection.execute(
                 "select min(recorded_at) as first_recorded_at, max(recorded_at) as last_recorded_at from count_events"
@@ -272,24 +295,34 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                 dict(row)
                 for row in connection.execute(
                     """
-                    select event_id, recorded_at, camera_name, direction, occupancy_count,
-                           visitor_id, source_kind, mock_run_id, submitted_report_id, synced_at
-                    from count_events
-                    order by recorded_at desc
+                    select event.event_id, event.recorded_at, event.camera_name,
+                           event.direction, event.occupancy_count, event.visitor_id,
+                           event.source_kind, event.mock_run_id, claim.report_id
+                    from count_events as event
+                    left join local_report_event_claims as claim
+                      on claim.event_id = event.event_id
+                    order by event.recorded_at desc
                     limit ?
                     """,
                     (limit,),
                 )
             ]
-        if "report_submissions" in existing_tables:
+        if "local_reports" in existing_tables:
             result["recentReports"] = [
                 dict(row)
                 for row in connection.execute(
                     """
-                    select report_id, period, submitted_at, entries, exits, peak_occupancy,
-                           unique_count, sync_status, source_kind, mock_run_id, synced_at
-                    from report_submissions
-                    order by submitted_at desc
+                    select report.report_id, report.period_label as period,
+                           revision.submitted_at, revision.entries, revision.exits,
+                           revision.peak_occupancy, revision.unique_count,
+                           outbox.status as delivery_status, revision.source_kind,
+                           revision.mock_run_id, outbox.acknowledged_at
+                    from local_reports as report
+                    join local_report_revisions as revision
+                      on revision.revision_id = report.current_revision_id
+                    join sync_outbox_items as outbox
+                      on outbox.report_revision_id = revision.revision_id
+                    order by revision.submitted_at desc
                     limit ?
                     """,
                     (limit,),
@@ -355,7 +388,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             for report in ledger["recentReports"]:
                 print(
                     f"    {report['report_id']} | {report['period']} | "
-                    f"{report['source_kind']} | {report['sync_status']}"
+                    f"{report['source_kind']} | {report['delivery_status']}"
                 )
         else:
             print("    none")
@@ -364,7 +397,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             for event in ledger["recentEvents"]:
                 print(
                     f"    {event['recorded_at']} | {event['direction']} | "
-                    f"{event['source_kind']} | report {event['submitted_report_id'] or '-'}"
+                    f"{event['source_kind']} | report {event['report_id'] or '-'}"
                 )
         else:
             print("    none")

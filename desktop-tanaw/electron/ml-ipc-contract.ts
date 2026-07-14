@@ -10,7 +10,7 @@ export const ML_OPERATION_NAMES = [
   "metrics.summary",
   "metrics.history",
   "occupancy.correction",
-  "reports.submit",
+  "reports.createRevision",
   "reports.list",
   "reports.purgeRaw",
   "sync.outbox.health",
@@ -112,9 +112,9 @@ const operationSpecs: Record<MlOperation, OperationSpec> = {
     payload: "body",
     allowedKeys: ["new_occupancy", "reason", "actor_id", "actor_name", "camera_id"],
   },
-  "reports.submit": {
+  "reports.createRevision": {
     method: "POST",
-    path: "/reports/local-submit",
+    path: "/reports/local",
     payload: "body",
     allowedKeys: ["metrics", "notes", "payload", "period_id", "report_id", "source_window"],
   },

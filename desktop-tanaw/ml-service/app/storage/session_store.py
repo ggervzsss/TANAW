@@ -23,7 +23,7 @@ class SessionStore:
         self._events_path = self._root / "events.jsonl"
         self._metrics_store = LocalMetricsStore(app_data_dir, enterprise_id)
         self._retire_legacy_event_log()
-        self._scrub_legacy_session_credentials()
+        self._scrub_session_credentials()
 
     def load_session(self) -> dict[str, Any] | None:
         self._scrub_session_file()
@@ -50,6 +50,10 @@ class SessionStore:
             json.dump(serializable, file, indent=2, sort_keys=True)
 
         temporary_path.replace(self._session_path)
+        self._metrics_store.save_camera_live_state(
+            serializable,
+            recorded_at=str(serializable["updated_at"]),
+        )
 
     def append_event(self, payload: dict[str, Any]) -> None:
         event = {
@@ -171,7 +175,7 @@ class SessionStore:
     def list_occupancy_corrections(self, limit: int = 100) -> list[dict[str, Any]]:
         return self._metrics_store.list_occupancy_corrections(limit=limit)
 
-    def record_report_submission(
+    def create_local_report_revision(
         self,
         report_id: str,
         period_id: str,
@@ -184,7 +188,7 @@ class SessionStore:
         idempotency_key: str | None = None,
         command_id: str | None = None,
     ) -> dict[str, int | str | None]:
-        return self._metrics_store.record_report_submission(
+        return self._metrics_store.create_local_report_revision(
             report_id=report_id,
             period_id=period_id,
             notes=notes,
@@ -196,8 +200,8 @@ class SessionStore:
             command_id=command_id,
         )
 
-    def list_report_submissions(self, limit: int = 100) -> list[dict[str, Any]]:
-        return self._metrics_store.list_report_submissions(limit=limit)
+    def list_local_reports(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._metrics_store.list_local_reports(limit=limit)
 
     def list_ready_sync_outbox_items(
         self, limit: int = 100, now: str | None = None
@@ -265,9 +269,8 @@ class SessionStore:
             return
         self._events_path.unlink(missing_ok=True)
 
-    def _scrub_legacy_session_credentials(self) -> None:
+    def _scrub_session_credentials(self) -> None:
         self._scrub_session_file()
-        self._metrics_store.scrub_legacy_session_snapshot_credentials()
 
     def _scrub_session_file(self) -> None:
         if not self._session_path.exists():

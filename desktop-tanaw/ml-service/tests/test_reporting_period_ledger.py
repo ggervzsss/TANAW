@@ -7,10 +7,11 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from app.config.camera_config import MockPrepareRequest, ReportSubmissionRequest
+from app.config.camera_config import LocalReportRevisionRequest, MockPrepareRequest
 from app.storage.local_metrics_store import LocalMetricsStore
 from app.storage.local_schema import (
     LOCAL_SCHEMA_VERSION,
@@ -18,11 +19,19 @@ from app.storage.local_schema import (
     connect_local_database,
     initialize_local_database,
 )
+from app.storage.local_schema import (
+    _migrate_baseline as migrate_local_v1,
+)
+from app.storage.local_schema import (
+    _migrate_reporting_periods as migrate_local_v2,
+)
+from app.storage.report_ledger_schema import migrate_report_ledger_v3
 from app.storage.reporting_periods import (
     monthly_period,
     monthly_period_for_captured_at,
     monthly_period_from_label,
 )
+from app.storage.resilience_schema import migrate_resilience_ledger_v4
 
 JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
@@ -75,7 +84,7 @@ class ReportingPeriodTest(unittest.TestCase):
             },
         }
 
-        request = ReportSubmissionRequest.model_validate(valid_payload)
+        request = LocalReportRevisionRequest.model_validate(valid_payload)
 
         self.assertEqual(request.period_id, JUNE_PERIOD_ID)
         for invalid_payload in (
@@ -89,11 +98,11 @@ class ReportingPeriodTest(unittest.TestCase):
             },
         ):
             with self.subTest(payload=invalid_payload), self.assertRaises(ValidationError):
-                ReportSubmissionRequest.model_validate(invalid_payload)
+                LocalReportRevisionRequest.model_validate(invalid_payload)
         missing_period = dict(valid_payload)
         del missing_period["period_id"]
         with self.assertRaises(ValidationError):
-            ReportSubmissionRequest.model_validate(missing_period)
+            LocalReportRevisionRequest.model_validate(missing_period)
 
     def test_report_submission_allows_zero_or_partial_demographic_facts(self) -> None:
         no_facts = _report_submission_request_payload(payload={})
@@ -114,10 +123,10 @@ class ReportingPeriodTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            ReportSubmissionRequest.model_validate(no_facts).payload,
+            LocalReportRevisionRequest.model_validate(no_facts).payload,
             {},
         )
-        request = ReportSubmissionRequest.model_validate(partial_facts)
+        request = LocalReportRevisionRequest.model_validate(partial_facts)
         self.assertEqual(request.metrics.unique_count if request.metrics else None, 1)
         self.assertEqual(
             request.payload["demographicFacts"] if request.payload else None,
@@ -145,7 +154,7 @@ class ReportingPeriodTest(unittest.TestCase):
 
         for report_payload in invalid_payloads:
             with self.subTest(payload=report_payload), self.assertRaises(ValidationError):
-                ReportSubmissionRequest.model_validate(
+                LocalReportRevisionRequest.model_validate(
                     _report_submission_request_payload(payload=report_payload)
                 )
 
@@ -218,7 +227,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             self.assertEqual(store.metrics_summary(period_id=JUNE_PERIOD_ID)["entries"], 1)
             self.assertEqual(store.metrics_summary(period_id=JULY_PERIOD_ID)["entries"], 1)
 
-            submission = store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+            submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
             self.assertEqual(submission["period_id"], JUNE_PERIOD_ID)
             self.assertEqual(submission["entries"], 1)
@@ -232,7 +241,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             store.append_count_event(_event("entry"), "2026-07-15T00:00:00+00:00")
 
             with self.assertRaisesRegex(ValueError, "month:Asia/Manila:YYYY-MM"):
-                store.record_report_submission("REP-AMBIGUOUS", "Current Period")
+                store.create_local_report_revision("REP-AMBIGUOUS", "Current Period")
 
     def test_correction_only_store_remains_unclassified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -252,7 +261,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             self.assertIsNone(summary["starts_at_utc"])
             self.assertEqual(summary["entries"], 0)
             with self.assertRaisesRegex(ValueError, "month:Asia/Manila:YYYY-MM"):
-                store.record_report_submission("REP-UNCLASSIFIED", "")
+                store.create_local_report_revision("REP-UNCLASSIFIED", "")
 
     def test_legacy_rows_are_migrated_without_data_loss_and_rerun_safely(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -291,6 +300,15 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 ).fetchall()
                 user_version = connection.execute("pragma user_version").fetchone()[0]
                 foreign_key_failures = connection.execute("pragma foreign_key_check").fetchall()
+                tables = {
+                    row["name"]
+                    for row in connection.execute(
+                        "select name from sqlite_master where type = 'table'"
+                    )
+                }
+                event_columns = {
+                    row["name"] for row in connection.execute("pragma table_info(count_events)")
+                }
 
             self.assertEqual(tuple(event), ("legacy-event", "2026-06-30", JUNE_PERIOD_ID))
             self.assertEqual(tuple(report), ("legacy-report", JUNE_PERIOD_ID))
@@ -303,9 +321,57 @@ class LocalReportingLedgerTest(unittest.TestCase):
                     "sync_outbox_items": 1,
                 },
             )
-            self.assertEqual([row["version"] for row in migrations], [1, 2, 3, 4])
+            self.assertEqual([row["version"] for row in migrations], [1, 2, 3, 4, 5])
             self.assertEqual(user_version, LOCAL_SCHEMA_VERSION)
             self.assertEqual(foreign_key_failures, [])
+            self.assertTrue({"count_snapshots", "report_submissions"}.isdisjoint(tables))
+            self.assertTrue(
+                {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
+            )
+
+    def test_interrupted_target_cutover_rolls_back_and_retry_removes_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = _create_legacy_database(Path(directory))
+            _upgrade_legacy_database_to_v4(database_path)
+            backup_path = database_path.with_name(f".{database_path.name}.schema-v4.backup")
+
+            with patch(
+                "app.storage.local_schema.migrate_target_ledger_v5",
+                side_effect=RuntimeError("simulated cutover interruption"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "simulated cutover interruption"):
+                    initialize_local_database(database_path)
+
+            self.assertTrue(backup_path.exists())
+            with closing(connect_local_database(database_path)) as connection:
+                self.assertEqual(connection.execute("pragma user_version").fetchone()[0], 4)
+                self.assertIsNotNone(
+                    connection.execute(
+                        "select 1 from sqlite_master where name = 'report_submissions'"
+                    ).fetchone()
+                )
+
+            initialize_local_database(database_path)
+
+            self.assertFalse(backup_path.exists())
+            with closing(connect_local_database(database_path)) as connection:
+                tables = {
+                    row["name"]
+                    for row in connection.execute(
+                        "select name from sqlite_master where type = 'table'"
+                    )
+                }
+                event_columns = {
+                    row["name"] for row in connection.execute("pragma table_info(count_events)")
+                }
+                report_count = connection.execute("select count(*) from local_reports").fetchone()[
+                    0
+                ]
+            self.assertTrue({"count_snapshots", "report_submissions"}.isdisjoint(tables))
+            self.assertTrue(
+                {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
+            )
+            self.assertEqual(report_count, 1)
 
     def test_unclassifiable_legacy_event_blocks_official_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -317,8 +383,8 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
             store = LocalMetricsStore(directory)
 
-            with self.assertRaisesRegex(ValueError, "no reporting period"):
-                store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+            with self.assertRaisesRegex(RuntimeError, "unclassified or invalid event"):
+                store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
     def test_noncontiguous_legacy_camera_membership_is_dead_lettered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -374,7 +440,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             def submit_report() -> None:
                 try:
                     report_result.update(
-                        report_store.record_report_submission("REP-JUNE", JUNE_PERIOD_ID)
+                        report_store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
                     )
                 except BaseException as exc:  # pragma: no cover - assertion captures thread errors
                     errors.append(exc)
@@ -526,6 +592,36 @@ def _create_legacy_database(root: Path) -> Path:
         )
         connection.commit()
     return database_path
+
+
+def _upgrade_legacy_database_to_v4(database_path: Path) -> None:
+    migrations = (
+        (1, "baseline_local_metrics_ledger", migrate_local_v1),
+        (2, "canonical_reporting_periods", migrate_local_v2),
+        (3, "immutable_report_revisions_and_sync_outbox", migrate_report_ledger_v3),
+        (4, "camera_resilience_coverage_and_rollups", migrate_resilience_ledger_v4),
+    )
+    with closing(connect_local_database(database_path)) as connection:
+        connection.execute(
+            """
+            create table local_schema_migrations (
+                version integer primary key,
+                name text not null unique,
+                applied_at text not null
+            )
+            """
+        )
+        for version, name, migration in migrations:
+            migration(connection)
+            connection.execute(
+                """
+                insert into local_schema_migrations (version, name, applied_at)
+                values (?, ?, ?)
+                """,
+                (version, name, datetime.now(UTC).isoformat()),
+            )
+            connection.execute(f"pragma user_version = {version}")
+            connection.commit()
 
 
 def _event(direction: str) -> dict[str, Any]:

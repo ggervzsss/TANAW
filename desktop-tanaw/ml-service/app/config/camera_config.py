@@ -450,7 +450,7 @@ _REPORT_DEMOGRAPHIC_QUALITIES = {"confirmed", "degraded", "estimated"}
 _MAX_REPORT_DEMOGRAPHIC_COUNT = 2_147_483_647
 
 
-class ReportSubmissionRequest(BaseModel):
+class LocalReportRevisionRequest(BaseModel):
     report_id: str = Field(..., min_length=3, max_length=80)
     period_id: str = Field(..., min_length=1, max_length=80)
     source_window: ReportSourceWindow
@@ -459,7 +459,7 @@ class ReportSubmissionRequest(BaseModel):
     payload: dict | None = None
 
     @model_validator(mode="after")
-    def validate_demographics(self) -> ReportSubmissionRequest:
+    def validate_demographics(self) -> LocalReportRevisionRequest:
         monthly_period_from_identity(
             self.period_id,
             self.source_window.start,
@@ -530,7 +530,7 @@ def _validate_report_demographics(payload: dict[Any, Any]) -> None:
         seen.add(key)
 
 
-class ReportSubmissionResponse(MetricsSummaryResponse):
+class LocalReportRevisionResponse(MetricsSummaryResponse):
     report_id: str
     revision_id: str
     outbox_item_id: str
@@ -642,7 +642,7 @@ class MockReportRequest(BaseModel):
         return self
 
 
-class ReportSubmissionRecordResponse(BaseModel):
+class LocalReportRecordResponse(BaseModel):
     report_id: str
     revision_id: str
     outbox_item_id: str

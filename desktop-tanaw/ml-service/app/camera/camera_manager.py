@@ -636,7 +636,7 @@ class CameraProcessingManager:
             "runtime_capabilities": get_runtime_capabilities(),
         }
 
-    def record_report_submission(
+    def create_local_report_revision(
         self,
         report_id: str,
         period_id: str,
@@ -649,7 +649,7 @@ class CameraProcessingManager:
         idempotency_key: str | None = None,
         command_id: str | None = None,
     ) -> dict:
-        submission = self._session_store.record_report_submission(
+        submission = self._session_store.create_local_report_revision(
             report_id=report_id,
             period_id=period_id,
             notes=notes,
@@ -663,8 +663,8 @@ class CameraProcessingManager:
         self._visitor_registry.cleanup_expired()
         return submission
 
-    def list_report_submissions(self, limit: int = 100) -> list[dict]:
-        return self._session_store.list_report_submissions(limit=limit)
+    def list_local_reports(self, limit: int = 100) -> list[dict]:
+        return self._session_store.list_local_reports(limit=limit)
 
     def list_ready_sync_outbox_items(
         self, limit: int = 100, now: str | None = None
@@ -922,7 +922,7 @@ class CameraProcessingManager:
             "mockRunId": mock_run_id,
             **(payload or {}),
         }
-        return self.record_report_submission(
+        return self.create_local_report_revision(
             resolved_report_id,
             period_id,
             notes or "Monthly camera analytics submitted for LGU review.",

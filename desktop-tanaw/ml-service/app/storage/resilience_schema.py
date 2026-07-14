@@ -8,14 +8,12 @@ from app.storage.reporting_periods import (
     parse_captured_at,
 )
 from app.storage.resilience_store import record_metric_rollups
-from app.storage.session_credentials import scrub_snapshot_table_credentials
 
 
 def migrate_resilience_ledger_v4(connection: sqlite3.Connection) -> None:
     _normalize_report_outbox_contract_version(connection)
     for statement in _RESILIENCE_LEDGER_STATEMENTS:
         connection.execute(statement)
-    scrub_snapshot_table_credentials(connection)
     _backfill_metric_rollups(connection)
 
 

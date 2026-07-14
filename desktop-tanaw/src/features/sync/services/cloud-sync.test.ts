@@ -11,7 +11,7 @@ const {
   listReadySyncOutboxItems,
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
-  listLocalReportSubmissions,
+  listLocalReports,
   purgeLocalReportRawEvents,
   listEnterpriseReportHistory,
 } = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ const {
   listReadySyncOutboxItems: vi.fn(),
   acknowledgeSyncOutboxItem: vi.fn(),
   recordSyncOutboxFailure: vi.fn(),
-  listLocalReportSubmissions: vi.fn(),
+  listLocalReports: vi.fn(),
   purgeLocalReportRawEvents: vi.fn(),
   listEnterpriseReportHistory: vi.fn(),
 }));
@@ -41,7 +41,7 @@ vi.mock("../../camera/services/ml-service", () => ({
   listReadySyncOutboxItems,
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
-  listLocalReportSubmissions,
+  listLocalReports,
   purgeLocalReportRawEvents,
 }));
 vi.mock("../../reports/services/report-history", () => ({ listEnterpriseReportHistory }));
@@ -55,7 +55,7 @@ beforeEach(() => {
   getMlServiceStatus.mockResolvedValue({ baseUrl: "tanaw-ml://local", error: null, pid: 123, running: true });
   getSimulationStatus.mockResolvedValue(null);
   prepareLocalMockCounts.mockResolvedValue({ prepared: true });
-  listLocalReportSubmissions.mockResolvedValue([]);
+  listLocalReports.mockResolvedValue([]);
   listEnterpriseReportHistory.mockResolvedValue([]);
   acknowledgeSyncOutboxItem.mockResolvedValue({ acknowledged: true });
   recordSyncOutboxFailure.mockResolvedValue({ status: "retry" });
@@ -142,7 +142,7 @@ describe("canonical mock preparation periods", () => {
 describe("durable report outbox delivery", () => {
   it("purges raw events only for the exact consolidated central revision", async () => {
     listReadySyncOutboxItems.mockResolvedValue([]);
-    listLocalReportSubmissions.mockResolvedValue([
+    listLocalReports.mockResolvedValue([
       { report_id: "local-report-1", revision_id: "revision-1", raw_purged_at: null },
       { report_id: "local-report-2", revision_id: "revision-2", raw_purged_at: null },
     ]);
@@ -242,7 +242,7 @@ describe("durable report outbox delivery", () => {
   it("throws an explicit pending result when the exact outbox item is not ready", async () => {
     const item = outboxItem("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     listReadySyncOutboxItems.mockResolvedValue([]);
-    listLocalReportSubmissions.mockResolvedValue([{ report_id: "REP-2026-06", outbox_item_id: item.outbox_item_id, sync_status: "pending_cloud_sync" }]);
+    listLocalReports.mockResolvedValue([{ report_id: "REP-2026-06", outbox_item_id: item.outbox_item_id, sync_status: "pending_cloud_sync" }]);
 
     await expect(syncDesktopReportSubmission("REP-2026-06", item.outbox_item_id)).rejects.toThrow("exact report revision remains queued");
 
@@ -251,7 +251,7 @@ describe("durable report outbox delivery", () => {
   });
 
   it("rejects a report that has no exact local outbox revision", async () => {
-    listLocalReportSubmissions.mockResolvedValue([]);
+    listLocalReports.mockResolvedValue([]);
 
     await expect(syncDesktopReportSubmission("REP-WITHOUT-OUTBOX")).rejects.toThrow("no exact local outbox revision");
 

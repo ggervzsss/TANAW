@@ -79,13 +79,13 @@ describe("ML IPC operation allowlist", () => {
       payload: {},
     };
 
-    expect(resolveMlOperationRequest("reports.submit", canonicalBody)).toEqual({
+    expect(resolveMlOperationRequest("reports.createRevision", canonicalBody)).toEqual({
       method: "POST",
-      path: "/reports/local-submit",
+      path: "/reports/local",
       body: JSON.stringify(canonicalBody),
     });
     expect(() =>
-      resolveMlOperationRequest("reports.submit", {
+      resolveMlOperationRequest("reports.createRevision", {
         ...canonicalBody,
         period_id: undefined,
         period: "Jun 1 - Jun 30, 2026",

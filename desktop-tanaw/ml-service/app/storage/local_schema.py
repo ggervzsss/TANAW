@@ -14,8 +14,9 @@ from app.storage.reporting_periods import (
     parse_captured_at,
 )
 from app.storage.resilience_schema import migrate_resilience_ledger_v4
+from app.storage.target_schema import bind_local_site, migrate_target_ledger_v5
 
-LOCAL_SCHEMA_VERSION = 4
+LOCAL_SCHEMA_VERSION = 5
 SQLITE_BUSY_TIMEOUT_MS = 5_000
 
 _Migration = Callable[[sqlite3.Connection], None]
@@ -28,7 +29,7 @@ def connect_local_database(database_path: Path) -> sqlite3.Connection:
     return connection
 
 
-def initialize_local_database(database_path: Path) -> None:
+def initialize_local_database(database_path: Path, *, enterprise_id: str | None = None) -> None:
     connection = sqlite3.connect(
         database_path,
         timeout=SQLITE_BUSY_TIMEOUT_MS / 1_000,
@@ -60,10 +61,19 @@ def initialize_local_database(database_path: Path) -> None:
             (2, "canonical_reporting_periods", _migrate_reporting_periods),
             (3, "immutable_report_revisions_and_sync_outbox", migrate_report_ledger_v3),
             (4, "camera_resilience_coverage_and_rollups", migrate_resilience_ledger_v4),
+            (5, "target_only_edge_ledger", migrate_target_ledger_v5),
+        )
+        backup_path = _prepare_upgrade_backup(
+            connection,
+            database_path,
+            database_version=database_version,
         )
         for version, name, migration in migrations:
             if _migration_is_applied(connection, version):
                 continue
+            foreign_keys_disabled = version == 5
+            if foreign_keys_disabled:
+                connection.execute("pragma foreign_keys = off")
             connection.execute("begin immediate")
             try:
                 if not _migration_is_applied(connection, version):
@@ -80,6 +90,9 @@ def initialize_local_database(database_path: Path) -> None:
             except Exception:
                 connection.rollback()
                 raise
+            finally:
+                if foreign_keys_disabled:
+                    connection.execute("pragma foreign_keys = on")
 
         applied_version = connection.execute(
             "select coalesce(max(version), 0) from local_schema_migrations"
@@ -89,12 +102,21 @@ def initialize_local_database(database_path: Path) -> None:
                 f"Local ledger schema is at version {applied_version}; "
                 f"expected {LOCAL_SCHEMA_VERSION}."
             )
+        _verify_database_integrity(connection)
+        bind_local_site(connection, enterprise_id=enterprise_id)
+        connection.commit()
+        if 0 < database_version < LOCAL_SCHEMA_VERSION:
+            connection.execute("vacuum")
+            _verify_database_integrity(connection)
+        if backup_path is not None:
+            backup_path.unlink(missing_ok=True)
     finally:
         connection.close()
 
 
 def _configure_connection(connection: sqlite3.Connection) -> None:
     connection.execute("pragma foreign_keys = on")
+    connection.execute("pragma secure_delete = on")
     connection.execute(f"pragma busy_timeout = {SQLITE_BUSY_TIMEOUT_MS}")
 
 
@@ -106,6 +128,41 @@ def _migration_is_applied(connection: sqlite3.Connection, version: int) -> bool:
         ).fetchone()
         is not None
     )
+
+
+def _prepare_upgrade_backup(
+    connection: sqlite3.Connection,
+    database_path: Path,
+    *,
+    database_version: int,
+) -> Path | None:
+    backup_path = database_path.with_name(f".{database_path.name}.schema-v4.backup")
+    if database_version == LOCAL_SCHEMA_VERSION:
+        backup_path.unlink(missing_ok=True)
+        return None
+    if database_version < 1:
+        return None
+    connection.execute("pragma wal_checkpoint(full)")
+    if not backup_path.exists():
+        backup = sqlite3.connect(backup_path)
+        try:
+            connection.backup(backup)
+            backup.commit()
+        finally:
+            backup.close()
+    return backup_path
+
+
+def _verify_database_integrity(connection: sqlite3.Connection) -> None:
+    integrity = str(connection.execute("pragma integrity_check").fetchone()[0])
+    if integrity != "ok":
+        raise RuntimeError(f"Local ledger integrity check failed: {integrity}")
+    foreign_key_failure = connection.execute("pragma foreign_key_check").fetchone()
+    if foreign_key_failure is not None:
+        raise RuntimeError(
+            "Local ledger foreign-key check failed for "
+            f"{foreign_key_failure['table']} row {foreign_key_failure['rowid']}."
+        )
 
 
 def _migrate_baseline(connection: sqlite3.Connection) -> None:

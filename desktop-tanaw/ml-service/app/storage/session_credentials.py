@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import sqlite3
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -78,35 +76,6 @@ def persisted_camera_config_has_credentials(config: dict[str, Any]) -> bool:
         or isinstance(stream_url, str)
         and _stream_url_has_credentials(stream_url)
     )
-
-
-def scrub_snapshot_table_credentials(connection: sqlite3.Connection) -> int:
-    scrubbed_rows = 0
-    rows = connection.execute(
-        "select id, error, payload_json from count_snapshots order by id"
-    ).fetchall()
-    for row in rows:
-        try:
-            payload = json.loads(str(row["payload_json"]))
-        except (TypeError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        scrubbed, changed = scrub_session_snapshot(payload)
-        raw_error = row["error"]
-        safe_error = redact_stream_credentials(str(raw_error)) if raw_error is not None else None
-        if not changed and safe_error == raw_error:
-            continue
-        connection.execute(
-            """
-            update count_snapshots
-            set error = ?, payload_json = ?
-            where id = ?
-            """,
-            (safe_error, json.dumps(scrubbed, sort_keys=True), row["id"]),
-        )
-        scrubbed_rows += 1
-    return scrubbed_rows
 
 
 def _stream_url_has_credentials(stream_url: str) -> bool:

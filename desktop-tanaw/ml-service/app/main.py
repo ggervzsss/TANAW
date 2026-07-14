@@ -24,6 +24,9 @@ from app.config.camera_config import (
     EnterpriseContextRequest,
     EnterpriseContextResponse,
     HealthResponse,
+    LocalReportRecordResponse,
+    LocalReportRevisionRequest,
+    LocalReportRevisionResponse,
     MetricsHistoryResponse,
     MetricsSummaryResponse,
     MockManualEventRequest,
@@ -36,9 +39,6 @@ from app.config.camera_config import (
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
     ReportRawDataPurgeResponse,
-    ReportSubmissionRecordResponse,
-    ReportSubmissionRequest,
-    ReportSubmissionResponse,
     SessionResponse,
 )
 from app.runtime.hardware import get_runtime_capabilities
@@ -295,11 +295,13 @@ def occupancy_corrections(limit: int = 100) -> list[OccupancyCorrectionResponse]
     ]
 
 
-@app.post("/reports/local-submit", response_model=ReportSubmissionResponse)
-def record_local_report_submission(payload: ReportSubmissionRequest) -> ReportSubmissionResponse:
+@app.post("/reports/local", response_model=LocalReportRevisionResponse)
+def create_local_report_revision(
+    payload: LocalReportRevisionRequest,
+) -> LocalReportRevisionResponse:
     try:
-        return ReportSubmissionResponse(
-            **manager.record_report_submission(
+        return LocalReportRevisionResponse(
+            **manager.create_local_report_revision(
                 payload.report_id,
                 payload.period_id,
                 payload.notes,
@@ -311,11 +313,11 @@ def record_local_report_submission(payload: ReportSubmissionRequest) -> ReportSu
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@app.get("/reports/local", response_model=list[ReportSubmissionRecordResponse])
-def list_local_report_submissions(limit: int = 100) -> list[ReportSubmissionRecordResponse]:
+@app.get("/reports/local", response_model=list[LocalReportRecordResponse])
+def list_local_reports(limit: int = 100) -> list[LocalReportRecordResponse]:
     return [
-        ReportSubmissionRecordResponse(**submission)
-        for submission in manager.list_report_submissions(limit=limit)
+        LocalReportRecordResponse(**submission)
+        for submission in manager.list_local_reports(limit=limit)
     ]
 
 
@@ -452,10 +454,10 @@ def mock_status() -> MockStatusResponse:
     return MockStatusResponse(**manager.mock_status())
 
 
-@app.post("/mock/generate-report", response_model=ReportSubmissionResponse)
-def generate_mock_report(payload: MockReportRequest) -> ReportSubmissionResponse:
+@app.post("/mock/generate-report", response_model=LocalReportRevisionResponse)
+def generate_mock_report(payload: MockReportRequest) -> LocalReportRevisionResponse:
     try:
-        return ReportSubmissionResponse(
+        return LocalReportRevisionResponse(
             **manager.generate_mock_report(
                 payload.report_id, payload.period_id, payload.notes, payload.payload
             )
