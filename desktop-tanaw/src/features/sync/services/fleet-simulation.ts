@@ -9,7 +9,6 @@ export type FleetSimulationEnterprise = {
   enterpriseName: string;
   category?: string | null;
   barangay?: string | null;
-  isCurrent: boolean;
 };
 
 export type FleetSimulationTarget = {
@@ -33,13 +32,13 @@ export type FleetSimulationState = {
 };
 
 type FleetSimulationTickResponse = {
+  contractVersion: 2;
   runId: string;
-  snapshots: unknown[];
-  alerts: unknown[];
+  observations: unknown[];
 };
 
 export async function listFleetSimulationEnterprises() {
-  const response = await staffApi.get<FleetSimulationEnterprise[]>("/operational/simulation/fleet/enterprises");
+  const response = await staffApi.get<FleetSimulationEnterprise[]>("/operational/simulation/sites/v2");
   return response.data;
 }
 
@@ -108,7 +107,8 @@ export async function syncFleetSimulationTelemetry() {
   if (!state || state.state !== "running" || state.targets.length === 0) return null;
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(state.startedAt)) / 1000));
-  const response = await staffApi.post<FleetSimulationTickResponse>("/operational/simulation/fleet/tick", {
+  const response = await staffApi.post<FleetSimulationTickResponse>("/operational/simulation/telemetry/v2", {
+    contractVersion: 2,
     runId: state.runId,
     startedAt: state.startedAt,
     elapsedSeconds,
@@ -123,8 +123,8 @@ export async function syncFleetSimulationTelemetry() {
     ...state,
     updatedAt: new Date().toISOString(),
     lastSyncedAt: new Date().toISOString(),
-    lastSnapshotCount: response.data.snapshots.length,
-    lastAlertCount: response.data.alerts.length,
+    lastSnapshotCount: response.data.observations.length,
+    lastAlertCount: 0,
     elapsedSeconds,
   };
   setFleetSimulationState(nextState);

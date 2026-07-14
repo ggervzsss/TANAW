@@ -32,6 +32,11 @@ from app.features.telemetry.service import (
     list_official_sites,
     register_epoch_command,
 )
+from app.features.telemetry.simulation import (
+    FleetSimulationCommand,
+    ingest_simulation_tick,
+    list_simulation_enterprises,
+)
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
@@ -42,6 +47,55 @@ from app.features.topology.models import (
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 BASE_TIME = datetime(2026, 7, 13, 8, 15, 3, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_fleet_simulation_uses_sequenced_target_tables_and_is_idempotent(
+    telemetry_session: AsyncSession,
+) -> None:
+    scope = await _seed_scope(telemetry_session, classification="simulation")
+    enterprise = await telemetry_session.get(Enterprise, scope["enterprise"])
+    site = await telemetry_session.get(EnterpriseSite, scope["site"])
+    assert enterprise is not None
+    assert site is not None
+    site.site_code = "primary"
+    await telemetry_session.flush()
+    observed_at = datetime.now(UTC)
+    command = FleetSimulationCommand.model_validate(
+        {
+            "contractVersion": 2,
+            "runId": "fleet-target-contract",
+            "startedAt": observed_at.isoformat(),
+            "elapsedSeconds": 0,
+            "targets": [
+                {
+                    "enterpriseId": enterprise.official_code,
+                    "lane": "warning",
+                    "capacity": 100,
+                    "thresholdPercent": 90,
+                }
+            ],
+        }
+    )
+
+    first = await ingest_simulation_tick(telemetry_session, command=command)
+    replay = await ingest_simulation_tick(telemetry_session, command=command)
+
+    assert first.contractVersion == 2
+    assert len(first.observations) == 1
+    assert first.observations[0].disposition == "created"
+    assert replay.observations[0].disposition == "replayed"
+    observation = await telemetry_session.get(
+        TelemetryObservation,
+        str(first.observations[0].resource.observationId),
+    )
+    assert observation is not None
+    assert observation.classification == "simulation"
+    assert observation.ordering_status == "sequenced"
+    assert await telemetry_session.scalar(select(func.count()).select_from(OperationalAlert)) == 0
+    assert [item.enterpriseId for item in await list_simulation_enterprises(telemetry_session)] == [
+        enterprise.official_code
+    ]
 
 
 class Scope(TypedDict):

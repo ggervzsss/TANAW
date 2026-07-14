@@ -1,25 +1,20 @@
 from datetime import UTC, datetime
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.operational.models import EnterpriseTelemetrySnapshot
 from app.features.operational.schemas import (
     DesktopMetricsSummary,
     DesktopTelemetryIngest,
-    FleetSimulationTarget,
 )
 from app.features.operational.service import (
     NOTIFY_CAMERA_SESSION_ERROR_KEY,
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
-    build_fleet_simulation_telemetry_payload,
     can_view_operational_event,
     gateway_status_for_snapshot,
     occupancy_alert_condition,
     resolve_system_setting_enabled,
 )
-from app.features.topology.account_scope import AccountTopology
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 
 def test_simulation_occupancy_threshold_is_calculated_from_capacity() -> None:
@@ -92,59 +87,6 @@ def test_it_receives_live_alert_websocket_events() -> None:
     assert can_view_operational_event("it", "alert.resolved")
 
 
-def test_fleet_breach_lane_holds_threshold_then_recovers() -> None:
-    enterprise = enterprise_account()
-    target = FleetSimulationTarget(
-        enterpriseId="ent-001",
-        lane="one-minute-breach",
-        capacity=100,
-        thresholdPercent=90,
-    )
-
-    breached = build_fleet_simulation_telemetry_payload(
-        target=target,
-        enterprise=enterprise,
-        run_id="fleet-test",
-        started_at=datetime.now(UTC),
-        elapsed_seconds=60,
-    )
-    recovered = build_fleet_simulation_telemetry_payload(
-        target=target,
-        enterprise=enterprise,
-        run_id="fleet-test",
-        started_at=datetime.now(UTC),
-        elapsed_seconds=125,
-    )
-
-    assert breached.metrics.currentOccupancy >= 90
-    assert recovered.metrics.currentOccupancy <= 80
-
-
-def test_fleet_warning_lane_reports_sync_delay_without_threshold_breach() -> None:
-    enterprise = enterprise_account()
-    target = FleetSimulationTarget(
-        enterpriseId="ent-001",
-        lane="warning",
-        capacity=100,
-        thresholdPercent=90,
-    )
-
-    payload = build_fleet_simulation_telemetry_payload(
-        target=target,
-        enterprise=enterprise,
-        run_id="fleet-test",
-        started_at=datetime.now(UTC),
-        elapsed_seconds=30,
-    )
-
-    condition = occupancy_alert_condition(payload)
-
-    assert payload.metrics.currentOccupancy < 90
-    assert payload.metrics.unsyncedEvents > 0
-    assert condition is not None
-    assert condition.breached is False
-
-
 def test_unsynced_gateway_snapshot_is_reported_as_sync_delayed() -> None:
     snapshot = EnterpriseTelemetrySnapshot(
         enterprise_account_id="account-1",
@@ -209,50 +151,4 @@ def test_notification_setting_ignores_invalid_values() -> None:
             NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
         )
         is True
-    )
-
-
-def enterprise_account() -> AccountTopology:
-    observed_at = datetime.now(UTC)
-    account = Account(
-        id="account-1",
-        email="enterprise@example.com",
-        password_hash="hash",
-        role=AccountRole.ENTERPRISE,
-        display_name="Enterprise Manager",
-        title="Enterprise",
-        status=AccountStatus.ACTIVE,
-    )
-    enterprise = Enterprise(
-        id="00000000-0000-0000-0000-000000000011",
-        official_code="ent-001",
-        name="Enterprise One",
-        classification="official",
-        lifecycle_state="active",
-    )
-    membership = EnterpriseMembership(
-        id="00000000-0000-0000-0000-000000000012",
-        enterprise_id=enterprise.id,
-        account_id=account.id,
-        classification="official",
-        membership_role="manager",
-        started_at=observed_at,
-    )
-    site = EnterpriseSite(
-        id="00000000-0000-0000-0000-000000000013",
-        enterprise_id=enterprise.id,
-        classification="official",
-        site_code="primary",
-        name="Enterprise One Primary Site",
-        building_capacity=100,
-        effective_from=observed_at,
-    )
-    return AccountTopology(
-        account=account,
-        membership=membership,
-        enterprise=enterprise,
-        site=site,
-        active_devices=(),
-        live_state=None,
-        evaluated_at=observed_at,
     )

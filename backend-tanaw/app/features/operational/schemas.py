@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.features.reporting.contracts import reporting_period_from_key
 
 SourceKind = Literal["real", "mock", "hybrid"]
-FleetSimulationLane = Literal["normal", "warning", "one-minute-breach"]
 REPORTING_TIME_ZONE = ZoneInfo("Asia/Manila")
 REPORTING_PERIOD_RANGE_RE = re.compile(
     r"^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$"
@@ -319,34 +318,6 @@ class MockPreparationSummary(BaseModel):
     enterpriseName: str
     counts: MockPreparationCounts | None = None
     pendingCounts: list[MockPreparationCounts] = Field(default_factory=list)
-
-
-class FleetSimulationEnterpriseSummary(BaseModel):
-    enterpriseId: str
-    enterpriseName: str
-    category: str | None = None
-    barangay: str | None = None
-    isCurrent: bool = False
-
-
-class FleetSimulationTarget(BaseModel):
-    enterpriseId: str = Field(min_length=1, max_length=120)
-    lane: FleetSimulationLane
-    capacity: int = Field(default=100, ge=1, le=100_000)
-    thresholdPercent: int = Field(default=90, ge=1, le=100)
-
-
-class FleetSimulationTickIngest(BaseModel):
-    runId: str = Field(min_length=3, max_length=36)
-    startedAt: datetime
-    elapsedSeconds: int = Field(ge=0, le=86_400)
-    targets: list[FleetSimulationTarget] = Field(min_length=1, max_length=50)
-
-
-class FleetSimulationTickSummary(BaseModel):
-    runId: str
-    snapshots: list[TelemetrySnapshotSummary]
-    alerts: list[OperationalAlertSummary]
 
 
 ReportReviewStatus = Literal["Pending Review", "Ready to Consolidate", "Returned", "Consolidated"]

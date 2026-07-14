@@ -61,9 +61,6 @@ from app.features.operational.schemas import (
     FinalReportRevisionReturn,
     FinalReportStatusUpdate,
     FinalReportSummary,
-    FleetSimulationEnterpriseSummary,
-    FleetSimulationTickIngest,
-    FleetSimulationTickSummary,
     IntakeReportSummary,
     MockPreparationCounts,
     MockPreparationSummary,
@@ -87,7 +84,6 @@ from app.features.operational.service import (
     NOTIFY_SYNC_DELAY_KEY,
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
-    build_fleet_simulation_telemetry_payload,
     create_final_report,
     create_operational_alert,
     create_role_notifications,
@@ -95,7 +91,6 @@ from app.features.operational.service import (
     create_support_ticket_message,
     create_support_ticket_message_with_record,
     create_user_notification,
-    enterprise_accounts_by_identifier,
     enterprise_identifier,
     evaluate_telemetry_alerts,
     get_enterprise_notification_recipient,
@@ -105,7 +100,6 @@ from app.features.operational.service import (
     get_support_ticket_for_account,
     ingest_report_submission,
     ingest_telemetry,
-    list_fleet_simulation_enterprises,
     list_intake_reports,
     list_latest_telemetry,
     list_operational_alerts,
@@ -335,81 +329,6 @@ async def get_desktop_mock_preparation(
         enterpriseName=run.target_enterprise_name or topology.enterprise.name,
         counts=pending_counts[0] if pending_counts else None,
         pendingCounts=pending_counts,
-    )
-
-
-@router.get(
-    "/simulation/fleet/enterprises",
-    response_model=list[FleetSimulationEnterpriseSummary],
-)
-async def list_fleet_simulation_targets(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[FleetSimulationEnterpriseSummary]:
-    ensure_simulation_api_allowed()
-    return await list_fleet_simulation_enterprises(db, account)
-
-
-@router.post(
-    "/simulation/fleet/tick",
-    response_model=FleetSimulationTickSummary,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def ingest_fleet_simulation_tick(
-    payload: FleetSimulationTickIngest,
-    _: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FleetSimulationTickSummary:
-    ensure_simulation_api_allowed()
-    accounts = await enterprise_accounts_by_identifier(
-        db, {target.enterpriseId for target in payload.targets}
-    )
-    snapshots: list[TelemetrySnapshotSummary] = []
-    alerts: list[OperationalAlertSummary] = []
-
-    for target in payload.targets:
-        enterprise_topology = accounts.get(target.enterpriseId)
-        if enterprise_topology is None:
-            continue
-
-        telemetry_payload = build_fleet_simulation_telemetry_payload(
-            target=target,
-            enterprise=enterprise_topology,
-            run_id=payload.runId,
-            started_at=payload.startedAt,
-            elapsed_seconds=payload.elapsedSeconds,
-        )
-        snapshot = await ingest_telemetry(
-            db,
-            enterprise_topology.account,
-            telemetry_payload,
-            update_account_gateway=False,
-        )
-        snapshots.append(snapshot)
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="telemetry.snapshot", data=snapshot.model_dump(mode="json")
-            )
-        )
-
-        for event_type, alert_summary in await evaluate_telemetry_alerts(
-            db, enterprise_topology.account, telemetry_payload
-        ):
-            alerts.append(alert_summary)
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type=event_type,  # type: ignore[arg-type]
-                    data=alert_summary.model_dump(mode="json"),
-                )
-            )
-
-    if snapshots:
-        await broadcast_summary(db)
-
-    return FleetSimulationTickSummary(
-        runId=payload.runId,
-        snapshots=snapshots,
-        alerts=alerts,
     )
 
 
@@ -1301,15 +1220,6 @@ async def broadcast_summary(db: AsyncSession) -> None:
     await operational_ws_manager.broadcast(
         OperationalWebSocketEnvelope(type="summary.updated", data=summary.model_dump(mode="json"))
     )
-
-
-def ensure_simulation_api_allowed() -> None:
-    settings = get_settings()
-    if settings.is_production and not settings.allow_mock_data:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Simulation Lab fleet endpoints are disabled in production.",
-        )
 
 
 async def notify_enterprise_ticket_update(

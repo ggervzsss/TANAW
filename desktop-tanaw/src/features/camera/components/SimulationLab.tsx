@@ -591,9 +591,7 @@ function buildFleetTargets({
   capacity: number;
   thresholdPercent: number;
 }): FleetSimulationTarget[] {
-  const nonCurrentEnterprises = enterprises.filter((enterprise) => !enterprise.isCurrent);
-  const pool = nonCurrentEnterprises.length >= enterpriseCount ? nonCurrentEnterprises : enterprises;
-  const selectedEnterprises = pool.slice(0, enterpriseCount);
+  const selectedEnterprises = enterprises.slice(0, enterpriseCount);
   const safeBreachCount = clampNumber(breachCount, 0, selectedEnterprises.length);
   const safeWarningCount = clampNumber(warningCount, 0, Math.max(0, selectedEnterprises.length - safeBreachCount));
 
