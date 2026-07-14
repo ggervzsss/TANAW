@@ -64,7 +64,10 @@ class Enterprise(Base):
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     classification: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
     simulation_run_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("mock_data_runs.id", ondelete="RESTRICT"), index=True, nullable=True
+        Uuid(as_uuid=False),
+        ForeignKey("mock_data_runs.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=True,
     )
     lifecycle_state: Mapped[str] = mapped_column(
         String(20), index=True, nullable=False, default="active"
@@ -119,7 +122,7 @@ class EnterpriseMembership(Base):
     # Cutover debt: accounts.id remains VARCHAR(36) until the authentication-principal
     # migration converts it to native UUID without changing externally visible identity.
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
     )
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     membership_role: Mapped[str] = mapped_column(

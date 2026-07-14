@@ -51,7 +51,7 @@ def test_reporting_schema_uses_native_postgres_uuids_and_creates_on_sqlite(
         ReportRevision.__table__.c.submitted_by_account_id.type.compile(
             dialect=postgresql.dialect()
         )
-        == "VARCHAR(36)"
+        == "UUID"
     )
     assert {
         "reporting_periods",

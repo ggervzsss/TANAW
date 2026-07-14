@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-LATEST_DATABASE_REVISION = "20260714_0034"
+LATEST_DATABASE_REVISION = "20260714_0035"
 
 
 class DatabaseMigrationError(RuntimeError):

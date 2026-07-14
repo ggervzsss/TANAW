@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -63,8 +64,15 @@ class EmailOutbox(Base):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
     purpose: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
     source_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -121,9 +129,11 @@ class EmailDeliveryAttempt(Base):
         UniqueConstraint("outbox_id", "attempt_number", name="uq_email_delivery_attempt"),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
     outbox_id: Mapped[str] = mapped_column(
-        String(36),
+        Uuid(as_uuid=False),
         ForeignKey("email_outbox.id", ondelete="CASCADE"),
         index=True,
         nullable=False,

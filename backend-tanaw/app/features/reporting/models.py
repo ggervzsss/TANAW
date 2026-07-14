@@ -410,7 +410,7 @@ class ReportRevision(Base):
     source_window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     source_window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     submitted_by_account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
     )
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -664,7 +664,7 @@ class ReportReviewEvent(Base):
     from_state: Mapped[str | None] = mapped_column(String(20), nullable=True)
     to_state: Mapped[str] = mapped_column(String(20), nullable=False)
     actor_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
     actor_display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     actor_role: Mapped[str | None] = mapped_column(String(40), nullable=True)

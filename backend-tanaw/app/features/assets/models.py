@@ -29,7 +29,7 @@ class AccountPreference(Base):
     )
 
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
     )
     theme: Mapped[str] = mapped_column(String(20), nullable=False, default="system")
     created_at: Mapped[datetime] = mapped_column(
@@ -77,7 +77,7 @@ class AccountProfileChangeRequest(Base):
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
     )
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
     )
     request_type: Mapped[str] = mapped_column(String(30), nullable=False)
     requested_value: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -85,7 +85,7 @@ class AccountProfileChangeRequest(Base):
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
 
 
@@ -131,7 +131,7 @@ class AccountAsset(Base):
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
     )
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
     )
     asset_kind: Mapped[str] = mapped_column(String(30), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -193,7 +193,9 @@ class SupportAttachment(Base):
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
     )
     ticket_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=False),
+        ForeignKey("support_tickets.id", ondelete="CASCADE"),
+        nullable=False,
     )
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)

@@ -87,7 +87,7 @@ class DomainEvent(Base):
     site_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     actor_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
     correlation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
     causation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)

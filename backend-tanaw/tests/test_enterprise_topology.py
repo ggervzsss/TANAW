@@ -47,7 +47,7 @@ def test_topology_uses_native_postgres_uuid_and_sqlite_can_create_schema(
     )
     assert (
         EnterpriseMembership.__table__.c.account_id.type.compile(dialect=postgresql.dialect())
-        == "VARCHAR(36)"
+        == "UUID"
     )
 
     assert {

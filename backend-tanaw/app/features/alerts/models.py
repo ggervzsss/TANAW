@@ -92,7 +92,9 @@ class SiteSyncAlertState(Base):
     edge_device_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     operational_alert_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("operational_alerts.id", ondelete="RESTRICT"), nullable=False
+        Uuid(as_uuid=False),
+        ForeignKey("operational_alerts.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     logical_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

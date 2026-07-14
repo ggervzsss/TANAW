@@ -7,6 +7,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    Uuid,
     func,
     text,
 )
@@ -18,12 +19,16 @@ from app.db.session import Base
 class MockDataRun(Base):
     __tablename__ = "mock_data_runs"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
     scenario: Mapped[str] = mapped_column(String(80), nullable=False)
     seed: Mapped[str] = mapped_column(String(80), nullable=False)
     range_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     range_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    target_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    target_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
+    )
     target_enterprise_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     target_enterprise_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="active")
@@ -38,10 +43,10 @@ class MockDataRunAccount(Base):
     __tablename__ = "mock_data_run_accounts"
 
     run_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("mock_data_runs.id", ondelete="CASCADE"), primary_key=True
+        Uuid(as_uuid=False), ForeignKey("mock_data_runs.id", ondelete="CASCADE"), primary_key=True
     )
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -60,7 +65,9 @@ class OperationalAlert(Base):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
     alert_code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
     alert_type: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
@@ -92,11 +99,21 @@ class UserNotification(Base):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    recipient_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    recipient_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
     recipient_role: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     recipient_enterprise_id: Mapped[str | None] = mapped_column(
-        String(120), index=True, nullable=True
+        Uuid(as_uuid=False),
+        ForeignKey("enterprises.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=True,
     )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
@@ -104,7 +121,9 @@ class UserNotification(Base):
     severity: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="Info")
     source_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     source_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
-    created_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+    )
     created_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -115,9 +134,16 @@ class UserNotification(Base):
 class SupportTicket(Base):
     __tablename__ = "support_tickets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
     ticket_code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
-    enterprise_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    enterprise_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
     enterprise_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
     category: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
@@ -138,11 +164,21 @@ class SupportTicket(Base):
 class SupportTicketMessage(Base):
     __tablename__ = "support_ticket_messages"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    ticket_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True, nullable=False
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
     )
-    author_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    ticket_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("support_tickets.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    author_account_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=False,
+    )
     author_name: Mapped[str] = mapped_column(String(120), nullable=False)
     author_role: Mapped[str] = mapped_column(String(40), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)

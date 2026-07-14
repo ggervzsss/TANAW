@@ -80,7 +80,7 @@ class ReportFinalization(Base):
     current_version_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     logical_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -178,7 +178,7 @@ class FinalReportVersion(Base):
     scope_member_count: Mapped[int] = mapped_column(Integer, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     prepared_by_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
     prepared_by_name: Mapped[str] = mapped_column(String(120), nullable=False)
     prepared_by_role: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -527,7 +527,7 @@ class FinalReportEvent(Base):
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     event_type: Mapped[str] = mapped_column(String(40), nullable=False)
     actor_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
     actor_display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     actor_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -595,7 +595,7 @@ class FinalReportArtifact(Base):
     last_error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     generated_by_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

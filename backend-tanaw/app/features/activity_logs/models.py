@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -10,7 +10,9 @@ from app.db.session import Base
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -24,4 +26,9 @@ class ActivityLog(Base):
     source_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    mock_run_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("mock_data_runs.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )

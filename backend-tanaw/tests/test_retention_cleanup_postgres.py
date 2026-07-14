@@ -537,6 +537,7 @@ async def test_retention_removes_only_terminal_operational_and_event_records(
     unread_notification_id = str(uuid4())
     resolved_alert_id = str(uuid4())
     active_alert_id = str(uuid4())
+    recipient_account_id = str(uuid4())
     delivered_event = _domain_event("delivered", recorded_at=old, expires_at=expired)
     dead_letter_event = _domain_event("dead-letter", recorded_at=old, expires_at=expired)
     permanent_event = _domain_event("permanent", recorded_at=old, expires_at=None)
@@ -566,6 +567,17 @@ async def test_retention_removes_only_terminal_operational_and_event_records(
     async with postgres_runtime.sessions() as db:
         db.add_all(
             [
+                Account(
+                    id=recipient_account_id,
+                    email=f"{TEST_PREFIX}notification-owner-{uuid4().hex}@example.com",
+                    password_hash=hash_password("Retention notification owner passphrase 2026"),
+                    role=AccountRole.IT,
+                    display_name="Retention Notification Owner",
+                    title="IT Personnel",
+                    status=AccountStatus.ACTIVE,
+                    activated_at=now,
+                    password_changed_at=now,
+                ),
                 ActivityLog(
                     id=activity_id,
                     timestamp=old,
@@ -581,7 +593,7 @@ async def test_retention_removes_only_terminal_operational_and_event_records(
                 ),
                 UserNotification(
                     id=read_notification_id,
-                    recipient_account_id="retention-recipient",
+                    recipient_account_id=recipient_account_id,
                     recipient_role="IT",
                     title="Read notification",
                     message="Read terminal notification.",
@@ -593,7 +605,7 @@ async def test_retention_removes_only_terminal_operational_and_event_records(
                 ),
                 UserNotification(
                     id=unread_notification_id,
-                    recipient_account_id="retention-recipient",
+                    recipient_account_id=recipient_account_id,
                     recipient_role="IT",
                     title="Unread notification",
                     message="Unread notification must remain.",
