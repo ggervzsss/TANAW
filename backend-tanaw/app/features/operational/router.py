@@ -49,7 +49,6 @@ from app.features.assets.storage import (
 from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
-    EnterpriseReportSubmission,
     MockDataRun,
     OperationalAlert,
 )
@@ -117,6 +116,7 @@ from app.features.operational.service import (
     list_final_reports as list_final_report_records,
 )
 from app.features.operational.websocket import operational_ws_manager
+from app.features.reporting.models import EnterpriseReport, ReportingObligation, ReportingPeriod
 from app.features.topology.account_scope import (
     load_account_topologies,
     load_account_topology,
@@ -274,7 +274,7 @@ async def ingest_desktop_report_submission(
     return report
 
 
-@router.get("/desktop/mock-preparation", response_model=MockPreparationSummary | None)
+@router.get("/desktop/simulation-preparation/v2", response_model=MockPreparationSummary | None)
 async def get_desktop_mock_preparation(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -298,28 +298,38 @@ async def get_desktop_mock_preparation(
         if not candidates:
             fallback_candidate = generated_counts.get("targetPreparedCounts")
             candidates = [fallback_candidate] if isinstance(fallback_candidate, dict) else []
-        candidate_periods = [
-            candidate["period"]
+        candidate_period_keys = [
+            candidate["periodKey"]
             for candidate in candidates
-            if isinstance(candidate, dict) and isinstance(candidate.get("period"), str)
+            if isinstance(candidate, dict) and isinstance(candidate.get("periodKey"), str)
         ]
-        submitted_periods = set(
+        submitted_period_keys = set(
             (
                 await db.scalars(
-                    select(EnterpriseReportSubmission.period).where(
-                        EnterpriseReportSubmission.enterprise_id
-                        == (run.target_enterprise_id or enterprise_identifier(topology)),
-                        EnterpriseReportSubmission.period.in_(candidate_periods),
+                    select(ReportingPeriod.natural_key)
+                    .join(
+                        ReportingObligation,
+                        ReportingObligation.reporting_period_id == ReportingPeriod.id,
+                    )
+                    .join(
+                        EnterpriseReport,
+                        EnterpriseReport.reporting_obligation_id == ReportingObligation.id,
+                    )
+                    .where(
+                        EnterpriseReport.enterprise_id == topology.enterprise.id,
+                        EnterpriseReport.classification == "simulation",
+                        ReportingPeriod.natural_key.in_(candidate_period_keys),
                     )
                 )
             ).all()
-            if candidate_periods
+            if candidate_period_keys
             else []
         )
         pending_counts = [
             MockPreparationCounts.model_validate(candidate)
             for candidate in candidates
-            if isinstance(candidate, dict) and candidate.get("period") not in submitted_periods
+            if isinstance(candidate, dict)
+            and candidate.get("periodKey") not in submitted_period_keys
         ]
 
     return MockPreparationSummary(

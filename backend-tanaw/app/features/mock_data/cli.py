@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -18,24 +18,16 @@ from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import generate_enterprise_id
-from app.features.activity_logs.models import ActivityLog
 from app.features.operational.models import (
-    EnterpriseReportSubmission,
-    EnterpriseTelemetrySnapshot,
-    FinalReport,
-    FinalReportSource,
     MockDataRun,
     MockDataRunAccount,
 )
-from app.features.operational.service import generate_final_report_code
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.topology.account_scope import (
     AccountTopology,
-    load_account_topologies,
     require_account_topology,
 )
 from app.features.topology.models import (
-    Camera,
     EdgeDevice,
     Enterprise,
     EnterpriseMembership,
@@ -46,14 +38,6 @@ TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
 DEFAULT_SEED = "tanaw-testing-v2"
 REPORTING_STAFF_NAME = "Carla Mendoza"
-DEMOGRAPHIC_FIELDS = (
-    "thisProvMale",
-    "thisProvFemale",
-    "otherProvMale",
-    "otherProvFemale",
-    "foreignMale",
-    "foreignFemale",
-)
 
 
 @dataclass(frozen=True)
@@ -335,27 +319,18 @@ async def generate_mock_data(
     await db.flush()
 
     accounts = await create_accounts(db, run.id)
-    enterprises = await list_active_enterprises(db)
     target = await resolve_target_enterprise(db, target_identifier, accounts["enterprises"])
     run.target_account_id = target.account.id
     run.target_enterprise_id = target.enterprise.official_code
     run.target_enterprise_name = target.enterprise.name
-    reports = await create_operational_history(
-        db, run.id, range_start, range_end, scenario, rng, enterprises, target
-    )
-    final_reports = await create_final_reports(db, run.id, reports)
-    logs = await create_activity_logs(db, run.id, reports, final_reports)
+    prepared_counts = create_prepared_report_counts(range_start, range_end, scenario, rng)
 
     counts = {
         "lguAccounts": len(accounts["lgu"]),
         "generatedEnterpriseAccounts": len(accounts["enterprises"]),
-        "participatingEnterprises": len(enterprises),
-        "telemetrySnapshots": len(reports["telemetry"]),
-        "intakeReports": len(reports["reports"]),
-        "finalReports": len(final_reports),
-        "activityLogs": logs,
-        "targetPreparedCounts": reports["targetPreparedCounts"],
-        "targetPreparedReportCounts": reports["targetPreparedReportCounts"],
+        "simulationEnterprises": len(accounts["enterprises"]),
+        "targetPreparedCounts": prepared_counts[0],
+        "targetPreparedReportCounts": prepared_counts,
     }
     run.generated_counts_json = json.dumps(counts, sort_keys=True)
     await db.commit()
@@ -464,29 +439,6 @@ def ensure_email_available(existing: Account | None, email: str) -> None:
         )
 
 
-async def list_active_enterprises(db: AsyncSession) -> list[AccountTopology]:
-    accounts = list(
-        await db.scalars(
-            select(Account)
-            .join(EnterpriseMembership, EnterpriseMembership.account_id == Account.id)
-            .join(Enterprise, Enterprise.id == EnterpriseMembership.enterprise_id)
-            .where(
-                Account.role == AccountRole.ENTERPRISE,
-                Account.status == AccountStatus.ACTIVE,
-                Account.activated_at.is_not(None),
-                Enterprise.classification == "simulation",
-                Enterprise.lifecycle_state == "active",
-            )
-        )
-    )
-    topologies = [
-        topology
-        for topology in (await load_account_topologies(db, accounts)).values()
-        if topology is not None
-    ]
-    return sorted(topologies, key=lambda topology: topology.enterprise.name.lower())
-
-
 async def resolve_target_enterprise(
     db: AsyncSession, identifier: str | None, generated_enterprises: list[Account]
 ) -> AccountTopology:
@@ -521,285 +473,32 @@ async def resolve_target_enterprise(
     return await require_account_topology(db, targets[0])
 
 
-async def create_operational_history(
-    db: AsyncSession,
-    run_id: str,
+def create_prepared_report_counts(
     range_start: datetime,
     range_end: datetime,
     scenario: str,
     rng: random.Random,
-    enterprises: list[AccountTopology],
-    target: AccountTopology,
-) -> dict:
-    reports: list[EnterpriseReportSubmission] = []
-    telemetry: list[EnterpriseTelemetrySnapshot] = []
-    months = month_starts(range_start, range_end)
-    current_month = months[-1]
-    target_prepared_counts: list[dict[str, Any]] = []
-
+) -> list[dict[str, Any]]:
+    months = month_starts(range_start, range_end)[-2:]
+    prepared: list[dict[str, Any]] = []
     for month_index, month_start in enumerate(months):
-        period = period_label(month_start)
-        month_name = month_start.strftime("%B")
-        for enterprise_index, enterprise in enumerate(enterprises):
-            base_entries = 460 + month_index * 42 + enterprise_index * 67 + rng.randint(0, 80)
-            if (
-                scenario == "peak-traffic"
-                and enterprise_index == 0
-                and month_start == current_month
-            ):
-                base_entries *= 2
-            exits = max(0, base_entries - rng.randint(8, 55))
-            unique_count = max(1, int(base_entries * rng.uniform(0.62, 0.82)))
-            peak = max(8, rng.randint(24, 96))
-            current_occupancy = max(0, base_entries - exits)
-            submitted_at = month_start.replace(
-                day=min(18 + enterprise_index, 24), hour=9 + enterprise_index, minute=15
-            )
-            should_skip = should_skip_target_report(
-                month_start,
-                current_month,
-                enterprise.account.id,
-                target.account.id,
-            )
-            if should_skip:
-                target_prepared_counts.append(
-                    mock_preparation_counts(
-                        month_start=month_start,
-                        entries=base_entries,
-                        exits=exits,
-                        unique_count=unique_count,
-                        peak_occupancy=peak,
-                        period_label_value=period,
-                    )
-                )
-
-            demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
-
-            snapshot = EnterpriseTelemetrySnapshot(
-                enterprise_account_id=enterprise.account.id,
-                enterprise_id=enterprise.enterprise.official_code,
-                enterprise_name=enterprise.enterprise.name,
-                camera_id=f"camera-{enterprise_index + 1}",
-                camera_name=f"{enterprise.enterprise.name} Main Entrance",
-                captured_at=latest_capture_time(month_start, range_end),
-                entries=base_entries,
+        entries = 620 + month_index * 73 + rng.randint(0, 80)
+        if scenario == "peak-traffic" and month_index == len(months) - 1:
+            entries *= 2
+        exits = max(0, entries - rng.randint(8, 55))
+        prepared.append(
+            mock_preparation_counts(
+                month_start=month_start,
+                entries=entries,
                 exits=exits,
-                current_occupancy=current_occupancy,
-                peak_occupancy=peak,
-                unique_count=unique_count,
-                confirmed_unique_count=int(unique_count * 0.86),
-                degraded_unique_count=unique_count - int(unique_count * 0.86),
-                total_events=base_entries + exits,
-                unsubmitted_events=0 if not should_skip else base_entries + exits,
-                unsynced_events=12 if scenario == "camera-health" and enterprise_index == 1 else 0,
-                running=month_start == current_month,
-                status="error"
-                if scenario == "camera-health"
-                and enterprise_index == 2
-                and month_start == current_month
-                else "running",
-                error="Desktop app synchronization delayed. Retrying automatically."
-                if scenario == "camera-health"
-                and enterprise_index == 2
-                and month_start == current_month
-                else None,
-                analytics_fps=8.0 + rng.random() * 5.0,
-                payload_json=json.dumps(
-                    {"source": "desktop-camera", "period": period}, sort_keys=True
-                ),
-                source_kind="mock",
-                mock_run_id=run_id,
-            )
-            db.add(snapshot)
-            telemetry.append(snapshot)
-
-            if should_skip:
-                continue
-
-            review_status = seeded_review_status(month_start, current_month)
-
-            report = EnterpriseReportSubmission(
-                report_id=f"REP-{month_start:%y%m}{enterprise_index + 1:02d}",
-                enterprise_account_id=enterprise.account.id,
-                enterprise_id=enterprise.enterprise.official_code,
-                enterprise_name=enterprise.enterprise.name,
-                category=category_label(enterprise.enterprise.category),
-                barangay=enterprise.site.barangay,
-                period=period,
-                month=month_name,
-                submitted_at=submitted_at,
-                entries=base_entries,
-                exits=exits,
-                peak_occupancy=peak,
-                unique_count=unique_count,
-                status="Submitted",
-                review_status=review_status,
-                notes="Monthly visitor count submitted for LGU review.",
-                remarks="Please verify the entry and exit variance before resubmission."
-                if review_status == "Returned"
-                else None,
-                sync_status="synced",
-                payload_json=json.dumps(
-                    {
-                        "demo": demographics,
-                        "metrics": {
-                            "entries": base_entries,
-                            "exits": exits,
-                            "peak": peak,
-                            "unique": unique_count,
-                        },
-                        "period": period,
-                        "source": "desktop-reporting",
-                        "status": "Submitted",
-                    },
-                    sort_keys=True,
-                ),
-                source_kind="mock",
-                mock_run_id=run_id,
-            )
-            db.add(report)
-            reports.append(report)
-
-    await db.flush()
-    if not target_prepared_counts:
-        raise SystemExit(
-            "The target enterprise did not receive prepared count packages for the reporting scenario."
-        )
-    return {
-        "reports": reports,
-        "telemetry": telemetry,
-        "targetPreparedCounts": target_prepared_counts[0],
-        "targetPreparedReportCounts": target_prepared_counts,
-    }
-
-
-def build_demographic_breakdown(
-    unique_count: int, enterprise_index: int, month_index: int
-) -> dict[str, str]:
-    this_province_share = 58 + (enterprise_index % 4) * 2
-    other_province_share = 27 + (month_index % 3) * 2
-    this_province_total = unique_count * this_province_share // 100
-    other_province_total = unique_count * other_province_share // 100
-    if this_province_total + other_province_total > unique_count:
-        other_province_total = max(0, unique_count - this_province_total)
-    foreign_total = unique_count - this_province_total - other_province_total
-
-    this_prov_male, this_prov_female = split_gender(
-        this_province_total, 48 + ((enterprise_index + month_index) % 5)
-    )
-    other_prov_male, other_prov_female = split_gender(
-        other_province_total, 49 + ((enterprise_index * 2 + month_index) % 4)
-    )
-    foreign_male, foreign_female = split_gender(
-        foreign_total, 52 + ((enterprise_index + month_index * 2) % 4)
-    )
-    return {
-        "thisProvMale": str(this_prov_male),
-        "thisProvFemale": str(this_prov_female),
-        "otherProvMale": str(other_prov_male),
-        "otherProvFemale": str(other_prov_female),
-        "foreignMale": str(foreign_male),
-        "foreignFemale": str(foreign_female),
-    }
-
-
-def split_gender(total: int, male_percent: int) -> tuple[int, int]:
-    male = max(0, min(total, total * male_percent // 100))
-    return male, total - male
-
-
-async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> list[FinalReport]:
-    reports_by_period: dict[str, list[EnterpriseReportSubmission]] = {}
-    for report in history["reports"]:
-        if report.review_status == "Consolidated":
-            reports_by_period.setdefault(f"{report.month} {report.submitted_at.year}", []).append(
-                report
-            )
-
-    final_reports: list[FinalReport] = []
-    for period, reports in sorted(reports_by_period.items()):
-        final_report = FinalReport(
-            report_code=await generate_final_report_code(db, period),
-            title="Citywide Tourism Aggregation",
-            period=period,
-            generated_on=max(report.submitted_at for report in reports) + timedelta(days=2),
-            prepared_by=REPORTING_STAFF_NAME,
-            prepared_role="Staff Processing Division",
-            status="Finalized",
-            total_entry=sum(report.entries for report in reports),
-            total_exit=sum(report.exits for report in reports),
-            total_unique=sum(report.unique_count for report in reports),
-            enterprise_count=len({report.enterprise_id for report in reports}),
-            source_kind="mock",
-            mock_run_id=run_id,
-        )
-        db.add(final_report)
-        await db.flush()
-        for report in reports:
-            db.add(
-                FinalReportSource(
-                    final_report_id=final_report.id,
-                    intake_report_id=report.id,
-                    enterprise_id=report.enterprise_id,
-                    enterprise=report.enterprise_name,
-                    code=report.report_id,
-                    unique_count=report.unique_count,
-                    entries=report.entries,
-                    exits=report.exits,
-                )
-            )
-        final_reports.append(final_report)
-    await db.flush()
-    return final_reports
-
-
-async def create_activity_logs(
-    db: AsyncSession, run_id: str, history: dict, final_reports: list[FinalReport]
-) -> int:
-    count = 0
-    for report in history["reports"]:
-        db.add(
-            ActivityLog(
-                timestamp=report.submitted_at,
-                category="Staff Submission",
-                severity="Success",
-                actor=report.enterprise_name,
-                actor_role="Enterprise Account",
-                action="Submit Enterprise Report",
-                target=report.enterprise_name,
-                summary=f"{report.enterprise_name} submitted {report.report_id} for {report.period}.",
-                source_id=report.id,
-                metadata_json=json.dumps(
-                    {"enterpriseId": report.enterprise_id, "period": report.period}, sort_keys=True
-                ),
-                source_kind="mock",
-                mock_run_id=run_id,
+                unique_count=max(1, int(entries * rng.uniform(0.62, 0.82))),
+                peak_occupancy=max(8, rng.randint(24, 96)),
+                period_label_value=period_label(month_start),
             )
         )
-        count += 1
-    for final_report in final_reports:
-        db.add(
-            ActivityLog(
-                timestamp=final_report.generated_on,
-                category="Staff Operation",
-                severity="Success",
-                actor=REPORTING_STAFF_NAME,
-                actor_role="LGU Staff",
-                action="Generate Final Report",
-                target=final_report.report_code,
-                summary=f"{REPORTING_STAFF_NAME} generated {final_report.report_code} for {final_report.period}.",
-                source_id=final_report.report_code,
-                metadata_json=json.dumps(
-                    {"period": final_report.period, "reportCount": final_report.enterprise_count},
-                    sort_keys=True,
-                ),
-                source_kind="mock",
-                mock_run_id=run_id,
-            )
-        )
-        count += 1
-    await db.flush()
-    return count
+    if not prepared:
+        raise SystemExit("The requested range produced no canonical reporting periods.")
+    return prepared
 
 
 async def remove_active_mock_data(db: AsyncSession) -> dict:
@@ -810,29 +509,6 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
     if not run_ids:
         return {"runs": 0}
 
-    final_report_ids = list(
-        await db.scalars(select(FinalReport.id).where(FinalReport.mock_run_id.in_(run_ids)))
-    )
-    if final_report_ids:
-        await db.execute(
-            delete(FinalReportSource).where(FinalReportSource.final_report_id.in_(final_report_ids))
-        )
-    final_reports_result = await db.execute(
-        delete(FinalReport).where(FinalReport.mock_run_id.in_(run_ids))
-    )
-    intake_reports_result = await db.execute(
-        delete(EnterpriseReportSubmission).where(
-            EnterpriseReportSubmission.mock_run_id.in_(run_ids)
-        )
-    )
-    telemetry_snapshots_result = await db.execute(
-        delete(EnterpriseTelemetrySnapshot).where(
-            EnterpriseTelemetrySnapshot.mock_run_id.in_(run_ids)
-        )
-    )
-    activity_logs_result = await db.execute(
-        delete(ActivityLog).where(ActivityLog.mock_run_id.in_(run_ids))
-    )
     owned_account_ids = list(
         await db.scalars(
             select(MockDataRunAccount.account_id).where(MockDataRunAccount.run_id.in_(run_ids))
@@ -846,32 +522,10 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
             )
         )
     )
-    site_ids = list(
-        await db.scalars(
-            select(EnterpriseSite.id).where(
-                EnterpriseSite.enterprise_id.in_(simulation_enterprise_ids)
-            )
-        )
-    )
-    if site_ids:
-        await db.execute(delete(Camera).where(Camera.site_id.in_(site_ids)))
-        await db.execute(delete(EdgeDevice).where(EdgeDevice.site_id.in_(site_ids)))
-        await db.execute(delete(EnterpriseSite).where(EnterpriseSite.id.in_(site_ids)))
-    if simulation_enterprise_ids:
-        await db.execute(
-            delete(EnterpriseMembership).where(
-                EnterpriseMembership.enterprise_id.in_(simulation_enterprise_ids)
-            )
-        )
-        await db.execute(delete(Enterprise).where(Enterprise.id.in_(simulation_enterprise_ids)))
+    await _delete_target_simulation_records(db)
     await db.execute(delete(MockDataRunAccount).where(MockDataRunAccount.run_id.in_(run_ids)))
     accounts_result = await db.execute(delete(Account).where(Account.id.in_(owned_account_ids)))
     counts = {
-        "finalReportSources": len(final_report_ids),
-        "finalReports": affected_row_count(final_reports_result),
-        "intakeReports": affected_row_count(intake_reports_result),
-        "telemetrySnapshots": affected_row_count(telemetry_snapshots_result),
-        "activityLogs": affected_row_count(activity_logs_result),
         "simulationEnterprises": len(simulation_enterprise_ids),
         "accounts": affected_row_count(accounts_result),
     }
@@ -882,6 +536,52 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
     )
     await db.commit()
     return {"runs": len(run_ids), **counts}
+
+
+async def _delete_target_simulation_records(db: AsyncSession) -> None:
+    statements = (
+        "DELETE FROM domain_event_delivery_attempts WHERE domain_event_delivery_id IN "
+        "(SELECT delivery.id FROM domain_event_deliveries delivery JOIN domain_events event "
+        "ON event.id = delivery.domain_event_id WHERE event.classification = 'simulation')",
+        "DELETE FROM domain_event_consumer_receipts WHERE domain_event_id IN "
+        "(SELECT id FROM domain_events WHERE classification = 'simulation')",
+        "DELETE FROM domain_event_deliveries WHERE domain_event_id IN "
+        "(SELECT id FROM domain_events WHERE classification = 'simulation')",
+        "DELETE FROM domain_events WHERE classification = 'simulation'",
+        "DELETE FROM final_report_command_receipts WHERE classification = 'simulation'",
+        "DELETE FROM final_report_events WHERE classification = 'simulation'",
+        "DELETE FROM final_report_artifacts WHERE classification = 'simulation'",
+        "DELETE FROM final_report_demographic_facts WHERE classification = 'simulation'",
+        "DELETE FROM final_report_metric_facts WHERE classification = 'simulation'",
+        "DELETE FROM final_report_items WHERE classification = 'simulation'",
+        "DELETE FROM final_report_scope_members WHERE classification = 'simulation'",
+        "DELETE FROM final_report_versions WHERE classification = 'simulation'",
+        "DELETE FROM final_report_source_claims WHERE classification = 'simulation'",
+        "DELETE FROM report_finalizations WHERE classification = 'simulation'",
+        "DELETE FROM report_migration_exceptions WHERE classification = 'simulation'",
+        "DELETE FROM report_intake_receipts WHERE classification = 'simulation'",
+        "DELETE FROM report_review_events WHERE classification = 'simulation'",
+        "DELETE FROM report_source_batches WHERE classification = 'simulation'",
+        "DELETE FROM report_demographic_facts WHERE classification = 'simulation'",
+        "DELETE FROM report_metric_facts WHERE classification = 'simulation'",
+        "DELETE FROM report_revisions WHERE classification = 'simulation'",
+        "DELETE FROM enterprise_reports WHERE classification = 'simulation'",
+        "DELETE FROM reporting_obligations WHERE classification = 'simulation'",
+        "DELETE FROM telemetry_migration_exceptions WHERE classification = 'simulation'",
+        "DELETE FROM site_live_state WHERE classification = 'simulation'",
+        "DELETE FROM site_telemetry_hourly_rollups WHERE classification = 'simulation'",
+        "DELETE FROM device_health_samples WHERE classification = 'simulation'",
+        "DELETE FROM telemetry_metric_facts WHERE classification = 'simulation'",
+        "DELETE FROM telemetry_observations WHERE classification = 'simulation'",
+        "DELETE FROM device_telemetry_epochs WHERE classification = 'simulation'",
+        "DELETE FROM cameras WHERE classification = 'simulation'",
+        "DELETE FROM edge_devices WHERE classification = 'simulation'",
+        "DELETE FROM enterprise_sites WHERE classification = 'simulation'",
+        "DELETE FROM enterprise_memberships WHERE classification = 'simulation'",
+        "DELETE FROM enterprises WHERE classification = 'simulation'",
+    )
+    for statement in statements:
+        await db.execute(text(statement))
 
 
 def reporting_range(range_value: str) -> tuple[datetime, datetime]:
@@ -966,38 +666,6 @@ def desktop_preparation_payload(
 
 def _utc_contract_timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-def latest_capture_time(month_start: datetime, range_end: datetime) -> datetime:
-    if month_start.year == range_end.year and month_start.month == range_end.month:
-        return range_end
-    return add_months(month_start, 1) - timedelta(hours=12)
-
-
-def category_label(value: str | None) -> str:
-    return {"events venue": "Events Venue", "tourism": "Tourism", "business": "Business"}.get(
-        value or "", "Uncategorized"
-    )
-
-
-def should_skip_target_report(
-    month_start: datetime,
-    current_month: datetime,
-    enterprise_account_id: str,
-    target_account_id: str,
-) -> bool:
-    previous_month = add_months(current_month, -1)
-    return enterprise_account_id == target_account_id and month_start in {
-        previous_month,
-        current_month,
-    }
-
-
-def seeded_review_status(month_start: datetime, current_month: datetime) -> str:
-    previous_month = add_months(current_month, -1)
-    return (
-        "Ready to Consolidate" if month_start in {previous_month, current_month} else "Consolidated"
-    )
 
 
 async def desktop_prepare(desktop_url: str | None, result: dict) -> None:

@@ -1,17 +1,15 @@
+import random
 from datetime import UTC, datetime
 
 from app.core.password_policy import validate_password_policy
 from app.features.mock_data.cli import (
-    DEMOGRAPHIC_FIELDS,
     ENTERPRISES,
     LGU_ACCOUNTS,
     REPORTING_STAFF_NAME,
     TEST_ACCOUNT_PASSWORD,
-    build_demographic_breakdown,
+    create_prepared_report_counts,
     desktop_preparation_payload,
     mock_preparation_counts,
-    seeded_review_status,
-    should_skip_target_report,
 )
 from app.features.operational.schemas import MockPreparationCounts
 
@@ -116,27 +114,18 @@ def test_generated_account_content_has_no_mock_label() -> None:
     assert validate_password_policy(TEST_ACCOUNT_PASSWORD) == TEST_ACCOUNT_PASSWORD
 
 
-def test_target_enterprise_is_missing_for_previous_and_current_month() -> None:
-    older_month = datetime(2026, 4, 1, tzinfo=UTC)
-    previous_month = datetime(2026, 5, 1, tzinfo=UTC)
-    current_month = datetime(2026, 6, 1, tzinfo=UTC)
+def test_prepared_counts_are_bounded_to_two_canonical_periods() -> None:
+    prepared = create_prepared_report_counts(
+        datetime(2026, 1, 1, tzinfo=UTC),
+        datetime(2026, 6, 30, tzinfo=UTC),
+        "full-workflow",
+        random.Random("target-simulation"),
+    )
 
-    assert not should_skip_target_report(older_month, current_month, "target", "target")
-    assert should_skip_target_report(previous_month, current_month, "target", "target")
-    assert not should_skip_target_report(current_month, current_month, "supporting", "target")
-    assert should_skip_target_report(current_month, current_month, "target", "target")
-    assert seeded_review_status(older_month, current_month) == "Consolidated"
-    assert seeded_review_status(previous_month, current_month) == "Ready to Consolidate"
-    assert seeded_review_status(current_month, current_month) == "Ready to Consolidate"
-
-
-def test_seeded_demographics_match_unique_visitor_count() -> None:
-    unique_count = 537
-    demographics = build_demographic_breakdown(unique_count, enterprise_index=2, month_index=3)
-
-    assert set(demographics) == set(DEMOGRAPHIC_FIELDS)
-    assert all(value.isdigit() for value in demographics.values())
-    assert sum(int(value) for value in demographics.values()) == unique_count
+    assert [item["periodKey"] for item in prepared] == [
+        "month:Asia/Manila:2026-05",
+        "month:Asia/Manila:2026-06",
+    ]
 
 
 def test_mock_preparation_persists_canonical_period_identity_and_manila_bounds() -> None:

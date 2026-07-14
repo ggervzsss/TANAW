@@ -42,7 +42,7 @@ export type BackendMockPreparation = {
 };
 
 export async function getDesktopMockPreparation() {
-  const response = await staffApi.get<BackendMockPreparation | null>("/operational/desktop/mock-preparation");
+  const response = await staffApi.get<BackendMockPreparation | null>("/operational/desktop/simulation-preparation/v2");
   return response.data;
 }
 
