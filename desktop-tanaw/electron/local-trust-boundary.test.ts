@@ -28,8 +28,9 @@ describe("Electron-to-ML trust-boundary source invariants", () => {
   it("does not fall back to browser credential persistence", () => {
     expect(credentialServiceSource).not.toMatch(/localStorage|sessionStorage|\.load\s*\(/);
     expect(credentialServiceSource).toContain("window.tanawCameraCredentials.save");
-    expect(rendererEntrySource).toContain('key.endsWith(":camera-credentials")');
-    expect(rendererEntrySource).toContain("window.localStorage.removeItem(key)");
+    expect(rendererEntrySource).not.toMatch(/camera-credentials|localStorage|migrateLegacy/i);
+    expect(mainSource).not.toMatch(/raw\.version === [12]|encoding === "plain"|Legacy plaintext/i);
+    expect(mainSource).toContain('raw.version === 3 && raw.encoding === "safeStorage"');
   });
 
   it("does not probe or trust the old fixed ML port", () => {

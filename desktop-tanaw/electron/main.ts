@@ -316,21 +316,10 @@ function loadCameraCredentialStore(): CameraCredentialStore {
       throw new Error("Invalid camera credential store.");
     }
 
-    if ((raw.version === 1 || raw.version === 2 || raw.version === 3) && raw.encoding === "safeStorage" && typeof raw.payload === "string") {
+    if (raw.version === 3 && raw.encoding === "safeStorage" && typeof raw.payload === "string") {
       assertSecureCameraCredentialStorage();
       const decrypted = safeStorage.decryptString(Buffer.from(raw.payload, "base64"));
-      return normalizeCredentialStore(JSON.parse(decrypted) as unknown, raw.version === 3);
-    }
-
-    if (raw.version === 1 && raw.encoding === "plain" && isObjectRecord(raw.scopes)) {
-      const store = normalizeCredentialStore(raw.scopes);
-      try {
-        saveCameraCredentialStore(store);
-      } catch {
-        unlinkSync(storePath);
-        throw new CameraCredentialSecurityError("Legacy plaintext camera credentials were removed because secure operating-system storage is unavailable.");
-      }
-      return store;
+      return normalizeCredentialStore(JSON.parse(decrypted) as unknown, true);
     }
     throw new Error("The camera credential store has an unsupported format.");
   } catch (error) {
