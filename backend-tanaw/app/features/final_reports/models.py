@@ -48,6 +48,7 @@ class ReportFinalization(Base):
             ondelete="RESTRICT",
             deferrable=True,
             initially="DEFERRED",
+            use_alter=True,
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_report_finalizations_classification"),
         CheckConstraint("logical_version >= 1", name="ck_report_finalizations_logical_version"),

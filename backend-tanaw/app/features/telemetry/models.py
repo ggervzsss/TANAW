@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    desc,
     func,
     text,
 )
@@ -225,8 +226,8 @@ class TelemetryObservation(Base):
             postgresql_where=text("ordering_status = 'sequenced'"),
             sqlite_where=text("ordering_status = 'sequenced'"),
         ),
-        Index("ix_telemetry_observations_site_observed", "site_id", "observed_at"),
-        Index("ix_telemetry_observations_device_received", "edge_device_id", "received_at"),
+        Index("ix_telemetry_observations_site_observed", "site_id", desc("observed_at")),
+        Index("ix_telemetry_observations_device_received", "edge_device_id", desc("received_at")),
         Index("ix_telemetry_observations_retention", "retention_expires_at"),
         Index(
             "ix_telemetry_observations_pending_downsample",
@@ -375,8 +376,12 @@ class TelemetryMetricFact(Base):
             postgresql_where=text("grain = 'import_unspecified'"),
             sqlite_where=text("grain = 'import_unspecified'"),
         ),
-        Index("ix_telemetry_metric_facts_site_window", "site_id", "metric_window_end"),
-        Index("ix_telemetry_metric_facts_definition_window", "definition", "metric_window_end"),
+        Index("ix_telemetry_metric_facts_site_window", "site_id", desc("metric_window_end")),
+        Index(
+            "ix_telemetry_metric_facts_definition_window",
+            "definition",
+            desc("metric_window_end"),
+        ),
         Index("ix_telemetry_metric_facts_retention", "retention_expires_at"),
     )
 
@@ -492,19 +497,19 @@ class SiteTelemetryHourlyRollup(Base):
             "ix_site_telemetry_hourly_rollups_site_bucket",
             "site_id",
             "classification",
-            "bucket_start",
+            desc("bucket_start"),
         ),
         Index(
             "ix_site_telemetry_hourly_rollups_enterprise_bucket",
             "enterprise_id",
             "classification",
-            "bucket_start",
+            desc("bucket_start"),
         ),
         Index(
             "ix_site_telemetry_hourly_rollups_definition_bucket",
             "definition",
             "definition_version",
-            "bucket_start",
+            desc("bucket_start"),
         ),
     )
 
@@ -544,6 +549,39 @@ class SiteTelemetryHourlyRollup(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class SiteTelemetryRollupPartition(Base):
+    """Authoritative UTC bounds for each managed monthly rollup partition."""
+
+    __tablename__ = "site_telemetry_rollup_partitions"
+    __table_args__ = (
+        CheckConstraint(
+            "partition_name ~ '^site_telemetry_hourly_rollups_[0-9]{6}$'",
+            name="ck_site_telemetry_rollup_partitions_name",
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint(
+            "(range_start AT TIME ZONE 'UTC') = "
+            "date_trunc('month', range_start AT TIME ZONE 'UTC') "
+            "AND (range_end AT TIME ZONE 'UTC') = "
+            "(range_start AT TIME ZONE 'UTC') + INTERVAL '1 month'",
+            name="ck_site_telemetry_rollup_partitions_utc_month",
+        ).ddl_if(dialect="postgresql"),
+        UniqueConstraint("range_start", name="site_telemetry_rollup_partitions_range_start_key"),
+        UniqueConstraint("range_end", name="site_telemetry_rollup_partitions_range_end_key"),
+        Index(
+            "ix_site_telemetry_rollup_partitions_expiry",
+            "range_end",
+            "partition_name",
+        ),
+    )
+
+    partition_name: Mapped[str] = mapped_column(String(80), primary_key=True)
+    range_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    range_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
@@ -601,7 +639,7 @@ class DeviceHealthSample(Base):
             name="ck_device_health_samples_retention",
         ),
         UniqueConstraint("telemetry_observation_id", name="uq_device_health_samples_observation"),
-        Index("ix_device_health_samples_device_observed", "edge_device_id", "observed_at"),
+        Index("ix_device_health_samples_device_observed", "edge_device_id", desc("observed_at")),
         Index("ix_device_health_samples_retention", "retention_expires_at"),
     )
 

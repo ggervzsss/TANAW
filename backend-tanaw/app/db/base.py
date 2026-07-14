@@ -69,6 +69,7 @@ from app.features.telemetry.models import (
     DeviceTelemetryEpoch,
     SiteLiveState,
     SiteTelemetryHourlyRollup,
+    SiteTelemetryRollupPartition,
     TelemetryMetricFact,
     TelemetryObservation,
 )
@@ -100,6 +101,7 @@ __all__ = [
     "DeviceHealthSample",
     "DeviceTelemetryEpoch",
     "SiteTelemetryHourlyRollup",
+    "SiteTelemetryRollupPartition",
     "SiteSyncAlertState",
     "DomainEvent",
     "DomainEventConsumerReceipt",

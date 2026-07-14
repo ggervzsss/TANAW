@@ -235,6 +235,7 @@ class EnterpriseReport(Base):
             ondelete="RESTRICT",
             deferrable=True,
             initially="DEFERRED",
+            use_alter=True,
         ),
         ForeignKeyConstraint(
             ["accepted_revision_id", "id", "enterprise_id", "site_id", "classification"],
@@ -249,6 +250,7 @@ class EnterpriseReport(Base):
             ondelete="RESTRICT",
             deferrable=True,
             initially="DEFERRED",
+            use_alter=True,
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_enterprise_reports_classification"),
         CheckConstraint(

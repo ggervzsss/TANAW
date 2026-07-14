@@ -51,6 +51,7 @@ class MockDataRun(Base):
 
 class MockDataRunAccount(Base):
     __tablename__ = "mock_data_run_accounts"
+    __table_args__ = (Index("ix_mock_data_run_accounts_account_id", "account_id"),)
 
     run_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("mock_data_runs.id", ondelete="CASCADE"), primary_key=True

@@ -56,6 +56,7 @@ def test_telemetry_and_event_schema_uses_native_uuid_and_creates_on_sqlite(
         "device_health_samples",
         "site_live_state",
         "site_telemetry_hourly_rollups",
+        "site_telemetry_rollup_partitions",
         "domain_events",
         "domain_event_deliveries",
         "domain_event_delivery_attempts",
