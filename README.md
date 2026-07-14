@@ -789,6 +789,13 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `DEVELOPMENT_DELIVERY_RETENTION_DAYS` | Short retention for local delivery bodies that can contain development secrets |
 | `EMAIL_OUTBOX_RETENTION_DAYS` | Retention for ordinary terminal transactional-email records |
 | `FAILED_EMAIL_OUTBOX_RETENTION_DAYS` | Longer audit retention for terminal failure and reconciliation records |
+| `READ_NOTIFICATION_RETENTION_DAYS` | Retention for read notifications; unread notifications are protected |
+| `RESOLVED_ALERT_RETENTION_DAYS` | Retention for resolved generic alerts not referenced by durable condition state |
+| `SUPPORT_ATTACHMENT_RETENTION_DAYS` | Time resolved-ticket image objects remain available unless the ticket reopens |
+| `ASSET_DELETED_METADATA_RETENTION_DAYS` | Retry/audit window for deleted profile and support object metadata |
+| `STALE_ASSET_TEMPORARY_RETENTION_HOURS` | Age before interrupted atomic-write temporary objects are removed |
+| `ASSET_ORPHAN_GRACE_HOURS` | Minimum object age before an unreferenced key can be treated as an orphan |
+| `ASSET_ORPHAN_SCAN_MAX_OBJECTS` | Fail-closed bound for each authoritative asset inventory scan |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |
 
 Do not permanently enable `TANAW_ALLOW_MOCK_DATA` in production. The examples

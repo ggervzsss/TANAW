@@ -39,6 +39,15 @@ class RetentionCleanupCountsResponse(BaseModel):
     emailChangeRequests: int
     developmentDeliveries: int
     emailOutboxRecords: int
+    activityLogs: int
+    domainEvents: int
+    userNotifications: int
+    operationalAlerts: int
+    supportAttachmentsRetired: int
+    assetObjectsReconciled: int
+    assetMetadataDeleted: int
+    orphanAssetObjectsDeleted: int
+    temporaryAssetObjectsDeleted: int
     telemetry: TelemetryRetentionCountsResponse
     deletedRecords: int
 
@@ -67,6 +76,15 @@ def to_counts_response(counts: RetentionCleanupCounts) -> RetentionCleanupCounts
         emailChangeRequests=counts.email_change_requests,
         developmentDeliveries=counts.development_deliveries,
         emailOutboxRecords=counts.email_outbox_records,
+        activityLogs=counts.activity_logs,
+        domainEvents=counts.domain_events,
+        userNotifications=counts.user_notifications,
+        operationalAlerts=counts.operational_alerts,
+        supportAttachmentsRetired=counts.assets.support_attachments_retired,
+        assetObjectsReconciled=counts.assets.objects_reconciled,
+        assetMetadataDeleted=counts.assets.metadata_deleted,
+        orphanAssetObjectsDeleted=counts.assets.orphan_objects_deleted,
+        temporaryAssetObjectsDeleted=counts.assets.temporary_objects_deleted,
         telemetry=_to_telemetry_counts_response(counts.telemetry),
         deletedRecords=counts.deleted_records,
     )

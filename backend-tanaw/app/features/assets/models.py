@@ -118,6 +118,13 @@ class AccountAsset(Base):
             sqlite_where=text("status = 'active'"),
         ),
         Index("ix_account_assets_account_status", "account_id", "status", "created_at"),
+        Index(
+            "ix_account_assets_deleted_retention",
+            "deleted_at",
+            "id",
+            postgresql_where=text("status = 'deleted'"),
+            sqlite_where=text("status = 'deleted'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -173,6 +180,13 @@ class SupportAttachment(Base):
         ),
         Index("ix_support_attachments_ticket_status", "ticket_id", "status", "ordinal"),
         Index("ix_support_attachments_retention", "retention_expires_at"),
+        Index(
+            "ix_support_attachments_deleted_retention",
+            "deleted_at",
+            "id",
+            postgresql_where=text("status = 'deleted'"),
+            sqlite_where=text("status = 'deleted'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(

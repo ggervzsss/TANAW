@@ -7,6 +7,7 @@ import hashlib
 import os
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 from urllib.parse import quote
@@ -49,6 +50,22 @@ class AssetStorage(Protocol):
     async def delete(self, *, key: str) -> None: ...
 
 
+class AssetInventoryStorage(AssetStorage, Protocol):
+    async def list_keys(
+        self,
+        *,
+        max_objects: int,
+        older_than: datetime | None = None,
+    ) -> tuple[str, ...]: ...
+
+    async def purge_stale_temporary_objects(
+        self,
+        *,
+        older_than: datetime,
+        max_objects: int,
+    ) -> int: ...
+
+
 class LocalAssetStorage:
     """Write immutable objects atomically below one configured root."""
 
@@ -73,6 +90,35 @@ class LocalAssetStorage:
     async def delete(self, *, key: str) -> None:
         path = self._resolve_key(key)
         await asyncio.to_thread(self._delete_sync, path)
+
+    async def list_keys(
+        self,
+        *,
+        max_objects: int,
+        older_than: datetime | None = None,
+    ) -> tuple[str, ...]:
+        if max_objects < 1:
+            raise AssetStorageError("Asset inventory limit must be positive.")
+        if older_than is not None and (older_than.tzinfo is None or older_than.utcoffset() is None):
+            raise AssetStorageError("Asset inventory cutoff must be timezone-aware.")
+        cutoff = older_than.astimezone(UTC).timestamp() if older_than is not None else None
+        return await asyncio.to_thread(self._list_keys_sync, max_objects, cutoff)
+
+    async def purge_stale_temporary_objects(
+        self,
+        *,
+        older_than: datetime,
+        max_objects: int,
+    ) -> int:
+        if older_than.tzinfo is None or older_than.utcoffset() is None:
+            raise AssetStorageError("Temporary-object cutoff must be timezone-aware.")
+        if max_objects < 1:
+            raise AssetStorageError("Temporary-object cleanup limit must be positive.")
+        return await asyncio.to_thread(
+            self._purge_stale_temporary_objects_sync,
+            older_than.astimezone(UTC).timestamp(),
+            max_objects,
+        )
 
     def _resolve_key(self, key: str) -> Path:
         if not key or "\\" in key:
@@ -120,6 +166,49 @@ class LocalAssetStorage:
     def _delete_sync(self, path: Path) -> None:
         self._assert_no_symlink_path(path)
         path.unlink(missing_ok=True)
+
+    def _list_keys_sync(
+        self,
+        max_objects: int,
+        older_than_timestamp: float | None,
+    ) -> tuple[str, ...]:
+        keys: list[str] = []
+        for path in sorted(self._root.rglob("*")):
+            if path.is_symlink():
+                raise AssetStorageError("Asset storage inventory contains a symbolic link.")
+            if not path.is_file() or _is_temporary_object(path):
+                continue
+            if older_than_timestamp is not None and path.stat().st_mtime >= older_than_timestamp:
+                continue
+            key = path.relative_to(self._root).as_posix()
+            self._resolve_key(key)
+            keys.append(key)
+            if len(keys) > max_objects:
+                raise AssetStorageError(
+                    "Asset inventory exceeds the configured bounded scan limit."
+                )
+        return tuple(keys)
+
+    def _purge_stale_temporary_objects_sync(
+        self,
+        older_than_timestamp: float,
+        max_objects: int,
+    ) -> int:
+        deleted = 0
+        for path in sorted(self._root.rglob("*")):
+            if path.is_symlink():
+                raise AssetStorageError("Asset storage inventory contains a symbolic link.")
+            if (
+                not path.is_file()
+                or not _is_temporary_object(path)
+                or path.stat().st_mtime >= older_than_timestamp
+            ):
+                continue
+            path.unlink(missing_ok=True)
+            deleted += 1
+            if deleted >= max_objects:
+                break
+        return deleted
 
     def _assert_no_symlink_path(self, path: Path) -> None:
         current = self._root
@@ -197,3 +286,7 @@ def _read_bounded(path: Path, max_bytes: int) -> bytes:
     if not content or len(content) > max_bytes:
         raise AssetStorageError("Stored asset size is outside the configured limit.")
     return content
+
+
+def _is_temporary_object(path: Path) -> bool:
+    return path.name.startswith(".") and path.name.endswith(".tmp")

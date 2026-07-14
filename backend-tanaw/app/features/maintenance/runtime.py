@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from time import monotonic
 
 from app.core.config import Settings
+from app.features.maintenance.asset_retention import AssetRetentionCounts
 from app.features.maintenance.retention import RetentionCleanupCounts, run_retention_cleanup
 from app.features.maintenance.telemetry_retention import TelemetryRetentionCounts
 
@@ -115,11 +116,13 @@ async def run_retention_cleanup_now(settings: Settings) -> RetentionCleanupCount
             _metrics.last_duration_seconds = monotonic() - started_clock
             logger.info(
                 "Retention cleanup completed deleted=%d expired_email_changes=%d "
-                "telemetry_downsampled=%d telemetry_facts_rolled_up=%d",
+                "telemetry_downsampled=%d telemetry_facts_rolled_up=%d "
+                "asset_orphans_deleted=%d",
                 counts.deleted_records,
                 counts.expired_email_change_requests,
                 counts.telemetry.observations_downsampled,
                 counts.telemetry.metric_facts_rolled_up,
+                counts.assets.orphan_objects_deleted,
             )
             return counts
         finally:
@@ -159,7 +162,29 @@ def _add_counts(
         email_change_requests=current.email_change_requests + addition.email_change_requests,
         development_deliveries=(current.development_deliveries + addition.development_deliveries),
         email_outbox_records=current.email_outbox_records + addition.email_outbox_records,
+        activity_logs=current.activity_logs + addition.activity_logs,
+        domain_events=current.domain_events + addition.domain_events,
+        user_notifications=current.user_notifications + addition.user_notifications,
+        operational_alerts=current.operational_alerts + addition.operational_alerts,
+        assets=_add_asset_counts(current.assets, addition.assets),
         telemetry=_add_telemetry_counts(current.telemetry, addition.telemetry),
+    )
+
+
+def _add_asset_counts(
+    current: AssetRetentionCounts,
+    addition: AssetRetentionCounts,
+) -> AssetRetentionCounts:
+    return AssetRetentionCounts(
+        support_attachments_retired=(
+            current.support_attachments_retired + addition.support_attachments_retired
+        ),
+        objects_reconciled=current.objects_reconciled + addition.objects_reconciled,
+        metadata_deleted=current.metadata_deleted + addition.metadata_deleted,
+        orphan_objects_deleted=(current.orphan_objects_deleted + addition.orphan_objects_deleted),
+        temporary_objects_deleted=(
+            current.temporary_objects_deleted + addition.temporary_objects_deleted
+        ),
     )
 
 

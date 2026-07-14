@@ -128,6 +128,11 @@ class Settings(BaseSettings):
         ge=1024,
         le=10 * 1024 * 1024,
     )
+    support_attachment_retention_days: int = Field(default=365, ge=30, le=3650)
+    asset_deleted_metadata_retention_days: int = Field(default=30, ge=1, le=365)
+    stale_asset_temporary_retention_hours: int = Field(default=24, ge=1, le=168)
+    asset_orphan_grace_hours: int = Field(default=24, ge=1, le=168)
+    asset_orphan_scan_max_objects: int = Field(default=100_000, ge=100, le=1_000_000)
     password_reset_rate_window_seconds: int = Field(default=900, ge=60, le=3600)
     password_reset_per_ip_limit: int = Field(default=10, ge=1, le=100)
     password_reset_per_identifier_limit: int = Field(default=5, ge=1, le=50)
@@ -146,6 +151,8 @@ class Settings(BaseSettings):
     development_delivery_retention_days: int = Field(default=7, ge=1, le=90)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
+    read_notification_retention_days: int = Field(default=180, ge=30, le=3650)
+    resolved_alert_retention_days: int = Field(default=365, ge=30, le=3650)
     telemetry_downsample_settle_seconds: int = Field(default=300, ge=60, le=86_400)
     telemetry_raw_observation_retention_days: int = Field(default=14, ge=2, le=90)
     telemetry_metric_fact_retention_days: int = Field(default=7, ge=1, le=90)

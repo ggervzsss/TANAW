@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.activity_logs.models import ActivityLog
 from app.features.events.models import DomainEvent, DomainEventDelivery
 from app.features.final_reports.artifact_service import FinalReportArtifactProcessor
 from app.features.final_reports.artifact_storage import LocalArtifactStorage
@@ -120,6 +121,30 @@ async def test_finalization_is_atomic_idempotent_and_exact(
     assert await _count(finalization_session, FinalReportCommandReceipt) == 1
     assert await _count(finalization_session, DomainEvent) == 1
     assert await _count(finalization_session, DomainEventDelivery) == 2
+    old_activity = ActivityLog(
+        id=str(uuid4()),
+        timestamp=datetime(1900, 1, 1, tzinfo=UTC),
+        category="Staff Operation",
+        severity="Success",
+        actor=staff.display_name,
+        actor_role="LGU Staff",
+        action="Legacy Duplicate Final Audit",
+        target=str(created.resource.reportFinalizationId),
+        summary="A convenience log must not own the official finalization audit.",
+        source_id=str(created.resource.reportFinalizationId),
+        source_kind="real",
+    )
+    finalization_session.add(old_activity)
+    await finalization_session.flush([old_activity])
+    await finalization_session.execute(
+        delete(ActivityLog).where(
+            ActivityLog.id == old_activity.id,
+            ActivityLog.timestamp < datetime(1901, 1, 1, tzinfo=UTC),
+        )
+    )
+    await finalization_session.flush()
+    assert await finalization_session.get(ActivityLog, old_activity.id) is None
+    assert await _count(finalization_session, FinalReportEvent) == 1
     for source in sources:
         report = await finalization_session.get(EnterpriseReport, source.enterprise_report_id)
         assert report is not None

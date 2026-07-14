@@ -228,13 +228,14 @@ the resend cooldown. Configure the limits with `PASSWORD_RESET_PER_IP_LIMIT`,
 `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS`, and
 `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS`.
 
-## Authentication and Email Data Retention
+## Data Retention
 
 The backend runs one bounded retention batch immediately after startup and then
 every `RETENTION_CLEANUP_INTERVAL_SECONDS`. Each record family is claimed with
 `FOR UPDATE SKIP LOCKED`, limited by `RETENTION_CLEANUP_BATCH_SIZE`, and committed
 separately so cleanup does not hold a long transaction or block another backend
-instance. Queued, leased, and retry-scheduled email is never age-deleted.
+instance. Queued, leased, retry-scheduled, dead-letter, unread, active-alert,
+and durable-condition records are never age-deleted.
 
 The default policy retains consumed, invalidated, or expired activation tokens
 and password-reset challenges for 30 days; password-reset rate buckets for 2
@@ -245,6 +246,16 @@ are first invalidated and their unsent verification messages are cancelled.
 Production outbox rows never contain raw OTPs or activation/email-change links;
 local `DevDelivery` bodies are the only debugging records that can contain a raw
 secret, which is why they have the shortest retention period.
+
+Read notifications are retained for 180 days and generic resolved alerts for
+365 days. Domain events are eligible only after their explicit expiry and only
+when every delivery succeeded; dead letters remain for operator action. Support
+attachments expire 365 days after resolution unless the ticket reopens. Deleted
+asset metadata remains for 30 days while object deletion is retried, and bounded
+inventory cleanup removes orphaned or interrupted temporary objects. Official
+report revisions, lineage, review/final events, facts, and final artifacts have
+no age-based purge. See `../docs/architecture/RETENTION_POLICY.md` for the complete
+target policy and local-ledger rules.
 
 `GET /maintenance/retention` exposes safe per-process counts and the most recent
 run to IT Personnel. `POST /maintenance/retention/run` starts the same serialized

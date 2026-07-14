@@ -1,7 +1,8 @@
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
@@ -10,19 +11,35 @@ from app.features.accounts.models import (
     AccountEmailChangeRequest,
     AccountEmailChangeStatus,
     DevDelivery,
+    SystemConfiguration,
 )
+from app.features.activity_logs.models import ActivityLog
+from app.features.activity_logs.service import resolve_activity_log_retention_days
+from app.features.alerts.models import SiteSyncAlertState
+from app.features.assets.storage import AssetInventoryStorage
 from app.features.auth.email_change import ACTIVE_EMAIL_CHANGE_STATUSES
 from app.features.auth.models import (
     AccountActivationToken,
     PasswordResetChallenge,
     PasswordResetRateLimitBucket,
 )
+from app.features.events.models import (
+    DomainEvent,
+    DomainEventConsumerReceipt,
+    DomainEventDelivery,
+    DomainEventDeliveryAttempt,
+)
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
 from app.features.mail.service import cancel_pending_source_emails
+from app.features.maintenance.asset_retention import (
+    AssetRetentionCounts,
+    run_asset_retention,
+)
 from app.features.maintenance.telemetry_retention import (
     TelemetryRetentionCounts,
     run_telemetry_retention,
 )
+from app.features.operational.models import OperationalAlert, UserNotification
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -47,6 +64,11 @@ class RetentionCleanupCounts:
     email_change_requests: int = 0
     development_deliveries: int = 0
     email_outbox_records: int = 0
+    activity_logs: int = 0
+    domain_events: int = 0
+    user_notifications: int = 0
+    operational_alerts: int = 0
+    assets: AssetRetentionCounts = AssetRetentionCounts()
     telemetry: TelemetryRetentionCounts = TelemetryRetentionCounts()
 
     @property
@@ -58,6 +80,11 @@ class RetentionCleanupCounts:
             + self.email_change_requests
             + self.development_deliveries
             + self.email_outbox_records
+            + self.activity_logs
+            + self.domain_events
+            + self.user_notifications
+            + self.operational_alerts
+            + self.assets.metadata_deleted
             + self.telemetry.deleted_records
         )
 
@@ -67,6 +94,7 @@ async def run_retention_cleanup(
     *,
     now: datetime | None = None,
     session_factory: SessionFactory = AsyncSessionLocal,
+    asset_storage: AssetInventoryStorage | None = None,
 ) -> RetentionCleanupCounts:
     current = _as_utc(now or datetime.now(UTC))
     batch_size = settings.retention_cleanup_batch_size
@@ -114,8 +142,169 @@ async def run_retention_cleanup(
             failed_cutoff=current - timedelta(days=settings.failed_email_outbox_retention_days),
             batch_size=batch_size,
         ),
+        activity_logs=await _delete_activity_logs(
+            session_factory,
+            current=current,
+            batch_size=batch_size,
+        ),
+        domain_events=await _delete_expired_domain_events(
+            session_factory,
+            current=current,
+            batch_size=batch_size,
+        ),
+        user_notifications=await _delete_read_notifications(
+            session_factory,
+            cutoff=current - timedelta(days=settings.read_notification_retention_days),
+            batch_size=batch_size,
+        ),
+        operational_alerts=await _delete_resolved_operational_alerts(
+            session_factory,
+            cutoff=current - timedelta(days=settings.resolved_alert_retention_days),
+            batch_size=batch_size,
+        ),
+        assets=await run_asset_retention(
+            settings,
+            now=current,
+            session_factory=session_factory,
+            storage=asset_storage,
+        ),
         telemetry=telemetry,
     )
+
+
+async def _delete_activity_logs(
+    session_factory: SessionFactory,
+    *,
+    current: datetime,
+    batch_size: int,
+) -> int:
+    async with session_factory() as db:
+        settings_record = await db.scalar(
+            select(SystemConfiguration).where(SystemConfiguration.id == "default")
+        )
+        values: dict[str, object] = {}
+        if settings_record is not None:
+            try:
+                candidate = json.loads(settings_record.values_json)
+            except TypeError, ValueError:
+                candidate = None
+            if isinstance(candidate, dict):
+                values = candidate
+        cutoff = current - timedelta(days=resolve_activity_log_retention_days(values))
+        ids = list(
+            await db.scalars(
+                select(ActivityLog.id)
+                .where(ActivityLog.timestamp < cutoff)
+                .order_by(ActivityLog.timestamp.asc(), ActivityLog.id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(batch_size)
+            )
+        )
+        if ids:
+            await db.execute(delete(ActivityLog).where(ActivityLog.id.in_(ids)))
+        await db.commit()
+        return len(ids)
+
+
+async def _delete_expired_domain_events(
+    session_factory: SessionFactory,
+    *,
+    current: datetime,
+    batch_size: int,
+) -> int:
+    incomplete_delivery = exists(
+        select(DomainEventDelivery.id).where(
+            DomainEventDelivery.domain_event_id == DomainEvent.id,
+            DomainEventDelivery.status != "delivered",
+        )
+    )
+    async with session_factory() as db:
+        ids = list(
+            await db.scalars(
+                select(DomainEvent.id)
+                .where(
+                    DomainEvent.retention_expires_at.is_not(None),
+                    DomainEvent.retention_expires_at <= current,
+                    ~incomplete_delivery,
+                )
+                .order_by(DomainEvent.retention_expires_at.asc(), DomainEvent.id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(batch_size)
+            )
+        )
+        if ids:
+            await db.execute(
+                delete(DomainEventDeliveryAttempt).where(
+                    DomainEventDeliveryAttempt.domain_event_id.in_(ids)
+                )
+            )
+            await db.execute(
+                delete(DomainEventConsumerReceipt).where(
+                    DomainEventConsumerReceipt.domain_event_id.in_(ids)
+                )
+            )
+            await db.execute(
+                delete(DomainEventDelivery).where(DomainEventDelivery.domain_event_id.in_(ids))
+            )
+            await db.execute(delete(DomainEvent).where(DomainEvent.id.in_(ids)))
+        await db.commit()
+        return len(ids)
+
+
+async def _delete_read_notifications(
+    session_factory: SessionFactory,
+    *,
+    cutoff: datetime,
+    batch_size: int,
+) -> int:
+    async with session_factory() as db:
+        ids = list(
+            await db.scalars(
+                select(UserNotification.id)
+                .where(
+                    UserNotification.read_at.is_not(None),
+                    UserNotification.read_at < cutoff,
+                )
+                .order_by(UserNotification.read_at.asc(), UserNotification.id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(batch_size)
+            )
+        )
+        if ids:
+            await db.execute(delete(UserNotification).where(UserNotification.id.in_(ids)))
+        await db.commit()
+        return len(ids)
+
+
+async def _delete_resolved_operational_alerts(
+    session_factory: SessionFactory,
+    *,
+    cutoff: datetime,
+    batch_size: int,
+) -> int:
+    durable_condition_reference = exists(
+        select(SiteSyncAlertState.id).where(
+            SiteSyncAlertState.operational_alert_id == OperationalAlert.id
+        )
+    )
+    async with session_factory() as db:
+        ids = list(
+            await db.scalars(
+                select(OperationalAlert.id)
+                .where(
+                    OperationalAlert.status == "Resolved",
+                    OperationalAlert.updated_at < cutoff,
+                    ~durable_condition_reference,
+                )
+                .order_by(OperationalAlert.updated_at.asc(), OperationalAlert.id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(batch_size)
+            )
+        )
+        if ids:
+            await db.execute(delete(OperationalAlert).where(OperationalAlert.id.in_(ids)))
+        await db.commit()
+        return len(ids)
 
 
 async def _delete_activation_tokens(

@@ -5,10 +5,11 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.activity_logs.models import ActivityLog
 from app.features.events.models import DomainEvent, DomainEventDelivery
 from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import CanonicalReportingPeriod, monthly_reporting_period
@@ -270,6 +271,30 @@ async def test_staff_transition_is_versioned_idempotent_and_auditable(
         enterprise_account.display_name,
         staff.display_name,
     ]
+    old_activity = ActivityLog(
+        id=str(uuid4()),
+        timestamp=datetime(1900, 1, 1, tzinfo=UTC),
+        category="Staff Operation",
+        severity="Success",
+        actor=staff.display_name,
+        actor_role="LGU Staff",
+        action="Legacy Duplicate Report Audit",
+        target=str(submitted.resource.enterpriseReportId),
+        summary="A purgeable convenience log must not own official workflow history.",
+        source_id=str(submitted.resource.enterpriseReportId),
+        source_kind="real",
+    )
+    report_session.add(old_activity)
+    await report_session.flush([old_activity])
+    await report_session.execute(
+        delete(ActivityLog).where(
+            ActivityLog.id == old_activity.id,
+            ActivityLog.timestamp < datetime(1901, 1, 1, tzinfo=UTC),
+        )
+    )
+    await report_session.flush()
+    assert await report_session.get(ActivityLog, old_activity.id) is None
+    assert await report_session.scalar(select(func.count()).select_from(ReportReviewEvent)) == 2
     stale_command = ReportTransitionCommand.model_validate(
         {
             "contractVersion": 2,

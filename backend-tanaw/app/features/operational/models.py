@@ -6,11 +6,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -170,6 +172,15 @@ class MockDataRunAccount(Base):
 
 class OperationalAlert(Base):
     __tablename__ = "operational_alerts"
+    __table_args__ = (
+        Index(
+            "ix_operational_alerts_resolved_retention",
+            "updated_at",
+            "id",
+            postgresql_where=text("status = 'Resolved'"),
+            sqlite_where=text("status = 'Resolved'"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     alert_code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
@@ -193,6 +204,15 @@ class OperationalAlert(Base):
 
 class UserNotification(Base):
     __tablename__ = "user_notifications"
+    __table_args__ = (
+        Index(
+            "ix_user_notifications_read_retention",
+            "read_at",
+            "id",
+            postgresql_where=text("read_at IS NOT NULL"),
+            sqlite_where=text("read_at IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     recipient_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)

@@ -21,11 +21,18 @@ from app.features.assets.service import (
 )
 from app.features.assets.storage import LocalAssetStorage, validate_image
 from app.features.operational import service as operational_service
-from app.features.operational.schemas import SupportTicketCreate
+from app.features.operational.models import SupportTicket
+from app.features.operational.schemas import (
+    SupportTicketCreate,
+    SupportTicketMessageCreate,
+    SupportTicketStatusUpdate,
+)
 from app.features.operational.service import (
     create_support_ticket,
+    create_support_ticket_message,
     get_support_attachment_for_account,
     get_support_ticket_detail,
+    update_support_ticket_status,
 )
 from app.features.topology.account_scope import AccountTopology
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
@@ -150,13 +157,13 @@ async def test_normalized_preferences_profile_contact_and_ticket_assets(
     )
     await db.refresh(first_request)
     assert first_request.status == "cancelled"
-    resolved = await resolve_contact_change(
+    resolved_request = await resolve_contact_change(
         db,
         account=enterprise_account,
         actor_account_id=it_account.id,
         approve=True,
     )
-    assert resolved is not None and resolved.id == second_request.id
+    assert resolved_request is not None and resolved_request.id == second_request.id
     assert enterprise_account.phone == "+639172222222"
     requests = list(
         await db.scalars(
@@ -202,6 +209,27 @@ async def test_normalized_preferences_profile_contact_and_ticket_assets(
     )
     detail = await get_support_ticket_detail(db, it_account, ticket.id)
     assert detail is not None and len(detail.attachments) == 2
+    ticket_record = await db.get(SupportTicket, ticket.id)
+    assert ticket_record is not None
+    resolved_ticket = await update_support_ticket_status(
+        db,
+        ticket_record,
+        it_account,
+        SupportTicketStatusUpdate(status="Resolved"),
+    )
+    assert resolved_ticket.status == "Resolved"
+    await db.refresh(attachment)
+    assert attachment.retention_expires_at is not None
+
+    reopened = await create_support_ticket_message(
+        db,
+        ticket_record,
+        enterprise_account,
+        SupportTicketMessageCreate(message="The camera issue happened again."),
+    )
+    assert reopened.status == "Open"
+    await db.refresh(attachment)
+    assert attachment.retention_expires_at is None
 
 
 def _account(*, role: AccountRole, activated_at: datetime) -> Account:

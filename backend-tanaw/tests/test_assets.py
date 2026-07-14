@@ -1,6 +1,8 @@
 import asyncio
 import base64
+import os
 import runpy
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -50,6 +52,30 @@ async def test_local_asset_storage_rejects_symlink_escape(tmp_path: Path) -> Non
 
     with pytest.raises(AssetStorageError, match="escapes|symbolic link"):
         await storage.put(key="accounts/account-1/asset", content=PNG_BYTES, max_bytes=64)
+
+
+@pytest.mark.asyncio
+async def test_asset_inventory_is_bounded_and_purges_only_stale_temporary_files(
+    tmp_path: Path,
+) -> None:
+    storage = LocalAssetStorage(tmp_path)
+    await storage.put(key="accounts/account-1/profile/asset-1", content=PNG_BYTES, max_bytes=64)
+    temporary = tmp_path / "accounts" / "account-1" / "profile" / ".asset.deadbeef.tmp"
+    temporary.write_bytes(b"partial")
+    old = datetime.now(UTC) - timedelta(days=2)
+    os.utime(temporary, (old.timestamp(), old.timestamp()))
+
+    assert await storage.list_keys(max_objects=1) == ("accounts/account-1/profile/asset-1",)
+    with pytest.raises(AssetStorageError, match="positive"):
+        await storage.list_keys(max_objects=0)
+    assert (
+        await storage.purge_stale_temporary_objects(
+            older_than=datetime.now(UTC) - timedelta(days=1),
+            max_objects=10,
+        )
+        == 1
+    )
+    assert not temporary.exists()
 
 
 def test_image_validation_requires_matching_mime_extension_signature_and_size() -> None:

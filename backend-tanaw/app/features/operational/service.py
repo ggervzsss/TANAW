@@ -2,15 +2,16 @@ import json
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from math import ceil, sin
 from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
 from app.features.accounts.options import format_enterprise_category
 from app.features.assets.models import SupportAttachment
@@ -540,6 +541,7 @@ async def create_support_ticket_message_with_record(
     *,
     commit: bool = True,
 ) -> tuple[SupportTicketDetail, SupportTicketMessage]:
+    ticket = await _lock_support_ticket(db, ticket.id)
     message = SupportTicketMessage(
         ticket_id=ticket.id,
         author_account_id=author.id,
@@ -548,10 +550,13 @@ async def create_support_ticket_message_with_record(
         message=payload.message,
     )
     db.add(message)
-    if author.role == AccountRole.ENTERPRISE and ticket.status == "Resolved":
+    reopened = author.role == AccountRole.ENTERPRISE and ticket.status == "Resolved"
+    if reopened:
         ticket.status = "Open"
     elif author.role == AccountRole.IT and ticket.status == "Open":
         ticket.status = "In Review"
+    if reopened:
+        await _set_support_attachment_retention(db, ticket_id=ticket.id, expires_at=None)
     if commit:
         await db.commit()
     else:
@@ -570,13 +575,52 @@ async def update_support_ticket_status(
     actor: Account,
     payload: SupportTicketStatusUpdate,
 ) -> SupportTicketDetail:
+    ticket = await _lock_support_ticket(db, ticket.id)
     ticket.status = payload.status
+    expires_at = (
+        datetime.now(UTC) + timedelta(days=get_settings().support_attachment_retention_days)
+        if payload.status == "Resolved"
+        else None
+    )
+    await _set_support_attachment_retention(
+        db,
+        ticket_id=ticket.id,
+        expires_at=expires_at,
+    )
     await db.commit()
     await db.refresh(ticket)
     detail = await get_support_ticket_detail(db, actor, ticket.id)
     if detail is None:
         raise RuntimeError("Support ticket detail disappeared after status update.")
     return detail
+
+
+async def _set_support_attachment_retention(
+    db: AsyncSession,
+    *,
+    ticket_id: str,
+    expires_at: datetime | None,
+) -> None:
+    await db.execute(
+        update(SupportAttachment)
+        .where(
+            SupportAttachment.ticket_id == ticket_id,
+            SupportAttachment.status == "active",
+        )
+        .values(retention_expires_at=expires_at)
+    )
+
+
+async def _lock_support_ticket(db: AsyncSession, ticket_id: str) -> SupportTicket:
+    ticket = await db.scalar(
+        select(SupportTicket)
+        .where(SupportTicket.id == ticket_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if ticket is None:
+        raise RuntimeError("Support ticket disappeared before its transaction was locked.")
+    return ticket
 
 
 async def get_enterprise_notification_recipient(

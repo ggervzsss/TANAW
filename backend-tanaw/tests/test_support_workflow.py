@@ -100,6 +100,8 @@ async def test_ticket_messages_apply_role_appropriate_status(
     monkeypatch.setattr("app.features.operational.service.get_support_ticket_detail", get_detail)
     db = MagicMock()
     db.commit = AsyncMock()
+    db.execute = AsyncMock()
+    db.scalar = AsyncMock(return_value=ticket)
     db.refresh = AsyncMock()
 
     result = await create_support_ticket_message(
