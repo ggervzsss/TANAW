@@ -16,7 +16,7 @@ const staffUser = {
   barangay: null,
   address: null,
   buildingCapacity: 100,
-  displayImageDataUrl: null,
+  displayImageUrl: null,
 };
 
 test("loads compiled styles and renders login feedback without CSP violations", async ({ page }) => {

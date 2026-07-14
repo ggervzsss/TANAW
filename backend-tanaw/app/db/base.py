@@ -11,6 +11,12 @@ from app.features.accounts.models import (
 )
 from app.features.activity_logs.models import ActivityLog
 from app.features.alerts.models import SiteSyncAlertState
+from app.features.assets.models import (
+    AccountAsset,
+    AccountPreference,
+    AccountProfileChangeRequest,
+    SupportAttachment,
+)
 from app.features.auth.models import (
     AccountActivationToken,
     PasswordResetChallenge,
@@ -84,11 +90,14 @@ from app.features.topology.models import (
 
 __all__ = [
     "Account",
+    "AccountAsset",
     "AccountEmailChangeRequest",
     "AccountEmailChangeStatus",
     "AccountActivationToken",
     "AccountRole",
     "AccountStatus",
+    "AccountPreference",
+    "AccountProfileChangeRequest",
     "ActivityLog",
     "Base",
     "Camera",
@@ -142,6 +151,7 @@ __all__ = [
     "ReportingPeriod",
     "SiteLiveState",
     "SupportTicket",
+    "SupportAttachment",
     "SystemConfiguration",
     "TelemetryMigrationException",
     "TelemetryMetricFact",

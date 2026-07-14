@@ -5,12 +5,11 @@ export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
 export type SupportTicketStatus = "Open" | "In Review" | "Resolved";
 
 export type SupportTicketAttachment = {
-  dataUrl: string;
   fileName: string;
-  id?: string | null;
+  id: string;
   mediaType: "image/png" | "image/jpeg" | "image/webp";
   sizeBytes: number;
-  url?: string | null;
+  url: string;
 };
 
 export type SupportTicketMessage = {
@@ -52,7 +51,7 @@ export type SupportTicketCreatePayload = {
   description: string;
   priority: SupportTicketPriority;
   subject: string;
-  attachments?: SupportTicketAttachment[];
+  attachments?: File[];
 };
 
 export async function listSupportTickets() {
@@ -66,22 +65,15 @@ export async function getSupportTicket(ticketId: string) {
 }
 
 export async function createSupportTicket(payload: SupportTicketCreatePayload) {
-  const response = await staffApi.post<SupportTicket>("/operational/tickets", payload);
+  const { attachments = [], ...command } = payload;
+  const body = new FormData();
+  body.append("payload", JSON.stringify(command));
+  for (const file of attachments) body.append("attachments", file, file.name);
+  const response = await staffApi.post<SupportTicket>("/operational/tickets", body);
   return response.data;
 }
 
 export async function replyToSupportTicket(ticketId: string, message: string) {
   const response = await staffApi.post<SupportTicketDetail>(`/operational/tickets/${ticketId}/messages`, { message });
   return response.data;
-}
-
-export function getSupportTicketAttachmentUrl(attachment: SupportTicketAttachment) {
-  if (attachment.dataUrl) {
-    return attachment.dataUrl;
-  }
-  if (attachment.url) {
-    const baseUrl = staffApi.defaults.baseURL ?? "http://localhost:8000";
-    return attachment.url.startsWith("http") ? attachment.url : new URL(attachment.url, baseUrl).toString();
-  }
-  return "";
 }

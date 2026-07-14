@@ -512,7 +512,7 @@ function useTicketAttachmentImageUrl(attachment: SupportTicketAttachment) {
 }
 
 function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
-  return [attachment.id ?? "", attachment.url ?? "", attachment.fileName, attachment.mediaType, attachment.sizeBytes, attachment.dataUrl?.length ?? 0].join(":");
+  return [attachment.id, attachment.url, attachment.fileName, attachment.mediaType, attachment.sizeBytes].join(":");
 }
 
 function ConversationItem({ authorName, authorRole, createdAt, message }: { authorName: string; authorRole: string; createdAt: string; message: string }) {

@@ -118,6 +118,16 @@ class Settings(BaseSettings):
     )
     final_report_artifact_batch_size: int = Field(default=2, ge=1, le=25)
     final_report_artifact_max_attempts: int = Field(default=5, ge=1, le=20)
+    asset_storage_root: Path = Field(
+        default_factory=lambda: Path("var/assets").resolve(),
+        validation_alias="ASSET_STORAGE_ROOT",
+    )
+    profile_image_max_bytes: int = Field(default=2 * 1024 * 1024, ge=1024, le=5 * 1024 * 1024)
+    support_attachment_max_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=1024,
+        le=10 * 1024 * 1024,
+    )
     password_reset_rate_window_seconds: int = Field(default=900, ge=60, le=3600)
     password_reset_per_ip_limit: int = Field(default=10, ge=1, le=100)
     password_reset_per_identifier_limit: int = Field(default=5, ge=1, le=50)
@@ -248,6 +258,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "FINAL_REPORT_ARTIFACT_STORAGE_ROOT must be an absolute mounted path "
                     "in production."
+                )
+            if not self.asset_storage_root.is_absolute():
+                raise ValueError(
+                    "ASSET_STORAGE_ROOT must be an absolute mounted path in production."
                 )
         return self
 

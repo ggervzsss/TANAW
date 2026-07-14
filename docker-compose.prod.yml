@@ -17,7 +17,11 @@ services:
       target: production
     env_file:
       - .env
+    environment:
+      ASSET_STORAGE_ROOT: /var/lib/tanaw/assets
     command: uv run alembic upgrade head
+    volumes:
+      - tanaw-assets:/var/lib/tanaw/assets
     depends_on:
       db:
         condition: service_healthy
@@ -29,6 +33,12 @@ services:
       target: production
     env_file:
       - .env
+    environment:
+      ASSET_STORAGE_ROOT: /var/lib/tanaw/assets
+      FINAL_REPORT_ARTIFACT_STORAGE_ROOT: /var/lib/tanaw/final-report-artifacts
+    volumes:
+      - tanaw-assets:/var/lib/tanaw/assets
+      - tanaw-final-report-artifacts:/var/lib/tanaw/final-report-artifacts
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -49,3 +59,5 @@ services:
 
 volumes:
   tanaw-postgres-data:
+  tanaw-assets:
+  tanaw-final-report-artifacts:

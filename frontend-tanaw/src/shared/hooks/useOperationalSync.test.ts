@@ -134,7 +134,7 @@ function createClient() {
 }
 
 function createUser(id: string, role: AuthUser["role"]): AuthUser {
-  return { id, email: `${id}@example.test`, displayName: id, role, title: "Operator", phone: null, firstName: null, lastName: null, enterpriseId: role === "enterprise" ? "enterprise-1" : null, enterpriseName: null, category: null, managerName: null, barangay: null, address: null, buildingCapacity: 0, displayImageDataUrl: null };
+  return { id, email: `${id}@example.test`, displayName: id, role, title: "Operator", phone: null, firstName: null, lastName: null, enterpriseId: role === "enterprise" ? "enterprise-1" : null, enterpriseName: null, category: null, managerName: null, barangay: null, address: null, buildingCapacity: 0, displayImageUrl: null };
 }
 
 function createTelemetry(id: string, receivedAt: string, occupancy: number): TelemetrySnapshot {

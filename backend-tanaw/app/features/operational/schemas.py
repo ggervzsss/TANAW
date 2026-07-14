@@ -496,12 +496,11 @@ SupportTicketAttachmentType = Literal["image/png", "image/jpeg", "image/webp"]
 
 
 class SupportTicketAttachment(BaseModel):
-    id: str | None = None
+    id: str
     fileName: str = Field(min_length=1, max_length=160)
     mediaType: SupportTicketAttachmentType
     sizeBytes: int = Field(ge=1, le=5 * 1024 * 1024)
-    dataUrl: str = Field(min_length=1, max_length=7_200_000)
-    url: str | None = None
+    url: str
 
     @field_validator("fileName")
     @classmethod
@@ -514,22 +513,6 @@ class SupportTicketAttachment(BaseModel):
             raise ValueError("Only image files are allowed.")
         return file_name
 
-    @field_validator("dataUrl")
-    @classmethod
-    def validate_data_url(cls, value: str) -> str:
-        if not value.startswith("data:image/"):
-            raise ValueError("Only image files are allowed.")
-        if ";base64," not in value:
-            raise ValueError("Upload a valid image file.")
-        return value
-
-    @model_validator(mode="after")
-    def validate_media_type_matches_data(self) -> SupportTicketAttachment:
-        expected_prefix = f"data:{self.mediaType};base64,"
-        if not self.dataUrl.startswith(expected_prefix):
-            raise ValueError("Upload a valid image file.")
-        return self
-
 
 class SupportTicketCreate(BaseModel):
     category: SupportTicketCategory
@@ -538,7 +521,6 @@ class SupportTicketCreate(BaseModel):
     description: str = Field(min_length=10, max_length=4000)
     affectedArea: str | None = Field(default=None, max_length=120)
     cameraNode: str | None = Field(default=None, max_length=120)
-    attachments: list[SupportTicketAttachment] = Field(default_factory=list, max_length=5)
 
     @field_validator("subject", "description", "affectedArea", "cameraNode", mode="before")
     @classmethod

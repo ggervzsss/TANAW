@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from time import monotonic
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,22 +28,33 @@ from app.features.accounts.schemas import (
     ContactNumberChangeRequest,
     LeadAdminNameUpdate,
     PasswordChangeRequest,
-    ProfileDisplayImageUpdate,
     ProfileUpdate,
 )
 from app.features.accounts.service import (
-    PENDING_CONTACT_NUMBER_CHANGE_KEY,
     change_account_password,
     get_account_by_login_identifier,
-    get_account_preferences,
     invalidate_account_tokens,
-    set_account_preferences,
-    set_display_image_data_url,
-    to_auth_user,
+    to_auth_user_with_asset,
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log, get_actor_role_label
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.assets.runtime import get_asset_storage
+from app.features.assets.service import (
+    delete_profile_asset,
+    get_account_theme,
+    read_profile_asset,
+    replace_profile_asset,
+    request_contact_change,
+    set_account_theme,
+)
+from app.features.assets.storage import (
+    AssetStorage,
+    AssetStorageError,
+    AssetValidationError,
+    inline_content_disposition,
+    validate_image,
+)
 from app.features.auth.account_activation import (
     AccountActivationError,
     complete_account_activation,
@@ -107,6 +118,7 @@ from app.features.topology.account_scope import (
     require_account_topology,
 )
 
+AssetStorageDependency = Annotated[AssetStorage, Depends(get_asset_storage)]
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 SYSTEM_SETTINGS_ID = "default"
@@ -242,12 +254,6 @@ def require_enterprise_account(account: Account) -> None:
 
 async def enterprise_label(db: AsyncSession, account: Account) -> str:
     return (await require_account_topology(db, account)).enterprise.name
-
-
-def set_pending_account_change(account: Account, key: str, value: dict[str, str]) -> None:
-    preferences = get_account_preferences(account)
-    preferences[key] = value
-    set_account_preferences(account, preferences)
 
 
 @router.post(
@@ -400,7 +406,10 @@ async def login(
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
     )
-    return LoginResponse(token=token, user=to_auth_user(account, topology))
+    return LoginResponse(
+        token=token,
+        user=await to_auth_user_with_asset(db, account, topology),
+    )
 
 
 @router.get("/me", response_model=AuthUser)
@@ -408,7 +417,7 @@ async def me(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    return to_auth_user(account, await load_account_topology(db, account))
+    return await to_auth_user_with_asset(db, account, await load_account_topology(db, account))
 
 
 @router.post("/logout")
@@ -468,7 +477,10 @@ async def change_password(
             source_type="enterprise.password",
         )
     token = create_access_token(account.id, {"role": account.role.value})
-    return LoginResponse(token=token, user=to_auth_user(account, topology))
+    return LoginResponse(
+        token=token,
+        user=await to_auth_user_with_asset(db, account, topology),
+    )
 
 
 @router.post("/forgot-password/request", response_model=ForgotPasswordRequestResponse)
@@ -646,8 +658,6 @@ async def update_profile(
         account.first_name = payload.firstName
         account.last_name = payload.lastName
         account.display_name = f"{payload.firstName} {payload.lastName}"
-    if "displayImageDataUrl" in payload.model_fields_set:
-        set_display_image_data_url(account, payload.displayImageDataUrl)
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -681,19 +691,42 @@ async def update_profile(
                 notification_type="Enterprise Profile Updated",
                 source_type="enterprise.profile",
             )
-    return to_auth_user(account, topology)
+    return await to_auth_user_with_asset(db, account, topology)
 
 
-@router.patch("/profile/display-image", response_model=AuthUser)
-async def update_profile_display_image(
-    payload: ProfileDisplayImageUpdate,
+@router.put("/profile/image", response_model=AuthUser)
+async def upload_profile_image(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    storage: AssetStorageDependency,
+    file: Annotated[UploadFile, File()],
 ) -> AuthUser:
     topology = await load_account_topology(db, account)
-    set_display_image_data_url(account, payload.displayImageDataUrl)
-    await db.commit()
-    await db.refresh(account)
+    settings = get_settings()
+    content = await file.read(settings.profile_image_max_bytes + 1)
+    try:
+        image = validate_image(
+            file_name=file.filename or "",
+            declared_mime_type=file.content_type,
+            content=content,
+            max_bytes=settings.profile_image_max_bytes,
+        )
+        await replace_profile_asset(
+            db,
+            storage=storage,
+            account=account,
+            image=image,
+        )
+    except AssetValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except AssetStorageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Profile image storage is unavailable.",
+        ) from exc
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -705,7 +738,64 @@ async def update_profile_display_image(
         summary=f"{account.display_name} updated their profile logo.",
         source_id=account.id,
     )
-    return to_auth_user(account, topology)
+    return await to_auth_user_with_asset(db, account, topology)
+
+
+@router.get("/profile/image/{asset_id}")
+async def get_profile_image(
+    asset_id: str,
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    storage: AssetStorageDependency,
+) -> Response:
+    try:
+        result = await read_profile_asset(
+            db,
+            storage=storage,
+            account_id=account.id,
+            asset_id=asset_id,
+        )
+    except AssetStorageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Profile image storage is unavailable.",
+        ) from exc
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Profile image not found."
+        )
+    asset, content = result
+    return Response(
+        content=content,
+        media_type=asset.mime_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": inline_content_disposition(asset.file_name),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.delete("/profile/image", response_model=AuthUser)
+async def remove_profile_image(
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    storage: AssetStorageDependency,
+) -> AuthUser:
+    topology = await load_account_topology(db, account)
+    await delete_profile_asset(db, storage=storage, account_id=account.id)
+    await record_auth_log(
+        db,
+        category=get_auth_log_category(account),
+        severity="Success",
+        actor=account.display_name,
+        actor_role=get_actor_role_label(account),
+        action="Remove Profile Logo",
+        target=account.email,
+        summary=f"{account.display_name} removed their profile logo.",
+        source_id=account.id,
+    )
+    return await to_auth_user_with_asset(db, account, topology)
 
 
 @router.patch("/profile/lead-admin", response_model=AuthUser)
@@ -741,7 +831,7 @@ async def update_lead_admin_name(
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.profile",
         )
-    return to_auth_user(account, topology)
+    return await to_auth_user_with_asset(db, account, topology)
 
 
 @router.patch("/profile/building-capacity", response_model=AuthUser)
@@ -784,7 +874,7 @@ async def update_building_capacity(
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.capacity",
         )
-    return to_auth_user(account, topology)
+    return await to_auth_user_with_asset(db, account, topology)
 
 
 @router.post("/profile/business-email-change", response_model=AccountChangeRequestResponse)
@@ -945,12 +1035,12 @@ async def request_contact_number_change(
             detail="This contact number is already active.",
         )
 
-    set_pending_account_change(
-        account,
-        PENDING_CONTACT_NUMBER_CHANGE_KEY,
-        {"phone": payload.phone, "requestedAt": datetime.now(UTC).isoformat()},
+    await request_contact_change(
+        db,
+        account_id=account.id,
+        requested_value=payload.phone,
+        requested_at=datetime.now(UTC),
     )
-    await db.commit()
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -980,9 +1070,9 @@ async def request_contact_number_change(
 @router.get("/preferences", response_model=AccountPreferences)
 async def get_preferences(
     account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountPreferences:
-    values = get_account_preferences(account)
-    return AccountPreferences.model_validate(values)
+    return AccountPreferences(theme=await get_account_theme(db, account_id=account.id))
 
 
 @router.patch("/preferences", response_model=AccountPreferences)
@@ -991,12 +1081,8 @@ async def update_preferences(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AccountPreferences:
-    values = get_account_preferences(account)
-    patch_values = payload.model_dump(mode="json", exclude_unset=True)
-    values.update(patch_values)
-    set_account_preferences(account, values)
-    await db.commit()
-    return AccountPreferences.model_validate(values)
+    preference = await set_account_theme(db, account_id=account.id, theme=payload.theme)
+    return AccountPreferences.model_validate({"theme": preference.theme})
 
 
 @router.get("/system-settings", response_model=SystemSettingsPayload)

@@ -35,13 +35,11 @@ from app.features.accounts.schemas import (
 from app.features.accounts.service import (
     NewEnterpriseTopology,
     account_role_from_value,
-    clear_pending_profile_change_request,
     create_account_with_activation,
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
     get_dev_delivery_by_id,
-    get_pending_profile_change_request,
     is_protected_startup_account,
     list_accounts_by_roles,
     list_dev_deliveries,
@@ -52,6 +50,7 @@ from app.features.accounts.service import (
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.assets.service import get_pending_contact_change, resolve_contact_change
 from app.features.auth.account_activation import (
     AccountActivationError,
     invalidate_account_activation_tokens,
@@ -537,7 +536,7 @@ async def resolve_enterprise_profile_change_request(
             action=payload.action,
         )
 
-    pending_request = get_pending_profile_change_request(account, request_type)
+    pending_request = await get_pending_contact_change(db, account_id=account.id, lock=True)
     if pending_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -545,14 +544,13 @@ async def resolve_enterprise_profile_change_request(
         )
 
     previous_value = get_profile_request_current_value(account, request_type)
-    requested_value = get_profile_request_requested_value(pending_request, request_type)
-
-    if payload.action == "approve":
-        account.phone = requested_value
-
-    clear_pending_profile_change_request(account, request_type)
-    await db.commit()
-    await db.refresh(account)
+    requested_value = pending_request.requested_value
+    await resolve_contact_change(
+        db,
+        account=account,
+        actor_account_id=actor.id,
+        approve=payload.action == "approve",
+    )
 
     request_label = profile_request_label(request_type)
     resolution_label = "approved" if payload.action == "approve" else "declined"
@@ -794,12 +792,6 @@ async def ensure_unique_account_email(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists.",
         )
-
-
-def get_profile_request_requested_value(
-    pending_request: dict[str, str], request_type: ProfileChangeRequestType
-) -> str:
-    return pending_request["email" if request_type == "businessEmail" else "phone"]
 
 
 def get_profile_request_current_value(

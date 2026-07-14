@@ -8,6 +8,7 @@ import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
 import { logoutService } from "@/features/login/services";
+import { useAuthenticatedImage } from "../../hooks/useAuthenticatedImage";
 import { getRoleProfilePath, getRoleSecurityPath } from "../../utils";
 import type { UserRole } from "../../types/role.types";
 import { roleAccessLabel } from "./navigation";
@@ -29,8 +30,8 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
     name: authUser?.displayName ?? "TANAW User",
     email: authUser?.email ?? "",
     department: authUser?.title ?? "City Tourism Operations",
-    displayImageDataUrl: authUser?.displayImageDataUrl ?? null,
   };
+  const displayImageObjectUrl = useAuthenticatedImage(authUser?.displayImageUrl);
 
   const initials = useMemo(
     () =>
@@ -107,7 +108,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
             className="flex items-center gap-3 rounded-full border border-white/80 bg-white py-1 pr-3 pl-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md active:translate-y-0"
           >
             <div className="bg-tanaw-green flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white">
-              {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
+              {displayImageObjectUrl ? <img src={displayImageObjectUrl} alt="" className="h-full w-full object-cover" /> : initials}
             </div>
             <div className="hidden text-left md:block">
               <p className="text-tanaw-navy text-sm leading-none font-bold">{profile.name}</p>

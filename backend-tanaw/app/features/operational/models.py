@@ -228,7 +228,6 @@ class SupportTicket(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     affected_area: Mapped[str | None] = mapped_column(String(120), nullable=True)
     camera_node: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    attachments_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(30), index=True, nullable=False, default="Open")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True, nullable=False

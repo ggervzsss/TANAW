@@ -32,13 +32,20 @@ export async function getCurrentUser() {
   return normalizeSession({ token: "", user: response.data }).user;
 }
 
-export async function updateCurrentProfile(payload: { managerName: string; email: string; phone?: string; enterpriseName: string; address?: string; displayImageDataUrl?: string | null }) {
+export async function updateCurrentProfile(payload: { managerName: string; email: string; phone?: string; enterpriseName: string; address?: string }) {
   const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile", payload);
   return normalizeSession({ token: "", user: response.data }).user;
 }
 
-export async function updateProfileImage(displayImageDataUrl: string | null) {
-  const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile/display-image", { displayImageDataUrl });
+export async function uploadProfileImage(file: File) {
+  const body = new FormData();
+  body.append("file", file, file.name);
+  const response = await staffApi.put<LoginResponse["user"]>("/auth/profile/image", body);
+  return normalizeSession({ token: "", user: response.data }).user;
+}
+
+export async function removeProfileImage() {
+  const response = await staffApi.delete<LoginResponse["user"]>("/auth/profile/image");
   return normalizeSession({ token: "", user: response.data }).user;
 }
 

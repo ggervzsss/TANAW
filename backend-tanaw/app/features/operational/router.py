@@ -1,14 +1,24 @@
 import asyncio
-import base64
-import binascii
 import json
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import Response
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +37,15 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.assets.runtime import get_asset_storage
+from app.features.assets.storage import (
+    AssetStorage,
+    AssetStorageError,
+    AssetValidationError,
+    inline_content_disposition,
+    validate_image,
+    verify_stored_image,
+)
 from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
@@ -81,6 +100,7 @@ from app.features.operational.service import (
     evaluate_telemetry_alerts,
     get_enterprise_notification_recipient,
     get_operational_summary,
+    get_support_attachment_for_account,
     get_support_ticket_detail,
     get_support_ticket_for_account,
     ingest_report_submission,
@@ -91,7 +111,6 @@ from app.features.operational.service import (
     list_operational_alerts,
     list_support_tickets,
     list_user_notifications,
-    parse_ticket_attachments,
     return_final_report_for_revision,
     set_user_notification_read,
     system_setting_enabled,
@@ -113,6 +132,7 @@ from app.features.topology.models import Enterprise, EnterpriseMembership
 
 router = APIRouter(prefix="/operational", tags=["operational"])
 WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
+AssetStorageDependency = Annotated[AssetStorage, Depends(get_asset_storage)]
 
 OperationalReadAccount = Annotated[
     Account, Depends(require_roles({"admin", "it", "staff", "enterprise"}))
@@ -636,37 +656,49 @@ async def get_ticket_detail(
     return ticket
 
 
-@router.get("/tickets/{ticket_id}/attachments/{attachment_index}")
+@router.get("/tickets/{ticket_id}/attachments/{attachment_id}")
 async def get_ticket_attachment(
     ticket_id: str,
-    attachment_index: int,
+    attachment_id: str,
     account: TicketReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
+    storage: AssetStorageDependency,
 ) -> Response:
-    ticket = await get_support_ticket_for_account(db, account, ticket_id)
-    if ticket is None:
+    attachment = await get_support_attachment_for_account(
+        db,
+        account,
+        ticket_id=ticket_id,
+        attachment_id=attachment_id,
+    )
+    if attachment is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Attachment not found.",
         )
-    attachments = parse_ticket_attachments(ticket.attachments_json)
-    if attachment_index < 0 or attachment_index >= len(attachments):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
-
-    attachment = attachments[attachment_index]
-    prefix = f"data:{attachment.mediaType};base64,"
     try:
-        content = base64.b64decode(attachment.dataUrl.removeprefix(prefix), validate=True)
-    except (binascii.Error, ValueError) as exc:
+        content = await storage.read(
+            key=attachment.storage_key,
+            max_bytes=attachment.size_bytes,
+        )
+        verify_stored_image(
+            content=content,
+            size_bytes=attachment.size_bytes,
+            content_hash=attachment.content_hash,
+        )
+    except AssetStorageError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Attachment data is not available.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Attachment storage is unavailable.",
         ) from exc
 
-    safe_file_name = attachment.fileName.replace('"', "").replace("\r", "").replace("\n", "")
     return Response(
         content=content,
-        media_type=attachment.mediaType,
-        headers={"Content-Disposition": f'inline; filename="{safe_file_name}"'},
+        media_type=attachment.mime_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": inline_content_disposition(attachment.file_name),
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -676,11 +708,53 @@ async def get_ticket_attachment(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_enterprise_support_ticket(
-    payload: SupportTicketCreate,
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
+    storage: AssetStorageDependency,
+    payload: Annotated[str, Form()],
+    attachments: Annotated[list[UploadFile] | None, File()] = None,
 ) -> SupportTicketSummary:
-    ticket = await create_support_ticket(db, account, payload)
+    attachments = attachments or []
+    if len(attachments) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A support ticket can contain at most five attachments.",
+        )
+    try:
+        command = SupportTicketCreate.model_validate_json(payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=exc.errors(),
+        ) from exc
+    settings = get_settings()
+    try:
+        images = [
+            validate_image(
+                file_name=upload.filename or "",
+                declared_mime_type=upload.content_type,
+                content=await upload.read(settings.support_attachment_max_bytes + 1),
+                max_bytes=settings.support_attachment_max_bytes,
+            )
+            for upload in attachments
+        ]
+        ticket = await create_support_ticket(
+            db,
+            account,
+            command,
+            storage=storage,
+            images=images,
+        )
+    except AssetValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except AssetStorageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Attachment storage is unavailable.",
+        ) from exc
     enterprise = (await require_account_topology(db, account)).enterprise.name
     severity = "Warning" if ticket.priority in {"High", "Urgent"} else "Info"
     attachment_count = len(ticket.attachments)

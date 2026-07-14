@@ -1,13 +1,14 @@
 import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Pencil, RefreshCw, Save, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { changePassword, updateCurrentProfile } from "@/shared/services/accountManagement";
+import { changePassword, removeProfileImage, updateCurrentProfile, uploadProfileImage } from "@/shared/services/accountManagement";
+import { useAuthenticatedImage } from "@/shared/hooks/useAuthenticatedImage";
 import type { UserRole } from "@/shared/types/role.types";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { normalizePersonName, normalizePhilippineContactNumber, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
@@ -44,15 +45,23 @@ export function AccountProfilePage({ role }: AccountPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [fieldResetSignal, setFieldResetSignal] = useState(0);
-  const authDisplayImageDataUrl = authUser?.displayImageDataUrl ?? null;
-  const [displayImageDraft, setDisplayImageDraft] = useState(() => ({
-    dataUrl: authDisplayImageDataUrl,
-    fileName: "",
-    sourceDataUrl: authDisplayImageDataUrl,
-  }));
-  const isImageDraftCurrent = displayImageDraft.sourceDataUrl === authDisplayImageDataUrl;
-  const displayImageDataUrl = isImageDraftCurrent ? displayImageDraft.dataUrl : authDisplayImageDataUrl;
-  const displayImageFileName = isImageDraftCurrent ? displayImageDraft.fileName : "";
+  const authDisplayImageUrl = authUser?.displayImageUrl ?? null;
+  const storedImageObjectUrl = useAuthenticatedImage(authDisplayImageUrl);
+  const [displayImageDraft, setDisplayImageDraft] = useState<{
+    file: File | null;
+    fileName: string;
+    previewUrl: string | null;
+    remove: boolean;
+  }>({ file: null, fileName: "", previewUrl: null, remove: false });
+  const displayImageUrl = displayImageDraft.previewUrl ?? (displayImageDraft.remove ? null : storedImageObjectUrl);
+  const displayImageFileName = displayImageDraft.fileName;
+
+  useEffect(
+    () => () => {
+      if (displayImageDraft.previewUrl) URL.revokeObjectURL(displayImageDraft.previewUrl);
+    },
+    [displayImageDraft.previewUrl],
+  );
   const initials = useMemo(
     () =>
       user.name
@@ -90,14 +99,19 @@ export function AccountProfilePage({ role }: AccountPageProps) {
     const normalizedPhone = normalizePhilippineContactNumber(phoneInput);
     setIsLoading(true);
     try {
-      const updated = await updateCurrentProfile({
+      let updated = await updateCurrentProfile({
         firstName,
         lastName,
         email: user.email,
         phone: normalizedPhone || undefined,
-        displayImageDataUrl,
       });
+      if (displayImageDraft.file) {
+        updated = await uploadProfileImage(displayImageDraft.file);
+      } else if (displayImageDraft.remove && authDisplayImageUrl) {
+        updated = await removeProfileImage();
+      }
       updateUser(updated);
+      setDisplayImageDraft({ file: null, fileName: "", previewUrl: null, remove: false });
       setIsLoading(false);
       setIsSuccess(true);
       setFieldResetSignal((current) => current + 1);
@@ -115,10 +129,9 @@ export function AccountProfilePage({ role }: AccountPageProps) {
 
     try {
       const upload = await readProfileImageFile(file);
-      setDisplayImageDraft({
-        dataUrl: upload.dataUrl,
-        fileName: upload.fileName,
-        sourceDataUrl: authDisplayImageDataUrl,
+      setDisplayImageDraft((current) => {
+        if (current.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return { file: upload.file, fileName: upload.fileName, previewUrl: upload.previewUrl, remove: false };
       });
       toast.success("Profile photo ready to save.");
     } catch (error) {
@@ -141,8 +154,8 @@ export function AccountProfilePage({ role }: AccountPageProps) {
                 htmlFor={`profile-image-${role}`}
                 className="group hover:border-tanaw-green relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-slate-300 bg-slate-50 shadow-sm transition"
               >
-                {displayImageDataUrl ? (
-                  <img src={displayImageDataUrl} alt="Profile preview" className="h-full w-full object-cover" />
+                {displayImageUrl ? (
+                  <img src={displayImageUrl} alt="Profile preview" className="h-full w-full object-cover" />
                 ) : (
                   <span className="font-display text-tanaw-navy text-2xl font-bold transition-opacity group-hover:opacity-0">{initials || "TU"}</span>
                 )}
@@ -156,14 +169,18 @@ export function AccountProfilePage({ role }: AccountPageProps) {
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">This profile is shown in the {rolePortalLabel[role]} header, reports, audit trails, and account activity logs.</p>
                 <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">{roleAccessLabel[role]}</span>
                 {displayImageFileName && <p className="mt-2 text-xs font-semibold text-emerald-700">{displayImageFileName}</p>}
-                {displayImageDataUrl && (
+                {displayImageUrl && (
                   <button
                     type="button"
                     onClick={() => {
-                      setDisplayImageDraft({
-                        dataUrl: null,
-                        fileName: "",
-                        sourceDataUrl: authDisplayImageDataUrl,
+                      setDisplayImageDraft((current) => {
+                        if (current.previewUrl) URL.revokeObjectURL(current.previewUrl);
+                        return {
+                          file: null,
+                          fileName: "",
+                          previewUrl: null,
+                          remove: true,
+                        };
                       });
                     }}
                     className="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"

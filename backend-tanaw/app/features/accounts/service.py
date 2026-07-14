@@ -1,4 +1,3 @@
-import json
 import re
 import secrets
 from dataclasses import dataclass
@@ -25,8 +24,14 @@ from app.features.accounts.schemas import (
     AccountSummary,
     AuthUser,
     DeliverySummary,
-    ProfileChangeRequestType,
 )
+from app.features.assets.models import (
+    AccountAsset,
+)
+from app.features.assets.models import (
+    AccountProfileChangeRequest as AccountProfileChangeRequestRecord,
+)
+from app.features.assets.service import get_active_profile_asset, profile_asset_url
 from app.features.auth.account_activation import issue_account_activation
 from app.features.auth.challenge_service import invalidate_password_reset_challenges
 from app.features.auth.email_change import (
@@ -45,23 +50,6 @@ from app.features.topology.models import (
     TopologyClassification,
 )
 
-DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
-PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
-PENDING_CONTACT_NUMBER_CHANGE_KEY = "pendingContactNumberChange"
-
-PROFILE_CHANGE_REQUEST_CONFIG: dict[ProfileChangeRequestType, tuple[str, str, str]] = {
-    "businessEmail": (
-        PENDING_BUSINESS_EMAIL_CHANGE_KEY,
-        "Business Email",
-        "email",
-    ),
-    "contactNumber": (
-        PENDING_CONTACT_NUMBER_CHANGE_KEY,
-        "Contact Number",
-        "phone",
-    ),
-}
-
 
 @dataclass(frozen=True, slots=True)
 class NewEnterpriseTopology:
@@ -79,64 +67,16 @@ class NewEnterpriseTopology:
     coordinates_updated_at: datetime | None = None
 
 
-def get_account_preferences(account: Account) -> dict[str, object]:
-    try:
-        values = json.loads(account.preferences_json or "{}")
-    except json.JSONDecodeError:
-        return {}
-    return values if isinstance(values, dict) else {}
-
-
-def set_account_preferences(account: Account, values: dict[str, object]) -> None:
-    account.preferences_json = json.dumps(values) if values else None
-
-
-def get_pending_profile_change_request(
-    account: Account, request_type: ProfileChangeRequestType
-) -> dict[str, str] | None:
-    key, _, value_key = PROFILE_CHANGE_REQUEST_CONFIG[request_type]
-    raw_request = get_account_preferences(account).get(key)
-    if not isinstance(raw_request, dict):
-        return None
-
-    requested_value = raw_request.get(value_key)
-    if not isinstance(requested_value, str) or not requested_value:
-        return None
-
-    requested_at = raw_request.get("requestedAt")
-    return {
-        value_key: requested_value,
-        "requestedAt": requested_at if isinstance(requested_at, str) else "",
-    }
-
-
-def clear_pending_profile_change_request(
-    account: Account, request_type: ProfileChangeRequestType
-) -> None:
-    key, _, _ = PROFILE_CHANGE_REQUEST_CONFIG[request_type]
-    values = get_account_preferences(account)
-    values.pop(key, None)
-    set_account_preferences(account, values)
-
-
-def set_display_image_data_url(account: Account, data_url: str | None) -> None:
-    values = get_account_preferences(account)
-    if data_url:
-        values[DISPLAY_IMAGE_DATA_URL_KEY] = data_url
-    else:
-        values.pop(DISPLAY_IMAGE_DATA_URL_KEY, None)
-    set_account_preferences(account, values)
-
-
 def to_auth_user(
     account: Account,
     topology: AccountTopology | None = None,
+    *,
+    profile_asset: AccountAsset | None = None,
 ) -> AuthUser:
     if account.role == AccountRole.ENTERPRISE and topology is None:
         raise RuntimeError(
             f"Enterprise account {account.id} cannot be serialized without normalized topology."
         )
-    display_image_data_url = get_account_preferences(account).get(DISPLAY_IMAGE_DATA_URL_KEY)
     enterprise = topology.enterprise if topology is not None else None
     site = topology.site if topology is not None else None
     return AuthUser(
@@ -155,10 +95,17 @@ def to_auth_user(
         barangay=site.barangay if site is not None else None,
         address=site.address if site is not None else None,
         buildingCapacity=site.building_capacity if site is not None else 100,
-        displayImageDataUrl=display_image_data_url
-        if isinstance(display_image_data_url, str)
-        else None,
+        displayImageUrl=profile_asset_url(profile_asset),
     )
+
+
+async def to_auth_user_with_asset(
+    db: AsyncSession,
+    account: Account,
+    topology: AccountTopology | None = None,
+) -> AuthUser:
+    profile_asset = await get_active_profile_asset(db, account_id=account.id)
+    return to_auth_user(account, topology, profile_asset=profile_asset)
 
 
 def to_account_summary(
@@ -166,6 +113,7 @@ def to_account_summary(
     *,
     topology: AccountTopology | None = None,
     email_change_request: AccountEmailChangeRequest | None = None,
+    contact_change_request: AccountProfileChangeRequestRecord | None = None,
 ) -> AccountSummary:
     if account.role == AccountRole.ENTERPRISE and topology is None:
         raise RuntimeError(
@@ -202,6 +150,7 @@ def to_account_summary(
         profileChangeRequests=get_profile_change_requests(
             account,
             email_change_request=email_change_request,
+            contact_change_request=contact_change_request,
         ),
         createdAt=account.created_at,
         lastLoginAt=account.last_login_at,
@@ -212,6 +161,7 @@ def get_profile_change_requests(
     account: Account,
     *,
     email_change_request: AccountEmailChangeRequest | None = None,
+    contact_change_request: AccountProfileChangeRequestRecord | None = None,
 ) -> list[AccountProfileChangeRequest]:
     requests: list[AccountProfileChangeRequest] = []
     if email_change_request is not None:
@@ -243,24 +193,13 @@ def get_profile_change_requests(
                 expiresAt=email_change_request.expires_at,
             )
         )
-    if account.role != AccountRole.ENTERPRISE:
-        return requests
-    for request_type, (_, label, value_key) in PROFILE_CHANGE_REQUEST_CONFIG.items():
-        if request_type == "businessEmail":
-            continue
-        pending_request = get_pending_profile_change_request(account, request_type)
-        if pending_request is None:
-            continue
-        requested_value = pending_request.get(value_key)
-        if not requested_value:
-            continue
-        requested_at = pending_request.get("requestedAt") or None
+    if account.role == AccountRole.ENTERPRISE and contact_change_request is not None:
         requests.append(
             AccountProfileChangeRequest(
-                type=cast(ProfileChangeRequestType, request_type),
-                label=label,
-                requestedValue=requested_value,
-                requestedAt=requested_at,
+                type="contactNumber",
+                label="Contact Number",
+                requestedValue=contact_change_request.requested_value,
+                requestedAt=contact_change_request.requested_at.isoformat(),
                 status="pending_review",
                 isVerified=False,
                 canApprove=True,
@@ -287,12 +226,27 @@ async def to_account_summaries_with_requests(
         else []
     )
     requests_by_account = {request.account_id: request for request in email_requests}
+    contact_requests = (
+        list(
+            await db.scalars(
+                select(AccountProfileChangeRequestRecord).where(
+                    AccountProfileChangeRequestRecord.account_id.in_(account_ids),
+                    AccountProfileChangeRequestRecord.request_type == "contact_number",
+                    AccountProfileChangeRequestRecord.status == "pending_review",
+                )
+            )
+        )
+        if account_ids
+        else []
+    )
+    contact_requests_by_account = {request.account_id: request for request in contact_requests}
     topologies = await load_account_topologies(db, accounts)
     return [
         to_account_summary(
             account,
             topology=topologies[account.id],
             email_change_request=requests_by_account.get(account.id),
+            contact_change_request=contact_requests_by_account.get(account.id),
         )
         for account in accounts
     ]

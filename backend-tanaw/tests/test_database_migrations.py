@@ -56,6 +56,7 @@ async def test_uninitialized_database_is_rejected() -> None:
         "20260714_0028_topology_authority_cutover.py",
         "20260714_0029_final_report_artifact_lifecycle.py",
         "20260714_0030_durable_sync_health_alerts.py",
+        "20260714_0031_normalize_assets_and_preferences.py",
     ),
 )
 def test_irreversible_migrations_block_unsafe_downgrades(migration_filename: str) -> None:

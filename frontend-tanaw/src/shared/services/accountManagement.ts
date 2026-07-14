@@ -242,11 +242,31 @@ export type ProfileUpdatePayload = {
   phone?: string;
   enterpriseName?: string;
   address?: string;
-  displayImageDataUrl?: string | null;
 };
 
 export async function updateCurrentProfile(payload: ProfileUpdatePayload) {
   const response = await apiClient.patch<AuthUser>("/auth/profile", payload);
+  return response.data;
+}
+
+export async function uploadProfileImage(file: File) {
+  const body = new FormData();
+  body.append("file", file, file.name);
+  const response = await apiClient.put<AuthUser>("/auth/profile/image", body);
+  return response.data;
+}
+
+export async function removeProfileImage() {
+  const response = await apiClient.delete<AuthUser>("/auth/profile/image");
+  return response.data;
+}
+
+export async function fetchProfileImage(url: string) {
+  if (!url.startsWith("/auth/profile/image/")) throw new Error("Profile image URL is invalid.");
+  const response = await apiClient.get<Blob>(url, { responseType: "blob" });
+  if (!new Set(["image/png", "image/jpeg", "image/webp"]).has(response.data.type)) {
+    throw new Error("Profile image response is invalid.");
+  }
   return response.data;
 }
 

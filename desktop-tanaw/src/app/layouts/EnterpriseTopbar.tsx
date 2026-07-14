@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
+import { useAuthenticatedImage } from "../../hooks/useAuthenticatedImage";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -96,7 +97,7 @@ export function EnterpriseTopbar({
 
   const profileEmail = user?.email ?? "No account email";
   const roleSubtitle = `${String(user?.role ?? "enterprise").toLowerCase()} Role`;
-  const displayImageDataUrl = user?.displayImageDataUrl ?? null;
+  const displayImageObjectUrl = useAuthenticatedImage(user?.displayImageUrl);
   const sealUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
 
   const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 max-2xl:px-3.5";
@@ -189,7 +190,7 @@ export function EnterpriseTopbar({
                 className="flex min-w-60.5 items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:min-w-56 max-sm:min-w-0 max-sm:pr-2.5"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
-                  {displayImageDataUrl ? <img src={displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
+                  {displayImageObjectUrl ? <img src={displayImageObjectUrl} alt="" className="h-full w-full object-cover" /> : initials}
                 </div>
                 <div className="hidden min-w-0 flex-1 text-left lg:block">
                   <p className="truncate text-sm leading-tight font-bold text-white drop-shadow-sm">{displayName}</p>

@@ -75,7 +75,7 @@ function createUser(id: string, role: AuthUser["role"]): AuthUser {
     barangay: null,
     address: null,
     buildingCapacity: 0,
-    displayImageDataUrl: null,
+    displayImageUrl: null,
   };
 }
 

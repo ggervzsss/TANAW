@@ -7,7 +7,6 @@ import { notifyError, notifySuccess } from "../../toasts/services/toast-service"
 import {
   createSupportTicket,
   getSupportTicket,
-  getSupportTicketAttachmentUrl,
   listSupportTickets,
   replyToSupportTicket,
   type SupportTicket,
@@ -16,6 +15,7 @@ import {
   type SupportTicketDetail,
   type SupportTicketPriority,
 } from "../services/tickets";
+import { useAuthenticatedImage } from "../../../hooks/useAuthenticatedImage";
 
 const categories: SupportTicketCategory[] = ["Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const priorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
@@ -33,6 +33,14 @@ type TicketFormState = {
   subject: string;
 };
 
+type TicketPhotoDraft = {
+  file: File;
+  fileName: string;
+  mediaType: SupportTicketAttachment["mediaType"];
+  previewUrl: string;
+  sizeBytes: number;
+};
+
 const emptyForm: TicketFormState = {
   affectedArea: "",
   cameraNode: "",
@@ -45,9 +53,10 @@ const emptyForm: TicketFormState = {
 export function TicketsView() {
   const user = useAuthStore((state) => state.user);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoDraftsRef = useRef<TicketPhotoDraft[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [form, setForm] = useState<TicketFormState>(emptyForm);
-  const [photos, setPhotos] = useState<SupportTicketAttachment[]>([]);
+  const [photos, setPhotos] = useState<TicketPhotoDraft[]>([]);
   const [error, setError] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +84,17 @@ export function TicketsView() {
   useEffect(() => {
     void refreshTickets();
   }, [refreshTickets]);
+
+  useEffect(() => {
+    photoDraftsRef.current = photos;
+  }, [photos]);
+
+  useEffect(
+    () => () => {
+      for (const photo of photoDraftsRef.current) URL.revokeObjectURL(photo.previewUrl);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!selectedTicketId) {
@@ -123,10 +143,11 @@ export function TicketsView() {
         description: form.description.trim(),
         priority: form.priority,
         subject: form.subject.trim(),
-        attachments: photos,
+        attachments: photos.map((photo) => photo.file),
       });
       setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
       setForm(emptyForm);
+      for (const photo of photos) URL.revokeObjectURL(photo.previewUrl);
       setPhotos([]);
       notifySuccess(`Ticket ${ticket.code} submitted.`);
     } catch (requestError) {
@@ -280,14 +301,19 @@ export function TicketsView() {
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {photos.map((photo, index) => (
                     <div key={`${photo.fileName}-${index}`} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-2.5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
-                      <img src={photo.dataUrl} alt="" className="h-12 w-12 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
+                      <img src={photo.previewUrl} alt="" className="h-12 w-12 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-bold text-[#111827] dark:text-slate-100">{photo.fileName}</p>
                         <p className="text-[11px] font-semibold text-gray-400 dark:text-slate-300">{formatFileSize(photo.sizeBytes)}</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
+                        onClick={() =>
+                          setPhotos((current) => {
+                            URL.revokeObjectURL(current[index].previewUrl);
+                            return current.filter((_, photoIndex) => photoIndex !== index);
+                          })
+                        }
                         className="rounded-full p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-200"
                         aria-label={`Remove ${photo.fileName}`}
                       >
@@ -535,14 +561,14 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
                     </div>
                     {ticket.attachments.length > 0 ? (
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        {ticket.attachments.map((attachment, index) => (
+                        {ticket.attachments.map((attachment) => (
                           <button
-                            key={attachment.id ?? `${attachment.fileName}-${index}`}
+                            key={attachment.id}
                             type="button"
                             onClick={() => onPreviewPhoto(attachment)}
                             className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-600 dark:bg-[#121c31] dark:hover:border-emerald-300/40 dark:hover:bg-emerald-500/10"
                           >
-                            <img src={getSupportTicketAttachmentUrl(attachment)} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
+                            <AuthenticatedTicketImage attachment={attachment} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-bold text-[#111827] dark:text-slate-100">{attachment.fileName}</span>
                               <span className="mt-1 block text-[11px] font-semibold text-gray-500 dark:text-slate-300">{formatFileSize(attachment.sizeBytes)}</span>
@@ -635,7 +661,7 @@ function PhotoPreviewModal({ onClose, photo }: { onClose: () => void; photo: Sup
           </header>
           <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-white p-5 dark:bg-[#121c31]">
             <div className="rounded-3xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-600 dark:bg-[#0f172a]">
-              <img src={getSupportTicketAttachmentUrl(photo)} alt={photo.fileName} className="max-h-[70vh] w-full rounded-2xl object-contain" />
+              <AuthenticatedTicketImage attachment={photo} alt={photo.fileName} className="max-h-[70vh] w-full rounded-2xl object-contain" />
             </div>
           </div>
         </section>
@@ -746,7 +772,7 @@ function fieldClassName(extra = "") {
   return `w-full rounded-2xl border border-gray-200 bg-white p-3.5 text-sm text-[#111827] shadow-sm outline-none transition-colors focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:border-slate-600 dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-400 dark:focus:border-emerald-300/70 ${extra}`;
 }
 
-async function readTicketPhoto(file: File): Promise<SupportTicketAttachment> {
+function readTicketPhoto(file: File): TicketPhotoDraft {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (!allowedImageTypes.has(file.type) || !allowedImageExtensions.has(extension)) {
     throw new Error("Only image files are allowed.");
@@ -755,32 +781,18 @@ async function readTicketPhoto(file: File): Promise<SupportTicketAttachment> {
     throw new Error("Each photo must be under 5 MB.");
   }
 
-  const dataUrl = await readAsDataUrl(file);
-  if (!/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
-    throw new Error("Only image files are allowed.");
-  }
-
   return {
-    dataUrl,
+    file,
     fileName: file.name.replace(/\\/g, "/").split("/").pop() || "ticket-photo",
     mediaType: file.type as SupportTicketAttachment["mediaType"],
+    previewUrl: URL.createObjectURL(file),
     sizeBytes: file.size,
   };
 }
 
-function readAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-      } else {
-        reject(new Error("Unable to read image file."));
-      }
-    };
-    reader.onerror = () => reject(new Error("Unable to read image file."));
-    reader.readAsDataURL(file);
-  });
+function AuthenticatedTicketImage({ attachment, alt, className }: { attachment: SupportTicketAttachment; alt: string; className: string }) {
+  const imageUrl = useAuthenticatedImage(attachment.url);
+  return imageUrl ? <img src={imageUrl} alt={alt} className={className} /> : <span className={className} aria-label="Image loading" />;
 }
 
 function validateTicketForm(form: TicketFormState) {

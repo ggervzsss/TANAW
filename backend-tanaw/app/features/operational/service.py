@@ -1,16 +1,20 @@
 import json
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from math import ceil, sin
 from typing import cast
+from uuid import uuid4
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
 from app.features.accounts.options import format_enterprise_category
+from app.features.assets.models import SupportAttachment
+from app.features.assets.storage import AssetStorage, ValidatedImage
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     EnterpriseTelemetrySnapshot,
@@ -302,7 +306,10 @@ async def set_user_notification_read(
     return to_user_notification_summary(notification)
 
 
-def to_support_ticket_summary(ticket: SupportTicket) -> SupportTicketSummary:
+def to_support_ticket_summary(
+    ticket: SupportTicket,
+    attachments: Sequence[SupportAttachment] = (),
+) -> SupportTicketSummary:
     return SupportTicketSummary(
         id=ticket.id,
         code=ticket.ticket_code,
@@ -315,42 +322,21 @@ def to_support_ticket_summary(ticket: SupportTicket) -> SupportTicketSummary:
         description=ticket.description,
         affectedArea=ticket.affected_area,
         cameraNode=ticket.camera_node,
-        attachments=ticket_attachment_summaries(ticket),
+        attachments=[ticket_attachment_summary(attachment) for attachment in attachments],
         status=ticket.status,  # type: ignore[arg-type]
         createdAt=ticket.created_at,
         updatedAt=ticket.updated_at,
     )
 
 
-def ticket_attachment_summaries(ticket: SupportTicket) -> list[SupportTicketAttachment]:
-    attachments = parse_ticket_attachments(ticket.attachments_json)
-    return [
-        attachment.model_copy(
-            update={
-                "id": f"{ticket.id}:{index}",
-                "url": f"/operational/tickets/{ticket.id}/attachments/{index}",
-            }
-        )
-        for index, attachment in enumerate(attachments)
-    ]
-
-
-def parse_ticket_attachments(value: str | None) -> list[SupportTicketAttachment]:
-    if not value:
-        return []
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(parsed, list):
-        return []
-    attachments: list[SupportTicketAttachment] = []
-    for item in parsed:
-        try:
-            attachments.append(SupportTicketAttachment.model_validate(item))
-        except ValueError:
-            continue
-    return attachments
+def ticket_attachment_summary(attachment: SupportAttachment) -> SupportTicketAttachment:
+    return SupportTicketAttachment(
+        id=attachment.id,
+        fileName=attachment.file_name,
+        mediaType=attachment.mime_type,  # type: ignore[arg-type]
+        sizeBytes=attachment.size_bytes,
+        url=f"/operational/tickets/{attachment.ticket_id}/attachments/{attachment.id}",
+    )
 
 
 def to_support_ticket_message_summary(message: SupportTicketMessage) -> SupportTicketMessageSummary:
@@ -373,7 +359,14 @@ async def list_support_tickets(
         topology = await require_account_topology(db, account)
         statement = statement.where(SupportTicket.enterprise_id == enterprise_identifier(topology))
     tickets = (await db.scalars(statement)).all()
-    return [to_support_ticket_summary(ticket) for ticket in tickets]
+    attachments_by_ticket = await _support_attachments_by_ticket(
+        db,
+        ticket_ids=[ticket.id for ticket in tickets],
+    )
+    return [
+        to_support_ticket_summary(ticket, attachments_by_ticket.get(ticket.id, ()))
+        for ticket in tickets
+    ]
 
 
 async def get_support_ticket_for_account(
@@ -405,7 +398,8 @@ async def get_support_ticket_detail(
             .order_by(SupportTicketMessage.created_at.asc())
         )
     ).all()
-    summary = to_support_ticket_summary(ticket)
+    attachments = await _support_attachments_by_ticket(db, ticket_ids=[ticket.id])
+    summary = to_support_ticket_summary(ticket, attachments.get(ticket.id, ()))
     return SupportTicketDetail(
         **summary.model_dump(),
         messages=[to_support_ticket_message_summary(message) for message in message_rows],
@@ -417,11 +411,13 @@ async def create_support_ticket(
     account: Account,
     payload: SupportTicketCreate,
     *,
-    commit: bool = True,
+    storage: AssetStorage,
+    images: Sequence[ValidatedImage] = (),
 ) -> SupportTicketSummary:
     topology = await require_account_topology(db, account)
     ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
     ticket = SupportTicket(
+        id=str(uuid4()),
         ticket_code=f"TCK-{int(ticket_count or 0) + 1:06d}",
         enterprise_account_id=account.id,
         enterprise_id=enterprise_identifier(topology),
@@ -432,20 +428,90 @@ async def create_support_ticket(
         description=payload.description,
         affected_area=payload.affectedArea,
         camera_node=payload.cameraNode,
-        attachments_json=json.dumps(
-            [attachment.model_dump(mode="json") for attachment in payload.attachments],
-            sort_keys=True,
-        )
-        if payload.attachments
-        else None,
     )
     db.add(ticket)
-    if commit:
+    stored_keys: list[str] = []
+    attachments: list[SupportAttachment] = []
+    try:
+        await db.flush([ticket])
+        for ordinal, image in enumerate(images):
+            attachment_id = str(uuid4())
+            storage_key = f"tickets/{ticket.id}/{attachment_id}"
+            await storage.put(
+                key=storage_key,
+                content=image.content,
+                max_bytes=image.size_bytes,
+            )
+            stored_keys.append(storage_key)
+            attachment = SupportAttachment(
+                id=attachment_id,
+                ticket_id=ticket.id,
+                ordinal=ordinal,
+                storage_key=storage_key,
+                file_name=image.file_name,
+                mime_type=image.mime_type,
+                size_bytes=image.size_bytes,
+                content_hash=image.content_hash,
+                status="active",
+            )
+            attachments.append(attachment)
+            db.add(attachment)
         await db.commit()
-    else:
-        await db.flush()
+    except Exception:
+        await db.rollback()
+        for storage_key in stored_keys:
+            try:
+                await storage.delete(key=storage_key)
+            except Exception:
+                pass
+        raise
     await db.refresh(ticket)
-    return to_support_ticket_summary(ticket)
+    return to_support_ticket_summary(ticket, attachments)
+
+
+async def get_support_attachment_for_account(
+    db: AsyncSession,
+    account: Account,
+    *,
+    ticket_id: str,
+    attachment_id: str,
+) -> SupportAttachment | None:
+    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    if ticket is None:
+        return None
+    return cast(
+        SupportAttachment | None,
+        await db.scalar(
+            select(SupportAttachment).where(
+                SupportAttachment.id == attachment_id,
+                SupportAttachment.ticket_id == ticket.id,
+                SupportAttachment.status == "active",
+            )
+        ),
+    )
+
+
+async def _support_attachments_by_ticket(
+    db: AsyncSession,
+    *,
+    ticket_ids: Sequence[str],
+) -> dict[str, tuple[SupportAttachment, ...]]:
+    if not ticket_ids:
+        return {}
+    rows = list(
+        await db.scalars(
+            select(SupportAttachment)
+            .where(
+                SupportAttachment.ticket_id.in_(ticket_ids),
+                SupportAttachment.status == "active",
+            )
+            .order_by(SupportAttachment.ticket_id, SupportAttachment.ordinal)
+        )
+    )
+    grouped: dict[str, list[SupportAttachment]] = defaultdict(list)
+    for attachment in rows:
+        grouped[attachment.ticket_id].append(attachment)
+    return {ticket_id: tuple(items) for ticket_id, items in grouped.items()}
 
 
 async def create_support_ticket_message(

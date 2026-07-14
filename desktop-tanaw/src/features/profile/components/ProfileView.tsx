@@ -9,13 +9,15 @@ import {
   getBusinessEmailChangeStatus,
   requestBusinessEmailChange,
   requestContactNumberChange,
+  removeProfileImage,
   updateBuildingCapacity,
   updateLeadAdminName,
-  updateProfileImage,
+  uploadProfileImage,
 } from "../../login/api/login";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { readProfileImageFile } from "../../../utils/image-upload";
 import { normalizeEmail, normalizeName, toPhilippineLocalDigits, validateEmail, validateName, validatePhilippineContactNumber } from "../../../utils/form-validation";
+import { useAuthenticatedImage } from "../../../hooks/useAuthenticatedImage";
 
 type EditableProfileField = "managerName" | "email" | "phone" | "buildingCapacity";
 
@@ -44,13 +46,21 @@ export function ProfileView() {
   const phoneLocal = toPhilippineLocalDigits(user?.phone ?? "");
   const phoneDisplay = phoneLocal ? `+63 ${phoneLocal}` : "Not provided";
   const initials = getInitials(enterpriseName);
-  const [displayImageDataUrl, setDisplayImageDataUrl] = useState<string | null>(() => user?.displayImageDataUrl ?? null);
+  const storedImageObjectUrl = useAuthenticatedImage(user?.displayImageUrl);
+  const [displayImageDraft, setDisplayImageDraft] = useState<{
+    file: File | null;
+    previewUrl: string | null;
+    remove: boolean;
+  }>({ file: null, previewUrl: null, remove: false });
   const [displayImageFileName, setDisplayImageFileName] = useState("");
+  const displayImageUrl = displayImageDraft.previewUrl ?? (displayImageDraft.remove ? null : storedImageObjectUrl);
 
-  useEffect(() => {
-    setDisplayImageDataUrl(user?.displayImageDataUrl ?? null);
-    setDisplayImageFileName("");
-  }, [user?.buildingCapacity, user?.displayImageDataUrl, user?.email, user?.managerName, user?.phone]);
+  useEffect(
+    () => () => {
+      if (displayImageDraft.previewUrl) URL.revokeObjectURL(displayImageDraft.previewUrl);
+    },
+    [displayImageDraft.previewUrl],
+  );
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -71,8 +81,15 @@ export function ProfileView() {
     event.preventDefault();
     setIsLoading(true);
     try {
-      const updated = await updateProfileImage(displayImageDataUrl);
+      const updated = displayImageDraft.file
+        ? await uploadProfileImage(displayImageDraft.file)
+        : displayImageDraft.remove
+          ? await removeProfileImage()
+          : user;
+      if (!updated) throw new Error("Profile session is unavailable.");
       updateUser(updated);
+      setDisplayImageDraft({ file: null, previewUrl: null, remove: false });
+      setDisplayImageFileName("");
       setIsLoading(false);
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
@@ -89,7 +106,10 @@ export function ProfileView() {
 
     try {
       const upload = await readProfileImageFile(file);
-      setDisplayImageDataUrl(upload.dataUrl);
+      setDisplayImageDraft((current) => {
+        if (current.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return { file: upload.file, previewUrl: upload.previewUrl, remove: false };
+      });
       setDisplayImageFileName(upload.fileName);
       notifySuccess("Logo ready to save.");
     } catch (error) {
@@ -115,8 +135,8 @@ export function ProfileView() {
               htmlFor="enterprise-logo-upload"
               className="group relative flex h-24 w-24 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-emerald-200 bg-white shadow-sm"
             >
-              {displayImageDataUrl ? (
-                <img src={displayImageDataUrl} alt="Enterprise logo preview" className="h-full w-full object-cover" />
+              {displayImageUrl ? (
+                <img src={displayImageUrl} alt="Enterprise logo preview" className="h-full w-full object-cover" />
               ) : (
                 <span className="text-tanaw-navy font-['Bai_Jamjuree'] text-2xl font-bold transition-opacity group-hover:opacity-0">{initials}</span>
               )}
@@ -133,11 +153,14 @@ export function ProfileView() {
                 Recommended format: 256x256px PNG or JPG.
               </p>
               {displayImageFileName && <p className="mt-2 text-xs font-semibold text-emerald-700">{displayImageFileName}</p>}
-              {displayImageDataUrl && (
+              {displayImageUrl && (
                 <button
                   type="button"
                   onClick={() => {
-                    setDisplayImageDataUrl(null);
+                    setDisplayImageDraft((current) => {
+                      if (current.previewUrl) URL.revokeObjectURL(current.previewUrl);
+                      return { file: null, previewUrl: null, remove: true };
+                    });
                     setDisplayImageFileName("");
                   }}
                   className="mt-3 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"

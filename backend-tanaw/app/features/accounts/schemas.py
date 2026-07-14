@@ -92,7 +92,7 @@ class AuthUser(BaseModel):
     managerName: str | None = None
     barangay: str | None = None
     address: str | None = None
-    displayImageDataUrl: str | None = None
+    displayImageUrl: str | None = None
     buildingCapacity: int = 100
 
 
@@ -358,7 +358,6 @@ class ProfileUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     enterpriseName: str | None = Field(default=None, min_length=2, max_length=120)
     address: str | None = Field(default=None, max_length=255)
-    displayImageDataUrl: str | None = Field(default=None, max_length=2_800_000)
 
     @field_validator("firstName", "lastName")
     @classmethod
@@ -382,28 +381,6 @@ class ProfileUpdate(BaseModel):
     @classmethod
     def normalize_profile_phone(cls, value: object) -> str | None:
         return normalize_optional_contact_number(value)
-
-    @field_validator("displayImageDataUrl")
-    @classmethod
-    def validate_display_image_data_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if re.fullmatch(r"data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+", value) is None:
-            raise ValueError("Upload a PNG, JPG, or WebP image.")
-        return value
-
-
-class ProfileDisplayImageUpdate(BaseModel):
-    displayImageDataUrl: str | None = Field(default=None, max_length=2_800_000)
-
-    @field_validator("displayImageDataUrl")
-    @classmethod
-    def validate_display_image_data_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if re.fullmatch(r"data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+", value) is None:
-            raise ValueError("Upload a PNG, JPG, or WebP image.")
-        return value
 
 
 class LeadAdminNameUpdate(BaseModel):
