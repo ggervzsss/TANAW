@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useFinalReportDetail } from "@/shared/hooks/useReportWorkflow";
 import { ModalPortal } from "@/shared/components/ui";
 import { CITY_SEAL } from "@/shared/constants/branding";
-import { downloadFinalReportSnapshotPdf } from "../utils/pdf";
+import { fetchFinalReportArtifact } from "@/shared/services/reporting";
 import { readableToken } from "../utils/reportWorkflow";
 import { FinalSnapshotFactTable } from "./ReportFactTables";
 import { ReportStatusBadge } from "./ReportStatusBadge";
@@ -16,8 +16,27 @@ type FinalReportViewerProps = {
 
 export function FinalReportViewer({ reportFinalizationId, onClose }: FinalReportViewerProps) {
   const [requestedVersionId, setRequestedVersionId] = useState<string | undefined>();
+  const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const detailQuery = useFinalReportDetail(reportFinalizationId, requestedVersionId);
   const report = detailQuery.data;
+  const officialPdf = report?.selectedVersion.artifacts.find(
+    (artifact) => artifact.status === "ready" && artifact.downloadAvailable && artifact.mimeType === "application/pdf",
+  );
+
+  const downloadOfficialPdf = async (artifactId: string) => {
+    if (!report || downloadingArtifactId) return;
+    setDownloadError(null);
+    setDownloadingArtifactId(artifactId);
+    try {
+      const artifact = await fetchFinalReportArtifact(report.reportFinalizationId, report.selectedVersionId, artifactId);
+      saveOfficialPdf(artifact.blob, `${report.reportCode}-v${report.selectedVersion.versionNumber}-official.pdf`);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "The official final-report artifact could not be downloaded.");
+    } finally {
+      setDownloadingArtifactId(null);
+    }
+  };
 
   return (
     <ModalPortal>
@@ -37,7 +56,7 @@ export function FinalReportViewer({ reportFinalizationId, onClose }: FinalReport
               {report && (
                 <label className="text-xs font-semibold text-slate-600">Version <select value={report.selectedVersionId} onChange={(event) => setRequestedVersionId(event.target.value)} className="ml-1 rounded-lg border border-slate-300 bg-white px-2 py-2">{report.versions.map((version) => <option key={version.finalReportVersionId} value={version.finalReportVersionId}>v{version.versionNumber} · {version.disposition}</option>)}</select></label>
               )}
-              <button type="button" disabled={!report} onClick={() => report && downloadFinalReportSnapshotPdf(report)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50"><Download size={15} /> Snapshot PDF</button>
+              <button type="button" disabled={!officialPdf || downloadingArtifactId !== null} onClick={() => officialPdf && void downloadOfficialPdf(officialPdf.artifactId)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50"><Download size={15} /> {downloadingArtifactId ? "Verifying PDF…" : "Official PDF"}</button>
               <button type="button" disabled={!report} onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50"><Printer size={15} /> Print</button>
               <button type="button" onClick={onClose} aria-label="Close final report" className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500"><X size={20} /></button>
             </div>
@@ -46,6 +65,7 @@ export function FinalReportViewer({ reportFinalizationId, onClose }: FinalReport
           <div className="tanaw-document-preview overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
             {detailQuery.isLoading && <Notice text="Loading the requested immutable version…" />}
             {detailQuery.isError && <Notice error text="The requested immutable final-report version could not be loaded. TANAW will not substitute a list row or another version." />}
+            {downloadError && <Notice error text={downloadError} />}
             {report && (
               <div className="space-y-7">
                 <div className="border-b-2 border-black pb-4 text-center">
@@ -83,7 +103,7 @@ export function FinalReportViewer({ reportFinalizationId, onClose }: FinalReport
 
                 <section>
                   <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Artifact generation records</h3>
-                  <div className="grid gap-2 md:grid-cols-2">{report.selectedVersion.artifacts.map((artifact) => <div key={artifact.artifactId} className="rounded-xl border border-slate-200 p-3 text-xs"><div className="flex items-center justify-between gap-2"><strong>{artifact.templateVersion} · {artifact.mimeType}</strong><ReportStatusBadge status={artifact.status} /></div><p className="mt-2 break-all text-slate-500">{artifact.contentHash ?? "Content hash pending"}</p><p className="mt-1 text-slate-500">Attempts: {artifact.generationAttempts} · {artifact.generatedAt ? formatTimestamp(artifact.generatedAt) : "Not generated"}</p>{artifact.downloadAvailable && <p className="mt-2 font-semibold text-amber-700">Artifact is ready, but the backend has not exposed an authorized download route. The snapshot PDF above remains evidence-derived.</p>}</div>)}</div>
+                  <div className="grid gap-2 md:grid-cols-2">{report.selectedVersion.artifacts.map((artifact) => <div key={artifact.artifactId} className="rounded-xl border border-slate-200 p-3 text-xs"><div className="flex items-center justify-between gap-2"><strong>{artifact.templateVersion} · {artifact.mimeType}</strong><ReportStatusBadge status={artifact.status} /></div><p className="mt-2 break-all text-slate-500">{artifact.contentHash ?? "Content hash pending"}</p><p className="mt-1 text-slate-500">Attempts: {artifact.generationAttempts} · {artifact.generatedAt ? formatTimestamp(artifact.generatedAt) : "Not generated"}</p>{artifact.status === "ready" && artifact.downloadAvailable && artifact.mimeType === "application/pdf" ? <button type="button" disabled={downloadingArtifactId !== null} onClick={() => void downloadOfficialPdf(artifact.artifactId)} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-800 disabled:opacity-50"><Download size={13} /> {downloadingArtifactId === artifact.artifactId ? "Verifying…" : "Download verified official PDF"}</button> : <p className="mt-2 font-semibold text-slate-500">{artifact.status === "failed" ? `Generation failed${artifact.lastErrorCode ? `: ${artifact.lastErrorCode}` : "."}` : "Official download is not ready."}</p>}</div>)}</div>
                 </section>
 
                 <section>
@@ -110,4 +130,15 @@ function Notice({ text, error = false }: { text: string; error?: boolean }) {
 function formatTimestamp(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(timestamp) : value;
+}
+
+function saveOfficialPdf(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -5,6 +5,7 @@ import type {
   EnterpriseReportPage,
   FinalizationAcknowledgement,
   FinalizeReportsCommand,
+  FinalReportArtifactDetail,
   FinalReportDetail,
   FinalReportListItem,
   FinalReportPage,
@@ -186,6 +187,73 @@ export async function finalizeReports(command: FinalizeReportsCommand): Promise<
   return response.data;
 }
 
+export type DownloadedFinalReportArtifact = {
+  blob: Blob;
+  contentHash: string;
+  mimeType: "application/pdf";
+  sizeBytes: number;
+};
+
+export async function readFinalReportArtifact(
+  reportFinalizationId: string,
+  finalReportVersionId: string,
+  artifactId: string,
+): Promise<FinalReportArtifactDetail> {
+  const response = await apiClient.get<FinalReportArtifactDetail>(
+    `/operational/reports/finalizations/${reportFinalizationId}/artifacts/${artifactId}/v2`,
+  );
+  const artifact = response.data;
+  if (
+    artifact.contractVersion !== 2 ||
+    artifact.reportFinalizationId !== reportFinalizationId ||
+    artifact.finalReportVersionId !== finalReportVersionId ||
+    artifact.artifactId !== artifactId
+  ) {
+    throw new Error("The artifact metadata did not match the requested immutable final-report version.");
+  }
+  assertFinalReportArtifactMetadata(artifact);
+  return artifact;
+}
+
+export async function fetchFinalReportArtifact(
+  reportFinalizationId: string,
+  finalReportVersionId: string,
+  artifactId: string,
+): Promise<DownloadedFinalReportArtifact> {
+  const metadata = await readFinalReportArtifact(reportFinalizationId, finalReportVersionId, artifactId);
+  if (metadata.status !== "ready" || !metadata.downloadAvailable || metadata.contentHash === null || metadata.sizeBytes === null) {
+    throw new Error("The official final-report artifact is not ready for download.");
+  }
+  if (metadata.mimeType !== "application/pdf") {
+    throw new Error("The official final-report artifact is not a supported PDF.");
+  }
+
+  const response = await apiClient.get<Blob>(
+    `/operational/reports/finalizations/${reportFinalizationId}/artifacts/${artifactId}/download/v2`,
+    { responseType: "blob" },
+  );
+  if (!(response.data instanceof Blob)) {
+    throw new Error("The official final-report download did not return binary content.");
+  }
+
+  const contentType = normalizedMediaType(response.data.type || headerValue(response.headers["content-type"]));
+  const contentLength = parseContentLength(headerValue(response.headers["content-length"]));
+  const etag = normalizeEtag(headerValue(response.headers.etag));
+  if (contentType !== metadata.mimeType || response.data.size !== metadata.sizeBytes || contentLength !== metadata.sizeBytes || etag !== metadata.contentHash) {
+    throw new Error("The official final-report download metadata failed integrity verification.");
+  }
+  const contentHash = await sha256Blob(response.data);
+  if (contentHash !== metadata.contentHash) {
+    throw new Error("The official final-report download content failed SHA-256 verification.");
+  }
+  return {
+    blob: response.data,
+    contentHash,
+    mimeType: metadata.mimeType,
+    sizeBytes: metadata.sizeBytes,
+  };
+}
+
 export async function collectCursorPages<TItem>(
   readPage: (cursor?: string) => Promise<{ items: TItem[]; page: { hasMore: boolean; nextCursor: string | null } }>,
   resourceName: string,
@@ -237,6 +305,58 @@ function assertCursorMetadata(
 
 function compactParams(params: Record<string, string | number | undefined>) {
   return Object.fromEntries(Object.entries(params).filter((entry): entry is [string, string | number] => entry[1] !== undefined));
+}
+
+function assertFinalReportArtifactMetadata(artifact: FinalReportArtifactDetail) {
+  if (!Number.isInteger(artifact.generationAttempts) || artifact.generationAttempts < 0) {
+    throw new Error("The artifact metadata contained an invalid generation-attempt count.");
+  }
+  if (artifact.status === "ready") {
+    if (
+      artifact.downloadAvailable !== true ||
+      artifact.mimeType !== "application/pdf" ||
+      artifact.sizeBytes === null ||
+      !Number.isSafeInteger(artifact.sizeBytes) ||
+      artifact.sizeBytes <= 0 ||
+      artifact.contentHash === null ||
+      !/^sha256:[0-9a-f]{64}$/.test(artifact.contentHash)
+    ) {
+      throw new Error("The ready artifact metadata was incomplete or invalid.");
+    }
+    return;
+  }
+  if (artifact.downloadAvailable) {
+    throw new Error("A non-ready artifact cannot advertise an available download.");
+  }
+}
+
+function headerValue(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function normalizedMediaType(value: string | undefined) {
+  return value?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
+function parseContentLength(value: string | undefined) {
+  if (!value || !/^\d+$/.test(value)) return null;
+  const size = Number(value);
+  return Number.isSafeInteger(size) ? size : null;
+}
+
+function normalizeEtag(value: string | undefined) {
+  if (!value) return null;
+  const normalized = value.trim();
+  return normalized.startsWith('"') && normalized.endsWith('"') ? normalized.slice(1, -1) : null;
+}
+
+async function sha256Blob(blob: Blob) {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("SHA-256 verification is unavailable in this browser.");
+  }
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `sha256:${hex}`;
 }
 
 function assertUniqueResources<TItem>(items: TItem[], resourceId: (item: TItem) => string, resourceName: string) {

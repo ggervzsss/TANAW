@@ -47,5 +47,8 @@ describe("report audit actor presentation", () => {
     expect(html).toContain("Actor not recorded");
     expect(html).toContain("Role not recorded");
     expect(html).not.toContain("System actor");
+    expect(html).toContain("Official PDF");
+    expect(html).toContain("Download verified official PDF");
+    expect(html).not.toContain("Snapshot PDF");
   });
 });

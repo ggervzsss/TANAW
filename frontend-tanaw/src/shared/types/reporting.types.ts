@@ -330,6 +330,13 @@ export type FinalReportArtifactResource = {
   updatedAt: string;
 };
 
+export type FinalReportArtifactDetail = FinalReportArtifactResource & {
+  contractVersion: 2;
+  reportFinalizationId: string;
+  finalReportVersionId: string;
+  sizeBytes: number | null;
+};
+
 export type FinalReportVersionSummaryResource = {
   finalReportVersionId: string;
   versionNumber: number;

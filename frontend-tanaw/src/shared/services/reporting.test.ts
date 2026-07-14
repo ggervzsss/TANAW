@@ -3,10 +3,12 @@ import { enterpriseReportDetailFixture, enterpriseReportFixture, finalReportDeta
 import { apiClient } from "../lib/apiClient";
 import {
   collectCursorPages,
+  fetchFinalReportArtifact,
   finalizeReports,
   listAllEnterpriseReports,
   listAllReportingPeriods,
   readEnterpriseReport,
+  readFinalReportArtifact,
   readFinalReport,
   runReportingPeriodLifecycle,
   transitionEnterpriseReport,
@@ -105,6 +107,70 @@ describe("reporting v2 service", () => {
 
     mockedGet.mockResolvedValueOnce({ data: { ...detail, selectedVersionId: "different-version" } });
     await expect(readFinalReport(detail.reportFinalizationId, detail.selectedVersionId)).rejects.toThrow("immutable version");
+  });
+
+  it("downloads only an exact, ready, byte-verified official final artifact", async () => {
+    const detail = finalReportDetailFixture();
+    const artifact = detail.selectedVersion.artifacts[0]!;
+    const bytes = "official-pdf-bytes";
+    const contentHash = "sha256:0a4650523390a147fa0517829b5087c5909db8cda3987c9e6858bca3549652ad";
+    const metadata = {
+      ...artifact,
+      contractVersion: 2 as const,
+      reportFinalizationId: detail.reportFinalizationId,
+      finalReportVersionId: detail.selectedVersionId,
+      contentHash,
+      sizeBytes: 18,
+    };
+    mockedGet
+      .mockResolvedValueOnce({ data: metadata })
+      .mockResolvedValueOnce({
+        data: new Blob([bytes], { type: "application/pdf" }),
+        headers: { "content-length": "18", "content-type": "application/pdf", etag: `"${contentHash}"` },
+      });
+
+    const downloaded = await fetchFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId);
+
+    expect(downloaded.contentHash).toBe(contentHash);
+    expect(downloaded.sizeBytes).toBe(18);
+    expect(mockedGet).toHaveBeenNthCalledWith(
+      1,
+      `/operational/reports/finalizations/${detail.reportFinalizationId}/artifacts/${artifact.artifactId}/v2`,
+    );
+    expect(mockedGet).toHaveBeenNthCalledWith(
+      2,
+      `/operational/reports/finalizations/${detail.reportFinalizationId}/artifacts/${artifact.artifactId}/download/v2`,
+      { responseType: "blob" },
+    );
+  });
+
+  it("fails closed on mismatched artifact identity and corrupted artifact bytes", async () => {
+    const detail = finalReportDetailFixture();
+    const artifact = detail.selectedVersion.artifacts[0]!;
+    const contentHash = "sha256:0a4650523390a147fa0517829b5087c5909db8cda3987c9e6858bca3549652ad";
+    const metadata = {
+      ...artifact,
+      contractVersion: 2 as const,
+      reportFinalizationId: detail.reportFinalizationId,
+      finalReportVersionId: detail.selectedVersionId,
+      contentHash,
+      sizeBytes: 18,
+    };
+
+    mockedGet.mockResolvedValueOnce({ data: { ...metadata, finalReportVersionId: "different-version" } });
+    await expect(readFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId)).rejects.toThrow(
+      "did not match",
+    );
+
+    mockedGet
+      .mockResolvedValueOnce({ data: metadata })
+      .mockResolvedValueOnce({
+        data: new Blob(["tampered-pdf-bytes"], { type: "application/pdf" }),
+        headers: { "content-length": "18", "content-type": "application/pdf", etag: `"${contentHash}"` },
+      });
+    await expect(fetchFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId)).rejects.toThrow(
+      "SHA-256",
+    );
   });
 
   it("uses version-checked v2 transitions and exact-revision finalization commands", async () => {

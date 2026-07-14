@@ -1,4 +1,4 @@
-import type { EnterpriseReportDetail, FinalReportDetail } from "@/shared/types";
+import type { EnterpriseReportDetail } from "@/shared/types";
 import { formatDecimal } from "./decimal";
 import { readableToken } from "./reportWorkflow";
 
@@ -49,45 +49,6 @@ export function buildEnterpriseReportPdf(report: EnterpriseReportDetail) {
     ...revisionEvents.map((event) => `${event.occurredAt}: ${readableToken(event.eventType)}; ${event.actor.displayName ?? "Actor not recorded"}; ${event.actor.role ?? "Role not recorded"}; ${event.expectedVersion}->${event.resultingVersion}; ${event.reason ?? "No reason recorded"}`),
   ];
   return buildTextPdf("TANAW Official Enterprise Report Evidence", report.enterpriseReportId, lines);
-}
-
-export function downloadFinalReportSnapshotPdf(report: FinalReportDetail) {
-  downloadPdf(buildFinalReportSnapshotPdf(report), `${report.reportCode}-v${report.selectedVersion.versionNumber}.pdf`);
-}
-
-export function buildFinalReportSnapshotPdf(report: FinalReportDetail) {
-  const version = report.selectedVersion;
-  const versionEvents = report.events.filter((event) => event.finalReportVersionId === report.selectedVersionId);
-  const lines = [
-    `Report code: ${report.reportCode}`,
-    `Finalization ID: ${report.reportFinalizationId}`,
-    `Selected immutable version: ${version.versionNumber} (${version.disposition})`,
-    `Version ID: ${version.finalReportVersionId}`,
-    `Reporting period: ${report.reportingPeriod.label} [${report.reportingPeriod.naturalKey}]`,
-    `Frozen scope: ${version.scope.label} (${readableToken(version.scope.type)})`,
-    `Prepared by: ${version.preparedBy.name} (${version.preparedBy.role})`,
-    `Finalized at: ${version.finalizedAt}`,
-    `Content hash: ${version.contentHash}`,
-    `Exact source count: ${version.sourceCount}`,
-    "",
-    "FROZEN SCOPE MEMBERS",
-    ...version.scopeMembers.map((member) => `${member.enterpriseName} [${member.enterpriseOfficialCode}] / ${member.siteName} [${member.siteCode}] / ${member.frozenBarangay ?? "Barangay not recorded"} / obligation ${member.reportingObligationId}`),
-    "",
-    "IMMUTABLE CONSOLIDATED METRIC FACTS",
-    ...version.metrics.map((metric) => `${readableToken(metric.definition)} v${metric.definitionVersion}: ${formatDecimal(metric.value)} ${metric.unit}; ${readableToken(metric.aggregationMethod)}; ${readableToken(metric.quality)}; ${metric.sourceFactCount} source facts`),
-    ...(version.metrics.length === 0 ? ["No consolidated metric facts recorded."] : []),
-    "",
-    "IMMUTABLE CONSOLIDATED DEMOGRAPHIC FACTS",
-    ...version.demographics.map((fact) => `${readableToken(fact.dimension)} / ${fact.value}: count ${fact.count}; percentage ${fact.percentage === null ? "Not recorded" : `${formatDecimal(fact.percentage)}%`}; ${readableToken(fact.quality)}; ${fact.sourceFactCount} source facts`),
-    ...(version.demographics.length === 0 ? ["No consolidated demographic facts recorded."] : []),
-    "",
-    "EXACT SOURCE REVISIONS",
-    ...version.items.map((item) => `${item.reportRevisionId} / obligation ${item.reportingObligationId} / payload ${item.sourcePayloadHash}`),
-    "",
-    "RECORDED FINALIZATION EVENTS",
-    ...versionEvents.map((event) => `${event.occurredAt}: ${readableToken(event.eventType)}; version ${event.resultingVersion}; ${event.actorDisplayName ?? "Actor not recorded"}; ${event.actorRole ?? "Role not recorded"}; ${event.reason ?? "No reason recorded"}`),
-  ];
-  return buildTextPdf("TANAW Immutable Final Report Snapshot", `${report.reportCode} / v${version.versionNumber}`, lines);
 }
 
 function buildTextPdf(title: string, subtitle: string, rawLines: string[]) {
