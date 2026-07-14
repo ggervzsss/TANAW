@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 from app.features.maintenance.telemetry_retention import run_telemetry_retention
-from app.features.operational.models import MockDataRun
+from app.features.simulation.models import MockDataRun
 from app.features.telemetry.models import (
     DeviceHealthSample,
     DeviceTelemetryEpoch,

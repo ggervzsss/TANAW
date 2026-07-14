@@ -46,7 +46,7 @@ from app.features.mail.models import (
     EmailTemplateName,
 )
 from app.features.mail.rendering import render_outbox_email
-from app.features.operational.models import UserNotification
+from app.features.notifications.models import UserNotification
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"

@@ -10,7 +10,7 @@ from app.features.accounts.models import (
     SystemConfiguration,
 )
 from app.features.activity_logs.models import ActivityLog
-from app.features.alerts.models import SiteSyncAlertState
+from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
 from app.features.assets.models import (
     AccountAsset,
     AccountPreference,
@@ -46,13 +46,7 @@ from app.features.mail.models import (
     EmailOutboxStatus,
     EmailTemplateName,
 )
-from app.features.operational.models import (
-    MockDataRun,
-    MockDataRunAccount,
-    OperationalAlert,
-    SupportTicket,
-    UserNotification,
-)
+from app.features.notifications.models import UserNotification
 from app.features.reporting.models import (
     EnterpriseReport,
     ReportDemographicFact,
@@ -64,6 +58,8 @@ from app.features.reporting.models import (
     ReportRevision,
     ReportSourceBatch,
 )
+from app.features.simulation.models import MockDataRun, MockDataRunAccount
+from app.features.support.models import SupportTicket, SupportTicketMessage
 from app.features.telemetry.models import (
     DeviceHealthSample,
     DeviceTelemetryEpoch,
@@ -142,6 +138,7 @@ __all__ = [
     "ReportingPeriod",
     "SiteLiveState",
     "SupportTicket",
+    "SupportTicketMessage",
     "SupportAttachment",
     "SystemConfiguration",
     "TelemetryMetricFact",

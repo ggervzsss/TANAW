@@ -15,7 +15,7 @@ from app.features.accounts.models import (
 )
 from app.features.activity_logs.models import ActivityLog
 from app.features.activity_logs.service import resolve_activity_log_retention_days
-from app.features.alerts.models import SiteSyncAlertState
+from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
 from app.features.assets.storage import AssetInventoryStorage
 from app.features.auth.email_change import ACTIVE_EMAIL_CHANGE_STATUSES
 from app.features.auth.models import (
@@ -39,7 +39,7 @@ from app.features.maintenance.telemetry_retention import (
     TelemetryRetentionCounts,
     run_telemetry_retention,
 )
-from app.features.operational.models import OperationalAlert, UserNotification
+from app.features.notifications.models import UserNotification
 
 SessionFactory = async_sessionmaker[AsyncSession]
 

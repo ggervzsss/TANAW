@@ -17,7 +17,7 @@ from app.features.assets.storage import (
     AssetStorageError,
     LocalAssetStorage,
 )
-from app.features.operational.models import SupportTicket
+from app.features.support.models import SupportTicket
 
 SessionFactory = async_sessionmaker[AsyncSession]
 

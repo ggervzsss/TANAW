@@ -10,10 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.alerts.models import SiteSyncAlertState
+from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
 from app.features.events.models import DomainEvent, DomainEventDelivery
-from app.features.operational.models import MockDataRun, OperationalAlert
 from app.features.operational.service import to_operational_alert_summary
+from app.features.simulation.models import MockDataRun
 from app.features.telemetry.envelopes import EpochStartCommand, TelemetryCommand
 from app.features.telemetry.models import (
     DeviceHealthSample,

@@ -21,7 +21,6 @@ from app.features.assets.service import (
 )
 from app.features.assets.storage import LocalAssetStorage, validate_image
 from app.features.operational import service as operational_service
-from app.features.operational.models import SupportTicket
 from app.features.operational.schemas import (
     SupportTicketCreate,
     SupportTicketMessageCreate,
@@ -34,6 +33,7 @@ from app.features.operational.service import (
     get_support_ticket_detail,
     update_support_ticket_status,
 )
+from app.features.support.models import SupportTicket
 from app.features.topology.account_scope import AccountTopology
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 

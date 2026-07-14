@@ -31,7 +31,7 @@ from app.features.auth.secret_values import derive_account_activation_token
 from app.features.mail import service as mail_service
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
 from app.features.mail.rendering import render_outbox_email
-from app.features.operational.models import UserNotification
+from app.features.notifications.models import UserNotification
 from app.features.topology.account_scope import enterprise_official_code_for_account
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 

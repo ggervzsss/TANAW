@@ -32,7 +32,7 @@ from app.features.mail.templates import (
     password_reset_code_email,
     support_ticket_reply_email,
 )
-from app.features.operational.models import SupportTicket, SupportTicketMessage
+from app.features.support.models import SupportTicket, SupportTicketMessage
 
 
 class EmailRenderCancelled(ValueError):

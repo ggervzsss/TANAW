@@ -18,11 +18,8 @@ from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import generate_enterprise_id
-from app.features.operational.models import (
-    MockDataRun,
-    MockDataRunAccount,
-)
 from app.features.reporting.contracts import monthly_reporting_period
+from app.features.simulation.models import MockDataRun, MockDataRunAccount
 from app.features.topology.account_scope import (
     AccountTopology,
     require_account_topology,

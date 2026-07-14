@@ -19,7 +19,7 @@ from app.features.events.contracts import (
     JSONValue,
 )
 from app.features.final_reports.models import FinalReportVersion, ReportFinalization
-from app.features.operational.models import UserNotification
+from app.features.notifications.models import UserNotification
 from app.features.reporting.models import (
     EnterpriseReport,
     ReportingObligation,

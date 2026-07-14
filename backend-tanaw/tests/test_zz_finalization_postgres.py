@@ -37,7 +37,6 @@ from app.features.final_reports.service import (
     FinalizationError,
     finalize_report_command,
 )
-from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import (
     EnterpriseReport,
@@ -46,6 +45,7 @@ from app.features.reporting.models import (
     ReportMetricFact,
     ReportRevision,
 )
+from app.features.simulation.models import MockDataRun
 from app.features.topology.models import Enterprise, EnterpriseSite
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"

@@ -8,9 +8,8 @@ from uuid import uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.alerts.models import SiteSyncAlertState
+from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
 from app.features.events.models import DomainEvent, DomainEventDelivery
-from app.features.operational.models import OperationalAlert
 from app.features.reporting.envelopes import canonical_payload_hash
 from app.features.telemetry.envelopes import SyncHealth, canonical_payload_json
 from app.features.telemetry.sync_health import (

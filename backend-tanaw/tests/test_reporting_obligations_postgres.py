@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.events.models import DomainEvent, DomainEventDelivery
-from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
 from app.features.reporting.obligation_envelopes import (
@@ -24,6 +23,7 @@ from app.features.reporting.obligations import (
     freeze_period_obligations,
     read_period_compliance,
 )
+from app.features.simulation.models import MockDataRun
 from app.features.topology.models import (
     Enterprise,
     EnterpriseMembership,

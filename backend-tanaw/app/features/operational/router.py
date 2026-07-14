@@ -34,6 +34,7 @@ from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.alerts.models import OperationalAlert
 from app.features.assets.runtime import get_asset_storage
 from app.features.assets.storage import (
     AssetStorage,
@@ -46,10 +47,6 @@ from app.features.assets.storage import (
 from app.features.events.operational_resources import enqueue_operational_resource_event
 from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
-from app.features.operational.models import (
-    MockDataRun,
-    OperationalAlert,
-)
 from app.features.operational.schemas import (
     EnterpriseNotificationCreate,
     MockPreparationCounts,
@@ -84,6 +81,7 @@ from app.features.operational.service import (
 )
 from app.features.operational.websocket import operational_ws_manager
 from app.features.reporting.models import EnterpriseReport, ReportingObligation, ReportingPeriod
+from app.features.simulation.models import MockDataRun
 from app.features.topology.account_scope import load_account_topology, require_account_topology
 
 router = APIRouter(prefix="/operational", tags=["operational"])

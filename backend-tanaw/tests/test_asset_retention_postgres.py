@@ -21,7 +21,7 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.assets.models import AccountAsset, SupportAttachment
 from app.features.assets.storage import LocalAssetStorage
 from app.features.maintenance.asset_retention import run_asset_retention
-from app.features.operational.models import SupportTicket
+from app.features.support.models import SupportTicket
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_EMAIL_PATTERN = "tanaw-asset-retention-%@example.com"

@@ -28,6 +28,7 @@ from app.features.accounts.models import (
     DevDelivery,
 )
 from app.features.activity_logs.models import ActivityLog
+from app.features.alerts.models import OperationalAlert
 from app.features.auth.models import (
     AccountActivationToken,
     PasswordResetChallenge,
@@ -46,7 +47,7 @@ from app.features.mail.models import (
     EmailTemplateName,
 )
 from app.features.maintenance.retention import run_retention_cleanup
-from app.features.operational.models import OperationalAlert, UserNotification
+from app.features.notifications.models import UserNotification
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_PREFIX = "tanaw-retention-pg-"

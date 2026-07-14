@@ -18,7 +18,7 @@ from app.features.assets.storage import (
     validate_image,
     verify_stored_image,
 )
-from app.features.operational.models import SupportTicket
+from app.features.support.models import SupportTicket
 from app.main import app
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nnormalized-asset-test"

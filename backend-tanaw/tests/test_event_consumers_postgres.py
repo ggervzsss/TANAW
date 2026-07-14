@@ -35,11 +35,12 @@ from app.features.events.realtime import (
     PostgresOperationalRealtimePublisher,
     RealtimeBroadcastHandler,
 )
-from app.features.operational.models import MockDataRun, UserNotification
+from app.features.notifications.models import UserNotification
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import create_user_notification
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
+from app.features.simulation.models import MockDataRun
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"

@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.models import ActivityLog
 from app.features.events.models import DomainEvent, DomainEventDelivery
-from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import CanonicalReportingPeriod, monthly_reporting_period
 from app.features.reporting.envelopes import ReportSubmissionCommand
 from app.features.reporting.models import (
@@ -30,6 +29,7 @@ from app.features.reporting.service import (
 )
 from app.features.reporting.workflow import transition_report
 from app.features.reporting.workflow_envelopes import ReportTransitionCommand
+from app.features.simulation.models import MockDataRun
 from app.features.topology.models import (
     Camera,
     EdgeDevice,

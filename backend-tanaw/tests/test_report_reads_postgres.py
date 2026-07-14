@@ -32,7 +32,6 @@ from app.features.final_reports.read_service import (
     list_official_final_reports,
     read_official_final_report,
 )
-from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import (
     EnterpriseReport,
@@ -53,6 +52,7 @@ from app.features.reporting.read_service import (
     read_official_enterprise_report,
     read_owned_enterprise_report,
 )
+from app.features.simulation.models import MockDataRun
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
