@@ -19,7 +19,7 @@ import {
 import { downloadDotReportPdf } from "../utils/pdf";
 import { buildDemographicFacts, demographicEvidenceFromFacts, getDemographicEvidenceStatus } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
-import { canonicalReportingPeriodFromSource, getReportingPeriodSubmissionError, UNCLASSIFIED_REPORTING_PERIOD_LABEL } from "../services/reporting-period";
+import { canonicalReportingPeriodFromSource, getReportingPeriodSubmissionError, requireCanonicalReportingPeriod, UNCLASSIFIED_REPORTING_PERIOD_LABEL } from "../services/reporting-period";
 
 type ReportsViewProps = {
   reportsHistory: ReportRecord[];
@@ -244,9 +244,10 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         notifyError("This central report has incomplete metric evidence and cannot be loaded as numeric data.");
         return;
       }
+      const resolvedPeriod = requireCanonicalReportingPeriod(resolved.reportingPeriod);
       setReportsHistory((current) => upsertReport(current, resolved));
       setActiveReportId(resolved.id);
-      setReportingPeriod(resolved.reportingPeriod ?? null);
+      setReportingPeriod(resolvedPeriod);
       setNotes(resolved.notes || "");
       setDemo(resolved.demo || emptyDemo());
       setDemographicEvidence(resolved.demographicEvidence ?? null);
@@ -277,13 +278,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         notifyError("This central report has incomplete metric evidence and cannot be previewed as numeric data.");
         return;
       }
+      const resolvedPeriod = requireCanonicalReportingPeriod(resolved.reportingPeriod);
       setReportsHistory((current) => upsertReport(current, resolved));
       setPreviewReport({
         demo: resolved.demo ?? emptyDemo(),
         demographicEvidence: resolved.demographicEvidence ?? null,
         metrics: metricsFromReport(resolved),
         notes: resolved.notes ?? "",
-        period: resolved.period ?? resolved.date,
+        period: resolvedPeriod.label,
         reportId: resolved.id,
       });
     } catch (error) {
@@ -298,6 +300,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         notifyError("This central report has incomplete metric evidence and cannot be exported as numeric data.");
         return;
       }
+      const resolvedPeriod = requireCanonicalReportingPeriod(resolved.reportingPeriod);
       const reportDemo = resolved.demo ?? emptyDemo();
       const reportMetrics = metricsFromReport(resolved);
       const exportError = validateDemographicEvidence(reportDemo, resolved.demographicEvidence ?? null);
@@ -309,7 +312,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
       downloadDotReportPdf({
         reportId: resolved.id,
-        period: resolved.period ?? resolved.date,
+        period: resolvedPeriod.label,
         metrics: reportMetrics,
         demo: reportDemo,
         demographicEvidence: resolved.demographicEvidence ?? null,
@@ -780,13 +783,7 @@ function reportFromCloudSubmission(report: EnterpriseReportHistoryItem): ReportR
     unique === null ? "unique_visitor_estimate" : null,
   ].filter((definition): definition is string => definition !== null);
   const status =
-    report.workflowState === "returned"
-      ? "Returned for Revision"
-      : report.workflowState === "consolidated"
-        ? "Consolidated"
-        : report.workflowState === "accepted"
-          ? "Accepted"
-          : "Submitted";
+    report.workflowState === "returned" ? "Returned for Revision" : report.workflowState === "consolidated" ? "Consolidated" : report.workflowState === "accepted" ? "Accepted" : "Submitted";
   const reportingPeriod = {
     periodId: report.reportingPeriod.reportingPeriodId,
     label: report.reportingPeriod.label,
@@ -837,9 +834,7 @@ async function resolveCentralReportDetail(report: ReportRecord): Promise<ReportR
   };
 }
 
-function demographicBreakdownFromDetail(
-  facts: EnterpriseReportDetail["revisions"][number]["demographics"],
-): DemoBreakdown {
+function demographicBreakdownFromDetail(facts: EnterpriseReportDetail["revisions"][number]["demographics"]): DemoBreakdown {
   const demo = emptyDemo();
   const fieldByValue: Record<string, keyof DemoBreakdown> = {
     this_province_male: "thisProvMale",

@@ -1,9 +1,4 @@
-import type {
-  EnterpriseReportListItem,
-  ObligationResource,
-  PeriodComplianceResource,
-  ReportMetricFactResource,
-} from "@/shared/types";
+import type { EnterpriseReportListItem, FinalReportScopeType, ObligationResource, PeriodComplianceResource, ReportMetricFactResource } from "@/shared/types";
 
 export type ComplianceRow = {
   obligation: ObligationResource;
@@ -53,10 +48,57 @@ export function acceptedRevisionIds(reports: EnterpriseReportListItem[]) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-export function reportMatchesScope(report: EnterpriseReportListItem, scope: { type: "citywide" | "barangay" | "enterprise_selection"; barangay: string | null }, selectedIds: Set<string>) {
-  if (scope.type === "citywide") return true;
-  if (scope.type === "barangay") return report.site.frozenBarangay === scope.barangay;
-  return selectedIds.has(report.enterpriseReportId);
+export function deriveFinalizationScope(rows: ComplianceRow[], scope: { type: FinalReportScopeType; barangay: string | null }, selectedIds: Set<string>) {
+  const targetedRows = rows.filter((row) => {
+    if (scope.type === "citywide") return true;
+    if (scope.type === "barangay") return row.obligation.frozenBarangay === scope.barangay;
+    return row.report !== null && selectedIds.has(row.report.enterpriseReportId);
+  });
+  const eligibleRows = targetedRows.filter((row) => row.obligation.eligibilityStatus === "eligible");
+  const reports = eligibleRows.flatMap((row) =>
+    row.report &&
+    !row.obligation.acceptanceBlocked &&
+    row.obligation.complianceStatus === "accepted" &&
+    row.report.workflowState === "accepted" &&
+    row.report.acceptedRevisionId !== null &&
+    row.report.acceptedRevisionId === row.report.currentRevisionId &&
+    row.report.currentRevision.isAccepted &&
+    !row.report.acceptanceBlocked
+      ? [row.report]
+      : [],
+  );
+
+  if (scope.type === "enterprise_selection") {
+    return {
+      complete: selectedIds.size > 0 && reports.length === selectedIds.size,
+      reports,
+    };
+  }
+
+  return {
+    complete:
+      eligibleRows.length > 0 &&
+      !targetedRows.some((row) => row.obligation.eligibilityStatus === "unknown") &&
+      !eligibleRows.some((row) => row.obligation.acceptanceBlocked) &&
+      reports.length === eligibleRows.length,
+    reports,
+  };
+}
+
+export function deriveBatchReportView(rows: ComplianceRow[], query: string, scope: { type: FinalReportScopeType; barangay: string | null }, selectedIds: Set<string>) {
+  const needle = query.trim().toLowerCase();
+  const visibleRows = needle
+    ? rows.filter((row) =>
+        [row.enterpriseLabel, row.siteLabel, row.obligation.enterpriseId, row.obligation.siteId, row.obligation.frozenBarangay ?? "", row.obligation.obligationId].some((value) =>
+          value.toLowerCase().includes(needle),
+        ),
+      )
+    : rows;
+
+  return {
+    ...deriveFinalizationScope(rows, scope, selectedIds),
+    visibleRows,
+  };
 }
 
 export function readableToken(value: string) {

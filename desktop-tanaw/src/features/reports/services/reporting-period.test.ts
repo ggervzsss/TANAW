@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalReportingPeriodFromSource, getReportingPeriodSubmissionError, reportingPeriodContains } from "./reporting-period";
+import { canonicalReportingPeriodFromSource, getReportingPeriodSubmissionError, reportingPeriodContains, requireCanonicalReportingPeriod } from "./reporting-period";
 
 const JUNE = {
   period_id: "month:Asia/Manila:2026-06",
@@ -51,5 +51,12 @@ describe("canonical reporting periods", () => {
     expect(getReportingPeriodSubmissionError(period, new Date("2026-06-30T15:59:59.999Z"))).toContain("Submission opens after");
     expect(getReportingPeriodSubmissionError(period, new Date("2026-06-30T16:00:00.000Z"))).toBeNull();
     expect(getReportingPeriodSubmissionError(null, new Date("2026-07-13T00:00:00Z"))).toContain("No canonical reporting period is selected");
+  });
+
+  it("refuses to present or export a report without its canonical period", () => {
+    const period = canonicalReportingPeriodFromSource(JUNE);
+
+    expect(requireCanonicalReportingPeriod(period)).toBe(period);
+    expect(() => requireCanonicalReportingPeriod(undefined)).toThrow("This report has no canonical reporting period");
   });
 });

@@ -54,6 +54,13 @@ export function getReportingPeriodSubmissionError(period: CanonicalReportingPeri
   return `Submission opens after ${formatManilaDate(period.endsAtUtc)}, when ${period.label} closes.`;
 }
 
+export function requireCanonicalReportingPeriod(period: CanonicalReportingPeriod | null | undefined): CanonicalReportingPeriod {
+  if (!period) {
+    throw new Error("This report has no canonical reporting period. Refresh its target ledger record before viewing, previewing, or exporting it.");
+  }
+  return period;
+}
+
 export function reportingPeriodContains(period: CanonicalReportingPeriod, instant: string | Date) {
   const timestamp = instant instanceof Date ? instant.getTime() : Date.parse(instant);
   return Number.isFinite(timestamp) && Date.parse(period.startsAtUtc) <= timestamp && timestamp < Date.parse(period.endsAtUtc);
