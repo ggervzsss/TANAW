@@ -25,6 +25,9 @@ import type {
 
 const PAGE_LIMIT = 100;
 const DECIMAL_STRING_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
+const ELIGIBILITY_BASES = new Set(["registry_snapshot", "migration_evidence", "manual_resolution"]);
+const REPORT_REVIEW_EVENT_TYPES = new Set(["revision_submitted", "returned", "accepted", "reopened", "consolidated", "migration_state_imported"]);
+const FINAL_REPORT_EVENT_TYPES = new Set(["version_finalized", "migration_final_imported"]);
 
 export const reportWorkflowQueryKey = ["operational", "reporting", "v2"] as const;
 export const reportingPeriodListQueryKey = [...reportWorkflowQueryKey, "periods"] as const;
@@ -126,7 +129,8 @@ export async function readPeriodCompliance(reportingPeriodId: string): Promise<P
       !obligation.enterpriseOfficialCode.trim() ||
       !obligation.enterpriseName.trim() ||
       !obligation.siteCode.trim() ||
-      !obligation.siteName.trim()
+      !obligation.siteName.trim() ||
+      !ELIGIBILITY_BASES.has(obligation.eligibilityBasis)
     ) {
       throw new Error("The compliance response contained a non-official obligation or an unfrozen identity.");
     }
@@ -194,32 +198,17 @@ export type DownloadedFinalReportArtifact = {
   sizeBytes: number;
 };
 
-export async function readFinalReportArtifact(
-  reportFinalizationId: string,
-  finalReportVersionId: string,
-  artifactId: string,
-): Promise<FinalReportArtifactDetail> {
-  const response = await apiClient.get<FinalReportArtifactDetail>(
-    `/operational/reports/finalizations/${reportFinalizationId}/artifacts/${artifactId}/v2`,
-  );
+export async function readFinalReportArtifact(reportFinalizationId: string, finalReportVersionId: string, artifactId: string): Promise<FinalReportArtifactDetail> {
+  const response = await apiClient.get<FinalReportArtifactDetail>(`/operational/reports/finalizations/${reportFinalizationId}/artifacts/${artifactId}/v2`);
   const artifact = response.data;
-  if (
-    artifact.contractVersion !== 2 ||
-    artifact.reportFinalizationId !== reportFinalizationId ||
-    artifact.finalReportVersionId !== finalReportVersionId ||
-    artifact.artifactId !== artifactId
-  ) {
+  if (artifact.contractVersion !== 2 || artifact.reportFinalizationId !== reportFinalizationId || artifact.finalReportVersionId !== finalReportVersionId || artifact.artifactId !== artifactId) {
     throw new Error("The artifact metadata did not match the requested immutable final-report version.");
   }
   assertFinalReportArtifactMetadata(artifact);
   return artifact;
 }
 
-export async function fetchFinalReportArtifact(
-  reportFinalizationId: string,
-  finalReportVersionId: string,
-  artifactId: string,
-): Promise<DownloadedFinalReportArtifact> {
+export async function fetchFinalReportArtifact(reportFinalizationId: string, finalReportVersionId: string, artifactId: string): Promise<DownloadedFinalReportArtifact> {
   const metadata = await readFinalReportArtifact(reportFinalizationId, finalReportVersionId, artifactId);
   if (metadata.status !== "ready" || !metadata.downloadAvailable || metadata.contentHash === null || metadata.sizeBytes === null) {
     throw new Error("The official final-report artifact is not ready for download.");
@@ -228,10 +217,7 @@ export async function fetchFinalReportArtifact(
     throw new Error("The official final-report artifact is not a supported PDF.");
   }
 
-  const response = await apiClient.get<Blob>(
-    `/operational/reports/finalizations/${reportFinalizationId}/artifacts/${artifactId}/download/v2`,
-    { responseType: "blob" },
-  );
+  const response = await apiClient.get<Blob>(`/operational/reports/finalizations/${reportFinalizationId}/artifacts/${artifactId}/download/v2`, { responseType: "blob" });
   if (!(response.data instanceof Blob)) {
     throw new Error("The official final-report download did not return binary content.");
   }
@@ -292,11 +278,7 @@ function assertOfficialPage(
   assertCursorMetadata(page.page, page.items.length, resourceName);
 }
 
-function assertCursorMetadata(
-  page: { limit: number; returnedCount: number; hasMore: boolean; nextCursor: string | null },
-  itemCount: number,
-  resourceName: string,
-) {
+function assertCursorMetadata(page: { limit: number; returnedCount: number; hasMore: boolean; nextCursor: string | null }, itemCount: number, resourceName: string) {
   if (page.hasMore !== Boolean(page.nextCursor)) throw new Error(`The ${resourceName} page returned inconsistent pagination metadata.`);
   if (page.returnedCount !== itemCount || page.returnedCount > page.limit) {
     throw new Error(`The ${resourceName} page returned inconsistent item counts.`);
@@ -308,6 +290,9 @@ function compactParams(params: Record<string, string | number | undefined>) {
 }
 
 function assertFinalReportArtifactMetadata(artifact: FinalReportArtifactDetail) {
+  if (!/^official-final-report-v[1-9]\d*$/.test(artifact.templateVersion)) {
+    throw new Error("The artifact metadata contained an unsupported official template version.");
+  }
   if (!Number.isInteger(artifact.generationAttempts) || artifact.generationAttempts < 0) {
     throw new Error("The artifact metadata contained an invalid generation-attempt count.");
   }
@@ -375,11 +360,11 @@ function assertOfficialReportingPeriod(period: ReportingPeriodDiscoveryResource)
 }
 
 function assertEnterpriseReportListItem(report: EnterpriseReportListItem) {
-  if (
-    report.classification !== "official" ||
-    report.currentRevision.reportRevisionId !== report.currentRevisionId
-  ) {
+  if (report.classification !== "official" || report.currentRevision.reportRevisionId !== report.currentRevisionId) {
     throw new Error("The enterprise report response contained inconsistent official revision identity.");
+  }
+  if (!report.currentRevision.localRevisionId.trim() || !ELIGIBILITY_BASES.has(report.obligation.eligibilityBasis)) {
+    throw new Error("The enterprise report response contained a removed or incomplete report contract value.");
   }
   assertMetricDecimalStrings(report.currentRevision.metrics, "enterprise report");
 }
@@ -393,16 +378,19 @@ function assertEnterpriseReportDetail(report: EnterpriseReportDetail) {
     throw new Error("The enterprise report detail omitted its exact current immutable revision.");
   }
   for (const revision of report.revisions) {
+    if (!revision.localRevisionId.trim()) {
+      throw new Error("The enterprise report revision omitted its target local revision identity.");
+    }
     assertMetricDecimalStrings(revision.metrics, "enterprise report revision");
     assertDemographicDecimalStrings(revision.demographics, "enterprise report revision");
+  }
+  if (report.reviewEvents.some((event) => !REPORT_REVIEW_EVENT_TYPES.has(event.eventType))) {
+    throw new Error("The enterprise report detail contained an unsupported review event type.");
   }
 }
 
 function assertFinalReportListItem(report: FinalReportListItem) {
-  if (
-    report.classification !== "official" ||
-    report.currentVersion.finalReportVersionId !== report.currentVersionId
-  ) {
+  if (report.classification !== "official" || report.currentVersion.finalReportVersionId !== report.currentVersionId) {
     throw new Error("The final report response contained inconsistent official version identity.");
   }
 }
@@ -412,14 +400,14 @@ function assertFinalReportDetail(report: FinalReportDetail) {
     throw new Error("The final report detail was not a v2 resource.");
   }
   assertFinalReportListItem(report);
-  if (
-    report.selectedVersion.finalReportVersionId !== report.selectedVersionId ||
-    !report.versions.some((version) => version.finalReportVersionId === report.selectedVersionId)
-  ) {
+  if (report.selectedVersion.finalReportVersionId !== report.selectedVersionId || !report.versions.some((version) => version.finalReportVersionId === report.selectedVersionId)) {
     throw new Error("The final report detail omitted its exact selected immutable version.");
   }
   assertMetricDecimalStrings(report.selectedVersion.metrics, "final report version");
   assertDemographicDecimalStrings(report.selectedVersion.demographics, "final report version");
+  if (report.events.some((event) => !FINAL_REPORT_EVENT_TYPES.has(event.eventType))) {
+    throw new Error("The final report detail contained an unsupported lifecycle event type.");
+  }
 }
 
 function assertMetricDecimalStrings(metrics: Array<{ value: unknown }>, resourceName: string) {

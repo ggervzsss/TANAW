@@ -69,7 +69,7 @@ export type ReportSiteResource = {
 export type ReportObligationResource = {
   reportingObligationId: string;
   eligibilityStatus: "eligible" | "exempt" | "ineligible" | "unknown";
-  eligibilityBasis: "registry_snapshot" | "legacy_submission" | "manual_resolution";
+  eligibilityBasis: "registry_snapshot" | "migration_evidence" | "manual_resolution";
   exemptionReason: string | null;
   registrationEffectiveAt: string | null;
   acceptanceBlocked: boolean;
@@ -127,6 +127,7 @@ export type ReportSourceBatchResource = {
 
 export type ReportRevisionSummaryResource = {
   reportRevisionId: string;
+  localRevisionId: string;
   revisionNumber: number;
   isCurrent: boolean;
   isAccepted: boolean;
@@ -140,7 +141,6 @@ export type ReportRevisionSummaryResource = {
 };
 
 export type ReportRevisionResource = ReportRevisionSummaryResource & {
-  localRevisionId: string;
   idempotencyKey: string;
   sourceWindowStart: string;
   sourceWindowEnd: string;
@@ -153,7 +153,7 @@ export type ReportRevisionResource = ReportRevisionSummaryResource & {
 export type ReportReviewEventResource = {
   reviewEventId: string;
   reportRevisionId: string;
-  eventType: "revision_submitted" | "returned" | "accepted" | "reopened" | "consolidated" | "legacy_state_imported";
+  eventType: "revision_submitted" | "returned" | "accepted" | "reopened" | "consolidated" | "migration_state_imported";
   fromState: ReportWorkflowState | null;
   toState: ReportWorkflowState;
   actor: {
@@ -232,7 +232,7 @@ export type ObligationResource = {
   siteName: string;
   classification: "official" | "simulation";
   eligibilityStatus: "eligible" | "exempt" | "ineligible" | "unknown";
-  eligibilityBasis: "registry_snapshot" | "legacy_submission" | "manual_resolution";
+  eligibilityBasis: "registry_snapshot" | "migration_evidence" | "manual_resolution";
   eligibilityReason: string | null;
   frozenBarangay: string | null;
   timezone: "Asia/Manila";
@@ -398,7 +398,7 @@ export type FinalReportDemographicFactResource = {
 export type FinalReportEventResource = {
   finalReportEventId: string;
   finalReportVersionId: string;
-  eventType: "version_finalized" | "legacy_final_imported";
+  eventType: "version_finalized" | "migration_final_imported";
   actorAccountId: string | null;
   actorDisplayName: string | null;
   actorRole: string | null;

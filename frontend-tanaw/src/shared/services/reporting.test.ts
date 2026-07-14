@@ -42,9 +42,7 @@ describe("reporting v2 service", () => {
   });
 
   it("rejects repeated cursors instead of looping or truncating", async () => {
-    await expect(
-      collectCursorPages(async () => ({ items: [], page: { hasMore: true, nextCursor: "same-cursor" } }), "test resource"),
-    ).rejects.toThrow("repeated continuation cursor");
+    await expect(collectCursorPages(async () => ({ items: [], page: { hasMore: true, nextCursor: "same-cursor" } }), "test resource")).rejects.toThrow("repeated continuation cursor");
   });
 
   it("loads official report pages with filters and follows the backend cursor", async () => {
@@ -57,7 +55,9 @@ describe("reporting v2 service", () => {
 
     expect(result).toEqual([item]);
     expect(mockedGet).toHaveBeenNthCalledWith(1, "/operational/reports/v2", { params: { reportingPeriodId: item.reportingPeriod.reportingPeriodId, workflowState: "accepted", limit: 100 } });
-    expect(mockedGet).toHaveBeenNthCalledWith(2, "/operational/reports/v2", { params: { reportingPeriodId: item.reportingPeriod.reportingPeriodId, workflowState: "accepted", limit: 100, cursor: "next" } });
+    expect(mockedGet).toHaveBeenNthCalledWith(2, "/operational/reports/v2", {
+      params: { reportingPeriodId: item.reportingPeriod.reportingPeriodId, workflowState: "accepted", limit: 100, cursor: "next" },
+    });
   });
 
   it("discovers only canonical Staff periods and runs lifecycle without client clock or period data", async () => {
@@ -122,26 +122,17 @@ describe("reporting v2 service", () => {
       contentHash,
       sizeBytes: 18,
     };
-    mockedGet
-      .mockResolvedValueOnce({ data: metadata })
-      .mockResolvedValueOnce({
-        data: new Blob([bytes], { type: "application/pdf" }),
-        headers: { "content-length": "18", "content-type": "application/pdf", etag: `"${contentHash}"` },
-      });
+    mockedGet.mockResolvedValueOnce({ data: metadata }).mockResolvedValueOnce({
+      data: new Blob([bytes], { type: "application/pdf" }),
+      headers: { "content-length": "18", "content-type": "application/pdf", etag: `"${contentHash}"` },
+    });
 
     const downloaded = await fetchFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId);
 
     expect(downloaded.contentHash).toBe(contentHash);
     expect(downloaded.sizeBytes).toBe(18);
-    expect(mockedGet).toHaveBeenNthCalledWith(
-      1,
-      `/operational/reports/finalizations/${detail.reportFinalizationId}/artifacts/${artifact.artifactId}/v2`,
-    );
-    expect(mockedGet).toHaveBeenNthCalledWith(
-      2,
-      `/operational/reports/finalizations/${detail.reportFinalizationId}/artifacts/${artifact.artifactId}/download/v2`,
-      { responseType: "blob" },
-    );
+    expect(mockedGet).toHaveBeenNthCalledWith(1, `/operational/reports/finalizations/${detail.reportFinalizationId}/artifacts/${artifact.artifactId}/v2`);
+    expect(mockedGet).toHaveBeenNthCalledWith(2, `/operational/reports/finalizations/${detail.reportFinalizationId}/artifacts/${artifact.artifactId}/download/v2`, { responseType: "blob" });
   });
 
   it("fails closed on mismatched artifact identity and corrupted artifact bytes", async () => {
@@ -158,31 +149,63 @@ describe("reporting v2 service", () => {
     };
 
     mockedGet.mockResolvedValueOnce({ data: { ...metadata, finalReportVersionId: "different-version" } });
-    await expect(readFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId)).rejects.toThrow(
-      "did not match",
-    );
+    await expect(readFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId)).rejects.toThrow("did not match");
 
-    mockedGet
-      .mockResolvedValueOnce({ data: metadata })
-      .mockResolvedValueOnce({
-        data: new Blob(["tampered-pdf-bytes"], { type: "application/pdf" }),
-        headers: { "content-length": "18", "content-type": "application/pdf", etag: `"${contentHash}"` },
-      });
-    await expect(fetchFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId)).rejects.toThrow(
-      "SHA-256",
-    );
+    mockedGet.mockResolvedValueOnce({ data: metadata }).mockResolvedValueOnce({
+      data: new Blob(["tampered-pdf-bytes"], { type: "application/pdf" }),
+      headers: { "content-length": "18", "content-type": "application/pdf", etag: `"${contentHash}"` },
+    });
+    await expect(fetchFinalReportArtifact(detail.reportFinalizationId, detail.selectedVersionId, artifact.artifactId)).rejects.toThrow("SHA-256");
   });
 
   it("uses version-checked v2 transitions and exact-revision finalization commands", async () => {
     const report = enterpriseReportFixture();
     const transitionCommand = { contractVersion: 2 as const, commandId: "command-transition", expectedVersion: report.logicalVersion, action: "accept_revision" as const, reason: null };
-    const transitionAck = { contractVersion: 2 as const, commandId: transitionCommand.commandId, disposition: "applied" as const, acknowledgedAt: "2026-08-01T02:00:00Z", resource: { enterpriseReportId: report.enterpriseReportId, reportRevisionId: report.currentRevisionId, workflowState: "accepted" as const, logicalVersion: 3 } };
+    const transitionAck = {
+      contractVersion: 2 as const,
+      commandId: transitionCommand.commandId,
+      disposition: "applied" as const,
+      acknowledgedAt: "2026-08-01T02:00:00Z",
+      resource: { enterpriseReportId: report.enterpriseReportId, reportRevisionId: report.currentRevisionId, workflowState: "accepted" as const, logicalVersion: 3 },
+    };
     mockedPost.mockResolvedValueOnce({ data: transitionAck });
 
     await expect(transitionEnterpriseReport(report.enterpriseReportId, transitionCommand)).resolves.toEqual(transitionAck);
 
-    const finalCommand = { contractVersion: 2 as const, commandId: "command-final", idempotencyKey: "final-report:period:command-final", occurredAt: "2026-08-02T01:00:00Z", expectedVersion: 0, payload: { targetFinalizationId: null, reportingPeriodId: report.reportingPeriod.reportingPeriodId, scope: { type: "enterprise_selection" as const, barangay: null }, reportRevisionIds: [report.acceptedRevisionId!], reason: null } };
-    const finalAck = { contractVersion: 2 as const, commandId: finalCommand.commandId, disposition: "created" as const, payloadHash: `sha256:${"9".repeat(64)}`, acknowledgedAt: "2026-08-02T01:00:01Z", resource: { reportFinalizationId: "finalization-1", finalReportVersionId: "version-1", reportCode: "FINAL-1", reportingPeriodId: report.reportingPeriod.reportingPeriodId, classification: "official" as const, versionNumber: 1, logicalVersion: 1, scopeType: "enterprise_selection" as const, scopeLabel: "Selected enterprises (1)", sourceCount: 1, artifactStatus: "pending" as const } };
+    const finalCommand = {
+      contractVersion: 2 as const,
+      commandId: "command-final",
+      idempotencyKey: "final-report:period:command-final",
+      occurredAt: "2026-08-02T01:00:00Z",
+      expectedVersion: 0,
+      payload: {
+        targetFinalizationId: null,
+        reportingPeriodId: report.reportingPeriod.reportingPeriodId,
+        scope: { type: "enterprise_selection" as const, barangay: null },
+        reportRevisionIds: [report.acceptedRevisionId!],
+        reason: null,
+      },
+    };
+    const finalAck = {
+      contractVersion: 2 as const,
+      commandId: finalCommand.commandId,
+      disposition: "created" as const,
+      payloadHash: `sha256:${"9".repeat(64)}`,
+      acknowledgedAt: "2026-08-02T01:00:01Z",
+      resource: {
+        reportFinalizationId: "finalization-1",
+        finalReportVersionId: "version-1",
+        reportCode: "FINAL-1",
+        reportingPeriodId: report.reportingPeriod.reportingPeriodId,
+        classification: "official" as const,
+        versionNumber: 1,
+        logicalVersion: 1,
+        scopeType: "enterprise_selection" as const,
+        scopeLabel: "Selected enterprises (1)",
+        sourceCount: 1,
+        artifactStatus: "pending" as const,
+      },
+    };
     mockedPost.mockResolvedValueOnce({ data: finalAck });
 
     await expect(finalizeReports(finalCommand)).resolves.toEqual(finalAck);
@@ -205,6 +228,26 @@ describe("reporting v2 service", () => {
     mockedGet.mockResolvedValueOnce({ data: unsafeFinal });
 
     await expect(readFinalReport(finalDetail.reportFinalizationId)).rejects.toThrow("exact decimal string");
+  });
+
+  it("rejects removed report and final-report contract values at runtime", async () => {
+    const report = structuredClone(enterpriseReportDetailFixture());
+    (report.obligation as { eligibilityBasis: string }).eligibilityBasis = "legacy_submission";
+    mockedGet.mockResolvedValueOnce({ data: report });
+
+    await expect(readEnterpriseReport(report.enterpriseReportId)).rejects.toThrow("removed or incomplete report contract value");
+
+    const reportEvent = structuredClone(enterpriseReportDetailFixture());
+    (reportEvent.reviewEvents[0] as { eventType: string }).eventType = "legacy_state_imported";
+    mockedGet.mockResolvedValueOnce({ data: reportEvent });
+
+    await expect(readEnterpriseReport(reportEvent.enterpriseReportId)).rejects.toThrow("unsupported review event type");
+
+    const finalReport = structuredClone(finalReportDetailFixture());
+    (finalReport.events[0] as { eventType: string }).eventType = "legacy_final_imported";
+    mockedGet.mockResolvedValueOnce({ data: finalReport });
+
+    await expect(readFinalReport(finalReport.reportFinalizationId)).rejects.toThrow("unsupported lifecycle event type");
   });
 });
 
