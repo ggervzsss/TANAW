@@ -51,7 +51,9 @@ from app.features.reporting.read_service import (
     ReportReadInvalidCursor,
     ReportReadNotFound,
     list_official_enterprise_reports,
+    list_owned_enterprise_reports,
     read_official_enterprise_report,
+    read_owned_enterprise_report,
 )
 from app.features.reporting.service import (
     ReportIntakeConflict,
@@ -214,6 +216,63 @@ async def read_enterprise_report_v2(
 ) -> EnterpriseReportDetail:
     try:
         return await read_official_enterprise_report(
+            db,
+            account=account,
+            enterprise_report_id=enterprise_report_id,
+        )
+    except ReportReadForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ReportReadNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.get("/enterprise/reports/v2", response_model=EnterpriseReportPage)
+async def list_owned_enterprise_reports_v2(
+    account: EnterpriseAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+    reportingPeriodId: UUID | None = None,
+    workflowState: ReportWorkflowState | None = None,
+) -> EnterpriseReportPage:
+    try:
+        return await list_owned_enterprise_reports(
+            db,
+            account=account,
+            limit=limit,
+            cursor=cursor,
+            reporting_period_id=reportingPeriodId,
+            workflow_state=workflowState,
+        )
+    except ReportReadForbidden as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except ReportReadInvalidCursor as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+
+@router.get(
+    "/enterprise/reports/{enterprise_report_id}/v2",
+    response_model=EnterpriseReportDetail,
+)
+async def read_owned_enterprise_report_v2(
+    enterprise_report_id: UUID,
+    account: EnterpriseAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> EnterpriseReportDetail:
+    try:
+        return await read_owned_enterprise_report(
             db,
             account=account,
             enterprise_report_id=enterprise_report_id,

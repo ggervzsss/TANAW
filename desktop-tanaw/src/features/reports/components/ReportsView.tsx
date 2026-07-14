@@ -7,7 +7,7 @@ import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { CanonicalReportingPeriod, DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
-import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
+import { listEnterpriseReportHistory, readEnterpriseReport, type EnterpriseReportDetail, type EnterpriseReportHistoryItem } from "../services/report-history";
 import {
   DESKTOP_REPORT_SYNC_EVENT,
   getDesktopMockPreparation,
@@ -237,17 +237,27 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
   };
 
-  const handleViewReport = (report: ReportRecord) => {
-    setActiveReportId(report.id);
-    setReportingPeriod(report.reportingPeriod ?? null);
-    setNotes(report.notes || "");
-    setDemo(report.demo || emptyDemo());
-    setDemographicEvidence(report.demographicEvidence ?? null);
+  const handleViewReport = async (report: ReportRecord) => {
+    try {
+      const resolved = await resolveCentralReportDetail(report);
+      if (resolved.metricsUnavailable?.length) {
+        notifyError("This central report has incomplete metric evidence and cannot be loaded as numeric data.");
+        return;
+      }
+      setReportsHistory((current) => upsertReport(current, resolved));
+      setActiveReportId(resolved.id);
+      setReportingPeriod(resolved.reportingPeriod ?? null);
+      setNotes(resolved.notes || "");
+      setDemo(resolved.demo || emptyDemo());
+      setDemographicEvidence(resolved.demographicEvidence ?? null);
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+    }
   };
 
   const handleSelectLedgerRow = (row: ReportLedgerRow) => {
     if (row.kind === "history") {
-      handleViewReport(row.report);
+      void handleViewReport(row.report);
       return;
     }
 
@@ -260,35 +270,54 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     void handleDraftPeriodSelect(row.report.reportingPeriod);
   };
 
-  const handlePreviewReport = (report: ReportRecord) => {
-    setPreviewReport({
-      demo: report.demo ?? emptyDemo(),
-      demographicEvidence: report.demographicEvidence ?? null,
-      metrics: metricsFromReport(report),
-      notes: report.notes ?? "",
-      period: report.period ?? report.date,
-      reportId: report.id,
-    });
+  const handlePreviewReport = async (report: ReportRecord) => {
+    try {
+      const resolved = await resolveCentralReportDetail(report);
+      if (resolved.metricsUnavailable?.length) {
+        notifyError("This central report has incomplete metric evidence and cannot be previewed as numeric data.");
+        return;
+      }
+      setReportsHistory((current) => upsertReport(current, resolved));
+      setPreviewReport({
+        demo: resolved.demo ?? emptyDemo(),
+        demographicEvidence: resolved.demographicEvidence ?? null,
+        metrics: metricsFromReport(resolved),
+        notes: resolved.notes ?? "",
+        period: resolved.period ?? resolved.date,
+        reportId: resolved.id,
+      });
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+    }
   };
 
-  const handleDownloadReport = (report: ReportRecord) => {
-    const reportDemo = report.demo ?? emptyDemo();
-    const reportMetrics = metricsFromReport(report);
-    const exportError = validateDemographicEvidence(reportDemo, report.demographicEvidence ?? null);
-    if (exportError) {
-      notifyError(exportError);
-      handlePreviewReport(report);
-      return;
-    }
+  const handleDownloadReport = async (report: ReportRecord) => {
+    try {
+      const resolved = await resolveCentralReportDetail(report);
+      if (resolved.metricsUnavailable?.length) {
+        notifyError("This central report has incomplete metric evidence and cannot be exported as numeric data.");
+        return;
+      }
+      const reportDemo = resolved.demo ?? emptyDemo();
+      const reportMetrics = metricsFromReport(resolved);
+      const exportError = validateDemographicEvidence(reportDemo, resolved.demographicEvidence ?? null);
+      if (exportError) {
+        notifyError(exportError);
+        await handlePreviewReport(resolved);
+        return;
+      }
 
-    downloadDotReportPdf({
-      reportId: report.id,
-      period: report.period ?? report.date,
-      metrics: reportMetrics,
-      demo: reportDemo,
-      demographicEvidence: report.demographicEvidence ?? null,
-      notes: report.notes ?? "",
-    });
+      downloadDotReportPdf({
+        reportId: resolved.id,
+        period: resolved.period ?? resolved.date,
+        metrics: reportMetrics,
+        demo: reportDemo,
+        demographicEvidence: resolved.demographicEvidence ?? null,
+        notes: resolved.notes ?? "",
+      });
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+    }
   };
 
   const executeSubmit = async () => {
@@ -700,6 +729,7 @@ function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): Rep
 
   return {
     id: submission.report_id,
+    localRevisionId: submission.revision_id,
     date: reportingPeriod.label,
     status: payloadStatus,
     entries: metrics.entries,
@@ -738,29 +768,99 @@ function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Me
   };
 }
 
-function reportFromCloudSubmission(report: EnterpriseIntakeReport): ReportRecord {
-  const peak = typeof report.metrics.peak === "number" ? report.metrics.peak : Number(report.metrics.peak) || 0;
-  const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
-  const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
-  const reportingPeriod = reportingPeriodFromPayload(report.payload);
-  const demo = demoFromPayload(report.payload?.demo);
+function reportFromCloudSubmission(report: EnterpriseReportHistoryItem): ReportRecord {
+  const entries = reportMetricValue(report, "visitor_entries");
+  const exits = reportMetricValue(report, "visitor_exits");
+  const peak = reportMetricValue(report, "peak_occupancy");
+  const unique = reportMetricValue(report, "unique_visitor_estimate");
+  const metricsUnavailable = [
+    entries === null ? "visitor_entries" : null,
+    exits === null ? "visitor_exits" : null,
+    peak === null ? "peak_occupancy" : null,
+    unique === null ? "unique_visitor_estimate" : null,
+  ].filter((definition): definition is string => definition !== null);
+  const status =
+    report.workflowState === "returned"
+      ? "Returned for Revision"
+      : report.workflowState === "consolidated"
+        ? "Consolidated"
+        : report.workflowState === "accepted"
+          ? "Accepted"
+          : "Submitted";
+  const reportingPeriod = {
+    periodId: report.reportingPeriod.reportingPeriodId,
+    label: report.reportingPeriod.label,
+    startsAtUtc: report.reportingPeriod.startsAt,
+    endsAtUtc: report.reportingPeriod.endsAt,
+  };
   return {
-    id: report.code,
-    date: report.period,
+    id: report.enterpriseReportId,
+    centralReportId: report.enterpriseReportId,
+    localRevisionId: report.currentRevision.localRevisionId,
+    date: report.reportingPeriod.label,
     status,
-    entries: report.metrics.entry,
-    exits: report.metrics.exit,
-    peak,
-    unique: report.metrics.unique,
-    period: report.period,
-    reportingPeriod: reportingPeriod ?? undefined,
-    demo,
-    demographicEvidence: demographicEvidenceFromFacts(report.payload?.demographicFacts, demo) ?? undefined,
-    notes: report.notes ?? "",
-    remarks: report.remarks,
-    submittedAt: report.submittedAt,
+    entries: entries ?? 0,
+    exits: exits ?? 0,
+    peak: peak ?? 0,
+    unique: unique ?? 0,
+    metricsUnavailable,
+    period: report.reportingPeriod.label,
+    reportingPeriod,
+    notes: "",
+    remarks: report.acceptanceBlocked ? "Acceptance blocked by incomplete evidence." : null,
+    submittedAt: report.currentRevision.submittedAt,
     syncStatus: "synced",
   };
+}
+
+function reportMetricValue(report: EnterpriseReportHistoryItem, definition: string) {
+  const fact = report.currentRevision.metrics.find((item) => item.definition === definition);
+  if (!fact || fact.value === null || fact.quality === "unknown") return null;
+  const value = Number(fact.value);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function resolveCentralReportDetail(report: ReportRecord): Promise<ReportRecord> {
+  if (!report.centralReportId || report.centralDetailLoaded) return report;
+  const detail = await readEnterpriseReport(report.centralReportId);
+  const revision = detail.revisions.find((item) => item.reportRevisionId === detail.currentRevisionId);
+  if (!revision || revision.localRevisionId !== report.localRevisionId) {
+    throw new Error("The immutable report detail does not match the selected history revision.");
+  }
+  const demo = demographicBreakdownFromDetail(revision.demographics);
+  return {
+    ...report,
+    centralDetailLoaded: true,
+    demo,
+    demographicEvidence: demographicEvidenceFromFacts(revision.demographics, demo) ?? undefined,
+    notes: revision.notes ?? "",
+  };
+}
+
+function demographicBreakdownFromDetail(
+  facts: EnterpriseReportDetail["revisions"][number]["demographics"],
+): DemoBreakdown {
+  const demo = emptyDemo();
+  const fieldByValue: Record<string, keyof DemoBreakdown> = {
+    this_province_male: "thisProvMale",
+    this_province_female: "thisProvFemale",
+    other_province_male: "otherProvMale",
+    other_province_female: "otherProvFemale",
+    foreign_male: "foreignMale",
+    foreign_female: "foreignFemale",
+  };
+  const seen = new Set<string>();
+  for (const fact of facts) {
+    if (fact.dimension !== "residence_sex") continue;
+    const field = fieldByValue[fact.value];
+    if (!field) continue;
+    if (seen.has(fact.value)) {
+      throw new Error(`The immutable report contains duplicate demographic evidence for ${fact.value}.`);
+    }
+    seen.add(fact.value);
+    demo[field] = String(fact.count);
+  }
+  return demo;
 }
 
 async function syncSubmittedReportToCloud(reportId: string, outboxItemId: string) {
@@ -783,20 +883,24 @@ async function prepareNextWorkspaceMetrics() {
 
 function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRecord[]) {
   const reportsById = new Map<string, ReportRecord>();
+  const localIdByRevision = new Map<string, string>();
 
   for (const report of localReports) {
     reportsById.set(report.id, report);
+    if (report.localRevisionId) localIdByRevision.set(report.localRevisionId, report.id);
   }
 
   for (const report of cloudReports) {
-    const localReport = reportsById.get(report.id);
+    const localId = report.localRevisionId ? localIdByRevision.get(report.localRevisionId) : undefined;
+    const historyId = localId ?? report.id;
+    const localReport = reportsById.get(historyId);
     if (!localReport) {
-      reportsById.set(report.id, report);
+      reportsById.set(historyId, report);
       continue;
     }
 
     if (isPendingLocalReport(localReport)) {
-      reportsById.set(report.id, {
+      reportsById.set(historyId, {
         ...report,
         ...localReport,
         remarks: report.remarks ?? localReport.remarks,
@@ -804,9 +908,10 @@ function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRe
       continue;
     }
 
-    reportsById.set(report.id, {
+    reportsById.set(historyId, {
       ...localReport,
       ...report,
+      id: historyId,
       demo: localReport.demo ?? report.demo,
       demographicEvidence: localReport.demographicEvidence ?? report.demographicEvidence,
       notes: report.notes || localReport.notes,
@@ -833,23 +938,6 @@ function reportTimestamp(report: ReportRecord) {
   const value = report.submittedAt ?? report.date;
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? 0 : timestamp;
-}
-
-function reportingPeriodFromPayload(payload: Record<string, unknown> | null | undefined): CanonicalReportingPeriod | null {
-  if (!payload) return null;
-  const sourceWindow = payload.sourceWindow;
-  if (!sourceWindow || typeof sourceWindow !== "object") return null;
-  const window = sourceWindow as Record<string, unknown>;
-  try {
-    return canonicalReportingPeriodFromSource({
-      period_id: payload.periodKey,
-      period: payload.period,
-      starts_at_utc: window.start,
-      ends_at_utc: window.end,
-    });
-  } catch {
-    return null;
-  }
 }
 
 function demoFromPayload(value: unknown): DemoBreakdown {

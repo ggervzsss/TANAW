@@ -13,7 +13,7 @@ import {
   resetLocalMockData,
   type LocalSyncOutboxItem,
 } from "../../camera/services/ml-service";
-import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
+import { listEnterpriseReportHistory } from "../../reports/services/report-history";
 import { canonicalReportingPeriodFromSource } from "../../reports/services/reporting-period";
 import type { CanonicalReportingPeriod } from "../../../types/enterprise";
 
@@ -225,19 +225,17 @@ function classifySyncFailure(error: unknown) {
 }
 
 async function purgeFinalizedLocalReportRawData(baseUrl: string) {
-  const [localSubmissions, finalReports] = await Promise.all([listLocalReportSubmissions(baseUrl, 500), listEnterpriseFinalReports()]);
-  const finalizedSourceCodes = new Set(finalReports.filter(isLockedFinalReport).flatMap((report) => report.sources.map((source) => source.code)));
-  const purgeableSubmissions = localSubmissions.filter((submission) => finalizedSourceCodes.has(submission.report_id) && !submission.raw_purged_at);
+  const [localSubmissions, reportHistory] = await Promise.all([listLocalReportSubmissions(baseUrl, 500), listEnterpriseReportHistory()]);
+  const consolidatedRevisionIds = new Set(
+    reportHistory.filter((report) => report.workflowState === "consolidated").map((report) => report.currentRevision.localRevisionId),
+  );
+  const purgeableSubmissions = localSubmissions.filter((submission) => consolidatedRevisionIds.has(submission.revision_id) && !submission.raw_purged_at);
 
   for (const submission of purgeableSubmissions) {
     await purgeLocalReportRawEvents(baseUrl, submission.report_id);
   }
 
   return purgeableSubmissions.length;
-}
-
-function isLockedFinalReport(report: EnterpriseFinalReport) {
-  return report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized");
 }
 
 async function resolveOptional<T>(loader: () => Promise<T>) {

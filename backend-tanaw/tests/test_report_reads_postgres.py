@@ -48,9 +48,17 @@ from app.features.reporting.read_service import (
     ReportReadInvalidCursor,
     ReportReadNotFound,
     list_official_enterprise_reports,
+    list_owned_enterprise_reports,
     read_official_enterprise_report,
+    read_owned_enterprise_report,
 )
-from app.features.topology.models import Camera, EdgeDevice, Enterprise, EnterpriseSite
+from app.features.topology.models import (
+    Camera,
+    EdgeDevice,
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+)
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 
@@ -274,6 +282,69 @@ async def test_report_reads_are_staff_only_paginated_exact_and_official(
             read_session,
             account=staff,
             enterprise_report_id=UUID(simulation.report.id),
+        )
+
+
+@pytest.mark.asyncio
+async def test_enterprise_report_history_is_derived_from_effective_membership(
+    read_session: AsyncSession,
+) -> None:
+    _staff, enterprise_account, period = await _seed_accounts_and_period(read_session)
+    owned = await _seed_report(
+        read_session,
+        period=period,
+        submitter=enterprise_account,
+        classification="official",
+        ordinal=20,
+        updated_at=period.ends_at,
+        revision_count=2,
+        accepted=True,
+    )
+    unrelated = await _seed_report(
+        read_session,
+        period=period,
+        submitter=enterprise_account,
+        classification="official",
+        ordinal=21,
+        updated_at=period.ends_at + timedelta(minutes=1),
+    )
+    read_session.add(
+        EnterpriseMembership(
+            id=str(uuid4()),
+            account_id=enterprise_account.id,
+            enterprise_id=owned.enterprise.id,
+            classification="official",
+            membership_role="owner",
+            started_at=period.starts_at,
+        )
+    )
+    await read_session.flush()
+
+    page = await list_owned_enterprise_reports(
+        read_session,
+        account=enterprise_account,
+        limit=100,
+        cursor=None,
+        evaluated_at=period.ends_at,
+    )
+
+    assert [str(item.enterpriseReportId) for item in page.items] == [owned.report.id]
+    assert page.items[0].currentRevision.localRevisionId == owned.revisions[-1].local_revision_id
+    detail = await read_owned_enterprise_report(
+        read_session,
+        account=enterprise_account,
+        enterprise_report_id=UUID(owned.report.id),
+        evaluated_at=period.ends_at,
+    )
+    assert detail.enterprise.enterpriseId == UUID(owned.enterprise.id)
+    assert detail.revisions[-1].localRevisionId == owned.revisions[-1].local_revision_id
+
+    with pytest.raises(ReportReadNotFound):
+        await read_owned_enterprise_report(
+            read_session,
+            account=enterprise_account,
+            enterprise_report_id=UUID(unrelated.report.id),
+            evaluated_at=period.ends_at,
         )
 
 

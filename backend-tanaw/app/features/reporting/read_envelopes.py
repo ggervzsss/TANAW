@@ -1,4 +1,4 @@
-"""Authoritative Staff read contracts for the immutable report workflow."""
+"""Authoritative role-scoped read contracts for the immutable report workflow."""
 
 from __future__ import annotations
 
@@ -117,6 +117,7 @@ class ReportSourceBatchResource(ContractModel):
 
 class ReportRevisionSummaryResource(ContractModel):
     reportRevisionId: UUID
+    localRevisionId: str
     revisionNumber: int = Field(ge=1)
     isCurrent: bool
     isAccepted: bool
@@ -130,7 +131,6 @@ class ReportRevisionSummaryResource(ContractModel):
 
 
 class ReportRevisionResource(ReportRevisionSummaryResource):
-    localRevisionId: str
     idempotencyKey: str
     sourceWindowStart: datetime
     sourceWindowEnd: datetime

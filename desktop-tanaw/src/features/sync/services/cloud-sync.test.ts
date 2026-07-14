@@ -12,7 +12,8 @@ const {
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
   listLocalReportSubmissions,
-  listEnterpriseFinalReports,
+  purgeLocalReportRawEvents,
+  listEnterpriseReportHistory,
 } = vi.hoisted(() => ({
   post: vi.fn(),
   get: vi.fn(),
@@ -25,7 +26,8 @@ const {
   acknowledgeSyncOutboxItem: vi.fn(),
   recordSyncOutboxFailure: vi.fn(),
   listLocalReportSubmissions: vi.fn(),
-  listEnterpriseFinalReports: vi.fn(),
+  purgeLocalReportRawEvents: vi.fn(),
+  listEnterpriseReportHistory: vi.fn(),
 }));
 
 vi.mock("../../../lib/axios", () => ({ staffApi: { get, post } }));
@@ -40,8 +42,9 @@ vi.mock("../../camera/services/ml-service", () => ({
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
   listLocalReportSubmissions,
+  purgeLocalReportRawEvents,
 }));
-vi.mock("../../reports/services/report-history", () => ({ listEnterpriseFinalReports }));
+vi.mock("../../reports/services/report-history", () => ({ listEnterpriseReportHistory }));
 
 import { prepareDesktopMockCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
 
@@ -53,9 +56,10 @@ beforeEach(() => {
   getSimulationStatus.mockResolvedValue(null);
   prepareLocalMockCounts.mockResolvedValue({ prepared: true });
   listLocalReportSubmissions.mockResolvedValue([]);
-  listEnterpriseFinalReports.mockResolvedValue([]);
+  listEnterpriseReportHistory.mockResolvedValue([]);
   acknowledgeSyncOutboxItem.mockResolvedValue({ acknowledged: true });
   recordSyncOutboxFailure.mockResolvedValue({ status: "retry" });
+  purgeLocalReportRawEvents.mockResolvedValue({ purged: true });
 });
 
 describe("canonical mock preparation periods", () => {
@@ -136,6 +140,23 @@ describe("canonical mock preparation periods", () => {
 });
 
 describe("durable report outbox delivery", () => {
+  it("purges raw events only for the exact consolidated central revision", async () => {
+    listReadySyncOutboxItems.mockResolvedValue([]);
+    listLocalReportSubmissions.mockResolvedValue([
+      { report_id: "local-report-1", revision_id: "revision-1", raw_purged_at: null },
+      { report_id: "local-report-2", revision_id: "revision-2", raw_purged_at: null },
+    ]);
+    listEnterpriseReportHistory.mockResolvedValue([
+      { workflowState: "consolidated", currentRevision: { localRevisionId: "revision-1" } },
+      { workflowState: "accepted", currentRevision: { localRevisionId: "revision-2" } },
+    ]);
+
+    await expect(syncDesktopReportSubmissions()).resolves.toBe(0);
+
+    expect(purgeLocalReportRawEvents).toHaveBeenCalledTimes(1);
+    expect(purgeLocalReportRawEvents).toHaveBeenCalledWith("tanaw-ml://local", "local-report-1");
+  });
+
   it("acknowledges only the exact successful item and continues after a deterministic failure", async () => {
     const first = outboxItem("11111111-1111-4111-8111-111111111111");
     const second = outboxItem("22222222-2222-4222-8222-222222222222");

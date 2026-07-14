@@ -149,8 +149,8 @@ async def test_artifact_lifecycle_event_invalidates_final_report_reads() -> None
         "version": 2,
     }
     assert envelopes[0]["data"]["invalidates"] == [
-        "/operational/reports/intake",
-        "/operational/reports/final",
+        "/operational/reports/v2",
+        "/operational/reports/finalizations/v2",
         f"final-report:{finalization_id}",
         f"final-reports-period:{period_id}",
         f"reporting-period-compliance:{period_id}",

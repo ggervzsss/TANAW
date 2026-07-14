@@ -149,3 +149,47 @@ def test_staff_principal_can_reach_report_list_handlers(
     assert client.get("/operational/reporting-periods/v2").status_code == 200
     assert client.post("/operational/reporting-periods/lifecycle/run/v2").status_code == 200
     database.commit.assert_awaited_once()
+
+
+def test_enterprise_principal_reaches_only_its_scoped_history_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = FastAPI()
+    app.include_router(reporting_router)
+    account = Account(
+        id=str(uuid4()),
+        email="report-owner@example.test",
+        password_hash="not-used",
+        role=AccountRole.ENTERPRISE,
+        display_name="Enterprise Report Owner",
+        title="Enterprise Manager",
+        status=AccountStatus.ACTIVE,
+        activated_at=datetime.now(UTC),
+    )
+
+    async def current_account() -> Account:
+        return account
+
+    async def unused_database() -> AsyncIterator[AsyncSession]:
+        yield cast(AsyncSession, AsyncMock(spec=AsyncSession))
+
+    async def empty_owned_page(*_args: object, **_kwargs: object) -> EnterpriseReportPage:
+        return EnterpriseReportPage(
+            items=[],
+            page=CursorPageInfo(limit=50, returnedCount=0, hasMore=False, nextCursor=None),
+        )
+
+    monkeypatch.setattr(
+        reporting_router_module,
+        "list_owned_enterprise_reports",
+        empty_owned_page,
+    )
+    app.dependency_overrides[get_current_account] = current_account
+    app.dependency_overrides[get_db] = unused_database
+    client = TestClient(app)
+
+    assert client.get("/operational/enterprise/reports/v2").status_code == 200
+    assert client.get("/operational/reports/v2").status_code == 403
+
+    account.role = AccountRole.STAFF
+    assert client.get("/operational/enterprise/reports/v2").status_code == 403

@@ -1,4 +1,4 @@
-"""Set-based Staff read models for official enterprise reports."""
+"""Set-based, role-scoped read models for official enterprise reports."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import UUID
 
@@ -52,6 +52,10 @@ from app.features.reporting.read_envelopes import (
     ReportSourceBatchResource,
     ReportWorkflowState,
 )
+from app.features.topology.access import (
+    EnterpriseTopologyAccessError,
+    require_effective_enterprise_access,
+)
 from app.features.topology.models import Enterprise, EnterpriseSite
 
 
@@ -94,10 +98,20 @@ async def list_official_enterprise_reports(
     workflow_state: ReportWorkflowState | None = None,
     enterprise_id: UUID | None = None,
     site_id: UUID | None = None,
+    _authorized_enterprise_id: str | None = None,
 ) -> EnterpriseReportPage:
     """Return an oldest-received, deterministic page of official report work."""
 
-    _require_staff(account)
+    if _authorized_enterprise_id is None:
+        _require_staff(account)
+    else:
+        _require_enterprise(account)
+        if enterprise_id is not None and str(enterprise_id) != _authorized_enterprise_id:
+            raise ReportReadForbidden(
+                "ENTERPRISE_REPORT_SCOPE_FORBIDDEN",
+                "The requested report scope does not belong to the authenticated enterprise.",
+            )
+        enterprise_id = UUID(_authorized_enterprise_id)
     if limit < 1 or limit > 100:
         raise ReportReadError("REPORT_PAGE_LIMIT_INVALID", "Report page limit must be 1 to 100.")
     fingerprint = filter_fingerprint(
@@ -197,45 +211,52 @@ async def read_official_enterprise_report(
     *,
     account: Account,
     enterprise_report_id: UUID,
+    _authorized_enterprise_id: str | None = None,
 ) -> EnterpriseReportDetail:
     """Return the complete immutable revision and audit graph for one official report."""
 
-    _require_staff(account)
+    if _authorized_enterprise_id is None:
+        _require_staff(account)
+    else:
+        _require_enterprise(account)
     current_revision = aliased(ReportRevision, name="current_report_revision")
-    result = (
-        await db.execute(
-            select(
-                EnterpriseReport,
-                current_revision,
-                ReportingObligation,
-                ReportingPeriod,
-                Enterprise,
-                EnterpriseSite,
-            )
-            .join(
-                current_revision,
-                and_(
-                    current_revision.id == EnterpriseReport.current_revision_id,
-                    current_revision.classification == EnterpriseReport.classification,
-                ),
-            )
-            .join(
-                ReportingObligation,
-                ReportingObligation.id == EnterpriseReport.reporting_obligation_id,
-            )
-            .join(ReportingPeriod, ReportingPeriod.id == ReportingObligation.reporting_period_id)
-            .join(Enterprise, Enterprise.id == EnterpriseReport.enterprise_id)
-            .join(EnterpriseSite, EnterpriseSite.id == EnterpriseReport.site_id)
-            .where(
-                EnterpriseReport.id == str(enterprise_report_id),
-                EnterpriseReport.classification == "official",
-                current_revision.classification == "official",
-                ReportingObligation.classification == "official",
-                Enterprise.classification == "official",
-                EnterpriseSite.classification == "official",
-            )
+    statement = (
+        select(
+            EnterpriseReport,
+            current_revision,
+            ReportingObligation,
+            ReportingPeriod,
+            Enterprise,
+            EnterpriseSite,
         )
-    ).one_or_none()
+        .join(
+            current_revision,
+            and_(
+                current_revision.id == EnterpriseReport.current_revision_id,
+                current_revision.classification == EnterpriseReport.classification,
+            ),
+        )
+        .join(
+            ReportingObligation,
+            ReportingObligation.id == EnterpriseReport.reporting_obligation_id,
+        )
+        .join(ReportingPeriod, ReportingPeriod.id == ReportingObligation.reporting_period_id)
+        .join(Enterprise, Enterprise.id == EnterpriseReport.enterprise_id)
+        .join(EnterpriseSite, EnterpriseSite.id == EnterpriseReport.site_id)
+        .where(
+            EnterpriseReport.id == str(enterprise_report_id),
+            EnterpriseReport.classification == "official",
+            current_revision.classification == "official",
+            ReportingObligation.classification == "official",
+            Enterprise.classification == "official",
+            EnterpriseSite.classification == "official",
+        )
+    )
+    if _authorized_enterprise_id is not None:
+        statement = statement.where(
+            EnterpriseReport.enterprise_id == _authorized_enterprise_id,
+        )
+    result = (await db.execute(statement)).one_or_none()
     if result is None:
         raise ReportReadNotFound(
             "ENTERPRISE_REPORT_NOT_FOUND",
@@ -274,6 +295,56 @@ async def read_official_enterprise_report(
             for revision in revisions
         ],
         reviewEvents=review_events,
+    )
+
+
+async def list_owned_enterprise_reports(
+    db: AsyncSession,
+    *,
+    account: Account,
+    limit: int,
+    cursor: str | None,
+    reporting_period_id: UUID | None = None,
+    workflow_state: ReportWorkflowState | None = None,
+    evaluated_at: datetime | None = None,
+) -> EnterpriseReportPage:
+    """Return only official reports owned by the authenticated enterprise."""
+
+    enterprise_id = await _effective_official_enterprise_id(
+        db,
+        account=account,
+        evaluated_at=evaluated_at,
+    )
+    return await list_official_enterprise_reports(
+        db,
+        account=account,
+        limit=limit,
+        cursor=cursor,
+        reporting_period_id=reporting_period_id,
+        workflow_state=workflow_state,
+        _authorized_enterprise_id=enterprise_id,
+    )
+
+
+async def read_owned_enterprise_report(
+    db: AsyncSession,
+    *,
+    account: Account,
+    enterprise_report_id: UUID,
+    evaluated_at: datetime | None = None,
+) -> EnterpriseReportDetail:
+    """Return one official immutable graph only when owned by the caller."""
+
+    enterprise_id = await _effective_official_enterprise_id(
+        db,
+        account=account,
+        evaluated_at=evaluated_at,
+    )
+    return await read_official_enterprise_report(
+        db,
+        account=account,
+        enterprise_report_id=enterprise_report_id,
+        _authorized_enterprise_id=enterprise_id,
     )
 
 
@@ -364,6 +435,7 @@ def _revision_summary(
 ) -> ReportRevisionSummaryResource:
     return ReportRevisionSummaryResource(
         reportRevisionId=UUID(revision.id),
+        localRevisionId=revision.local_revision_id,
         revisionNumber=revision.revision_number,
         isCurrent=revision.id == report.current_revision_id,
         isAccepted=revision.id == report.accepted_revision_id,
@@ -388,7 +460,6 @@ def _revision_resource(
     summary = _revision_summary(revision, report=report, metrics=metrics)
     return ReportRevisionResource(
         **summary.model_dump(),
-        localRevisionId=revision.local_revision_id,
         idempotencyKey=revision.idempotency_key,
         sourceWindowStart=revision.source_window_start,
         sourceWindowEnd=revision.source_window_end,
@@ -615,3 +686,34 @@ def _require_staff(account: Account) -> None:
             "REPORT_READ_FORBIDDEN",
             "Only an authenticated Staff account may read the official report work queue.",
         )
+
+
+def _require_enterprise(account: Account) -> None:
+    if account.role != AccountRole.ENTERPRISE:
+        raise ReportReadForbidden(
+            "ENTERPRISE_REPORT_READ_FORBIDDEN",
+            "Only an authenticated Enterprise account may read its report history.",
+        )
+
+
+async def _effective_official_enterprise_id(
+    db: AsyncSession,
+    *,
+    account: Account,
+    evaluated_at: datetime | None,
+) -> str:
+    _require_enterprise(account)
+    try:
+        access = await require_effective_enterprise_access(
+            db,
+            account_id=account.id,
+            evaluated_at=evaluated_at or datetime.now(UTC),
+        )
+    except EnterpriseTopologyAccessError as exc:
+        raise ReportReadForbidden(exc.code, exc.message) from exc
+    if access.classification != "official":
+        raise ReportReadForbidden(
+            "ENTERPRISE_REPORT_SCOPE_INVALID",
+            "The authenticated enterprise is not in the official report scope.",
+        )
+    return access.enterprise_id

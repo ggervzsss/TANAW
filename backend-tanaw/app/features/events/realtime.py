@@ -383,7 +383,11 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
         ):
             raise _invalid_realtime_event("A report event has an invalid resource scope.")
         period_id = _string(payload.get("reportingPeriodId"))
-        keys = ["/operational/reports/intake", f"enterprise-report:{report_id}"]
+        keys = [
+            "/operational/reports/v2",
+            "/operational/enterprise/reports/v2",
+            f"enterprise-report:{report_id}",
+        ]
         if period_id:
             keys.append(f"reporting-period-compliance:{period_id}")
         return _Invalidation(
@@ -414,8 +418,8 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
         ):
             raise _invalid_realtime_event("A final-report event has an invalid resource scope.")
         keys = [
-            "/operational/reports/intake",
-            "/operational/reports/final",
+            "/operational/reports/v2",
+            "/operational/reports/finalizations/v2",
             f"final-report:{finalization_id}",
             f"final-reports-period:{period_id}",
             f"reporting-period-compliance:{period_id}",

@@ -109,7 +109,9 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                     <p className="mt-1 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">{row.reportDescription}</p>
                   </td>
                   <td className="px-5 py-4 text-sm font-medium text-gray-700">{report.period ?? report.date}</td>
-                  <td className="px-5 py-4 text-right font-mono font-bold text-[#065f46]">{report.unique?.toLocaleString() || 0}</td>
+                  <td className="px-5 py-4 text-right font-mono font-bold text-[#065f46]">
+                    {report.metricsUnavailable?.includes("unique_visitor_estimate") ? "Unknown" : report.unique.toLocaleString()}
+                  </td>
                   <td className="px-5 py-4">
                     <Badge variant={badgeVariant(row)}>{row.statusLabel}</Badge>
                   </td>

@@ -36,6 +36,10 @@ export type AuditEntry = {
 
 export type ReportRecord = {
   id: string;
+  centralReportId?: string;
+  centralDetailLoaded?: boolean;
+  localRevisionId?: string;
+  metricsUnavailable?: string[];
   date: string;
   status: string;
   entries: number;
