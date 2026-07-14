@@ -1,3 +1,4 @@
+import json
 import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import contextmanager
@@ -143,6 +144,57 @@ async def test_report_read_integrity_schema_matches_postgres_catalog(
         "ck_final_report_events_actor_snapshot",
         "ck_final_report_scope_members_identity_snapshots",
     }
+
+
+@pytest.mark.asyncio
+async def test_report_list_queries_use_target_keyset_indexes(
+    read_session: AsyncSession,
+) -> None:
+    await read_session.execute(text("SET LOCAL enable_seqscan = off"))
+    report_plan = await read_session.scalar(
+        text(
+            """
+            EXPLAIN (FORMAT JSON)
+            SELECT enterprise_reports.id, current_revision.received_at
+            FROM report_revisions AS current_revision
+            JOIN enterprise_reports
+              ON enterprise_reports.current_revision_id = current_revision.id
+             AND enterprise_reports.classification = current_revision.classification
+            JOIN reporting_obligations
+              ON reporting_obligations.id = enterprise_reports.reporting_obligation_id
+            WHERE current_revision.classification = 'official'
+              AND enterprise_reports.classification = 'official'
+              AND reporting_obligations.classification = 'official'
+            ORDER BY current_revision.received_at, enterprise_reports.id
+            LIMIT 101
+            """
+        )
+    )
+    final_report_plan = await read_session.scalar(
+        text(
+            """
+            EXPLAIN (FORMAT JSON)
+            SELECT report_finalizations.id, current_version.finalized_at
+            FROM final_report_versions AS current_version
+            JOIN report_finalizations
+              ON report_finalizations.current_version_id = current_version.id
+             AND report_finalizations.classification = current_version.classification
+            WHERE current_version.classification = 'official'
+              AND current_version.disposition = 'current'
+              AND report_finalizations.classification = 'official'
+            ORDER BY current_version.finalized_at DESC, report_finalizations.id DESC
+            LIMIT 101
+            """
+        )
+    )
+
+    rendered_report_plan = json.dumps(report_plan)
+    assert "ix_report_revisions_queue_received" in rendered_report_plan
+    assert '"Node Type": "Seq Scan"' not in rendered_report_plan
+    rendered_final_report_plan = json.dumps(final_report_plan)
+    assert "ix_final_report_versions_current_keyset" in rendered_final_report_plan
+    assert "ix_report_finalizations_period_current" in rendered_final_report_plan
+    assert '"Node Type": "Seq Scan"' not in rendered_final_report_plan
 
 
 @pytest.mark.asyncio
