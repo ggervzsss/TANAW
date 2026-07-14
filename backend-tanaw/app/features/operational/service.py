@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
 from app.features.alerts.models import OperationalAlert
+from app.features.alerts.schemas import OperationalAlertSummary
 from app.features.assets.models import SupportAttachment
 from app.features.assets.storage import AssetStorage, ValidatedImage
 from app.features.events.operational_resources import enqueue_operational_resource_event
 from app.features.notifications.models import UserNotification
-from app.features.operational.schemas import (
-    OperationalAlertSummary,
+from app.features.notifications.schemas import UserNotificationSummary
+from app.features.support.models import SupportTicket, SupportTicketMessage
+from app.features.support.schemas import (
     SupportTicketAttachment,
     SupportTicketCreate,
     SupportTicketDetail,
@@ -24,9 +26,7 @@ from app.features.operational.schemas import (
     SupportTicketMessageSummary,
     SupportTicketStatusUpdate,
     SupportTicketSummary,
-    UserNotificationSummary,
 )
-from app.features.support.models import SupportTicket, SupportTicketMessage
 from app.features.topology.account_scope import (
     AccountTopology,
     get_enterprise_account_by_identifier,

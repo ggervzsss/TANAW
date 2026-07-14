@@ -20,7 +20,7 @@ from app.features.events.contracts import (
     DomainEventEnvelope,
     JSONValue,
 )
-from app.features.operational.schemas import OperationalWebSocketEnvelope
+from app.features.events.realtime_envelopes import OperationalWebSocketEnvelope
 from app.features.operational.websocket import operational_ws_manager
 
 Broadcast = Callable[[OperationalWebSocketEnvelope], Awaitable[None]]

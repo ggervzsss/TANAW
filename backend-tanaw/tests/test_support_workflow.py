@@ -7,9 +7,9 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.alerts.models import OperationalAlert
 from app.features.auth.router import create_support_request
 from app.features.auth.schemas import SupportRequest
-from app.features.operational.schemas import SupportTicketDetail, SupportTicketMessageCreate
 from app.features.operational.service import create_support_ticket_message
 from app.features.support.models import SupportTicket
+from app.features.support.schemas import SupportTicketDetail, SupportTicketMessageCreate
 
 
 def _account(*, role: AccountRole) -> Account:

@@ -11,7 +11,7 @@ from app.features.mock_data.cli import (
     desktop_preparation_payload,
     mock_preparation_counts,
 )
-from app.features.operational.schemas import MockPreparationCounts
+from app.features.simulation.schemas import MockPreparationCounts
 
 
 def test_generated_enterprises_match_configured_locations_and_contacts() -> None:
