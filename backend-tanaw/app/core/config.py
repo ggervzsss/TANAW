@@ -1,6 +1,7 @@
 import hmac
 from functools import lru_cache
 from ipaddress import ip_address
+from pathlib import Path
 from typing import Self
 from urllib.parse import urlsplit
 
@@ -101,6 +102,22 @@ class Settings(BaseSettings):
     domain_event_batch_size: int = Field(default=20, ge=1, le=500)
     domain_event_lease_seconds: int = Field(default=60, ge=5, le=600)
     domain_event_max_attempts: int = Field(default=8, ge=1, le=100)
+    final_report_artifact_storage_root: Path = Field(
+        default_factory=lambda: Path("var/final-report-artifacts").resolve(),
+        validation_alias="FINAL_REPORT_ARTIFACT_STORAGE_ROOT",
+    )
+    final_report_artifact_max_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=64 * 1024,
+        le=50 * 1024 * 1024,
+    )
+    final_report_artifact_poll_interval_seconds: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=60.0,
+    )
+    final_report_artifact_batch_size: int = Field(default=2, ge=1, le=25)
+    final_report_artifact_max_attempts: int = Field(default=5, ge=1, le=20)
     password_reset_rate_window_seconds: int = Field(default=900, ge=60, le=3600)
     password_reset_per_ip_limit: int = Field(default=10, ge=1, le=100)
     password_reset_per_identifier_limit: int = Field(default=5, ge=1, le=50)
@@ -227,6 +244,11 @@ class Settings(BaseSettings):
         if self.is_production:
             self._validate_production_credentials()
             self._validate_production_email()
+            if not self.final_report_artifact_storage_root.is_absolute():
+                raise ValueError(
+                    "FINAL_REPORT_ARTIFACT_STORAGE_ROOT must be an absolute mounted path "
+                    "in production."
+                )
         return self
 
     def _validate_telemetry_retention_policy(self) -> None:

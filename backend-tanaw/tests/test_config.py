@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +16,7 @@ PRODUCTION_SETTINGS: dict[str, Any] = {
     "resend_api_key": "re_production_sending_key_123456789",
     "email_secret_derivation_key": "production-email-secret-different-from-jwt-2026",
     "email_from_address": "no-reply@mail.tanaw-sanpedro.ph",
+    "final_report_artifact_storage_root": "/var/lib/tanaw/final-report-artifacts",
 }
 
 
@@ -233,6 +235,37 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
     assert settings.telemetry_metric_fact_retention_days == 7
     assert settings.telemetry_device_health_retention_days == 7
     assert settings.telemetry_hourly_rollup_retention_days == 730
+
+
+def test_final_report_artifact_runtime_has_bounded_defaults() -> None:
+    settings = Settings()
+
+    assert (
+        settings.final_report_artifact_storage_root == Path("var/final-report-artifacts").resolve()
+    )
+    assert settings.final_report_artifact_max_bytes == 5 * 1024 * 1024
+    assert settings.final_report_artifact_poll_interval_seconds == 1.0
+    assert settings.final_report_artifact_batch_size == 2
+    assert settings.final_report_artifact_max_attempts == 5
+
+
+def test_production_requires_absolute_final_report_artifact_storage_root() -> None:
+    with pytest.raises(ValueError, match="FINAL_REPORT_ARTIFACT_STORAGE_ROOT"):
+        production_settings(final_report_artifact_storage_root="relative/artifacts")
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("final_report_artifact_max_bytes", 64 * 1024 - 1),
+        ("final_report_artifact_poll_interval_seconds", 0),
+        ("final_report_artifact_batch_size", 0),
+        ("final_report_artifact_max_attempts", 0),
+    ],
+)
+def test_final_report_artifact_settings_reject_unsafe_bounds(name: str, value: int) -> None:
+    with pytest.raises(ValueError, match=name):
+        Settings.model_validate({name: value})
 
 
 @pytest.mark.parametrize(

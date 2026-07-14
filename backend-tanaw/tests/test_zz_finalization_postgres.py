@@ -3,6 +3,7 @@ import os
 from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -14,8 +15,11 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.config import Settings
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.events.models import DomainEvent, DomainEventDelivery
+from app.features.final_reports.artifact_service import FinalReportArtifactProcessor
+from app.features.final_reports.artifact_storage import LocalArtifactStorage
 from app.features.final_reports.envelopes import FinalizeReportsCommand
 from app.features.final_reports.models import (
     FinalReportArtifact,
@@ -32,6 +36,7 @@ from app.features.final_reports.service import (
     FinalizationError,
     finalize_report_command,
 )
+from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import (
     EnterpriseReport,
@@ -43,6 +48,10 @@ from app.features.reporting.models import (
 from app.features.topology.models import Enterprise, EnterpriseSite
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
+
+# Register the simulation-lineage target before SQLAlchemy sorts the topology
+# mapper dependencies in this deliberately isolated PostgreSQL module.
+assert MockDataRun.__tablename__ == "mock_data_runs"
 
 
 def _postgres_async_url(raw_url: str) -> str:
@@ -137,6 +146,74 @@ async def test_finalization_is_atomic_idempotent_and_exact(
         await finalize_report_command(
             finalization_session, account=staff, command=other_finalization
         )
+
+
+@pytest.mark.asyncio
+async def test_pending_artifact_renders_from_the_persisted_immutable_graph(
+    finalization_session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    staff, period, sources = await _seed_accepted_sources(
+        finalization_session, barangays=["Poblacion"]
+    )
+    created = await finalize_report_command(
+        finalization_session,
+        account=staff,
+        command=_command(period.id, [sources[0].id]),
+        acknowledged_at=period.ends_at,
+    )
+    artifact = await finalization_session.scalar(
+        select(FinalReportArtifact).where(
+            FinalReportArtifact.final_report_version_id
+            == str(created.resource.finalReportVersionId)
+        )
+    )
+    assert artifact is not None
+    settings = Settings(
+        final_report_artifact_storage_root=tmp_path,
+        final_report_artifact_max_bytes=64 * 1024,
+    )
+    storage = LocalArtifactStorage(tmp_path, max_bytes=64 * 1024)
+    processor = FinalReportArtifactProcessor(
+        sessions=async_sessionmaker(),
+        storage=storage,
+        settings=settings,
+    )
+
+    await processor._generate_locked(finalization_session, artifact)
+    await finalization_session.flush([artifact])
+
+    assert artifact.status == "ready"
+    assert artifact.storage_key is not None
+    assert artifact.content_hash is not None
+    stored = await storage.read(key=artifact.storage_key)
+    assert stored.content_hash == artifact.content_hash
+    assert stored.content.startswith(b"%PDF-1.4")
+    assert (
+        await finalization_session.scalar(
+            select(func.count(FinalReportEvent.id)).where(
+                FinalReportEvent.final_report_artifact_id == artifact.id,
+                FinalReportEvent.event_type == "artifact_ready",
+            )
+        )
+        == 1
+    )
+    artifact_domain_event = await finalization_session.scalar(
+        select(DomainEvent).where(
+            DomainEvent.event_type == "final_report.artifact_ready",
+            DomainEvent.aggregate_id == str(created.resource.reportFinalizationId),
+        )
+    )
+    assert artifact_domain_event is not None
+    assert (
+        await finalization_session.scalar(
+            select(func.count(DomainEventDelivery.id)).where(
+                DomainEventDelivery.domain_event_id == artifact_domain_event.id,
+                DomainEventDelivery.destination == "realtime_broadcast",
+            )
+        )
+        == 1
+    )
 
 
 @pytest.mark.asyncio

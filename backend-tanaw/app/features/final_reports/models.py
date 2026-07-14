@@ -478,13 +478,32 @@ class FinalReportEvent(Base):
             name="fk_final_report_events_version_scope",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["final_report_artifact_id", "final_report_version_id", "classification"],
+            [
+                "final_report_artifacts.id",
+                "final_report_artifacts.final_report_version_id",
+                "final_report_artifacts.classification",
+            ],
+            name="fk_final_report_events_artifact_scope",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_final_report_events_classification"),
         CheckConstraint(
-            "event_type IN ('version_finalized', 'legacy_final_imported')",
+            "event_type IN ('version_finalized', 'legacy_final_imported', "
+            "'artifact_ready', 'artifact_failed', 'artifact_retry_scheduled', "
+            "'artifact_repair_requested')",
             name="ck_final_report_events_type",
         ),
         CheckConstraint(
-            "expected_version >= 0 AND resulting_version > expected_version",
+            "((event_type IN ('version_finalized', 'legacy_final_imported') AND "
+            "final_report_artifact_id IS NULL AND expected_version >= 0 AND "
+            "resulting_version > expected_version) OR "
+            "(event_type IN ('artifact_ready', 'artifact_failed', "
+            "'artifact_retry_scheduled', 'artifact_repair_requested') AND "
+            "final_report_artifact_id IS NOT NULL AND expected_version = resulting_version "
+            "AND resulting_version >= 1))",
             name="ck_final_report_events_versions",
         ),
         CheckConstraint(
@@ -504,6 +523,7 @@ class FinalReportEvent(Base):
     )
     report_finalization_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     final_report_version_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    final_report_artifact_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     event_type: Mapped[str] = mapped_column(String(40), nullable=False)
     actor_account_id: Mapped[str | None] = mapped_column(
@@ -532,7 +552,8 @@ class FinalReportArtifact(Base):
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_final_report_artifacts_classification"),
         CheckConstraint(
-            "status IN ('pending', 'ready', 'failed')", name="ck_final_report_artifacts_status"
+            "status IN ('pending', 'repairing', 'ready', 'failed')",
+            name="ck_final_report_artifacts_status",
         ),
         CheckConstraint("generation_attempts >= 0", name="ck_final_report_artifacts_attempts"),
         CheckConstraint(
@@ -550,6 +571,12 @@ class FinalReportArtifact(Base):
             "template_version",
             "mime_type",
             name="uq_final_report_artifacts_rendering",
+        ),
+        UniqueConstraint(
+            "id",
+            "final_report_version_id",
+            "classification",
+            name="uq_final_report_artifacts_event_scope",
         ),
         Index("ix_final_report_artifacts_status", "status", "updated_at"),
     )

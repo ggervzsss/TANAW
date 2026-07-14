@@ -394,9 +394,15 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
             audience_roles=roles,
         )
 
-    if event.event_type == "final_report.version_finalized":
+    if event.event_type == "final_report.version_finalized" or event.event_type in {
+        "final_report.artifact_ready",
+        "final_report.artifact_failed",
+        "final_report.artifact_retry_scheduled",
+        "final_report.artifact_repair_requested",
+    }:
         finalization_id = _string(payload.get("reportFinalizationId"))
         period_id = _string(payload.get("reportingPeriodId"))
+        artifact_id = _string(payload.get("artifactId"))
         if (
             finalization_id is None
             or finalization_id != event.aggregate_id
@@ -404,6 +410,7 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
             or event.aggregate_type != "report_finalization"
             or event.enterprise_id is not None
             or event.site_id is not None
+            or (event.event_type != "final_report.version_finalized" and artifact_id is None)
         ):
             raise _invalid_realtime_event("A final-report event has an invalid resource scope.")
         keys = [
@@ -476,7 +483,9 @@ def _audience_roles(event: DomainEventEnvelope) -> tuple[str, ...]:
         return ("staff", "enterprise")
     if event.event_type.startswith("enterprise_report."):
         return ("staff", "enterprise")
-    if event.event_type == "final_report.version_finalized":
+    if event.event_type == "final_report.version_finalized" or event.event_type.startswith(
+        "final_report.artifact_"
+    ):
         return ("staff",)
     if event.event_type == "reporting_obligation.reminder_requested":
         return ("enterprise",)

@@ -16,6 +16,7 @@ from app.features.events.runtime import (
     start_domain_event_delivery_worker,
     stop_domain_event_delivery_worker,
 )
+from app.features.final_reports.artifact_runtime import final_report_artifact_worker_ready
 from app.features.mail.runtime import (
     close_email_runtime,
     email_runtime_ready,
@@ -69,6 +70,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["ETag"],
 )
 
 
@@ -118,6 +120,16 @@ async def maintenance_readiness() -> JSONResponse:
 @app.head("/ready/domain-events")
 async def domain_event_readiness() -> JSONResponse:
     ready = domain_event_delivery_worker_ready()
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "ready" if ready else "not_ready"},
+    )
+
+
+@app.get("/ready/final-report-artifacts")
+@app.head("/ready/final-report-artifacts")
+async def final_report_artifact_readiness() -> JSONResponse:
+    ready = final_report_artifact_worker_ready()
     return JSONResponse(
         status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"status": "ready" if ready else "not_ready"},

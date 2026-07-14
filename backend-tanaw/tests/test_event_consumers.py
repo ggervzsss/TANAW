@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, cast
 from unittest.mock import AsyncMock
@@ -104,6 +105,57 @@ async def test_realtime_publisher_emits_refetch_only_resource_envelope_once() ->
             "refetchRequired": True,
         },
     }
+
+
+@pytest.mark.asyncio
+async def test_artifact_lifecycle_event_invalidates_final_report_reads() -> None:
+    envelopes: list[dict[str, Any]] = []
+
+    async def broadcast(envelope: Any) -> None:
+        envelopes.append(envelope.model_dump(mode="json"))
+
+    finalization_id = str(uuid4())
+    period_id = str(uuid4())
+    artifact_id = str(uuid4())
+    base = _event(
+        event_type="final_report.artifact_ready",
+        payload={
+            "artifactId": artifact_id,
+            "artifactStatus": "ready",
+            "finalReportVersionId": str(uuid4()),
+            "reportFinalizationId": finalization_id,
+            "reportingPeriodId": period_id,
+        },
+    )
+    event = replace(
+        base,
+        aggregate_type="report_finalization",
+        aggregate_id=finalization_id,
+        aggregate_version=2,
+        enterprise_id=None,
+        site_id=None,
+    )
+
+    await OperationalRealtimePublisher(broadcast=broadcast).publish(
+        topic="operational.resource-invalidations.v2",
+        event=event,
+        idempotency_key=event.event_key,
+    )
+
+    assert len(envelopes) == 1
+    assert envelopes[0]["data"]["resource"] == {
+        "type": "final_report",
+        "id": finalization_id,
+        "version": 2,
+    }
+    assert envelopes[0]["data"]["invalidates"] == [
+        "/operational/reports/intake",
+        "/operational/reports/final",
+        f"final-report:{finalization_id}",
+        f"final-reports-period:{period_id}",
+        f"reporting-period-compliance:{period_id}",
+    ]
+    assert envelopes[0]["data"]["audienceRoles"] == ["staff"]
 
 
 @pytest.mark.asyncio

@@ -50,6 +50,15 @@ def test_maintenance_readiness_is_separate_from_basic_health() -> None:
     assert response.json() == {"status": "not_ready"}
 
 
+def test_final_report_artifact_readiness_is_separate_from_basic_health() -> None:
+    client = TestClient(app)
+
+    response = client.get("/ready/final-report-artifacts")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready"}
+
+
 def test_retention_metrics_require_authentication() -> None:
     client = TestClient(app)
 

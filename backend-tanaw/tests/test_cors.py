@@ -32,6 +32,7 @@ def build_cors_test_client() -> TestClient:
         allow_credentials=False,
         allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["ETag"],
     )
 
     @app.get("/health")
@@ -50,6 +51,7 @@ def test_trusted_production_origin_receives_cors_header() -> None:
     assert response.headers["access-control-allow-origin"] == TRUSTED_FRONTEND_ORIGIN
     assert response.headers["access-control-allow-origin"] != "*"
     assert "access-control-allow-credentials" not in response.headers
+    assert response.headers["access-control-expose-headers"] == "ETag"
 
 
 def test_unknown_origin_does_not_receive_cors_header() -> None:
