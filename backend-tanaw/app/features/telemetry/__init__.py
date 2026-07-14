@@ -6,7 +6,6 @@ from app.features.telemetry.models import (
     SiteLiveState,
     SiteTelemetryHourlyRollup,
     TelemetryMetricFact,
-    TelemetryMigrationException,
     TelemetryObservation,
 )
 
@@ -16,6 +15,5 @@ __all__ = [
     "SiteTelemetryHourlyRollup",
     "SiteLiveState",
     "TelemetryMetricFact",
-    "TelemetryMigrationException",
     "TelemetryObservation",
 ]

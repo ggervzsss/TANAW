@@ -119,7 +119,7 @@ class ReportingObligation(Base):
             name="ck_reporting_obligations_eligibility_status",
         ),
         CheckConstraint(
-            "eligibility_basis IN ('registry_snapshot', 'legacy_submission', 'manual_resolution')",
+            "eligibility_basis IN ('registry_snapshot', 'migration_evidence', 'manual_resolution')",
             name="ck_reporting_obligations_eligibility_basis",
         ),
         CheckConstraint(
@@ -627,7 +627,7 @@ class ReportReviewEvent(Base):
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_report_review_events_classification"),
         CheckConstraint(
             "event_type IN ('revision_submitted', 'returned', 'accepted', 'reopened', "
-            "'consolidated', 'legacy_state_imported')",
+            "'consolidated', 'migration_state_imported')",
             name="ck_report_review_events_type",
         ),
         CheckConstraint(
@@ -735,85 +735,6 @@ class ReportIntakeReceipt(Base):
     payload_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     acknowledged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class ReportMigrationException(Base):
-    __tablename__ = "report_migration_exceptions"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["enterprise_id", "classification"],
-            ["enterprises.id", "enterprises.classification"],
-            name="fk_report_migration_exceptions_enterprise_classification",
-            ondelete="RESTRICT",
-        ),
-        CheckConstraint(
-            "classification IS NULL OR classification IN ('official', 'simulation')",
-            name="ck_report_migration_exceptions_classification",
-        ),
-        CheckConstraint(
-            "(enterprise_id IS NULL AND classification IS NULL) OR "
-            "(enterprise_id IS NOT NULL AND classification IS NOT NULL)",
-            name="ck_report_migration_exceptions_enterprise_classification_pair",
-        ),
-        CheckConstraint(
-            "status IN ('open', 'resolved', 'waived')",
-            name="ck_report_migration_exceptions_status",
-        ),
-        CheckConstraint(
-            "details_json IS NULL OR length(details_json) <= 20000",
-            name="ck_report_migration_exceptions_details_size",
-        ),
-        CheckConstraint(
-            "(status = 'open' AND resolved_at IS NULL AND resolved_by_account_id IS NULL) OR "
-            "(status IN ('resolved', 'waived') AND resolved_at IS NOT NULL "
-            "AND resolved_by_account_id IS NOT NULL)",
-            name="ck_report_migration_exceptions_resolution",
-        ),
-        UniqueConstraint(
-            "source_table",
-            "source_row_id",
-            "exception_code",
-            name="uq_report_migration_exceptions_source_code",
-        ),
-        Index(
-            "ix_report_migration_exceptions_open_blocking",
-            "status",
-            "blocks_acceptance",
-            postgresql_where=text("status = 'open' AND blocks_acceptance = true"),
-            sqlite_where=text("status = 'open' AND blocks_acceptance = 1"),
-        ),
-        Index("ix_report_migration_exceptions_revision", "report_revision_id"),
-    )
-
-    id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    source_table: Mapped[str] = mapped_column(String(120), nullable=False)
-    source_row_id: Mapped[str] = mapped_column(String(120), nullable=False)
-    exception_code: Mapped[str] = mapped_column(String(80), nullable=False)
-    enterprise_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
-    reporting_period_id: Mapped[str | None] = mapped_column(
-        Uuid(as_uuid=False),
-        ForeignKey("reporting_periods.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
-    report_revision_id: Mapped[str | None] = mapped_column(
-        Uuid(as_uuid=False),
-        ForeignKey("report_revisions.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
-    classification: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    blocks_acceptance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_by_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
-    )
-    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

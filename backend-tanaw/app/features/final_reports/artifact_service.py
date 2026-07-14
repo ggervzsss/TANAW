@@ -596,7 +596,7 @@ async def _load_artifact_graph(
             .where(
                 FinalReportEvent.final_report_version_id == version.id,
                 FinalReportEvent.classification == "official",
-                FinalReportEvent.event_type.in_(("version_finalized", "legacy_final_imported")),
+                FinalReportEvent.event_type.in_(("version_finalized", "migration_final_imported")),
             )
             .order_by(FinalReportEvent.occurred_at, FinalReportEvent.id)
         )

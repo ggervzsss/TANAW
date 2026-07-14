@@ -16,7 +16,6 @@ from app.features.telemetry.models import (
     SiteLiveState,
     SiteTelemetryHourlyRollup,
     TelemetryMetricFact,
-    TelemetryMigrationException,
     TelemetryObservation,
 )
 
@@ -547,12 +546,6 @@ async def _delete_observations(
                     ~exists(
                         select(SiteLiveState.site_id).where(
                             SiteLiveState.telemetry_observation_id == TelemetryObservation.id
-                        )
-                    ),
-                    ~exists(
-                        select(TelemetryMigrationException.id).where(
-                            TelemetryMigrationException.telemetry_observation_id
-                            == TelemetryObservation.id
                         )
                     ),
                 )

@@ -63,8 +63,8 @@ def test_reporting_schema_uses_native_postgres_uuids_and_creates_on_sqlite(
         "report_source_batches",
         "report_review_events",
         "report_intake_receipts",
-        "report_migration_exceptions",
     }.issubset(Base.metadata.tables)
+    assert "report_migration_exceptions" not in Base.metadata.tables
 
 
 def test_period_bounds_and_natural_key_are_constrained(sqlite_engine: Engine) -> None:

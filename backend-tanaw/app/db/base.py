@@ -60,7 +60,6 @@ from app.features.reporting.models import (
     ReportingPeriod,
     ReportIntakeReceipt,
     ReportMetricFact,
-    ReportMigrationException,
     ReportReviewEvent,
     ReportRevision,
     ReportSourceBatch,
@@ -71,7 +70,6 @@ from app.features.telemetry.models import (
     SiteLiveState,
     SiteTelemetryHourlyRollup,
     TelemetryMetricFact,
-    TelemetryMigrationException,
     TelemetryObservation,
 )
 from app.features.topology.models import (
@@ -135,7 +133,6 @@ __all__ = [
     "ReportFinalization",
     "ReportIntakeReceipt",
     "ReportMetricFact",
-    "ReportMigrationException",
     "ReportRevision",
     "ReportReviewEvent",
     "ReportSourceBatch",
@@ -145,7 +142,6 @@ __all__ = [
     "SupportTicket",
     "SupportAttachment",
     "SystemConfiguration",
-    "TelemetryMigrationException",
     "TelemetryMetricFact",
     "TelemetryObservation",
     "TopologyClassification",

@@ -56,12 +56,12 @@ def test_telemetry_and_event_schema_uses_native_uuid_and_creates_on_sqlite(
         "device_health_samples",
         "site_live_state",
         "site_telemetry_hourly_rollups",
-        "telemetry_migration_exceptions",
         "domain_events",
         "domain_event_deliveries",
         "domain_event_delivery_attempts",
         "domain_event_consumer_receipts",
     }.issubset(Base.metadata.tables)
+    assert "telemetry_migration_exceptions" not in Base.metadata.tables
     assert SiteTelemetryHourlyRollup.__table__.c.bucket_start.primary_key is True
 
 
@@ -88,7 +88,7 @@ def test_unsequenced_or_unknown_metrics_cannot_become_current(sqlite_engine: Eng
                 edge_device_id=graph["device_id"],
                 classification="official",
                 ingest_kind="migration",
-                ordering_status="unsequenced_legacy",
+                ordering_status="unsequenced_import",
                 payload_hash=_HASH,
                 observed_at=now,
                 received_at=now,
@@ -106,7 +106,7 @@ def test_unsequenced_or_unknown_metrics_cannot_become_current(sqlite_engine: Eng
             edge_device_id=graph["device_id"],
             classification="official",
             ingest_kind="migration",
-            ordering_status="unsequenced_legacy",
+            ordering_status="unsequenced_import",
             payload_hash=_HASH,
             observed_at=now,
             received_at=now,

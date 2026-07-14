@@ -491,13 +491,13 @@ class FinalReportEvent(Base):
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_final_report_events_classification"),
         CheckConstraint(
-            "event_type IN ('version_finalized', 'legacy_final_imported', "
+            "event_type IN ('version_finalized', 'migration_final_imported', "
             "'artifact_ready', 'artifact_failed', 'artifact_retry_scheduled', "
             "'artifact_repair_requested')",
             name="ck_final_report_events_type",
         ),
         CheckConstraint(
-            "((event_type IN ('version_finalized', 'legacy_final_imported') AND "
+            "((event_type IN ('version_finalized', 'migration_final_imported') AND "
             "final_report_artifact_id IS NULL AND expected_version >= 0 AND "
             "resulting_version > expected_version) OR "
             "(event_type IN ('artifact_ready', 'artifact_failed', "

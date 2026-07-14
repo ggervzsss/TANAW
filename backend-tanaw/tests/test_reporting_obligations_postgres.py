@@ -500,7 +500,7 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         site_id=legacy_site.id,
         classification="official",
         eligibility_status="unknown",
-        eligibility_basis="legacy_submission",
+        eligibility_basis="migration_evidence",
         exemption_reason="Historical eligibility was not provable during migration.",
         frozen_barangay=legacy_site.barangay,
         enterprise_official_code=legacy_enterprise.official_code,
@@ -542,7 +542,7 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
     assert len(obligations) == 2
     preserved = next(item for item in obligations if item.id == legacy_obligation.id)
     assert preserved.eligibility_status == "unknown"
-    assert preserved.eligibility_basis == "legacy_submission"
+    assert preserved.eligibility_basis == "migration_evidence"
     assert preserved.acceptance_blocked is True
     created = next(item for item in obligations if item.site_id == new_site.id)
     assert created.eligibility_status == "eligible"

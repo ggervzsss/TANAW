@@ -8,7 +8,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Float,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -161,7 +160,7 @@ class TelemetryObservation(Base):
             name="ck_telemetry_observations_ingest_kind",
         ),
         CheckConstraint(
-            "ordering_status IN ('sequenced', 'unsequenced_legacy')",
+            "ordering_status IN ('sequenced', 'unsequenced_import')",
             name="ck_telemetry_observations_ordering_status",
         ),
         CheckConstraint(
@@ -169,7 +168,7 @@ class TelemetryObservation(Base):
             "AND edge_device_id IS NOT NULL AND telemetry_epoch_id IS NOT NULL "
             "AND epoch_generation >= 1 AND sequence >= 0 AND command_id IS NOT NULL "
             "AND idempotency_key IS NOT NULL) OR "
-            "(ingest_kind = 'migration' AND ordering_status = 'unsequenced_legacy' "
+            "(ingest_kind = 'migration' AND ordering_status = 'unsequenced_import' "
             "AND telemetry_epoch_id IS NULL AND epoch_generation IS NULL "
             "AND sequence IS NULL AND command_id IS NULL AND idempotency_key IS NULL "
             "AND became_current = false)",
@@ -289,16 +288,16 @@ class TelemetryMetricFact(Base):
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_telemetry_metric_facts_classification"),
         CheckConstraint(
-            "fact_status IN ('qualified', 'unqualified_legacy')",
+            "fact_status IN ('qualified', 'unqualified_import')",
             name="ck_telemetry_metric_facts_status",
         ),
         CheckConstraint(
-            "grain IN ('camera', 'site', 'legacy_unspecified')",
+            "grain IN ('camera', 'site', 'import_unspecified')",
             name="ck_telemetry_metric_facts_grain",
         ),
         CheckConstraint(
             "(grain = 'camera' AND camera_id IS NOT NULL) OR "
-            "(grain IN ('site', 'legacy_unspecified') AND camera_id IS NULL)",
+            "(grain IN ('site', 'import_unspecified') AND camera_id IS NULL)",
             name="ck_telemetry_metric_facts_camera_grain",
         ),
         CheckConstraint(
@@ -313,7 +312,7 @@ class TelemetryMetricFact(Base):
             "(fact_status = 'qualified' AND grain IN ('camera', 'site') "
             "AND metric_window_start IS NOT NULL "
             "AND metric_window_end IS NOT NULL AND metric_window_end > metric_window_start) OR "
-            "(fact_status = 'unqualified_legacy' AND grain = 'legacy_unspecified' "
+            "(fact_status = 'unqualified_import' AND grain = 'import_unspecified' "
             "AND metric_window_start IS NULL "
             "AND metric_window_end IS NULL AND coverage_evidence_status = 'not_recorded')",
             name="ck_telemetry_metric_facts_window_evidence",
@@ -368,13 +367,13 @@ class TelemetryMetricFact(Base):
             sqlite_where=text("grain = 'camera'"),
         ),
         Index(
-            "uq_telemetry_metric_facts_legacy_definition",
+            "uq_telemetry_metric_facts_import_definition",
             "telemetry_observation_id",
             "definition",
             "definition_version",
             unique=True,
-            postgresql_where=text("grain = 'legacy_unspecified'"),
-            sqlite_where=text("grain = 'legacy_unspecified'"),
+            postgresql_where=text("grain = 'import_unspecified'"),
+            sqlite_where=text("grain = 'import_unspecified'"),
         ),
         Index("ix_telemetry_metric_facts_site_window", "site_id", "metric_window_end"),
         Index("ix_telemetry_metric_facts_definition_window", "definition", "metric_window_end"),
@@ -840,90 +839,5 @@ class SiteLiveState(Base):
     last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_failure_class: Mapped[str | None] = mapped_column(String(120), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class TelemetryMigrationException(Base):
-    __tablename__ = "telemetry_migration_exceptions"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["enterprise_id", "classification"],
-            ["enterprises.id", "enterprises.classification"],
-            name="fk_telemetry_migration_exceptions_enterprise_scope",
-            ondelete="RESTRICT",
-        ),
-        ForeignKeyConstraint(
-            ["site_id", "enterprise_id", "classification"],
-            [
-                "enterprise_sites.id",
-                "enterprise_sites.enterprise_id",
-                "enterprise_sites.classification",
-            ],
-            name="fk_telemetry_migration_exceptions_site_scope",
-            ondelete="RESTRICT",
-        ),
-        CheckConstraint(
-            "classification IS NULL OR classification IN ('official', 'simulation')",
-            name="ck_telemetry_migration_exceptions_classification",
-        ),
-        CheckConstraint(
-            "(enterprise_id IS NULL AND site_id IS NULL AND classification IS NULL) OR "
-            "(enterprise_id IS NOT NULL AND classification IS NOT NULL)",
-            name="ck_telemetry_migration_exceptions_scope_pair",
-        ),
-        CheckConstraint(
-            "status IN ('open', 'resolved', 'waived')",
-            name="ck_telemetry_migration_exceptions_status",
-        ),
-        CheckConstraint(
-            "details_json IS NULL OR length(details_json) <= 20000",
-            name="ck_telemetry_migration_exceptions_details_size",
-        ),
-        CheckConstraint(
-            "(status = 'open' AND resolved_at IS NULL AND resolved_by_account_id IS NULL) OR "
-            "(status IN ('resolved', 'waived') AND resolved_at IS NOT NULL "
-            "AND resolved_by_account_id IS NOT NULL)",
-            name="ck_telemetry_migration_exceptions_resolution",
-        ),
-        UniqueConstraint(
-            "source_table",
-            "source_row_id",
-            "exception_code",
-            name="uq_telemetry_migration_exceptions_source_code",
-        ),
-        Index(
-            "ix_telemetry_migration_exceptions_open_projection",
-            "status",
-            "blocks_current_projection",
-            postgresql_where=text("status = 'open' AND blocks_current_projection = true"),
-            sqlite_where=text("status = 'open' AND blocks_current_projection = 1"),
-        ),
-        Index("ix_telemetry_migration_exceptions_observation", "telemetry_observation_id"),
-    )
-
-    id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    source_table: Mapped[str] = mapped_column(String(120), nullable=False)
-    source_row_id: Mapped[str] = mapped_column(String(120), nullable=False)
-    exception_code: Mapped[str] = mapped_column(String(80), nullable=False)
-    enterprise_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
-    site_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
-    classification: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    telemetry_observation_id: Mapped[str | None] = mapped_column(
-        Uuid(as_uuid=False),
-        ForeignKey("telemetry_observations.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
-    details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    blocks_current_projection: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_by_account_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
-    )
-    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
