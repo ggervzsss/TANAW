@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -133,7 +133,7 @@ async def create_user_notification(
         recipient_account_id=recipient.id,
         recipient_role=recipient.role.value,
         recipient_enterprise_id=(
-            enterprise_identifier(recipient_topology) if recipient_topology is not None else None
+            recipient_topology.enterprise.id if recipient_topology is not None else None
         ),
         title=title,
         message=message,
@@ -336,10 +336,12 @@ async def create_support_ticket(
     images: Sequence[ValidatedImage] = (),
 ) -> SupportTicketSummary:
     topology = await require_account_topology(db, account)
-    ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
+    ticket_sequence = await db.scalar(text("SELECT nextval('support_ticket_code_seq')"))
+    if not isinstance(ticket_sequence, int):
+        raise RuntimeError("The support ticket code sequence returned an invalid value.")
     ticket = SupportTicket(
         id=str(uuid4()),
-        ticket_code=f"TCK-{int(ticket_count or 0) + 1:06d}",
+        ticket_code=f"TCK-{ticket_sequence:06d}",
         enterprise_account_id=account.id,
         enterprise_id=enterprise_identifier(topology),
         enterprise_name=enterprise_name(topology),
@@ -578,9 +580,11 @@ async def create_operational_alert(
             await db.refresh(existing)
             return existing
 
-    count = await db.scalar(select(func.count()).select_from(OperationalAlert))
+    alert_sequence = await db.scalar(text("SELECT nextval('operational_alert_code_seq')"))
+    if not isinstance(alert_sequence, int):
+        raise RuntimeError("The operational alert code sequence returned an invalid value.")
     alert = OperationalAlert(
-        alert_code=f"ALT-{int(count or 0) + 1:06d}",
+        alert_code=f"ALT-{alert_sequence:06d}",
         alert_type=alert_type,
         severity=severity,
         enterprise=enterprise,

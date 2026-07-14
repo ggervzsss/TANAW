@@ -58,6 +58,24 @@ class EmailOutbox(Base):
         CheckConstraint("max_attempts >= 1", name="ck_email_outbox_max_attempts"),
         CheckConstraint("manual_retry_count >= 0", name="ck_email_outbox_manual_retry_count"),
         CheckConstraint(
+            "status IN ('queued', 'processing', 'retry_scheduled', 'accepted', "
+            "'recorded', 'terminal_failed', 'cancelled', 'expired', "
+            "'reconciliation_required')",
+            name="ck_email_outbox_status",
+        ),
+        CheckConstraint(
+            "template_name IN ('account_activation', 'password_reset', "
+            "'business_email_change', 'account_email_change_verification', "
+            "'account_email_change_request_notice', 'account_email_change_approved_old', "
+            "'account_email_change_approved_new', 'support_reply')",
+            name="ck_email_outbox_template",
+        ),
+        CheckConstraint("provider IN ('local', 'resend')", name="ck_email_outbox_provider"),
+        CheckConstraint(
+            "attempt_count <= max_attempts",
+            name="ck_email_outbox_attempt_limit",
+        ),
+        CheckConstraint(
             "(status = 'processing' AND lock_token IS NOT NULL AND lock_expires_at IS NOT NULL) "
             "OR (status <> 'processing' AND lock_token IS NULL AND lock_expires_at IS NULL)",
             name="ck_email_outbox_lease_state",
@@ -127,6 +145,17 @@ class EmailDeliveryAttempt(Base):
     __tablename__ = "email_delivery_attempts"
     __table_args__ = (
         UniqueConstraint("outbox_id", "attempt_number", name="uq_email_delivery_attempt"),
+        CheckConstraint("attempt_number >= 1", name="ck_email_delivery_attempt_number"),
+        CheckConstraint(
+            "status IN ('queued', 'processing', 'retry_scheduled', 'accepted', "
+            "'recorded', 'terminal_failed', 'cancelled', 'expired', "
+            "'reconciliation_required')",
+            name="ck_email_delivery_attempt_status",
+        ),
+        CheckConstraint(
+            "finished_at >= started_at",
+            name="ck_email_delivery_attempt_timestamps",
+        ),
     )
 
     id: Mapped[str] = mapped_column(

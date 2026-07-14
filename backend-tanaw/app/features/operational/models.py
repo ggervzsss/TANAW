@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -18,6 +19,15 @@ from app.db.session import Base
 
 class MockDataRun(Base):
     __tablename__ = "mock_data_runs"
+    __table_args__ = (
+        CheckConstraint("range_end > range_start", name="ck_mock_data_runs_range"),
+        CheckConstraint("status IN ('active', 'removed')", name="ck_mock_data_runs_status"),
+        CheckConstraint(
+            "(status = 'active' AND ended_at IS NULL) OR "
+            "(status = 'removed' AND ended_at IS NOT NULL)",
+            name="ck_mock_data_runs_lifecycle",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
@@ -56,6 +66,38 @@ class MockDataRunAccount(Base):
 class OperationalAlert(Base):
     __tablename__ = "operational_alerts"
     __table_args__ = (
+        CheckConstraint(
+            "alert_type IN ('Maintenance Request', 'Password Reset Request', "
+            "'Submission Delay', 'Threshold Breach', 'Foot Traffic Alert', "
+            "'Occupancy Spike', 'Failed Login Threshold', 'Sync Delay')",
+            name="ck_operational_alerts_type",
+        ),
+        CheckConstraint(
+            "severity IN ('Info', 'Warning', 'Critical')",
+            name="ck_operational_alerts_severity",
+        ),
+        CheckConstraint(
+            "resolution_mode IN ('On-site Visit Required', 'In-system Action', "
+            "'Staff Follow-up', 'Remote Review', 'Admin Monitoring', "
+            "'Automatic Health Recovery')",
+            name="ck_operational_alerts_resolution_mode",
+        ),
+        CheckConstraint(
+            "status IN ('New', 'In Review', 'Resolved')",
+            name="ck_operational_alerts_status",
+        ),
+        CheckConstraint(
+            "owner IN ('IT', 'Admin', 'System')",
+            name="ck_operational_alerts_owner",
+        ),
+        Index(
+            "uq_operational_alerts_active_source",
+            "alert_type",
+            "source_id",
+            unique=True,
+            postgresql_where=text("source_id IS NOT NULL AND status != 'Resolved'"),
+            sqlite_where=text("source_id IS NOT NULL AND status != 'Resolved'"),
+        ),
         Index(
             "ix_operational_alerts_resolved_retention",
             "updated_at",
@@ -90,6 +132,25 @@ class OperationalAlert(Base):
 class UserNotification(Base):
     __tablename__ = "user_notifications"
     __table_args__ = (
+        CheckConstraint(
+            "recipient_role IN ('it', 'admin', 'staff', 'enterprise')",
+            name="ck_user_notifications_recipient_role",
+        ),
+        CheckConstraint(
+            "severity IN ('Info', 'Warning', 'Critical', 'Success')",
+            name="ck_user_notifications_severity",
+        ),
+        CheckConstraint(
+            "(recipient_role = 'enterprise' AND recipient_enterprise_id IS NOT NULL) OR "
+            "(recipient_role != 'enterprise' AND recipient_enterprise_id IS NULL)",
+            name="ck_user_notifications_enterprise_scope",
+        ),
+        CheckConstraint(
+            "(created_by_account_id IS NULL AND created_by_name IS NULL) OR "
+            "(created_by_account_id IS NOT NULL AND created_by_name IS NOT NULL "
+            "AND length(trim(created_by_name)) > 0)",
+            name="ck_user_notifications_actor_snapshot",
+        ),
         Index(
             "ix_user_notifications_read_retention",
             "read_at",
@@ -133,6 +194,21 @@ class UserNotification(Base):
 
 class SupportTicket(Base):
     __tablename__ = "support_tickets"
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('Camera Issue', 'Report Concern', 'Maintenance', "
+            "'Account & Security', 'Other')",
+            name="ck_support_tickets_category",
+        ),
+        CheckConstraint(
+            "priority IN ('Low', 'Normal', 'High', 'Urgent')",
+            name="ck_support_tickets_priority",
+        ),
+        CheckConstraint(
+            "status IN ('Open', 'In Review', 'Resolved')",
+            name="ck_support_tickets_status",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
@@ -163,6 +239,16 @@ class SupportTicket(Base):
 
 class SupportTicketMessage(Base):
     __tablename__ = "support_ticket_messages"
+    __table_args__ = (
+        CheckConstraint(
+            "author_role IN ('it', 'admin', 'staff', 'enterprise')",
+            name="ck_support_ticket_messages_author_role",
+        ),
+        CheckConstraint(
+            "length(trim(author_name)) > 0 AND length(trim(message)) > 0",
+            name="ck_support_ticket_messages_content",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())

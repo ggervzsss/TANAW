@@ -594,7 +594,7 @@ async def test_retention_removes_only_terminal_operational_and_event_records(
                 UserNotification(
                     id=read_notification_id,
                     recipient_account_id=recipient_account_id,
-                    recipient_role="IT",
+                    recipient_role="it",
                     title="Read notification",
                     message="Read terminal notification.",
                     notification_type="Retention Test",
@@ -606,7 +606,7 @@ async def test_retention_removes_only_terminal_operational_and_event_records(
                 UserNotification(
                     id=unread_notification_id,
                     recipient_account_id=recipient_account_id,
-                    recipient_role="IT",
+                    recipient_role="it",
                     title="Unread notification",
                     message="Unread notification must remain.",
                     notification_type="Retention Test",
