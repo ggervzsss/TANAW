@@ -97,49 +97,6 @@ export type PipelineHealth = {
   warnings: PipelineAlert[];
 };
 
-export type TelemetrySnapshot = {
-  id: string;
-  enterpriseId: string;
-  enterpriseName: string;
-  category?: string | null;
-  barangay?: string | null;
-  cameraId?: string | null;
-  cameraName?: string | null;
-  capturedAt: string;
-  receivedAt: string;
-  entries: number;
-  exits: number;
-  currentOccupancy: number;
-  peakOccupancy: number;
-  uniqueCount: number;
-  confirmedUniqueCount: number;
-  degradedUniqueCount: number;
-  totalEvents: number;
-  unsubmittedEvents: number;
-  unsyncedEvents: number;
-  running: boolean;
-  status: string;
-  error?: string | null;
-  analyticsFps?: number | null;
-  gatewayStatus: GatewayStatus;
-  sourceKind: "real" | "mock" | "hybrid";
-  mockRunId?: string | null;
-};
-
-export type OperationalSummary = {
-  enterpriseCount: number;
-  onlineGateways: number;
-  delayedGateways: number;
-  offlineGateways: number;
-  totalCurrentOccupancy: number;
-  totalEntries: number;
-  totalExits: number;
-  totalUniqueCount: number;
-  activeReports: number;
-  pendingReports: number;
-  lastSyncAt?: string | null;
-};
-
 export type SystemLogCategory = "IT Activity" | "Staff Submission" | "Staff Operation" | "Admin Operation" | "Enterprise Activity" | "System";
 export type SystemLogActorRole = "Admin" | "IT Personnel" | "LGU Staff" | "Enterprise Account" | "System";
 

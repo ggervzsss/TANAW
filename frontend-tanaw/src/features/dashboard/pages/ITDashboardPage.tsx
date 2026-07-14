@@ -10,13 +10,13 @@ import { PageHeader } from "@/shared/components/layout";
 import { DetailField, EmptyState, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import { useAlerts } from "@/shared/hooks/useAlerts";
-import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
+import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
 import { listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
 import type { PriorityAlert, SystemLog } from "@/shared/types";
 
 export function ITDashboardPage() {
   const { logs, isLoading: logsLoading } = useActivityLogs();
-  const operationalSummaryQuery = useOperationalSummary();
+  const operationalSitesQuery = useOperationalMapEnterprises();
   const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
   const [selectedActivity, setSelectedActivity] = useState<SystemLog | null>(null);
@@ -26,10 +26,12 @@ export function ITDashboardPage() {
   const activeAlertsCount = priorityAlerts.filter((alert) => alert.status !== "Resolved").length;
   const lguAccounts = lguAccountsQuery.data ?? [];
   const enterpriseAccounts = enterpriseAccountsQuery.data ?? [];
-  const operationalSummary = operationalSummaryQuery.data;
+  const operationalSites = operationalSitesQuery.data ?? [];
   const activeLguAccounts = lguAccounts.filter((account) => account.status === "active").length;
   const activeEnterprises = enterpriseAccounts.filter((enterprise) => enterprise.status === "active").length;
-  const desktopAppsOnline = operationalSummary?.onlineGateways ?? enterpriseAccounts.filter((enterprise) => enterprise.gatewayStatus?.toLowerCase() === "connected").length;
+  const onlineSites = operationalSites.filter((site) => site.gatewayStatus === "Connected").length;
+  const delayedSites = operationalSites.filter((site) => site.gatewayStatus === "Sync Delayed").length;
+  const offlineSites = operationalSites.filter((site) => site.gatewayStatus === "Offline" || site.gatewayStatus === "Not Linked").length;
   const recentActivities = logs.slice(0, 7);
 
   const actionableAlerts = priorityAlerts.filter((alert) => alert.status !== "Resolved").slice(0, 4);
@@ -42,15 +44,15 @@ export function ITDashboardPage() {
         <MetricCard label="LGU Accounts" value={lguAccountsQuery.isLoading ? "..." : activeLguAccounts} foot="Active account registry" color="#065f46" icon={Users} />
         <MetricCard label="Active Enterprises" value={enterpriseAccountsQuery.isLoading ? "..." : activeEnterprises} foot="Can access TANAW" color="#2563eb" icon={Building2} />
         <MetricCard
-          label="Desktop Apps Online"
-          value={operationalSummaryQuery.isLoading && !operationalSummary ? "..." : desktopAppsOnline}
-          foot={operationalSummary ? `${operationalSummary.delayedGateways} delayed / ${operationalSummary.offlineGateways} offline` : "Connected desktop apps"}
+          label="Enterprise Sites Online"
+          value={operationalSitesQuery.isLoading ? "..." : onlineSites}
+          foot={operationalSitesQuery.isLoading ? "Loading live site state" : `${delayedSites} delayed / ${offlineSites} offline or unlinked`}
           color="#10b981"
           icon={Wifi}
         />
         <MetricCard label="Priority Alerts" value={activeAlertsCount} foot="Requires IT action" color="#dc2626" footClassName="text-red-600" icon={Bell} />
       </motion.section>
-      {(lguAccountsQuery.isError || enterpriseAccountsQuery.isError || operationalSummaryQuery.isError) && (
+      {(lguAccountsQuery.isError || enterpriseAccountsQuery.isError || operationalSitesQuery.isError) && (
         <p className="mt-4 text-sm font-semibold text-red-600">Some dashboard metrics could not be loaded from the database. Refresh or check the API connection.</p>
       )}
 

@@ -31,7 +31,7 @@ from app.features.telemetry.service import (
 router = APIRouter(prefix="/operational", tags=["telemetry-v2"])
 
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
-MapAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
+MapAccount = Annotated[Account, Depends(require_roles({"admin", "staff", "it"}))]
 Database = Annotated[AsyncSession, Depends(get_db)]
 
 

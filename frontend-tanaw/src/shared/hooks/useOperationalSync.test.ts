@@ -1,8 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import type { AuthUser, OperationalSummary, TelemetrySnapshot } from "../types";
+import type { AuthUser } from "../types";
 import { enterpriseReportDetailQueryKey, enterpriseReportListQueryKey, finalReportDetailQueryKey, finalReportListQueryKey, reportComplianceQueryKey } from "../services/reporting";
-import { createOperationalQueryKeys, handleOperationalEnvelope, operationalSummaryQueryKey } from "./useOperationalSync";
+import { createOperationalQueryKeys, handleOperationalEnvelope, operationalMapEnterprisesQueryKey } from "./useOperationalSync";
 import { reportingAccountScope } from "./useReportWorkflow";
 
 vi.mock("@/app/store/authStore", () => ({ useAuthStore: vi.fn() }));
@@ -16,50 +16,22 @@ describe("operational realtime reconciliation", () => {
     const otherAccount = createOperationalQueryKeys(createUser("account-2", "staff"));
     const otherRole = createOperationalQueryKeys(createUser("account-1", "admin"));
 
-    expect(first.telemetry).not.toEqual(otherAccount.telemetry);
-    expect(first.telemetry).not.toEqual(otherRole.telemetry);
+    expect(first.mapEnterprises).not.toEqual(otherAccount.mapEnterprises);
+    expect(first.mapEnterprises).not.toEqual(otherRole.mapEnterprises);
     expect(JSON.stringify(first)).not.toContain("secret-token");
-    expect(first.summary.slice(0, operationalSummaryQueryKey.length)).toEqual(operationalSummaryQueryKey);
+    expect(first.mapEnterprises.slice(0, operationalMapEnterprisesQueryKey.length)).toEqual(operationalMapEnterprisesQueryKey);
     expect(reportingAccountScope(user)).not.toEqual(reportingAccountScope(createUser("account-2", "staff")));
     expect(reportingAccountScope(user)).not.toEqual(reportingAccountScope(createUser("account-1", "admin")));
-  });
-
-  it("does not let an older telemetry snapshot replace current enterprise state", () => {
-    const client = createClient();
-    const keys = createOperationalQueryKeys(user);
-    const current = createTelemetry("snapshot-current", "2026-07-13T08:15:00Z", 20);
-    const older = createTelemetry("snapshot-older", "2026-07-13T08:14:00Z", 5);
-    client.setQueryData(keys.telemetry, [current]);
-
-    handleOperationalEnvelope(client, keys, JSON.stringify({ type: "telemetry.snapshot", data: older }));
-
-    expect(client.getQueryData<TelemetrySnapshot[]>(keys.telemetry)).toEqual([current]);
-  });
-
-  it("keeps one latest snapshot per enterprise when a newer snapshot arrives", () => {
-    const client = createClient();
-    const keys = createOperationalQueryKeys(user);
-    const current = createTelemetry("snapshot-current", "2026-07-13T08:15:00Z", 20);
-    const newer = createTelemetry("snapshot-new", "2026-07-13T08:16:00Z", 24);
-    client.setQueryData(keys.telemetry, [current]);
-
-    handleOperationalEnvelope(client, keys, JSON.stringify({ type: "telemetry.snapshot", data: newer }));
-
-    expect(client.getQueryData<TelemetrySnapshot[]>(keys.telemetry)).toEqual([newer]);
   });
 
   it("refetches the target site registry for a version-only live-state event", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
     client.setQueryData(keys.mapEnterprises, []);
-    client.setQueryData(keys.telemetry, []);
-    client.setQueryData(keys.summary, createSummary());
 
     handleOperationalEnvelope(client, keys, invalidationEnvelope("site_live_state"));
 
     expect(client.getQueryState(keys.mapEnterprises)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(keys.telemetry)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(keys.summary)?.isInvalidated).toBe(true);
     expect(client.getQueryData(keys.mapEnterprises)).toEqual([]);
   });
 
@@ -86,16 +58,14 @@ describe("operational realtime reconciliation", () => {
     },
   );
 
-  it("invalidates alerts and summary when durable sync health changes", () => {
+  it("invalidates alerts when durable sync health changes", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
     client.setQueryData(keys.alerts, []);
-    client.setQueryData(keys.summary, createSummary());
 
     handleOperationalEnvelope(client, keys, invalidationEnvelope("operational_alert"));
 
     expect(client.getQueryState(keys.alerts)?.isInvalidated).toBe(true);
-    expect(client.getQueryState(keys.summary)?.isInvalidated).toBe(true);
   });
 
   it("ignores simulation invalidations in the official portal cache", () => {
@@ -135,12 +105,4 @@ function createClient() {
 
 function createUser(id: string, role: AuthUser["role"]): AuthUser {
   return { id, email: `${id}@example.test`, displayName: id, role, title: "Operator", phone: null, firstName: null, lastName: null, enterpriseId: role === "enterprise" ? "enterprise-1" : null, enterpriseName: null, category: null, managerName: null, barangay: null, address: null, buildingCapacity: 0, displayImageUrl: null };
-}
-
-function createTelemetry(id: string, receivedAt: string, occupancy: number): TelemetrySnapshot {
-  return { id, enterpriseId: "enterprise-1", enterpriseName: "Enterprise One", capturedAt: receivedAt, receivedAt, entries: occupancy, exits: 0, currentOccupancy: occupancy, peakOccupancy: occupancy, uniqueCount: occupancy, confirmedUniqueCount: occupancy, degradedUniqueCount: 0, totalEvents: occupancy, unsubmittedEvents: 0, unsyncedEvents: 0, running: true, status: "running", gatewayStatus: "Connected", sourceKind: "real" };
-}
-
-function createSummary(): OperationalSummary {
-  return { enterpriseCount: 1, onlineGateways: 1, delayedGateways: 0, offlineGateways: 0, totalCurrentOccupancy: 6, totalEntries: 10, totalExits: 4, totalUniqueCount: 8, activeReports: 1, pendingReports: 1, lastSyncAt: "2026-07-13T09:00:00Z" };
 }

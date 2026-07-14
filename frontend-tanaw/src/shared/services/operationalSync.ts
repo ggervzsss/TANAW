@@ -1,6 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
-import type { GatewayStatus, MapEnterprise, MapSite, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
+import type { GatewayStatus, MapEnterprise, MapSite, PriorityAlert } from "../types";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -44,8 +44,6 @@ export type OperationalWebSocketEnvelope =
         refetchRequired: true;
       };
     }
-  | { type: "telemetry.snapshot"; data: TelemetrySnapshot }
-  | { type: "summary.updated"; data: OperationalSummary }
   | { type: "alert.created"; data: PriorityAlert }
   | { type: "alert.updated"; data: PriorityAlert }
   | { type: "alert.resolved"; data: PriorityAlert }
@@ -86,16 +84,6 @@ type EnterpriseSitePageResponse = {
   nextCursor: string | null;
   evaluatedAt: string;
 };
-
-export async function listLatestTelemetry() {
-  const response = await apiClient.get<TelemetrySnapshot[]>("/operational/telemetry/latest");
-  return response.data;
-}
-
-export async function getOperationalSummary() {
-  const response = await apiClient.get<OperationalSummary>("/operational/telemetry/summary");
-  return response.data;
-}
 
 export async function listOperationalMapEnterprises() {
   const resources: EnterpriseSiteResponse[] = [];

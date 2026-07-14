@@ -4,28 +4,22 @@ import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import {
   createWebSocketAuthMessage,
-  getOperationalSummary,
   getOperationalWebSocketUrl,
-  listLatestTelemetry,
   listOperationalMapEnterprises,
   listUserNotifications,
   type BackendNotification,
   type OperationalWebSocketEnvelope,
 } from "../services/operationalSync";
 import { reportWorkflowQueryKey } from "../services/reporting";
-import type { AuthUser, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
+import type { AuthUser, PriorityAlert } from "../types";
 
 const RECONCILIATION_INTERVAL_MS = 30_000;
 
-export const operationalSummaryQueryKey = ["operational", "summary"] as const;
-export const operationalTelemetryQueryKey = ["operational", "telemetry", "latest"] as const;
 export const operationalMapEnterprisesQueryKey = ["operational", "sites", "v2"] as const;
 export const operationalNotificationsQueryKey = ["operational", "notifications"] as const;
 const operationalAlertsQueryKey = ["operational-alerts"] as const;
 
 type OperationalQueryKeys = {
-  summary: QueryKey;
-  telemetry: QueryKey;
   mapEnterprises: QueryKey;
   notifications: QueryKey;
   alerts: QueryKey;
@@ -40,26 +34,10 @@ export function createOperationalQueryKeys(user: AuthUser | null): OperationalQu
   } as const;
 
   return {
-    summary: [...operationalSummaryQueryKey, scope],
-    telemetry: [...operationalTelemetryQueryKey, scope],
     mapEnterprises: [...operationalMapEnterprisesQueryKey, scope],
     notifications: [...operationalNotificationsQueryKey, scope],
     alerts: [...operationalAlertsQueryKey, scope],
   };
-}
-
-export function useOperationalSummary() {
-  const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
-  const keys = createOperationalQueryKeys(user);
-  return useQuery({ queryKey: keys.summary, queryFn: getOperationalSummary, enabled: Boolean(token && user) });
-}
-
-export function useOperationalTelemetry() {
-  const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
-  const keys = createOperationalQueryKeys(user);
-  return useQuery({ queryKey: keys.telemetry, queryFn: listLatestTelemetry, enabled: Boolean(token && user) });
 }
 
 export function useOperationalMapEnterprises() {
@@ -206,29 +184,17 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
     if (envelope.data.contractVersion !== 2 || envelope.data.refetchRequired !== true || envelope.data.scope.classification !== "official") return;
     const resourceType = envelope.data.resource.type;
     if (resourceType === "site_live_state") {
-      invalidate(queryClient, keys.mapEnterprises, keys.telemetry, keys.summary);
+      invalidate(queryClient, keys.mapEnterprises);
       return;
     }
     if (resourceType === "operational_alert") {
-      invalidate(queryClient, keys.alerts, keys.summary);
+      invalidate(queryClient, keys.alerts);
       return;
     }
     if (resourceType === "enterprise_report" || resourceType === "final_report" || resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {
-      invalidate(queryClient, reportWorkflowQueryKey, operationalSummaryQueryKey, operationalNotificationsQueryKey);
+      invalidate(queryClient, reportWorkflowQueryKey, operationalNotificationsQueryKey);
       return;
     }
-    return;
-  }
-
-  if (envelope.type === "telemetry.snapshot") {
-    const snapshot = envelope.data;
-    const patchedTelemetry = patchExistingList(queryClient, keys.telemetry, snapshot, upsertTelemetrySnapshot);
-    if (!patchedTelemetry) invalidate(queryClient, keys.telemetry);
-    return;
-  }
-
-  if (envelope.type === "summary.updated") {
-    patchSummary(queryClient, keys.summary, envelope.data);
     return;
   }
 
@@ -271,23 +237,12 @@ function upsertById<TItem extends { id: string }>(items: TItem[], nextItem: TIte
   return items.map((item) => (item.id === nextItem.id ? nextItem : item));
 }
 
-function upsertTelemetrySnapshot(items: TelemetrySnapshot[], nextItem: TelemetrySnapshot) {
-  const existing = items.find((item) => item.enterpriseId === nextItem.enterpriseId);
-  if (!existing) return [nextItem, ...items];
-  if (getTelemetryTime(nextItem) < getTelemetryTime(existing)) return items;
-  return items.map((item) => (item.enterpriseId === nextItem.enterpriseId ? nextItem : item));
-}
-
 function sortAlerts(alerts: PriorityAlert[]) {
   return [...alerts].sort((left, right) => getAlertTime(right) - getAlertTime(left));
 }
 
 function sortNotifications(notifications: BackendNotification[]) {
   return [...notifications].sort((left, right) => getNotificationTime(right) - getNotificationTime(left));
-}
-
-function getTelemetryTime(snapshot: TelemetrySnapshot) {
-  return getTimestamp(snapshot.receivedAt, snapshot.capturedAt);
 }
 
 function getAlertTime(alert: PriorityAlert) {
@@ -309,10 +264,4 @@ function getTimestamp(...candidates: Array<string | null | undefined>) {
 
 function getAccountScope(user: AuthUser | null) {
   return user ? `${user.id}:${user.role}:${user.enterpriseId ?? "-"}` : null;
-}
-
-function patchSummary(queryClient: QueryClient, queryKey: QueryKey, summary: OperationalSummary) {
-  const current = queryClient.getQueryData<OperationalSummary>(queryKey);
-  if (current && getTimestamp(summary.lastSyncAt) < getTimestamp(current.lastSyncAt)) return;
-  queryClient.setQueryData(queryKey, summary);
 }

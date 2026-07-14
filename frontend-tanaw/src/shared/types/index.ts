@@ -28,7 +28,5 @@ export type {
   SystemActivityDeviceState,
   SystemActivityTimePeriod,
   SystemActivityType,
-  TelemetrySnapshot,
-  OperationalSummary,
 } from "./domain.types";
 export type * from "./reporting.types";
