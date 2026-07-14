@@ -20,8 +20,6 @@ def _account(*, role: AccountRole) -> Account:
         display_name=f"{role.value.title()} User",
         title=role.value.title(),
         status=AccountStatus.ACTIVE,
-        enterprise_id="ENT-001" if role == AccountRole.ENTERPRISE else None,
-        enterprise_name="Test Enterprise" if role == AccountRole.ENTERPRISE else None,
     )
 
 

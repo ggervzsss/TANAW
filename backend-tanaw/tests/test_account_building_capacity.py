@@ -10,6 +10,8 @@ from app.features.accounts.schemas import (
     EnterpriseAccountUpdate,
 )
 from app.features.accounts.service import to_account_summary, to_auth_user
+from app.features.topology.account_scope import AccountTopology
+from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 
 def test_enterprise_account_create_defaults_building_capacity() -> None:
@@ -33,10 +35,10 @@ def test_enterprise_account_payloads_validate_building_capacity() -> None:
 
 
 def test_account_serializers_include_building_capacity() -> None:
-    account = enterprise_account(building_capacity=425)
+    topology = enterprise_topology(building_capacity=425)
 
-    assert to_auth_user(account).buildingCapacity == 425
-    assert to_account_summary(account).buildingCapacity == 425
+    assert to_auth_user(topology.account, topology).buildingCapacity == 425
+    assert to_account_summary(topology.account, topology=topology).buildingCapacity == 425
 
 
 def enterprise_create_payload(**overrides: object) -> dict[str, object]:
@@ -60,22 +62,52 @@ def enterprise_update_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
-def enterprise_account(*, building_capacity: int) -> Account:
-    return Account(
+def enterprise_topology(*, building_capacity: int) -> AccountTopology:
+    observed_at = datetime(2026, 7, 3, tzinfo=UTC)
+    account = Account(
         id="account-1",
         email="enterprise@example.com",
         password_hash="hash",
         role=AccountRole.ENTERPRISE,
-        display_name="Acme Mall",
+        display_name="Alex Santos",
         title="Enterprise",
         status=AccountStatus.ACTIVE,
-        enterprise_id="ent-001",
-        enterprise_name="Acme Mall",
+        activated_at=observed_at,
+        created_at=observed_at,
+    )
+    enterprise = Enterprise(
+        id="00000000-0000-0000-0000-000000000001",
+        official_code="ent-001",
+        name="Acme Mall",
         category="business",
-        manager_name="Alex Santos",
+        classification="official",
+        lifecycle_state="active",
+    )
+    membership = EnterpriseMembership(
+        id="00000000-0000-0000-0000-000000000002",
+        enterprise_id=enterprise.id,
+        account_id=account.id,
+        classification="official",
+        membership_role="manager",
+        started_at=observed_at,
+    )
+    site = EnterpriseSite(
+        id="00000000-0000-0000-0000-000000000003",
+        enterprise_id=enterprise.id,
+        classification="official",
+        site_code="primary",
+        name="Acme Mall Primary Site",
         barangay="Poblacion",
         address="123 Main Street, San Pedro, Laguna 4023",
         building_capacity=building_capacity,
-        activated_at=datetime(2026, 7, 3, tzinfo=UTC),
-        created_at=datetime(2026, 7, 3, tzinfo=UTC),
+        effective_from=observed_at,
+    )
+    return AccountTopology(
+        account=account,
+        membership=membership,
+        enterprise=enterprise,
+        site=site,
+        active_devices=(),
+        live_state=None,
+        evaluated_at=observed_at,
     )

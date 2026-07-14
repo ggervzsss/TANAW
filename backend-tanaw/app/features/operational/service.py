@@ -50,6 +50,14 @@ from app.features.operational.schemas import (
     TelemetrySnapshotSummary,
     UserNotificationSummary,
 )
+from app.features.topology.account_scope import (
+    AccountTopology,
+    get_enterprise_account_by_identifier,
+    load_account_topologies,
+    load_account_topology,
+    require_account_topology,
+)
+from app.features.topology.models import EdgeDevice, Enterprise, EnterpriseMembership
 
 STALE_GATEWAY_SECONDS = 120
 OFFLINE_GATEWAY_SECONDS = 900
@@ -195,12 +203,13 @@ async def create_user_notification(
     source_type: str | None = None,
     source_id: str | None = None,
 ) -> UserNotificationSummary:
+    recipient_topology = await load_account_topology(db, recipient)
     notification = UserNotification(
         recipient_account_id=recipient.id,
         recipient_role=recipient.role.value,
-        recipient_enterprise_id=enterprise_identifier(recipient)
-        if recipient.role == AccountRole.ENTERPRISE
-        else None,
+        recipient_enterprise_id=(
+            enterprise_identifier(recipient_topology) if recipient_topology is not None else None
+        ),
         title=title,
         message=message,
         notification_type=notification_type,
@@ -361,7 +370,8 @@ async def list_support_tickets(
 ) -> list[SupportTicketSummary]:
     statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
     if account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(SupportTicket.enterprise_id == enterprise_identifier(account))
+        topology = await require_account_topology(db, account)
+        statement = statement.where(SupportTicket.enterprise_id == enterprise_identifier(topology))
     tickets = (await db.scalars(statement)).all()
     return [to_support_ticket_summary(ticket) for ticket in tickets]
 
@@ -375,10 +385,10 @@ async def get_support_ticket_for_account(
     )
     if ticket is None:
         return None
-    if account.role == AccountRole.ENTERPRISE and ticket.enterprise_id != enterprise_identifier(
-        account
-    ):
-        return None
+    if account.role == AccountRole.ENTERPRISE:
+        topology = await require_account_topology(db, account)
+        if ticket.enterprise_id != enterprise_identifier(topology):
+            return None
     return ticket
 
 
@@ -409,12 +419,13 @@ async def create_support_ticket(
     *,
     commit: bool = True,
 ) -> SupportTicketSummary:
+    topology = await require_account_topology(db, account)
     ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
     ticket = SupportTicket(
         ticket_code=f"TCK-{int(ticket_count or 0) + 1:06d}",
         enterprise_account_id=account.id,
-        enterprise_id=enterprise_identifier(account),
-        enterprise_name=enterprise_name(account),
+        enterprise_id=enterprise_identifier(topology),
+        enterprise_name=enterprise_name(topology),
         category=payload.category,
         priority=payload.priority,
         subject=payload.subject,
@@ -505,15 +516,7 @@ async def update_support_ticket_status(
 async def get_enterprise_notification_recipient(
     db: AsyncSession, enterprise_id: str
 ) -> Account | None:
-    return cast(
-        Account | None,
-        await db.scalar(
-            select(Account).where(
-                Account.role == AccountRole.ENTERPRISE,
-                or_(Account.id == enterprise_id, Account.enterprise_id == enterprise_id),
-            )
-        ),
-    )
+    return await get_enterprise_account_by_identifier(db, enterprise_id)
 
 
 async def create_operational_alert(
@@ -663,6 +666,7 @@ async def evaluate_telemetry_alerts(
     account: Account,
     payload: DesktopTelemetryIngest,
 ) -> list[tuple[str, OperationalAlertSummary]]:
+    topology = await require_account_topology(db, account)
     source_id = f"occupancy-threshold:{account.id}"
     existing = await db.scalar(
         select(OperationalAlert).where(
@@ -671,13 +675,13 @@ async def evaluate_telemetry_alerts(
             OperationalAlert.status != "Resolved",
         )
     )
-    condition = occupancy_alert_condition(payload, account.building_capacity)
+    condition = occupancy_alert_condition(payload, topology.site.building_capacity)
 
     if condition is not None and condition.breached:
         if existing is not None:
             return []
 
-        enterprise = enterprise_name(account)
+        enterprise = enterprise_name(topology)
         alert = await create_operational_alert(
             db,
             alert_type="Threshold Breach",
@@ -719,15 +723,16 @@ async def ingest_telemetry(
     *,
     update_account_gateway: bool = True,
 ) -> TelemetrySnapshotSummary:
+    topology = await require_account_topology(db, account, lock=update_account_gateway)
     captured_at = payload.capturedAt or payload.metrics.lastEventAt or datetime.now(UTC)
     if captured_at.tzinfo is None:
         captured_at = captured_at.replace(tzinfo=UTC)
 
-    enterprise_id = enterprise_identifier(account)
+    enterprise_id = enterprise_identifier(topology)
     snapshot = EnterpriseTelemetrySnapshot(
         enterprise_account_id=account.id,
         enterprise_id=enterprise_id,
-        enterprise_name=enterprise_name(account),
+        enterprise_name=enterprise_name(topology),
         camera_id=str(payload.session.cameraId) if payload.session.cameraId is not None else None,
         camera_name=payload.session.cameraName,
         captured_at=captured_at,
@@ -750,21 +755,31 @@ async def ingest_telemetry(
         mock_run_id=payload.mockRunId,
     )
     db.add(snapshot)
-    if update_account_gateway:
-        account.gateway_status = (
-            "Offline" if snapshot.error or snapshot.status == "error" else "Connected"
-        )
-        if payload.deviceId:
-            account.gateway_id = payload.deviceId
+    if update_account_gateway and payload.deviceId:
+        active_devices = topology.active_devices
+        if len(active_devices) > 1:
+            raise RuntimeError("The enterprise primary site has ambiguous active devices.")
+        if active_devices and active_devices[0].device_key != payload.deviceId:
+            raise RuntimeError("The authenticated enterprise is paired to a different edge device.")
+        if not active_devices:
+            db.add(
+                EdgeDevice(
+                    site_id=topology.site.id,
+                    classification=topology.enterprise.classification,
+                    device_key=payload.deviceId,
+                    display_name=payload.deviceId,
+                    paired_at=datetime.now(UTC),
+                )
+            )
     await db.commit()
     await db.refresh(snapshot)
-    return to_telemetry_summary(snapshot, account)
+    return to_telemetry_summary(snapshot, topology)
 
 
 async def list_fleet_simulation_enterprises(
     db: AsyncSession, actor: Account
 ) -> list[FleetSimulationEnterpriseSummary]:
-    enterprises = (
+    accounts = (
         await db.scalars(
             select(Account)
             .where(
@@ -772,46 +787,62 @@ async def list_fleet_simulation_enterprises(
                 Account.status == AccountStatus.ACTIVE,
                 Account.activated_at.is_not(None),
             )
-            .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+            .order_by(Account.display_name.asc())
         )
     ).all()
+    topologies = [
+        topology
+        for topology in (await load_account_topologies(db, accounts)).values()
+        if topology is not None
+    ]
+    topologies.sort(key=lambda topology: topology.enterprise.name.lower())
     current_enterprise_id = (
-        enterprise_identifier(actor) if actor.role == AccountRole.ENTERPRISE else None
+        enterprise_identifier(await require_account_topology(db, actor))
+        if actor.role == AccountRole.ENTERPRISE
+        else None
     )
     return [
         FleetSimulationEnterpriseSummary(
-            enterpriseId=enterprise_identifier(enterprise),
-            enterpriseName=enterprise_name(enterprise),
-            category=format_enterprise_category(enterprise.category),
-            barangay=enterprise.barangay,
-            isCurrent=enterprise_identifier(enterprise) == current_enterprise_id,
+            enterpriseId=enterprise_identifier(topology),
+            enterpriseName=enterprise_name(topology),
+            category=format_enterprise_category(topology.enterprise.category),
+            barangay=topology.site.barangay,
+            isCurrent=enterprise_identifier(topology) == current_enterprise_id,
         )
-        for enterprise in enterprises
+        for topology in topologies
     ]
 
 
 async def enterprise_accounts_by_identifier(
     db: AsyncSession, enterprise_ids: set[str]
-) -> dict[str, Account]:
+) -> dict[str, AccountTopology]:
     if not enterprise_ids:
         return {}
     accounts = (
         await db.scalars(
-            select(Account).where(
+            select(Account)
+            .join(EnterpriseMembership, EnterpriseMembership.account_id == Account.id)
+            .join(Enterprise, Enterprise.id == EnterpriseMembership.enterprise_id)
+            .where(
                 Account.role == AccountRole.ENTERPRISE,
                 Account.status == AccountStatus.ACTIVE,
                 Account.activated_at.is_not(None),
-                (Account.enterprise_id.in_(enterprise_ids)) | (Account.id.in_(enterprise_ids)),
+                or_(Enterprise.official_code.in_(enterprise_ids), Account.id.in_(enterprise_ids)),
             )
         )
     ).all()
-    return {enterprise_identifier(account): account for account in accounts}
+    topologies = await load_account_topologies(db, accounts)
+    return {
+        enterprise_identifier(topology): topology
+        for topology in topologies.values()
+        if topology is not None
+    }
 
 
 def build_fleet_simulation_telemetry_payload(
     *,
     target: FleetSimulationTarget,
-    enterprise: Account,
+    enterprise: AccountTopology,
     run_id: str,
     started_at: datetime,
     elapsed_seconds: int,
@@ -906,7 +937,8 @@ def build_fleet_simulation_telemetry_payload(
 async def ingest_report_submission(
     db: AsyncSession, account: Account, payload: DesktopReportSubmissionIngest
 ) -> IntakeReportSummary:
-    enterprise_id = enterprise_identifier(account)
+    topology = await require_account_topology(db, account)
+    enterprise_id = enterprise_identifier(topology)
     result = await db.scalars(
         select(EnterpriseReportSubmission).where(
             EnterpriseReportSubmission.enterprise_id == enterprise_id,
@@ -933,9 +965,9 @@ async def ingest_report_submission(
             report_id=payload.reportId,
             enterprise_account_id=account.id,
             enterprise_id=enterprise_id,
-            enterprise_name=enterprise_name(account),
-            category=format_enterprise_category(account.category) or "Uncategorized",
-            barangay=account.barangay or "Unassigned",
+            enterprise_name=enterprise_name(topology),
+            category=format_enterprise_category(topology.enterprise.category) or "Uncategorized",
+            barangay=topology.site.barangay or "Unassigned",
             period=payload.period,
             month=month,
             submitted_at=_aware(payload.submittedAt),
@@ -955,9 +987,11 @@ async def ingest_report_submission(
     else:
         report = existing
         report.enterprise_account_id = account.id
-        report.enterprise_name = enterprise_name(account)
-        report.category = format_enterprise_category(account.category) or "Uncategorized"
-        report.barangay = account.barangay or "Unassigned"
+        report.enterprise_name = enterprise_name(topology)
+        report.category = (
+            format_enterprise_category(topology.enterprise.category) or "Uncategorized"
+        )
+        report.barangay = topology.site.barangay or "Unassigned"
         report.period = payload.period
         report.month = month
         report.submitted_at = _aware(payload.submittedAt)
@@ -974,7 +1008,6 @@ async def ingest_report_submission(
         if report.review_status == "Returned" and report_status in {"Submitted", "Resubmitted"}:
             report.review_status = "Pending Review"
 
-    account.gateway_status = "Connected"
     await db.commit()
     await db.refresh(report)
     return to_intake_report_summary(report)
@@ -1003,15 +1036,16 @@ async def list_latest_telemetry(
         .limit(limit)
     )
     if account is not None and account.role == AccountRole.ENTERPRISE:
+        topology = await require_account_topology(db, account)
         statement = statement.where(
-            EnterpriseTelemetrySnapshot.enterprise_id == enterprise_identifier(account)
+            EnterpriseTelemetrySnapshot.enterprise_id == enterprise_identifier(topology)
         )
 
     snapshots = (await db.scalars(statement)).all()
-    accounts = await enterprise_accounts_by_id(db)
+    topologies = await enterprise_accounts_by_id(db)
 
     return [
-        to_telemetry_summary(snapshot, accounts.get(snapshot.enterprise_id))
+        to_telemetry_summary(snapshot, topologies.get(snapshot.enterprise_id))
         for snapshot in snapshots
     ]
 
@@ -1044,8 +1078,9 @@ async def list_intake_reports(
         .limit(limit)
     )
     if account is not None and account.role == AccountRole.ENTERPRISE:
+        topology = await require_account_topology(db, account)
         statement = statement.where(
-            EnterpriseReportSubmission.enterprise_id == enterprise_identifier(account)
+            EnterpriseReportSubmission.enterprise_id == enterprise_identifier(topology)
         )
 
     reports = (await db.scalars(statement)).all()
@@ -1085,7 +1120,7 @@ async def list_final_reports(
     statement = select(FinalReport).order_by(FinalReport.generated_on.desc()).limit(limit)
     reports = list((await db.scalars(statement)).all())
     if account.role == AccountRole.ENTERPRISE:
-        enterprise_id = enterprise_identifier(account)
+        enterprise_id = enterprise_identifier(await require_account_topology(db, account))
         visible_ids = {
             item.final_report_id
             for item in (
@@ -1237,24 +1272,27 @@ async def find_final_report(db: AsyncSession, report_id: str) -> FinalReport | N
     ).first()
 
 
-async def enterprise_accounts_by_id(db: AsyncSession) -> dict[str, Account]:
+async def enterprise_accounts_by_id(db: AsyncSession) -> dict[str, AccountTopology]:
     accounts = (
         await db.scalars(select(Account).where(Account.role == AccountRole.ENTERPRISE))
     ).all()
-    return {enterprise_identifier(account): account for account in accounts}
+    topologies = await load_account_topologies(db, accounts)
+    return {
+        enterprise_identifier(topology): topology
+        for topology in topologies.values()
+        if topology is not None
+    }
 
 
 def to_telemetry_summary(
-    snapshot: EnterpriseTelemetrySnapshot, account: Account | None = None
+    snapshot: EnterpriseTelemetrySnapshot, topology: AccountTopology | None = None
 ) -> TelemetrySnapshotSummary:
     return TelemetrySnapshotSummary(
         id=snapshot.id,
         enterpriseId=snapshot.enterprise_id,
-        enterpriseName=account.enterprise_name
-        if account and account.enterprise_name
-        else snapshot.enterprise_name,
-        category=format_enterprise_category(account.category) if account else None,
-        barangay=account.barangay if account else None,
+        enterpriseName=topology.enterprise.name if topology else snapshot.enterprise_name,
+        category=(format_enterprise_category(topology.enterprise.category) if topology else None),
+        barangay=topology.site.barangay if topology else None,
         cameraId=snapshot.camera_id,
         cameraName=snapshot.camera_name,
         capturedAt=snapshot.captured_at,
@@ -1438,12 +1476,12 @@ def to_final_report_archived_from_status(
     return None
 
 
-def enterprise_identifier(account: Account) -> str:
-    return account.enterprise_id or account.id
+def enterprise_identifier(topology: AccountTopology) -> str:
+    return topology.enterprise.official_code
 
 
-def enterprise_name(account: Account) -> str:
-    return account.enterprise_name or account.display_name
+def enterprise_name(topology: AccountTopology) -> str:
+    return topology.enterprise.name
 
 
 async def generate_final_report_code(db: AsyncSession, period: str) -> str:

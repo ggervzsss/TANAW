@@ -31,6 +31,7 @@ from app.features.final_reports.read_service import (
     list_official_final_reports,
     read_official_final_report,
 )
+from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import (
     EnterpriseReport,
@@ -513,6 +514,19 @@ async def _seed_report(
         classification=classification,
         lifecycle_state="active",
     )
+    simulation_run = (
+        MockDataRun(
+            id=str(uuid4()),
+            scenario="report-read-scope-test",
+            seed=suffix,
+            range_start=period.starts_at,
+            range_end=period.ends_at,
+            status="active",
+        )
+        if classification == "simulation"
+        else None
+    )
+    enterprise.simulation_run_id = simulation_run.id if simulation_run is not None else None
     site = EnterpriseSite(
         id=str(uuid4()),
         enterprise_id=enterprise.id,
@@ -577,6 +591,9 @@ async def _seed_report(
         created_at=updated_at,
         updated_at=updated_at,
     )
+    if simulation_run is not None:
+        db.add(simulation_run)
+        await db.flush([simulation_run])
     db.add(enterprise)
     await db.flush([enterprise])
     db.add(site)

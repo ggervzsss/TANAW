@@ -34,6 +34,7 @@ from app.features.mail.service import (
     email_idempotency_key,
     enqueue_email,
 )
+from app.features.topology.account_scope import enterprise_official_code_for_account
 
 OTP_TTL_MINUTES = 10
 MAX_OTP_ATTEMPTS = 5
@@ -168,6 +169,7 @@ async def request_password_reset(
 
     if eligible_account is not None:
         expires_label = expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        enterprise_code = await enterprise_official_code_for_account(db, eligible_account)
         await enqueue_email(
             db,
             account_id=eligible_account.id,
@@ -179,7 +181,7 @@ async def request_password_reset(
                 "displayName": eligible_account.display_name,
                 "email": eligible_account.email,
                 "role": eligible_account.role.value,
-                "enterpriseId": eligible_account.enterprise_id or "",
+                "enterpriseId": enterprise_code or "",
                 "expiresLabel": expires_label,
             },
             idempotency_key=email_idempotency_key("password-reset", challenge.id),

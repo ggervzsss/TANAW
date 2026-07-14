@@ -101,6 +101,11 @@ from app.features.operational.service import (
     to_operational_alert_summary,
 )
 from app.features.operational.websocket import operational_ws_manager
+from app.features.topology.account_scope import (
+    invalidate_site_coordinates,
+    load_account_topology,
+    require_account_topology,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -132,6 +137,11 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
     if not await system_setting_enabled(db, NOTIFY_FAILED_LOGIN_LOCKOUT_KEY):
         return
 
+    topology = (
+        await require_account_topology(db, account)
+        if account.role == AccountRole.ENTERPRISE
+        else None
+    )
     alert = await create_operational_alert(
         db,
         alert_type="Failed Login Threshold",
@@ -144,7 +154,7 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         required_action="Review account activity and contact the user if the lockout is suspicious.",
         resolution_mode="Remote Review",
         owner="IT",
-        enterprise=account.enterprise_name if account.role == AccountRole.ENTERPRISE else None,
+        enterprise=topology.enterprise.name if topology is not None else None,
         source_id=f"failed-login-threshold:{account.id}",
     )
     await operational_ws_manager.broadcast(
@@ -230,8 +240,8 @@ def require_enterprise_account(account: Account) -> None:
         )
 
 
-def enterprise_label(account: Account) -> str:
-    return account.enterprise_name or account.display_name
+async def enterprise_label(db: AsyncSession, account: Account) -> str:
+    return (await require_account_topology(db, account)).enterprise.name
 
 
 def set_pending_account_change(account: Account, key: str, value: dict[str, str]) -> None:
@@ -376,6 +386,7 @@ async def login(
         )
 
     clear_login_failures(account)
+    topology = await load_account_topology(db, account)
     account.last_login_at = datetime.now(UTC)
     token = create_access_token(account.id, {"role": account.role.value})
     await record_auth_log(
@@ -389,12 +400,15 @@ async def login(
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
     )
-    return LoginResponse(token=token, user=to_auth_user(account))
+    return LoginResponse(token=token, user=to_auth_user(account, topology))
 
 
 @router.get("/me", response_model=AuthUser)
-async def me(account: Annotated[Account, Depends(get_current_account)]) -> AuthUser:
-    return to_auth_user(account)
+async def me(
+    account: Annotated[Account, Depends(get_current_account)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthUser:
+    return to_auth_user(account, await load_account_topology(db, account))
 
 
 @router.post("/logout")
@@ -423,6 +437,7 @@ async def change_password(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoginResponse:
+    topology = await load_account_topology(db, account)
     changed = await change_account_password(
         db, account, payload.currentPassword, payload.newPassword
     )
@@ -442,17 +457,18 @@ async def change_password(
         summary=f"{account.display_name} changed their account password.",
         source_id=account.id,
     )
-    enterprise = account.enterprise_name or account.display_name
-    await notify_enterprise_account_change(
-        db,
-        account,
-        title=f"{enterprise} changed account password.",
-        message=f"{enterprise} changed account password.",
-        notification_type="Enterprise Security Updated",
-        source_type="enterprise.password",
-    )
+    if topology is not None:
+        enterprise = topology.enterprise.name
+        await notify_enterprise_account_change(
+            db,
+            account,
+            title=f"{enterprise} changed account password.",
+            message=f"{enterprise} changed account password.",
+            notification_type="Enterprise Security Updated",
+            source_type="enterprise.password",
+        )
     token = create_access_token(account.id, {"role": account.role.value})
-    return LoginResponse(token=token, user=to_auth_user(account))
+    return LoginResponse(token=token, user=to_auth_user(account, topology))
 
 
 @router.post("/forgot-password/request", response_model=ForgotPasswordRequestResponse)
@@ -597,7 +613,8 @@ async def update_profile(
             detail="Email changes require the dedicated verified email-change workflow.",
         )
 
-    previous_manager_name = account.manager_name
+    topology = await load_account_topology(db, account, lock=True)
+    previous_manager_name = account.display_name
     previous_phone = account.phone
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
@@ -611,11 +628,15 @@ async def update_profile(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Contact number is required.",
             )
-        account.manager_name = payload.managerName
+        if topology is None:
+            raise RuntimeError("Enterprise profile has no normalized topology.")
+        account.display_name = payload.managerName
         enterprise_name = payload.enterpriseName.strip()
-        account.enterprise_name = enterprise_name
-        account.display_name = enterprise_name
-        account.address = payload.address
+        topology.enterprise.name = enterprise_name
+        topology.site.name = f"{enterprise_name} Primary Site"
+        if topology.site.address != payload.address:
+            topology.site.address = payload.address
+            invalidate_site_coordinates(topology.site)
     else:
         if payload.firstName is None or payload.lastName is None:
             raise HTTPException(
@@ -642,13 +663,15 @@ async def update_profile(
     )
     if account.role == AccountRole.ENTERPRISE:
         changed_fields: list[str] = []
-        if account.manager_name != previous_manager_name:
+        if account.display_name != previous_manager_name:
             changed_fields.append("lead admin")
         if account.phone != previous_phone:
             changed_fields.append("contact number")
 
         if changed_fields:
-            enterprise = account.enterprise_name or account.display_name
+            if topology is None:
+                raise RuntimeError("Enterprise profile has no normalized topology.")
+            enterprise = topology.enterprise.name
             changed_field_text = join_changed_fields(changed_fields)
             await notify_enterprise_account_change(
                 db,
@@ -658,7 +681,7 @@ async def update_profile(
                 notification_type="Enterprise Profile Updated",
                 source_type="enterprise.profile",
             )
-    return to_auth_user(account)
+    return to_auth_user(account, topology)
 
 
 @router.patch("/profile/display-image", response_model=AuthUser)
@@ -667,6 +690,7 @@ async def update_profile_display_image(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
+    topology = await load_account_topology(db, account)
     set_display_image_data_url(account, payload.displayImageDataUrl)
     await db.commit()
     await db.refresh(account)
@@ -681,7 +705,7 @@ async def update_profile_display_image(
         summary=f"{account.display_name} updated their profile logo.",
         source_id=account.id,
     )
-    return to_auth_user(account)
+    return to_auth_user(account, topology)
 
 
 @router.patch("/profile/lead-admin", response_model=AuthUser)
@@ -691,8 +715,9 @@ async def update_lead_admin_name(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
     require_enterprise_account(account)
-    previous_manager_name = account.manager_name
-    account.manager_name = payload.managerName
+    topology = await require_account_topology(db, account, lock=True)
+    previous_manager_name = account.display_name
+    account.display_name = payload.managerName
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -706,8 +731,8 @@ async def update_lead_admin_name(
         summary=f"{account.display_name} updated the lead admin name.",
         source_id=account.id,
     )
-    if account.manager_name != previous_manager_name:
-        enterprise = enterprise_label(account)
+    if account.display_name != previous_manager_name:
+        enterprise = topology.enterprise.name
         await notify_enterprise_account_change(
             db,
             account,
@@ -716,7 +741,7 @@ async def update_lead_admin_name(
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.profile",
         )
-    return to_auth_user(account)
+    return to_auth_user(account, topology)
 
 
 @router.patch("/profile/building-capacity", response_model=AuthUser)
@@ -726,8 +751,9 @@ async def update_building_capacity(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
     require_enterprise_account(account)
-    previous_capacity = account.building_capacity
-    account.building_capacity = payload.buildingCapacity
+    topology = await require_account_topology(db, account, lock=True)
+    previous_capacity = topology.site.building_capacity
+    topology.site.building_capacity = payload.buildingCapacity
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -738,27 +764,27 @@ async def update_building_capacity(
         actor_role=get_actor_role_label(account),
         action="Update Building Capacity",
         target=account.email,
-        summary=f"{account.display_name} updated building capacity to {account.building_capacity}.",
+        summary=f"{account.display_name} updated building capacity to {topology.site.building_capacity}.",
         source_id=account.id,
         metadata={
             "previousBuildingCapacity": previous_capacity,
-            "buildingCapacity": account.building_capacity,
+            "buildingCapacity": topology.site.building_capacity,
         },
     )
-    if account.building_capacity != previous_capacity:
-        enterprise = enterprise_label(account)
+    if topology.site.building_capacity != previous_capacity:
+        enterprise = topology.enterprise.name
         await notify_enterprise_account_change(
             db,
             account,
             title=f"{enterprise} updated building capacity.",
             message=(
                 f"{enterprise} updated building capacity from "
-                f"{previous_capacity} to {account.building_capacity}."
+                f"{previous_capacity} to {topology.site.building_capacity}."
             ),
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.capacity",
         )
-    return to_auth_user(account)
+    return to_auth_user(account, topology)
 
 
 @router.post("/profile/business-email-change", response_model=AccountChangeRequestResponse)
@@ -799,7 +825,7 @@ async def request_business_email_change(
             "status": email_request.status,
         },
     )
-    enterprise = enterprise_label(account)
+    enterprise = await enterprise_label(db, account)
     notification_account_id = account.id
     notification_request_id = email_request.id
     try:
@@ -881,7 +907,7 @@ async def cancel_business_email_change(
         source_id=account.id,
         metadata={"requestId": request.id, "requestedEmail": request.requested_email},
     )
-    enterprise = enterprise_label(account)
+    enterprise = await enterprise_label(db, account)
     notification_account_id = account.id
     notification_request_id = request.id
     try:
@@ -936,7 +962,7 @@ async def request_contact_number_change(
         summary=f"{account.display_name} requested a contact number change.",
         source_id=account.id,
     )
-    enterprise = enterprise_label(account)
+    enterprise = await enterprise_label(db, account)
     await notify_enterprise_account_change(
         db,
         account,

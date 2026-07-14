@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.events.models import DomainEvent, DomainEventDelivery
+from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import CanonicalReportingPeriod, monthly_reporting_period
 from app.features.reporting.envelopes import ReportSubmissionCommand
 from app.features.reporting.models import (
@@ -441,6 +442,19 @@ async def _seed_scope(
         classification=classification,
         lifecycle_state="active",
     )
+    simulation_run = (
+        MockDataRun(
+            id=str(uuid4()),
+            scenario="report-intake-scope-test",
+            seed=suffix,
+            range_start=now - timedelta(days=1),
+            range_end=now,
+            status="active",
+        )
+        if classification == "simulation"
+        else None
+    )
+    enterprise.simulation_run_id = simulation_run.id if simulation_run is not None else None
     site = EnterpriseSite(
         id=str(uuid4()),
         enterprise_id=enterprise.id,
@@ -513,7 +527,9 @@ async def _seed_scope(
         registration_effective_at=now,
         acceptance_blocked=False,
     )
-    db.add_all([account, enterprise, period])
+    db.add_all(
+        [account, *([simulation_run] if simulation_run is not None else []), enterprise, period]
+    )
     await db.flush()
     db.add_all([site, membership])
     await db.flush()

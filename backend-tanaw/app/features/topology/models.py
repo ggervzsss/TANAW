@@ -47,6 +47,11 @@ class Enterprise(Base):
             "length(trim(official_code)) > 0 AND length(trim(name)) > 0",
             name="ck_enterprises_identity",
         ),
+        CheckConstraint(
+            "(classification = 'official' AND simulation_run_id IS NULL) OR "
+            "(classification = 'simulation' AND simulation_run_id IS NOT NULL)",
+            name="ck_enterprises_simulation_run_scope",
+        ),
         UniqueConstraint("official_code", name="uq_enterprises_official_code"),
         UniqueConstraint("id", "classification", name="uq_enterprises_id_classification"),
     )
@@ -58,6 +63,9 @@ class Enterprise(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     classification: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    simulation_run_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("mock_data_runs.id", ondelete="RESTRICT"), index=True, nullable=True
+    )
     lifecycle_state: Mapped[str] = mapped_column(
         String(20), index=True, nullable=False, default="active"
     )

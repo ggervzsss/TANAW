@@ -18,6 +18,8 @@ from app.features.operational.service import (
     occupancy_alert_condition,
     resolve_system_setting_enabled,
 )
+from app.features.topology.account_scope import AccountTopology
+from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 
 def test_simulation_occupancy_threshold_is_calculated_from_capacity() -> None:
@@ -210,15 +212,47 @@ def test_notification_setting_ignores_invalid_values() -> None:
     )
 
 
-def enterprise_account() -> Account:
-    return Account(
+def enterprise_account() -> AccountTopology:
+    observed_at = datetime.now(UTC)
+    account = Account(
         id="account-1",
         email="enterprise@example.com",
         password_hash="hash",
         role=AccountRole.ENTERPRISE,
-        display_name="Enterprise One",
+        display_name="Enterprise Manager",
         title="Enterprise",
         status=AccountStatus.ACTIVE,
-        enterprise_id="ent-001",
-        enterprise_name="Enterprise One",
+    )
+    enterprise = Enterprise(
+        id="00000000-0000-0000-0000-000000000011",
+        official_code="ent-001",
+        name="Enterprise One",
+        classification="official",
+        lifecycle_state="active",
+    )
+    membership = EnterpriseMembership(
+        id="00000000-0000-0000-0000-000000000012",
+        enterprise_id=enterprise.id,
+        account_id=account.id,
+        classification="official",
+        membership_role="manager",
+        started_at=observed_at,
+    )
+    site = EnterpriseSite(
+        id="00000000-0000-0000-0000-000000000013",
+        enterprise_id=enterprise.id,
+        classification="official",
+        site_code="primary",
+        name="Enterprise One Primary Site",
+        building_capacity=100,
+        effective_from=observed_at,
+    )
+    return AccountTopology(
+        account=account,
+        membership=membership,
+        enterprise=enterprise,
+        site=site,
+        active_devices=(),
+        live_state=None,
+        evaluated_at=observed_at,
     )

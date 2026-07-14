@@ -20,6 +20,7 @@ from app.features.mail.service import (
     email_idempotency_key,
     enqueue_email,
 )
+from app.features.topology.account_scope import enterprise_official_code_for_account
 
 
 class AccountActivationError(ValueError):
@@ -110,6 +111,7 @@ async def issue_account_activation(
     await db.flush()
 
     expires_label = token.expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    enterprise_code = await enterprise_official_code_for_account(db, account)
     await enqueue_email(
         db,
         account_id=account.id,
@@ -121,7 +123,7 @@ async def issue_account_activation(
             "displayName": account.display_name,
             "email": account.email,
             "role": account.role.value,
-            "enterpriseId": account.enterprise_id or "",
+            "enterpriseId": enterprise_code or "",
             "frontendPublicUrl": settings.frontend_public_url,
             "expiresLabel": expires_label,
         },

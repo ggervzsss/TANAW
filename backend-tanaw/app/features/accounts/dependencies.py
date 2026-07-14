@@ -11,6 +11,10 @@ from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.features.accounts.models import Account, AccountStatus
 from app.features.accounts.service import get_account_by_id
+from app.features.topology.account_scope import (
+    AccountTopologyInvariantError,
+    require_account_topology,
+)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -46,6 +50,14 @@ async def get_current_account(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token."
         )
+    if account.role.value == "enterprise":
+        try:
+            await require_account_topology(db, account)
+        except AccountTopologyInvariantError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Enterprise account ownership is not active.",
+            ) from exc
 
     return account
 

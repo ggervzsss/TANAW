@@ -47,6 +47,7 @@ from app.features.mail.models import (
 )
 from app.features.mail.rendering import render_outbox_email
 from app.features.operational.models import UserNotification
+from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_EMAIL_PATTERN = "tanaw-email-change-pg-%@example.com"
@@ -158,6 +159,13 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                 )
             )
         if account_ids:
+            enterprise_ids = list(
+                await db.scalars(
+                    select(EnterpriseMembership.enterprise_id).where(
+                        EnterpriseMembership.account_id.in_(account_ids)
+                    )
+                )
+            )
             await db.execute(
                 delete(PasswordResetChallenge).where(
                     or_(
@@ -176,6 +184,16 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                     AccountEmailChangeRequest.account_id.in_(account_ids)
                 )
             )
+            if enterprise_ids:
+                await db.execute(
+                    delete(EnterpriseSite).where(EnterpriseSite.enterprise_id.in_(enterprise_ids))
+                )
+                await db.execute(
+                    delete(EnterpriseMembership).where(
+                        EnterpriseMembership.enterprise_id.in_(enterprise_ids)
+                    )
+                )
+                await db.execute(delete(Enterprise).where(Enterprise.id.in_(enterprise_ids)))
             await db.execute(delete(Account).where(Account.id.in_(account_ids)))
         await db.commit()
 
@@ -194,10 +212,6 @@ async def _create_account(
         phone="+639123456789",
         first_name="Test",
         last_name=label,
-        enterprise_name=f"Test {label}" if role == AccountRole.ENTERPRISE else None,
-        enterprise_id=f"test_{label}_{uuid4().hex[:8]}@tanaw.sanpedro"
-        if role == AccountRole.ENTERPRISE
-        else None,
         password_hash=hash_password("Existing-Password-For-Email-Change1!"),
         role=role,
         display_name=f"Email Change Test {label}",
@@ -206,10 +220,40 @@ async def _create_account(
         is_protected_system_account=False,
         activated_at=now if activated else None,
         password_changed_at=now if activated else None,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(account)
+        await db.flush()
+        if role == AccountRole.ENTERPRISE:
+            enterprise = Enterprise(
+                official_code=f"test_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",
+                name=f"Test {label}",
+                classification="official",
+                lifecycle_state="active",
+            )
+            db.add(enterprise)
+            await db.flush()
+            db.add_all(
+                [
+                    EnterpriseMembership(
+                        enterprise_id=enterprise.id,
+                        account_id=account.id,
+                        classification="official",
+                        membership_role="manager",
+                        started_at=now,
+                    ),
+                    EnterpriseSite(
+                        enterprise_id=enterprise.id,
+                        classification="official",
+                        site_code="primary",
+                        name=f"Test {label} Primary Site",
+                        barangay="Poblacion",
+                        address="Email Change Test, San Pedro, Laguna 4023",
+                        building_capacity=100,
+                        effective_from=now,
+                    ),
+                ]
+            )
         await db.commit()
     return CreatedAccount(id=account.id, email=account.email)
 

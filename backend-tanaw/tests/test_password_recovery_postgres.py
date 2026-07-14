@@ -232,7 +232,6 @@ async def _create_account(
         is_protected_system_account=False,
         activated_at=now if activated else None,
         password_changed_at=now if activated else None,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(account)

@@ -154,6 +154,20 @@ class MockDataRun(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class MockDataRunAccount(Base):
+    __tablename__ = "mock_data_run_accounts"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("mock_data_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class OperationalAlert(Base):
     __tablename__ = "operational_alerts"
 

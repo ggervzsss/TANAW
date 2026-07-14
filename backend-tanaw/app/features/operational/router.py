@@ -104,6 +104,11 @@ from app.features.operational.service import (
     list_final_reports as list_final_report_records,
 )
 from app.features.operational.websocket import operational_ws_manager
+from app.features.topology.account_scope import (
+    load_account_topologies,
+    load_account_topology,
+    require_account_topology,
+)
 from app.features.topology.models import Enterprise, EnterpriseMembership
 
 router = APIRouter(prefix="/operational", tags=["operational"])
@@ -130,6 +135,7 @@ async def ingest_desktop_telemetry(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TelemetrySnapshotSummary:
+    topology = await require_account_topology(db, account)
     snapshot = await ingest_telemetry(db, account, payload)
     await operational_ws_manager.broadcast(
         OperationalWebSocketEnvelope(
@@ -153,7 +159,7 @@ async def ingest_desktop_telemetry(
             alert_type="Maintenance Request",
             severity="Warning",
             requester=account.display_name,
-            enterprise=account.enterprise_name or account.display_name,
+            enterprise=topology.enterprise.name,
             summary=(
                 f"{payload.metrics.unsyncedEvents} telemetry event"
                 f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} remain unsynced."
@@ -181,7 +187,7 @@ async def ingest_desktop_telemetry(
             alert_type="Maintenance Request",
             severity="Critical",
             requester=account.display_name,
-            enterprise=account.enterprise_name or account.display_name,
+            enterprise=topology.enterprise.name,
             summary=payload.session.error,
             required_action="Review the camera or desktop app error and restore monitoring.",
             resolution_mode="Remote Review",
@@ -198,11 +204,11 @@ async def ingest_desktop_telemetry(
             db,
             category="Enterprise Activity",
             severity="Warning",
-            actor=account.enterprise_name or account.display_name,
+            actor=topology.enterprise.name,
             actor_role="Enterprise Account",
             action="Desktop App Sync Error",
-            target=account.enterprise_name or account.email,
-            summary=f"{account.enterprise_name or account.display_name} reported desktop app sync status {payload.session.status}: {payload.session.error}",
+            target=topology.enterprise.name,
+            summary=f"{topology.enterprise.name} reported desktop app sync status {payload.session.status}: {payload.session.error}",
             source_id=snapshot.id,
             metadata={
                 "enterpriseId": snapshot.enterpriseId,
@@ -224,6 +230,7 @@ async def ingest_desktop_report_submission(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IntakeReportSummary:
+    topology = await require_account_topology(db, account)
     try:
         report = await ingest_report_submission(db, account, payload)
     except DuplicateReportPeriodError as exc:
@@ -238,7 +245,7 @@ async def ingest_desktop_report_submission(
         db,
         category="Staff Submission",
         severity="Success",
-        actor=account.enterprise_name or account.display_name,
+        actor=topology.enterprise.name,
         actor_role="Enterprise Account",
         action="Submit Enterprise Report",
         target=report.enterprise,
@@ -258,6 +265,7 @@ async def get_desktop_mock_preparation(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MockPreparationSummary | None:
+    topology = await require_account_topology(db, account)
     run = await db.scalar(
         select(MockDataRun)
         .where(
@@ -286,7 +294,7 @@ async def get_desktop_mock_preparation(
                 await db.scalars(
                     select(EnterpriseReportSubmission.period).where(
                         EnterpriseReportSubmission.enterprise_id
-                        == (run.target_enterprise_id or enterprise_identifier(account)),
+                        == (run.target_enterprise_id or enterprise_identifier(topology)),
                         EnterpriseReportSubmission.period.in_(candidate_periods),
                     )
                 )
@@ -303,10 +311,8 @@ async def get_desktop_mock_preparation(
     return MockPreparationSummary(
         runId=run.id,
         status=run.status,  # type: ignore[arg-type]
-        enterpriseId=run.target_enterprise_id or enterprise_identifier(account),
-        enterpriseName=run.target_enterprise_name
-        or account.enterprise_name
-        or account.display_name,
+        enterpriseId=run.target_enterprise_id or enterprise_identifier(topology),
+        enterpriseName=run.target_enterprise_name or topology.enterprise.name,
         counts=pending_counts[0] if pending_counts else None,
         pendingCounts=pending_counts,
     )
@@ -342,20 +348,20 @@ async def ingest_fleet_simulation_tick(
     alerts: list[OperationalAlertSummary] = []
 
     for target in payload.targets:
-        enterprise = accounts.get(target.enterpriseId)
-        if enterprise is None:
+        enterprise_topology = accounts.get(target.enterpriseId)
+        if enterprise_topology is None:
             continue
 
         telemetry_payload = build_fleet_simulation_telemetry_payload(
             target=target,
-            enterprise=enterprise,
+            enterprise=enterprise_topology,
             run_id=payload.runId,
             started_at=payload.startedAt,
             elapsed_seconds=payload.elapsedSeconds,
         )
         snapshot = await ingest_telemetry(
             db,
-            enterprise,
+            enterprise_topology.account,
             telemetry_payload,
             update_account_gateway=False,
         )
@@ -367,7 +373,7 @@ async def ingest_fleet_simulation_tick(
         )
 
         for event_type, alert_summary in await evaluate_telemetry_alerts(
-            db, enterprise, telemetry_payload
+            db, enterprise_topology.account, telemetry_payload
         ):
             alerts.append(alert_summary)
             await operational_ws_manager.broadcast(
@@ -584,21 +590,27 @@ async def list_report_enterprises(
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
         )
-        .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+        .order_by(Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Account.id == account.id)
 
-    result = await db.scalars(statement)
+    accounts = list(await db.scalars(statement))
+    topologies = [
+        topology
+        for topology in (await load_account_topologies(db, accounts)).values()
+        if topology is not None
+    ]
+    topologies.sort(key=lambda topology: topology.enterprise.name.lower())
     return [
         {
-            "id": account.enterprise_id or account.id,
-            "name": account.enterprise_name or account.display_name,
-            "category": format_enterprise_category(account.category) or "Uncategorized",
-            "barangay": account.barangay or "Unassigned",
-            "complianceOwner": account.manager_name or account.email,
+            "id": topology.enterprise.official_code,
+            "name": topology.enterprise.name,
+            "category": format_enterprise_category(topology.enterprise.category) or "Uncategorized",
+            "barangay": topology.site.barangay or "Unassigned",
+            "complianceOwner": topology.account.display_name,
         }
-        for account in result
+        for topology in topologies
     ]
 
 
@@ -669,7 +681,7 @@ async def create_enterprise_support_ticket(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketSummary:
     ticket = await create_support_ticket(db, account, payload)
-    enterprise = account.enterprise_name or account.display_name
+    enterprise = (await require_account_topology(db, account)).enterprise.name
     severity = "Warning" if ticket.priority in {"High", "Urgent"} else "Info"
     attachment_count = len(ticket.attachments)
     attachment_suffix = (
@@ -911,6 +923,7 @@ async def create_enterprise_notification(
             data=notification.model_dump(mode="json"),
         )
     )
+    recipient_topology = await require_account_topology(db, recipient)
     log = await create_activity_log(
         db,
         ActivityLogCreate(
@@ -919,10 +932,10 @@ async def create_enterprise_notification(
             actor=actor.display_name,
             actorRole="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
             action="Notify Enterprise",
-            target=recipient.enterprise_name or recipient.display_name,
+            target=recipient_topology.enterprise.name,
             summary=(
                 f"{actor.display_name} notified "
-                f"{recipient.enterprise_name or recipient.display_name}: {payload.message}"
+                f"{recipient_topology.enterprise.name}: {payload.message}"
             ),
             sourceId=notification.id,
         ),
@@ -944,36 +957,47 @@ async def list_map_enterprises(
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
         )
-        .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+        .order_by(Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Account.id == account.id)
 
-    result = await db.scalars(statement)
+    accounts = list(await db.scalars(statement))
+    topologies = [
+        topology
+        for topology in (await load_account_topologies(db, accounts)).values()
+        if topology is not None
+    ]
+    topologies.sort(key=lambda topology: topology.enterprise.name.lower())
     enterprises = []
-    for enterprise in result:
-        telemetry = latest.get(enterprise_identifier(enterprise))
+    for topology in topologies:
+        telemetry = latest.get(enterprise_identifier(topology))
         enterprises.append(
             {
-                "id": enterprise.enterprise_id or enterprise.id,
-                "name": enterprise.enterprise_name or enterprise.display_name,
-                "barangay": enterprise.barangay or "Unassigned",
-                "category": format_enterprise_category(enterprise.category) or "Uncategorized",
-                "fullAddress": enterprise.address
-                or enterprise.geocoded_address
+                "id": topology.enterprise.official_code,
+                "name": topology.enterprise.name,
+                "barangay": topology.site.barangay or "Unassigned",
+                "category": format_enterprise_category(topology.enterprise.category)
+                or "Uncategorized",
+                "fullAddress": topology.site.address
+                or topology.site.geocoded_address
                 or "Address not provided",
-                "lat": enterprise.latitude,
-                "lng": enterprise.longitude,
+                "lat": topology.site.latitude,
+                "lng": topology.site.longitude,
                 "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
                 "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
                 "status": enterprise_status_from_telemetry(telemetry),
-                "contact": enterprise.phone or enterprise.email,
+                "contact": topology.account.phone or topology.account.email,
                 "lastSync": telemetry.receivedAt.isoformat() if telemetry else None,
-                "gatewayStatus": telemetry.gatewayStatus
-                if telemetry
-                else enterprise.gateway_status or "Not Linked",
-                "sourceKind": telemetry.sourceKind if telemetry else "real",
-                "mockRunId": telemetry.mockRunId if telemetry else None,
+                "gatewayStatus": telemetry.gatewayStatus if telemetry else topology.gateway_status,
+                "sourceKind": (
+                    telemetry.sourceKind
+                    if telemetry
+                    else ("mock" if topology.enterprise.classification == "simulation" else "real")
+                ),
+                "mockRunId": (
+                    telemetry.mockRunId if telemetry else topology.enterprise.simulation_run_id
+                ),
             }
         )
     return enterprises
@@ -1063,10 +1087,14 @@ async def operational_websocket(
 
     async with AsyncSessionLocal() as db:
         account = await authenticate_websocket_account(db, token)
-        topology_membership = (
-            await get_active_websocket_enterprise_membership(db, account.id)
+        account_topology = (
+            await load_account_topology(db, account)
             if account is not None and account.role == AccountRole.ENTERPRISE
             else None
+        )
+        topology_membership = account_topology.membership if account_topology is not None else None
+        enterprise_code = (
+            account_topology.enterprise.official_code if account_topology is not None else None
         )
 
     if account is None:
@@ -1080,7 +1108,7 @@ async def operational_websocket(
         websocket,
         account.role.value,
         account.id,
-        enterprise_identifier(account) if account.role == AccountRole.ENTERPRISE else None,
+        enterprise_code,
         topology_enterprise_id=(
             topology_membership.enterprise_id if topology_membership is not None else None
         ),
@@ -1108,11 +1136,14 @@ async def operational_websocket(
                 receive_task = asyncio.create_task(websocket.receive_text())
             async with AsyncSessionLocal() as db:
                 current_account = await authenticate_websocket_account(db, token)
-                current_membership = (
-                    await get_active_websocket_enterprise_membership(db, current_account.id)
+                current_topology = (
+                    await load_account_topology(db, current_account)
                     if current_account is not None
                     and current_account.role == AccountRole.ENTERPRISE
                     else None
+                )
+                current_membership = (
+                    current_topology.membership if current_topology is not None else None
                 )
             if current_account is None:
                 await websocket.close(code=1008)

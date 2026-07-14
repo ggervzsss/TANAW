@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.events.models import DomainEvent, DomainEventDelivery
+from app.features.operational.models import MockDataRun
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
 from app.features.reporting.obligation_envelopes import (
@@ -142,6 +143,15 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         effective_from=effective_last_year,
         technical_created_at=technical_now,
     )
+    simulation_run = MockDataRun(
+        id=str(uuid4()),
+        scenario="obligation-scope-test",
+        seed=suffix,
+        range_start=canonical.starts_at,
+        range_end=canonical.ends_at,
+        status="active",
+    )
+    simulation.simulation_run_id = simulation_run.id
     membership = EnterpriseMembership(
         id=str(uuid4()),
         enterprise_id=eligible.id,
@@ -161,6 +171,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
             unresolved,
             inactive,
             exempted,
+            simulation_run,
             simulation,
         ]
     )

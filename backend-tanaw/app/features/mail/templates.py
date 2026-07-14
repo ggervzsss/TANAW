@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from html import escape
 
-from app.features.accounts.models import Account, AccountRole
+from app.features.accounts.models import AccountRole
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class EmailRecipient:
 
 
 def account_activation_email(
-    account: Account | EmailRecipient, activation_url: str, expires_label: str
+    account: EmailRecipient, activation_url: str, expires_label: str
 ) -> EmailContent:
     if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
         login_lines = (
@@ -55,7 +55,7 @@ def account_activation_email(
 
 
 def password_reset_code_email(
-    account: Account | EmailRecipient, code: str, expires_label: str
+    account: EmailRecipient, code: str, expires_label: str
 ) -> EmailContent:
     text = (
         f"Hello {account.display_name},\n\n"
@@ -99,7 +99,7 @@ def support_ticket_reply_email(
     return EmailContent(subject=email_subject, text=text, html=html)
 
 
-def business_email_change_email(account: Account | EmailRecipient, new_email: str) -> EmailContent:
+def business_email_change_email(account: EmailRecipient, new_email: str) -> EmailContent:
     text = (
         f"Hello {account.display_name},\n\n"
         "A request was submitted to change the TANAW business email for your account "
@@ -119,7 +119,7 @@ def business_email_change_email(account: Account | EmailRecipient, new_email: st
 
 
 def account_email_change_verification_email(
-    account: Account | EmailRecipient,
+    account: EmailRecipient,
     *,
     old_email: str,
     new_email: str,
@@ -155,7 +155,7 @@ def account_email_change_verification_email(
 
 
 def account_email_change_request_notice_email(
-    account: Account | EmailRecipient,
+    account: EmailRecipient,
     *,
     new_email: str,
     expires_label: str,
@@ -181,7 +181,7 @@ def account_email_change_request_notice_email(
 
 
 def account_email_change_approved_email(
-    account: Account | EmailRecipient,
+    account: EmailRecipient,
     *,
     old_email: str,
     new_email: str,

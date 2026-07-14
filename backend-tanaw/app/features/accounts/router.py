@@ -33,6 +33,7 @@ from app.features.accounts.schemas import (
     ProfileChangeRequestType,
 )
 from app.features.accounts.service import (
+    NewEnterpriseTopology,
     account_role_from_value,
     clear_pending_profile_change_request,
     create_account_with_activation,
@@ -66,6 +67,10 @@ from app.features.auth.email_change import (
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import create_user_notification
 from app.features.operational.websocket import operational_ws_manager
+from app.features.topology.account_scope import (
+    invalidate_site_coordinates,
+    require_account_topology,
+)
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 dev_router = APIRouter(prefix="/dev", tags=["dev"])
@@ -360,22 +365,22 @@ async def create_enterprise_account(
         email=str(payload.email),
         phone=payload.contactNumber,
         role=AccountRole.ENTERPRISE,
-        display_name=payload.enterpriseName,
+        display_name=payload.managerName,
         title="Enterprise Account",
-        enterprise_name=payload.enterpriseName,
-        category=payload.category,
-        manager_name=payload.managerName,
-        barangay=payload.barangay,
-        address=payload.address,
-        latitude=latitude,
-        longitude=longitude,
-        location_source=location_source,
-        location_confidence=location_confidence,
-        geocoded_address=geocoded_address,
-        location_updated_at=location_updated_at,
-        enterprise_id=enterprise_id,
-        gateway_status="Not Linked",
-        building_capacity=payload.buildingCapacity,
+        enterprise_topology=NewEnterpriseTopology(
+            official_code=enterprise_id,
+            name=payload.enterpriseName,
+            category=payload.category,
+            barangay=payload.barangay,
+            address=payload.address,
+            latitude=latitude,
+            longitude=longitude,
+            location_source=location_source,
+            location_confidence=location_confidence,
+            geocoded_address=geocoded_address,
+            coordinates_updated_at=location_updated_at,
+            building_capacity=payload.buildingCapacity,
+        ),
     )
     await record_account_log(
         db,
@@ -384,13 +389,13 @@ async def create_enterprise_account(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Create Enterprise Account",
-        target=account.enterprise_name or account.email,
-        summary=f"{actor.display_name} registered enterprise account {account.enterprise_name}.",
+        target=payload.enterpriseName,
+        summary=f"{actor.display_name} registered enterprise account {payload.enterpriseName}.",
         source_id=account.id,
         metadata={
-            "enterpriseId": account.enterprise_id,
-            "barangay": account.barangay,
-            "buildingCapacity": account.building_capacity,
+            "enterpriseId": enterprise_id,
+            "barangay": payload.barangay,
+            "buildingCapacity": payload.buildingCapacity,
         },
     )
     await record_account_log(
@@ -401,7 +406,7 @@ async def create_enterprise_account(
         actor_role="System",
         action="Activation Email Queued",
         target=account.email,
-        summary=f"The system queued an account activation email for enterprise {account.enterprise_name}.",
+        summary=f"The system queued an account activation email for enterprise {payload.enterpriseName}.",
         source_id=account.id,
     )
     return await to_account_summary_with_requests(db, account)
@@ -419,6 +424,7 @@ async def update_enterprise_account(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
+    topology = await require_account_topology(db, account, lock=True)
 
     requested_email = str(payload.email)
     await ensure_unique_account_email(db, requested_email, account.id)
@@ -431,15 +437,23 @@ async def update_enterprise_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Keep the account active while verifying a new email address.",
         )
-    account.enterprise_name = payload.enterpriseName
-    account.display_name = payload.enterpriseName
-    account.category = payload.category
-    account.manager_name = payload.managerName
+    topology.enterprise.name = payload.enterpriseName
+    topology.enterprise.category = payload.category
+    topology.site.name = f"{payload.enterpriseName} Primary Site"
+    account.display_name = payload.managerName
     account.phone = payload.contactNumber
-    account.barangay = payload.barangay
-    account.address = payload.address
-    account.building_capacity = payload.buildingCapacity
+    location_changed = (
+        topology.site.barangay != payload.barangay or topology.site.address != payload.address
+    )
+    topology.site.barangay = payload.barangay
+    topology.site.address = payload.address
+    topology.site.building_capacity = payload.buildingCapacity
+    if location_changed:
+        invalidate_site_coordinates(topology.site)
     account.status = next_status
+    topology.enterprise.lifecycle_state = (
+        "active" if next_status == AccountStatus.ACTIVE else "inactive"
+    )
     email_change_requested = False
     if email_changed:
         if account.activated_at is None:
@@ -482,13 +496,13 @@ async def update_enterprise_account(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Update Enterprise Account",
-        target=account.enterprise_name or account.email,
-        summary=f"{actor.display_name} updated enterprise account {account.enterprise_name}.",
+        target=topology.enterprise.name,
+        summary=f"{actor.display_name} updated enterprise account {topology.enterprise.name}.",
         source_id=account.id,
         metadata={
-            "enterpriseId": account.enterprise_id,
-            "barangay": account.barangay,
-            "buildingCapacity": account.building_capacity,
+            "enterpriseId": topology.enterprise.official_code,
+            "barangay": topology.site.barangay,
+            "buildingCapacity": topology.site.building_capacity,
             "status": account.status.value,
             "emailChangeRequested": email_change_requested,
             "requestedEmail": requested_email if email_change_requested else None,
@@ -513,6 +527,7 @@ async def resolve_enterprise_profile_change_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
+    topology = await require_account_topology(db, account)
 
     if request_type == "businessEmail":
         return await resolve_verified_email_change_request(
@@ -548,9 +563,9 @@ async def resolve_enterprise_profile_change_request(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action=f"{payload.action.title()} Enterprise Profile Change",
-        target=account.enterprise_name or account.email,
+        target=topology.enterprise.name,
         summary=(
-            f"{actor.display_name} {resolution_label} {account.enterprise_name or account.display_name}'s "
+            f"{actor.display_name} {resolution_label} {topology.enterprise.name}'s "
             f"{request_label.lower()} change request."
         ),
         source_id=account.id,
@@ -652,7 +667,16 @@ async def update_account_status(
     await ensure_privileged_account_remains_available(db, account, next_status)
 
     previous_status = account.status
+    topology = (
+        await require_account_topology(db, account, lock=True)
+        if account.role == AccountRole.ENTERPRISE
+        else None
+    )
     account.status = next_status
+    if topology is not None:
+        topology.enterprise.lifecycle_state = (
+            "active" if next_status == AccountStatus.ACTIVE else "inactive"
+        )
     if previous_status != account.status:
         access_changed_at = datetime.now(UTC)
         account.token_invalid_before = access_changed_at

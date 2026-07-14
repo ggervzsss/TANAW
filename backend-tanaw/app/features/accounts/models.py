@@ -7,7 +7,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
-    Float,
     ForeignKey,
     Index,
     Integer,
@@ -51,25 +50,6 @@ class Account(Base):
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
-    enterprise_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    manager_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    barangay: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    location_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    location_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    geocoded_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    location_updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    enterprise_id: Mapped[str | None] = mapped_column(
-        String(120), unique=True, index=True, nullable=True
-    )
-    gateway_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    gateway_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    building_capacity: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[AccountRole] = mapped_column(
         Enum(AccountRole, name="account_role"), nullable=False
@@ -92,8 +72,6 @@ class Account(Base):
     failed_login_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     preferences_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

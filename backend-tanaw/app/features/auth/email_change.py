@@ -26,6 +26,7 @@ from app.features.mail.service import (
     email_idempotency_key,
     enqueue_email,
 )
+from app.features.topology.account_scope import enterprise_official_code_for_account
 
 ACTIVE_EMAIL_CHANGE_STATUSES = (
     AccountEmailChangeStatus.PENDING_VERIFICATION.value,
@@ -158,11 +159,12 @@ async def request_account_email_change(
         ) from exc
 
     expires_label = expires_at.strftime("%Y-%m-%d %H:%M UTC")
+    enterprise_code = await enterprise_official_code_for_account(db, account)
     common_payload = {
         "requestId": request.id,
         "displayName": account.display_name,
         "role": account.role.value,
-        "enterpriseId": account.enterprise_id or "",
+        "enterpriseId": enterprise_code or "",
         "oldEmail": request.old_email,
         "newEmail": request.requested_email,
         "expiresLabel": expires_label,
@@ -348,11 +350,12 @@ async def resolve_account_email_change(
         reason="The verified account email change was resolved.",
     )
 
+    enterprise_code = await enterprise_official_code_for_account(db, account)
     common_payload = {
         "requestId": request.id,
         "displayName": account.display_name,
         "role": account.role.value,
-        "enterpriseId": account.enterprise_id or "",
+        "enterpriseId": enterprise_code or "",
         "oldEmail": request.old_email,
         "newEmail": request.requested_email,
     }

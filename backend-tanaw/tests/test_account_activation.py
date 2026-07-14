@@ -14,7 +14,7 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.auth import account_activation, password_recovery
 from app.features.auth import service as auth_service
 from app.features.auth.models import AccountActivationToken
-from app.features.mail.templates import account_activation_email
+from app.features.mail.templates import EmailRecipient, account_activation_email
 
 
 def test_activation_schema_replaces_temporary_password_state() -> None:
@@ -62,13 +62,10 @@ def test_activation_configuration_has_safe_development_defaults() -> None:
 
 
 def test_activation_email_contains_a_link_without_an_emailed_password() -> None:
-    account = Account(
+    account = EmailRecipient(
         email="user@example.com",
-        password_hash="unusable-password-hash",
         role=AccountRole.STAFF,
         display_name="Test User",
-        title="LGU Staff",
-        status=AccountStatus.ACTIVE,
     )
     activation_url = "https://tanaw.example/activate-account?token=secret-token"
 
@@ -78,8 +75,6 @@ def test_activation_email_contains_a_link_without_an_emailed_password() -> None:
     assert activation_url in content.text
     assert activation_url.replace("&", "&amp;") in content.html
     assert "Temporary password" not in content.text
-    assert "unusable-password-hash" not in content.text
-    assert "unusable-password-hash" not in content.html
 
 
 def test_activation_endpoints_are_post_only() -> None:

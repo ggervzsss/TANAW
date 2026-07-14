@@ -35,7 +35,7 @@ from app.features.events.realtime import (
     PostgresOperationalRealtimePublisher,
     RealtimeBroadcastHandler,
 )
-from app.features.operational.models import UserNotification
+from app.features.operational.models import MockDataRun, UserNotification
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
@@ -62,6 +62,7 @@ class ConsumerRuntime:
     prefix: str
     account_ids: list[str] = field(default_factory=list)
     enterprise_ids: list[str] = field(default_factory=list)
+    mock_run_ids: list[str] = field(default_factory=list)
     site_ids: list[str] = field(default_factory=list)
     obligation_ids: list[str] = field(default_factory=list)
     event_ids: list[str] = field(default_factory=list)
@@ -131,6 +132,10 @@ async def consumer_runtime() -> AsyncIterator[ConsumerRuntime]:
             if runtime.enterprise_ids:
                 await db.execute(
                     delete(Enterprise).where(Enterprise.id.in_(runtime.enterprise_ids))
+                )
+            if runtime.mock_run_ids:
+                await db.execute(
+                    delete(MockDataRun).where(MockDataRun.id.in_(runtime.mock_run_ids))
                 )
             if runtime.account_ids:
                 await db.execute(delete(Account).where(Account.id.in_(runtime.account_ids)))
@@ -379,15 +384,32 @@ async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
 
 
 async def _enterprise(runtime: ConsumerRuntime, classification: str) -> Enterprise:
+    now = datetime.now(UTC)
+    simulation_run = (
+        MockDataRun(
+            id=str(uuid4()),
+            scenario="event-consumer-scope-test",
+            seed=str(uuid4()),
+            range_start=now - timedelta(days=1),
+            range_end=now,
+            status="active",
+        )
+        if classification == "simulation"
+        else None
+    )
     enterprise = Enterprise(
         id=str(uuid4()),
         official_code=f"{runtime.prefix}:{uuid4()}",
         name=f"Consumer Test {classification}",
         classification=classification,
+        simulation_run_id=simulation_run.id if simulation_run is not None else None,
         lifecycle_state="active",
     )
     runtime.enterprise_ids.append(enterprise.id)
     async with runtime.sessions() as db:
+        if simulation_run is not None:
+            runtime.mock_run_ids.append(simulation_run.id)
+            db.add(simulation_run)
         db.add(enterprise)
         await db.commit()
     return enterprise

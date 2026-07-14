@@ -205,7 +205,6 @@ async def test_retention_cleanup_batches_expired_data_and_preserves_live_records
         status=AccountStatus.ACTIVE,
         activated_at=now,
         password_changed_at=now,
-        source_kind="real",
     )
 
     old_activation_ids = [_test_id(f"activation-old-{index}") for index in range(11)]

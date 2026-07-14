@@ -25,9 +25,22 @@ from app.features.operational.models import (
     FinalReport,
     FinalReportSource,
     MockDataRun,
+    MockDataRunAccount,
 )
 from app.features.operational.service import generate_final_report_code
 from app.features.reporting.contracts import monthly_reporting_period
+from app.features.topology.account_scope import (
+    AccountTopology,
+    load_account_topologies,
+    require_account_topology,
+)
+from app.features.topology.models import (
+    Camera,
+    EdgeDevice,
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+)
 
 TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
@@ -298,7 +311,7 @@ async def ensure_active_target_matches(
         return
 
     requested_target = await resolve_target_enterprise(db, requested_identifier, [])
-    if requested_target.id != run.target_account_id:
+    if requested_target.account.id != run.target_account_id:
         raise SystemExit(
             f"The active mock-data run targets {run.target_enterprise_name} ({run.target_enterprise_id}). "
             "Use mock-data reset to select a different target."
@@ -324,9 +337,9 @@ async def generate_mock_data(
     accounts = await create_accounts(db, run.id)
     enterprises = await list_active_enterprises(db)
     target = await resolve_target_enterprise(db, target_identifier, accounts["enterprises"])
-    run.target_account_id = target.id
-    run.target_enterprise_id = target.enterprise_id or target.id
-    run.target_enterprise_name = target.enterprise_name or target.display_name
+    run.target_account_id = target.account.id
+    run.target_enterprise_id = target.enterprise.official_code
+    run.target_enterprise_name = target.enterprise.name
     reports = await create_operational_history(
         db, run.id, range_start, range_end, scenario, rng, enterprises, target
     )
@@ -366,10 +379,10 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             title=title,
             status=AccountStatus.ACTIVE,
             activated_at=datetime.now(UTC),
-            source_kind="mock",
-            mock_run_id=run_id,
         )
         db.add(account)
+        await db.flush()
+        db.add(MockDataRunAccount(run_id=run_id, account_id=account.id))
         lgu_accounts.append(account)
 
     enterprise_accounts: list[Account] = []
@@ -382,30 +395,62 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
         account = Account(
             email=enterprise.email,
             phone=enterprise.phone,
-            enterprise_name=enterprise.name,
+            password_hash=password_hash,
+            role=AccountRole.ENTERPRISE,
+            display_name=enterprise.manager,
+            title="Enterprise Account",
+            status=AccountStatus.ACTIVE,
+            activated_at=datetime.now(UTC),
+        )
+        db.add(account)
+        await db.flush()
+        topology_enterprise = Enterprise(
+            official_code=enterprise_id,
+            name=enterprise.name,
             category=enterprise.category,
-            manager_name=enterprise.manager,
+            classification="simulation",
+            simulation_run_id=run_id,
+            lifecycle_state="active",
+        )
+        db.add(topology_enterprise)
+        await db.flush()
+        site = EnterpriseSite(
+            enterprise_id=topology_enterprise.id,
+            classification="simulation",
+            site_code="primary",
+            name=f"{enterprise.name} Primary Site",
             barangay=enterprise.barangay,
             address=enterprise.address,
+            building_capacity=100,
             latitude=enterprise.latitude,
             longitude=enterprise.longitude,
             location_source="geocoded",
             location_confidence=1.0,
             geocoded_address=enterprise.address,
-            location_updated_at=datetime.now(UTC),
-            enterprise_id=enterprise_id,
-            gateway_id=f"GW-SP-{index:04d}",
-            gateway_status="Connected",
-            password_hash=password_hash,
-            role=AccountRole.ENTERPRISE,
-            display_name=enterprise.name,
-            title="Enterprise Account",
-            status=AccountStatus.ACTIVE,
-            activated_at=datetime.now(UTC),
-            source_kind="mock",
-            mock_run_id=run_id,
+            coordinates_updated_at=datetime.now(UTC),
         )
-        db.add(account)
+        db.add_all(
+            [
+                EnterpriseMembership(
+                    enterprise_id=topology_enterprise.id,
+                    account_id=account.id,
+                    classification="simulation",
+                    membership_role="manager",
+                ),
+                site,
+                MockDataRunAccount(run_id=run_id, account_id=account.id),
+            ]
+        )
+        await db.flush()
+        db.add(
+            EdgeDevice(
+                site_id=site.id,
+                classification="simulation",
+                device_key=f"GW-SP-{index:04d}",
+                display_name=f"GW-SP-{index:04d}",
+                paired_at=datetime.now(UTC),
+            )
+        )
         enterprise_accounts.append(account)
 
     await db.flush()
@@ -419,47 +464,61 @@ def ensure_email_available(existing: Account | None, email: str) -> None:
         )
 
 
-async def list_active_enterprises(db: AsyncSession) -> list[Account]:
-    return list(
-        (
-            await db.scalars(
-                select(Account)
-                .where(
-                    Account.role == AccountRole.ENTERPRISE,
-                    Account.status == AccountStatus.ACTIVE,
-                    Account.activated_at.is_not(None),
-                )
-                .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+async def list_active_enterprises(db: AsyncSession) -> list[AccountTopology]:
+    accounts = list(
+        await db.scalars(
+            select(Account)
+            .join(EnterpriseMembership, EnterpriseMembership.account_id == Account.id)
+            .join(Enterprise, Enterprise.id == EnterpriseMembership.enterprise_id)
+            .where(
+                Account.role == AccountRole.ENTERPRISE,
+                Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
+                Enterprise.classification == "simulation",
+                Enterprise.lifecycle_state == "active",
             )
-        ).all()
+        )
     )
+    topologies = [
+        topology
+        for topology in (await load_account_topologies(db, accounts)).values()
+        if topology is not None
+    ]
+    return sorted(topologies, key=lambda topology: topology.enterprise.name.lower())
 
 
 async def resolve_target_enterprise(
     db: AsyncSession, identifier: str | None, generated_enterprises: list[Account]
-) -> Account:
+) -> AccountTopology:
     if not identifier:
         if not generated_enterprises:
             raise SystemExit("No generated enterprise is available as the default target.")
-        return generated_enterprises[0]
+        return await require_account_topology(db, generated_enterprises[0])
 
     normalized = identifier.strip().lower()
-    target = await db.scalar(
-        select(Account).where(
-            Account.role == AccountRole.ENTERPRISE,
-            Account.status == AccountStatus.ACTIVE,
-            Account.activated_at.is_not(None),
-            or_(
-                func.lower(Account.id) == normalized,
-                func.lower(Account.email) == normalized,
-                func.lower(Account.enterprise_id) == normalized,
-                func.lower(Account.enterprise_name) == normalized,
-            ),
+    targets = list(
+        await db.scalars(
+            select(Account)
+            .join(EnterpriseMembership, EnterpriseMembership.account_id == Account.id)
+            .join(Enterprise, Enterprise.id == EnterpriseMembership.enterprise_id)
+            .where(
+                Account.role == AccountRole.ENTERPRISE,
+                Account.status == AccountStatus.ACTIVE,
+                Account.activated_at.is_not(None),
+                Enterprise.classification == "simulation",
+                Enterprise.lifecycle_state == "active",
+                or_(
+                    func.lower(Account.id) == normalized,
+                    func.lower(Account.email) == normalized,
+                    func.lower(Enterprise.official_code) == normalized,
+                    func.lower(Enterprise.name) == normalized,
+                ),
+            )
         )
     )
-    if target is None:
+    if len(targets) != 1:
         raise SystemExit(f"Target enterprise '{identifier}' was not found or is not active.")
-    return target
+    return await require_account_topology(db, targets[0])
 
 
 async def create_operational_history(
@@ -469,8 +528,8 @@ async def create_operational_history(
     range_end: datetime,
     scenario: str,
     rng: random.Random,
-    enterprises: list[Account],
-    target: Account,
+    enterprises: list[AccountTopology],
+    target: AccountTopology,
 ) -> dict:
     reports: list[EnterpriseReportSubmission] = []
     telemetry: list[EnterpriseTelemetrySnapshot] = []
@@ -497,7 +556,10 @@ async def create_operational_history(
                 day=min(18 + enterprise_index, 24), hour=9 + enterprise_index, minute=15
             )
             should_skip = should_skip_target_report(
-                month_start, current_month, enterprise.id, target.id
+                month_start,
+                current_month,
+                enterprise.account.id,
+                target.account.id,
             )
             if should_skip:
                 target_prepared_counts.append(
@@ -514,11 +576,11 @@ async def create_operational_history(
             demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
 
             snapshot = EnterpriseTelemetrySnapshot(
-                enterprise_account_id=enterprise.id,
-                enterprise_id=enterprise.enterprise_id or enterprise.id,
-                enterprise_name=enterprise.enterprise_name or enterprise.display_name,
+                enterprise_account_id=enterprise.account.id,
+                enterprise_id=enterprise.enterprise.official_code,
+                enterprise_name=enterprise.enterprise.name,
                 camera_id=f"camera-{enterprise_index + 1}",
-                camera_name=f"{enterprise.enterprise_name} Main Entrance",
+                camera_name=f"{enterprise.enterprise.name} Main Entrance",
                 captured_at=latest_capture_time(month_start, range_end),
                 entries=base_entries,
                 exits=exits,
@@ -558,11 +620,11 @@ async def create_operational_history(
 
             report = EnterpriseReportSubmission(
                 report_id=f"REP-{month_start:%y%m}{enterprise_index + 1:02d}",
-                enterprise_account_id=enterprise.id,
-                enterprise_id=enterprise.enterprise_id or enterprise.id,
-                enterprise_name=enterprise.enterprise_name or enterprise.display_name,
-                category=category_label(enterprise.category),
-                barangay=enterprise.barangay,
+                enterprise_account_id=enterprise.account.id,
+                enterprise_id=enterprise.enterprise.official_code,
+                enterprise_name=enterprise.enterprise.name,
+                category=category_label(enterprise.enterprise.category),
+                barangay=enterprise.site.barangay,
                 period=period,
                 month=month_name,
                 submitted_at=submitted_at,
@@ -771,13 +833,46 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
     activity_logs_result = await db.execute(
         delete(ActivityLog).where(ActivityLog.mock_run_id.in_(run_ids))
     )
-    accounts_result = await db.execute(delete(Account).where(Account.mock_run_id.in_(run_ids)))
+    owned_account_ids = list(
+        await db.scalars(
+            select(MockDataRunAccount.account_id).where(MockDataRunAccount.run_id.in_(run_ids))
+        )
+    )
+    simulation_enterprise_ids = list(
+        await db.scalars(
+            select(Enterprise.id).where(
+                Enterprise.classification == "simulation",
+                Enterprise.simulation_run_id.in_(run_ids),
+            )
+        )
+    )
+    site_ids = list(
+        await db.scalars(
+            select(EnterpriseSite.id).where(
+                EnterpriseSite.enterprise_id.in_(simulation_enterprise_ids)
+            )
+        )
+    )
+    if site_ids:
+        await db.execute(delete(Camera).where(Camera.site_id.in_(site_ids)))
+        await db.execute(delete(EdgeDevice).where(EdgeDevice.site_id.in_(site_ids)))
+        await db.execute(delete(EnterpriseSite).where(EnterpriseSite.id.in_(site_ids)))
+    if simulation_enterprise_ids:
+        await db.execute(
+            delete(EnterpriseMembership).where(
+                EnterpriseMembership.enterprise_id.in_(simulation_enterprise_ids)
+            )
+        )
+        await db.execute(delete(Enterprise).where(Enterprise.id.in_(simulation_enterprise_ids)))
+    await db.execute(delete(MockDataRunAccount).where(MockDataRunAccount.run_id.in_(run_ids)))
+    accounts_result = await db.execute(delete(Account).where(Account.id.in_(owned_account_ids)))
     counts = {
         "finalReportSources": len(final_report_ids),
         "finalReports": affected_row_count(final_reports_result),
         "intakeReports": affected_row_count(intake_reports_result),
         "telemetrySnapshots": affected_row_count(telemetry_snapshots_result),
         "activityLogs": affected_row_count(activity_logs_result),
+        "simulationEnterprises": len(simulation_enterprise_ids),
         "accounts": affected_row_count(accounts_result),
     }
     await db.execute(

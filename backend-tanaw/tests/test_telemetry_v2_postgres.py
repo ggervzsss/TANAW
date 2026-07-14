@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.events.models import DomainEvent, DomainEventDelivery
+from app.features.operational.models import MockDataRun
 from app.features.telemetry.envelopes import EpochStartCommand, TelemetryCommand
 from app.features.telemetry.models import (
     DeviceHealthSample,
@@ -834,15 +835,29 @@ async def _seed_scope(db: AsyncSession, *, classification: str) -> Scope:
     site_id = str(uuid4())
     device_id = str(uuid4())
     camera_id = str(uuid4())
+    simulation_run = (
+        MockDataRun(
+            id=str(uuid4()),
+            scenario="telemetry-scope-test",
+            seed=suffix,
+            range_start=BASE_TIME - timedelta(days=1),
+            range_end=BASE_TIME,
+            status="active",
+        )
+        if classification == "simulation"
+        else None
+    )
     db.add_all(
         [
             account,
+            *([simulation_run] if simulation_run is not None else []),
             Enterprise(
                 id=enterprise_id,
                 official_code=f"TEL-{suffix}",
                 name=f"Telemetry Enterprise {suffix[:8]}",
                 category="Test",
                 classification=classification,
+                simulation_run_id=(simulation_run.id if simulation_run is not None else None),
                 lifecycle_state="active",
             ),
         ]

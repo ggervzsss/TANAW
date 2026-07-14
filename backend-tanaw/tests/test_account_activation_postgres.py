@@ -22,7 +22,7 @@ from app.core.security import hash_password, verify_password
 from app.features.accounts.models import Account, AccountRole, AccountStatus, DevDelivery
 from app.features.accounts.router import update_account_status, update_lgu_account
 from app.features.accounts.schemas import AccountStatusUpdate, LguAccountUpdate
-from app.features.accounts.service import create_account_with_activation
+from app.features.accounts.service import NewEnterpriseTopology, create_account_with_activation
 from app.features.activity_logs.models import ActivityLog
 from app.features.auth import account_activation, secret_values
 from app.features.auth import service as auth_service
@@ -32,6 +32,8 @@ from app.features.mail import service as mail_service
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
 from app.features.mail.rendering import render_outbox_email
 from app.features.operational.models import UserNotification
+from app.features.topology.account_scope import enterprise_official_code_for_account
+from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_EMAIL_PATTERN = "tanaw-activation-pg-%@example.com"
@@ -116,6 +118,13 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
             )
             await db.execute(delete(EmailOutbox).where(EmailOutbox.id.in_(outbox_ids)))
         if account_ids:
+            enterprise_ids = list(
+                await db.scalars(
+                    select(EnterpriseMembership.enterprise_id).where(
+                        EnterpriseMembership.account_id.in_(account_ids)
+                    )
+                )
+            )
             await db.execute(
                 delete(PasswordResetChallenge).where(
                     PasswordResetChallenge.account_id.in_(account_ids)
@@ -133,6 +142,16 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                     UserNotification.recipient_account_id.in_(account_ids)
                 )
             )
+            if enterprise_ids:
+                await db.execute(
+                    delete(EnterpriseSite).where(EnterpriseSite.enterprise_id.in_(enterprise_ids))
+                )
+                await db.execute(
+                    delete(EnterpriseMembership).where(
+                        EnterpriseMembership.enterprise_id.in_(enterprise_ids)
+                    )
+                )
+                await db.execute(delete(Enterprise).where(Enterprise.id.in_(enterprise_ids)))
             await db.execute(delete(Account).where(Account.id.in_(account_ids)))
         await db.commit()
 
@@ -144,6 +163,18 @@ async def _create_pending_account(
     role: AccountRole,
 ) -> Account:
     email = f"tanaw-activation-pg-{label}-{uuid4().hex}@example.com"
+    enterprise_topology = (
+        NewEnterpriseTopology(
+            official_code=f"activation_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",
+            name=f"Activation Test {label} Enterprise",
+            category="business",
+            barangay="Poblacion",
+            address="Activation Test Address, San Pedro, Laguna 4023",
+            building_capacity=100,
+        )
+        if role == AccountRole.ENTERPRISE
+        else None
+    )
     async with runtime.sessions() as db:
         return await create_account_with_activation(
             db,
@@ -154,12 +185,7 @@ async def _create_pending_account(
             title="Enterprise Account" if role == AccountRole.ENTERPRISE else "LGU Staff",
             first_name=None if role == AccountRole.ENTERPRISE else "Activation",
             last_name=None if role == AccountRole.ENTERPRISE else "Test",
-            enterprise_name=f"Activation Test {label} Enterprise"
-            if role == AccountRole.ENTERPRISE
-            else None,
-            enterprise_id=f"activation_{label}_{uuid4().hex[:8]}@tanaw.sanpedro"
-            if role == AccountRole.ENTERPRISE
-            else None,
+            enterprise_topology=enterprise_topology,
         )
 
 
@@ -179,7 +205,6 @@ async def _create_active_it_actor(runtime: PostgresRuntime, *, label: str) -> Ac
         is_protected_system_account=False,
         activated_at=now,
         password_changed_at=now,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(actor)
@@ -235,10 +260,11 @@ async def test_account_creation_activation_and_login_use_only_single_use_links(
                 )
                 is None
             )
-            if stored.enterprise_id:
+            enterprise_code = await enterprise_official_code_for_account(db, stored)
+            if enterprise_code:
                 assert (
                     await auth_service.authenticate_account(
-                        db, stored.enterprise_id, "Unknown pending password phrase"
+                        db, enterprise_code, "Unknown pending password phrase"
                     )
                     is None
                 )
@@ -453,8 +479,10 @@ async def test_two_concurrent_activation_completions_have_exactly_one_winner(
         assert verify_password(winning_password, stored.password_hash)
         assert not verify_password(losing_password, stored.password_hash)
         by_email = await auth_service.authenticate_account(db, stored.email, winning_password)
+        enterprise_code = await enterprise_official_code_for_account(db, stored)
+        assert enterprise_code is not None
         by_enterprise_id = await auth_service.authenticate_account(
-            db, stored.enterprise_id or "", winning_password
+            db, enterprise_code, winning_password
         )
         assert by_email is not None
         assert by_enterprise_id is not None

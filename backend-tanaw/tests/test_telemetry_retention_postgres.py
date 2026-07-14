@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 from app.features.maintenance.telemetry_retention import run_telemetry_retention
+from app.features.operational.models import MockDataRun
 from app.features.telemetry.models import (
     DeviceHealthSample,
     DeviceTelemetryEpoch,
@@ -41,6 +42,7 @@ class PostgresRuntime:
     sessions: async_sessionmaker[AsyncSession]
     settings: Settings
     enterprise_ids: list[str] = field(default_factory=list)
+    mock_run_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -523,10 +525,27 @@ async def test_dynamic_utc_partitions_prune_queries_and_expire_only_as_whole_mon
 
 async def _seed_scope(runtime: PostgresRuntime, *, classification: str) -> Scope:
     async with runtime.sessions() as db:
+        simulation_run = (
+            MockDataRun(
+                id=str(uuid4()),
+                scenario="telemetry-retention-scope-test",
+                seed=uuid4().hex,
+                range_start=datetime(2020, 1, 1, tzinfo=UTC),
+                range_end=datetime(2030, 1, 1, tzinfo=UTC),
+                status="active",
+            )
+            if classification == "simulation"
+            else None
+        )
+        if simulation_run is not None:
+            db.add(simulation_run)
+            await db.flush()
+            runtime.mock_run_ids.append(simulation_run.id)
         enterprise = Enterprise(
             official_code=f"{TEST_PREFIX}{uuid4().hex[:12]}",
             name="Telemetry retention test",
             classification=classification,
+            simulation_run_id=simulation_run.id if simulation_run is not None else None,
             lifecycle_state="active",
         )
         db.add(enterprise)
@@ -750,6 +769,8 @@ async def _clean_runtime(runtime: PostgresRuntime) -> None:
         await db.execute(delete(EdgeDevice).where(EdgeDevice.id.in_(device_ids)))
         await db.execute(delete(EnterpriseSite).where(EnterpriseSite.id.in_(site_ids)))
         await db.execute(delete(Enterprise).where(Enterprise.id.in_(runtime.enterprise_ids)))
+        if runtime.mock_run_ids:
+            await db.execute(delete(MockDataRun).where(MockDataRun.id.in_(runtime.mock_run_ids)))
 
         for table_name in reversed(trigger_tables):
             await db.execute(text(f"ALTER TABLE {table_name} ENABLE TRIGGER USER"))
