@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
 from app.features.assets.models import SupportAttachment
 from app.features.assets.storage import AssetStorage, ValidatedImage
+from app.features.events.operational_resources import enqueue_operational_resource_event
 from app.features.operational.models import (
     OperationalAlert,
     SupportTicket,
@@ -145,6 +146,21 @@ async def create_user_notification(
         created_by_name=actor.display_name if actor else None,
     )
     db.add(notification)
+    await db.flush([notification])
+    await enqueue_operational_resource_event(
+        db,
+        event_type="user_notification.created.v2",
+        aggregate_type="user_notification",
+        aggregate_id=notification.id,
+        aggregate_version=1,
+        payload={
+            "notificationId": notification.id,
+            "recipientAccountId": notification.recipient_account_id,
+            "recipientRole": notification.recipient_role,
+        },
+        actor_account_id=actor.id if actor else None,
+        enterprise_id=notification.recipient_enterprise_id,
+    )
     await db.commit()
     await db.refresh(notification)
     return to_user_notification_summary(notification)
@@ -195,6 +211,22 @@ async def create_role_notifications(
     if not notifications:
         return []
 
+    await db.flush(notifications)
+    for notification in notifications:
+        await enqueue_operational_resource_event(
+            db,
+            event_type="user_notification.created.v2",
+            aggregate_type="user_notification",
+            aggregate_id=notification.id,
+            aggregate_version=1,
+            payload={
+                "notificationId": notification.id,
+                "recipientAccountId": notification.recipient_account_id,
+                "recipientRole": notification.recipient_role,
+            },
+            actor_account_id=actor.id if actor else None,
+            enterprise_id=notification.recipient_enterprise_id,
+        )
     await db.commit()
     for notification in notifications:
         await db.refresh(notification)
@@ -222,6 +254,21 @@ async def set_user_notification_read(
     if notification is None:
         return None
     notification.read_at = datetime.now(UTC) if read else None
+    await db.flush([notification])
+    await enqueue_operational_resource_event(
+        db,
+        event_type="user_notification.updated.v2",
+        aggregate_type="user_notification",
+        aggregate_id=notification.id,
+        aggregate_version=2,
+        payload={
+            "notificationId": notification.id,
+            "recipientAccountId": notification.recipient_account_id,
+            "recipientRole": notification.recipient_role,
+        },
+        actor_account_id=account.id,
+        enterprise_id=notification.recipient_enterprise_id,
+    )
     await db.commit()
     await db.refresh(notification)
     return to_user_notification_summary(notification)
@@ -576,6 +623,16 @@ async def create_operational_alert(
             existing.severity = severity
             existing.summary = summary
             existing.required_action = required_action
+            await db.flush([existing])
+            await enqueue_operational_resource_event(
+                db,
+                event_type="operational_alert.updated.v2",
+                aggregate_type="operational_alert",
+                aggregate_id=existing.id,
+                aggregate_version=2,
+                payload={"operationalAlertId": existing.id},
+                actor_account_id=None,
+            )
             await db.commit()
             await db.refresh(existing)
             return existing
@@ -596,6 +653,16 @@ async def create_operational_alert(
         source_id=source_id,
     )
     db.add(alert)
+    await db.flush([alert])
+    await enqueue_operational_resource_event(
+        db,
+        event_type="operational_alert.created.v2",
+        aggregate_type="operational_alert",
+        aggregate_id=alert.id,
+        aggregate_version=1,
+        payload={"operationalAlertId": alert.id},
+        actor_account_id=None,
+    )
     await db.commit()
     await db.refresh(alert)
     return alert
@@ -607,13 +674,8 @@ async def list_operational_alerts(db: AsyncSession) -> list[OperationalAlertSumm
 
 
 def can_view_operational_event(role: str, event_type: str) -> bool:
-    notification_events = {"notification.created", "notification.updated"}
     if event_type == "resource.invalidated":
         return role in {item.value for item in AccountRole}
-    if event_type in notification_events:
-        return role in {item.value for item in AccountRole}
-    if event_type in {"alert.created", "alert.updated", "alert.resolved"}:
-        return role in {AccountRole.ADMIN.value, AccountRole.IT.value}
     return False
 
 

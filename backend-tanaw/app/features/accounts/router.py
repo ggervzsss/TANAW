@@ -63,9 +63,7 @@ from app.features.auth.email_change import (
     request_account_email_change,
     resolve_account_email_change,
 )
-from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import create_user_notification
-from app.features.operational.websocket import operational_ws_manager
 from app.features.topology.account_scope import (
     invalidate_site_coordinates,
     require_account_topology,
@@ -862,7 +860,7 @@ async def resolve_verified_email_change_request(
     notification_account_id = account.id
     notification_request_id = request.id
     try:
-        notification = await create_user_notification(
+        await create_user_notification(
             db,
             recipient=account,
             title=f"Email change request {resolution_label}.",
@@ -875,12 +873,6 @@ async def resolve_verified_email_change_request(
             actor=actor,
             source_type="account.profile.email",
             source_id=request.id,
-        )
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
         )
     except Exception:
         await db.rollback()
@@ -904,7 +896,7 @@ async def notify_enterprise_profile_change_resolution(
 ) -> None:
     request_label = profile_request_label(request_type)
     resolution_text = "approved" if approved else "declined"
-    notification = await create_user_notification(
+    await create_user_notification(
         db,
         recipient=account,
         title=f"{request_label} change request {resolution_text}.",
@@ -921,11 +913,6 @@ async def notify_enterprise_profile_change_resolution(
             else "enterprise.profile.contact"
         ),
         source_id=account.id,
-    )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.created", data=notification.model_dump(mode="json")
-        )
     )
 
 

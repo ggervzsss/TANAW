@@ -1,17 +1,9 @@
 import { QueryClient, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect } from "react";
-import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
-import {
-  createWebSocketAuthMessage,
-  getOperationalWebSocketUrl,
-  listOperationalMapEnterprises,
-  listUserNotifications,
-  type BackendNotification,
-  type OperationalWebSocketEnvelope,
-} from "../services/operationalSync";
+import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listOperationalMapEnterprises, listUserNotifications, type OperationalWebSocketEnvelope } from "../services/operationalSync";
 import { reportWorkflowQueryKey } from "../services/reporting";
-import type { AuthUser, PriorityAlert } from "../types";
+import type { AuthUser } from "../types";
 
 const RECONCILIATION_INTERVAL_MS = 30_000;
 
@@ -191,75 +183,21 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
       invalidate(queryClient, keys.alerts);
       return;
     }
+    if (resourceType === "user_notification") {
+      invalidate(queryClient, keys.notifications, operationalNotificationsQueryKey);
+      return;
+    }
     if (resourceType === "enterprise_report" || resourceType === "final_report" || resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {
       invalidate(queryClient, reportWorkflowQueryKey, operationalNotificationsQueryKey);
       return;
     }
-    return;
   }
-
-  if (envelope.type === "alert.created" || envelope.type === "alert.updated" || envelope.type === "alert.resolved") {
-    const alert = envelope.data;
-    patchExistingList(queryClient, keys.alerts, alert, (current, nextAlert) => sortAlerts(upsertById(current, nextAlert, getAlertTime)));
-    invalidate(queryClient, operationalAlertsQueryKey);
-    if (envelope.type === "alert.created") {
-      toast.error(`${alert.enterprise ?? alert.requester}: ${alert.summary}`, { id: alert.id, duration: 8000 });
-    }
-    return;
-  }
-
-  if (envelope.type === "notification.created" || envelope.type === "notification.updated") {
-    patchExistingList(queryClient, keys.notifications, envelope.data, (current, notification) => sortNotifications(upsertById(current, notification, getNotificationTime)));
-    invalidate(queryClient, operationalNotificationsQueryKey);
-  }
-}
-
-function patchExistingData<TData>(queryClient: QueryClient, queryKey: QueryKey, updater: (current: TData) => TData) {
-  if (queryClient.getQueryData<TData>(queryKey) === undefined) return false;
-  queryClient.setQueryData<TData>(queryKey, (current) => (current === undefined ? current : updater(current)));
-  return true;
-}
-
-function patchExistingList<TItem>(queryClient: QueryClient, queryKey: QueryKey, nextItem: TItem, updater: (current: TItem[], next: TItem) => TItem[]) {
-  return patchExistingData(queryClient, queryKey, (current: TItem[]) => updater(current, nextItem));
 }
 
 function invalidate(queryClient: QueryClient, ...queryKeys: QueryKey[]) {
   for (const queryKey of queryKeys) {
     void queryClient.invalidateQueries({ queryKey });
   }
-}
-
-function upsertById<TItem extends { id: string }>(items: TItem[], nextItem: TItem, getTime: (item: TItem) => number) {
-  const existing = items.find((item) => item.id === nextItem.id);
-  if (!existing) return [nextItem, ...items];
-  if (getTime(nextItem) < getTime(existing)) return items;
-  return items.map((item) => (item.id === nextItem.id ? nextItem : item));
-}
-
-function sortAlerts(alerts: PriorityAlert[]) {
-  return [...alerts].sort((left, right) => getAlertTime(right) - getAlertTime(left));
-}
-
-function sortNotifications(notifications: BackendNotification[]) {
-  return [...notifications].sort((left, right) => getNotificationTime(right) - getNotificationTime(left));
-}
-
-function getAlertTime(alert: PriorityAlert) {
-  return getTimestamp(alert.time);
-}
-
-function getNotificationTime(notification: BackendNotification) {
-  return getTimestamp(notification.createdAt);
-}
-
-function getTimestamp(...candidates: Array<string | null | undefined>) {
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    const timestamp = Date.parse(candidate);
-    if (Number.isFinite(timestamp)) return timestamp;
-  }
-  return 0;
 }
 
 function getAccountScope(user: AuthUser | null) {

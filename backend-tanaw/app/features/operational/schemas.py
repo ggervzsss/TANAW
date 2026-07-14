@@ -214,12 +214,5 @@ class SupportTicketDetail(SupportTicketSummary):
 
 
 class OperationalWebSocketEnvelope(BaseModel):
-    type: Literal[
-        "alert.created",
-        "alert.updated",
-        "alert.resolved",
-        "notification.created",
-        "notification.updated",
-        "resource.invalidated",
-    ]
+    type: Literal["resource.invalidated"]
     data: dict

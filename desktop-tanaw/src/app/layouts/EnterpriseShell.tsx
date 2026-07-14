@@ -9,9 +9,9 @@ import {
   createWebSocketAuthMessage,
   getOperationalWebSocketUrl,
   listNotifications,
+  parseOperationalNotificationInvalidation,
   updateNotificationRead,
   type BackendNotification,
-  type OperationalNotificationEnvelope,
 } from "../../features/notifications/services/notifications";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
@@ -247,9 +247,9 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
       socket.onmessage = (event) => {
         if (event.data === "pong") return;
-        const envelope = parseNotificationEnvelope(event.data);
+        const envelope = parseOperationalNotificationInvalidation(event.data, user?.id);
         if (!envelope) return;
-        setBackendNotifications((current) => upsertBackendNotification(current, envelope.data));
+        void refreshNotifications();
       };
 
       socket.onerror = () => socket?.close();
@@ -270,7 +270,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
-  }, [token]);
+  }, [token, user?.id]);
 
   useEffect(() => {
     const enterpriseId = user?.enterpriseId || user?.id;
@@ -605,18 +605,6 @@ function stableNotificationId(value: string) {
     hash |= 0;
   }
   return Math.abs(hash);
-}
-
-function parseNotificationEnvelope(value: string): OperationalNotificationEnvelope | null {
-  try {
-    const parsed = JSON.parse(value) as OperationalNotificationEnvelope;
-    if (parsed.type === "notification.created" || parsed.type === "notification.updated") {
-      return parsed;
-    }
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 function upsertBackendNotification(notifications: BackendNotification[], nextNotification: BackendNotification) {

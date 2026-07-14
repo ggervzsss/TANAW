@@ -103,15 +103,12 @@ from app.features.auth.service import (
     register_failed_login,
     resolve_login_lockout_policy,
 )
-from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     create_operational_alert,
     create_role_notifications,
     system_setting_enabled,
-    to_operational_alert_summary,
 )
-from app.features.operational.websocket import operational_ws_manager
 from app.features.topology.account_scope import (
     invalidate_site_coordinates,
     load_account_topology,
@@ -154,7 +151,7 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         if account.role == AccountRole.ENTERPRISE
         else None
     )
-    alert = await create_operational_alert(
+    await create_operational_alert(
         db,
         alert_type="Failed Login Threshold",
         severity="Warning",
@@ -168,12 +165,6 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         owner="IT",
         enterprise=topology.enterprise.name if topology is not None else None,
         source_id=f"failed-login-threshold:{account.id}",
-    )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="alert.created",
-            data=to_operational_alert_summary(alert).model_dump(mode="json"),
-        )
     )
 
 
@@ -189,7 +180,7 @@ async def notify_enterprise_account_change(
     if account.role != AccountRole.ENTERPRISE:
         return
 
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=ENTERPRISE_CHANGE_NOTIFICATION_ROLES,
         title=title,
@@ -200,13 +191,6 @@ async def notify_enterprise_account_change(
         source_type=source_type,
         source_id=account.id,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
 
 
 async def get_login_lockout_policy(db: AsyncSession) -> LoginLockoutPolicy:
@@ -586,13 +570,7 @@ async def create_support_request(
         enterprise=None,
         source_id=f"login-support:{hashlib.sha256(requester_email.encode()).hexdigest()}",
     )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="alert.created",
-            data=to_operational_alert_summary(alert).model_dump(mode="json"),
-        )
-    )
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=[AccountRole.ADMIN],
         title=f"Login support requested by {requester_name}.",
@@ -603,13 +581,6 @@ async def create_support_request(
         source_type="operational.alert",
         source_id=alert.id,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
     return StatusResponse(status="ok")
 
 

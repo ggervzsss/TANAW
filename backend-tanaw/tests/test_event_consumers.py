@@ -94,6 +94,7 @@ async def test_realtime_publisher_emits_refetch_only_resource_envelope_once() ->
                 "classification": "official",
                 "enterpriseId": event.enterprise_id,
                 "siteId": event.site_id,
+                "recipientAccountId": None,
             },
             "invalidates": [
                 "/operational/sites/v2",
@@ -303,6 +304,50 @@ async def test_realtime_hub_enforces_audience_enterprise_and_classification_scop
     assert staff.messages == []
     assert other_enterprise.messages == []
     assert simulation_membership.messages == []
+
+
+@pytest.mark.asyncio
+async def test_notification_invalidation_reaches_only_the_recorded_account() -> None:
+    manager = OperationalConnectionManager()
+    notification_id = str(uuid4())
+    target_account_id = str(uuid4())
+    base = _event(
+        event_type="user_notification.created.v2",
+        payload={
+            "contractVersion": 2,
+            "eventType": "user_notification.created.v2",
+            "notificationId": notification_id,
+            "recipientAccountId": target_account_id,
+            "recipientRole": "admin",
+        },
+    )
+    event = replace(
+        base,
+        aggregate_type="user_notification",
+        aggregate_id=notification_id,
+        aggregate_version=1,
+        enterprise_id=None,
+        site_id=None,
+    )
+    target = _FakeSocket()
+    other = _FakeSocket()
+    await manager.connect(cast(WebSocket, target), "admin", target_account_id)
+    await manager.connect(cast(WebSocket, other), "admin", str(uuid4()))
+
+    await OperationalRealtimePublisher(broadcast=manager.broadcast).publish(
+        topic="operational.resource-invalidations.v2",
+        event=event,
+        idempotency_key=event.event_key,
+    )
+
+    assert len(target.messages) == 1
+    assert target.messages[0]["data"]["resource"] == {
+        "type": "user_notification",
+        "id": notification_id,
+        "version": 1,
+    }
+    assert target.messages[0]["data"]["scope"]["recipientAccountId"] == target_account_id
+    assert other.messages == []
 
 
 @pytest.mark.asyncio

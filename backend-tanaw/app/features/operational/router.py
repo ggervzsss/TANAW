@@ -43,6 +43,7 @@ from app.features.assets.storage import (
     validate_image,
     verify_stored_image,
 )
+from app.features.events.operational_resources import enqueue_operational_resource_event
 from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
@@ -56,7 +57,6 @@ from app.features.operational.schemas import (
     NotificationReadUpdate,
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
-    OperationalWebSocketEnvelope,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
@@ -295,7 +295,7 @@ async def create_enterprise_support_ticket(
         if attachment_count
         else ""
     )
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=support_ticket_notification_roles(ticket.category),
         title=f"{enterprise} submitted support ticket {ticket.code}.",
@@ -306,13 +306,6 @@ async def create_enterprise_support_ticket(
         source_type="support.ticket",
         source_id=ticket.id,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
     await record_operational_log(
         db,
         category="Enterprise Activity",
@@ -384,7 +377,7 @@ async def create_ticket_message(
             severity="Info",
         )
     else:
-        notifications = await create_role_notifications(
+        await create_role_notifications(
             db,
             recipient_roles=support_ticket_notification_roles(detail.category),
             title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
@@ -395,13 +388,6 @@ async def create_ticket_message(
             source_type="support.ticket",
             source_id=detail.id,
         )
-        for notification in notifications:
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type="notification.created",
-                    data=notification.model_dump(mode="json"),
-                )
-            )
     actor_role = "IT Personnel" if account.role == AccountRole.IT else "Enterprise Account"
     activity_category = "IT Activity" if account.role == AccountRole.IT else "Enterprise Activity"
     await record_operational_log(
@@ -483,12 +469,6 @@ async def update_notification_read_status(
     notification = await set_user_notification_read(db, account, notification_id, read=payload.read)
     if notification is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found.")
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.updated",
-            data=notification.model_dump(mode="json"),
-        )
-    )
     return notification
 
 
@@ -522,12 +502,6 @@ async def create_enterprise_notification(
         actor=actor,
         source_type=payload.sourceType,
         source_id=payload.sourceId,
-    )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.created",
-            data=notification.model_dump(mode="json"),
-        )
     )
     recipient_topology = await require_account_topology(db, recipient)
     log = await create_activity_log(
@@ -577,15 +551,23 @@ async def update_alert_status(
         )
     previous_status = alert.status
     alert.status = payload.status
+    await db.flush([alert])
+    await enqueue_operational_resource_event(
+        db,
+        event_type=(
+            "operational_alert.resolved.v2"
+            if payload.status == "Resolved"
+            else "operational_alert.updated.v2"
+        ),
+        aggregate_type="operational_alert",
+        aggregate_id=alert.id,
+        aggregate_version=3 if payload.status == "Resolved" else 2,
+        payload={"operationalAlertId": alert.id},
+        actor_account_id=actor.id,
+    )
     await db.commit()
     await db.refresh(alert)
     alert_summary = to_operational_alert_summary(alert)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="alert.resolved" if payload.status == "Resolved" else "alert.updated",
-            data=alert_summary.model_dump(mode="json"),
-        )
-    )
     await record_operational_log(
         db,
         category="IT Activity",
@@ -617,9 +599,6 @@ async def operational_websocket(
             else None
         )
         topology_membership = account_topology.membership if account_topology is not None else None
-        enterprise_code = (
-            account_topology.enterprise.official_code if account_topology is not None else None
-        )
 
     if account is None:
         await websocket.close(code=1008)
@@ -632,7 +611,6 @@ async def operational_websocket(
         websocket,
         account.role.value,
         account.id,
-        enterprise_code,
         topology_enterprise_id=(
             topology_membership.enterprise_id if topology_membership is not None else None
         ),
@@ -734,7 +712,7 @@ async def notify_enterprise_ticket_update(
         or recipient.activated_at is None
     ):
         return
-    notification = await create_user_notification(
+    await create_user_notification(
         db,
         recipient=recipient,
         title=title,
@@ -744,12 +722,6 @@ async def notify_enterprise_ticket_update(
         actor=actor,
         source_type="support.ticket",
         source_id=ticket.id,
-    )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.created",
-            data=notification.model_dump(mode="json"),
-        )
     )
 
 

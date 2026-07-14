@@ -1,6 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
-import type { GatewayStatus, MapEnterprise, MapSite, PriorityAlert } from "../types";
+import type { GatewayStatus, MapEnterprise, MapSite } from "../types";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -20,35 +20,30 @@ export type BackendNotification = {
   readAt: string | null;
 };
 
-export type OperationalWebSocketEnvelope =
-  | {
-      type: "resource.invalidated";
-      data: {
-        contractVersion: 2;
-        eventId: string;
-        eventKey: string;
-        eventType: string;
-        resource: {
-          type: "site_live_state" | "operational_alert" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation";
-          id: string;
-          version: number;
-        };
-        scope: {
-          classification: "official" | "simulation";
-          enterpriseId: string | null;
-          siteId: string | null;
-        };
-        invalidates: string[];
-        audienceRoles: string[];
-        occurredAt: string;
-        refetchRequired: true;
-      };
-    }
-  | { type: "alert.created"; data: PriorityAlert }
-  | { type: "alert.updated"; data: PriorityAlert }
-  | { type: "alert.resolved"; data: PriorityAlert }
-  | { type: "notification.created"; data: BackendNotification }
-  | { type: "notification.updated"; data: BackendNotification };
+export type OperationalWebSocketEnvelope = {
+  type: "resource.invalidated";
+  data: {
+    contractVersion: 2;
+    eventId: string;
+    eventKey: string;
+    eventType: string;
+    resource: {
+      type: "site_live_state" | "operational_alert" | "user_notification" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation";
+      id: string;
+      version: number;
+    };
+    scope: {
+      classification: "official" | "simulation";
+      enterpriseId: string | null;
+      siteId: string | null;
+      recipientAccountId: string | null;
+    };
+    invalidates: string[];
+    audienceRoles: string[];
+    occurredAt: string;
+    refetchRequired: true;
+  };
+};
 
 type SiteLiveStateResponse = {
   freshnessState: "fresh" | "stale" | "offline";
@@ -159,11 +154,7 @@ function mapStatus(resource: EnterpriseSiteResponse): MapEnterprise["status"] {
   if (resource.enterpriseLifecycleState === "inactive") return "Warning";
   if (resource.topologyStatus === "unlinked" || resource.liveState === null) return "No Data";
   if (resource.liveState.freshnessState === "offline" || resource.liveState.serviceState === "unavailable") return "Critical";
-  if (
-    resource.liveState.freshnessState === "stale" ||
-    resource.liveState.serviceState !== "healthy" ||
-    (resource.liveState.syncHealth.pendingCount ?? 0) > 0
-  ) {
+  if (resource.liveState.freshnessState === "stale" || resource.liveState.serviceState !== "healthy" || (resource.liveState.syncHealth.pendingCount ?? 0) > 0) {
     return "Warning";
   }
   return "Normal";
@@ -174,11 +165,7 @@ function gatewayStatus(resource: EnterpriseSiteResponse): GatewayStatus {
   if (resource.topologyStatus === "unlinked") return "Not Linked";
   if (resource.topologyStatus === "ambiguous" || resource.liveState === null) return "Offline";
   if (resource.liveState.freshnessState === "offline" || resource.liveState.serviceState === "unavailable") return "Offline";
-  if (
-    resource.liveState.freshnessState === "stale" ||
-    resource.liveState.serviceState !== "healthy" ||
-    (resource.liveState.syncHealth.pendingCount ?? 0) > 0
-  ) {
+  if (resource.liveState.freshnessState === "stale" || resource.liveState.serviceState !== "healthy" || (resource.liveState.syncHealth.pendingCount ?? 0) > 0) {
     return "Sync Delayed";
   }
   return "Connected";

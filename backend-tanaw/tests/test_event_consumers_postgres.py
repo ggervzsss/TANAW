@@ -37,6 +37,7 @@ from app.features.events.realtime import (
 )
 from app.features.operational.models import MockDataRun, UserNotification
 from app.features.operational.schemas import OperationalWebSocketEnvelope
+from app.features.operational.service import create_user_notification
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
@@ -279,6 +280,51 @@ async def test_reminder_projection_is_exact_once_and_topology_scoped_with_two_wo
 
 
 @pytest.mark.asyncio
+async def test_notification_mutation_commits_its_realtime_delivery_atomically(
+    consumer_runtime: ConsumerRuntime,
+) -> None:
+    recipient = await _account(consumer_runtime, role=AccountRole.ADMIN)
+
+    async with consumer_runtime.sessions() as db:
+        notification = await create_user_notification(
+            db,
+            recipient=recipient,
+            title="Durable notification",
+            message="Refetch the authoritative notification resource.",
+            notification_type="Test",
+            severity="Info",
+            actor=recipient,
+            source_type="test.resource",
+            source_id=str(uuid4()),
+        )
+        event = await db.scalar(
+            select(DomainEvent).where(
+                DomainEvent.aggregate_type == "user_notification",
+                DomainEvent.aggregate_id == notification.id,
+            )
+        )
+        assert event is not None
+        consumer_runtime.event_ids.append(event.id)
+        delivery = await db.scalar(
+            select(DomainEventDelivery).where(DomainEventDelivery.domain_event_id == event.id)
+        )
+
+    assert event.event_type == "user_notification.created.v2"
+    assert event.actor_account_id == recipient.id
+    assert event.classification == "official"
+    assert json.loads(event.payload_json) == {
+        "contractVersion": 2,
+        "eventType": "user_notification.created.v2",
+        "notificationId": notification.id,
+        "recipientAccountId": recipient.id,
+        "recipientRole": "admin",
+    }
+    assert delivery is not None
+    assert delivery.destination == "realtime_broadcast"
+    assert delivery.status == "pending"
+
+
+@pytest.mark.asyncio
 async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
     consumer_runtime: ConsumerRuntime,
 ) -> None:
@@ -344,6 +390,7 @@ async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
                 "classification": "official",
                 "enterpriseId": None,
                 "siteId": None,
+                "recipientAccountId": None,
             },
             "invalidates": [f"reporting-period-compliance:{event.aggregate_id}"],
             "audienceRoles": ["staff", "admin"],

@@ -5,12 +5,6 @@ from app.features.operational.service import (
 )
 
 
-def test_it_receives_live_alert_websocket_events() -> None:
-    assert can_view_operational_event("it", "alert.created")
-    assert can_view_operational_event("it", "alert.updated")
-    assert can_view_operational_event("it", "alert.resolved")
-
-
 def test_websocket_authorization_rejects_removed_event_contracts() -> None:
     for event_type in (
         "telemetry.snapshot",
@@ -19,18 +13,20 @@ def test_websocket_authorization_rejects_removed_event_contracts() -> None:
         "report.updated",
         "final_report.generated",
         "final_report.updated",
+        "alert.created",
+        "alert.updated",
+        "alert.resolved",
+        "notification.created",
+        "notification.updated",
     ):
         assert not can_view_operational_event("admin", event_type)
         assert not can_view_operational_event("staff", event_type)
         assert not can_view_operational_event("enterprise", event_type)
 
 
-def test_target_notifications_and_invalidations_are_role_scoped() -> None:
+def test_target_invalidations_are_role_scoped() -> None:
     for role in ("admin", "it", "staff", "enterprise"):
-        assert can_view_operational_event(role, "notification.created")
         assert can_view_operational_event(role, "resource.invalidated")
-    assert not can_view_operational_event("staff", "alert.created")
-    assert not can_view_operational_event("enterprise", "alert.created")
 
 
 def test_notification_setting_uses_stable_typed_key() -> None:

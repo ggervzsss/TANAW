@@ -19,9 +19,42 @@ export type BackendNotification = {
   readAt: string | null;
 };
 
-export type OperationalNotificationEnvelope =
-  | { type: "notification.created"; data: BackendNotification }
-  | { type: "notification.updated"; data: BackendNotification };
+export type OperationalNotificationEnvelope = {
+  type: "resource.invalidated";
+  data: {
+    contractVersion: 2;
+    resource: { type: "user_notification"; id: string; version: number };
+    scope: { classification: "official"; recipientAccountId: string | null };
+    refetchRequired: true;
+  };
+};
+
+export function parseOperationalNotificationInvalidation(value: string, recipientAccountId: string | undefined): OperationalNotificationEnvelope | null {
+  if (!recipientAccountId) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed) || parsed.type !== "resource.invalidated" || !isRecord(parsed.data)) return null;
+
+    const { data } = parsed;
+    if (!isRecord(data.resource) || !isRecord(data.scope)) return null;
+    if (
+      data.contractVersion !== 2 ||
+      data.resource.type !== "user_notification" ||
+      typeof data.resource.id !== "string" ||
+      typeof data.resource.version !== "number" ||
+      data.scope.classification !== "official" ||
+      data.scope.recipientAccountId !== recipientAccountId ||
+      data.refetchRequired !== true
+    ) {
+      return null;
+    }
+
+    return parsed as OperationalNotificationEnvelope;
+  } catch {
+    return null;
+  }
+}
 
 export async function listNotifications() {
   const response = await staffApi.get<BackendNotification[]>("/operational/notifications");
@@ -46,4 +79,8 @@ export function getOperationalWebSocketUrl() {
 export function createWebSocketAuthMessage() {
   const token = useAuthStore.getState().token;
   return token ? JSON.stringify({ type: "auth", token }) : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

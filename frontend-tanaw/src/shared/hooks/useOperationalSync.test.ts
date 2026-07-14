@@ -6,7 +6,6 @@ import { createOperationalQueryKeys, handleOperationalEnvelope, operationalMapEn
 import { reportingAccountScope } from "./useReportWorkflow";
 
 vi.mock("@/app/store/authStore", () => ({ useAuthStore: vi.fn() }));
-vi.mock("react-hot-toast/headless", () => ({ default: { error: vi.fn() } }));
 
 const user = createUser("account-1", "staff");
 
@@ -68,6 +67,17 @@ describe("operational realtime reconciliation", () => {
     expect(client.getQueryState(keys.alerts)?.isInvalidated).toBe(true);
   });
 
+  it("refetches account-scoped notifications from durable invalidations", () => {
+    const client = createClient();
+    const keys = createOperationalQueryKeys(user);
+    client.setQueryData(keys.notifications, []);
+
+    handleOperationalEnvelope(client, keys, invalidationEnvelope("user_notification"));
+
+    expect(client.getQueryState(keys.notifications)?.isInvalidated).toBe(true);
+    expect(client.getQueryData(keys.notifications)).toEqual([]);
+  });
+
   it("ignores simulation invalidations in the official portal cache", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
@@ -78,10 +88,12 @@ describe("operational realtime reconciliation", () => {
 
     expect(client.getQueryState(queryKey)?.isInvalidated).toBe(false);
   });
-
 });
 
-function invalidationEnvelope(resourceType: "site_live_state" | "operational_alert" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation", classification: "official" | "simulation" = "official") {
+function invalidationEnvelope(
+  resourceType: "site_live_state" | "operational_alert" | "user_notification" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation",
+  classification: "official" | "simulation" = "official",
+) {
   return JSON.stringify({
     type: "resource.invalidated",
     data: {
@@ -90,7 +102,7 @@ function invalidationEnvelope(resourceType: "site_live_state" | "operational_ale
       eventKey: "resource:1",
       eventType: "resource.changed.v2",
       resource: { type: resourceType, id: "resource-1", version: 4 },
-      scope: { classification, enterpriseId: "enterprise-1", siteId: "site-1" },
+      scope: { classification, enterpriseId: "enterprise-1", siteId: "site-1", recipientAccountId: null },
       invalidates: ["/operational/reports/v2"],
       audienceRoles: ["staff"],
       occurredAt: "2026-07-13T08:00:00Z",
@@ -104,5 +116,22 @@ function createClient() {
 }
 
 function createUser(id: string, role: AuthUser["role"]): AuthUser {
-  return { id, email: `${id}@example.test`, displayName: id, role, title: "Operator", phone: null, firstName: null, lastName: null, enterpriseId: role === "enterprise" ? "enterprise-1" : null, enterpriseName: null, category: null, managerName: null, barangay: null, address: null, buildingCapacity: 0, displayImageUrl: null };
+  return {
+    id,
+    email: `${id}@example.test`,
+    displayName: id,
+    role,
+    title: "Operator",
+    phone: null,
+    firstName: null,
+    lastName: null,
+    enterpriseId: role === "enterprise" ? "enterprise-1" : null,
+    enterpriseName: null,
+    category: null,
+    managerName: null,
+    barangay: null,
+    address: null,
+    buildingCapacity: 0,
+    displayImageUrl: null,
+  };
 }

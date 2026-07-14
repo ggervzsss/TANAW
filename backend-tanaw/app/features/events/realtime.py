@@ -38,6 +38,7 @@ class _Invalidation:
     resource_version: int
     invalidates: tuple[str, ...]
     audience_roles: tuple[str, ...]
+    recipient_account_id: str | None = None
 
 
 class RealtimePublisher(Protocol):
@@ -395,6 +396,53 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
             audience_roles=roles,
         )
 
+    if event.event_type in {
+        "operational_alert.created.v2",
+        "operational_alert.updated.v2",
+        "operational_alert.resolved.v2",
+    }:
+        alert_id = _string(payload.get("operationalAlertId"))
+        if (
+            alert_id is None
+            or alert_id != event.aggregate_id
+            or event.aggregate_type != "operational_alert"
+            or event.enterprise_id is not None
+            or event.site_id is not None
+        ):
+            raise _invalid_realtime_event("An operational-alert event has an invalid scope.")
+        return _Invalidation(
+            resource_type="operational_alert",
+            resource_id=alert_id,
+            resource_version=event.aggregate_version,
+            invalidates=("/operational/alerts", "/operational/summary"),
+            audience_roles=roles,
+        )
+
+    if event.event_type in {
+        "user_notification.created.v2",
+        "user_notification.updated.v2",
+    }:
+        notification_id = _string(payload.get("notificationId"))
+        recipient_account_id = _string(payload.get("recipientAccountId"))
+        recipient_role = _string(payload.get("recipientRole"))
+        if (
+            notification_id is None
+            or notification_id != event.aggregate_id
+            or recipient_account_id is None
+            or recipient_role is None
+            or event.aggregate_type != "user_notification"
+            or event.site_id is not None
+        ):
+            raise _invalid_realtime_event("A user-notification event has an invalid scope.")
+        return _Invalidation(
+            resource_type="user_notification",
+            resource_id=notification_id,
+            resource_version=event.aggregate_version,
+            invalidates=("/operational/notifications",),
+            audience_roles=roles,
+            recipient_account_id=recipient_account_id,
+        )
+
     if event.event_type.startswith("enterprise_report."):
         if event.event_type not in {
             "enterprise_report.revision_submitted",
@@ -515,6 +563,11 @@ def _audience_roles(event: DomainEventEnvelope) -> tuple[str, ...]:
         return ("admin", "it", "enterprise")
     if event.event_type.startswith("sync_health."):
         return ("admin", "it")
+    if event.event_type.startswith("operational_alert."):
+        return ("admin", "it")
+    if event.event_type.startswith("user_notification."):
+        recipient_role = _string(event.payload.get("recipientRole"))
+        return (recipient_role,) if recipient_role in {"admin", "it", "staff", "enterprise"} else ()
     if event.event_type == "enterprise_report.revision_submitted":
         return ("staff", "enterprise")
     if event.event_type.startswith("enterprise_report."):
@@ -550,6 +603,7 @@ def _envelope(
                 "classification": event.classification,
                 "enterpriseId": event.enterprise_id,
                 "siteId": event.site_id,
+                "recipientAccountId": invalidation.recipient_account_id,
             },
             "invalidates": list(invalidation.invalidates),
             "audienceRoles": list(invalidation.audience_roles),
