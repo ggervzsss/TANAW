@@ -10,8 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.alerts.models import SiteSyncAlertState
 from app.features.events.models import DomainEvent, DomainEventDelivery
-from app.features.operational.models import MockDataRun
+from app.features.operational.models import MockDataRun, OperationalAlert
+from app.features.operational.service import to_operational_alert_summary
 from app.features.telemetry.envelopes import EpochStartCommand, TelemetryCommand
 from app.features.telemetry.models import (
     DeviceHealthSample,
@@ -174,6 +176,147 @@ async def test_epoch_and_observation_are_exactly_idempotent_and_auditable(
             command=TelemetryCommand.model_validate(hash_conflict_payload),
             acknowledged_at=BASE_TIME + timedelta(minutes=1),
         )
+
+
+@pytest.mark.asyncio
+async def test_durable_sync_health_opens_one_alert_and_auto_resolves(
+    telemetry_session: AsyncSession,
+) -> None:
+    scope = await _seed_scope(telemetry_session, classification="official")
+    epoch = await register_epoch_command(
+        telemetry_session,
+        account=scope["account"],
+        command=EpochStartCommand.model_validate(_epoch_command(scope["device"], 0)),
+        acknowledged_at=BASE_TIME - timedelta(seconds=5),
+    )
+
+    healthy_payload = _telemetry_command(
+        scope,
+        counter_epoch=str(epoch.resource.counterEpoch),
+        generation=epoch.resource.epochGeneration,
+        sequence=1,
+        site_entries=1,
+    )
+    healthy_payload["payload"]["syncHealth"] = {
+        "evidenceStatus": "recorded",
+        "pendingCount": 1,
+        "oldestPendingAt": (BASE_TIME - timedelta(seconds=10)).isoformat(),
+        "lastAcknowledgedAt": (BASE_TIME - timedelta(seconds=3)).isoformat(),
+        "lastFailureAt": None,
+        "lastFailureClass": None,
+    }
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(healthy_payload),
+        acknowledged_at=BASE_TIME + timedelta(seconds=1),
+    )
+    assert await telemetry_session.scalar(select(func.count(SiteSyncAlertState.id))) == 0
+
+    delayed_payload = _telemetry_command(
+        scope,
+        counter_epoch=str(epoch.resource.counterEpoch),
+        generation=epoch.resource.epochGeneration,
+        sequence=2,
+        site_entries=2,
+    )
+    delayed_payload["payload"]["syncHealth"] = {
+        "evidenceStatus": "recorded",
+        "pendingCount": 10,
+        "oldestPendingAt": (BASE_TIME - timedelta(seconds=301)).isoformat(),
+        "lastAcknowledgedAt": (BASE_TIME - timedelta(seconds=3)).isoformat(),
+        "lastFailureAt": BASE_TIME.isoformat(),
+        "lastFailureClass": "network_unavailable",
+    }
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(delayed_payload),
+        acknowledged_at=BASE_TIME + timedelta(seconds=2),
+    )
+    state = await telemetry_session.scalar(select(SiteSyncAlertState))
+    assert state is not None
+    assert state.status == "active"
+    alert = await telemetry_session.get(OperationalAlert, state.operational_alert_id)
+    assert alert is not None
+    assert alert.status == "New"
+    alert_summary = to_operational_alert_summary(alert)
+    assert alert_summary.type == "Sync Delay"
+    assert alert_summary.resolutionMode == "Automatic Health Recovery"
+
+    repeated_payload = _telemetry_command(
+        scope,
+        counter_epoch=str(epoch.resource.counterEpoch),
+        generation=epoch.resource.epochGeneration,
+        sequence=3,
+        site_entries=3,
+    )
+    repeated_payload["payload"]["syncHealth"] = delayed_payload["payload"]["syncHealth"]
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(repeated_payload),
+        acknowledged_at=BASE_TIME + timedelta(seconds=3),
+    )
+    assert await telemetry_session.scalar(select(func.count(SiteSyncAlertState.id))) == 1
+    assert (
+        await telemetry_session.scalar(
+            select(func.count(OperationalAlert.id)).where(
+                OperationalAlert.source_id == f"sync-health:{scope['site']}"
+            )
+        )
+        == 1
+    )
+
+    recovered_payload = _telemetry_command(
+        scope,
+        counter_epoch=str(epoch.resource.counterEpoch),
+        generation=epoch.resource.epochGeneration,
+        sequence=4,
+        site_entries=4,
+    )
+    await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(recovered_payload),
+        acknowledged_at=BASE_TIME + timedelta(seconds=4),
+    )
+    await telemetry_session.refresh(state)
+    await telemetry_session.refresh(alert)
+    assert state.status == "resolved"
+    assert state.resolved_at == BASE_TIME + timedelta(seconds=4)
+    assert alert.status == "Resolved"
+    transitions = list(
+        await telemetry_session.scalars(
+            select(DomainEvent.event_type)
+            .where(DomainEvent.aggregate_type == "site_sync_health")
+            .order_by(DomainEvent.aggregate_version)
+        )
+    )
+    assert transitions == [
+        "sync_health.alert_opened",
+        "sync_health.alert_resolved",
+    ]
+
+    stale_payload = _telemetry_command(
+        scope,
+        counter_epoch=str(epoch.resource.counterEpoch),
+        generation=epoch.resource.epochGeneration,
+        sequence=5,
+        site_entries=5,
+    )
+    stale_payload["payload"]["observedAt"] = (BASE_TIME - timedelta(minutes=10)).isoformat()
+    stale_payload["payload"]["metrics"] = []
+    stale_payload["payload"]["syncHealth"] = delayed_payload["payload"]["syncHealth"]
+    acknowledgement = await ingest_telemetry_command(
+        telemetry_session,
+        account=scope["account"],
+        command=TelemetryCommand.model_validate(stale_payload),
+        acknowledged_at=BASE_TIME + timedelta(seconds=5),
+    )
+    await telemetry_session.refresh(state)
+    assert acknowledgement.resource.becameCurrent is False
+    assert state.status == "resolved"
 
 
 @pytest.mark.asyncio

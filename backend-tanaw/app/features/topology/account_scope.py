@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.alerts.models import SiteSyncAlertState
 from app.features.telemetry.models import SiteLiveState
+from app.features.telemetry.sync_health import evaluate_sync_health
 from app.features.topology.models import (
     EdgeDevice,
     Enterprise,
@@ -36,6 +38,7 @@ class AccountTopology:
     active_devices: tuple[EdgeDevice, ...]
     live_state: SiteLiveState | None
     evaluated_at: datetime
+    sync_alert_state: SiteSyncAlertState | None = None
 
     @property
     def official_code(self) -> str:
@@ -54,17 +57,18 @@ class AccountTopology:
         evaluated_at = _as_utc(self.evaluated_at)
         if evaluated_at >= _as_utc(state.offline_after_at) or state.service_state == "unavailable":
             return "Offline"
+        sync_health = evaluate_sync_health(
+            evaluated_at=evaluated_at,
+            pending_count=state.pending_count,
+            oldest_pending_at=state.oldest_pending_at,
+            alert_is_active=(
+                self.sync_alert_state is not None and self.sync_alert_state.status == "active"
+            ),
+        )
         if (
             evaluated_at >= _as_utc(state.freshness_expires_at)
             or state.service_state == "degraded"
-            or (state.pending_count or 0) > 0
-            or (
-                state.last_failure_at is not None
-                and (
-                    state.last_acknowledged_at is None
-                    or _as_utc(state.last_failure_at) > _as_utc(state.last_acknowledged_at)
-                )
-            )
+            or sync_health.state in {"delayed", "recovering"}
         ):
             return "Sync Delayed"
         return "Connected"
@@ -222,6 +226,16 @@ async def load_account_topologies(
         await db.scalars(select(SiteLiveState).where(SiteLiveState.site_id.in_(site_ids)))
     )
     live_state_by_site = {state.site_id: state for state in live_states}
+    sync_alert_states = list(
+        await db.scalars(
+            _with_lock(
+                select(SiteSyncAlertState).where(SiteSyncAlertState.site_id.in_(site_ids)),
+                SiteSyncAlertState,
+                lock,
+            )
+        )
+    )
+    sync_alert_state_by_site = {state.site_id: state for state in sync_alert_states}
 
     resolved: dict[str, AccountTopology | None] = {}
     for account in accounts:
@@ -244,6 +258,7 @@ async def load_account_topologies(
             active_devices=active_devices,
             live_state=live_state_by_site.get(site.id),
             evaluated_at=evaluated_at,
+            sync_alert_state=sync_alert_state_by_site.get(site.id),
         )
     return resolved
 

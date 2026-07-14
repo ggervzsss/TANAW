@@ -17,7 +17,7 @@ type TypeFilter = "All Types" | PriorityAlertType;
 
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info"];
 const statusFilters: StatusFilter[] = ["All Statuses", "New", "In Review", "Resolved"];
-const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Failed Login Threshold"];
+const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Failed Login Threshold", "Sync Delay"];
 
 export function ITAlertsPage() {
   const queryClient = useQueryClient();
@@ -133,7 +133,7 @@ export function ITAlertsPage() {
                       <StatusButton disabled={alert.status === "In Review" || alert.status === "Resolved"} onClick={() => handleStatusChange(alert, "In Review")}>
                         Review
                       </StatusButton>
-                      <StatusButton disabled={alert.status === "Resolved"} onClick={() => handleStatusChange(alert, "Resolved")}>
+                      <StatusButton disabled={alert.status === "Resolved" || alert.resolutionMode === "Automatic Health Recovery"} onClick={() => handleStatusChange(alert, "Resolved")}>
                         Resolve
                       </StatusButton>
                     </div>

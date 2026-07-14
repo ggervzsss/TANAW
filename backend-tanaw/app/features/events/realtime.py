@@ -365,6 +365,36 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
             audience_roles=roles,
         )
 
+    if event.event_type in {
+        "sync_health.alert_opened",
+        "sync_health.alert_updated",
+        "sync_health.alert_resolved",
+    }:
+        condition_state_id = _string(payload.get("conditionStateId"))
+        operational_alert_id = _string(payload.get("operationalAlertId"))
+        enterprise_id = _string(payload.get("enterpriseId"))
+        site_id = _string(payload.get("siteId"))
+        if (
+            condition_state_id is None
+            or condition_state_id != event.aggregate_id
+            or operational_alert_id is None
+            or enterprise_id != event.enterprise_id
+            or site_id != event.site_id
+            or event.aggregate_type != "site_sync_health"
+            or event.enterprise_id is None
+            or event.site_id is None
+        ):
+            raise _invalid_realtime_event(
+                "A sync-health alert event has an invalid resource scope."
+            )
+        return _Invalidation(
+            resource_type="operational_alert",
+            resource_id=operational_alert_id,
+            resource_version=event.aggregate_version,
+            invalidates=("/operational/alerts", "/operational/summary"),
+            audience_roles=roles,
+        )
+
     if event.event_type.startswith("enterprise_report."):
         if event.event_type not in {
             "enterprise_report.revision_submitted",
@@ -483,6 +513,8 @@ def _audience_roles(event: DomainEventEnvelope) -> tuple[str, ...]:
         return ()
     if event.event_type.startswith("telemetry."):
         return ("admin", "it", "enterprise")
+    if event.event_type.startswith("sync_health."):
+        return ("admin", "it")
     if event.event_type == "enterprise_report.revision_submitted":
         return ("staff", "enterprise")
     if event.event_type.startswith("enterprise_report."):

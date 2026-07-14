@@ -425,6 +425,7 @@ class OperationalAlertSummary(BaseModel):
         "Foot Traffic Alert",
         "Occupancy Spike",
         "Failed Login Threshold",
+        "Sync Delay",
     ]
     severity: Literal["Info", "Warning", "Critical"]
     enterprise: str | None = None
@@ -437,6 +438,7 @@ class OperationalAlertSummary(BaseModel):
         "Staff Follow-up",
         "Remote Review",
         "Admin Monitoring",
+        "Automatic Health Recovery",
     ]
     status: Literal["New", "In Review", "Resolved"]
     owner: Literal["IT", "Admin", "System"]

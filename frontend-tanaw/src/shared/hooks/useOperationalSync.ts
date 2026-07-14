@@ -209,6 +209,10 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
       invalidate(queryClient, keys.mapEnterprises, keys.telemetry, keys.summary);
       return;
     }
+    if (resourceType === "operational_alert") {
+      invalidate(queryClient, keys.alerts, keys.summary);
+      return;
+    }
     if (resourceType === "enterprise_report" || resourceType === "final_report" || resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {
       invalidate(queryClient, reportWorkflowQueryKey, operationalSummaryQueryKey, operationalNotificationsQueryKey);
       return;

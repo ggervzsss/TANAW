@@ -61,8 +61,8 @@ export type SystemActivity = {
   requiresEnterpriseAttention?: boolean;
 };
 
-export type PriorityAlertType = "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Threshold Breach" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold";
-export type PriorityAlertResolutionMode = "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring";
+export type PriorityAlertType = "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Threshold Breach" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold" | "Sync Delay";
+export type PriorityAlertResolutionMode = "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring" | "Automatic Health Recovery";
 export type PriorityAlertStatus = "New" | "In Review" | "Resolved";
 export type PriorityAlertOwner = "IT" | "Admin" | "System";
 

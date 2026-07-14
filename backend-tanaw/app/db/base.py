@@ -10,6 +10,7 @@ from app.features.accounts.models import (
     SystemConfiguration,
 )
 from app.features.activity_logs.models import ActivityLog
+from app.features.alerts.models import SiteSyncAlertState
 from app.features.auth.models import (
     AccountActivationToken,
     PasswordResetChallenge,
@@ -96,6 +97,7 @@ __all__ = [
     "DeviceHealthSample",
     "DeviceTelemetryEpoch",
     "SiteTelemetryHourlyRollup",
+    "SiteSyncAlertState",
     "DomainEvent",
     "DomainEventConsumerReceipt",
     "DomainEventDelivery",

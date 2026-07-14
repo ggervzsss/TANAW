@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.features.accounts.models import Account
+from app.features.alerts.sync_health import reconcile_site_sync_alert
 from app.features.events.models import DomainEvent, DomainEventDelivery
 from app.features.telemetry.contracts import (
     ERROR_CAMERA_HEALTH_STATES,
@@ -349,6 +350,16 @@ async def ingest_telemetry_command(
             received_at=acknowledged_at,
             live_state_version=live_state_version,
             db=db,
+        )
+        await reconcile_site_sync_alert(
+            db,
+            enterprise=access.enterprise,
+            site=site,
+            device=device,
+            sync=command.payload.syncHealth,
+            evaluated_at=acknowledged_at,
+            actor_account_id=account.id,
+            causation_id=observation.id,
         )
     await db.flush()
 

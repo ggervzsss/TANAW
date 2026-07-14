@@ -86,6 +86,18 @@ describe("operational realtime reconciliation", () => {
     },
   );
 
+  it("invalidates alerts and summary when durable sync health changes", () => {
+    const client = createClient();
+    const keys = createOperationalQueryKeys(user);
+    client.setQueryData(keys.alerts, []);
+    client.setQueryData(keys.summary, createSummary());
+
+    handleOperationalEnvelope(client, keys, invalidationEnvelope("operational_alert"));
+
+    expect(client.getQueryState(keys.alerts)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys.summary)?.isInvalidated).toBe(true);
+  });
+
   it("ignores simulation invalidations in the official portal cache", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
@@ -99,7 +111,7 @@ describe("operational realtime reconciliation", () => {
 
 });
 
-function invalidationEnvelope(resourceType: "site_live_state" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation", classification: "official" | "simulation" = "official") {
+function invalidationEnvelope(resourceType: "site_live_state" | "operational_alert" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation", classification: "official" | "simulation" = "official") {
   return JSON.stringify({
     type: "resource.invalidated",
     data: {

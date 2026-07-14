@@ -18,7 +18,7 @@ type TypeFilter = "All Types" | PriorityAlertType;
 
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info"];
 const statusFilters: StatusFilter[] = ["All Statuses", "New", "In Review", "Resolved"];
-const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Submission Delay", "Threshold Breach", "Foot Traffic Alert", "Occupancy Spike", "Failed Login Threshold"];
+const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Submission Delay", "Threshold Breach", "Foot Traffic Alert", "Occupancy Spike", "Failed Login Threshold", "Sync Delay"];
 const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 
 export function AdminAlertsMonitorPage() {

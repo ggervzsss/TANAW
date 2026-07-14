@@ -1023,6 +1023,11 @@ async def update_alert_status(
     )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found.")
+    if payload.status == "Resolved" and alert.resolution_mode == "Automatic Health Recovery":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This alert resolves only from authoritative sync-health recovery.",
+        )
     previous_status = alert.status
     alert.status = payload.status
     await db.commit()

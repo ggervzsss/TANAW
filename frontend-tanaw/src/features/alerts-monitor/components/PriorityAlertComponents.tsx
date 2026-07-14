@@ -83,6 +83,7 @@ export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode })
     "Staff Follow-up": "bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200",
     "Remote Review": "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
     "Admin Monitoring": "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200",
+    "Automatic Health Recovery": "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-200",
   };
   return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[mode]}`}>{mode}</span>;
 }

@@ -159,6 +159,55 @@ async def test_artifact_lifecycle_event_invalidates_final_report_reads() -> None
 
 
 @pytest.mark.asyncio
+async def test_sync_health_transition_invalidates_alerts_and_summary() -> None:
+    envelopes: list[dict[str, Any]] = []
+
+    async def broadcast(envelope: Any) -> None:
+        envelopes.append(envelope.model_dump(mode="json"))
+
+    condition_id = str(uuid4())
+    alert_id = str(uuid4())
+    base = _event(
+        event_type="sync_health.alert_opened",
+        payload={
+            "conditionStateId": condition_id,
+            "operationalAlertId": alert_id,
+            "enterpriseId": "placeholder",
+            "siteId": "placeholder",
+            "status": "active",
+            "pendingCount": 10,
+        },
+    )
+    event = replace(
+        base,
+        aggregate_type="site_sync_health",
+        aggregate_id=condition_id,
+        payload={
+            **base.payload,
+            "enterpriseId": base.enterprise_id,
+            "siteId": base.site_id,
+        },
+    )
+
+    await OperationalRealtimePublisher(broadcast=broadcast).publish(
+        topic="operational.resource-invalidations.v2",
+        event=event,
+        idempotency_key=event.event_key,
+    )
+
+    assert envelopes[0]["data"]["resource"] == {
+        "type": "operational_alert",
+        "id": alert_id,
+        "version": 3,
+    }
+    assert envelopes[0]["data"]["invalidates"] == [
+        "/operational/alerts",
+        "/operational/summary",
+    ]
+    assert envelopes[0]["data"]["audienceRoles"] == ["admin", "it"]
+
+
+@pytest.mark.asyncio
 async def test_realtime_handler_ignores_audit_and_out_of_order_events() -> None:
     broadcast = AsyncMock()
     handler = RealtimeBroadcastHandler(OperationalRealtimePublisher(broadcast=broadcast))

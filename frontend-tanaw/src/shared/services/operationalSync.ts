@@ -29,7 +29,7 @@ export type OperationalWebSocketEnvelope =
         eventKey: string;
         eventType: string;
         resource: {
-          type: "site_live_state" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation";
+          type: "site_live_state" | "operational_alert" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation";
           id: string;
           version: number;
         };
