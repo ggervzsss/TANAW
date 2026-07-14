@@ -3,8 +3,8 @@ from collections import defaultdict
 from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from app.features.alerts.service import can_view_operational_event
 from app.features.events.realtime_envelopes import OperationalWebSocketEnvelope
-from app.features.operational.service import can_view_operational_event
 
 
 class OperationalConnectionManager:

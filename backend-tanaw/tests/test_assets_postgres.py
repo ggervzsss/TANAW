@@ -20,19 +20,19 @@ from app.features.assets.service import (
     set_account_theme,
 )
 from app.features.assets.storage import LocalAssetStorage, validate_image
-from app.features.operational import service as operational_service
-from app.features.operational.service import (
-    create_support_ticket,
-    create_support_ticket_message,
-    get_support_attachment_for_account,
-    get_support_ticket_detail,
-    update_support_ticket_status,
-)
+from app.features.support import service as support_service
 from app.features.support.models import SupportTicket
 from app.features.support.schemas import (
     SupportTicketCreate,
     SupportTicketMessageCreate,
     SupportTicketStatusUpdate,
+)
+from app.features.support.service import (
+    create_support_ticket,
+    create_support_ticket_message,
+    get_support_attachment_for_account,
+    get_support_ticket_detail,
+    update_support_ticket_status,
 )
 from app.features.topology.account_scope import AccountTopology
 from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
@@ -178,7 +178,7 @@ async def test_normalized_preferences_profile_contact_and_ticket_assets(
         assert account.id == enterprise_account.id
         return topology
 
-    monkeypatch.setattr(operational_service, "require_account_topology", require_seeded_topology)
+    monkeypatch.setattr(support_service, "require_account_topology", require_seeded_topology)
     ticket = await create_support_ticket(
         db,
         enterprise_account,

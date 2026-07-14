@@ -1,6 +1,6 @@
-from app.features.operational.service import (
+from app.features.alerts.service import can_view_operational_event
+from app.features.notifications.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
-    can_view_operational_event,
     resolve_system_setting_enabled,
 )
 

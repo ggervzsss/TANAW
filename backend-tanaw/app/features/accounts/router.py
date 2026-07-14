@@ -63,7 +63,7 @@ from app.features.auth.email_change import (
     request_account_email_change,
     resolve_account_email_change,
 )
-from app.features.operational.service import create_user_notification
+from app.features.notifications.service import create_user_notification
 from app.features.topology.account_scope import (
     invalidate_site_coordinates,
     require_account_topology,

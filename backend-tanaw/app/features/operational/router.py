@@ -36,6 +36,7 @@ from app.features.activity_logs.service import create_activity_log
 from app.features.activity_logs.websocket import activity_log_manager
 from app.features.alerts.models import OperationalAlert
 from app.features.alerts.schemas import OperationalAlertStatusUpdate, OperationalAlertSummary
+from app.features.alerts.service import list_operational_alerts, to_operational_alert_summary
 from app.features.assets.runtime import get_asset_storage
 from app.features.assets.storage import (
     AssetStorage,
@@ -53,23 +54,12 @@ from app.features.notifications.schemas import (
     NotificationReadUpdate,
     UserNotificationSummary,
 )
-from app.features.operational.service import (
+from app.features.notifications.service import (
     create_role_notifications,
-    create_support_ticket,
-    create_support_ticket_message,
-    create_support_ticket_message_with_record,
     create_user_notification,
-    enterprise_identifier,
     get_enterprise_notification_recipient,
-    get_support_attachment_for_account,
-    get_support_ticket_detail,
-    get_support_ticket_for_account,
-    list_operational_alerts,
-    list_support_tickets,
     list_user_notifications,
     set_user_notification_read,
-    to_operational_alert_summary,
-    update_support_ticket_status,
 )
 from app.features.operational.websocket import operational_ws_manager
 from app.features.reporting.models import EnterpriseReport, ReportingObligation, ReportingPeriod
@@ -81,6 +71,17 @@ from app.features.support.schemas import (
     SupportTicketMessageCreate,
     SupportTicketStatusUpdate,
     SupportTicketSummary,
+)
+from app.features.support.service import (
+    create_support_ticket,
+    create_support_ticket_message,
+    create_support_ticket_message_with_record,
+    enterprise_identifier,
+    get_support_attachment_for_account,
+    get_support_ticket_detail,
+    get_support_ticket_for_account,
+    list_support_tickets,
+    update_support_ticket_status,
 )
 from app.features.topology.account_scope import load_account_topology, require_account_topology
 

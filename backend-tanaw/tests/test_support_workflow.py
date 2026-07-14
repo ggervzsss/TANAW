@@ -7,9 +7,9 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.alerts.models import OperationalAlert
 from app.features.auth.router import create_support_request
 from app.features.auth.schemas import SupportRequest
-from app.features.operational.service import create_support_ticket_message
 from app.features.support.models import SupportTicket
 from app.features.support.schemas import SupportTicketDetail, SupportTicketMessageCreate
+from app.features.support.service import create_support_ticket_message
 
 
 def _account(*, role: AccountRole) -> Account:
@@ -95,7 +95,7 @@ async def test_ticket_messages_apply_role_appropriate_status(
     )
     detail = MagicMock(spec=SupportTicketDetail)
     get_detail = AsyncMock(return_value=detail)
-    monkeypatch.setattr("app.features.operational.service.get_support_ticket_detail", get_detail)
+    monkeypatch.setattr("app.features.support.service.get_support_ticket_detail", get_detail)
     db = MagicMock()
     db.commit = AsyncMock()
     db.execute = AsyncMock()

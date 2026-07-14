@@ -39,6 +39,7 @@ from app.features.accounts.service import (
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log, get_actor_role_label
 from app.features.activity_logs.websocket import activity_log_manager
+from app.features.alerts.service import create_operational_alert
 from app.features.assets.runtime import get_asset_storage
 from app.features.assets.service import (
     delete_profile_asset,
@@ -103,9 +104,8 @@ from app.features.auth.service import (
     register_failed_login,
     resolve_login_lockout_policy,
 )
-from app.features.operational.service import (
+from app.features.notifications.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
-    create_operational_alert,
     create_role_notifications,
     system_setting_enabled,
 )
