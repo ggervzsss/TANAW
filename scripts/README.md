@@ -1,6 +1,6 @@
 # TANAW utility scripts
 
-Run these target-generation utilities from the repository root.
+Run these TANAW utilities from the repository root.
 
 Linux, macOS, WSL, and Git Bash:
 
@@ -49,16 +49,17 @@ projections, and occupancy corrections. It preserves saved camera settings,
 Electron preferences, authentication storage, and other device state. It does
 not remove central PostgreSQL data.
 
-`migrate_local_edge_ledger_v8.py` is the external pre-install cutover tool for
-an existing v5, v6, or v7 SQLite ledger. It is not packaged with the target
-desktop runtime. See
-[`docs/architecture/LOCAL_EDGE_LEDGER.md`](../docs/architecture/LOCAL_EDGE_LEDGER.md)
-before using it.
+Local-ledger schema 8 is initialized automatically. Use `local-data-reset` when
+you intentionally want to clear disposable device data, then start the desktop
+application to initialize the ledger again. See
+[`docs/architecture/LOCAL_EDGE_LEDGER.md`](../docs/architecture/LOCAL_EDGE_LEDGER.md).
 
-`verify_target_release.py` produces the deterministic target release inventory.
+`verify_release.py` produces the deterministic release inventory.
 Run it with `--require-builds` only after both production applications have
 been built:
 
 ```shell
-python3 scripts/verify_target_release.py --require-builds
+python3 scripts/verify_release.py
 ```
+
+Add `--require-builds` only when validating final production build directories.

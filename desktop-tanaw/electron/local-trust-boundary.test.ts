@@ -28,13 +28,11 @@ describe("Electron-to-ML trust-boundary source invariants", () => {
   it("does not fall back to browser credential persistence", () => {
     expect(credentialServiceSource).not.toMatch(/localStorage|sessionStorage|\.load\s*\(/);
     expect(credentialServiceSource).toContain("window.tanawCameraCredentials.save");
-    expect(rendererEntrySource).not.toMatch(/camera-credentials|localStorage|migrateLegacy/i);
-    expect(mainSource).not.toMatch(/raw\.version === [12]|encoding === "plain"|Legacy plaintext/i);
+    expect(rendererEntrySource).not.toMatch(/camera-credentials|localStorage/i);
     expect(mainSource).toContain('raw.version === 3 && raw.encoding === "safeStorage"');
   });
 
-  it("does not probe or trust the old fixed ML port", () => {
-    expect(mainSource).not.toMatch(/TANAW_ML_SERVICE_PORT|isMlServiceReachable|ConnectedExternally|127\.0\.0\.1:8765/);
+  it("allocates a private dynamic ML service port", () => {
     expect(pythonLauncherSource).toContain('listener.bind(("127.0.0.1", 0))');
     for (const documentation of [readmeSource, rootReadmeSource, rootTldrSource]) {
       expect(documentation).not.toMatch(/8765|TANAW_ML_SERVICE_(?:HOST|PORT)|curl\s+http:\/\/127\.0\.0\.1|Invoke-RestMethod\s+http:\/\/127\.0\.0\.1/i);

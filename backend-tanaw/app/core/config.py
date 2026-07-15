@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     minimum_client_version: str = "2.0.0"
     maximum_client_major_exclusive: int = Field(default=3, ge=3, le=3)
     client_contract_version: int = Field(default=2, ge=2, le=2)
-    target_release_id: str = "target-cutover-release"
+    release_id: str = Field(default="tanaw-release-2", validation_alias="TANAW_RELEASE_ID")
     bootstrap_it_username: str | None = Field(
         default=None,
         validation_alias="BOOTSTRAP_IT_USERNAME",
@@ -182,15 +182,15 @@ class Settings(BaseSettings):
             raise ValueError("MINIMUM_CLIENT_VERSION must be a semantic x.y.z version.")
         major = int(normalized.split(".", 1)[0])
         if major != 2:
-            raise ValueError("MINIMUM_CLIENT_VERSION must select target major version 2.")
+            raise ValueError("MINIMUM_CLIENT_VERSION must select supported major version 2.")
         return normalized
 
-    @field_validator("target_release_id")
+    @field_validator("release_id")
     @classmethod
-    def validate_target_release_id(cls, value: str) -> str:
+    def validate_release_id(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized or len(normalized) > 128 or not normalized.isascii():
-            raise ValueError("TARGET_RELEASE_ID must be a non-empty ASCII release identifier.")
+            raise ValueError("TANAW_RELEASE_ID must be a non-empty ASCII release identifier.")
         return normalized
 
     @field_validator(

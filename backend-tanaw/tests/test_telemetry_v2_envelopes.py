@@ -23,7 +23,7 @@ def test_epoch_command_requires_exact_device_epoch_idempotency_key() -> None:
         EpochStartCommand.model_validate(invalid)
 
 
-def test_telemetry_contract_rejects_legacy_aliases_and_client_scope() -> None:
+def test_telemetry_contract_rejects_unsupported_aliases_and_client_scope() -> None:
     payload = _telemetry_command()
     payload["payload"]["metrics"][0]["definition"] = "entries"
     with pytest.raises(ValidationError, match="not in the v2 catalog"):

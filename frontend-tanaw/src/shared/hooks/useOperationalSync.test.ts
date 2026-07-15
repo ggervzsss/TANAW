@@ -24,7 +24,7 @@ describe("operational realtime reconciliation", () => {
     expect(reportingAccountScope(user)).not.toEqual(reportingAccountScope(createUser("account-1", "admin")));
   });
 
-  it("refetches the target site registry for a version-only live-state event", () => {
+  it("refetches the site registry for a version-only live-state event", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
     client.setQueryData(keys.mapEnterprises, []);

@@ -21,29 +21,29 @@ from app.core.client_compatibility import (
 from app.core.config import Settings
 from app.main import app
 
-TARGET_HEADERS = {
+SUPPORTED_HEADERS = {
     CLIENT_NAME_HEADER: DESKTOP_CLIENT_NAME,
     CLIENT_VERSION_HEADER: "2.0.0",
     CONTRACT_VERSION_HEADER: "2",
-    RELEASE_ID_HEADER: "target-cutover-release",
+    RELEASE_ID_HEADER: "tanaw-release-2",
 }
 
 
 @pytest.mark.parametrize(
     ("generation", "supported"),
     [
-        (ClientGeneration("enterprise-desktop", "2.0.0", "2", "target-cutover-release"), True),
-        (ClientGeneration("enterprise-desktop", "2.99.99", "2", "target-cutover-release"), True),
-        (ClientGeneration("enterprise-desktop", "0.0.0", "2", "target-cutover-release"), False),
-        (ClientGeneration("enterprise-desktop", "1.9.9", "2", "target-cutover-release"), False),
-        (ClientGeneration("enterprise-desktop", "3.0.0", "2", "target-cutover-release"), False),
-        (ClientGeneration("enterprise-desktop", "2.0.0", "1", "target-cutover-release"), False),
+        (ClientGeneration("enterprise-desktop", "2.0.0", "2", "tanaw-release-2"), True),
+        (ClientGeneration("enterprise-desktop", "2.99.99", "2", "tanaw-release-2"), True),
+        (ClientGeneration("enterprise-desktop", "0.0.0", "2", "tanaw-release-2"), False),
+        (ClientGeneration("enterprise-desktop", "1.9.9", "2", "tanaw-release-2"), False),
+        (ClientGeneration("enterprise-desktop", "3.0.0", "2", "tanaw-release-2"), False),
+        (ClientGeneration("enterprise-desktop", "2.0.0", "1", "tanaw-release-2"), False),
         (ClientGeneration("enterprise-desktop", "2.0.0", "2", "another-release"), False),
-        (ClientGeneration("unknown-client", "2.0.0", "2", "target-cutover-release"), False),
+        (ClientGeneration("unknown-client", "2.0.0", "2", "tanaw-release-2"), False),
         (ClientGeneration(None, None, None, None), False),
     ],
 )
-def test_supported_client_generation_is_target_only(
+def test_supported_client_generation_is_exact(
     generation: ClientGeneration, supported: bool
 ) -> None:
     assert is_supported_client_generation(generation, Settings()) is supported
@@ -63,7 +63,7 @@ def test_outdated_desktop_is_rejected_before_business_body_parsing() -> None:
         "contractVersion": 2,
         "error": {
             "code": "CLIENT_UPGRADE_REQUIRED",
-            "message": "Update TANAW to the required target release before continuing.",
+            "message": "Update TANAW to the required release before continuing.",
             "retryable": False,
             "minimumClientVersion": "2.0.0",
             "requiredContractVersion": 2,
@@ -71,13 +71,13 @@ def test_outdated_desktop_is_rejected_before_business_body_parsing() -> None:
     }
 
 
-def test_target_desktop_generation_passes_the_cutover_boundary() -> None:
+def test_supported_desktop_generation_is_accepted() -> None:
     client = TestClient(app)
 
     response = client.post(
         "/operational/desktop/report-submissions/v2",
         content=b"{not-json",
-        headers={"Content-Type": "application/json", **TARGET_HEADERS},
+        headers={"Content-Type": "application/json", **SUPPORTED_HEADERS},
     )
 
     assert response.status_code != 426
@@ -93,19 +93,19 @@ def test_production_portal_generation_is_required_for_general_api_reads(
     client = TestClient(app)
 
     missing = client.get("/auth/me")
-    target = client.get(
+    supported = client.get(
         "/auth/me",
         headers={
             CLIENT_NAME_HEADER: PORTAL_CLIENT_NAME,
             CLIENT_VERSION_HEADER: "2.0.0",
             CONTRACT_VERSION_HEADER: "2",
-            RELEASE_ID_HEADER: "target-cutover-release",
+            RELEASE_ID_HEADER: "tanaw-release-2",
         },
     )
     health = client.get("/health")
 
     assert missing.status_code == 426
-    assert target.status_code != 426
+    assert supported.status_code != 426
     assert health.status_code == 200
 
 

@@ -1,4 +1,4 @@
-"""Target-only final-report persistence rooted at ``report_finalizations``."""
+"""Final-report persistence rooted at ``report_finalizations``."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -487,13 +487,13 @@ class FinalReportEvent(Base):
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_final_report_events_classification"),
         CheckConstraint(
-            "event_type IN ('version_finalized', 'migration_final_imported', "
-            "'artifact_ready', 'artifact_failed', 'artifact_retry_scheduled', "
+            "event_type IN ('version_finalized', 'artifact_ready', 'artifact_failed', "
+            "'artifact_retry_scheduled', "
             "'artifact_repair_requested')",
             name="ck_final_report_events_type",
         ),
         CheckConstraint(
-            "((event_type IN ('version_finalized', 'migration_final_imported') AND "
+            "((event_type = 'version_finalized' AND "
             "final_report_artifact_id IS NULL AND expected_version >= 0 AND "
             "resulting_version > expected_version) OR "
             "(event_type IN ('artifact_ready', 'artifact_failed', "

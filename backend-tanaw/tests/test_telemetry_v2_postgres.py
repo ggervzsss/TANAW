@@ -51,7 +51,7 @@ BASE_TIME = datetime(2026, 7, 13, 8, 15, 3, tzinfo=UTC)
 
 
 @pytest.mark.asyncio
-async def test_fleet_simulation_uses_sequenced_target_tables_and_is_idempotent(
+async def test_fleet_simulation_uses_sequenced_tables_and_is_idempotent(
     telemetry_session: AsyncSession,
 ) -> None:
     scope = await _seed_scope(telemetry_session, classification="simulation")
@@ -65,7 +65,7 @@ async def test_fleet_simulation_uses_sequenced_target_tables_and_is_idempotent(
     command = FleetSimulationCommand.model_validate(
         {
             "contractVersion": 2,
-            "runId": "fleet-target-contract",
+            "runId": "fleet-contract",
             "startedAt": observed_at.isoformat(),
             "elapsedSeconds": 0,
             "targets": [
@@ -92,7 +92,7 @@ async def test_fleet_simulation_uses_sequenced_target_tables_and_is_idempotent(
     )
     assert observation is not None
     assert observation.classification == "simulation"
-    assert observation.ordering_status == "sequenced"
+    assert observation.epoch_generation == 1
     assert await telemetry_session.scalar(select(func.count()).select_from(OperationalAlert)) == 0
     assert [item.enterpriseId for item in await list_simulation_enterprises(telemetry_session)] == [
         enterprise.official_code

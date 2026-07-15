@@ -31,7 +31,7 @@ let isQuitting = false;
 let rendererSecurityHeadersRegistered = false;
 
 const LOCAL_CONTRACT_VERSION = 2;
-const LOCAL_RELEASE_ID = "target-cutover-release";
+const LOCAL_RELEASE_ID = "tanaw-release-2";
 const LOCAL_SERVICE_NAME = "tanaw-ml-service";
 const CONTROLLED_ML_SERVICE_URL = "tanaw-ml://local";
 const CENTRAL_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";

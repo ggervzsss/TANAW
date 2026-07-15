@@ -62,7 +62,6 @@ def test_telemetry_and_event_schema_uses_native_uuid_and_creates_on_sqlite(
         "domain_event_delivery_attempts",
         "domain_event_consumer_receipts",
     }.issubset(Base.metadata.tables)
-    assert "telemetry_migration_exceptions" not in Base.metadata.tables
     assert SiteTelemetryHourlyRollup.__table__.c.bucket_start.primary_key is True
 
 
@@ -77,7 +76,7 @@ def test_sequenced_observation_can_project_valid_live_state(sqlite_engine: Engin
         assert state.metric_provenance == "camera_derived"
 
 
-def test_unsequenced_or_unknown_metrics_cannot_become_current(sqlite_engine: Engine) -> None:
+def test_invalid_observation_ordering_is_rejected(sqlite_engine: Engine) -> None:
     graph = _sequenced_graph(sqlite_engine)
     now = datetime(2026, 7, 13, 4, tzinfo=UTC)
 
@@ -88,8 +87,11 @@ def test_unsequenced_or_unknown_metrics_cannot_become_current(sqlite_engine: Eng
                 site_id=graph["site_id"],
                 edge_device_id=graph["device_id"],
                 classification="official",
-                ingest_kind="migration",
-                ordering_status="unsequenced_import",
+                telemetry_epoch_id=graph["epoch_id"],
+                epoch_generation=0,
+                sequence=-1,
+                command_id=str(uuid4()),
+                idempotency_key=f"invalid:{uuid4()}",
                 payload_hash=_HASH,
                 observed_at=now,
                 received_at=now,
@@ -99,44 +101,6 @@ def test_unsequenced_or_unknown_metrics_cannot_become_current(sqlite_engine: Eng
         with pytest.raises(IntegrityError):
             session.commit()
         session.rollback()
-
-        observation = TelemetryObservation(
-            id=str(uuid4()),
-            enterprise_id=graph["enterprise_id"],
-            site_id=graph["site_id"],
-            edge_device_id=graph["device_id"],
-            classification="official",
-            ingest_kind="migration",
-            ordering_status="unsequenced_import",
-            payload_hash=_HASH,
-            observed_at=now,
-            received_at=now,
-            became_current=False,
-        )
-        session.add(observation)
-        session.flush()
-        session.add(
-            TelemetryMetricFact(
-                telemetry_observation_id=observation.id,
-                enterprise_id=graph["enterprise_id"],
-                site_id=graph["site_id"],
-                classification="official",
-                fact_status="qualified",
-                definition="occupancy_current",
-                definition_version=1,
-                value=Decimal(1),
-                unit="people",
-                grain="site",
-                metric_window_start=now - timedelta(seconds=30),
-                metric_window_end=now,
-                timezone_name="Asia/Manila",
-                provenance="camera_derived",
-                quality="unknown",
-                coverage_evidence_status="not_recorded",
-            )
-        )
-        with pytest.raises(IntegrityError):
-            session.commit()
 
 
 def test_stale_live_state_cannot_retain_live_metrics(sqlite_engine: Engine) -> None:
@@ -242,8 +206,6 @@ def _sequenced_graph(engine: Engine) -> dict[str, str]:
             site_id=site_id,
             edge_device_id=device_id,
             classification="official",
-            ingest_kind="command",
-            ordering_status="sequenced",
             telemetry_epoch_id=epoch.id,
             epoch_generation=1,
             sequence=10,

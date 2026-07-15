@@ -309,7 +309,7 @@ async def test_staff_transition_is_versioned_idempotent_and_auditable(
         severity="Success",
         actor=staff.display_name,
         actor_role="LGU Staff",
-        action="Legacy Duplicate Report Audit",
+        action="Existing Duplicate Report Audit",
         target=str(submitted.resource.enterpriseReportId),
         summary="A purgeable convenience log must not own official workflow history.",
         source_id=str(submitted.resource.enterpriseReportId),

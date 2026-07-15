@@ -1,14 +1,10 @@
 import asyncio
-import base64
 import os
-import runpy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from app.features.accounts.models import Account
-from app.features.assets.models import AccountAsset, SupportAttachment
 from app.features.assets.storage import (
     AssetStorageConflict,
     AssetStorageError,
@@ -18,7 +14,6 @@ from app.features.assets.storage import (
     validate_image,
     verify_stored_image,
 )
-from app.features.support.models import SupportTicket
 from app.main import app
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nnormalized-asset-test"
@@ -116,41 +111,7 @@ def test_image_validation_requires_matching_mime_extension_signature_and_size() 
     assert '"official"' not in disposition
 
 
-def test_asset_cutover_is_irreversible_fail_closed_and_removes_blob_columns() -> None:
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "alembic"
-        / "versions"
-        / "20260714_0031_normalize_assets_and_preferences.py"
-    )
-    migration = runpy.run_path(str(path))
-    source = path.read_text()
-
-    assert migration["revision"] == "20260714_0031"
-    assert migration["down_revision"] == "20260714_0030"
-    assert 'op.drop_column("accounts", "preferences_json")' in source
-    assert 'op.drop_column("support_tickets", "attachments_json")' in source
-    assert "preferences_json" not in Account.__table__.c
-    assert "attachments_json" not in SupportTicket.__table__.c
-    assert "storage_key" in AccountAsset.__table__.c
-    assert "storage_key" in SupportAttachment.__table__.c
-
-    encoded = base64.b64encode(PNG_BYTES).decode("ascii")
-    image = migration["_decode_image"](
-        f"data:image/png;base64,{encoded}",
-        max_bytes=64,
-    )
-    assert image.content == PNG_BYTES
-    assert migration["_ALLOWED_PREFERENCE_KEYS"] == {
-        "theme",
-        "displayImageDataUrl",
-        "pendingContactNumberChange",
-    }
-    with pytest.raises(RuntimeError, match="backup"):
-        migration["downgrade"]()
-
-
-def test_target_asset_routes_use_ids_and_multipart_uploads_only() -> None:
+def test_asset_routes_use_ids_and_multipart_uploads_only() -> None:
     paths = app.openapi()["paths"]
 
     assert "/auth/profile/image" in paths

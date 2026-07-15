@@ -512,7 +512,7 @@ async def test_background_runtime_partial_startup_is_unwound(
     monkeypatch.setattr(app_main, "close_email_runtime", lambda: record("close-email"))
     monkeypatch.setattr(
         app_main,
-        "TARGET_BACKGROUND_RUNTIMES",
+        "BACKGROUND_RUNTIMES",
         (
             app_main.BackgroundRuntime(
                 "email_outbox",

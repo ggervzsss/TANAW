@@ -5,11 +5,10 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
-from app.storage.ledger_schema import TARGET_LOCAL_SCHEMA_VERSION, create_target_schema
+from app.storage.ledger_schema import LOCAL_SCHEMA_VERSION, create_ledger_schema
+from app.storage.ledger_state import bind_local_site
 from app.storage.reporting_periods import ReportingPeriod
-from app.storage.target_schema import bind_local_site
 
-LOCAL_SCHEMA_VERSION = TARGET_LOCAL_SCHEMA_VERSION
 SQLITE_BUSY_TIMEOUT_MS = 5_000
 
 
@@ -50,7 +49,7 @@ def initialize_local_database(database_path: Path, *, enterprise_id: str | None 
         if database_version == 0 and not existing_tables:
             connection.execute("begin immediate")
             try:
-                create_target_schema(connection)
+                create_ledger_schema(connection)
                 connection.execute(f"pragma user_version = {LOCAL_SCHEMA_VERSION}")
                 connection.commit()
             except Exception:
@@ -58,14 +57,14 @@ def initialize_local_database(database_path: Path, *, enterprise_id: str | None 
                 raise
         elif database_version != LOCAL_SCHEMA_VERSION:
             raise RuntimeError(
-                "This TANAW build accepts only the target local-ledger schema "
-                f"version {LOCAL_SCHEMA_VERSION} (found {database_version}). Run the "
-                "coordinated pre-cutover migration before installing this build; target "
-                "runtime does not contain compatibility migrations."
+                "The local ledger schema version is not supported "
+                f"(found {database_version}, required {LOCAL_SCHEMA_VERSION}). Remove "
+                "the invalid local ledger with scripts/local-data-reset, then start "
+                "TANAW to initialize it again."
             )
 
         _verify_database_integrity(connection)
-        _verify_target_catalog(connection)
+        _verify_catalog(connection)
         bind_local_site(connection, enterprise_id=enterprise_id)
         connection.commit()
     finally:
@@ -90,8 +89,8 @@ def _verify_database_integrity(connection: sqlite3.Connection) -> None:
         )
 
 
-def _verify_target_catalog(connection: sqlite3.Connection) -> None:
-    expected_object_items, expected_table_items = _target_catalog_definition()
+def _verify_catalog(connection: sqlite3.Connection) -> None:
+    expected_object_items, expected_table_items = _catalog_definition()
     expected_objects = dict(expected_object_items)
     expected_tables = dict(expected_table_items)
     actual_objects = _catalog_objects(connection)
@@ -104,19 +103,19 @@ def _verify_target_catalog(connection: sqlite3.Connection) -> None:
             if actual_objects[key] != expected_objects[key]
         )
         raise RuntimeError(
-            "The local ledger catalog is not the exact target schema "
+            "The local ledger catalog does not match the application schema "
             f"(missing={missing}, unexpected={unexpected}, changed={changed})."
         )
 
     for table_name, expected_columns in expected_tables.items():
         if _table_info(connection, table_name) != expected_columns:
             raise RuntimeError(
-                f"The local ledger table {table_name!r} does not match the target columns."
+                f"The local ledger table {table_name!r} does not match the expected columns."
             )
 
 
 @lru_cache(maxsize=1)
-def _target_catalog_definition() -> tuple[
+def _catalog_definition() -> tuple[
     tuple[tuple[tuple[str, str, str], str], ...],
     tuple[tuple[str, tuple[tuple[object, ...], ...]], ...],
 ]:
@@ -124,7 +123,7 @@ def _target_catalog_definition() -> tuple[
     reference.row_factory = sqlite3.Row
     try:
         _configure_connection(reference)
-        create_target_schema(reference)
+        create_ledger_schema(reference)
         expected_objects = _catalog_objects(reference)
         expected_tables = sorted(
             name for object_type, name, _ in expected_objects if object_type == "table"

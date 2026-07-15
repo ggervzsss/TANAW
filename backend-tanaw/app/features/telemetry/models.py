@@ -157,22 +157,7 @@ class TelemetryObservation(Base):
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_telemetry_observations_classification"),
         CheckConstraint(
-            "ingest_kind IN ('command', 'migration')",
-            name="ck_telemetry_observations_ingest_kind",
-        ),
-        CheckConstraint(
-            "ordering_status IN ('sequenced', 'unsequenced_import')",
-            name="ck_telemetry_observations_ordering_status",
-        ),
-        CheckConstraint(
-            "(ingest_kind = 'command' AND ordering_status = 'sequenced' "
-            "AND edge_device_id IS NOT NULL AND telemetry_epoch_id IS NOT NULL "
-            "AND epoch_generation >= 1 AND sequence >= 0 AND command_id IS NOT NULL "
-            "AND idempotency_key IS NOT NULL) OR "
-            "(ingest_kind = 'migration' AND ordering_status = 'unsequenced_import' "
-            "AND telemetry_epoch_id IS NULL AND epoch_generation IS NULL "
-            "AND sequence IS NULL AND command_id IS NULL AND idempotency_key IS NULL "
-            "AND became_current = false)",
+            "epoch_generation >= 1 AND sequence >= 0",
             name="ck_telemetry_observations_ordering_evidence",
         ),
         CheckConstraint(_HASH_CHECK, name="ck_telemetry_observations_payload_hash"),
@@ -223,8 +208,6 @@ class TelemetryObservation(Base):
             "telemetry_epoch_id",
             "sequence",
             unique=True,
-            postgresql_where=text("ordering_status = 'sequenced'"),
-            sqlite_where=text("ordering_status = 'sequenced'"),
         ),
         Index("ix_telemetry_observations_site_observed", "site_id", desc("observed_at")),
         Index("ix_telemetry_observations_device_received", "edge_device_id", desc("received_at")),
@@ -244,15 +227,13 @@ class TelemetryObservation(Base):
     )
     enterprise_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     site_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
-    edge_device_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
+    edge_device_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
-    ingest_kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    ordering_status: Mapped[str] = mapped_column(String(30), nullable=False)
-    telemetry_epoch_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
-    epoch_generation: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    sequence: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    command_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    telemetry_epoch_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    epoch_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    command_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(240), nullable=False)
     payload_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -511,6 +492,7 @@ class SiteTelemetryHourlyRollup(Base):
             "definition_version",
             desc("bucket_start"),
         ),
+        {"postgresql_partition_by": "RANGE (bucket_start)"},
     )
 
     bucket_start: Mapped[datetime] = mapped_column(

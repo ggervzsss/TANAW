@@ -15,7 +15,7 @@ from app.storage.local_ledger import LocalLedger
 
 
 class CameraRuntimeBoundaryTest(unittest.TestCase):
-    def test_target_runtime_modules_own_their_responsibilities(self) -> None:
+    def test_runtime_modules_own_their_responsibilities(self) -> None:
         expected_owners = {
             "prepare_simulation_counts": SimulationRuntimeMixin,
             "_capture_loop": CaptureRuntimeMixin,
@@ -36,7 +36,7 @@ class CameraRuntimeBoundaryTest(unittest.TestCase):
 
     def test_facade_and_runtime_modules_remain_bounded(self) -> None:
         camera_root = Path(__file__).parents[1] / "app" / "camera"
-        target_files = (
+        runtime_files = (
             "camera_manager.py",
             "capture_runtime.py",
             "coverage_runtime.py",
@@ -49,7 +49,7 @@ class CameraRuntimeBoundaryTest(unittest.TestCase):
 
         line_counts = {
             filename: len((camera_root / filename).read_text(encoding="utf-8").splitlines())
-            for filename in target_files
+            for filename in runtime_files
         }
 
         self.assertLess(line_counts["camera_manager.py"], 1_000)

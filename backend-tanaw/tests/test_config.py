@@ -30,7 +30,7 @@ def test_database_url_uses_asyncpg_for_plain_postgresql_url() -> None:
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
 
 
-def test_database_url_uses_asyncpg_for_legacy_postgres_url() -> None:
+def test_database_url_uses_asyncpg_for_postgres_shorthand_url() -> None:
     settings = Settings(database_url="postgres://user:pass@example.com:5432/tanaw")
 
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
@@ -337,14 +337,14 @@ def test_development_seed_accounts_require_complete_credentials() -> None:
 def test_unregistered_environment_aliases_are_ignored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("DEFAULT_IT_USERNAME", "legacy-bootstrap@tanaw.local")
-    monkeypatch.setenv("DEFAULT_IT_PASSWORD", "legacy-bootstrap-password")
-    monkeypatch.setenv("TEMPORARY_ADMIN_USERNAME", "legacy-admin@tanaw.local")
-    monkeypatch.setenv("TEMPORARY_ADMIN_PASSWORD", "legacy-admin-password")
-    monkeypatch.setenv("TEMPORARY_STAFF_USERNAME", "legacy-staff@tanaw.local")
-    monkeypatch.setenv("TEMPORARY_STAFF_PASSWORD", "legacy-staff-password")
-    monkeypatch.setenv("TEMPORARY_IT_USERNAME", "legacy-it@tanaw.local")
-    monkeypatch.setenv("TEMPORARY_IT_PASSWORD", "legacy-it-password")
+    monkeypatch.setenv("DEFAULT_IT_USERNAME", "ignored-bootstrap@tanaw.local")
+    monkeypatch.setenv("DEFAULT_IT_PASSWORD", "ignored-bootstrap-password")
+    monkeypatch.setenv("TEMPORARY_ADMIN_USERNAME", "ignored-admin@tanaw.local")
+    monkeypatch.setenv("TEMPORARY_ADMIN_PASSWORD", "ignored-admin-password")
+    monkeypatch.setenv("TEMPORARY_STAFF_USERNAME", "ignored-staff@tanaw.local")
+    monkeypatch.setenv("TEMPORARY_STAFF_PASSWORD", "ignored-staff-password")
+    monkeypatch.setenv("TEMPORARY_IT_USERNAME", "ignored-it@tanaw.local")
+    monkeypatch.setenv("TEMPORARY_IT_PASSWORD", "ignored-it-password")
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("ALLOW_SIMULATION_DATA", "true")

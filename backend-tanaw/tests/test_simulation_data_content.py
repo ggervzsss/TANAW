@@ -93,7 +93,7 @@ def test_generated_enterprises_match_configured_locations_and_contacts() -> None
     assert len({enterprise.phone for enterprise in ENTERPRISES}) == len(ENTERPRISES)
 
 
-def test_generated_account_content_has_no_legacy_label() -> None:
+def test_generated_account_content_uses_simulation_vocabulary() -> None:
     values = [TEST_ACCOUNT_PASSWORD, REPORTING_STAFF_NAME]
     for enterprise in ENTERPRISES:
         values.extend(
@@ -118,7 +118,7 @@ def test_prepared_counts_are_bounded_to_two_canonical_periods() -> None:
         datetime(2026, 1, 1, tzinfo=UTC),
         datetime(2026, 6, 30, tzinfo=UTC),
         "full-workflow",
-        random.Random("target-simulation"),
+        random.Random("tanaw-simulation"),
     )
 
     assert [item["periodKey"] for item in prepared] == [

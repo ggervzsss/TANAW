@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { filterVisibleSettings } from "../settingsVisibility";
 
-describe("target-only system settings", () => {
+describe("system settings", () => {
   it("keeps only canonical keys and never translates removed setting labels", () => {
     expect(
       filterVisibleSettings({

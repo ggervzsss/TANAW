@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 LOCAL_CONTRACT_VERSION: Final = 2
-LOCAL_RELEASE_ID: Final = "target-cutover-release"
+LOCAL_RELEASE_ID: Final = "tanaw-release-2"
 LOCAL_SERVICE_VERSION: Final = "2.0.0"
 LOCAL_SERVICE_NAME: Final = "tanaw-ml-service"
 BOOTSTRAP_TIMEOUT_SECONDS: Final = 5.0

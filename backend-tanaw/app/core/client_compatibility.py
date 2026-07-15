@@ -71,7 +71,7 @@ def is_supported_client_generation(
         return False
     if generation.release_id is None:
         return False
-    return hmac.compare_digest(generation.release_id, settings.target_release_id)
+    return hmac.compare_digest(generation.release_id, settings.release_id)
 
 
 def client_upgrade_required_response(settings: Settings) -> JSONResponse:
@@ -81,7 +81,7 @@ def client_upgrade_required_response(settings: Settings) -> JSONResponse:
             "contractVersion": settings.client_contract_version,
             "error": {
                 "code": MANDATORY_UPGRADE_REASON,
-                "message": "Update TANAW to the required target release before continuing.",
+                "message": "Update TANAW to the required release before continuing.",
                 "retryable": False,
                 "minimumClientVersion": settings.minimum_client_version,
                 "requiredContractVersion": settings.client_contract_version,

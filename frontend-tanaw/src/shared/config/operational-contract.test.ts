@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import contractDocument from "../../../../shared-contracts/target-operational-v2.openapi.json";
+import contractDocument from "../../../../shared-contracts/operational-v2.openapi.json";
 
 type SharedContract = {
   info: { version: string };
@@ -9,7 +9,7 @@ type SharedContract = {
 
 const contract = contractDocument as SharedContract;
 
-describe("shared target operational contract", () => {
+describe("shared operational contract", () => {
   it("contains the immutable report and live-map APIs consumed by the portal", () => {
     expect(contract.info.version).toBe("2.0.0");
     expect(contract.paths["/operational/reports/v2"]?.get).toBeDefined();

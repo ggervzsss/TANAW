@@ -254,7 +254,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "month:Asia/Manila:YYYY-MM"):
                 store.create_local_report_revision("REP-UNCLASSIFIED", "")
 
-    def test_target_schema_is_created_idempotently_without_superseded_objects(self) -> None:
+    def test_schema_is_created_idempotently(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
 
@@ -285,7 +285,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
             )
 
-    def test_target_runtime_rejects_every_unregistered_schema_object(self) -> None:
+    def test_runtime_rejects_every_unregistered_schema_object(self) -> None:
         statements = (
             "create table backup_count_events (id text primary key)",
             "create view shadow_counts as select event_id from count_events",
@@ -300,10 +300,10 @@ class LocalReportingLedgerTest(unittest.TestCase):
                     connection.execute(statement)
                     connection.commit()
 
-                with self.assertRaisesRegex(RuntimeError, "not the exact target schema"):
+                with self.assertRaisesRegex(RuntimeError, "does not match the application schema"):
                     initialize_local_database(database_path)
 
-    def test_target_runtime_rejects_a_changed_table_definition(self) -> None:
+    def test_runtime_rejects_a_changed_table_definition(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "ledger.sqlite3"
             initialize_local_database(database_path)
@@ -311,10 +311,10 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 connection.execute("alter table count_events add column backup_payload text")
                 connection.commit()
 
-            with self.assertRaisesRegex(RuntimeError, "not the exact target schema"):
+            with self.assertRaisesRegex(RuntimeError, "does not match the application schema"):
                 initialize_local_database(database_path)
 
-    def test_pre_cutover_store_is_rejected_without_runtime_migration(self) -> None:
+    def test_unsupported_schema_version_is_rejected_with_reset_instruction(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "ledger.sqlite3"
             with closing(sqlite3.connect(database_path)) as connection:
@@ -322,7 +322,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 connection.execute("pragma user_version = 5")
                 connection.commit()
 
-            with self.assertRaisesRegex(RuntimeError, "coordinated pre-cutover migration"):
+            with self.assertRaisesRegex(RuntimeError, "scripts/local-data-reset"):
                 initialize_local_database(database_path)
 
             with closing(sqlite3.connect(database_path)) as connection:
@@ -333,15 +333,15 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 )
                 self.assertEqual(connection.execute("pragma user_version").fetchone()[0], 5)
 
-    def test_interrupted_target_schema_creation_rolls_back_cleanly(self) -> None:
+    def test_interrupted_schema_creation_rolls_back_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "ledger.sqlite3"
 
             with patch(
-                "app.storage.local_schema.create_target_schema",
-                side_effect=RuntimeError("simulated target initialization interruption"),
+                "app.storage.local_schema.create_ledger_schema",
+                side_effect=RuntimeError("simulated schema initialization interruption"),
             ):
-                with self.assertRaisesRegex(RuntimeError, "simulated target initialization"):
+                with self.assertRaisesRegex(RuntimeError, "simulated schema initialization"):
                     initialize_local_database(database_path)
 
             with closing(sqlite3.connect(database_path)) as connection:

@@ -260,7 +260,6 @@ async def submit_report_command(
             report_revision_id=revision_id,
             enterprise_id=access.enterprise_id,
             classification=classification,
-            receipt_kind="command",
             contract_version=2,
             command_id=str(command.commandId),
             idempotency_key=command.idempotencyKey,

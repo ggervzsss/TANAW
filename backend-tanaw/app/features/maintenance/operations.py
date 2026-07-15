@@ -1,4 +1,4 @@
-"""Durable operational gauges for the target report and telemetry runtime."""
+"""Durable operational gauges for the report and telemetry runtime."""
 
 from __future__ import annotations
 

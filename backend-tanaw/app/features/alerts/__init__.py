@@ -1,4 +1,4 @@
-"""Target operational-alert domain."""
+"""Operational-alert domain."""
 
 from app.features.alerts.models import SiteSyncAlertState
 

@@ -155,7 +155,6 @@ def test_metric_quality_and_receipt_contract_are_database_enforced(
                 report_revision_id=graph["revision_id"],
                 enterprise_id=graph["enterprise_id"],
                 classification="official",
-                receipt_kind="command",
                 contract_version=None,
                 command_id=None,
                 idempotency_key="report:install:revision",

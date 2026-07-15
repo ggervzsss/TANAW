@@ -625,8 +625,6 @@ async def _add_observation(
             site_id=scope.site_id,
             edge_device_id=scope.device_id,
             classification=scope.classification,
-            ingest_kind="command",
-            ordering_status="sequenced",
             telemetry_epoch_id=scope.epoch_id,
             epoch_generation=1,
             sequence=sequence,

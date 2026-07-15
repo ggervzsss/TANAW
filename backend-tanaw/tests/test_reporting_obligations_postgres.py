@@ -225,8 +225,8 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
     historical = next(
         item for item in frozen.resource.obligations if str(item.siteId) == eligible_site.id
     )
-    # Regression: target Enterprise.created_at is technical migration time. The site's
-    # effective range is the authoritative registration evidence for historical periods.
+    # The enterprise creation timestamp is technical metadata. The site's effective
+    # range is the authoritative registration evidence for historical periods.
     assert historical.registrationEffectiveAt == effective_last_year
     assert all(item.classification == "official" for item in frozen.resource.obligations)
 
@@ -545,7 +545,7 @@ async def test_freeze_uses_period_effective_location_and_keeps_missing_evidence_
 
 
 @pytest.mark.asyncio
-async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registry_rows(
+async def test_freeze_preserves_existing_obligations_and_adds_only_missing_registry_rows(
     obligation_session: AsyncSession,
 ) -> None:
     db = obligation_session
@@ -567,11 +567,11 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         label=canonical.label,
     )
     staff = _account("staff", suffix, frozen_at)
-    legacy_enterprise, legacy_site, legacy_location = _enterprise_site(
-        suffix=f"legacy-{suffix}",
+    existing_enterprise, existing_site, existing_location = _enterprise_site(
+        suffix=f"existing-{suffix}",
         lifecycle="active",
         classification="official",
-        barangay="Barangay Legacy",
+        barangay="Barangay Existing",
         effective_from=canonical.starts_at,
         technical_created_at=frozen_at,
     )
@@ -583,29 +583,29 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         effective_from=canonical.starts_at,
         technical_created_at=frozen_at,
     )
-    db.add_all([period, staff, legacy_enterprise, new_enterprise])
+    db.add_all([period, staff, existing_enterprise, new_enterprise])
     await db.flush()
-    db.add_all([legacy_site, new_site, legacy_location, new_location])
+    db.add_all([existing_site, new_site, existing_location, new_location])
     await db.flush()
-    legacy_obligation = ReportingObligation(
+    existing_obligation = ReportingObligation(
         id=str(uuid4()),
         reporting_period_id=period.id,
-        enterprise_id=legacy_enterprise.id,
-        site_id=legacy_site.id,
+        enterprise_id=existing_enterprise.id,
+        site_id=existing_site.id,
         classification="official",
         eligibility_status="unknown",
-        eligibility_basis="migration_evidence",
-        exemption_reason="Historical eligibility was not provable during migration.",
-        frozen_barangay=legacy_location.barangay,
-        enterprise_official_code=legacy_enterprise.official_code,
-        enterprise_name=legacy_enterprise.name,
-        site_code=legacy_site.site_code,
-        site_name=legacy_site.name,
+        eligibility_basis="manual_resolution",
+        exemption_reason="Eligibility requires staff resolution.",
+        frozen_barangay=existing_location.barangay,
+        enterprise_official_code=existing_enterprise.official_code,
+        enterprise_name=existing_enterprise.name,
+        site_code=existing_site.site_code,
+        site_name=existing_site.name,
         timezone_name="Asia/Manila",
-        registration_effective_at=legacy_location.effective_from,
+        registration_effective_at=existing_location.effective_from,
         acceptance_blocked=True,
     )
-    db.add(legacy_obligation)
+    db.add(existing_obligation)
     await db.flush()
 
     result = await freeze_period_obligations(
@@ -634,9 +634,9 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         )
     )
     assert len(obligations) == 2
-    preserved = next(item for item in obligations if item.id == legacy_obligation.id)
+    preserved = next(item for item in obligations if item.id == existing_obligation.id)
     assert preserved.eligibility_status == "unknown"
-    assert preserved.eligibility_basis == "migration_evidence"
+    assert preserved.eligibility_basis == "manual_resolution"
     assert preserved.acceptance_blocked is True
     created = next(item for item in obligations if item.site_id == new_site.id)
     assert created.eligibility_status == "eligible"

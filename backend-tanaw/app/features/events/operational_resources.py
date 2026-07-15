@@ -27,7 +27,7 @@ async def enqueue_operational_resource_event(
     actor_account_id: str | None,
     enterprise_id: str | None = None,
 ) -> DomainEvent:
-    """Record one target resource invalidation in the caller's transaction."""
+    """Record one resource invalidation in the caller's transaction."""
 
     if event_type not in _OPERATIONAL_RESOURCE_EVENTS:
         raise ValueError(f"Unsupported operational resource event type: {event_type}")

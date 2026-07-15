@@ -120,7 +120,7 @@ class ReportingObligation(Base):
             name="ck_reporting_obligations_eligibility_status",
         ),
         CheckConstraint(
-            "eligibility_basis IN ('registry_snapshot', 'migration_evidence', 'manual_resolution')",
+            "eligibility_basis IN ('registry_snapshot', 'manual_resolution')",
             name="ck_reporting_obligations_eligibility_basis",
         ),
         CheckConstraint(
@@ -630,7 +630,7 @@ class ReportReviewEvent(Base):
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_report_review_events_classification"),
         CheckConstraint(
             "event_type IN ('revision_submitted', 'returned', 'accepted', 'reopened', "
-            "'consolidated', 'migration_state_imported')",
+            "'consolidated')",
             name="ck_report_review_events_type",
         ),
         CheckConstraint(
@@ -706,12 +706,7 @@ class ReportIntakeReceipt(Base):
         ),
         CheckConstraint(_CLASSIFICATION_CHECK, name="ck_report_intake_receipts_classification"),
         CheckConstraint(
-            "receipt_kind IN ('command', 'migration')",
-            name="ck_report_intake_receipts_kind",
-        ),
-        CheckConstraint(
-            "(receipt_kind = 'command' AND contract_version = 2 AND command_id IS NOT NULL) "
-            "OR (receipt_kind = 'migration' AND contract_version IS NULL AND command_id IS NULL)",
+            "contract_version = 2",
             name="ck_report_intake_receipts_contract",
         ),
         CheckConstraint(_SHA256_CHECK, name="ck_report_intake_receipts_payload_hash"),
@@ -731,9 +726,8 @@ class ReportIntakeReceipt(Base):
     report_revision_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     enterprise_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
-    receipt_kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    contract_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    command_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), nullable=True)
+    contract_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    command_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(240), nullable=False)
     payload_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

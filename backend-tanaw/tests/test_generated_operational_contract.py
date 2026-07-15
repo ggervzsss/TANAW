@@ -1,16 +1,16 @@
 import json
 from pathlib import Path
 
-from app.core.contract_export import build_target_operational_contract
+from app.core.contract_export import build_operational_contract
 from app.main import app
 
 SHARED_CONTRACT = (
-    Path(__file__).resolve().parents[2] / "shared-contracts" / "target-operational-v2.openapi.json"
+    Path(__file__).resolve().parents[2] / "shared-contracts" / "operational-v2.openapi.json"
 )
 
 
-def test_shared_target_operational_contract_is_current_and_target_only() -> None:
-    generated = build_target_operational_contract(app)
+def test_shared_operational_contract_is_current() -> None:
+    generated = build_operational_contract(app)
 
     assert json.loads(SHARED_CONTRACT.read_text(encoding="utf-8")) == generated
     assert generated["info"]["version"] == "2.0.0"

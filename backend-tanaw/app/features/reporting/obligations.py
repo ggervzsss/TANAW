@@ -354,8 +354,7 @@ async def freeze_period_obligations(
                 timezone_name=location.timezone_name
                 if location is not None
                 else period.timezone_name,
-                # Enterprise.created_at is a target-row insertion timestamp for migrated
-                # topology. The effective-dated site is the authoritative registration fact.
+                # The effective-dated site is the authoritative registration fact.
                 registration_effective_at=_as_utc(site.registered_at),
                 acceptance_blocked=decision.acceptance_blocked,
             )

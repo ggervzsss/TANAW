@@ -101,7 +101,7 @@ class FinalReportDemographicFactResource(ContractModel):
 class FinalReportEventResource(ContractModel):
     finalReportEventId: UUID
     finalReportVersionId: UUID
-    eventType: Literal["version_finalized", "migration_final_imported"]
+    eventType: Literal["version_finalized"]
     actorAccountId: UUID | None
     actorDisplayName: str | None
     actorRole: str | None

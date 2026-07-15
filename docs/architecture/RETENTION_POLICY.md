@@ -1,6 +1,6 @@
 # TANAW Data Retention Policy
 
-Status: target policy for contract version 2
+Status: policy for contract version 2
 
 This policy defines which TANAW records are permanent business evidence, which
 records are operationally purgeable, and the conditions that must be true before
@@ -11,9 +11,9 @@ before deployment because completed cleanup is intentionally irreversible.
 
 The following records have no age-based purge. They remain for the lifetime of
 their owning official report or final report and are restored from the same
-target-schema backup:
+database backup:
 
-| Evidence | Target records | Rule |
+| Evidence | Records | Rule |
 | --- | --- | --- |
 | Enterprise report identity and exact source lineage | `enterprise_reports`, `report_revisions`, facts, coverage, source batches, intake receipts | Permanent; immutable revision lineage is the report of record. |
 | Staff review history | `report_review_events` | Permanent and append-only. General activity logs are never used to reconstruct it. |
@@ -87,7 +87,7 @@ the Manila business-day boundary plus the configured two-hour grace window.
 The retained rollups and coverage gaps preserve dashboard/report meaning after
 raw deletion.
 
-The target runtime writes no active-session JSON file, JSONL event copy, snapshot
+The runtime writes no active-session JSON file, JSONL event copy, snapshot
 directory, image cache, or embedding file. The bounded, credential-free restart
 snapshot is part of the same SQLite transaction as typed camera live state.
 `local-data inspect --json` reports forbidden disk artifacts
@@ -98,7 +98,7 @@ show an empty forbidden-artifact list on every enrolled device.
 ## Recovery and verification
 
 Retention is not an in-place rollback mechanism. Recovery uses a verified
-external backup and the matching target application generation. Before changing
+external backup and the matching application generation. Before changing
 any horizon, rehearse the cleanup on a restored production-like snapshot and
 verify report/final hashes, event chains, dead letters, object checksums, and
 rollup totals.

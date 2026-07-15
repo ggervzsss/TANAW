@@ -9,7 +9,7 @@ const getMock = vi.mocked(apiClient.get);
 describe("getOperationalStatus", () => {
   beforeEach(() => getMock.mockReset());
 
-  it("reads the target operational diagnostics endpoint", async () => {
+  it("reads the operational diagnostics endpoint", async () => {
     const status = {
       observedAt: "2026-07-15T08:00:00Z",
       processInstanceOnly: true,

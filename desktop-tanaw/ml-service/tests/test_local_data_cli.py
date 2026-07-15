@@ -14,9 +14,9 @@ class LocalDataCliTest(unittest.TestCase):
             store.append_count_event(_event("official", None))
             store.append_count_event(_event("simulation", "run-1"))
             forbidden_file = store._database_path.parent / "events.jsonl"
-            forbidden_file.write_text("legacy duplicate", encoding="utf-8")
-            legacy_session = store._database_path.parent / "active_session.json"
-            legacy_session.write_text("{}", encoding="utf-8")
+            forbidden_file.write_text("duplicate event copy", encoding="utf-8")
+            unexpected_session = store._database_path.parent / "active_session.json"
+            unexpected_session.write_text("{}", encoding="utf-8")
 
             result = inspect_local_data(app_data_dir, "enterprise@example.test", limit=5)
 

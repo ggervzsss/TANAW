@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
-from app.db.migrations import validate_database_migration_head
+from app.db.schema_version import validate_database_schema
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import generate_enterprise_id
@@ -212,7 +212,7 @@ async def run(args: argparse.Namespace) -> None:
 
 async def validate_schema() -> None:
     async with engine.connect() as connection:
-        await validate_database_migration_head(connection)
+        await validate_database_schema(connection)
 
 
 def require_simulation_enabled() -> None:
@@ -277,7 +277,8 @@ async def ensure_active_target_matches(
 ) -> None:
     if not run.target_enterprise_id:
         raise SystemExit(
-            "The active simulation-data run predates target-enterprise support. Run simulation-data reset with --target-enterprise."
+            "The active simulation-data run does not identify an enterprise. "
+            "Run simulation-data reset with --target-enterprise."
         )
     if not requested_identifier:
         return

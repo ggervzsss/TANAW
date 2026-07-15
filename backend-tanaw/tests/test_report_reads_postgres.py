@@ -148,7 +148,7 @@ async def test_report_read_integrity_schema_matches_postgres_catalog(
 
 
 @pytest.mark.asyncio
-async def test_report_list_queries_use_target_keyset_indexes(
+async def test_report_list_queries_use_keyset_indexes(
     read_session: AsyncSession,
 ) -> None:
     await read_session.execute(text("SET LOCAL enable_seqscan = off"))

@@ -47,7 +47,7 @@ class ReportSiteResource(ContractModel):
 class ReportObligationResource(ContractModel):
     reportingObligationId: UUID
     eligibilityStatus: Literal["eligible", "exempt", "ineligible", "unknown"]
-    eligibilityBasis: Literal["registry_snapshot", "migration_evidence", "manual_resolution"]
+    eligibilityBasis: Literal["registry_snapshot", "manual_resolution"]
     exemptionReason: str | None
     registrationEffectiveAt: datetime | None
     acceptanceBlocked: bool
@@ -149,7 +149,6 @@ class ReportReviewEventResource(ContractModel):
         "accepted",
         "reopened",
         "consolidated",
-        "migration_state_imported",
     ]
     fromState: ReportWorkflowState | None
     toState: ReportWorkflowState

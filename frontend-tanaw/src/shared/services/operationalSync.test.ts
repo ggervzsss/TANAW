@@ -8,7 +8,7 @@ vi.mock("../lib/apiClient", () => ({
 
 const getMock = vi.mocked(apiClient.get);
 
-describe("target site registry adapter", () => {
+describe("site registry adapter", () => {
   beforeEach(() => {
     getMock.mockReset();
   });

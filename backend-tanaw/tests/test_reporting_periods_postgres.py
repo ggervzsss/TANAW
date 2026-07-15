@@ -270,7 +270,7 @@ async def test_database_rejects_noncanonical_periods_and_has_migration_model_par
     for mutation in ("key", "start", "close", "timezone"):
         invalid = _period_row(canonical, period_id=str(uuid4()))
         if mutation == "key":
-            invalid.natural_key = f"legacy-label-{uuid4()}"
+            invalid.natural_key = f"invalid-label-{uuid4()}"
         elif mutation == "start":
             invalid.starts_at += timedelta(microseconds=1)
         elif mutation == "close":

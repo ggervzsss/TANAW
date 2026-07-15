@@ -11,7 +11,7 @@ from app.features.final_reports.models import (
 )
 
 
-def test_final_report_target_uses_logical_parent_and_exact_revision_claims() -> None:
+def test_final_report_uses_logical_parent_and_exact_revision_claims() -> None:
     assert ReportFinalization.__tablename__ == "report_finalizations"
     assert FinalReportVersion.__tablename__ == "final_report_versions"
     assert FinalReportItem.__table__.c.report_revision_id.type.python_type is str

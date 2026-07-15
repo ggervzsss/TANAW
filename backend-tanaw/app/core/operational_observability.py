@@ -1,4 +1,4 @@
-"""Payload-free process metrics for target report and telemetry operations."""
+"""Payload-free process metrics for report and telemetry operations."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class OperationalCounter(StrEnum):
     DOMAIN_EVENT_CONSUMER_DEDUPLICATION = "domain_event_consumer_deduplications"
     DOMAIN_EVENT_DELIVERY_RETRY = "domain_event_delivery_retries"
     DOMAIN_EVENT_DELIVERY_DEAD_LETTER = "domain_event_delivery_dead_letters"
-    TARGET_CLIENT_REQUEST = "target_client_requests"
+    SUPPORTED_CLIENT_REQUEST = "supported_client_requests"
     OUTDATED_CLIENT_REJECTION = "outdated_client_rejections"
 
 

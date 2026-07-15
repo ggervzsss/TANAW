@@ -188,7 +188,7 @@ describe("durable report outbox delivery", () => {
   });
 
   it("dead-letters an unapproved local endpoint without making a cloud request", async () => {
-    const item = { ...outboxItem("33333333-3333-4333-8333-333333333333"), endpoint: "/legacy/report-submit" };
+    const item = { ...outboxItem("33333333-3333-4333-8333-333333333333"), endpoint: "/unsupported/report-submit" };
     listReadySyncOutboxItems.mockResolvedValue([item]);
 
     await expect(syncDesktopReportSubmissions()).resolves.toBe(0);

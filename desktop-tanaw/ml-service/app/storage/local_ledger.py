@@ -27,6 +27,11 @@ from app.storage.coverage import (
 from app.storage.coverage import (
     start_monitoring_session as insert_monitoring_session,
 )
+from app.storage.ledger_state import (
+    MAX_EVENT_ATTRIBUTES_BYTES,
+    upsert_camera_live_state,
+    upsert_local_camera,
+)
 from app.storage.ledger_writer import SerializedLedgerWriter, writer_for
 from app.storage.local_schema import (
     upsert_reporting_period,
@@ -63,11 +68,6 @@ from app.storage.retention import (
 )
 from app.storage.rollups import record_metric_rollups
 from app.storage.sqlite_retry import SQLiteRetryPolicy, run_sqlite_write
-from app.storage.target_schema import (
-    MAX_EVENT_ATTRIBUTES_BYTES,
-    upsert_camera_live_state,
-    upsert_local_camera,
-)
 
 _LOCAL_REPORT_SELECT = """
 select

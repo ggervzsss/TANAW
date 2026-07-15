@@ -68,7 +68,7 @@ class ObligationResource(ContractModel):
     siteName: str
     classification: Literal["official", "simulation"]
     eligibilityStatus: EligibilityStatus
-    eligibilityBasis: Literal["registry_snapshot", "migration_evidence", "manual_resolution"]
+    eligibilityBasis: Literal["registry_snapshot", "manual_resolution"]
     eligibilityReason: str | None
     frozenBarangay: str | None
     timezone: Literal["Asia/Manila"]

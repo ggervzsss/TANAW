@@ -1,4 +1,4 @@
-"""Deterministic export of the target operational HTTP contract."""
+"""Deterministic export of the operational HTTP contract."""
 
 from __future__ import annotations
 
@@ -8,17 +8,17 @@ from typing import Any
 
 from fastapi import FastAPI
 
-TARGET_PATH_PREFIXES = ("/operational/",)
-TARGET_EXACT_PATHS = frozenset({"/maintenance/operations"})
+OPERATIONAL_PATH_PREFIXES = ("/operational/",)
+OPERATIONAL_EXACT_PATHS = frozenset({"/maintenance/operations"})
 SCHEMA_REFERENCE_PREFIX = "#/components/schemas/"
 
 
-def build_target_operational_contract(app: FastAPI) -> dict[str, Any]:
+def build_operational_contract(app: FastAPI) -> dict[str, Any]:
     openapi = app.openapi()
     paths = {
         path: deepcopy(value)
         for path, value in sorted(openapi["paths"].items())
-        if path.startswith(TARGET_PATH_PREFIXES) or path in TARGET_EXACT_PATHS
+        if path.startswith(OPERATIONAL_PATH_PREFIXES) or path in OPERATIONAL_EXACT_PATHS
     }
     referenced_schemas = _referenced_schema_names(paths)
     all_schemas = openapi.get("components", {}).get("schemas", {})
@@ -30,7 +30,7 @@ def build_target_operational_contract(app: FastAPI) -> dict[str, Any]:
             continue
         schema = all_schemas.get(name)
         if schema is None:
-            raise ValueError(f"Target OpenAPI references an unknown schema: {name}")
+            raise ValueError(f"Operational OpenAPI references an unknown schema: {name}")
         schemas[name] = deepcopy(schema)
         for dependency in sorted(_referenced_schema_names(schema)):
             if dependency not in schemas:

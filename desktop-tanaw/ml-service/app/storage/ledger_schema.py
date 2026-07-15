@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-TARGET_LOCAL_SCHEMA_VERSION = 8
+LOCAL_SCHEMA_VERSION = 8
 
 TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
     """CREATE TABLE camera_runtime_state (
@@ -499,6 +499,6 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
 )
 
 
-def create_target_schema(connection: sqlite3.Connection) -> None:
+def create_ledger_schema(connection: sqlite3.Connection) -> None:
     for statement in TARGET_SCHEMA_STATEMENTS:
         connection.execute(statement)

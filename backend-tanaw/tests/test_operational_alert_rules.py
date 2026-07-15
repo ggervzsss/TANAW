@@ -24,7 +24,7 @@ def test_websocket_authorization_rejects_removed_event_contracts() -> None:
         assert not can_view_operational_event("enterprise", event_type)
 
 
-def test_target_invalidations_are_role_scoped() -> None:
+def test_invalidations_are_role_scoped() -> None:
     for role in ("admin", "it", "staff", "enterprise"):
         assert can_view_operational_event(role, "resource.invalidated")
 

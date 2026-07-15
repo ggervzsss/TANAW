@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Account, Base
-from app.db.migration_policy import include_target_schema_object
+from app.db.schema_policy import include_schema_object
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
@@ -26,7 +26,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_object=include_target_schema_object,
+        include_object=include_schema_object,
         transaction_per_migration=True,
     )
 
@@ -38,7 +38,7 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
-        include_object=include_target_schema_object,
+        include_object=include_schema_object,
         transaction_per_migration=True,
     )
 

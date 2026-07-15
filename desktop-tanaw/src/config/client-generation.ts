@@ -7,7 +7,7 @@ export const CLIENT_GENERATION = Object.freeze({
   name: "enterprise-desktop",
   version: packageMetadata.version,
   contractVersion: 2,
-  releaseId: "target-cutover-release",
+  releaseId: "tanaw-release-2",
 });
 
 export const CLIENT_GENERATION_HEADERS = Object.freeze({

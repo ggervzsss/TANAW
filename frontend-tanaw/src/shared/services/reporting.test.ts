@@ -232,21 +232,21 @@ describe("reporting v2 service", () => {
     await expect(readFinalReport(finalDetail.reportFinalizationId)).rejects.toThrow("exact decimal string");
   });
 
-  it("rejects removed report and final-report contract values at runtime", async () => {
+  it("rejects unsupported report and final-report contract values at runtime", async () => {
     const report = structuredClone(enterpriseReportDetailFixture());
-    (report.obligation as { eligibilityBasis: string }).eligibilityBasis = "legacy_submission";
+    (report.obligation as { eligibilityBasis: string }).eligibilityBasis = "unsupported_basis";
     mockedGet.mockResolvedValueOnce({ data: report });
 
     await expect(readEnterpriseReport(report.enterpriseReportId)).rejects.toThrow("removed or incomplete report contract value");
 
     const reportEvent = structuredClone(enterpriseReportDetailFixture());
-    (reportEvent.reviewEvents[0] as { eventType: string }).eventType = "legacy_state_imported";
+    (reportEvent.reviewEvents[0] as { eventType: string }).eventType = "unsupported_event";
     mockedGet.mockResolvedValueOnce({ data: reportEvent });
 
     await expect(readEnterpriseReport(reportEvent.enterpriseReportId)).rejects.toThrow("unsupported review event type");
 
     const finalReport = structuredClone(finalReportDetailFixture());
-    (finalReport.events[0] as { eventType: string }).eventType = "legacy_final_imported";
+    (finalReport.events[0] as { eventType: string }).eventType = "unsupported_event";
     mockedGet.mockResolvedValueOnce({ data: finalReport });
 
     await expect(readFinalReport(finalReport.reportFinalizationId)).rejects.toThrow("unsupported lifecycle event type");

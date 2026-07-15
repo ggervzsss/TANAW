@@ -119,7 +119,7 @@ async def test_operational_websocket_closes_when_session_is_invalidated(
         client_name="web-portal",
         client_version="2.0.0",
         contract_version="2",
-        release_id="target-cutover-release",
+        release_id="tanaw-release-2",
     )
 
     websocket.close.assert_awaited_once_with(code=1008)

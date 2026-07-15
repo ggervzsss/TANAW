@@ -17,7 +17,7 @@ from app.core.client_compatibility import (
 from app.core.config import Settings, get_settings
 from app.core.http_security import apply_security_headers
 from app.core.operational_observability import OperationalCounter, operational_observability
-from app.db.migrations import validate_database_migration_head
+from app.db.schema_version import validate_database_schema
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.seed import seed_default_accounts
 from app.features.events.runtime import (
@@ -54,7 +54,7 @@ class BackgroundRuntime:
     stop: Callable[[], Awaitable[None]]
 
 
-TARGET_BACKGROUND_RUNTIMES = (
+BACKGROUND_RUNTIMES = (
     BackgroundRuntime(
         name="email_outbox",
         start=start_email_outbox_worker,
@@ -83,7 +83,7 @@ async def _background_runtimes() -> AsyncIterator[None]:
     async with AsyncExitStack() as runtimes:
         runtimes.push_async_callback(close_email_runtime)
         await initialize_email_runtime(settings)
-        for runtime in TARGET_BACKGROUND_RUNTIMES:
+        for runtime in BACKGROUND_RUNTIMES:
             runtimes.push_async_callback(runtime.stop)
             await runtime.start(settings)
         yield
@@ -92,7 +92,7 @@ async def _background_runtimes() -> AsyncIterator[None]:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     async with engine.connect() as connection:
-        await validate_database_migration_head(connection)
+        await validate_database_schema(connection)
 
     async with AsyncSessionLocal() as session:
         await seed_default_accounts(session)
@@ -129,7 +129,7 @@ async def security_headers_middleware(
         response = client_upgrade_required_response(settings)
     else:
         if supported_generation:
-            operational_observability.increment(OperationalCounter.TARGET_CLIENT_REQUEST)
+            operational_observability.increment(OperationalCounter.SUPPORTED_CLIENT_REQUEST)
         response = await call_next(request)
     apply_security_headers(request, response)
     return response

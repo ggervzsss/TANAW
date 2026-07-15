@@ -8,10 +8,10 @@ type SharedContract = {
 };
 
 const contract = JSON.parse(
-  readFileSync(new URL("../../../shared-contracts/target-operational-v2.openapi.json", import.meta.url), "utf8"),
+  readFileSync(new URL("../../../shared-contracts/operational-v2.openapi.json", import.meta.url), "utf8"),
 ) as SharedContract;
 
-describe("shared target operational contract", () => {
+describe("shared operational contract", () => {
   it("contains the exact report and telemetry write contracts consumed by desktop", () => {
     expect(contract.info.version).toBe("2.0.0");
     expect(contract.paths["/operational/desktop/report-submissions/v2"]?.post).toBeDefined();

@@ -52,9 +52,11 @@ app/
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
     mail/              # Outbound Resend delivery and email templates
-    mock_data/         # Explicit CLI-driven test-data tooling
-    operational/       # Telemetry, sync, intake reports, and final reports
-alembic/               # Database migration files
+    reporting/         # Intake revisions, Staff review, and obligations
+    telemetry/         # Sequenced observations and current live state
+    final_reports/     # Scoped immutable final reports and artifacts
+    simulation/        # Explicit isolated test-data tooling
+alembic/               # Database schema revisions
 tests/                 # Backend unit and integration tests
 main.py                # FastAPI application entry point
 ```
@@ -63,9 +65,9 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 `app/core`, `app/db`, and `app/api`; domain behavior lives under
 `app/features`.
 
-## Database Migrations
+## Database Schema
 
-Alembic is the only schema authority. Apply migrations before starting any API
+Alembic is the only schema authority. Apply the schema before starting any API
 or simulation-data process:
 
 ```shell
@@ -75,26 +77,11 @@ uv run uvicorn main:app
 
 Application startup validates the `alembic_version` revision and fails with an
 actionable error when the database is missing or outdated. It never creates,
-alters, or drops schema objects. Production deployments must back up PostgreSQL,
-run migrations as a separate pre-deploy/release step, and start the new API only
-after migration succeeds. Revision `20260711_0016` reconciles tables formerly
-created at runtime and is intentionally irreversible because dropping those
-tables would destroy operational and support records; recovery uses a verified
-pre-migration backup or a forward fix.
-
-The account-activation migration (`20260711_0014`) is also intentionally
-irreversible. TANAW discarded temporary passwords when activation links became
-authoritative, so a structural downgrade could not restore credentials for
-pending users. Activated and pending users remain usable on the migrated schema;
-if a release must be reverted, keep the database at the current revision and
-roll forward the application, or restore the application and database together
-from a verified pre-activation backup. Never deploy pre-activation backend code
-against the migrated database.
-
-The verified-email-change migration (`20260712_0019`) is intentionally
-irreversible as well. Its request history is security audit evidence and can
-contain an outstanding ownership proof. Roll forward or restore the application
-and database together from a verified backup instead of dropping that state.
+alters, or drops schema objects. Production deployments run Alembic as a
+separate pre-deploy step and start the API only after they succeed. Revision
+`20260715_0001` is the initial schema revision and creates the complete database
+in an empty PostgreSQL database. It is intentionally irreversible. Recovery uses
+a verified database backup or recreates an empty database.
 
 ## Email Integration
 

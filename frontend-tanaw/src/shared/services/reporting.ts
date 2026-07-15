@@ -26,9 +26,9 @@ import type {
 
 const PAGE_LIMIT = 100;
 const DECIMAL_STRING_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
-const ELIGIBILITY_BASES = new Set(["registry_snapshot", "migration_evidence", "manual_resolution"]);
-const REPORT_REVIEW_EVENT_TYPES = new Set(["revision_submitted", "returned", "accepted", "reopened", "consolidated", "migration_state_imported"]);
-const FINAL_REPORT_EVENT_TYPES = new Set(["version_finalized", "migration_final_imported"]);
+const ELIGIBILITY_BASES = new Set(["registry_snapshot", "manual_resolution"]);
+const REPORT_REVIEW_EVENT_TYPES = new Set(["revision_submitted", "returned", "accepted", "reopened", "consolidated"]);
+const FINAL_REPORT_EVENT_TYPES = new Set(["version_finalized"]);
 
 export const reportWorkflowQueryKey = ["operational", "reporting", "v2"] as const;
 export const reportingPeriodListQueryKey = [...reportWorkflowQueryKey, "periods"] as const;
@@ -359,7 +359,7 @@ function assertEnterpriseReportDetail(report: EnterpriseReportDetail) {
   }
   for (const revision of report.revisions) {
     if (!revision.localRevisionId.trim()) {
-      throw new Error("The enterprise report revision omitted its target local revision identity.");
+      throw new Error("The enterprise report revision omitted its required local revision identity.");
     }
     assertMetricDecimalStrings(revision.metrics, "enterprise report revision");
     assertDemographicDecimalStrings(revision.demographics, "enterprise report revision");

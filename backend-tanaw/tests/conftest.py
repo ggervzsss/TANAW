@@ -1,5 +1,5 @@
-"""Register the complete target model graph before isolated SQLAlchemy tests run."""
+"""Register the complete model graph before isolated SQLAlchemy tests run."""
 
-from app.db import base as target_model_registry
+from app.db import base as model_registry
 
-assert target_model_registry.Base.metadata.tables["simulation_runs"] is not None
+assert model_registry.Base.metadata.tables["simulation_runs"] is not None

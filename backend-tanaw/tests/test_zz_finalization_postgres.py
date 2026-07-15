@@ -50,7 +50,7 @@ from app.features.topology.models import Enterprise, EnterpriseSite, SiteLocatio
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 
-# Register the simulation-lineage target before SQLAlchemy sorts the topology
+# Register the simulation-lineage model before SQLAlchemy sorts the topology
 # mapper dependencies in this deliberately isolated PostgreSQL module.
 assert SimulationRun.__tablename__ == "simulation_runs"
 
@@ -145,7 +145,7 @@ async def test_finalization_is_atomic_idempotent_and_exact(
         severity="Success",
         actor=staff.display_name,
         actor_role="LGU Staff",
-        action="Legacy Duplicate Final Audit",
+        action="Existing Duplicate Final Audit",
         target=str(created.resource.reportFinalizationId),
         summary="A convenience log must not own the official finalization audit.",
         source_id=str(created.resource.reportFinalizationId),

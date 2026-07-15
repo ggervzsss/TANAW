@@ -61,7 +61,7 @@ means supplied by an authenticated human and MUST include that method in officia
 views. `system_derived` means calculated from documented source facts.
 
 Demographic facts are not camera-derived unless an approved, tested model and
-legal/privacy policy explicitly makes them so. In the current target contract,
+legal/privacy policy explicitly makes them so. In the current contract,
 manual demographics are `operator_entered`. Missing demographics stay absent;
 no fixed residence, age, gender, or source ratio may be generated.
 

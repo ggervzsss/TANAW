@@ -1,4 +1,4 @@
-"""Opaque, filter-bound keyset cursors shared by target reporting readers."""
+"""Opaque, filter-bound keyset cursors shared by reporting readers."""
 
 from __future__ import annotations
 

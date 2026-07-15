@@ -3,7 +3,7 @@ import packageMetadata from "../../../package.json";
 import { APP_VERSION } from "./app.config";
 import { appendClientGeneration, CLIENT_GENERATION, CLIENT_GENERATION_HEADERS, parseUpgradeDetail } from "./client-generation";
 
-describe("portal target generation", () => {
+describe("portal release generation", () => {
   it("ships the backend-matched contract-2 identity", () => {
     expect(packageMetadata.version).toBe("2.0.0");
     expect(APP_VERSION).toBe(packageMetadata.version);
@@ -11,13 +11,13 @@ describe("portal target generation", () => {
       name: "web-portal",
       version: "2.0.0",
       contractVersion: 2,
-      releaseId: "target-cutover-release",
+      releaseId: "tanaw-release-2",
     });
     expect(CLIENT_GENERATION_HEADERS).toEqual({
       "X-TANAW-Client-Name": "web-portal",
       "X-TANAW-Client-Version": "2.0.0",
       "X-TANAW-Contract-Version": "2",
-      "X-TANAW-Release-ID": "target-cutover-release",
+      "X-TANAW-Release-ID": "tanaw-release-2",
     });
   });
 
@@ -28,13 +28,13 @@ describe("portal target generation", () => {
       client: "web-portal",
       clientVersion: "2.0.0",
       contractVersion: "2",
-      releaseId: "target-cutover-release",
+      releaseId: "tanaw-release-2",
     });
   });
 
   it("turns a 426 payload into a blocking upgrade message", () => {
-    expect(parseUpgradeDetail({ error: { message: "Deploy the target portal.", minimumClientVersion: "2.0.0", requiredContractVersion: 2 } })).toEqual({
-      message: "Deploy the target portal.",
+    expect(parseUpgradeDetail({ error: { message: "Deploy the current portal.", minimumClientVersion: "2.0.0", requiredContractVersion: 2 } })).toEqual({
+      message: "Deploy the current portal.",
       minimumClientVersion: "2.0.0",
       requiredContractVersion: 2,
     });

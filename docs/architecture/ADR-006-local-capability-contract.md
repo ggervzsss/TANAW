@@ -84,7 +84,7 @@ Electron:
 {
   "serviceName": "tanaw-ml-service",
   "localContractVersion": 2,
-  "releaseId": "target-cutover-release",
+  "releaseId": "tanaw-release-2",
   "launchId": "5df0f569-6bc5-4383-8ee4-a9f6d0b30222",
   "pid": 12345,
   "status": "ready"
@@ -98,7 +98,7 @@ does not establish identity.
 
 - Missing, wrong, and previous-launch capabilities fail for REST, health,
   WebSocket, and stream endpoints.
-- A rogue service on the old fixed port is never trusted.
+- A rogue loopback service is never trusted.
 - A valid restart rotates capability/launch ID and reconnects.
 - Renderer APIs cannot obtain a token, camera credential, arbitrary endpoint, or
   raw command bridge.

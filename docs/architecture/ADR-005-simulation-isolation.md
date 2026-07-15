@@ -10,7 +10,7 @@ revision, domain event, alert, notification, and final report is classified as
 server-owned topology and MUST NOT be selected or promoted by a client payload.
 There is no `hybrid` official state.
 
-Simulation is test/training data. It may exercise the same target contracts, but
+Simulation is test/training data. It may exercise the same application contracts, but
 it is never evidence for government reporting or operational health.
 
 ## Isolation rules

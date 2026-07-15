@@ -1,4 +1,4 @@
-"""Target-only account ownership projection for normalized enterprise topology."""
+"""Account ownership projection for normalized enterprise topology."""
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ async def enterprise_official_code_for_account(
     db: AsyncSession,
     account: Account,
 ) -> str | None:
-    """Return the target business login code, or none for an LGU principal."""
+    """Return the business login code, or none for an LGU principal."""
 
     if account.role != AccountRole.ENTERPRISE:
         return None
@@ -300,7 +300,7 @@ async def get_account_by_official_code(
     *,
     for_update: bool = False,
 ) -> Account | None:
-    """Resolve a login principal from the unique target enterprise code."""
+    """Resolve a login principal from the unique enterprise code."""
 
     now = datetime.now(UTC)
     statement = (
@@ -337,7 +337,7 @@ async def get_enterprise_account_by_identifier(
     db: AsyncSession,
     identifier: str,
 ) -> Account | None:
-    """Resolve an enterprise principal by target official code or account UUID."""
+    """Resolve an enterprise principal by official code or account UUID."""
 
     normalized = identifier.strip().lower()
     statement = (

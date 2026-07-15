@@ -1,4 +1,4 @@
-"""Shared target-only page metadata for bounded keyset list APIs."""
+"""Shared page metadata for bounded keyset list APIs."""
 
 from typing import Self
 

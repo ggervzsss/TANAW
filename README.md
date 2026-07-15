@@ -135,7 +135,7 @@ TANAW/
 │   │       ├── auth/           # Login, logout, password, and recovery flows
 │   │       ├── simulation/     # Explicit simulation CLI
 │   │       └── operational/    # Telemetry, reports, sync, and final reports
-│   ├── alembic/                # Database migrations
+│   ├── alembic/                # Database schema revisions
 │   └── tests/
 ├── frontend-tanaw/             # LGU role-based React web portal
 │   └── src/
@@ -326,8 +326,8 @@ Stop the services without deleting database data:
 docker compose down
 ```
 
-Compose applies every versioned Alembic migration before the backend starts.
-The backend validates that migration state, initializes the bootstrap IT account
+Compose applies the required Alembic schema revision before the backend starts.
+The backend validates that schema state, initializes the bootstrap IT account
 once, and optionally creates explicitly enabled development accounts. Later
 restarts never mutate the schema or synchronize or reset an existing account.
 
@@ -414,8 +414,8 @@ For a fresh production database, configure a unique bootstrap email and password
 for the first startup. After initialization, remove `BOOTSTRAP_IT_*` from the
 deployment secrets. TANAW persists the bootstrap account's protected identity in
 the database, so removing those variables never makes the account editable or
-deactivatable. If an IT account already exists in a migrated database, no
-bootstrap credentials are required.
+deactivatable. If an IT account already exists, no bootstrap credentials are
+required.
 
 ## Seed and simulate reports
 
@@ -715,7 +715,7 @@ docker compose -f docker-compose.prod.yml up --build -d
 This configuration:
 
 - installs production-only backend dependencies;
-- runs a one-shot migration service and starts the API only after it succeeds;
+- runs a one-shot schema service and starts the API only after it succeeds;
 - runs Uvicorn without reload;
 - compiles the web portal during image creation;
 - serves the compiled frontend through Nginx;
@@ -726,10 +726,10 @@ installed from a packaged desktop build.
 
 For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
 pre-deploy or release command before replacing the backend process. TANAW refuses
-to start against an uninitialized or outdated database. Back up PostgreSQL before
-every production migration; revision `20260711_0016` is intentionally
-irreversible because rolling it back would require dropping operational and
-support data.
+to start against an uninitialized or unsupported database schema. Back up
+PostgreSQL before every production schema change. The initial revision is
+intentionally irreversible because its downgrade would drop the complete TANAW
+database.
 
 ## Environment configuration
 

@@ -316,8 +316,6 @@ async def ingest_telemetry_command(
         site_id=site.id,
         edge_device_id=device.id,
         classification=site.classification,
-        ingest_kind="command",
-        ordering_status="sequenced",
         telemetry_epoch_id=epoch.id,
         epoch_generation=epoch.generation,
         sequence=command.payload.sequence,
