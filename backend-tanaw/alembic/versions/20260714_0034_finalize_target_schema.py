@@ -26,6 +26,8 @@ def upgrade() -> None:
     connection = op.get_bind()
     _require_closed_exception_ledgers(connection)
 
+    _drop_import_normalization_guards()
+
     op.drop_constraint(
         "ck_reporting_obligations_eligibility_basis",
         "reporting_obligations",
@@ -164,6 +166,8 @@ def upgrade() -> None:
         postgresql_where=sa.text("grain = 'import_unspecified'"),
     )
 
+    _restore_import_normalization_guards()
+
     op.execute(
         """
         CREATE OR REPLACE FUNCTION tanaw_enforce_report_acceptance_unblocked()
@@ -200,6 +204,42 @@ def upgrade() -> None:
 
     op.drop_table("report_migration_exceptions")
     op.drop_table("telemetry_migration_exceptions")
+
+
+def _drop_import_normalization_guards() -> None:
+    """Allow this atomic migration to relabel already-imported immutable rows."""
+    for table_name, trigger_suffix in (
+        ("report_review_events", "immutable"),
+        ("final_report_events", "immutable"),
+        ("telemetry_observations", "append_only"),
+        ("telemetry_metric_facts", "append_only"),
+    ):
+        op.execute(f"DROP TRIGGER trg_{table_name}_{trigger_suffix} ON {table_name}")
+
+
+def _restore_import_normalization_guards() -> None:
+    for table_name in ("report_review_events", "final_report_events"):
+        op.execute(
+            f"""
+            CREATE TRIGGER trg_{table_name}_immutable
+            BEFORE UPDATE OR DELETE ON {table_name}
+            FOR EACH ROW EXECUTE FUNCTION tanaw_reject_immutable_reporting_mutation()
+            """
+        )
+    op.execute(
+        """
+        CREATE TRIGGER trg_telemetry_observations_append_only
+        BEFORE UPDATE ON telemetry_observations
+        FOR EACH ROW EXECUTE FUNCTION tanaw_guard_telemetry_observation_update()
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_telemetry_metric_facts_append_only
+        BEFORE UPDATE ON telemetry_metric_facts
+        FOR EACH ROW EXECUTE FUNCTION tanaw_reject_append_only_update()
+        """
+    )
 
 
 def _require_closed_exception_ledgers(connection: Connection) -> None:

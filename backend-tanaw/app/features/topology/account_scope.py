@@ -126,7 +126,7 @@ async def load_account_topologies(
     evaluated_at: datetime | None = None,
     lock: bool = False,
 ) -> dict[str, AccountTopology | None]:
-    """Batch-load normalized ownership without legacy account-column fallbacks."""
+    """Batch-load authoritative normalized account ownership."""
 
     if not accounts:
         return {}

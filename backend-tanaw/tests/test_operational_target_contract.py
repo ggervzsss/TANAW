@@ -2,7 +2,8 @@ from app.main import app
 
 
 def test_openapi_exposes_only_target_report_and_telemetry_contracts() -> None:
-    paths = app.openapi()["paths"]
+    openapi = app.openapi()
+    paths = openapi["paths"]
 
     for target_path in (
         "/operational/desktop/telemetry-epochs/v2",
@@ -31,3 +32,16 @@ def test_openapi_exposes_only_target_report_and_telemetry_contracts() -> None:
         "/operational/enterprise-accounts",
     ):
         assert removed_path not in paths
+
+    assert all("/v1" not in path for path in paths)
+    schema_names = set(openapi["components"]["schemas"])
+    assert schema_names.isdisjoint(
+        {
+            "EnterpriseReportSubmission",
+            "EnterpriseTelemetrySnapshot",
+            "FinalReportCreate",
+            "FinalReportSource",
+            "ReportIntakePayload",
+            "TelemetrySnapshot",
+        }
+    )

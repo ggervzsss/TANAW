@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from app.storage.ledger_schema import TARGET_LOCAL_SCHEMA_VERSION, create_target_schema
@@ -90,37 +91,67 @@ def _verify_database_integrity(connection: sqlite3.Connection) -> None:
 
 
 def _verify_target_catalog(connection: sqlite3.Connection) -> None:
-    forbidden_tables = {"count_snapshots", "report_submissions", "local_schema_migrations"}
-    tables = {
-        str(row["name"])
+    expected_object_items, expected_table_items = _target_catalog_definition()
+    expected_objects = dict(expected_object_items)
+    expected_tables = dict(expected_table_items)
+    actual_objects = _catalog_objects(connection)
+    if actual_objects != expected_objects:
+        missing = sorted(expected_objects.keys() - actual_objects.keys())
+        unexpected = sorted(actual_objects.keys() - expected_objects.keys())
+        changed = sorted(
+            key
+            for key in actual_objects.keys() & expected_objects.keys()
+            if actual_objects[key] != expected_objects[key]
+        )
+        raise RuntimeError(
+            "The local ledger catalog is not the exact target schema "
+            f"(missing={missing}, unexpected={unexpected}, changed={changed})."
+        )
+
+    for table_name, expected_columns in expected_tables.items():
+        if _table_info(connection, table_name) != expected_columns:
+            raise RuntimeError(
+                f"The local ledger table {table_name!r} does not match the target columns."
+            )
+
+
+@lru_cache(maxsize=1)
+def _target_catalog_definition() -> tuple[
+    tuple[tuple[tuple[str, str, str], str], ...],
+    tuple[tuple[str, tuple[tuple[object, ...], ...]], ...],
+]:
+    reference = sqlite3.connect(":memory:")
+    reference.row_factory = sqlite3.Row
+    try:
+        _configure_connection(reference)
+        create_target_schema(reference)
+        expected_objects = _catalog_objects(reference)
+        expected_tables = sorted(
+            name for object_type, name, _ in expected_objects if object_type == "table"
+        )
+        return (
+            tuple(sorted(expected_objects.items())),
+            tuple(
+                (table_name, _table_info(reference, table_name)) for table_name in expected_tables
+            ),
+        )
+    finally:
+        reference.close()
+
+
+def _catalog_objects(connection: sqlite3.Connection) -> dict[tuple[str, str, str], str]:
+    return {
+        (str(row["type"]), str(row["name"]), str(row["tbl_name"])): str(row["sql"] or "")
         for row in connection.execute(
-            "select name from sqlite_master where type = 'table' and name not like 'sqlite_%'"
+            "select type, name, tbl_name, sql from sqlite_master "
+            "where name not like 'sqlite_%' order by type, name"
         )
     }
-    remaining = sorted(forbidden_tables & tables)
-    if remaining:
-        raise RuntimeError(
-            "Superseded local-ledger objects are not accepted by the target runtime: "
-            + ", ".join(remaining)
-        )
-    columns = {str(row["name"]) for row in connection.execute("pragma table_info(count_events)")}
-    required_columns = {
-        "event_id",
-        "business_date",
-        "reporting_period_id",
-        "camera_key",
-        "camera_event_sequence",
-        "attributes_json",
-    }
-    if not required_columns <= columns:
-        raise RuntimeError("The local event ledger does not match the target catalog.")
-    forbidden_columns = {"payload_json", "submitted_report_id", "synced_at"}
-    remaining_columns = sorted(forbidden_columns & columns)
-    if remaining_columns:
-        raise RuntimeError(
-            "Superseded event-ledger columns are not accepted by the target runtime: "
-            + ", ".join(remaining_columns)
-        )
+
+
+def _table_info(connection: sqlite3.Connection, table_name: str) -> tuple[tuple[object, ...], ...]:
+    escaped_name = table_name.replace('"', '""')
+    return tuple(tuple(row) for row in connection.execute(f'pragma table_info("{escaped_name}")'))
 
 
 def upsert_reporting_period(connection: sqlite3.Connection, period: ReportingPeriod) -> None:

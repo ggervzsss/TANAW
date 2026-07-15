@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.db.session import AsyncSessionLocal
 from app.features.final_reports.artifact_service import FinalReportArtifactProcessor
 from app.features.final_reports.artifact_storage import ArtifactStorage, LocalArtifactStorage
@@ -17,16 +15,6 @@ _storage: ArtifactStorage | None = None
 _processor: FinalReportArtifactProcessor | None = None
 _worker_task: asyncio.Task[None] | None = None
 _stop_event: asyncio.Event | None = None
-
-
-@asynccontextmanager
-async def final_report_artifact_lifespan(_: object) -> AsyncIterator[None]:
-    settings = get_settings()
-    await start_final_report_artifact_worker(settings)
-    try:
-        yield
-    finally:
-        await stop_final_report_artifact_worker()
 
 
 async def start_final_report_artifact_worker(settings: Settings) -> None:

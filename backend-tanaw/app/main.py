@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,7 @@ from app.core.client_compatibility import (
     is_supported_client_generation,
     request_client_generation,
 )
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.http_security import apply_security_headers
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
@@ -24,7 +25,11 @@ from app.features.events.runtime import (
     start_domain_event_delivery_worker,
     stop_domain_event_delivery_worker,
 )
-from app.features.final_reports.artifact_runtime import final_report_artifact_worker_ready
+from app.features.final_reports.artifact_runtime import (
+    final_report_artifact_worker_ready,
+    start_final_report_artifact_worker,
+    stop_final_report_artifact_worker,
+)
 from app.features.mail.runtime import (
     close_email_runtime,
     email_runtime_ready,
@@ -42,17 +47,45 @@ from app.features.maintenance.runtime import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class BackgroundRuntime:
+    name: str
+    start: Callable[[Settings], Awaitable[None]]
+    stop: Callable[[], Awaitable[None]]
+
+
+TARGET_BACKGROUND_RUNTIMES = (
+    BackgroundRuntime(
+        name="email_outbox",
+        start=start_email_outbox_worker,
+        stop=stop_email_outbox_worker,
+    ),
+    BackgroundRuntime(
+        name="final_report_artifacts",
+        start=start_final_report_artifact_worker,
+        stop=stop_final_report_artifact_worker,
+    ),
+    BackgroundRuntime(
+        name="retention_cleanup",
+        start=start_retention_cleanup_worker,
+        stop=stop_retention_cleanup_worker,
+    ),
+    BackgroundRuntime(
+        name="domain_event_delivery_and_realtime_subscription",
+        start=start_domain_event_delivery_worker,
+        stop=stop_domain_event_delivery_worker,
+    ),
+)
+
+
 @asynccontextmanager
 async def _background_runtimes() -> AsyncIterator[None]:
     async with AsyncExitStack() as runtimes:
         runtimes.push_async_callback(close_email_runtime)
         await initialize_email_runtime(settings)
-        runtimes.push_async_callback(stop_email_outbox_worker)
-        await start_email_outbox_worker(settings)
-        runtimes.push_async_callback(stop_retention_cleanup_worker)
-        await start_retention_cleanup_worker(settings)
-        runtimes.push_async_callback(stop_domain_event_delivery_worker)
-        await start_domain_event_delivery_worker(settings)
+        for runtime in TARGET_BACKGROUND_RUNTIMES:
+            runtimes.push_async_callback(runtime.stop)
+            await runtime.start(settings)
         yield
 
 

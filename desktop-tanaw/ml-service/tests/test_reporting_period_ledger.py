@@ -285,6 +285,35 @@ class LocalReportingLedgerTest(unittest.TestCase):
                 {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
             )
 
+    def test_target_runtime_rejects_every_unregistered_schema_object(self) -> None:
+        statements = (
+            "create table backup_count_events (id text primary key)",
+            "create view shadow_counts as select event_id from count_events",
+            "create index comparison_count_events on count_events(recorded_at, event_id)",
+            "create trigger checkpoint_count_events after insert on count_events begin select 1; end",
+        )
+        for statement in statements:
+            with self.subTest(statement=statement), tempfile.TemporaryDirectory() as directory:
+                database_path = Path(directory) / "ledger.sqlite3"
+                initialize_local_database(database_path)
+                with closing(connect_local_database(database_path)) as connection:
+                    connection.execute(statement)
+                    connection.commit()
+
+                with self.assertRaisesRegex(RuntimeError, "not the exact target schema"):
+                    initialize_local_database(database_path)
+
+    def test_target_runtime_rejects_a_changed_table_definition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "ledger.sqlite3"
+            initialize_local_database(database_path)
+            with closing(connect_local_database(database_path)) as connection:
+                connection.execute("alter table count_events add column backup_payload text")
+                connection.commit()
+
+            with self.assertRaisesRegex(RuntimeError, "not the exact target schema"):
+                initialize_local_database(database_path)
+
     def test_pre_cutover_store_is_rejected_without_runtime_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "ledger.sqlite3"

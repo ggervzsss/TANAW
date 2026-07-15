@@ -9,7 +9,6 @@ from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
 from app.features.final_reports.artifact_envelopes import FinalReportArtifactDetail
 from app.features.final_reports.artifact_runtime import (
-    final_report_artifact_lifespan,
     get_final_report_artifact_storage,
 )
 from app.features.final_reports.artifact_service import (
@@ -47,7 +46,6 @@ from app.features.final_reports.service import (
 router = APIRouter(
     prefix="/operational",
     tags=["final-reports-v2"],
-    lifespan=final_report_artifact_lifespan,
 )
 
 StaffAccount = Annotated[Account, Depends(require_roles({"staff"}))]

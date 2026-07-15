@@ -468,23 +468,31 @@ async def test_background_runtime_partial_startup_is_unwound(
 
     monkeypatch.setattr(app_main, "initialize_email_runtime", lambda _: record("init-email"))
     monkeypatch.setattr(app_main, "close_email_runtime", lambda: record("close-email"))
-    monkeypatch.setattr(app_main, "start_email_outbox_worker", lambda _: record("start-email"))
-    monkeypatch.setattr(app_main, "stop_email_outbox_worker", lambda: record("stop-email"))
     monkeypatch.setattr(
         app_main,
-        "start_retention_cleanup_worker",
-        lambda _: record("start-retention"),
-    )
-    monkeypatch.setattr(
-        app_main,
-        "stop_retention_cleanup_worker",
-        lambda: record("stop-retention"),
-    )
-    monkeypatch.setattr(app_main, "start_domain_event_delivery_worker", fail_domain_start)
-    monkeypatch.setattr(
-        app_main,
-        "stop_domain_event_delivery_worker",
-        lambda: record("stop-domain"),
+        "TARGET_BACKGROUND_RUNTIMES",
+        (
+            app_main.BackgroundRuntime(
+                "email_outbox",
+                lambda _: record("start-email"),
+                lambda: record("stop-email"),
+            ),
+            app_main.BackgroundRuntime(
+                "final_report_artifacts",
+                lambda _: record("start-artifacts"),
+                lambda: record("stop-artifacts"),
+            ),
+            app_main.BackgroundRuntime(
+                "retention_cleanup",
+                lambda _: record("start-retention"),
+                lambda: record("stop-retention"),
+            ),
+            app_main.BackgroundRuntime(
+                "domain_event_delivery_and_realtime_subscription",
+                fail_domain_start,
+                lambda: record("stop-domain"),
+            ),
+        ),
     )
 
     with pytest.raises(RuntimeError, match="domain startup failed"):
@@ -494,10 +502,12 @@ async def test_background_runtime_partial_startup_is_unwound(
     assert calls == [
         "init-email",
         "start-email",
+        "start-artifacts",
         "start-retention",
         "start-domain",
         "stop-domain",
         "stop-retention",
+        "stop-artifacts",
         "stop-email",
         "close-email",
     ]

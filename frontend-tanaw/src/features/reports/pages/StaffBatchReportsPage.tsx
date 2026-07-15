@@ -126,7 +126,7 @@ export function StaffBatchReportsPage() {
     <PageMotion>
       <PageHeader title="Batch Reports" description="Review official evidence, period obligations, and exact accepted revisions before immutable finalization." />
 
-      {loadError && <Notice tone="error">Official v2 report resources could not be loaded. TANAW will not use legacy lists as a fallback.</Notice>}
+      {loadError && <Notice tone="error">Official v2 report resources could not be loaded. Review and finalization remain unavailable until the authoritative service recovers.</Notice>}
       {periods.length === 0 && !periodsQuery.isLoading && (
         <Notice tone="warning">
           No official reporting period was returned by the Staff discovery endpoint. TANAW will not invent one from the browser clock. Run the server lifecycle to ensure its configured period horizon.

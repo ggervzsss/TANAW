@@ -1,9 +1,4 @@
-"""Target final-report persistence.
-
-``report_finalizations`` is the permanent logical parent name.  The existing
-``final_reports`` table is a legacy migration input and deliberately does not
-share a runtime model with this target graph.
-"""
+"""Target-only final-report persistence rooted at ``report_finalizations``."""
 
 from datetime import datetime
 from decimal import Decimal

@@ -22,6 +22,7 @@ The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 6. [ADR-006: Electron-to-ML capability](ADR-006-local-capability-contract.md)
 7. [ADR-007: Client compatibility and hard cutover](ADR-007-client-cutover.md)
 8. [Zero-legacy manifest](ZERO_LEGACY_MANIFEST.md)
+9. [Target cutover rehearsal](CUTOVER_REHEARSAL.md)
 
 ## System-wide invariants
 

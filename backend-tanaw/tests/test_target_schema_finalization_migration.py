@@ -35,6 +35,23 @@ def test_finalization_relabels_imported_rows_and_drops_cutover_ledgers() -> None
     assert "unsequenced_import" in executed_sql
     assert "unqualified_import" in executed_sql
     assert "import_unspecified" in executed_sql
+    for table_name, trigger_suffix in (
+        ("report_review_events", "immutable"),
+        ("final_report_events", "immutable"),
+        ("telemetry_observations", "append_only"),
+        ("telemetry_metric_facts", "append_only"),
+    ):
+        trigger_name = f"trg_{table_name}_{trigger_suffix}"
+        drop_position = executed_sql.index(f"DROP TRIGGER {trigger_name}")
+        update_position = executed_sql.index(f"UPDATE {table_name}")
+        create_position = executed_sql.index(f"CREATE TRIGGER {trigger_name}")
+        assert drop_position < update_position < create_position
+    assert (
+        "CREATE TRIGGER trg_telemetry_observations_append_only\n"
+        "        BEFORE UPDATE ON telemetry_observations\n"
+        "        FOR EACH ROW EXECUTE FUNCTION tanaw_guard_telemetry_observation_update()"
+        in executed_sql
+    )
     assert "CREATE OR REPLACE FUNCTION tanaw_enforce_report_acceptance_unblocked" in executed_sql
     assert [call.args[0] for call in operation.drop_table.call_args_list] == [
         "report_migration_exceptions",
