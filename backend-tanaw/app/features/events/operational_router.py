@@ -6,6 +6,11 @@ import jwt
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.client_compatibility import (
+    ClientGeneration,
+    reject_unsupported_websocket_generation,
+)
+from app.core.config import get_settings
 from app.core.security import decode_access_token
 from app.core.websocket_auth import receive_websocket_bearer_token
 from app.db.session import AsyncSessionLocal
@@ -21,8 +26,19 @@ WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
 
 @router.websocket("/ws")
 async def operational_websocket(
-    websocket: WebSocket, query_token: Annotated[str | None, Query(alias="token")] = None
+    websocket: WebSocket,
+    query_token: Annotated[str | None, Query(alias="token")] = None,
+    client_name: Annotated[str | None, Query(alias="client")] = None,
+    client_version: Annotated[str | None, Query(alias="clientVersion")] = None,
+    contract_version: Annotated[str | None, Query(alias="contractVersion")] = None,
+    release_id: Annotated[str | None, Query(alias="releaseId")] = None,
 ) -> None:
+    if await reject_unsupported_websocket_generation(
+        websocket,
+        ClientGeneration(client_name, client_version, contract_version, release_id),
+        get_settings(),
+    ):
+        return
     token = await receive_websocket_bearer_token(websocket, query_token)
     if token is None:
         return

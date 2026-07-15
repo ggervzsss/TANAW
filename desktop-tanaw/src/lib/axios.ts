@@ -1,10 +1,12 @@
 import axios from "axios";
+import { announceClientUpgradeRequired, CLIENT_GENERATION_HEADERS } from "../config/client-generation";
 import { useAuthStore } from "../features/login/stores/auth-store";
 
 export const staffApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
   headers: {
     "Content-Type": "application/json",
+    ...CLIENT_GENERATION_HEADERS,
   },
 });
 
@@ -21,6 +23,9 @@ staffApi.interceptors.request.use((config) => {
 staffApi.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 426) {
+      announceClientUpgradeRequired(error.response.data);
+    }
     if (error.response?.status === 401 || error.response?.status === 403) {
       useAuthStore.getState().logout();
     }

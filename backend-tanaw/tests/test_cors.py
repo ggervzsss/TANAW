@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
+from app.core.client_compatibility import CLIENT_COMPATIBILITY_HEADERS
 from app.core.config import Settings
 
 TRUSTED_FRONTEND_ORIGIN = "https://tanaw-sanpedro.vercel.app"
@@ -31,7 +32,7 @@ def build_cors_test_client() -> TestClient:
         allow_origins=settings.cors_origin_list,
         allow_credentials=False,
         allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", *CLIENT_COMPATIBILITY_HEADERS],
         expose_headers=["ETag"],
     )
 
@@ -79,6 +80,23 @@ def test_options_preflight_works_for_trusted_origin() -> None:
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == TRUSTED_FRONTEND_ORIGIN
     assert response.headers["access-control-allow-origin"] != "*"
+
+
+def test_desktop_generation_headers_are_allowed_by_cors() -> None:
+    client = build_cors_test_client()
+
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": TRUSTED_FRONTEND_ORIGIN,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": ",".join(CLIENT_COMPATIBILITY_HEADERS),
+        },
+    )
+
+    assert response.status_code == 200
+    allowed = response.headers["access-control-allow-headers"].lower()
+    assert all(header.lower() in allowed for header in CLIENT_COMPATIBILITY_HEADERS)
 
 
 def test_options_preflight_rejects_unknown_origin() -> None:

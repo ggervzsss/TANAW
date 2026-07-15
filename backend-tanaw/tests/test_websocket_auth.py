@@ -115,7 +115,13 @@ async def test_operational_websocket_closes_when_session_is_invalidated(
     monkeypatch.setattr(operational_router, "AsyncSessionLocal", AsyncSessionContext)
     monkeypatch.setattr(operational_router, "operational_ws_manager", manager)
 
-    await operational_router.operational_websocket(cast(WebSocket, websocket))
+    await operational_router.operational_websocket(
+        cast(WebSocket, websocket),
+        client_name="web-portal",
+        client_version="2.0.0",
+        contract_version="2",
+        release_id="target-cutover-release",
+    )
 
     websocket.close.assert_awaited_once_with(code=1008)
     websocket.send_text.assert_not_awaited()
@@ -142,7 +148,13 @@ async def test_activity_log_websocket_closes_when_session_is_invalidated(
     monkeypatch.setattr(activity_logs_router, "AsyncSessionLocal", AsyncSessionContext)
     monkeypatch.setattr(activity_logs_router, "activity_log_manager", manager)
 
-    await activity_logs_router.activity_logs_websocket(cast(WebSocket, websocket))
+    await activity_logs_router.activity_logs_websocket(
+        cast(WebSocket, websocket),
+        client_name="web-portal",
+        client_version="2.0.0",
+        contract_version="2",
+        release_id="target-cutover-release",
+    )
 
     websocket.close.assert_awaited_once_with(code=1008)
     websocket.send_text.assert_not_awaited()

@@ -1,5 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
+import { appendClientGeneration } from "../config/client-generation";
 import type { GatewayStatus, MapEnterprise, MapSite } from "../types";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
@@ -113,7 +114,7 @@ export async function updateUserNotificationRead(notificationId: string, read: b
 }
 
 export function getOperationalWebSocketUrl() {
-  return getWebSocketUrl("/operational/ws");
+  return appendClientGeneration(new URL(getWebSocketUrl("/operational/ws"))).toString();
 }
 
 export function createWebSocketAuthMessage(token: string) {

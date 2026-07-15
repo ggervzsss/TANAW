@@ -1,6 +1,7 @@
 import { QueryClient, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAuthStore } from "@/app/store/authStore";
+import { MANDATORY_UPGRADE_WEBSOCKET_CODE } from "../config/client-generation";
 import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listOperationalMapEnterprises, listUserNotifications, type OperationalWebSocketEnvelope } from "../services/operationalSync";
 import { reportWorkflowQueryKey } from "../services/reporting";
 import type { AuthUser } from "../types";
@@ -142,9 +143,13 @@ function useOperationalSyncSocket() {
         socket?.close();
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         clearHeartbeat();
         reconcile();
+        if (event.code === MANDATORY_UPGRADE_WEBSOCKET_CODE) {
+          window.location.reload();
+          return;
+        }
         scheduleReconnect();
       };
     };

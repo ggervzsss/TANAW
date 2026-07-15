@@ -176,6 +176,17 @@ describe("durable report outbox delivery", () => {
     expect(acknowledgeSyncOutboxItem).toHaveBeenCalledWith("tanaw-ml://local", second.outbox_item_id, acknowledgement);
   });
 
+  it("preserves the exact durable outbox item when the backend requires an upgrade", async () => {
+    const item = outboxItem("12121212-1212-4212-8212-121212121212");
+    listReadySyncOutboxItems.mockResolvedValue([item]);
+    post.mockRejectedValue({ response: { status: 426 } });
+
+    await expect(syncDesktopReportSubmissions()).resolves.toBe(0);
+
+    expect(acknowledgeSyncOutboxItem).not.toHaveBeenCalled();
+    expect(recordSyncOutboxFailure).not.toHaveBeenCalled();
+  });
+
   it("dead-letters an unapproved local endpoint without making a cloud request", async () => {
     const item = { ...outboxItem("33333333-3333-4333-8333-333333333333"), endpoint: "/legacy/report-submit" };
     listReadySyncOutboxItems.mockResolvedValue([item]);

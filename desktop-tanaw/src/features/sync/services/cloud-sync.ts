@@ -1,4 +1,5 @@
 import { staffApi } from "../../../lib/axios";
+import { isClientUpgradeRequiredError } from "../../../config/client-generation";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   getLocalMetricsSummary,
@@ -152,6 +153,7 @@ async function deliverSyncOutboxItem(baseUrl: string, item: LocalSyncOutboxItem)
     const response = await staffApi.post<Record<string, unknown>>(item.endpoint, item.payload);
     acknowledgement = response.data;
   } catch (error) {
+    if (isClientUpgradeRequiredError(error)) return false;
     const failure = classifySyncFailure(error);
     await recordSyncOutboxFailure(baseUrl, item.outbox_item_id, failure);
     return false;

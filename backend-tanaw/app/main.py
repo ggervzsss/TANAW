@@ -6,6 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse, Response
 
 from app.api.router import api_router
+from app.core.client_compatibility import (
+    CLIENT_COMPATIBILITY_HEADERS,
+    DESKTOP_CLIENT_NAME,
+    desktop_request_requires_compatibility,
+    desktop_upgrade_required_response,
+    is_supported_client_generation,
+    request_client_generation,
+)
 from app.core.config import get_settings
 from app.core.http_security import apply_security_headers
 from app.db.migrations import validate_database_migration_head
@@ -69,7 +77,7 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=False,
     allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", *CLIENT_COMPATIBILITY_HEADERS],
     expose_headers=["ETag"],
 )
 
@@ -78,7 +86,15 @@ app.add_middleware(
 async def security_headers_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    response = await call_next(request)
+    response: Response
+    if desktop_request_requires_compatibility(request) and not is_supported_client_generation(
+        request_client_generation(request),
+        settings,
+        allowed_client_names=frozenset({DESKTOP_CLIENT_NAME}),
+    ):
+        response = desktop_upgrade_required_response(settings)
+    else:
+        response = await call_next(request)
     apply_security_headers(request, response)
     return response
 

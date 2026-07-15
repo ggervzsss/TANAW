@@ -1,4 +1,5 @@
 import hmac
+import re
 from functools import lru_cache
 from ipaddress import ip_address
 from pathlib import Path
@@ -12,6 +13,7 @@ LOCAL_OR_PRIVATE_HOSTNAMES = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 DEVELOPMENT_JWT_SECRET = "change-this-local-development-secret"
 PLACEHOLDER_BOOTSTRAP_EMAILS = {"default@email.com", "bootstrap@example.com"}
 PLACEHOLDER_BOOTSTRAP_PASSWORDS = {"default", "change-me", "password"}
+SEMANTIC_VERSION_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 class Settings(BaseSettings):
@@ -21,6 +23,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str = DEVELOPMENT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 30
+    minimum_client_version: str = "2.0.0"
+    maximum_client_major_exclusive: int = Field(default=3, ge=3, le=3)
+    client_contract_version: int = Field(default=2, ge=2, le=2)
+    target_release_id: str = "target-cutover-release"
     bootstrap_it_username: str | None = Field(
         default=None,
         validation_alias="BOOTSTRAP_IT_USERNAME",
@@ -165,6 +171,25 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         if normalized not in {"log", "resend"}:
             raise ValueError("EMAIL_DELIVERY_MODE must be either 'log' or 'resend'.")
+        return normalized
+
+    @field_validator("minimum_client_version")
+    @classmethod
+    def validate_minimum_client_version(cls, value: str) -> str:
+        normalized = value.strip()
+        if SEMANTIC_VERSION_PATTERN.fullmatch(normalized) is None:
+            raise ValueError("MINIMUM_CLIENT_VERSION must be a semantic x.y.z version.")
+        major = int(normalized.split(".", 1)[0])
+        if major != 2:
+            raise ValueError("MINIMUM_CLIENT_VERSION must select target major version 2.")
+        return normalized
+
+    @field_validator("target_release_id")
+    @classmethod
+    def validate_target_release_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or len(normalized) > 128 or not normalized.isascii():
+            raise ValueError("TARGET_RELEASE_ID must be a non-empty ASCII release identifier.")
         return normalized
 
     @field_validator(

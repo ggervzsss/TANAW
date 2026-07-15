@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { announceClientUpgradeRequired, CLIENT_UPGRADE_REQUIRED_EVENT, MANDATORY_UPGRADE_WEBSOCKET_CODE, type ClientUpgradeRequiredDetail } from "../../config/client-generation";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
@@ -13,7 +14,7 @@ import {
   updateNotificationRead,
   type BackendNotification,
 } from "../../features/notifications/services/notifications";
-import { notifySuccess } from "../../features/toasts/services/toast-service";
+import { notifyError, notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
@@ -109,6 +110,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
 
   useDesktopCloudSync(mlContextReady, mlBaseUrl);
+
+  useEffect(() => {
+    const handleUpgradeRequired = (event: Event) => {
+      const detail = (event as CustomEvent<ClientUpgradeRequiredDetail>).detail;
+      notifyError(`${detail.message} Required version: ${detail.minimumClientVersion} or newer.`);
+    };
+    window.addEventListener(CLIENT_UPGRADE_REQUIRED_EVENT, handleUpgradeRequired);
+    return () => window.removeEventListener(CLIENT_UPGRADE_REQUIRED_EVENT, handleUpgradeRequired);
+  }, []);
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],
@@ -253,8 +263,12 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       };
 
       socket.onerror = () => socket?.close();
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         clearHeartbeat();
+        if (event.code === MANDATORY_UPGRADE_WEBSOCKET_CODE) {
+          announceClientUpgradeRequired(null);
+          return;
+        }
         scheduleReconnect();
       };
     };

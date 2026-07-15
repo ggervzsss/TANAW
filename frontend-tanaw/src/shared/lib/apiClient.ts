@@ -1,11 +1,13 @@
 import axios from "axios";
 import { useAuthStore } from "@/app/store/authStore";
 import { API_BASE_URL } from "@/shared/config/api.config";
+import { CLIENT_GENERATION_HEADERS } from "@/shared/config/client-generation";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
+    ...CLIENT_GENERATION_HEADERS,
   },
 });
 

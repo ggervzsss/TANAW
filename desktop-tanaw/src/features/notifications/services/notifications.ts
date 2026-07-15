@@ -1,4 +1,5 @@
 import { staffApi } from "../../../lib/axios";
+import { appendClientGeneration } from "../../../config/client-generation";
 import { useAuthStore } from "../../login/stores/auth-store";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
@@ -73,7 +74,7 @@ export function getOperationalWebSocketUrl() {
   url.pathname = "/operational/ws";
   url.search = "";
   url.hash = "";
-  return url.toString();
+  return appendClientGeneration(url).toString();
 }
 
 export function createWebSocketAuthMessage() {

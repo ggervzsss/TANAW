@@ -1,5 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
+import { appendClientGeneration } from "../config/client-generation";
 import type { LogSeverity, SystemLog, SystemLogActorRole, SystemLogCategory } from "../types";
 
 export type CreateActivityLogPayload = {
@@ -40,7 +41,7 @@ export async function recordActivityLog(payload: CreateActivityLogPayload) {
 }
 
 export function getActivityLogsWebSocketUrl() {
-  return getWebSocketUrl("/activity-logs/ws");
+  return appendClientGeneration(new URL(getWebSocketUrl("/activity-logs/ws"))).toString();
 }
 
 export function createWebSocketAuthMessage(token: string) {

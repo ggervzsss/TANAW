@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAuthStore } from "@/app/store/authStore";
+import { MANDATORY_UPGRADE_WEBSOCKET_CODE } from "../config/client-generation";
 import { createWebSocketAuthMessage, getActivityLogsWebSocketUrl, listActivityLogs } from "../services/activityLogs";
 import type { SystemLog } from "../types";
 
@@ -84,9 +85,13 @@ export function useActivityLogs() {
         socket?.close();
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         clearHeartbeat();
         void queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
+        if (event.code === MANDATORY_UPGRADE_WEBSOCKET_CODE) {
+          window.location.reload();
+          return;
+        }
         scheduleReconnect();
       };
     };
