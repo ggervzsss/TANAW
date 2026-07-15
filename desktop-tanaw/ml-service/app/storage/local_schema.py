@@ -12,8 +12,16 @@ LOCAL_SCHEMA_VERSION = TARGET_LOCAL_SCHEMA_VERSION
 SQLITE_BUSY_TIMEOUT_MS = 5_000
 
 
-def connect_local_database(database_path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(database_path, timeout=SQLITE_BUSY_TIMEOUT_MS / 1_000)
+def connect_local_database(
+    database_path: Path,
+    *,
+    cross_thread: bool = False,
+) -> sqlite3.Connection:
+    connection = sqlite3.connect(
+        database_path,
+        timeout=SQLITE_BUSY_TIMEOUT_MS / 1_000,
+        check_same_thread=not cross_thread,
+    )
     connection.row_factory = sqlite3.Row
     _configure_connection(connection)
     return connection

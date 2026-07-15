@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from app.storage.retention import forbidden_disk_artifacts
+
 APP_DIRECTORY_NAME = "desktop-tanaw"
 DATABASE_NAME = "tanaw_metrics.sqlite3"
 LEDGER_TABLES = (
@@ -240,6 +242,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
         "eventRange": {"first": None, "last": None},
         "recentEvents": [],
         "recentReports": [],
+        "forbiddenDiskArtifacts": forbidden_disk_artifacts(database_path.parent),
     }
     if not database_path.exists():
         return result

@@ -8,15 +8,33 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Lock, RLock
+from threading import Lock
 from typing import Any
 from uuid import UUID, uuid4
 
+from app.storage.coverage import (
+    coverage_summary as build_coverage_summary,
+)
+from app.storage.coverage import (
+    end_monitoring_session as close_monitoring_session,
+)
+from app.storage.coverage import (
+    mark_monitoring_connected as mark_session_connected,
+)
+from app.storage.coverage import (
+    open_coverage_gap as insert_coverage_gap,
+)
+from app.storage.coverage import (
+    start_monitoring_session as insert_monitoring_session,
+)
+from app.storage.ledger_writer import SerializedLedgerWriter, writer_for
 from app.storage.local_schema import (
-    connect_local_database,
-    initialize_local_database,
     upsert_reporting_period,
 )
+from app.storage.outbox import acknowledge as acknowledge_outbox
+from app.storage.outbox import health as outbox_health
+from app.storage.outbox import list_ready_items as list_ready_outbox_items
+from app.storage.outbox import record_failure as record_outbox_failure
 from app.storage.report_contract import (
     REPORT_OUTBOX_CONTRACT_VERSION,
     REPORT_OUTBOX_ENDPOINT,
@@ -35,26 +53,13 @@ from app.storage.reporting_periods import (
     monthly_period_from_id,
     parse_captured_at,
 )
-from app.storage.resilience_store import (
-    SQLiteRetryPolicy,
-    record_metric_rollups,
-    run_sqlite_write,
+from app.storage.retention import (
+    purge_consolidated_report_raw_data,
+    purge_expired_identity_data,
+    retention_inventory,
 )
-from app.storage.resilience_store import (
-    coverage_summary as build_coverage_summary,
-)
-from app.storage.resilience_store import (
-    end_monitoring_session as close_monitoring_session,
-)
-from app.storage.resilience_store import (
-    mark_monitoring_connected as mark_session_connected,
-)
-from app.storage.resilience_store import (
-    open_coverage_gap as insert_coverage_gap,
-)
-from app.storage.resilience_store import (
-    start_monitoring_session as insert_monitoring_session,
-)
+from app.storage.rollups import record_metric_rollups
+from app.storage.sqlite_retry import SQLiteRetryPolicy, run_sqlite_write
 from app.storage.target_schema import (
     MAX_EVENT_ATTRIBUTES_BYTES,
     upsert_camera_live_state,
@@ -101,8 +106,6 @@ _REPORT_REVISION_SELECT = _LOCAL_REPORT_SELECT.replace(
     "on revision.revision_id = report.current_revision_id",
     "on revision.report_id = report.report_id",
 )
-_DATABASE_LOCKS: dict[Path, RLock] = {}
-_DATABASE_LOCKS_GUARD = Lock()
 
 
 @dataclass
@@ -134,7 +137,7 @@ class _MetricsBucket:
         self.current_occupancy = _safe_int(row["last_occupancy"])
 
 
-class LocalMetricsStore:
+class LocalLedger:
     def __init__(
         self,
         app_data_dir: str | None = None,
@@ -157,8 +160,7 @@ class LocalMetricsStore:
         self._database_path = self._root / "tanaw_metrics.sqlite3"
         self._initialized = False
         self._initialize_lock = Lock()
-        with _DATABASE_LOCKS_GUARD:
-            self._connection_lock = _DATABASE_LOCKS.setdefault(self._database_path, RLock())
+        self._ledger_writer: SerializedLedgerWriter = writer_for(self._database_path)
         self._sqlite_retry_policy = sqlite_retry_policy or SQLiteRetryPolicy()
         self._retry_sleep = retry_sleep
 
@@ -615,30 +617,9 @@ class LocalMetricsStore:
 
     def cleanup_expired_visitor_metadata(self, now: str | None = None) -> int:
         now = now or _utc_now()
-        with self._connection() as connection:
-            visitor_ids = [
-                row["visitor_id"]
-                for row in connection.execute(
-                    """
-                    select visitor_id
-                    from visitor_identities
-                    where expires_at <= ?
-                    """,
-                    (now,),
-                ).fetchall()
-            ]
-            if not visitor_ids:
-                return 0
-
-            placeholders = ",".join("?" for _ in visitor_ids)
-            connection.execute(
-                f"delete from visitor_sightings where visitor_id in ({placeholders})", visitor_ids
-            )
-            connection.execute(
-                f"delete from visitor_identities where visitor_id in ({placeholders})", visitor_ids
-            )
-
-        return len(visitor_ids)
+        with self._connection(immediate=True) as connection:
+            result = purge_expired_identity_data(connection, expires_at_or_before=now)
+        return result["identities"]
 
     def save_camera_live_state(
         self, payload: dict[str, Any], recorded_at: str | None = None
@@ -1495,83 +1476,12 @@ class LocalMetricsStore:
         limit: int = 100,
         now: str | None = None,
     ) -> list[dict[str, Any]]:
-        limit = max(1, min(limit, 500))
-        now = now or _utc_now()
         with self._connection() as connection:
-            rows = connection.execute(
-                """
-                select *
-                from sync_outbox_items
-                where status in ('ready', 'retry')
-                  and next_attempt_at <= ?
-                order by next_attempt_at, created_at, outbox_item_id
-                limit ?
-                """,
-                (now, limit),
-            ).fetchall()
-        return [_outbox_item_row(row) for row in rows]
+            return list_ready_outbox_items(connection, limit=limit, now=now or _utc_now())
 
     def sync_outbox_health(self) -> dict[str, int | str | None]:
-        """Return health derived only from durable report outbox state and attempts."""
         with self._connection() as connection:
-            backlog = connection.execute(
-                """
-                select
-                    count(*) as pending_count,
-                    min(outbox.created_at) as oldest_pending_at
-                from sync_outbox_items as outbox
-                join local_report_revisions as revision
-                  on revision.revision_id = outbox.report_revision_id
-                where outbox.status != 'acknowledged'
-                  and revision.source_kind = 'real'
-                """
-            ).fetchone()
-            last_acknowledgement = connection.execute(
-                """
-                select max(outbox.acknowledged_at) as acknowledged_at
-                from sync_outbox_items as outbox
-                join local_report_revisions as revision
-                  on revision.revision_id = outbox.report_revision_id
-                where outbox.status = 'acknowledged'
-                  and revision.source_kind = 'real'
-                """
-            ).fetchone()
-            last_failure = connection.execute(
-                """
-                select failed_at, error_class
-                from (
-                    select attempt.completed_at as failed_at, attempt.error_class
-                    from sync_attempts as attempt
-                    join sync_outbox_items as outbox
-                      on outbox.outbox_item_id = attempt.outbox_item_id
-                    join local_report_revisions as revision
-                      on revision.revision_id = outbox.report_revision_id
-                    where attempt.outcome in ('retry', 'dead_letter')
-                      and attempt.error_class is not null
-                      and revision.source_kind = 'real'
-                    union all
-                    select coalesce(outbox.last_attempt_at, outbox.created_at) as failed_at,
-                           outbox.last_error_class as error_class
-                    from sync_outbox_items as outbox
-                    join local_report_revisions as revision
-                      on revision.revision_id = outbox.report_revision_id
-                    where outbox.last_error_class is not null
-                      and revision.source_kind = 'real'
-                )
-                order by julianday(failed_at) desc, failed_at desc
-                limit 1
-                """
-            ).fetchone()
-
-        return {
-            "pending_count": _safe_int(backlog["pending_count"]),
-            "oldest_pending_at": backlog["oldest_pending_at"],
-            "last_acknowledged_at": last_acknowledgement["acknowledged_at"],
-            "last_failure_at": last_failure["failed_at"] if last_failure is not None else None,
-            "last_failure_class": (
-                last_failure["error_class"] if last_failure is not None else None
-            ),
-        }
+            return outbox_health(connection)
 
     def acknowledge_sync_outbox_item(
         self,
@@ -1580,9 +1490,9 @@ class LocalMetricsStore:
         acknowledged_at: str | None = None,
     ) -> bool:
         with self._connection(immediate=True) as connection:
-            return _acknowledge_outbox_item(
+            return acknowledge_outbox(
                 connection,
-                outbox_item_id,
+                outbox_item_id=outbox_item_id,
                 acknowledgement=acknowledgement or {},
                 acknowledged_at=acknowledged_at or _utc_now(),
             )
@@ -1597,160 +1507,33 @@ class LocalMetricsStore:
         http_status: int | None = None,
         failed_at: str | None = None,
     ) -> dict[str, Any]:
-        failed_at = failed_at or _utc_now()
-        failed_datetime = parse_captured_at(failed_at)
         with self._connection(immediate=True) as connection:
-            row = connection.execute(
-                "select * from sync_outbox_items where outbox_item_id = ?",
-                (outbox_item_id,),
-            ).fetchone()
-            if row is None:
-                raise ValueError(f"Unknown sync outbox item: {outbox_item_id}")
-            if row["status"] == "acknowledged":
-                raise ValueError("An acknowledged sync outbox item cannot be failed.")
-
-            attempt_number = int(row["attempt_count"]) + 1
-            if retryable:
-                delay_seconds = min(3_600, 2 ** min(attempt_number, 11))
-                next_attempt_at = (failed_datetime + timedelta(seconds=delay_seconds)).isoformat()
-                status = "retry"
-                outcome = "retry"
-            else:
-                next_attempt_at = failed_datetime.isoformat()
-                status = "dead_letter"
-                outcome = "dead_letter"
-            connection.execute(
-                """
-                update sync_outbox_items
-                set status = ?,
-                    next_attempt_at = ?,
-                    attempt_count = ?,
-                    last_attempt_at = ?,
-                    last_error_class = ?,
-                    last_error_message = ?
-                where outbox_item_id = ?
-                """,
-                (
-                    status,
-                    next_attempt_at,
-                    attempt_number,
-                    failed_datetime.isoformat(),
-                    error_class,
-                    error_message,
-                    outbox_item_id,
-                ),
+            return record_outbox_failure(
+                connection,
+                outbox_item_id=outbox_item_id,
+                error_class=error_class,
+                error_message=error_message,
+                retryable=retryable,
+                http_status=http_status,
+                failed_at=failed_at or _utc_now(),
             )
-            connection.execute(
-                """
-                insert into sync_attempts (
-                    attempt_id,
-                    outbox_item_id,
-                    attempt_number,
-                    attempted_at,
-                    completed_at,
-                    outcome,
-                    error_class,
-                    error_message,
-                    http_status,
-                    next_attempt_at
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(uuid4()),
-                    outbox_item_id,
-                    attempt_number,
-                    failed_datetime.isoformat(),
-                    failed_datetime.isoformat(),
-                    outcome,
-                    error_class,
-                    error_message,
-                    http_status,
-                    next_attempt_at if retryable else None,
-                ),
-            )
-            updated = connection.execute(
-                "select * from sync_outbox_items where outbox_item_id = ?",
-                (outbox_item_id,),
-            ).fetchone()
-        return _outbox_item_row(updated)
 
-    def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
-        purged_at = _utc_now()
+    def purge_report_raw_events(
+        self,
+        report_id: str,
+        consolidated_revision_id: str,
+    ) -> dict[str, int | str | None]:
         with self._connection(immediate=True) as connection:
-            report = connection.execute(
-                "select report_id, raw_purged_at from local_reports where report_id = ?",
-                (report_id,),
-            ).fetchone()
-            if report is None:
-                return {
-                    "report_id": report_id,
-                    "purged_events": 0,
-                    "raw_purged_at": None,
-                }
-
-            event_rows = connection.execute(
-                """
-                select distinct membership.event_id, event.visitor_id
-                from local_report_event_memberships as membership
-                join local_report_revisions as revision
-                  on revision.revision_id = membership.report_revision_id
-                join count_events as event on event.event_id = membership.event_id
-                where revision.report_id = ?
-                """,
-                (report_id,),
-            ).fetchall()
-            event_ids = [str(row["event_id"]) for row in event_rows]
-            visitor_ids = sorted(
-                {str(row["visitor_id"]) for row in event_rows if row["visitor_id"]}
-            )
-            purged_events = 0
-            if event_ids:
-                placeholders = ", ".join("?" for _ in event_ids)
-                result = connection.execute(
-                    f"delete from count_events where event_id in ({placeholders})",
-                    event_ids,
-                )
-                purged_events = result.rowcount or 0
-            purged_sightings = 0
-            purged_identities = 0
-            if visitor_ids:
-                visitor_placeholders = ", ".join("?" for _ in visitor_ids)
-                result = connection.execute(
-                    f"delete from visitor_sightings where visitor_id in ({visitor_placeholders})",
-                    visitor_ids,
-                )
-                purged_sightings = result.rowcount or 0
-                result = connection.execute(
-                    f"""
-                    delete from visitor_identities
-                    where visitor_id in ({visitor_placeholders})
-                      and not exists (
-                          select 1
-                          from count_events
-                          where count_events.visitor_id = visitor_identities.visitor_id
-                      )
-                    """,
-                    visitor_ids,
-                )
-                purged_identities = result.rowcount or 0
-            next_purged_at = (
-                purged_at
-                if purged_events > 0 or report["raw_purged_at"] is None
-                else report["raw_purged_at"]
-            )
-            connection.execute(
-                "update local_reports set raw_purged_at = ? where report_id = ?",
-                (next_purged_at, report_id),
+            return purge_consolidated_report_raw_data(
+                connection,
+                report_id=report_id,
+                consolidated_revision_id=consolidated_revision_id,
+                purged_at=_utc_now(),
             )
 
-        return {
-            "report_id": report_id,
-            "purged_events": _safe_int(purged_events),
-            "purged_sightings": _safe_int(purged_sightings),
-            "purged_identities": _safe_int(purged_identities),
-            "raw_purged_at": next_purged_at,
-        }
+    def retention_inventory(self) -> dict[str, Any]:
+        with self._connection() as connection:
+            return retention_inventory(connection, root=self._root)
 
     def prepare_mock_counts(
         self,
@@ -2092,34 +1875,14 @@ class LocalMetricsStore:
     @contextmanager
     def _connection(self, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
         self._initialize()
-        with self._connection_lock:
-            connection = connect_local_database(self._database_path)
-            try:
-                if immediate:
-                    connection.execute("begin immediate")
-                yield connection
-                connection.commit()
-            except Exception:
-                connection.rollback()
-                raise
-            finally:
-                connection.close()
+        with self._ledger_writer.transaction(immediate=immediate) as connection:
+            yield connection
 
     def _write(self, operation_name: str, operation: Callable[[sqlite3.Connection], None]) -> None:
         self._initialize()
 
         def transaction() -> None:
-            with self._connection_lock:
-                connection = connect_local_database(self._database_path)
-                try:
-                    connection.execute("begin immediate")
-                    operation(connection)
-                    connection.commit()
-                except Exception:
-                    connection.rollback()
-                    raise
-                finally:
-                    connection.close()
+            self._ledger_writer.instrumented_write(operation)
 
         retry_values: dict[str, Any] = {
             "policy": self._sqlite_retry_policy,
@@ -2127,6 +1890,9 @@ class LocalMetricsStore:
         if self._retry_sleep is not None:
             retry_values["sleep"] = self._retry_sleep
         run_sqlite_write(operation_name, transaction, **retry_values)
+
+    def persistence_instrumentation(self) -> dict[str, int]:
+        return self._ledger_writer.instrumentation()
 
     def ensure_initialized(self) -> None:
         self._initialize()
@@ -2138,7 +1904,7 @@ class LocalMetricsStore:
             if self._initialized:
                 return
             self._root.mkdir(parents=True, exist_ok=True)
-            initialize_local_database(self._database_path, enterprise_id=self._enterprise_id)
+            self._ledger_writer.initialize(enterprise_id=self._enterprise_id)
             self._initialized = True
 
 
@@ -2399,133 +2165,6 @@ def _revision_response_from_record(
         "submitted_at": str(record["submitted_at"]),
         "sync_status": str(record["sync_status"]),
     }
-
-
-def _acknowledge_outbox_item(
-    connection: sqlite3.Connection,
-    outbox_item_id: str,
-    *,
-    acknowledgement: dict[str, Any],
-    acknowledged_at: str,
-) -> bool:
-    row = connection.execute(
-        "select * from sync_outbox_items where outbox_item_id = ?",
-        (outbox_item_id,),
-    ).fetchone()
-    if row is None:
-        return False
-    acknowledgement_command_id = acknowledgement.get("commandId")
-    if acknowledgement_command_id is not None and str(acknowledgement_command_id) != str(
-        row["command_id"]
-    ):
-        raise ValueError("Acknowledgement command ID does not match the outbox item.")
-    acknowledgement_hash = acknowledgement.get("payloadHash")
-    if acknowledgement_hash is not None and str(acknowledgement_hash) != str(row["payload_hash"]):
-        raise ValueError("Acknowledgement payload hash does not match the outbox item.")
-    if row["status"] == "acknowledged":
-        return True
-
-    normalized_acknowledged_at = parse_captured_at(acknowledged_at).isoformat()
-    attempt_number = int(row["attempt_count"]) + 1
-    acknowledgement_json = canonical_json(acknowledgement)
-    connection.execute(
-        """
-        update sync_outbox_items
-        set status = 'acknowledged',
-            attempt_count = ?,
-            last_attempt_at = ?,
-            last_error_class = null,
-            last_error_message = null,
-            acknowledged_at = ?,
-            acknowledgement_json = ?
-        where outbox_item_id = ?
-        """,
-        (
-            attempt_number,
-            normalized_acknowledged_at,
-            normalized_acknowledged_at,
-            acknowledgement_json,
-            outbox_item_id,
-        ),
-    )
-    resource = acknowledgement.get("resource")
-    logical_version_value = resource.get("logicalVersion") if isinstance(resource, dict) else None
-    if isinstance(logical_version_value, int) and logical_version_value >= 1:
-        connection.execute(
-            """
-            update local_reports
-            set last_acknowledged_logical_version = max(
-                    last_acknowledged_logical_version,
-                    ?
-                ),
-                updated_at = ?
-            where report_id = (
-                select revision.report_id
-                from local_report_revisions as revision
-                where revision.revision_id = ?
-            )
-            """,
-            (
-                logical_version_value,
-                normalized_acknowledged_at,
-                row["report_revision_id"],
-            ),
-        )
-    connection.execute(
-        """
-        insert into sync_attempts (
-            attempt_id,
-            outbox_item_id,
-            attempt_number,
-            attempted_at,
-            completed_at,
-            outcome,
-            response_json
-        )
-        values (?, ?, ?, ?, ?, 'acknowledged', ?)
-        """,
-        (
-            str(uuid4()),
-            outbox_item_id,
-            attempt_number,
-            normalized_acknowledged_at,
-            normalized_acknowledged_at,
-            acknowledgement_json,
-        ),
-    )
-    return True
-
-
-def _outbox_item_row(row: sqlite3.Row) -> dict[str, Any]:
-    payload = _json_dict(row["payload_json"])
-    acknowledgement = _json_dict(row["acknowledgement_json"])
-    return {
-        "outbox_item_id": row["outbox_item_id"],
-        "report_revision_id": row["report_revision_id"],
-        "command_id": row["command_id"],
-        "idempotency_key": row["idempotency_key"],
-        "endpoint": row["endpoint"],
-        "contract_version": row["contract_version"],
-        "payload": payload,
-        "payload_hash": row["payload_hash"],
-        "status": row["status"],
-        "created_at": row["created_at"],
-        "next_attempt_at": row["next_attempt_at"],
-        "attempt_count": _safe_int(row["attempt_count"]),
-        "last_attempt_at": row["last_attempt_at"],
-        "last_error_class": row["last_error_class"],
-        "last_error_message": row["last_error_message"],
-        "acknowledged_at": row["acknowledged_at"],
-        "acknowledgement": acknowledgement,
-    }
-
-
-def _json_dict(value: Any) -> dict[str, Any]:
-    try:
-        parsed = json.loads(str(value)) if value else {}
-    except (TypeError, json.JSONDecodeError):
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
 
 
 def _safe_scope(value: str | None) -> str:

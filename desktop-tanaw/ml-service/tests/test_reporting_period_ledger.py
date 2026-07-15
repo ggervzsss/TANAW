@@ -11,7 +11,7 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from app.config.camera_config import LocalReportRevisionRequest, MockPrepareRequest
-from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.local_ledger import LocalLedger
 from app.storage.local_schema import (
     LOCAL_SCHEMA_VERSION,
     SQLITE_BUSY_TIMEOUT_MS,
@@ -175,7 +175,7 @@ class ReportingPeriodTest(unittest.TestCase):
 class LocalReportingLedgerTest(unittest.TestCase):
     def test_count_events_store_business_date_and_canonical_period(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(
                 _event("entry"),
                 "2026-06-30T15:59:59.999999+00:00",
@@ -205,7 +205,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
     def test_june_report_never_summarizes_or_consumes_july_event(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(
                 _event("entry"),
                 "2026-06-30T15:59:59.999999+00:00",
@@ -227,7 +227,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
     def test_display_label_is_rejected_even_when_open_events_span_months(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-15T00:00:00+00:00")
             store.append_count_event(_event("entry"), "2026-07-15T00:00:00+00:00")
 
@@ -236,7 +236,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
     def test_correction_only_store_remains_unclassified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.record_occupancy_correction(
                 enterprise_id=None,
                 camera_id=None,
@@ -324,9 +324,9 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
     def test_report_transaction_leaves_concurrent_same_period_insert_open(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            bootstrap = LocalMetricsStore(directory)
+            bootstrap = LocalLedger(directory)
             bootstrap.append_count_event(_event("entry"), "2026-06-15T00:00:00+00:00")
-            writer = LocalMetricsStore(directory)
+            writer = LocalLedger(directory)
             writer.metrics_summary(period_id=JUNE_PERIOD_ID)
             report_store = _BlockingReportStore(directory)
 
@@ -375,7 +375,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
 
     def test_local_connections_enable_wal_foreign_keys_and_busy_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.metrics_summary()
             database_path = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
 
@@ -389,7 +389,7 @@ class LocalReportingLedgerTest(unittest.TestCase):
             self.assertEqual(busy_timeout, SQLITE_BUSY_TIMEOUT_MS)
 
 
-class _BlockingReportStore(LocalMetricsStore):
+class _BlockingReportStore(LocalLedger):
     def __init__(self, app_data_dir: str) -> None:
         super().__init__(app_data_dir)
         self.transaction_entered = threading.Event()

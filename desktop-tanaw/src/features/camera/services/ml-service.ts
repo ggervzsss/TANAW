@@ -509,9 +509,9 @@ export async function recordSyncOutboxFailure(
   });
 }
 
-export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string): Promise<{ report_id: string; purged_events: number; raw_purged_at: string | null }> {
+export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string, consolidatedRevisionId: string): Promise<{ report_id: string; revision_id: string; purged_events: number; purged_sightings: number; purged_identities: number; raw_purged_at: string | null }> {
   void baseUrl;
-  return requestMl<{ report_id: string; purged_events: number; raw_purged_at: string | null }>("reports.purgeRaw", { reportId });
+  return requestMl<{ report_id: string; revision_id: string; purged_events: number; purged_sightings: number; purged_identities: number; raw_purged_at: string | null }>("reports.purgeRaw", { reportId, consolidatedRevisionId });
 }
 
 export async function prepareLocalMockCounts(baseUrl: string, payload: MockPreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {

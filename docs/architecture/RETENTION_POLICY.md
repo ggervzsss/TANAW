@@ -76,12 +76,22 @@ missing is an availability/integrity fault and is not disguised as retention.
 
 The local ledger keeps report identity, immutable local revisions, exact source
 batch membership, sync acknowledgements, and non-identifying hourly/daily
-rollups. Raw count events, snapshots, sightings, identities, and embeddings are
-purged only after the exact central revision is consolidated. The retained
-rollups and coverage gaps preserve dashboard/report meaning after raw deletion.
-Unique-visitor identity expires after the business-day boundary plus the
-configured grace window. Local target-only schema rebuilding and final removal
-of migration readers are tracked separately in the zero-legacy manifest.
+rollups. Raw count events and their linked sightings/identities are purged as
+soon as the desktop observes that the exact acknowledged central revision is
+`consolidated`; the purge command carries that exact local revision ID and the
+ledger rejects mismatches or unacknowledged revisions. There is no age-only
+deletion of unsent or unconsolidated report evidence. Unique-visitor identities,
+sightings, every model-specific embedding, and event-to-identity links expire at
+the Manila business-day boundary plus the configured two-hour grace window.
+`camera_live_state` is one replaceable current-state row rather than raw history.
+The retained rollups and coverage gaps preserve dashboard/report meaning after
+raw deletion.
+
+The target runtime writes no JSONL event copy, snapshot directory, image cache,
+or embedding file. `local-data inspect --json` reports forbidden disk artifacts
+for every ledger, while the retention inventory reports counts for raw event,
+identity, sighting, and embedding tables. The production acceptance scan must
+show an empty forbidden-artifact list on every enrolled device.
 
 ## Recovery and verification
 

@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.local_ledger import LocalLedger
 from app.tools.local_data_cli import clear_local_data, inspect_local_data
 
 
@@ -10,9 +10,11 @@ class LocalDataCliTest(unittest.TestCase):
     def test_inspect_lists_scoped_ledger_counts_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app_data_dir = Path(directory)
-            store = LocalMetricsStore(str(app_data_dir), "enterprise@example.test")
+            store = LocalLedger(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event("real", None))
             store.append_count_event(_event("mock", "run-1"))
+            forbidden_file = store._database_path.parent / "events.jsonl"
+            forbidden_file.write_text("legacy duplicate", encoding="utf-8")
 
             result = inspect_local_data(app_data_dir, "enterprise@example.test", limit=5)
 
@@ -20,6 +22,7 @@ class LocalDataCliTest(unittest.TestCase):
             self.assertTrue(ledger["exists"])
             self.assertEqual(ledger["tables"]["count_events"], 2)
             self.assertEqual(ledger["currentDraftEvents"], 2)
+            self.assertEqual(ledger["forbiddenDiskArtifacts"], ["events.jsonl"])
             self.assertEqual(
                 {
                     (row["sourceKind"], row["mockRunId"], row["count"])
@@ -31,8 +34,8 @@ class LocalDataCliTest(unittest.TestCase):
     def test_clear_enterprise_does_not_remove_other_ledger_or_browser_storage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app_data_dir = Path(directory)
-            first = LocalMetricsStore(str(app_data_dir), "first@example.test")
-            second = LocalMetricsStore(str(app_data_dir), "second@example.test")
+            first = LocalLedger(str(app_data_dir), "first@example.test")
+            second = LocalLedger(str(app_data_dir), "second@example.test")
             first.append_count_event(_event("real", None))
             second.append_count_event(_event("real", None))
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
@@ -49,7 +52,7 @@ class LocalDataCliTest(unittest.TestCase):
     def test_clear_all_ledgers_preserves_browser_storage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             app_data_dir = Path(directory)
-            store = LocalMetricsStore(str(app_data_dir), "enterprise@example.test")
+            store = LocalLedger(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event("real", None))
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)
@@ -63,7 +66,7 @@ class LocalDataCliTest(unittest.TestCase):
     def test_full_device_removes_browser_and_ledgers(self) -> None:
         with tempfile.TemporaryDirectory() as parent:
             app_data_dir = Path(parent) / "desktop-tanaw"
-            store = LocalMetricsStore(str(app_data_dir), "enterprise@example.test")
+            store = LocalLedger(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event("real", None))
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)

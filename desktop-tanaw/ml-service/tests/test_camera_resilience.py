@@ -17,7 +17,7 @@ from app.camera.reconnect import (
     classify_camera_failure,
 )
 from app.config.camera_config import CameraStartRequest
-from app.storage.session_store import SessionStore
+from app.storage.runtime_store import EdgeRuntimeStore
 
 
 class CameraReconnectPolicyTest(unittest.TestCase):
@@ -91,7 +91,7 @@ class CameraCaptureRecoveryTest(unittest.TestCase):
             self.assertEqual(attempts, 2)
             self.assertEqual(manager._latest_raw_frame_id, 2)
             self.assertEqual(manager._connection_state.state, CameraConnectionState.RUNNING)
-            coverage = manager._session_store.monitoring_coverage("month:Asia/Manila:2026-07")
+            coverage = manager._runtime_store.monitoring_coverage("month:Asia/Manila:2026-07")
             self.assertEqual(coverage["evidenceStatus"], "recorded")
             self.assertGreaterEqual(coverage["gapCount"], 1)
 
@@ -119,7 +119,7 @@ class CameraCaptureRecoveryTest(unittest.TestCase):
     def test_safe_session_config_never_persists_camera_username(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager(directory)
-            manager._session_store = SessionStore(directory)
+            manager._runtime_store = EdgeRuntimeStore(directory)
             manager._config = CameraStartRequest(
                 stream_url="rtsp://camera.example.test/live",
                 username="camera-admin",
@@ -129,7 +129,7 @@ class CameraCaptureRecoveryTest(unittest.TestCase):
             payload = manager._safe_config_dump()
             with manager._lock:
                 manager._persist_session_locked()
-            persisted = manager._session_store.load_session()
+            persisted = manager._runtime_store.load_session()
 
             self.assertIsNone(payload["username"])
             self.assertTrue(payload["username_redacted"])
@@ -151,7 +151,7 @@ def _active_manager(directory: str) -> tuple[CameraProcessingManager, Processing
             random_value=lambda: 0.5,
         ),
     )
-    manager._session_store = SessionStore(str(Path(directory)))
+    manager._runtime_store = EdgeRuntimeStore(str(Path(directory)))
     session = ProcessingSession(
         session_id=1,
         config=CameraStartRequest(stream_url="000", camera_id=1, camera_name="Entrance"),

@@ -6,7 +6,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.local_ledger import LocalLedger
 from app.storage.local_schema import connect_local_database
 from app.storage.report_contract import build_revision_document, canonical_hash
 
@@ -65,7 +65,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_official_report_rejects_camera_without_central_uuid_binding(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             event = _event("entry")
             event.pop("central_camera_id")
             store.append_count_event(event, "2026-06-10T00:00:00+00:00")
@@ -81,7 +81,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_report_revision_membership_batches_and_outbox_commit_atomically(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(
                 _event("entry", camera_id=1, camera_name="North"),
                 "2026-06-10T00:00:00+00:00",
@@ -186,7 +186,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_outbox_insert_failure_rolls_back_report_revision_and_membership(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             database_path = _database_path(directory)
             with closing(connect_local_database(database_path)) as connection:
@@ -219,7 +219,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_lost_ack_restart_and_replay_return_the_original_revision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            first_store = LocalMetricsStore(directory)
+            first_store = LocalLedger(directory)
             first_store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             first = first_store.create_local_report_revision(
                 "REP-JUNE",
@@ -229,7 +229,7 @@ class LocalReportOutboxTest(unittest.TestCase):
                 idempotency_key="submit-june-v1",
             )
 
-            restarted_store = LocalMetricsStore(directory)
+            restarted_store = LocalLedger(directory)
             replay = restarted_store.create_local_report_revision(
                 "REP-JUNE",
                 JUNE_PERIOD_ID,
@@ -278,7 +278,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_idempotency_key_rejects_a_different_request(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             store.create_local_report_revision(
                 "REP-JUNE",
@@ -297,7 +297,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_new_request_creates_an_immutable_next_revision(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             first = store.create_local_report_revision(
                 "REP-JUNE",
@@ -362,7 +362,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_report_revision_rows_reject_in_place_updates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
@@ -386,7 +386,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_dead_letter_does_not_block_another_ready_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             store.append_count_event(_event("entry"), "2026-07-10T00:00:00+00:00")
             june = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
@@ -414,7 +414,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_simulation_derived_report_never_enters_official_ready_queue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             event = _event("entry")
             event["source_kind"] = "hybrid"
             event["mock_run_id"] = "simulation-1"
@@ -449,7 +449,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_retry_backoff_hides_only_the_failed_item_until_ready(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
@@ -475,7 +475,7 @@ class LocalReportOutboxTest(unittest.TestCase):
 
     def test_sync_health_uses_the_complete_durable_outbox_and_attempt_history(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
 
@@ -507,7 +507,7 @@ class LocalReportOutboxTest(unittest.TestCase):
                     acknowledged_at="2026-08-01T00:00:03+00:00",
                 )
             )
-            recovered = LocalMetricsStore(directory).sync_outbox_health()
+            recovered = LocalLedger(directory).sync_outbox_health()
 
             self.assertEqual(recovered["pending_count"], 0)
             self.assertIsNone(recovered["oldest_pending_at"])
@@ -519,7 +519,7 @@ class LocalReportOutboxTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
             submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
             store.record_sync_outbox_failure(

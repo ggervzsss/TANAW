@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config.camera_config import reporting_period_submission_error
-from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.local_ledger import LocalLedger
 from app.storage.reporting_periods import monthly_period_for_captured_at
 
 CURRENT_PERIOD_ID = monthly_period_for_captured_at(datetime.now(UTC)).period_id
@@ -12,7 +12,7 @@ JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
 
 
-class LocalMetricsStoreTest(unittest.TestCase):
+class LocalLedgerTest(unittest.TestCase):
     def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
         self.assertIsNotNone(
             reporting_period_submission_error(
@@ -27,7 +27,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_duplicate_reporting_period_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.create_local_report_revision(
                 "REP-001", JUNE_PERIOD_ID, payload={"source": "test"}
@@ -40,7 +40,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_count_events_are_summarized_and_marked_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
 
@@ -62,7 +62,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_event_attributes_reject_nonfinite_or_oversized_documents(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             nonfinite = _event("entry", entry=1, exit=0, occupancy=1)
             nonfinite["reid_score"] = float("nan")
             oversized = _event("entry", entry=1, exit=0, occupancy=1)
@@ -77,7 +77,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_local_reports_are_listed_with_payload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             store.create_local_report_revision(
@@ -93,14 +93,15 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_purging_report_raw_events_keeps_submission_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
-            store.create_local_report_revision(
+            revision = store.create_local_report_revision(
                 "REP-001", CURRENT_PERIOD_ID, "notes", {"source": "test"}
             )
+            store.acknowledge_sync_outbox_item(str(revision["outbox_item_id"]))
 
-            purged = store.purge_report_raw_events("REP-001")
+            purged = store.purge_report_raw_events("REP-001", str(revision["revision_id"]))
 
             self.assertEqual(purged["report_id"], "REP-001")
             self.assertEqual(purged["purged_events"], 2)
@@ -112,13 +113,13 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["unique_count"], 1)
             self.assertEqual(reports[0]["raw_purged_at"], purged["raw_purged_at"])
 
-            repeated = store.purge_report_raw_events("REP-001")
+            repeated = store.purge_report_raw_events("REP-001", str(revision["revision_id"]))
             self.assertEqual(repeated["purged_events"], 0)
             self.assertEqual(repeated["raw_purged_at"], purged["raw_purged_at"])
 
     def test_hybrid_mock_rows_are_tagged_and_removed_without_real_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             hybrid_event = _event("entry", entry=2, exit=0, occupancy=2)
             hybrid_event["source_kind"] = "hybrid"
@@ -145,7 +146,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_removing_hybrid_report_restores_real_camera_events_to_current_draft(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             mock_event = _event("entry", entry=1, exit=0, occupancy=1)
             mock_event["source_kind"] = "mock"
             mock_event["mock_run_id"] = "mock-run-1"
@@ -168,7 +169,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_resubmitting_existing_report_preserves_metrics_when_no_new_events_exist(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.create_local_report_revision(
                 "REP-001", CURRENT_PERIOD_ID, "first", {"notes": "first"}
@@ -187,7 +188,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_resubmitting_existing_report_uses_report_metrics_not_current_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(
                 _event("entry", entry=1, exit=0, occupancy=1),
                 "2026-06-15T04:00:00+00:00",
@@ -224,7 +225,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_resubmitting_cloud_report_does_not_consume_current_open_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             resubmission = store.create_local_report_revision(
@@ -247,7 +248,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_metrics_history_groups_events_and_can_include_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(
                 _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True),
                 "2026-06-11T00:15:00+00:00",
@@ -279,7 +280,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_unique_count_uses_identity_decision_fields(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.append_count_event(
                 _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
             )
@@ -298,7 +299,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_confirmed_and_degraded_unique_counts_are_separated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             confirmed = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
             confirmed["visitor_id"] = "visitor-1"
             confirmed["reid_decision"] = "new"
@@ -317,7 +318,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_occupancy_corrections_are_audited_and_included_in_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "enterprise-a")
+            store = LocalLedger(str(Path(directory)), "enterprise-a")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
 
@@ -341,7 +342,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_expired_visitor_metadata_cleanup_preserves_count_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.upsert_visitor_identity(
                 visitor_id="visitor-1",
                 business_date="2026-06-07",
@@ -379,7 +380,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_secondary_model_embedding_is_persisted_with_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalLedger(str(Path(directory)))
             store.upsert_visitor_identity(
                 visitor_id="visitor-1",
                 business_date="2026-06-07",
@@ -412,8 +413,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_enterprise_scopes_use_separate_ledgers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            first = LocalMetricsStore(str(Path(directory)), "enterprise-a@tanaw.test")
-            second = LocalMetricsStore(str(Path(directory)), "enterprise-b@tanaw.test")
+            first = LocalLedger(str(Path(directory)), "enterprise-a@tanaw.test")
+            second = LocalLedger(str(Path(directory)), "enterprise-b@tanaw.test")
             first.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             self.assertEqual(first.metrics_summary()["entries"], 1)
@@ -421,7 +422,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_prepared_counts_are_finite_and_report_ready(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalLedger(str(Path(directory)), "target@tanaw.test")
 
             summary = store.prepare_mock_counts(
                 mock_run_id="run-1",
@@ -459,7 +460,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_prepared_counts_allow_next_period_after_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalLedger(str(Path(directory)), "target@tanaw.test")
 
             first = store.prepare_mock_counts(
                 mock_run_id="run-1",
@@ -493,7 +494,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_prepared_counts_can_switch_open_periods(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalLedger(str(Path(directory)), "target@tanaw.test")
 
             first = store.prepare_mock_counts(
                 mock_run_id="run-1",
@@ -525,7 +526,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_sync_acknowledgements_update_local_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalLedger(str(Path(directory)), "target@tanaw.test")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             submission = store.create_local_report_revision("REP-001", CURRENT_PERIOD_ID)
 
@@ -539,7 +540,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_mixed_real_and_prepared_counts_preserve_run_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalLedger(str(Path(directory)), "target@tanaw.test")
             store.prepare_mock_counts(
                 mock_run_id="run-1",
                 entries=4,

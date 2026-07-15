@@ -6,13 +6,13 @@ from pathlib import Path
 import numpy as np
 
 from app.identity.unique_visitor_registry import UniqueVisitorRegistry
-from app.storage.session_store import SessionStore
+from app.storage.runtime_store import EdgeRuntimeStore
 
 
 class UniqueVisitorRegistryTest(unittest.TestCase):
     def test_first_entry_creates_unique_visitor(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            registry = UniqueVisitorRegistry(SessionStore(str(Path(directory))))
+            registry = UniqueVisitorRegistry(EdgeRuntimeStore(str(Path(directory))))
 
             decision = registry.resolve_entry(
                 track_id=1,
@@ -29,7 +29,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_strong_repeat_match_does_not_increment_unique(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            registry = UniqueVisitorRegistry(SessionStore(str(Path(directory))))
+            registry = UniqueVisitorRegistry(EdgeRuntimeStore(str(Path(directory))))
             now = _utc("2026-06-07T01:00:00+00:00")
             first = registry.resolve_entry(
                 track_id=1,
@@ -54,7 +54,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_ambiguous_match_counts_as_new(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            registry = UniqueVisitorRegistry(SessionStore(str(Path(directory))))
+            registry = UniqueVisitorRegistry(EdgeRuntimeStore(str(Path(directory))))
             registry.resolve_entry(
                 track_id=1,
                 camera_id=10,
@@ -78,7 +78,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_missing_embedding_degrades_to_unique_without_identity_record(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = SessionStore(str(Path(directory)))
+            store = EdgeRuntimeStore(str(Path(directory)))
             registry = UniqueVisitorRegistry(store)
 
             decision = registry.resolve_entry(
@@ -97,7 +97,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_expired_business_day_identity_is_not_reused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = SessionStore(str(Path(directory)))
+            store = EdgeRuntimeStore(str(Path(directory)))
             registry = UniqueVisitorRegistry(store)
             first = registry.resolve_entry(
                 track_id=1,
@@ -123,7 +123,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_session_track_mapping_can_be_reset_without_clearing_gallery(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            registry = UniqueVisitorRegistry(SessionStore(str(Path(directory))))
+            registry = UniqueVisitorRegistry(EdgeRuntimeStore(str(Path(directory))))
             first = registry.resolve_entry(
                 track_id=1,
                 camera_id=10,
@@ -160,7 +160,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_gallery_ignores_embeddings_from_another_model_version(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = SessionStore(str(Path(directory)))
+            store = EdgeRuntimeStore(str(Path(directory)))
             now = _utc("2026-06-07T01:00:00+00:00")
             old_registry = UniqueVisitorRegistry(store, model_name="old-model")
             old_registry.resolve_entry(
@@ -188,7 +188,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
     def test_quality_embedding_overrides_conflicting_fast_match(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             registry = UniqueVisitorRegistry(
-                SessionStore(str(Path(directory))),
+                EdgeRuntimeStore(str(Path(directory))),
                 model_name="fast",
                 quality_model_name="quality",
             )
@@ -239,7 +239,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
 
     def test_late_quality_embedding_is_attached_to_track_visitor(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = SessionStore(str(Path(directory)))
+            store = EdgeRuntimeStore(str(Path(directory)))
             registry = UniqueVisitorRegistry(store, model_name="fast", quality_model_name="quality")
             registry.resolve_entry(
                 track_id=1,

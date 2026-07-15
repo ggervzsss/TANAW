@@ -5,9 +5,9 @@ from contextlib import closing
 from datetime import UTC, datetime
 
 from app.config.camera_config import LocalReportRecordResponse, LocalReportRevisionResponse
-from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.local_ledger import LocalLedger
 from app.storage.local_schema import connect_local_database
-from app.storage.resilience_store import (
+from app.storage.sqlite_retry import (
     SQLiteRetryPolicy,
     SQLiteWriteExhausted,
     run_sqlite_write,
@@ -20,7 +20,7 @@ JUNE_PERIOD_ID = "month:Asia/Manila:2026-06"
 class ResilienceLedgerTest(unittest.TestCase):
     def test_enterprise_camera_and_current_state_are_normalized(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory, enterprise_id="enterprise-42")
+            store = LocalLedger(directory, enterprise_id="enterprise-42")
             store.append_count_event(
                 _event(central_camera_id=CAMERA_UUID),
                 "2026-06-15T04:00:00+00:00",
@@ -71,7 +71,7 @@ class ResilienceLedgerTest(unittest.TestCase):
 
     def test_coverage_gaps_are_persisted_and_projected_to_strict_report_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.start_monitoring_session(
                 monitoring_session_id="session-1",
                 camera_id=1,
@@ -149,7 +149,7 @@ class ResilienceLedgerTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.upsert_visitor_identity(
                 visitor_id="visitor-1",
                 business_date="2026-06-15",
@@ -185,9 +185,13 @@ class ResilienceLedgerTest(unittest.TestCase):
                 },
                 "2026-06-15T04:00:01+00:00",
             )
-            store.create_local_report_revision("REP-PURGE", JUNE_PERIOD_ID)
+            revision = store.create_local_report_revision("REP-PURGE", JUNE_PERIOD_ID)
+            store.acknowledge_sync_outbox_item(str(revision["outbox_item_id"]))
 
-            purged = store.purge_report_raw_events("REP-PURGE")
+            purged = store.purge_report_raw_events(
+                "REP-PURGE",
+                str(revision["revision_id"]),
+            )
 
             self.assertEqual(purged["purged_events"], 1)
             self.assertEqual(purged["purged_sightings"], 1)
@@ -270,7 +274,7 @@ class ResilienceLedgerTest(unittest.TestCase):
         self.assertEqual(raised.exception.attempts, 2)
 
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             error_id = store.record_persistence_error(
                 operation=raised.exception.operation,
                 reason="sqlite_busy_exhausted",
@@ -282,9 +286,119 @@ class ResilienceLedgerTest(unittest.TestCase):
         self.assertEqual([row["persistence_error_id"] for row in diagnostics], [error_id])
         self.assertEqual(diagnostics[0]["attempt_count"], 2)
 
+    def test_one_instrumented_writer_connection_is_shared_per_enterprise_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = LocalLedger(directory, enterprise_id="enterprise-42")
+            second = LocalLedger(directory, enterprise_id="enterprise-42")
+
+            first.append_count_event(
+                _event(central_camera_id=CAMERA_UUID),
+                "2026-06-15T04:00:00+00:00",
+            )
+            second.append_count_event(
+                _event(central_camera_id=CAMERA_UUID),
+                "2026-06-15T04:00:01+00:00",
+            )
+
+            instrumentation = first.persistence_instrumentation()
+
+            self.assertEqual(instrumentation["connection_open_count"], 1)
+            self.assertEqual(instrumentation["maximum_concurrent_writers"], 1)
+            self.assertEqual(instrumentation["active_writer_count"], 0)
+            self.assertGreaterEqual(instrumentation["committed_transaction_count"], 2)
+            self.assertEqual(instrumentation["rolled_back_transaction_count"], 0)
+
+    def test_expired_identity_cleanup_removes_every_embedding_copy_but_keeps_rollups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalLedger(directory)
+            store.upsert_visitor_identity(
+                visitor_id="visitor-expired",
+                business_date="2026-06-15",
+                camera_id=1,
+                embedding=b"private-embedding",
+                embedding_dim=2,
+                embedding_count=1,
+                model_name="fast",
+                expires_at="2026-06-16T02:00:00+00:00",
+                recorded_at="2026-06-15T04:00:00+00:00",
+            )
+            store.upsert_visitor_model_embedding(
+                visitor_id="visitor-expired",
+                model_name="quality",
+                embedding=b"private-quality-embedding",
+                embedding_dim=2,
+                embedding_count=1,
+                recorded_at="2026-06-15T04:00:00+00:00",
+            )
+            store.append_visitor_sighting(
+                {
+                    "visitor_id": "visitor-expired",
+                    "business_date": "2026-06-15",
+                    "camera_id": 1,
+                    "track_id": 1,
+                    "direction": "entry",
+                    "reid_decision": "new",
+                    "identity_confidence": "high",
+                },
+                "2026-06-15T04:00:00+00:00",
+            )
+            event = _event(central_camera_id=CAMERA_UUID)
+            event["visitor_id"] = "visitor-expired"
+            store.append_count_event(event, "2026-06-15T04:00:00+00:00")
+
+            removed = store.cleanup_expired_visitor_metadata("2026-06-16T02:00:01+00:00")
+            inventory = store.retention_inventory()
+            with closing(connect_local_database(store._database_path)) as connection:
+                event_visitor_id = connection.execute(
+                    "select visitor_id from count_events"
+                ).fetchone()[0]
+                rollup_count = connection.execute("select count(*) from metric_rollups").fetchone()[
+                    0
+                ]
+
+            self.assertEqual(removed, 1)
+            self.assertEqual(event_visitor_id, None)
+            self.assertEqual(rollup_count, 2)
+            self.assertEqual(
+                inventory["raw_table_counts"],
+                {
+                    "count_events": 1,
+                    "visitor_identities": 0,
+                    "visitor_model_embeddings": 0,
+                    "visitor_sightings": 0,
+                },
+            )
+            self.assertEqual(inventory["forbidden_disk_artifacts"], [])
+
+    def test_raw_purge_requires_acknowledged_exact_consolidated_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalLedger(directory)
+            store.append_count_event(
+                _event(central_camera_id=CAMERA_UUID),
+                "2026-06-15T04:00:00+00:00",
+            )
+            revision = store.create_local_report_revision("REP-GUARDED", JUNE_PERIOD_ID)
+
+            with self.assertRaisesRegex(ValueError, "central acknowledgement"):
+                store.purge_report_raw_events("REP-GUARDED", str(revision["revision_id"]))
+            store.acknowledge_sync_outbox_item(str(revision["outbox_item_id"]))
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                store.purge_report_raw_events(
+                    "REP-GUARDED",
+                    "11111111-1111-4111-8111-111111111111",
+                )
+
+            result = store.purge_report_raw_events(
+                "REP-GUARDED",
+                str(revision["revision_id"]),
+            )
+
+            self.assertEqual(result["revision_id"], revision["revision_id"])
+            self.assertEqual(result["purged_events"], 1)
+
     def test_outbox_schema_uses_only_integer_contract_version_two(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(directory)
+            store = LocalLedger(directory)
             store.append_count_event(
                 _event(central_camera_id=CAMERA_UUID),
                 "2026-06-15T04:00:00+00:00",

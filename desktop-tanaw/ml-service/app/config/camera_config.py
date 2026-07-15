@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from math import hypot
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -648,9 +649,16 @@ class LocalReportRecordResponse(BaseModel):
     raw_purged_at: str | None = None
 
 
+class ReportRawDataPurgeRequest(BaseModel):
+    consolidated_revision_id: UUID
+
+
 class ReportRawDataPurgeResponse(BaseModel):
     report_id: str
+    revision_id: str
     purged_events: int
+    purged_sightings: int
+    purged_identities: int
     raw_purged_at: str | None = None
 
 

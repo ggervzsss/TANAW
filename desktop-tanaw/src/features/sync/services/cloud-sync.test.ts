@@ -154,7 +154,7 @@ describe("durable report outbox delivery", () => {
     await expect(syncDesktopReportSubmissions()).resolves.toBe(0);
 
     expect(purgeLocalReportRawEvents).toHaveBeenCalledTimes(1);
-    expect(purgeLocalReportRawEvents).toHaveBeenCalledWith("tanaw-ml://local", "local-report-1");
+    expect(purgeLocalReportRawEvents).toHaveBeenCalledWith("tanaw-ml://local", "local-report-1", "revision-1");
   });
 
   it("acknowledges only the exact successful item and continues after a deterministic failure", async () => {

@@ -16,7 +16,7 @@ from app.detection.yolo_detector import TrackResult
 from app.identity import UniqueVisitorRegistry
 from app.reid import PersonReIdentifier, TrackAppearanceBuffer
 from app.storage.reporting_periods import monthly_period_for_captured_at
-from app.storage.session_store import SessionStore
+from app.storage.runtime_store import EdgeRuntimeStore
 
 CURRENT_PERIOD_ID = monthly_period_for_captured_at(datetime.now().astimezone()).period_id
 
@@ -25,7 +25,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
     def test_exact_sync_outbox_operations_are_forwarded_by_manager(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
-            manager._session_store.append_event(_event_payload())
+            manager._runtime_store.append_event(_event_payload())
             first = manager.create_local_report_revision("REP-MANAGER", CURRENT_PERIOD_ID)
 
             ready = manager.list_ready_sync_outbox_items()
@@ -135,12 +135,12 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(status["mock_run_id"], "live-run")
             manager.stop_mock_mode()
 
-    def test_enterprise_binding_switches_session_store_scope(self) -> None:
+    def test_enterprise_binding_switches_runtime_store_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager(directory)
 
             first = manager.bind_enterprise("enterprise-a@tanaw.test", "Enterprise A")
-            manager._session_store.append_event(_event_payload())
+            manager._runtime_store.append_event(_event_payload())
             second = manager.bind_enterprise("enterprise-b@tanaw.test", "Enterprise B")
 
             self.assertTrue(first["changed"])
@@ -152,7 +152,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             manager = _manager_with_store(directory)
             manager._enterprise_id = "target@tanaw.test"
             manager._enterprise_name = "Target Enterprise"
-            manager._session_store = SessionStore(directory, "target@tanaw.test")
+            manager._runtime_store = EdgeRuntimeStore(directory, "target@tanaw.test")
 
             result = manager.prepare_mock_counts(
                 mock_run_id="run-1",
@@ -203,7 +203,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
     def test_stale_session_cannot_replace_current_error_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager()
-            manager._session_store = SessionStore(directory)
+            manager._runtime_store = EdgeRuntimeStore(directory)
             current_session = _session(1)
             stale_session = _session(2)
 
@@ -731,8 +731,8 @@ def _flush_pending(manager: CameraProcessingManager, session: ProcessingSession)
 
 def _manager_with_store(directory: str) -> CameraProcessingManager:
     manager = CameraProcessingManager(directory)
-    manager._session_store = SessionStore(str(Path(directory)))
-    manager._visitor_registry = UniqueVisitorRegistry(manager._session_store, model_name="test")
+    manager._runtime_store = EdgeRuntimeStore(str(Path(directory)))
+    manager._visitor_registry = UniqueVisitorRegistry(manager._runtime_store, model_name="test")
     manager._reidentifier = PersonReIdentifier(model_path=str(Path(directory) / "missing.onnx"))
     manager._appearance_buffer = TrackAppearanceBuffer()
     manager._counter = TripwireCounter(tripwire_position=0.5)

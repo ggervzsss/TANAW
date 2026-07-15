@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 
-from app.storage.session_store import SessionStore
+from app.storage.runtime_store import EdgeRuntimeStore
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ class VisitorModelEmbedding:
 class UniqueVisitorRegistry:
     def __init__(
         self,
-        session_store: SessionStore,
+        runtime_store: EdgeRuntimeStore,
         model_name: str = "person_reid_onnx",
         timezone_name: str = "Asia/Manila",
         retention_grace_hours: int = 2,
@@ -62,7 +62,7 @@ class UniqueVisitorRegistry:
         quality_strong_match_threshold: float = 0.74,
         quality_top_match_margin: float = 0.05,
     ) -> None:
-        self._session_store = session_store
+        self._runtime_store = runtime_store
         self.model_name = model_name
         self.timezone = ZoneInfo(timezone_name)
         self.retention_grace_hours = retention_grace_hours
@@ -105,7 +105,7 @@ class UniqueVisitorRegistry:
 
     def cleanup_expired(self, now: datetime | None = None) -> int:
         now = now or datetime.now(UTC)
-        deleted_count = self._session_store.cleanup_expired_visitor_metadata(now.isoformat())
+        deleted_count = self._runtime_store.cleanup_expired_visitor_metadata(now.isoformat())
         self._last_cleanup_at = now.isoformat()
         if deleted_count and self._business_date is not None:
             self._gallery = self._load_gallery(self._business_date, self._camera_id, now)
@@ -274,7 +274,7 @@ class UniqueVisitorRegistry:
     def _load_gallery(
         self, business_date: str, camera_id: int | None, now: datetime
     ) -> list[VisitorIdentity]:
-        rows = self._session_store.load_active_visitor_identities(business_date, now.isoformat())
+        rows = self._runtime_store.load_active_visitor_identities(business_date, now.isoformat())
         gallery: list[VisitorIdentity] = []
         for row in rows:
             if row.get("model_name") != self.model_name:
@@ -316,7 +316,7 @@ class UniqueVisitorRegistry:
 
         valid_visitor_ids = {identity.visitor_id for identity in self._gallery}
         gallery: dict[str, VisitorModelEmbedding] = {}
-        rows = self._session_store.load_active_visitor_model_embeddings(
+        rows = self._runtime_store.load_active_visitor_model_embeddings(
             business_date,
             self.quality_model_name,
             now.isoformat(),
@@ -421,7 +421,7 @@ class UniqueVisitorRegistry:
             model_name=self.quality_model_name,
         )
         self._quality_gallery[visitor_id] = entry
-        self._session_store.upsert_visitor_model_embedding(
+        self._runtime_store.upsert_visitor_model_embedding(
             visitor_id=visitor_id,
             model_name=self.quality_model_name,
             embedding=updated_embedding.astype(np.float32).tobytes(),
@@ -431,7 +431,7 @@ class UniqueVisitorRegistry:
         )
 
     def _persist_identity(self, identity: VisitorIdentity, now: datetime) -> None:
-        self._session_store.upsert_visitor_identity(
+        self._runtime_store.upsert_visitor_identity(
             visitor_id=identity.visitor_id,
             business_date=identity.business_date,
             camera_id=identity.camera_id,
@@ -455,7 +455,7 @@ class UniqueVisitorRegistry:
         if decision.visitor_id is None:
             return
 
-        self._session_store.append_visitor_sighting(
+        self._runtime_store.append_visitor_sighting(
             {
                 "visitor_id": decision.visitor_id,
                 "business_date": decision.business_date,

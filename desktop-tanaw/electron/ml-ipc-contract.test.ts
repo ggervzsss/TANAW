@@ -11,9 +11,13 @@ describe("ML IPC operation allowlist", () => {
 
   it("resolves named operations to fixed routes", () => {
     expect(resolveMlOperationRequest("camera.stop", undefined)).toEqual({ method: "POST", path: "/camera/stop" });
-    expect(resolveMlOperationRequest("reports.purgeRaw", { reportId: "report/id" })).toEqual({
+    expect(resolveMlOperationRequest("reports.purgeRaw", {
+      reportId: "report/id",
+      consolidatedRevisionId: "11111111-1111-4111-8111-111111111111",
+    })).toEqual({
       method: "POST",
       path: "/reports/local/report%2Fid/purge-raw",
+      body: JSON.stringify({ consolidated_revision_id: "11111111-1111-4111-8111-111111111111" }),
     });
     expect(resolveMlOperationRequest("metrics.summary", { includeSubmitted: true })).toEqual({
       method: "GET",
@@ -63,7 +67,14 @@ describe("ML IPC operation allowlist", () => {
         body: { stream_url: "rtsp://camera", arbitraryUrl: "http://attacker" },
       }),
     ).toThrow("unsupported field");
-    expect(() => resolveMlOperationRequest("reports.purgeRaw", { reportId: "x".repeat(241) })).toThrow("Invalid ML service identifier");
+    expect(() => resolveMlOperationRequest("reports.purgeRaw", {
+      reportId: "x".repeat(241),
+      consolidatedRevisionId: "11111111-1111-4111-8111-111111111111",
+    })).toThrow("report identifier");
+    expect(() => resolveMlOperationRequest("reports.purgeRaw", {
+      reportId: "report-1",
+      consolidatedRevisionId: "not-a-revision",
+    })).toThrow("consolidated revision");
   });
 
   it("allows only canonical reporting period identity and bounds on report submission", () => {

@@ -41,8 +41,8 @@ from app.identity import UniqueVisitorRegistry, VisitorDecision
 from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
 from app.reid.person_reid import get_reid_model_availability
 from app.runtime.hardware import get_runtime_capabilities
+from app.storage.runtime_store import EdgeRuntimeStore
 from app.storage.session_credentials import persisted_camera_config_has_credentials
-from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack, TrackIdentityResolver
 
 NormalizedPath = tuple[tuple[float, float], ...]
@@ -160,9 +160,9 @@ class CameraProcessingManager:
         )
         self._identity_resolver = TrackIdentityResolver()
         self._pending_entry_events: dict[tuple[int, int], PendingEntryEvent] = {}
-        self._session_store = SessionStore(app_data_dir)
+        self._runtime_store = EdgeRuntimeStore(app_data_dir)
         self._visitor_registry = UniqueVisitorRegistry(
-            self._session_store,
+            self._runtime_store,
             model_name=self._reidentifier.model_name,
             quality_model_name=self._quality_reidentifier.model_name,
         )
@@ -234,9 +234,9 @@ class CameraProcessingManager:
         with self._lock:
             self._enterprise_id = normalized_id
             self._enterprise_name = normalized_name
-            self._session_store = SessionStore(self._app_data_dir, normalized_id)
+            self._runtime_store = EdgeRuntimeStore(self._app_data_dir, normalized_id)
             self._visitor_registry = UniqueVisitorRegistry(
-                self._session_store,
+                self._runtime_store,
                 model_name=self._reidentifier.model_name,
                 quality_model_name=self._quality_reidentifier.model_name,
             )
@@ -502,7 +502,7 @@ class CameraProcessingManager:
     def session(self) -> dict:
         with self._lock:
             if self._mock_mode == "virtual" and self._mock_state in {"running", "paused"}:
-                summary = self._session_store.metrics_summary(include_submitted=True)
+                summary = self._runtime_store.metrics_summary(include_submitted=True)
                 simulation_running = self._mock_state == "running"
                 return {
                     "running": True,
@@ -538,10 +538,10 @@ class CameraProcessingManager:
             }
 
     def metrics_summary(self, include_submitted: bool = False) -> dict:
-        return self._session_store.metrics_summary(include_submitted=include_submitted)
+        return self._runtime_store.metrics_summary(include_submitted=include_submitted)
 
     def metrics_history(self, include_submitted: bool = False) -> dict:
-        return self._session_store.metrics_history(include_submitted=include_submitted)
+        return self._runtime_store.metrics_history(include_submitted=include_submitted)
 
     def record_occupancy_correction(
         self,
@@ -554,7 +554,7 @@ class CameraProcessingManager:
         source_kind: str | None = None,
     ) -> dict:
         with self._lock:
-            summary = self._session_store.metrics_summary(include_submitted=True)
+            summary = self._runtime_store.metrics_summary(include_submitted=True)
             old_occupancy = (
                 self._counter.counts.occupancy
                 if self._state.running
@@ -570,7 +570,7 @@ class CameraProcessingManager:
             resolved_source_kind = source_kind or self._current_source_kind_locked()
             mock_run_id = self._mock_run_id if resolved_source_kind in {"mock", "hybrid"} else None
 
-        correction = self._session_store.record_occupancy_correction(
+        correction = self._runtime_store.record_occupancy_correction(
             enterprise_id=self._enterprise_id,
             camera_id=resolved_camera_id,
             old_occupancy=old_occupancy,
@@ -588,7 +588,7 @@ class CameraProcessingManager:
         return correction
 
     def occupancy_corrections(self, limit: int = 100) -> list[dict]:
-        return self._session_store.list_occupancy_corrections(limit=limit)
+        return self._runtime_store.list_occupancy_corrections(limit=limit)
 
     def model_status(self) -> dict:
         with self._lock:
@@ -602,7 +602,7 @@ class CameraProcessingManager:
                 "effective_reid_mode": self._effective_reid_mode,
                 "unique_counting_mode": self._config.unique_counting_mode if self._config else None,
             }
-        summary = self._session_store.metrics_summary(include_submitted=False)
+        summary = self._runtime_store.metrics_summary(include_submitted=False)
         quality_status = self._quality_reidentifier.status()
         quality_worker_status = self._quality_reid_worker.status()
         return {
@@ -649,7 +649,7 @@ class CameraProcessingManager:
         idempotency_key: str | None = None,
         command_id: str | None = None,
     ) -> dict:
-        submission = self._session_store.create_local_report_revision(
+        submission = self._runtime_store.create_local_report_revision(
             report_id=report_id,
             period_id=period_id,
             notes=notes,
@@ -664,15 +664,15 @@ class CameraProcessingManager:
         return submission
 
     def list_local_reports(self, limit: int = 100) -> list[dict]:
-        return self._session_store.list_local_reports(limit=limit)
+        return self._runtime_store.list_local_reports(limit=limit)
 
     def list_ready_sync_outbox_items(
         self, limit: int = 100, now: str | None = None
     ) -> list[dict[str, Any]]:
-        return self._session_store.list_ready_sync_outbox_items(limit=limit, now=now)
+        return self._runtime_store.list_ready_sync_outbox_items(limit=limit, now=now)
 
     def sync_outbox_health(self) -> dict[str, int | str | None]:
-        return self._session_store.sync_outbox_health()
+        return self._runtime_store.sync_outbox_health()
 
     def acknowledge_sync_outbox_item(
         self,
@@ -680,7 +680,7 @@ class CameraProcessingManager:
         acknowledgement: dict[str, Any] | None = None,
         acknowledged_at: str | None = None,
     ) -> bool:
-        return self._session_store.acknowledge_sync_outbox_item(
+        return self._runtime_store.acknowledge_sync_outbox_item(
             outbox_item_id,
             acknowledgement=acknowledgement,
             acknowledged_at=acknowledged_at,
@@ -696,7 +696,7 @@ class CameraProcessingManager:
         http_status: int | None = None,
         failed_at: str | None = None,
     ) -> dict[str, Any]:
-        return self._session_store.record_sync_outbox_failure(
+        return self._runtime_store.record_sync_outbox_failure(
             outbox_item_id,
             error_class=error_class,
             error_message=error_message,
@@ -705,8 +705,8 @@ class CameraProcessingManager:
             failed_at=failed_at,
         )
 
-    def purge_report_raw_events(self, report_id: str) -> dict:
-        return self._session_store.purge_report_raw_events(report_id)
+    def purge_report_raw_events(self, report_id: str, consolidated_revision_id: str) -> dict:
+        return self._runtime_store.purge_report_raw_events(report_id, consolidated_revision_id)
 
     def prepare_mock_counts(
         self,
@@ -729,7 +729,7 @@ class CameraProcessingManager:
             camera_id = self._config.camera_id if self._config else None
             camera_name = self._config.camera_name if self._config else None
 
-        summary = self._session_store.prepare_mock_counts(
+        summary = self._runtime_store.prepare_mock_counts(
             mock_run_id=mock_run_id,
             entries=entries,
             exits=exits,
@@ -838,7 +838,7 @@ class CameraProcessingManager:
             should_stop_current_run = mock_run_id is None or self._mock_run_id == mock_run_id
         if should_stop_current_run:
             self.stop_mock_mode()
-        removed = self._session_store.remove_mock_data(mock_run_id)
+        removed = self._runtime_store.remove_mock_data(mock_run_id)
         with self._lock:
             if mock_run_id is None or self._mock_run_id == mock_run_id:
                 self._mock_run_id = None
@@ -865,7 +865,7 @@ class CameraProcessingManager:
         return self.mock_status()
 
     def mock_status(self) -> dict:
-        summary = self._session_store.metrics_summary(include_submitted=True)
+        summary = self._runtime_store.metrics_summary(include_submitted=True)
         with self._lock:
             running = self._mock_thread is not None and self._mock_thread.is_alive()
             prepared_run_id = (
@@ -935,7 +935,7 @@ class CameraProcessingManager:
         if self.running or self._restoring_session:
             return False
 
-        payload = self._session_store.load_session()
+        payload = self._runtime_store.load_session()
         if not payload or not payload.get("running"):
             self._restore_saved_snapshot(payload)
             return False
@@ -1018,7 +1018,7 @@ class CameraProcessingManager:
                     self._mock_completed_at = datetime.now(UTC).isoformat()
                 break
 
-            summary = self._session_store.metrics_summary(include_submitted=True)
+            summary = self._runtime_store.metrics_summary(include_submitted=True)
             occupancy = int(summary["current_occupancy"] or 0)
             direction = self._next_mock_direction(rng, occupancy)
             if direction is None:
@@ -1069,7 +1069,7 @@ class CameraProcessingManager:
         rng: random.Random | None = None,
     ) -> bool:
         rng = rng or random.Random(f"{mock_run_id}:{time.time_ns()}")
-        summary = self._session_store.metrics_summary(include_submitted=True)
+        summary = self._runtime_store.metrics_summary(include_submitted=True)
         entries = int(summary["entries"] or 0)
         exits = int(summary["exits"] or 0)
         occupancy = int(summary["current_occupancy"] or 0)
@@ -1116,7 +1116,7 @@ class CameraProcessingManager:
             },
         }
         try:
-            self._session_store.append_event(payload)
+            self._runtime_store.append_event(payload)
         except Exception as exc:
             self._record_persistence_failure("append_mock_event", exc)
             return False
@@ -1128,7 +1128,7 @@ class CameraProcessingManager:
     def _set_mock_starting_occupancy(
         self, mock_run_id: str, mode: str, starting_occupancy: int
     ) -> None:
-        summary = self._session_store.metrics_summary(include_submitted=True)
+        summary = self._runtime_store.metrics_summary(include_submitted=True)
         current_occupancy = int(summary["current_occupancy"] or 0)
         direction = "entry" if starting_occupancy > current_occupancy else "exit"
         difference = abs(starting_occupancy - current_occupancy)
@@ -1378,7 +1378,7 @@ class CameraProcessingManager:
                 and self._connection_state.state is not CameraConnectionState.RUNNING
             )
         if should_mark_connected and session.monitoring_session_id is not None:
-            self._session_store.mark_monitoring_connected(
+            self._runtime_store.mark_monitoring_connected(
                 session.monitoring_session_id,
                 self._utc_now().isoformat(),
             )
@@ -1403,14 +1403,14 @@ class CameraProcessingManager:
             return
         started_at = self._utc_now().isoformat()
         config = session.config
-        self._session_store.start_monitoring_session(
+        self._runtime_store.start_monitoring_session(
             monitoring_session_id=session.monitoring_session_id,
             camera_id=config.camera_id,
             camera_name=config.camera_name,
             central_camera_id=getattr(config, "central_camera_id", None),
             started_at=started_at,
         )
-        self._session_store.record_coverage_gap(
+        self._runtime_store.record_coverage_gap(
             monitoring_session_id=session.monitoring_session_id,
             camera_id=config.camera_id,
             camera_name=config.camera_name,
@@ -1433,7 +1433,7 @@ class CameraProcessingManager:
             return
         config = session.config
         try:
-            self._session_store.record_coverage_gap(
+            self._runtime_store.record_coverage_gap(
                 monitoring_session_id=session.monitoring_session_id,
                 camera_id=config.camera_id,
                 camera_name=config.camera_name,
@@ -1452,7 +1452,7 @@ class CameraProcessingManager:
         if session.monitoring_session_id is None:
             return
         try:
-            self._session_store.end_monitoring_session(
+            self._runtime_store.end_monitoring_session(
                 session.monitoring_session_id,
                 ended_at=self._utc_now().isoformat(),
                 reason=reason,
@@ -2332,7 +2332,7 @@ class CameraProcessingManager:
             counts = self._counter.counts.as_dict()
             visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
             try:
-                self._session_store.append_event(
+                self._runtime_store.append_event(
                     {
                         "camera_id": self._config.camera_id if self._config else None,
                         "camera_name": self._config.camera_name if self._config else None,
@@ -2375,8 +2375,8 @@ class CameraProcessingManager:
             },
         }
         try:
-            self._session_store.save_session(payload)
-            saved_payload = self._session_store.load_session()
+            self._runtime_store.save_session(payload)
+            saved_payload = self._runtime_store.load_session()
             self._session_updated_at = saved_payload.get("updated_at") if saved_payload else None
         except Exception as exc:
             self._record_persistence_failure("save_session_snapshot", exc)
@@ -2392,7 +2392,7 @@ class CameraProcessingManager:
         attempt_count = getattr(error, "attempts", 1)
         safe_detail = redact_stream_credentials(str(error))
         try:
-            self._session_store.record_persistence_error(
+            self._runtime_store.record_persistence_error(
                 operation=operation,
                 reason="sqlite_write_failed",
                 detail=safe_detail,
@@ -2500,7 +2500,7 @@ class CameraProcessingManager:
         self._reid_worker = AsyncReIdWorker(self._reidentifier)
         self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
         self._visitor_registry = UniqueVisitorRegistry(
-            self._session_store,
+            self._runtime_store,
             model_name=self._reidentifier.model_name,
             quality_model_name=self._quality_reidentifier.model_name,
         )

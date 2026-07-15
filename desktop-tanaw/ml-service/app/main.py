@@ -38,6 +38,7 @@ from app.config.camera_config import (
     MockStatusResponse,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
+    ReportRawDataPurgeRequest,
     ReportRawDataPurgeResponse,
     SessionResponse,
 )
@@ -367,8 +368,18 @@ def record_sync_outbox_failure(
 
 
 @app.post("/reports/local/{report_id}/purge-raw", response_model=ReportRawDataPurgeResponse)
-def purge_local_report_raw_events(report_id: str) -> ReportRawDataPurgeResponse:
-    return ReportRawDataPurgeResponse(**manager.purge_report_raw_events(report_id))
+def purge_local_report_raw_events(
+    report_id: str,
+    payload: ReportRawDataPurgeRequest,
+) -> ReportRawDataPurgeResponse:
+    try:
+        result = manager.purge_report_raw_events(
+            report_id,
+            str(payload.consolidated_revision_id),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ReportRawDataPurgeResponse(**result)
 
 
 @app.post("/mock/prepare", response_model=MockPrepareResponse)

@@ -208,8 +208,16 @@ export function resolveMlOperationRequest(operationInput: unknown, payload: unkn
     return { method: spec.method, path: `/sync/outbox/${outboxItemId}/failure`, body };
   }
 
-  const reportId = getIdentifier(payload, "reportId");
-  return { method: spec.method, path: `/reports/local/${encodeURIComponent(reportId)}/purge-raw` };
+  if (!isObjectRecord(payload) || Object.keys(payload).some((key) => key !== "reportId" && key !== "consolidatedRevisionId")) {
+    throw new Error("Invalid ML service report-retention payload.");
+  }
+  const reportId = getBoundedString(payload.reportId, "report identifier");
+  const consolidatedRevisionId = getUuid(payload.consolidatedRevisionId, "consolidated revision");
+  return {
+    method: spec.method,
+    path: `/reports/local/${encodeURIComponent(reportId)}/purge-raw`,
+    body: JSON.stringify({ consolidated_revision_id: consolidatedRevisionId }),
+  };
 }
 
 function assertNoPayload(payload: unknown) {
@@ -310,6 +318,13 @@ function getOutboxItemId(payload: unknown) {
   const value = payload.outboxItemId;
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error("Invalid ML service outbox identifier.");
+  }
+  return value.toLowerCase();
+}
+
+function getUuid(value: unknown, label: string) {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error(`Invalid ML service ${label} identifier.`);
   }
   return value.toLowerCase();
 }

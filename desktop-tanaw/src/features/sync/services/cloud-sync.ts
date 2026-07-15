@@ -232,7 +232,7 @@ async function purgeFinalizedLocalReportRawData(baseUrl: string) {
   const purgeableSubmissions = localReports.filter((submission) => consolidatedRevisionIds.has(submission.revision_id) && !submission.raw_purged_at);
 
   for (const submission of purgeableSubmissions) {
-    await purgeLocalReportRawEvents(baseUrl, submission.report_id);
+    await purgeLocalReportRawEvents(baseUrl, submission.report_id, submission.revision_id);
   }
 
   return purgeableSubmissions.length;
