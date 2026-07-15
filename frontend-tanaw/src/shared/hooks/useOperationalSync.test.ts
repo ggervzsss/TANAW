@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "../types";
+import { activityLogsQueryKey } from "../services/activityLogs";
 import { enterpriseReportDetailQueryKey, enterpriseReportListQueryKey, finalReportDetailQueryKey, finalReportListQueryKey, reportComplianceQueryKey } from "../services/reporting";
 import { createOperationalQueryKeys, handleOperationalEnvelope, operationalMapEnterprisesQueryKey } from "./useOperationalSync";
 import { reportingAccountScope } from "./useReportWorkflow";
@@ -78,6 +79,16 @@ describe("operational realtime reconciliation", () => {
     expect(client.getQueryData(keys.notifications)).toEqual([]);
   });
 
+  it("refetches activity logs through the shared durable realtime stream", () => {
+    const client = createClient();
+    const keys = createOperationalQueryKeys(user);
+    client.setQueryData(activityLogsQueryKey, []);
+
+    handleOperationalEnvelope(client, keys, invalidationEnvelope("activity_log"));
+
+    expect(client.getQueryState(activityLogsQueryKey)?.isInvalidated).toBe(true);
+  });
+
   it("ignores simulation invalidations in the official portal cache", () => {
     const client = createClient();
     const keys = createOperationalQueryKeys(user);
@@ -91,7 +102,7 @@ describe("operational realtime reconciliation", () => {
 });
 
 function invalidationEnvelope(
-  resourceType: "site_live_state" | "operational_alert" | "user_notification" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation",
+  resourceType: "site_live_state" | "operational_alert" | "user_notification" | "activity_log" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation",
   classification: "official" | "simulation" = "official",
 ) {
   return JSON.stringify({

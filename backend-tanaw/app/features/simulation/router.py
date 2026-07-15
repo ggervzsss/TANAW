@@ -9,29 +9,34 @@ from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
 from app.features.reporting.models import EnterpriseReport, ReportingObligation, ReportingPeriod
-from app.features.simulation.models import MockDataRun
-from app.features.simulation.schemas import MockPreparationCounts, MockPreparationSummary
+from app.features.simulation.models import SimulationRun
+from app.features.simulation.schemas import (
+    SimulationPreparationCounts,
+    SimulationPreparationSummary,
+)
 from app.features.topology.account_scope import require_account_topology
 
 router = APIRouter(prefix="/operational", tags=["simulation"])
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 
 
-@router.get("/desktop/simulation-preparation/v2", response_model=MockPreparationSummary | None)
-async def get_desktop_mock_preparation(
+@router.get(
+    "/desktop/simulation-preparation/v2", response_model=SimulationPreparationSummary | None
+)
+async def get_desktop_simulation_preparation(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> MockPreparationSummary | None:
+) -> SimulationPreparationSummary | None:
     topology = await require_account_topology(db, account)
     run = await db.scalar(
-        select(MockDataRun)
-        .where(MockDataRun.target_account_id == account.id)
-        .order_by(MockDataRun.created_at.desc())
+        select(SimulationRun)
+        .where(SimulationRun.target_account_id == account.id)
+        .order_by(SimulationRun.created_at.desc())
     )
     if run is None:
         return None
 
-    pending_counts: list[MockPreparationCounts] = []
+    pending_counts: list[SimulationPreparationCounts] = []
     if run.status == "active" and run.generated_counts_json:
         generated_counts = json.loads(run.generated_counts_json)
         raw_candidates = generated_counts.get("targetPreparedReportCounts")
@@ -64,13 +69,13 @@ async def get_desktop_mock_preparation(
             else []
         )
         pending_counts = [
-            MockPreparationCounts.model_validate(candidate)
+            SimulationPreparationCounts.model_validate(candidate)
             for candidate in candidates
             if isinstance(candidate, dict)
             and candidate.get("periodKey") not in submitted_period_keys
         ]
 
-    return MockPreparationSummary(
+    return SimulationPreparationSummary(
         runId=run.id,
         status=run.status,  # type: ignore[arg-type]
         enterpriseId=run.target_enterprise_id or topology.official_code,

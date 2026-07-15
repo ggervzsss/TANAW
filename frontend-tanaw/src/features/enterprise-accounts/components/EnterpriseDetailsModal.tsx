@@ -7,6 +7,7 @@ import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, typ
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { getLocationEvidenceWarning } from "@/shared/services/operationalSync";
 import {
   normalizeEmail,
   normalizePersonName,
@@ -55,6 +56,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const nextStatus = enterprise.status === "active" ? "inactive" : "active";
+  const locationWarning = getLocationEvidenceWarning(enterprise);
 
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateEnterpriseAccountPayload) => updateEnterpriseAccount(enterprise.id, payload),
@@ -63,7 +65,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       const emailVerificationQueued = enterprise.isActivated && payload.email !== enterprise.email && updatedEnterprise.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setForm(getInitialForm(updatedEnterprise));
@@ -84,7 +86,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const activationMutation = useMutation({
     mutationFn: () => resendAccountActivation(enterprise.id),
     onSuccess: async (updatedEnterprise) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
       toast.success("Activation email queued");
@@ -98,7 +100,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       const activationEmailQueued = nextStatus === "active" && !updatedEnterprise.isActivated;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
@@ -180,6 +182,13 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
               </span>
             </div>
           </section>
+
+          {locationWarning && (
+            <div role="alert" className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <span>{locationWarning}</span>
+            </div>
+          )}
 
           {!isEditing ? (
             <>

@@ -1,12 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
+import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore, useSystemLogStore } from "@/app/store";
-import { useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
+import { createOperationalQueryKeys, useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
 import type { LogSeverity, PriorityAlert, SystemLog } from "@/shared/types";
 import type { UserRole } from "@/shared/types/role.types";
 import { useActivityLogs } from "./useActivityLogs";
 import { useAlerts } from "./useAlerts";
+import { runOptimisticRead } from "./optimisticRead";
 
 export type PortalNotificationTone = "critical" | "warning" | "success" | "info";
 
@@ -39,6 +41,7 @@ const viewAllPathByRole: Record<UserRole, string | undefined> = {
 
 export function usePortalNotifications(role: UserRole) {
   const authUser = useAuthStore((state) => state.user);
+  const queryClient = useQueryClient();
   const shouldLoadAlerts = role === "admin" || role === "it";
   const { alerts, isLoading: alertsLoading } = useAlerts(shouldLoadAlerts);
   const localLogs = useSystemLogStore((state) => state.logs);
@@ -50,6 +53,7 @@ export function usePortalNotifications(role: UserRole) {
     storageKey,
     ids: readStoredNotificationIds(storageKey),
   }));
+  const [readError, setReadError] = useState<string | null>(null);
   const readIds = readState.storageKey === storageKey ? readState.ids : readStoredNotificationIds(storageKey);
 
   const mergedLogs = useMemo(() => mergeLogs(activityLogs, localLogs), [activityLogs, localLogs]);
@@ -98,22 +102,49 @@ export function usePortalNotifications(role: UserRole) {
   const markAsRead = useCallback(
     (notificationId: string) => {
       const backendId = allNotifications.find((notification) => notification.id === notificationId)?.backendId;
-      if (backendId) {
-        void updateUserNotificationRead(backendId, true);
-      }
-      persistReadIds(new Set(readIds).add(notificationId));
+      const previousIds = new Set(readIds);
+      persistReadIds(new Set(previousIds).add(notificationId));
+      setReadError(null);
+      if (!backendId || !authUser) return;
+
+      const queryKey = createOperationalQueryKeys(authUser).notifications;
+      const previousBackend = optimisticallyMarkBackendNotifications(queryClient, queryKey, [backendId]);
+      void runOptimisticRead({
+        request: () => updateUserNotificationRead(backendId, true),
+        onSuccess: (updated) => replaceBackendNotification(queryClient, queryKey, updated),
+        onFailure: () => {
+          persistReadIds(previousIds);
+          queryClient.setQueryData(queryKey, previousBackend);
+          setReadError("The notification could not be marked as read. Your previous state was restored.");
+        },
+        onSettled: () => void queryClient.invalidateQueries({ queryKey }),
+      });
     },
-    [allNotifications, persistReadIds, readIds],
+    [allNotifications, authUser, persistReadIds, queryClient, readIds],
   );
 
   const markAllAsRead = useCallback(() => {
-    allNotifications
+    const unreadBackendIds = allNotifications
       .filter((notification): notification is PortalNotification & { backendId: string } => Boolean(notification.backendId) && !notification.read)
-      .forEach((notification) => {
-        void updateUserNotificationRead(notification.backendId, true);
-      });
-    persistReadIds(new Set([...readIds, ...allNotifications.map((notification) => notification.id)]));
-  }, [allNotifications, persistReadIds, readIds]);
+      .map((notification) => notification.backendId);
+    const previousIds = new Set(readIds);
+    persistReadIds(new Set([...previousIds, ...allNotifications.map((notification) => notification.id)]));
+    setReadError(null);
+    if (!authUser || unreadBackendIds.length === 0) return;
+
+    const queryKey = createOperationalQueryKeys(authUser).notifications;
+    const previousBackend = optimisticallyMarkBackendNotifications(queryClient, queryKey, unreadBackendIds);
+    void runOptimisticRead({
+      request: () => Promise.all(unreadBackendIds.map((id) => updateUserNotificationRead(id, true))),
+      onSuccess: (updated) => updated.forEach((notification) => replaceBackendNotification(queryClient, queryKey, notification)),
+      onFailure: () => {
+        persistReadIds(previousIds);
+        queryClient.setQueryData(queryKey, previousBackend);
+        setReadError("Not all notifications could be marked as read. Your previous state was restored.");
+      },
+      onSettled: () => void queryClient.invalidateQueries({ queryKey }),
+    });
+  }, [allNotifications, authUser, persistReadIds, queryClient, readIds]);
 
   return {
     notifications,
@@ -123,7 +154,25 @@ export function usePortalNotifications(role: UserRole) {
     viewAllPath: viewAllPathByRole[role],
     markAsRead,
     markAllAsRead,
+    readError,
   };
+}
+
+function optimisticallyMarkBackendNotifications(queryClient: ReturnType<typeof useQueryClient>, queryKey: QueryKey, ids: string[]) {
+  const previous = queryClient.getQueryData<BackendNotification[]>(queryKey);
+  const marked = new Set(ids);
+  queryClient.setQueryData<BackendNotification[]>(queryKey, (current) =>
+    current?.map((notification) =>
+      marked.has(notification.id) ? { ...notification, readAt: notification.readAt ?? new Date().toISOString() } : notification,
+    ),
+  );
+  return previous;
+}
+
+function replaceBackendNotification(queryClient: ReturnType<typeof useQueryClient>, queryKey: QueryKey, updated: BackendNotification) {
+  queryClient.setQueryData<BackendNotification[]>(queryKey, (current) =>
+    current?.map((notification) => (notification.id === updated.id ? updated : notification)),
+  );
 }
 
 function buildBackendNotifications(notifications: BackendNotification[], role: UserRole): DraftNotification[] {

@@ -35,7 +35,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   const createMutation = useMutation({
     mutationFn: createLguAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       toast.success("LGU account created; activation email queued");
       onClose();
     },

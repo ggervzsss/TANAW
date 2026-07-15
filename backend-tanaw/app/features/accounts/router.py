@@ -20,7 +20,6 @@ from app.features.accounts.schemas import (
     AccountEmailChangeRequestResolution,
     AccountStatusUpdate,
     AccountSummary,
-    DeliverySummary,
     EnterpriseAccountCreate,
     EnterpriseAccountUpdate,
     EnterpriseGeocodeRequest,
@@ -39,17 +38,13 @@ from app.features.accounts.service import (
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
-    get_dev_delivery_by_id,
     is_protected_startup_account,
     list_accounts_by_roles,
-    list_dev_deliveries,
     to_account_summaries_with_requests,
     to_account_summary_with_requests,
-    to_delivery_summary,
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.assets.service import get_pending_contact_change, resolve_contact_change
 from app.features.auth.account_activation import (
     AccountActivationError,
@@ -66,11 +61,11 @@ from app.features.auth.email_change import (
 from app.features.notifications.service import create_user_notification
 from app.features.topology.account_scope import (
     invalidate_site_coordinates,
+    replace_site_location,
     require_account_topology,
 )
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
-dev_router = APIRouter(prefix="/dev", tags=["dev"])
 logger = logging.getLogger(__name__)
 
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
@@ -440,13 +435,35 @@ async def update_enterprise_account(
     account.display_name = payload.managerName
     account.phone = payload.contactNumber
     location_changed = (
-        topology.site.barangay != payload.barangay or topology.site.address != payload.address
+        topology.location.barangay != payload.barangay
+        or topology.location.address != payload.address
     )
-    topology.site.barangay = payload.barangay
-    topology.site.address = payload.address
-    topology.site.building_capacity = payload.buildingCapacity
     if location_changed:
-        invalidate_site_coordinates(topology.site)
+        await invalidate_site_coordinates(
+            db,
+            topology.site,
+            topology.location,
+            barangay=payload.barangay,
+            address=payload.address,
+            building_capacity=payload.buildingCapacity,
+        )
+    elif topology.location.building_capacity != payload.buildingCapacity:
+        await replace_site_location(
+            db,
+            site=topology.site,
+            current=topology.location,
+            barangay=topology.location.barangay,
+            address=topology.location.address,
+            timezone_name=topology.location.timezone_name,
+            building_capacity=payload.buildingCapacity,
+            latitude=topology.location.latitude,
+            longitude=topology.location.longitude,
+            location_source=topology.location.location_source,
+            location_confidence=topology.location.location_confidence,
+            geocoded_address=topology.location.geocoded_address,
+            coordinates_confirmed_at=topology.location.coordinates_confirmed_at,
+            change_reason="building_capacity_changed",
+        )
     account.status = next_status
     topology.enterprise.lifecycle_state = (
         "active" if next_status == AccountStatus.ACTIVE else "inactive"
@@ -498,8 +515,8 @@ async def update_enterprise_account(
         source_id=account.id,
         metadata={
             "enterpriseId": topology.enterprise.official_code,
-            "barangay": topology.site.barangay,
-            "buildingCapacity": topology.site.building_capacity,
+            "barangay": payload.barangay,
+            "buildingCapacity": payload.buildingCapacity,
             "status": account.status.value,
             "emailChangeRequested": email_change_requested,
             "requestedEmail": requested_email if email_change_requested else None,
@@ -931,7 +948,7 @@ async def record_account_log(
     source_id: str,
     metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category=category,  # type: ignore[arg-type]
@@ -946,25 +963,3 @@ async def record_account_log(
         ),
     )
     await db.commit()
-    await activity_log_manager.broadcast(log)
-
-
-@dev_router.get("/deliveries", response_model=list[DeliverySummary])
-async def get_dev_deliveries(
-    _: ITAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[DeliverySummary]:
-    deliveries = await list_dev_deliveries(db)
-    return [to_delivery_summary(delivery) for delivery in deliveries]
-
-
-@dev_router.get("/deliveries/{delivery_id}", response_model=DeliverySummary)
-async def get_dev_delivery(
-    delivery_id: str,
-    _: ITAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> DeliverySummary:
-    delivery = await get_dev_delivery_by_id(db, delivery_id)
-    if delivery is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found.")
-    return to_delivery_summary(delivery)

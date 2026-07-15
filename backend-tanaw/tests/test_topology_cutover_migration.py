@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 from sqlalchemy import Table
 
-from app.db.base import Account, Base, MockDataRunAccount
+from app.db.base import Account, Base, SimulationRunAccount
 
 
 def test_cutover_is_chained_irreversible_and_removes_exact_account_responsibilities() -> None:
@@ -38,7 +38,7 @@ def test_cutover_is_chained_irreversible_and_removes_exact_account_responsibilit
         "mock_run_id",
     }
     assert superseded.isdisjoint(Account.__table__.c.keys())
-    assert cast(Table, MockDataRunAccount.__table__).name in Base.metadata.tables
+    assert cast(Table, SimulationRunAccount.__table__).name in Base.metadata.tables
 
 
 def test_cutover_projection_is_deterministic_and_fail_closed() -> None:

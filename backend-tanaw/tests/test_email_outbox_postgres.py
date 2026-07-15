@@ -23,8 +23,6 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
 )
 from app.features.auth import account_activation, password_recovery, secret_values
 from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
@@ -39,7 +37,6 @@ from app.features.mail.models import (
 )
 from app.features.mail.service import (
     MANUAL_RETRY_SAFETY_MARGIN,
-    REDACTED_EMAIL_BODY,
     RESEND_IDEMPOTENCY_WINDOW,
     enqueue_email,
 )
@@ -254,19 +251,6 @@ async def _clean_postgres_rows(sessions: async_sessionmaker[AsyncSession]) -> No
                 delete(PasswordResetChallenge).where(
                     PasswordResetChallenge.email.like(TEST_EMAIL_PATTERN)
                 )
-            )
-        if account_ids:
-            await db.execute(
-                delete(DevDelivery).where(
-                    or_(
-                        DevDelivery.recipient.like(TEST_EMAIL_PATTERN),
-                        DevDelivery.account_id.in_(account_ids),
-                    )
-                )
-            )
-        else:
-            await db.execute(
-                delete(DevDelivery).where(DevDelivery.recipient.like(TEST_EMAIL_PATTERN))
             )
         if account_ids:
             await db.execute(delete(Account).where(Account.id.in_(account_ids)))
@@ -705,13 +689,6 @@ async def test_raw_activation_token_and_password_reset_code_are_never_persisted(
                 select(EmailOutbox).where(EmailOutbox.source_id.in_((activation_id, challenge_id)))
             )
         )
-        deliveries = list(
-            await db.scalars(
-                select(DevDelivery).where(
-                    DevDelivery.account_id.in_((pending_account.id, active_account.id))
-                )
-            )
-        )
 
     assert stored_activation is not None
     assert stored_challenge is not None
@@ -725,6 +702,3 @@ async def test_raw_activation_token_and_password_reset_code_are_never_persisted(
         assert all(raw_activation_token not in value for value in payload.values())
         assert all(raw_reset_code not in value for value in payload.values())
         assert outbox.status == EmailOutboxStatus.ACCEPTED.value
-    assert len(deliveries) == 2
-    assert all(delivery.status == DeliveryStatus.ACCEPTED for delivery in deliveries)
-    assert all(delivery.body == REDACTED_EMAIL_BODY for delivery in deliveries)

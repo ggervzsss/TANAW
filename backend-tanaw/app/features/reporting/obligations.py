@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
@@ -27,7 +27,12 @@ from app.features.reporting.obligation_envelopes import (
     ReminderIntentCommand,
     ReminderPhase,
 )
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
+from app.features.topology.models import (
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 _FREEZE_EVENT_TYPE = "reporting_period.obligations_frozen"
 _FREEZE_COMMAND_EVENT_TYPE = "reporting_period.obligation_freeze_recorded"
@@ -63,14 +68,14 @@ def derive_eligibility(
     *,
     enterprise_lifecycle_state: str,
     frozen_barangay: str | None,
-    overlapping_site_versions: bool = False,
+    location_resolution_error: str | None = None,
 ) -> EligibilityDecision:
     """Derive one frozen status without treating unresolved topology as official evidence."""
 
-    if overlapping_site_versions:
+    if location_resolution_error is not None:
         return EligibilityDecision(
             status="unknown",
-            reason="unresolved_topology: overlapping effective site versions",
+            reason=f"unresolved_topology: {location_resolution_error}",
             acceptance_blocked=True,
         )
     if enterprise_lifecycle_state != "active":
@@ -238,7 +243,7 @@ async def freeze_period_obligations(
         for obligation in existing_obligations
     }
     existing_by_site = {obligation.site_id: obligation for obligation in existing_obligations}
-    candidates = list(
+    site_candidates = list(
         (
             await db.execute(
                 select(EnterpriseSite, Enterprise)
@@ -246,19 +251,41 @@ async def freeze_period_obligations(
                 .where(
                     Enterprise.classification == "official",
                     EnterpriseSite.classification == "official",
-                    EnterpriseSite.effective_from < period.ends_at,
+                    EnterpriseSite.registered_at < period.ends_at,
                     or_(
-                        EnterpriseSite.effective_to.is_(None),
-                        EnterpriseSite.effective_to > period.starts_at,
+                        EnterpriseSite.retired_at.is_(None),
+                        EnterpriseSite.retired_at > period.starts_at,
                     ),
                 )
-                .order_by(EnterpriseSite.enterprise_id, EnterpriseSite.site_code, EnterpriseSite.id)
+                .order_by(
+                    EnterpriseSite.enterprise_id,
+                    EnterpriseSite.site_code,
+                    EnterpriseSite.id,
+                )
             )
         )
         .tuples()
         .all()
     )
-    candidate_site_ids = {site.id for site, _enterprise in candidates}
+    candidate_site_ids = {site.id for site, _enterprise in site_candidates}
+    location_versions = list(
+        await db.scalars(
+            select(SiteLocationVersion)
+            .where(
+                SiteLocationVersion.site_id.in_(candidate_site_ids),
+                SiteLocationVersion.classification == "official",
+            )
+            .order_by(
+                SiteLocationVersion.site_id,
+                SiteLocationVersion.effective_from,
+                SiteLocationVersion.version,
+                SiteLocationVersion.id,
+            )
+        )
+    )
+    location_versions_by_site: dict[str, list[SiteLocationVersion]] = defaultdict(list)
+    for location_version in location_versions:
+        location_versions_by_site[location_version.site_id].append(location_version)
     resolutions = {str(resolution.siteId): resolution for resolution in command.resolutions}
     frozen_site_ids = candidate_site_ids | set(existing_by_site)
     unknown_sites = sorted(set(resolutions) - frozen_site_ids)
@@ -269,20 +296,35 @@ async def freeze_period_obligations(
             + ", ".join(unknown_sites),
         )
 
-    version_counts = Counter((site.enterprise_id, site.site_code) for site, _ in candidates)
     created_obligations: list[ReportingObligation] = []
-    for site, enterprise in candidates:
+    for site, enterprise in site_candidates:
         existing_obligation = existing_by_scope.get((enterprise.id, site.id, "official"))
         if existing_obligation is not None:
             resolution = resolutions.get(site.id)
             if resolution is not None:
                 _apply_resolution(existing_obligation, resolution)
             continue
-        frozen_barangay = _normalized_optional(site.barangay)
+        # A site that existed before the period is represented by its location at the
+        # inclusive period start. A site registered during the period is represented at
+        # its registration instant. Later, non-overlapping address versions must not make
+        # the historical obligation ambiguous.
+        location_as_of = max(_as_utc(period.starts_at), _as_utc(site.registered_at))
+        effective_locations = [
+            location
+            for location in location_versions_by_site.get(site.id, [])
+            if _effective_at(location.effective_from, location.effective_to, location_as_of)
+        ]
+        location = effective_locations[0] if len(effective_locations) == 1 else None
+        location_resolution_error = None
+        if not effective_locations:
+            location_resolution_error = "missing effective location version"
+        elif len(effective_locations) > 1:
+            location_resolution_error = "overlapping effective location versions"
+        frozen_barangay = _normalized_optional(location.barangay) if location is not None else None
         decision = derive_eligibility(
             enterprise_lifecycle_state=enterprise.lifecycle_state,
             frozen_barangay=frozen_barangay,
-            overlapping_site_versions=version_counts[(site.enterprise_id, site.site_code)] > 1,
+            location_resolution_error=location_resolution_error,
         )
         resolution = resolutions.get(site.id)
         if resolution is not None:
@@ -309,10 +351,12 @@ async def freeze_period_obligations(
                 enterprise_name=enterprise.name,
                 site_code=site.site_code,
                 site_name=site.name,
-                timezone_name=site.timezone_name,
+                timezone_name=location.timezone_name
+                if location is not None
+                else period.timezone_name,
                 # Enterprise.created_at is a target-row insertion timestamp for migrated
                 # topology. The effective-dated site is the authoritative registration fact.
-                registration_effective_at=_as_utc(site.effective_from),
+                registration_effective_at=_as_utc(site.registered_at),
                 acceptance_blocked=decision.acceptance_blocked,
             )
         )
@@ -983,3 +1027,9 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("Reporting-obligation timestamps must include a UTC offset.")
     return value.astimezone(UTC)
+
+
+def _effective_at(start: datetime, end: datetime | None, evaluated_at: datetime) -> bool:
+    effective_from = _as_utc(start)
+    effective_to = _as_utc(end) if end is not None else None
+    return effective_from <= evaluated_at and (effective_to is None or evaluated_at < effective_to)

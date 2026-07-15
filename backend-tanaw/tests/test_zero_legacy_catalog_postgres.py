@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from app.db.base import Base
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
-TARGET_MIGRATION_HEAD = "20260714_0036"
+TARGET_MIGRATION_HEAD = "20260715_0041"
 PARTITION_NAME = re.compile(r"^site_telemetry_hourly_rollups_\d{6}$")
 
 APPROVED_SEQUENCES = {
@@ -153,6 +153,11 @@ APPROVED_TRIGGERS = {
     ),
     ("site_live_state", "trg_site_live_state_monotonic", "tanaw_guard_site_live_state_monotonic"),
     (
+        "site_location_versions",
+        "trg_site_location_versions_immutable",
+        "tanaw_guard_site_location_version",
+    ),
+    (
         "telemetry_metric_facts",
         "trg_telemetry_metric_facts_append_only",
         "tanaw_reject_append_only_update",
@@ -179,6 +184,7 @@ APPROVED_FUNCTIONS = {
     "tanaw_guard_reporting_obligation_identity",
     "tanaw_guard_reporting_period_mutation",
     "tanaw_guard_site_live_state_monotonic",
+    "tanaw_guard_site_location_version",
     "tanaw_guard_telemetry_observation_delete",
     "tanaw_guard_telemetry_observation_update",
     "tanaw_reject_append_only_update",

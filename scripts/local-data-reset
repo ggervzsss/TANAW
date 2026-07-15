@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [ "$#" -ne 0 ]; then
-  echo "Usage: ./scripts/local-mockdata-off"
+  echo "Usage: ./scripts/local-data-reset"
   echo "Removes all local desktop ledger data while preserving camera settings."
   exit 2
 fi

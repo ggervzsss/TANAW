@@ -5,11 +5,10 @@ import { roleNavigation, rolePortalLabel } from "./navigation";
 
 type GlobalSidebarProps = {
   role: UserRole;
-  showDevLog?: boolean;
 };
 
-export function GlobalSidebar({ role, showDevLog = false }: GlobalSidebarProps) {
-  const navigation = role === "it" && !showDevLog ? roleNavigation[role].filter((item) => item.id !== "dev-log") : roleNavigation[role];
+export function GlobalSidebar({ role }: GlobalSidebarProps) {
+  const navigation = roleNavigation[role];
 
   return (
     <aside className="bg-tanaw-green z-20 flex h-full w-64 flex-col rounded-r-4xl border-r border-white/10 text-white shadow-2xl max-[920px]:h-auto max-[920px]:w-full max-[920px]:rounded-none">

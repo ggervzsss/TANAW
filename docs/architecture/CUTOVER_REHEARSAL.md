@@ -1,21 +1,34 @@
-# TANAW Target Cutover Rehearsal
+# TANAW target cutover rehearsal
 
-- Status: **Engineering rehearsal passed; release sign-off pending**
-- Rehearsed at: **2026-07-15T08:49:34Z**
+- Evidence updated: **2026-07-15T13:01:00Z**
 - Source revision: **`20260712_0019`**
-- Target revision: **`20260714_0036`**
-- Contract generation: **2**
+- Target revision: **`20260715_0041`**
+- Central target contract: **2.0.0 / generation 2**
+- Local target schema: **8**
+- Engineering status: **central migration and external restore rehearsal passed**
+- Release status: **local target-only full-suite/build verification passed**
+- Production W8-C: **not executed**
+- Independent W8-D approval: **not signed**
 
-This record proves the central PostgreSQL hard-cutover mechanics against a
-representative pre-target dataset. It does not authorize a production cutover.
-Production still requires its own backup checksum, input reconciliation,
-target-only smoke tests, coordinator approval, and independent review recorded
-in `ZERO_LEGACY_MANIFEST.md`.
+This is engineering evidence for the repeatable hard-cutover mechanism. It is
+not production acceptance. TANAW production must remain closed during W8-C
+until the production snapshot is backed up, migrated, reconciled, deployed, and
+smoke-tested, and an independent reviewer signs the exact W8-D inventory.
 
-## Representative source inventory
+## Representative source checkpoint
 
-The source database contained one official enterprise/account and the following
-linked historical records:
+The representative PostgreSQL source was exported in custom format outside the
+database. It was restored into an empty database and confirmed at revision
+`20260712_0019` before migration.
+
+```text
+Artifact: /tmp/tanaw_cutover_expanded_source_v2.dump
+Size: 71547 bytes
+SHA-256: 753df5fb7d83cbe27908a8d024b782c1099c19b7e419aac0a677dcc3953fb32b
+```
+
+The source contains one official enterprise/account and one linked example of
+each superseded reporting path:
 
 | Source object | Stable rehearsal identity | Count |
 | --- | --- | ---: |
@@ -24,143 +37,132 @@ linked historical records:
 | `final_reports` | `44444444-4444-4444-8444-444444444444` | 1 |
 | `final_report_sources` | `55555555-5555-4555-8555-555555555555` | 1 |
 
-The report carried 120 entries, 100 exits, peak occupancy 30, unique estimate
-110, and six demographic counts totaling 110. The final report referenced that
-exact source report.
+The source report carries 120 entries, 100 exits, peak occupancy 30, venue-local
+unique estimate 110, and six demographic facts totaling 110. Its final report
+references that exact source report.
 
-## External recovery checkpoint
+## Migration and exception control
 
-The pre-target database was exported in PostgreSQL custom format outside the
-live database:
+The restored database migrated to revision `20260714_0032` and stopped for
+operator review. The open exception set was compared for exact equality before
+the engineering-only waiver was applied:
 
-```text
-Artifact: /tmp/tanaw_cutover_source_corrected.dump
-Size: 70317 bytes
-SHA-256: b7b2d63fe3ded31021fdf1108fd8be1eb4bbce62d3870d3149fb6cc8d4a1d87b
-```
-
-Restoring that artifact into an empty database produced revision
-`20260712_0019` and restored the exact account, submission, telemetry snapshot,
-final report, final source link, and demographic payload. This establishes the
-pre-acceptance rollback mechanism: stop services, restore the complete external
-checkpoint, and deploy the matching pre-target application generation. No
-backup or compatibility table is retained in the upgraded database.
-
-## Migration exception disposition
-
-The migration stopped at revision `20260714_0032` for operator review. The
-allowlist was asserted as an exact set before any row was waived.
-
-| Ledger | Exact exception code | Count | Disposition |
+| Ledger | Exact exception code | Count | Engineering disposition |
 | --- | --- | ---: | --- |
-| Report | `incomplete_review_history` | 1 | Waived; target revision remains acceptance-blocked |
-| Report | `missing_coverage_evidence` | 1 | Waived; target revision remains acceptance-blocked |
-| Report | `missing_source_lineage` | 1 | Waived; target revision remains acceptance-blocked |
-| Report | `unverified_historical_obligation` | 1 | Waived; target revision remains acceptance-blocked |
-| Telemetry | `missing_camera_lineage` | 1 | Waived; observation excluded from current projection |
-| Telemetry | `missing_epoch_sequence_evidence` | 1 | Waived; observation excluded from current projection |
-| Telemetry | `missing_metric_coverage` | 1 | Waived; observation excluded from current projection |
+| Report | `incomplete_review_history` | 1 | Waived; imported revision remains acceptance-blocked |
+| Report | `missing_coverage_evidence` | 1 | Waived; imported revision remains acceptance-blocked |
+| Report | `missing_source_lineage` | 1 | Waived; imported revision remains acceptance-blocked |
+| Report | `unverified_historical_obligation` | 1 | Waived; imported revision remains acceptance-blocked |
+| Telemetry | `missing_camera_lineage` | 1 | Waived; observation is not projected as current |
+| Telemetry | `missing_epoch_sequence_evidence` | 1 | Waived; observation is not projected as current |
+| Telemetry | `missing_metric_coverage` | 1 | Waived; observation is not projected as current |
 
-No unexpected exception was waived. Unknown historical evidence was not
-fabricated. The temporary exception ledgers were subsequently removed by the
-target finalization migration.
+There were no additional exceptions. No period, lineage, coverage, actor,
+camera, epoch, sequence, or quality fact was guessed. A production dataset may
+use a waiver only after a named operator approves the exact evidence; any
+unknown or additional exception blocks W8-C acceptance.
 
-## Defects found by the rehearsal
+After the exact engineering waiver, the database migrated through
+`20260715_0041`. The temporary exception ledgers and every superseded source
+relation were removed. An immediate second `alembic upgrade head` was a no-op,
+and `alembic check` reported no new upgrade operations.
 
-The rehearsal exposed and fixed two migration-order defects that fresh empty
-database tests could not reveal:
+The same migration chain also passed against a fresh empty database from
+revision 0001 through `20260715_0041`, followed by a clean `alembic check`.
 
-1. Alembic previously wrapped all revisions in one transaction. Revision
-   `20260713_0024` backfilled rows whose pending trigger events then prevented an
-   index operation in `20260713_0025`. `alembic/env.py` now commits each
-   irreversible revision atomically with `transaction_per_migration=True`.
-2. Revision `20260714_0034` attempted to normalize imported labels after
-   append-only/immutable triggers were active. The migration now drops only the
-   four affected guards inside its transaction, performs the fixed one-time
-   relabeling, and restores the exact guards before completing. The restored
-   telemetry-observation trigger is explicitly bound to
-   `tanaw_guard_telemetry_observation_update`, preserving the one-way atomic
-   downsampling marker while rejecting every other update. Any failure rolls
-   the complete revision back.
+## Target reconciliation
 
-The first failed attempt rolled back to revision `20260712_0019` without losing
-source data. The second failed attempt left the database cleanly at revision
-`20260714_0033`. Both were resumed only after correcting the migration.
-
-## Target reconciliation result
-
-An uninterrupted restored-database replay from `20260712_0019` to
-`20260714_0036` produced:
+The restored-source replay at `20260715_0041` produced:
 
 | Target evidence | Result |
 | --- | --- |
 | Matching `report_revisions` row | 1 |
+| Report revision identity | `5410967d-37d9-5a14-bb1e-858c6263b050` |
+| Preserved local revision identity | `legacy:22222222-2222-4222-8222-222222222222` |
+| Canonical report payload hash | `sha256:d8c30dc454e1b7b3ef4a9cc3eb414396a8f2734bcc1f4e740b4c6d63fe32196d` |
+| Accepted pointer / workflow state | Exact revision / `consolidated` |
 | `visitor_entries` | `120.000000` |
 | `visitor_exits` | `100.000000` |
 | `occupancy_peak` | `30.000000` |
 | `venue_local_unique_estimate` | `110.000000` |
 | Demographic facts | 6, total 110 |
 | Matching `telemetry_observations` row | 1 |
-| Matching final report/source claim | 1 / 1 |
+| Matching `report_finalizations` row | 1 |
+| Finalization identity / exact items | `234bd1d5-871a-506c-b1ce-54fac406ead4` / 1 |
+| `enterprise_sites` / `site_location_versions` | 1 / 1 |
 | Final report content hash | `sha256:b02d1e5499407a572c0e48e8340519d3bcc289c50ba669537a381df6db132edf` |
 | Superseded source/exception relations remaining | 0 |
 
-The exact target-catalog test passed all five checks against both the first
-upgraded database and the independently restored/full-replay database. It
-compared tables, columns, indexes, sequences, triggers, functions, partitions,
-and native foreign-key types against the target model and allowlists.
+The expanded source also reconciled nonzero topology, asset, preference,
+profile-change, activity, device-health, email-outbox, seed-state, support,
+system-setting, and notification records. The target contains one row in each
+corresponding core/ownership table, five telemetry metric facts, one telemetry
+observation, six report demographic facts, and the expected immutable report
+review/final hierarchy. All four superseded source relations resolve absent
+(`to_regclass(...) IS NULL`) after cutover.
 
-An immediate second `alembic upgrade head` was a no-op, and `alembic check`
-reported `No new upgrade operations detected.`
+Migration and exact catalog coverage passed 33 tests on the migrated database.
+The catalog proof compares target tables and columns, indexes, sequences,
+triggers, functions, partitions, native structural UUIDs, and absence of views
+or foreign tables against the SQLAlchemy target model and explicit allowlists.
 
-## Target release verification
+## External target restore drill
 
-The completed target-only engineering release produced this deterministic
-inventory:
+The migrated target was exported, restored into a second empty PostgreSQL
+database, and validated independently:
 
 ```text
-Files scanned: 573
-Contract version: 2
-Release ID: target-cutover-release
-Portal version: 2.0.0
-Desktop version: 2.0.0
-Inventory SHA-256: sha256:d4ddf654df618108db547ef865829fb9450fadb75a986e3108a65431b9e590ff
-Forbidden source/build findings: 0
+Artifact: /tmp/tanaw_rehearsal_target0041.dump
+Size: 361652 bytes
+SHA-256: 1fecc6fffd342b60f98e4b8f0820493eb18919dbc3aae03f92be61de3e4bb4a5
+Restored revision: 20260715_0041
 ```
 
-The final quality evidence was:
+The restored target contains one report revision, one telemetry observation,
+one report finalization, one enterprise site, and one immutable site-location
+version. All five exact catalog tests passed against the restored database.
+This proves that recovery uses a complete external checkpoint, not retained
+legacy relations in the upgraded database.
 
-| Project/gate | Result |
-| --- | --- |
-| Backend PostgreSQL/unit suite | 481 passed |
-| Backend Ruff/format/mypy/Pyright | Passed |
-| ML-service suite | 193 passed |
-| ML-service Ruff/format/mypy/Pyright | Passed |
-| Portal unit suite | 64 passed |
-| Portal lint/type/build | Passed |
-| Portal Playwright | 13 passed; 1 credential-gated real-backend scenario skipped |
-| Desktop unit suite | 87 passed |
-| Desktop lint/type/build | Passed |
-| Desktop Playwright | 7 passed |
+## Application and release verification
 
-The portal Playwright suite includes target report/map workflows: Staff
-finalization submits only the accepted immutable revision selected from frozen
-compliance, and Admin Map renders fresh target live-state values while stale
-values remain unavailable and visibly degraded.
+The authoritative current commands are listed in
+[`IMPLEMENTATION_COMPLETION_EVIDENCE.md`](IMPLEMENTATION_COMPLETION_EVIDENCE.md).
+The final local record includes the fresh-0041 backend suite, all four static
+gate groups, portal and desktop production builds, portal Playwright, Electron
+Playwright no-secret/recovery/restart proof, and target source/build inspection.
 
-## Production execution gate
+The deterministic release inventory is generated with:
 
-Before production is reopened, repeat this procedure with the production
-snapshot and record:
+```shell
+python3 scripts/verify_target_release.py --require-builds
+```
 
-1. the external backup location, byte size, checksum, restore result, and exact
-   matching pre-cutover application release;
-2. source and target counts/hashes for every production classification and
-   exception disposition approved by a named operator;
-3. target-only backend, portal, desktop, ML-service, report, map, artifact, and
-   outdated-client smoke results;
-4. the final release inventory hash from `scripts/verify_target_release.py`;
-5. coordinator and independent-reviewer approval in the zero-legacy manifest.
+Its inventory hash identifies the exact scanned source and build bytes; it is
+not a cryptographic reviewer signature. W8-D still requires a named independent
+reviewer to approve that exact inventory.
 
-Production must remain closed if any exception is unexplained, reconciliation
-differs, a superseded object remains, or target-only smoke tests fail.
+## Production W8-C gate
+
+The engineering rehearsal does not satisfy W8-C. Before production is reopened,
+the cutover operator must record all of the following for the production
+snapshot and deployment:
+
+1. maintenance-window approval and the identities of the coordinator, migration
+   operator, restore operator, and independent reviewer;
+2. stopped/drained write confirmation for central and durable edge queues;
+3. external PostgreSQL and local-ledger backup locations, byte sizes, checksums,
+   successful restore results, and exact matching pre-cutover application build;
+4. exact source and target counts, normalized totals/hashes, lineage, final
+   artifacts, topology/location history, assets, and every exception decision;
+5. the deployed target release inventory hash and minimum-client rejection;
+6. target-only backend, portal, desktop/ML, Admin Map, Staff review, Enterprise
+   report, final artifact, notification, realtime, and recovery smoke results;
+7. PostgreSQL and SQLite catalog absence proof plus source, OpenAPI, route,
+   generated contract, package, and production-build absence proof; and
+8. coordinator acceptance followed by independent W8-D signature.
+
+Any unexplained exception or delta, failed invariant, remaining superseded
+object, or failed target-only smoke test stops acceptance. Before acceptance,
+rollback restores the complete external pre-cutover database/files and matching
+application generation. It never selectively reads an old table.

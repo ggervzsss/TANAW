@@ -133,7 +133,7 @@ TANAW/
 │   │       ├── accounts/       # LGU/enterprise accounts and bootstrap seed
 │   │       ├── activity_logs/  # Audit and operational activity
 │   │       ├── auth/           # Login, logout, password, and recovery flows
-│   │       ├── mock_data/      # Explicit simulation CLI
+│   │       ├── simulation/     # Explicit simulation CLI
 │   │       └── operational/    # Telemetry, reports, sync, and final reports
 │   ├── alembic/                # Database migrations
 │   └── tests/
@@ -451,26 +451,26 @@ With the account active and Docker services running, execute this from the
 repository root:
 
 ```shell
-./scripts/mockdata-on
+./scripts/simulation-on
 ```
 
 PowerShell users can run the matching wrapper:
 
 ```powershell
-.\scripts\mockdata-on.ps1
+.\scripts\simulation-on.ps1
 ```
 
 The script defaults to the six-month `full-workflow` scenario for
 `archies_001@tanaw.sanpedro`. To target a different enterprise, run it with
-`TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
-`$env:TANAW_MOCK_TARGET_ENTERPRISE = "actual_enterprise_id"`.
+`TANAW_SIMULATION_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
+`$env:TANAW_SIMULATION_TARGET_ENTERPRISE = "actual_enterprise_id"`.
 
 This creates:
 
 - three LGU test accounts;
 - five enterprise test accounts;
-- enterprise telemetry snapshots;
-- historical enterprise submissions and finalized city reports for closed
+- sequenced telemetry observations and current live-site projections;
+- historical immutable enterprise report revisions and finalized city reports for closed
   periods;
 - previous-period and current-period submissions ready for consolidation from
   supporting enterprises;
@@ -480,7 +480,7 @@ This creates:
   steps for real desktop submissions.
 
 Archie's remains a normal, persistent account and is not deleted by
-`mock-data off`. The five generated enterprises act as supporting participants
+`simulation-data off`. The five generated enterprises act as supporting participants
 in the reporting scenario.
 
 A camera does not need to be running. The authenticated target desktop polls
@@ -548,18 +548,18 @@ and then marked as synced locally.
 Show recent simulation runs:
 
 ```shell
-./scripts/mockdata-status
+./scripts/simulation-status
 ```
 
-PowerShell: `.\scripts\mockdata-status.ps1`
+PowerShell: `.\scripts\simulation-status.ps1`
 
 Replace the active run with a fresh deterministic dataset:
 
 ```shell
-./scripts/mockdata-reset
+./scripts/simulation-reset
 ```
 
-PowerShell: `.\scripts\mockdata-reset.ps1`
+PowerShell: `.\scripts\simulation-reset.ps1`
 
 Supported ranges:
 
@@ -584,17 +584,17 @@ month begins or before a demonstration.
 Keep the target enterprise signed in to the desktop when practical, then run:
 
 ```shell
-./scripts/mockdata-off
+./scripts/simulation-off
 ```
 
-PowerShell: `.\scripts\mockdata-off.ps1`
+PowerShell: `.\scripts\simulation-off.ps1`
 
 This removes records belonging to active simulation run IDs, including:
 
 - generated LGU and enterprise accounts;
 - generated telemetry and activity logs;
 - generated and manually submitted test reports associated with the run;
-- generated final reports and source rows;
+- generated final report versions and exact immutable revision items;
 - prepared target-enterprise desktop events and local test reports.
 
 Real records are not selected by names, dates, or email patterns. Cleanup uses
@@ -609,7 +609,7 @@ in and reconnects.
 Confirm the result:
 
 ```shell
-./scripts/mockdata-status
+./scripts/simulation-status
 ```
 
 ### Destructive full database reset
@@ -623,7 +623,7 @@ docker compose up --build -d
 ```
 
 Use this only when a fully clean local database is intended. Normal simulation
-cleanup should use `mock-data off`.
+cleanup should use `simulation-data off`.
 
 ## Optional host-run development
 
@@ -759,7 +759,7 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `TANAW_PUBLIC_DEPLOYMENT`     | Frontend build guard for non-Vercel public deployments; requires a public HTTPS API URL |
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |
 | `FRONTEND_PORT`               | Host port mapped to the portal; defaults to `5173`     |
-| `TANAW_ALLOW_MOCK_DATA`       | Explicit simulation safety switch; false by default    |
+| `TANAW_ALLOW_SIMULATION_DATA`       | Explicit simulation safety switch; false by default    |
 | `EMAIL_DELIVERY_MODE`         | `log` locally or `resend` for real email delivery       |
 | `RESEND_API_KEY`              | Backend-only Resend API credential                      |
 | `EMAIL_FROM_NAME`             | Display name used for TANAW transactional messages      |
@@ -798,7 +798,7 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `ASSET_ORPHAN_SCAN_MAX_OBJECTS` | Fail-closed bound for each authoritative asset inventory scan |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |
 
-Do not permanently enable `TANAW_ALLOW_MOCK_DATA` in production. The examples
+Do not permanently enable `TANAW_ALLOW_SIMULATION_DATA` in production. The examples
 in this README inject it only for the individual CLI process.
 
 ## Local desktop data
@@ -806,19 +806,19 @@ in this README inject it only for the individual CLI process.
 Desktop records are separate from PostgreSQL and are scoped by enterprise.
 Close the desktop app before manually clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows, mock
-runs, hybrid runs, immutable local reports, camera live state, and occupancy corrections, while
+Remove all local desktop ledger data, including official CCTV-derived rows,
+simulation runs, immutable local reports, camera live state, and occupancy corrections, while
 preserving saved camera settings, authentication storage, preferences, and
 Electron caches:
 
 ```shell
-./scripts/local-mockdata-off
+./scripts/local-data-reset
 ```
 
-PowerShell: `.\scripts\local-mockdata-off.ps1`
+PowerShell: `.\scripts\local-data-reset.ps1`
 
 The script does not remove backend data. If a backend simulation is active, run
-`./scripts/mockdata-off` as well; otherwise the target desktop can download the
+`./scripts/simulation-off` as well; otherwise the target desktop can download the
 active prepared package again after sign-in.
 
 Inspect all local ledgers:
@@ -965,7 +965,7 @@ another actively synchronized folder.
 ### A simulation account already exists
 
 The seed command refuses to overwrite an existing account with the same email.
-Run `mock-data off` to remove the active generated run, or resolve the conflicting
+Run `simulation-data off` to remove the active generated run, or resolve the conflicting
 account intentionally before seeding again.
 
 ### Source changes are not reflected in Docker

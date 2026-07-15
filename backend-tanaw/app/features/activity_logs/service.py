@@ -3,13 +3,22 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, false, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
-from app.features.accounts.models import Account, AccountRole, SystemConfiguration
+from app.core.keyset_pagination import decode_cursor, encode_cursor, filter_fingerprint
+from app.core.pagination_schemas import CursorPageInfo
+from app.features.accounts.models import Account, AccountRole
+from app.features.accounts.settings import get_system_settings, system_settings_values
 from app.features.activity_logs.models import ActivityLog
-from app.features.activity_logs.schemas import ActivityLogCreate, ActivityLogSummary
+from app.features.activity_logs.schemas import (
+    ActivityLogCreate,
+    ActivityLogPage,
+    ActivityLogSummary,
+)
+from app.features.events.operational_resources import enqueue_operational_resource_event
 
 ROLE_LABELS = {
     AccountRole.ADMIN: "Admin",
@@ -17,7 +26,6 @@ ROLE_LABELS = {
     AccountRole.STAFF: "LGU Staff",
     AccountRole.ENTERPRISE: "Enterprise Account",
 }
-SYSTEM_SETTINGS_ID = "default"
 LOG_RETENTION_DAYS = 180
 LOG_RETENTION_DAYS_SETTING_KEY = "logs.retentionDays"
 ALLOWED_LOG_RETENTION_DAYS = frozenset({90, 180, 365})
@@ -44,46 +52,108 @@ def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
 
 
 async def list_activity_logs_for_account(
-    db: AsyncSession, account: Account, limit: int = 250
-) -> list[ActivityLogSummary]:
+    db: AsyncSession, account: Account, *, limit: int, cursor: str | None
+) -> ActivityLogPage:
     retention_days = await get_activity_log_retention_days(db)
     cutoff = activity_log_retention_cutoff(retention_days)
-    result = await db.scalars(
-        select(ActivityLog)
-        .where(ActivityLog.timestamp >= cutoff)
-        .order_by(ActivityLog.timestamp.desc())
-        .limit(limit)
+    fingerprint = filter_fingerprint(
+        {"accountId": str(account.id), "role": account.role.value, "classification": "official"}
     )
-    return [
-        to_activity_log_summary(log) for log in result if can_role_view_log(account.role.value, log)
-    ]
+    role_scope: ColumnElement[bool] = false()
+    if account.role == AccountRole.ADMIN:
+        role_scope = ActivityLog.id.is_not(None)
+    elif account.role == AccountRole.IT:
+        role_scope = or_(
+            ActivityLog.category.in_({"System", "IT Activity", "Enterprise Activity"}),
+            ActivityLog.actor_role == "IT Personnel",
+        )
+    elif account.role == AccountRole.STAFF:
+        role_scope = ActivityLog.category.in_({"Staff Submission", "Staff Operation"})
+    statement = (
+        select(ActivityLog)
+        .where(
+            ActivityLog.timestamp >= cutoff,
+            ActivityLog.classification == "official",
+            role_scope,
+        )
+        .order_by(ActivityLog.timestamp.desc(), ActivityLog.id.desc())
+        .limit(limit + 1)
+    )
+    if cursor is not None:
+        cursor_at, cursor_id = decode_cursor(cursor, fingerprint=fingerprint)
+        statement = statement.where(
+            or_(
+                ActivityLog.timestamp < cursor_at,
+                and_(ActivityLog.timestamp == cursor_at, ActivityLog.id < cursor_id),
+            )
+        )
+    rows = (await db.scalars(statement)).all()
+    selected = rows[:limit]
+    has_more = len(rows) > limit
+    next_cursor = (
+        encode_cursor(
+            occurred_at=selected[-1].timestamp,
+            resource_id=selected[-1].id,
+            fingerprint=fingerprint,
+        )
+        if has_more and selected
+        else None
+    )
+    items = [to_activity_log_summary(log) for log in selected]
+    return ActivityLogPage(
+        items=items,
+        page=CursorPageInfo(
+            limit=limit,
+            returnedCount=len(items),
+            hasMore=has_more,
+            nextCursor=next_cursor,
+        ),
+    )
 
 
-async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> ActivityLogSummary:
+async def create_activity_log(
+    db: AsyncSession,
+    payload: ActivityLogCreate,
+    *,
+    actor_account_id: str | None = None,
+) -> ActivityLogSummary:
     log = ActivityLog(
         category=payload.category,
         severity=payload.severity,
         actor=payload.actor,
+        actor_account_id=actor_account_id,
         actor_role=payload.actorRole,
         action=payload.action,
         target=payload.target,
         summary=payload.summary,
         source_id=payload.sourceId,
         metadata_json=json.dumps(payload.metadata) if payload.metadata else None,
-        source_kind=payload.sourceKind,
-        mock_run_id=payload.mockRunId,
+        classification="official",
+        simulation_run_id=None,
     )
     db.add(log)
     await db.flush([log])
     await db.refresh(log)
+    await enqueue_operational_resource_event(
+        db,
+        event_type="activity_log.created.v2",
+        aggregate_type="activity_log",
+        aggregate_id=log.id,
+        aggregate_version=1,
+        payload={
+            "activityLogId": log.id,
+            "category": log.category,
+            "actorRole": log.actor_role,
+        },
+        actor_account_id=actor_account_id,
+    )
     return to_activity_log_summary(log)
 
 
 async def get_activity_log_retention_days(db: AsyncSession) -> int:
-    record = await db.scalar(
-        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    return resolve_activity_log_retention_days(
+        system_settings_values(await get_system_settings(db))
     )
-    return resolve_activity_log_retention_days(load_system_settings_values(record))
 
 
 async def purge_expired_activity_logs(
@@ -94,7 +164,6 @@ async def purge_expired_activity_logs(
         CursorResult[Any],
         await db.execute(delete(ActivityLog).where(ActivityLog.timestamp < cutoff)),
     )
-    await db.commit()
     return result.rowcount or 0
 
 
@@ -110,22 +179,6 @@ def resolve_activity_log_retention_days(values: Mapping[str, object] | None) -> 
 def activity_log_retention_cutoff(retention_days: int, now: datetime | None = None) -> datetime:
     current = now or datetime.now(UTC)
     return current - timedelta(days=retention_days)
-
-
-def load_system_settings_values(record: SystemConfiguration | None) -> dict[str, str | bool | int]:
-    if record is None:
-        return {}
-    try:
-        values = json.loads(record.values_json)
-    except json.JSONDecodeError:
-        return {}
-    if not isinstance(values, dict):
-        return {}
-    return {
-        key: value
-        for key, value in values.items()
-        if isinstance(key, str) and isinstance(value, str | bool | int)
-    }
 
 
 def to_activity_log_summary(log: ActivityLog) -> ActivityLogSummary:

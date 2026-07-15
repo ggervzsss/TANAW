@@ -8,7 +8,7 @@ from app.config.camera_config import CameraStartRequest, OccupancyCorrectionRequ
 class CameraConfigValidationTest(unittest.TestCase):
     def test_correction_rejects_client_controlled_actor_and_classification(self) -> None:
         for privileged_field, value in (
-            ("source_kind", "real"),
+            ("classification", "real"),
             ("actor_id", "spoofed-account"),
             ("actor_name", "Spoofed Actor"),
         ):

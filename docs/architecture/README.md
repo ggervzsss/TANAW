@@ -23,6 +23,8 @@ The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 7. [ADR-007: Client compatibility and hard cutover](ADR-007-client-cutover.md)
 8. [Zero-legacy manifest](ZERO_LEGACY_MANIFEST.md)
 9. [Target cutover rehearsal](CUTOVER_REHEARSAL.md)
+10. [Target operational observability](OPERATIONAL_OBSERVABILITY.md)
+11. [Implementation completion evidence](IMPLEMENTATION_COMPLETION_EVIDENCE.md)
 
 ## System-wide invariants
 

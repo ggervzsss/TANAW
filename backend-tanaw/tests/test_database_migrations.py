@@ -62,6 +62,10 @@ async def test_uninitialized_database_is_rejected() -> None:
         "20260714_0034_finalize_target_schema.py",
         "20260714_0035_native_structural_identities.py",
         "20260714_0036_constrain_retained_operations.py",
+        "20260715_0037_normalize_activity_log_classification.py",
+        "20260715_0038_constrain_activity_log_projection.py",
+        "20260715_0040_clean_central_erd.py",
+        "20260715_0041_rename_simulation_storage.py",
     ),
 )
 def test_irreversible_migrations_block_unsafe_downgrades(migration_filename: str) -> None:

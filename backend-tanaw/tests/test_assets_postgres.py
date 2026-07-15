@@ -35,7 +35,12 @@ from app.features.support.service import (
     update_support_ticket_status,
 )
 from app.features.topology.account_scope import AccountTopology
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
+from app.features.topology.models import (
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 PNG_BYTES = b"\x89PNG\r\n\x1a\npostgres-normalized-asset"
@@ -269,16 +274,24 @@ def _topology(account: Account, *, now: datetime) -> AccountTopology:
         classification="official",
         site_code="primary",
         name="Normalized Asset Enterprise Primary Site",
+    )
+    location = SiteLocationVersion(
+        site_id=site.id,
+        classification="official",
+        version=1,
         barangay="Poblacion",
         address="San Pedro, Laguna",
+        timezone_name="Asia/Manila",
         building_capacity=100,
         effective_from=now,
+        change_reason="test_fixture",
     )
     return AccountTopology(
         account=account,
         membership=membership,
         enterprise=enterprise,
         site=site,
+        location=location,
         active_devices=(),
         live_state=None,
         evaluated_at=now,

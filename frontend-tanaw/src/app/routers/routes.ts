@@ -14,7 +14,6 @@ export const routes = {
     notifications: "/it/notifications",
     systemLogs: "/it/system-logs",
     emailDeliveries: "/it/email-deliveries",
-    devLog: "/it/dev-log",
     systemSettings: "/it/system-settings",
     profile: "/it/profile",
     security: "/it/security",

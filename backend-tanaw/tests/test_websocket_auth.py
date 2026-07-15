@@ -11,7 +11,6 @@ from starlette.datastructures import URL
 from app.core.http_security import websocket_security_headers
 from app.core.websocket_auth import is_websocket_origin_allowed
 from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.activity_logs import router as activity_logs_router
 from app.features.events import operational_router
 
 TRUSTED_FRONTEND_ORIGIN = "https://tanaw-sanpedro.vercel.app"
@@ -130,39 +129,6 @@ async def test_operational_websocket_closes_when_session_is_invalidated(
 
 
 @pytest.mark.asyncio
-async def test_activity_log_websocket_closes_when_session_is_invalidated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    websocket = MagicMock()
-    websocket.receive_text = AsyncMock(return_value="ping")
-    websocket.close = AsyncMock()
-    websocket.send_text = AsyncMock()
-    manager = SimpleNamespace(connect=AsyncMock(), disconnect=MagicMock())
-    authenticate = AsyncMock(side_effect=[active_it_account(), None])
-    monkeypatch.setattr(
-        activity_logs_router,
-        "receive_websocket_bearer_token",
-        AsyncMock(return_value="access-token"),
-    )
-    monkeypatch.setattr(activity_logs_router, "authenticate_websocket_account", authenticate)
-    monkeypatch.setattr(activity_logs_router, "AsyncSessionLocal", AsyncSessionContext)
-    monkeypatch.setattr(activity_logs_router, "activity_log_manager", manager)
-
-    await activity_logs_router.activity_logs_websocket(
-        cast(WebSocket, websocket),
-        client_name="web-portal",
-        client_version="2.0.0",
-        contract_version="2",
-        release_id="target-cutover-release",
-    )
-
-    websocket.close.assert_awaited_once_with(code=1008)
-    websocket.send_text.assert_not_awaited()
-    assert authenticate.await_count == 2
-    manager.disconnect.assert_called_once()
-
-
-@pytest.mark.asyncio
 async def test_websocket_authentication_rejects_pending_and_inactive_accounts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -171,12 +137,6 @@ async def test_websocket_authentication_rejects_pending_and_inactive_accounts(
         "decode_access_token",
         lambda _token: {"sub": "websocket-account-1"},
     )
-    monkeypatch.setattr(
-        activity_logs_router,
-        "decode_access_token",
-        lambda _token: {"sub": "websocket-account-1"},
-    )
-
     pending = active_it_account()
     pending.activated_at = None
     inactive = active_it_account()
@@ -188,19 +148,8 @@ async def test_websocket_authentication_rejects_pending_and_inactive_accounts(
             "get_account_by_id",
             AsyncMock(return_value=account),
         )
-        monkeypatch.setattr(
-            activity_logs_router,
-            "get_account_by_id",
-            AsyncMock(return_value=account),
-        )
         assert (
             await operational_router.authenticate_websocket_account(
-                cast(AsyncSession, MagicMock()), "access-token"
-            )
-            is None
-        )
-        assert (
-            await activity_logs_router.authenticate_websocket_account(
                 cast(AsyncSession, MagicMock()), "access-token"
             )
             is None

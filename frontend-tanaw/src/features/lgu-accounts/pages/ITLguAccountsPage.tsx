@@ -32,7 +32,7 @@ export function ITLguAccountsPage() {
   const activationMutation = useMutation({
     mutationFn: (accountId: string) => resendAccountActivation(accountId),
     onSuccess: async (updatedAccount) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       toast.success("Activation email queued");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
       setPendingActivationResend(null);
@@ -46,7 +46,7 @@ export function ITLguAccountsPage() {
       const activationEmailQueued = nextStatus === "active" && !updatedAccount.isActivated;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued ? [queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       toast.success(activationEmailQueued ? "Account reactivated; activation email queued" : "Account status updated");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));

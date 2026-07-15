@@ -1,17 +1,18 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.keyset_pagination import ReadCursorError
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.notifications.schemas import (
     EnterpriseNotificationCreate,
     NotificationReadUpdate,
+    UserNotificationPage,
     UserNotificationSummary,
 )
 from app.features.notifications.service import (
@@ -29,12 +30,19 @@ OperationalReadAccount = Annotated[
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 
 
-@router.get("/notifications", response_model=list[UserNotificationSummary])
+@router.get("/notifications", response_model=UserNotificationPage)
 async def list_notifications(
     account: OperationalReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[UserNotificationSummary]:
-    return await list_user_notifications(db, account)
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> UserNotificationPage:
+    try:
+        return await list_user_notifications(db, account, limit=limit, cursor=cursor)
+    except ReadCursorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.patch("/notifications/{notification_id}", response_model=UserNotificationSummary)
@@ -83,7 +91,7 @@ async def create_enterprise_notification(
         source_id=payload.sourceId,
     )
     recipient_topology = await require_account_topology(db, recipient)
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category="Staff Operation",
@@ -98,7 +106,7 @@ async def create_enterprise_notification(
             ),
             sourceId=notification.id,
         ),
+        actor_account_id=actor.id,
     )
     await db.commit()
-    await activity_log_manager.broadcast(log)
     return notification

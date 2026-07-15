@@ -20,6 +20,7 @@ from app.db.base import (
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 
@@ -65,13 +66,22 @@ def test_site_constraints_reject_invalid_capacity_and_unpaired_coordinates(
     enterprise_id = _insert_enterprise(sqlite_engine, "official", "ENT-CHECK")
 
     with Session(sqlite_engine) as session:
+        site = EnterpriseSite(
+            enterprise_id=enterprise_id,
+            classification="official",
+            site_code="location-check",
+            name="Location check",
+        )
+        session.add(site)
+        session.commit()
         session.add(
-            EnterpriseSite(
-                enterprise_id=enterprise_id,
+            SiteLocationVersion(
+                site_id=site.id,
                 classification="official",
-                site_code="invalid-capacity",
-                name="Invalid capacity",
+                version=1,
+                timezone_name="Asia/Manila",
                 building_capacity=0,
+                change_reason="test",
             )
         )
         with pytest.raises(IntegrityError):
@@ -79,14 +89,15 @@ def test_site_constraints_reject_invalid_capacity_and_unpaired_coordinates(
         session.rollback()
 
         session.add(
-            EnterpriseSite(
-                enterprise_id=enterprise_id,
+            SiteLocationVersion(
+                site_id=site.id,
                 classification="official",
-                site_code="unpaired-location",
-                name="Unpaired location",
+                version=2,
+                timezone_name="Asia/Manila",
                 building_capacity=100,
                 latitude=14.36,
                 longitude=None,
+                change_reason="test",
             )
         )
         with pytest.raises(IntegrityError):
@@ -133,7 +144,6 @@ def test_composite_foreign_keys_reject_cross_classification_topology(
                 classification="simulation",
                 site_code="wrong-classification",
                 name="Invalid simulation site",
-                building_capacity=100,
             )
         )
         with pytest.raises(IntegrityError):
@@ -148,7 +158,6 @@ def test_camera_identity_is_scoped_to_one_device(sqlite_engine: Engine) -> None:
             classification="official",
             site_code="primary",
             name="Camera site",
-            building_capacity=100,
         )
         session.add(site)
         session.commit()

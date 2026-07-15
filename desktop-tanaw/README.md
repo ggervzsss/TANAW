@@ -277,7 +277,7 @@ Default Linux development path:
 ~/.config/desktop-tanaw
 ```
 
-## Using Mock Or Generated Local Data
+## Using Simulation Data
 
 There are two supported ways to use generated data in the desktop.
 
@@ -302,13 +302,13 @@ PowerShell uses the same command.
 
 ### Backend Prepared Counts
 
-The backend mock-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves pending prepared packages through the authenticated backend connection and writes the selected period into the local ledger. For Archie's Event Place, the default scenario loads the overdue previous-period package first, exposes unfinished periods in the **Reporting Month** selector, then loads the current-period package after the overdue report syncs.
+The backend simulation-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves pending prepared packages through the authenticated backend connection and writes the selected period into the local ledger. For Archie's Event Place, the default scenario loads the overdue previous-period package first, exposes unfinished periods in the **Reporting Month** selector, then loads the current-period package after the overdue report syncs.
 
 Prepare from the project root:
 
 ```bash
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend \
-  uv run mock-data reset \
+docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend \
+  uv run simulation-data reset \
   --range 6m \
   --target-enterprise "archies_001@tanaw.sanpedro"
 ```
@@ -316,8 +316,8 @@ docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend \
 PowerShell:
 
 ```powershell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend `
-  uv run mock-data reset `
+docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend `
+  uv run simulation-data reset `
   --range 6m `
   --target-enterprise "archies_001@tanaw.sanpedro"
 ```
@@ -329,13 +329,13 @@ supported local service client; no direct ML-service status URL is exposed.
 Remove generated backend and prepared desktop data:
 
 ```bash
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off
+docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend uv run simulation-data off
 ```
 
 PowerShell:
 
 ```powershell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off
+docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend uv run simulation-data off
 ```
 
 Run backend cleanup before clearing local ledgers when a generated backend run is still active. Otherwise, signing the target enterprise back in can prepare that active run again in a newly created local ledger.
@@ -348,7 +348,7 @@ Manual corrections are stored separately from count events. Current occupancy is
 entries - exits + sum(correction_delta)
 ```
 
-Corrections include old/new occupancy, delta, reason, optional actor metadata, source kind, mock run ID, and timestamp. Generated and hybrid corrections are removable with the mock reset tools.
+Corrections include old/new occupancy, delta, reason, optional actor metadata, source classification, simulation run ID, and timestamp. Simulation corrections are removable with the simulation reset tools.
 
 ## Tracking Evaluation
 
@@ -469,4 +469,4 @@ ml-service/scripts/       # Model setup, replay, and evaluation helpers
 
 Local data commands affect only the desktop computer. They do not delete backend accounts, backend reports, final LGU audit reports, or other cloud records.
 
-Camera configuration, authentication state, desktop local ledgers, and backend records are intentionally separate. Use backend mock cleanup for generated backend runs and desktop local-data cleanup for local device state.
+Camera configuration, authentication state, desktop local ledgers, and backend records are intentionally separate. Use backend simulation cleanup for generated backend runs and desktop local-data cleanup for local device state.

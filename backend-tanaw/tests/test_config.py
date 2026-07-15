@@ -42,12 +42,12 @@ def test_database_url_preserves_explicit_driver() -> None:
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
 
 
-def test_mock_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TANAW_ALLOW_MOCK_DATA", "true")
+def test_simulation_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TANAW_ALLOW_SIMULATION_DATA", "true")
 
     settings = Settings()
 
-    assert settings.allow_mock_data is True
+    assert settings.allow_simulation_data is True
 
 
 def test_default_access_token_lifetime_supports_continuous_operation() -> None:
@@ -227,7 +227,6 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
     assert settings.password_reset_retention_days == 30
     assert settings.password_reset_rate_bucket_retention_days == 2
     assert settings.account_email_change_retention_days == 180
-    assert settings.development_delivery_retention_days == 7
     assert settings.email_outbox_retention_days == 180
     assert settings.failed_email_outbox_retention_days == 365
     assert settings.telemetry_downsample_settle_seconds == 300
@@ -279,7 +278,6 @@ def test_final_report_artifact_settings_reject_unsafe_bounds(name: str, value: i
         ("password_reset_retention_days", 0),
         ("password_reset_rate_bucket_retention_days", 0),
         ("account_email_change_retention_days", 29),
-        ("development_delivery_retention_days", 0),
         ("email_outbox_retention_days", 29),
         ("failed_email_outbox_retention_days", 29),
         ("telemetry_downsample_settle_seconds", 59),
@@ -349,7 +347,7 @@ def test_unregistered_environment_aliases_are_ignored(
     monkeypatch.setenv("TEMPORARY_IT_PASSWORD", "legacy-it-password")
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("ALLOW_MOCK_DATA", "true")
+    monkeypatch.setenv("ALLOW_SIMULATION_DATA", "true")
     monkeypatch.setenv("SEED_DEVELOPMENT_ACCOUNTS", "true")
 
     settings = Settings()
@@ -359,5 +357,5 @@ def test_unregistered_environment_aliases_are_ignored(
     assert settings.development_staff_username is None
     assert settings.development_it_username is None
     assert settings.environment == "development"
-    assert settings.allow_mock_data is False
+    assert settings.allow_simulation_data is False
     assert settings.seed_development_accounts is False

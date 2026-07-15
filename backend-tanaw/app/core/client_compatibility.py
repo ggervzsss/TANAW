@@ -33,8 +33,15 @@ class ClientGeneration:
     release_id: str | None
 
 
-def desktop_request_requires_compatibility(request: Request) -> bool:
-    return request.method != "OPTIONS" and request.url.path.startswith("/operational/desktop/")
+def request_requires_compatibility(request: Request, settings: Settings) -> bool:
+    if request.method == "OPTIONS":
+        return False
+    path = request.url.path
+    if path.startswith("/operational/desktop/"):
+        return True
+    if settings.environment != "production":
+        return False
+    return path != "/health" and not path.startswith("/ready/")
 
 
 def request_client_generation(request: Request) -> ClientGeneration:
@@ -67,14 +74,14 @@ def is_supported_client_generation(
     return hmac.compare_digest(generation.release_id, settings.target_release_id)
 
 
-def desktop_upgrade_required_response(settings: Settings) -> JSONResponse:
+def client_upgrade_required_response(settings: Settings) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_426_UPGRADE_REQUIRED,
         content={
             "contractVersion": settings.client_contract_version,
             "error": {
                 "code": MANDATORY_UPGRADE_REASON,
-                "message": "Update TANAW Desktop before synchronizing.",
+                "message": "Update TANAW to the required target release before continuing.",
                 "retryable": False,
                 "minimumClientVersion": settings.minimum_client_version,
                 "requiredContractVersion": settings.client_contract_version,

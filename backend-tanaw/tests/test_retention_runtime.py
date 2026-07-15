@@ -27,7 +27,6 @@ async def test_manual_cleanup_records_counts_and_safe_metrics(
     expected = RetentionCleanupCounts(
         activation_tokens=2,
         password_reset_challenges=3,
-        development_deliveries=1,
         telemetry=TelemetryRetentionCounts(
             observations_downsampled=4,
             metric_facts_rolled_up=8,

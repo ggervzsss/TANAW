@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
@@ -50,7 +51,7 @@ def _require_simulation_enabled() -> None:
     from app.core.config import get_settings
 
     settings = get_settings()
-    if settings.is_production and not settings.allow_mock_data:
+    if settings.is_production and not settings.allow_simulation_data:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Simulation Lab endpoints are disabled in production.",
@@ -69,6 +70,8 @@ async def start_telemetry_epoch_v2(
     try:
         acknowledgement = await register_epoch_command(db, account=account, command=command)
         await db.commit()
+        if acknowledgement.disposition == "replayed":
+            operational_observability.increment(OperationalCounter.TELEMETRY_COMMAND_REPLAY)
         return acknowledgement
     except TelemetryIntakeConflict as exc:
         await db.rollback()
@@ -96,6 +99,13 @@ async def ingest_telemetry_v2(
     try:
         acknowledgement = await ingest_telemetry_command(db, account=account, command=command)
         await db.commit()
+        if acknowledgement.disposition == "replayed":
+            operational_observability.increment(OperationalCounter.TELEMETRY_COMMAND_REPLAY)
+        else:
+            operational_observability.observe_telemetry_lag(
+                observed_at=command.payload.observedAt,
+                received_at=acknowledgement.acknowledgedAt,
+            )
         return acknowledgement
     except TelemetryIntakeConflict as exc:
         await db.rollback()

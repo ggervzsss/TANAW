@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { CircleAlert, CircleCheckBig, LoaderCircle } from "lucide-react";
 import { BrowserRouter, useLocation } from "react-router-dom";
@@ -10,6 +10,7 @@ import {
 } from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { TOAST_DURATION_MS } from "@/shared/config/app.config";
+import { CLIENT_UPGRADE_REQUIRED_EVENT, type ClientUpgradeRequiredDetail } from "@/shared/config/client-generation";
 import { OperationalSyncBridge } from "@/shared/hooks/useOperationalSync";
 import { queryClient } from "@/shared/lib/queryClient";
 
@@ -56,9 +57,39 @@ export function AppProviders({ children }: AppProvidersProps) {
       <BrowserRouter>
         <OperationalSyncBridge />
         {children}
+        <MandatoryUpgradeOverlay />
         <TanawToaster />
       </BrowserRouter>
     </QueryClientProvider>
+  );
+}
+
+function MandatoryUpgradeOverlay() {
+  const [detail, setDetail] = useState<ClientUpgradeRequiredDetail | null>(null);
+
+  useEffect(() => {
+    const handleUpgrade = (event: Event) => {
+      setDetail((event as CustomEvent<ClientUpgradeRequiredDetail>).detail);
+    };
+    window.addEventListener(CLIENT_UPGRADE_REQUIRED_EVENT, handleUpgrade);
+    return () => window.removeEventListener(CLIENT_UPGRADE_REQUIRED_EVENT, handleUpgrade);
+  }, []);
+
+  if (!detail) return null;
+  return (
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-slate-950/80 p-5 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-labelledby="tanaw-upgrade-title">
+      <div className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-2xl dark:border-amber-400/30 dark:bg-slate-900">
+        <CircleAlert className="h-10 w-10 text-amber-600" aria-hidden="true" />
+        <h1 id="tanaw-upgrade-title" className="mt-4 text-xl font-black text-slate-950 dark:text-white">TANAW update required</h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{detail.message}</p>
+        <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-400">
+          Required portal version: {detail.minimumClientVersion} or newer · Contract {detail.requiredContractVersion}
+        </p>
+        <button type="button" onClick={() => window.location.reload()} className="mt-6 w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-800">
+          Load the updated portal
+        </button>
+      </div>
+    </div>
   );
 }
 

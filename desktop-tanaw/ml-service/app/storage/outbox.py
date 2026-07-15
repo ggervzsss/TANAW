@@ -25,6 +25,45 @@ def list_ready_items(
     return [_item_row(row) for row in rows]
 
 
+def list_recovery_items(connection: sqlite3.Connection, *, limit: int) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        """
+        select outbox.*, revision.report_id, revision.revision_number
+        from sync_outbox_items as outbox
+        join local_report_revisions as revision
+          on revision.revision_id = outbox.report_revision_id
+        where outbox.status in ('retry', 'dead_letter')
+          and revision.classification = 'official'
+        order by
+          case outbox.status when 'dead_letter' then 0 else 1 end,
+          coalesce(outbox.last_attempt_at, outbox.created_at),
+          outbox.outbox_item_id
+        limit ?
+        """,
+        (max(1, min(limit, 500)),),
+    ).fetchall()
+    return [_recovery_row(row) for row in rows]
+
+
+def get_recovery_item(
+    connection: sqlite3.Connection, *, outbox_item_id: str
+) -> dict[str, Any] | None:
+    row = connection.execute(
+        """
+        select outbox.*, revision.report_id, revision.revision_number,
+               revision.classification
+        from sync_outbox_items as outbox
+        join local_report_revisions as revision
+          on revision.revision_id = outbox.report_revision_id
+        where outbox.outbox_item_id = ?
+        """,
+        (outbox_item_id,),
+    ).fetchone()
+    if row is None or row["classification"] != "official":
+        return None
+    return _recovery_row(row)
+
+
 def health(connection: sqlite3.Connection) -> dict[str, int | str | None]:
     backlog = connection.execute(
         """
@@ -32,7 +71,7 @@ def health(connection: sqlite3.Connection) -> dict[str, int | str | None]:
         from sync_outbox_items as outbox
         join local_report_revisions as revision
           on revision.revision_id = outbox.report_revision_id
-        where outbox.status != 'acknowledged' and revision.source_kind = 'real'
+        where outbox.status != 'acknowledged' and revision.classification = 'official'
         """
     ).fetchone()
     last_acknowledgement = connection.execute(
@@ -41,7 +80,7 @@ def health(connection: sqlite3.Connection) -> dict[str, int | str | None]:
         from sync_outbox_items as outbox
         join local_report_revisions as revision
           on revision.revision_id = outbox.report_revision_id
-        where outbox.status = 'acknowledged' and revision.source_kind = 'real'
+        where outbox.status = 'acknowledged' and revision.classification = 'official'
         """
     ).fetchone()
     last_failure = connection.execute(
@@ -53,21 +92,37 @@ def health(connection: sqlite3.Connection) -> dict[str, int | str | None]:
             join local_report_revisions as revision
               on revision.revision_id = outbox.report_revision_id
             where attempt.outcome in ('retry', 'dead_letter')
-              and attempt.error_class is not null and revision.source_kind = 'real'
+              and attempt.error_class != 'manual_retry'
+              and attempt.error_class is not null and revision.classification = 'official'
             union all
             select coalesce(outbox.last_attempt_at, outbox.created_at) as failed_at,
                    outbox.last_error_class as error_class
             from sync_outbox_items as outbox
             join local_report_revisions as revision
               on revision.revision_id = outbox.report_revision_id
-            where outbox.last_error_class is not null and revision.source_kind = 'real'
+            where outbox.last_error_class is not null and revision.classification = 'official'
         )
         order by julianday(failed_at) desc, failed_at desc
         limit 1
         """
     ).fetchone()
+    lifecycle = connection.execute(
+        """
+        select
+            sum(case when outbox.status = 'retry' then 1 else 0 end) as retry_item_count,
+            sum(case when outbox.status = 'dead_letter' then 1 else 0 end) as dead_letter_count,
+            coalesce(sum(outbox.attempt_count), 0) as attempt_count
+        from sync_outbox_items as outbox
+        join local_report_revisions as revision
+          on revision.revision_id = outbox.report_revision_id
+        where revision.classification = 'official'
+        """
+    ).fetchone()
     return {
         "pending_count": _safe_int(backlog["pending_count"]),
+        "retry_item_count": _safe_int(lifecycle["retry_item_count"]),
+        "dead_letter_count": _safe_int(lifecycle["dead_letter_count"]),
+        "attempt_count": _safe_int(lifecycle["attempt_count"]),
         "oldest_pending_at": backlog["oldest_pending_at"],
         "last_acknowledged_at": last_acknowledgement["acknowledged_at"],
         "last_failure_at": last_failure["failed_at"] if last_failure is not None else None,
@@ -208,6 +263,73 @@ def record_failure(
     return _item_row(updated)
 
 
+def requeue(
+    connection: sqlite3.Connection,
+    *,
+    outbox_item_id: str,
+    reason: str,
+    requeued_at: str,
+) -> dict[str, Any]:
+    row = connection.execute(
+        """
+        select outbox.*, revision.report_id, revision.revision_number,
+               revision.classification
+        from sync_outbox_items as outbox
+        join local_report_revisions as revision
+          on revision.revision_id = outbox.report_revision_id
+        where outbox.outbox_item_id = ?
+        """,
+        (outbox_item_id,),
+    ).fetchone()
+    if row is None or row["classification"] != "official":
+        raise ValueError(f"Unknown official sync outbox item: {outbox_item_id}")
+    if row["status"] not in {"retry", "dead_letter"}:
+        raise ValueError(
+            "Only a failed or dead-letter official submission can be deliberately requeued."
+        )
+
+    normalized_at = parse_captured_at(requeued_at).isoformat()
+    attempt_number = int(row["attempt_count"]) + 1
+    normalized_reason = reason.strip()
+    connection.execute(
+        """
+        update sync_outbox_items
+        set status = 'ready', next_attempt_at = ?, attempt_count = ?,
+            last_attempt_at = ?, last_error_class = null, last_error_message = null
+        where outbox_item_id = ?
+        """,
+        (normalized_at, attempt_number, normalized_at, outbox_item_id),
+    )
+    connection.execute(
+        """
+        insert into sync_attempts (
+            attempt_id, outbox_item_id, attempt_number, attempted_at, completed_at,
+            outcome, error_class, error_message, next_attempt_at
+        ) values (?, ?, ?, ?, ?, 'retry', 'manual_retry', ?, ?)
+        """,
+        (
+            str(uuid4()),
+            outbox_item_id,
+            attempt_number,
+            normalized_at,
+            normalized_at,
+            normalized_reason,
+            normalized_at,
+        ),
+    )
+    updated = connection.execute(
+        """
+        select outbox.*, revision.report_id, revision.revision_number
+        from sync_outbox_items as outbox
+        join local_report_revisions as revision
+          on revision.revision_id = outbox.report_revision_id
+        where outbox.outbox_item_id = ?
+        """,
+        (outbox_item_id,),
+    ).fetchone()
+    return _recovery_row(updated)
+
+
 def _item_row(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "outbox_item_id": row["outbox_item_id"],
@@ -227,6 +349,25 @@ def _item_row(row: sqlite3.Row) -> dict[str, Any]:
         "last_error_message": row["last_error_message"],
         "acknowledged_at": row["acknowledged_at"],
         "acknowledgement": _json_dict(row["acknowledgement_json"]),
+    }
+
+
+def _recovery_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "outbox_item_id": row["outbox_item_id"],
+        "report_id": row["report_id"],
+        "report_revision_id": row["report_revision_id"],
+        "revision_number": _safe_int(row["revision_number"]),
+        "command_id": row["command_id"],
+        "endpoint": row["endpoint"],
+        "contract_version": _safe_int(row["contract_version"]),
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "next_attempt_at": row["next_attempt_at"],
+        "attempt_count": _safe_int(row["attempt_count"]),
+        "last_attempt_at": row["last_attempt_at"],
+        "last_error_class": row["last_error_class"],
+        "last_error_message": row["last_error_message"],
     }
 
 

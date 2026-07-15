@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.pagination_schemas import CursorPageInfo
+
 SupportTicketCategory = Literal[
     "Camera Issue",
     "Report Concern",
@@ -67,6 +69,11 @@ class SupportTicketSummary(BaseModel):
     status: SupportTicketStatus
     createdAt: datetime
     updatedAt: datetime
+
+
+class SupportTicketPage(BaseModel):
+    items: list[SupportTicketSummary]
+    page: CursorPageInfo
 
 
 class SupportTicketMessageCreate(BaseModel):

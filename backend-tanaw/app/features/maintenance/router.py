@@ -1,20 +1,28 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.operational_observability import operational_observability
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
+from app.features.events.delivery import read_delivery_queue_metrics
+from app.features.maintenance.operations import read_live_freshness_metrics
 from app.features.maintenance.runtime import (
     retention_runtime_snapshot,
     run_retention_cleanup_now,
 )
-from app.features.maintenance.schemas import RetentionStatusResponse, to_status_response
+from app.features.maintenance.schemas import (
+    OperationalStatusResponse,
+    RetentionStatusResponse,
+    to_operational_status_response,
+    to_status_response,
+)
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
@@ -27,6 +35,21 @@ async def get_retention_status(_: ITAccount) -> RetentionStatusResponse:
         retention_runtime_snapshot(),
         interval_seconds=settings.retention_cleanup_interval_seconds,
         batch_size=settings.retention_cleanup_batch_size,
+    )
+
+
+@router.get("/operations", response_model=OperationalStatusResponse)
+async def get_operational_status(
+    _: ITAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OperationalStatusResponse:
+    observed_at = datetime.now(UTC)
+    queue = await read_delivery_queue_metrics(db, now=observed_at)
+    live = await read_live_freshness_metrics(db, observed_at=observed_at)
+    return to_operational_status_response(
+        operational_observability.snapshot(observed_at=observed_at),
+        queue,
+        live,
     )
 
 
@@ -44,7 +67,7 @@ async def run_retention_now(
             detail="Retention maintenance could not complete.",
         ) from exc
 
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category="IT Activity",
@@ -63,9 +86,9 @@ async def run_retention_now(
                 "expiredEmailChangeRequests": counts.expired_email_change_requests,
             },
         ),
+        actor_account_id=actor.id,
     )
     await db.commit()
-    await activity_log_manager.broadcast(log)
     return to_status_response(
         retention_runtime_snapshot(),
         interval_seconds=settings.retention_cleanup_interval_seconds,

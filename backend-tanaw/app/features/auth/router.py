@@ -1,13 +1,11 @@
 import asyncio
 import hashlib
-import json
 import logging
 from datetime import UTC, datetime
 from time import monotonic
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -18,7 +16,7 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    SystemConfiguration,
+    SystemSetting,
 )
 from app.features.accounts.schemas import (
     AccountChangeRequestResponse,
@@ -36,9 +34,15 @@ from app.features.accounts.service import (
     invalidate_account_tokens,
     to_auth_user_with_asset,
 )
+from app.features.accounts.settings import (
+    apply_system_settings,
+    system_settings_values,
+)
+from app.features.accounts.settings import (
+    get_system_settings as get_system_settings_record,
+)
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log, get_actor_role_label
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.alerts.service import create_operational_alert
 from app.features.assets.runtime import get_asset_storage
 from app.features.assets.service import (
@@ -112,13 +116,13 @@ from app.features.notifications.service import (
 from app.features.topology.account_scope import (
     invalidate_site_coordinates,
     load_account_topology,
+    replace_site_location,
     require_account_topology,
 )
 
 AssetStorageDependency = Annotated[AssetStorage, Depends(get_asset_storage)]
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
-SYSTEM_SETTINGS_ID = "default"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
     AccountRole.IT,
@@ -196,26 +200,9 @@ async def notify_enterprise_account_change(
 
 
 async def get_login_lockout_policy(db: AsyncSession) -> LoginLockoutPolicy:
-    record = await db.scalar(
-        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
+    return resolve_login_lockout_policy(
+        system_settings_values(await get_system_settings_record(db))
     )
-    return resolve_login_lockout_policy(load_system_settings_values(record))
-
-
-def load_system_settings_values(record: SystemConfiguration | None) -> dict[str, str | bool | int]:
-    if record is None:
-        return {}
-    try:
-        values = json.loads(record.values_json)
-    except json.JSONDecodeError:
-        return {}
-    if not isinstance(values, dict):
-        return {}
-    return {
-        key: value
-        for key, value in values.items()
-        if isinstance(key, str) and isinstance(value, str | bool | int)
-    }
 
 
 def join_changed_fields(fields: list[str]) -> str:
@@ -620,9 +607,15 @@ async def update_profile(
         enterprise_name = payload.enterpriseName.strip()
         topology.enterprise.name = enterprise_name
         topology.site.name = f"{enterprise_name} Primary Site"
-        if topology.site.address != payload.address:
-            topology.site.address = payload.address
-            invalidate_site_coordinates(topology.site)
+        if topology.location.address != payload.address:
+            await invalidate_site_coordinates(
+                db,
+                topology.site,
+                topology.location,
+                barangay=topology.location.barangay,
+                address=payload.address,
+                building_capacity=topology.location.building_capacity,
+            )
     else:
         if payload.firstName is None or payload.lastName is None:
             raise HTTPException(
@@ -816,8 +809,24 @@ async def update_building_capacity(
 ) -> AuthUser:
     require_enterprise_account(account)
     topology = await require_account_topology(db, account, lock=True)
-    previous_capacity = topology.site.building_capacity
-    topology.site.building_capacity = payload.buildingCapacity
+    previous_capacity = topology.location.building_capacity
+    if previous_capacity != payload.buildingCapacity:
+        await replace_site_location(
+            db,
+            site=topology.site,
+            current=topology.location,
+            barangay=topology.location.barangay,
+            address=topology.location.address,
+            timezone_name=topology.location.timezone_name,
+            building_capacity=payload.buildingCapacity,
+            latitude=topology.location.latitude,
+            longitude=topology.location.longitude,
+            location_source=topology.location.location_source,
+            location_confidence=topology.location.location_confidence,
+            geocoded_address=topology.location.geocoded_address,
+            coordinates_confirmed_at=topology.location.coordinates_confirmed_at,
+            change_reason="building_capacity_changed",
+        )
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -828,14 +837,14 @@ async def update_building_capacity(
         actor_role=get_actor_role_label(account),
         action="Update Building Capacity",
         target=account.email,
-        summary=f"{account.display_name} updated building capacity to {topology.site.building_capacity}.",
+        summary=f"{account.display_name} updated building capacity to {payload.buildingCapacity}.",
         source_id=account.id,
         metadata={
             "previousBuildingCapacity": previous_capacity,
-            "buildingCapacity": topology.site.building_capacity,
+            "buildingCapacity": payload.buildingCapacity,
         },
     )
-    if topology.site.building_capacity != previous_capacity:
+    if payload.buildingCapacity != previous_capacity:
         enterprise = topology.enterprise.name
         await notify_enterprise_account_change(
             db,
@@ -843,12 +852,12 @@ async def update_building_capacity(
             title=f"{enterprise} updated building capacity.",
             message=(
                 f"{enterprise} updated building capacity from "
-                f"{previous_capacity} to {topology.site.building_capacity}."
+                f"{previous_capacity} to {payload.buildingCapacity}."
             ),
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.capacity",
         )
-    return await to_auth_user_with_asset(db, account, topology)
+    return await to_auth_user_with_asset(db, account, await require_account_topology(db, account))
 
 
 @router.post("/profile/business-email-change", response_model=AccountChangeRequestResponse)
@@ -1064,12 +1073,10 @@ async def get_system_settings(
     _: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SystemSettingsPayload:
-    record = await db.scalar(
-        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
-    )
+    record = await get_system_settings_record(db)
     return SystemSettingsPayload(
-        values=load_system_settings_values(record),
-        updatedBy=record.updated_by if record else None,
+        values=system_settings_values(record),
+        updatedBy=record.updated_by_name if record else None,
         updatedAt=record.updated_at if record else None,
     )
 
@@ -1084,14 +1091,13 @@ async def update_system_settings(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="IT Personnel access required."
         )
-    record = await db.scalar(
-        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
-    )
+    record = await get_system_settings_record(db)
     if record is None:
-        record = SystemConfiguration(id=SYSTEM_SETTINGS_ID)
+        record = SystemSetting(id="default")
         db.add(record)
-    record.values_json = json.dumps(payload.values, sort_keys=True)
-    record.updated_by = account.display_name
+    apply_system_settings(record, payload.values)
+    record.updated_by_account_id = account.id
+    record.updated_by_name = account.display_name
     await db.commit()
     await db.refresh(record)
     await record_auth_log(
@@ -1107,7 +1113,7 @@ async def update_system_settings(
     )
     return SystemSettingsPayload(
         values=payload.values,
-        updatedBy=record.updated_by,
+        updatedBy=record.updated_by_name,
         updatedAt=record.updated_at,
     )
 
@@ -1125,7 +1131,7 @@ async def record_auth_log(
     source_id: str,
     metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category=category,  # type: ignore[arg-type]
@@ -1140,4 +1146,3 @@ async def record_auth_log(
         ),
     )
     await db.commit()
-    await activity_log_manager.broadcast(log)

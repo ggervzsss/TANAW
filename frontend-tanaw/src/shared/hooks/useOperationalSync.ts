@@ -1,7 +1,8 @@
 import { QueryClient, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAuthStore } from "@/app/store/authStore";
-import { MANDATORY_UPGRADE_WEBSOCKET_CODE } from "../config/client-generation";
+import { activityLogsQueryKey } from "../services/activityLogs";
+import { announceClientUpgradeRequired, MANDATORY_UPGRADE_WEBSOCKET_CODE } from "../config/client-generation";
 import { createWebSocketAuthMessage, getOperationalWebSocketUrl, listOperationalMapEnterprises, listUserNotifications, type OperationalWebSocketEnvelope } from "../services/operationalSync";
 import { reportWorkflowQueryKey } from "../services/reporting";
 import type { AuthUser } from "../types";
@@ -10,12 +11,13 @@ const RECONCILIATION_INTERVAL_MS = 30_000;
 
 export const operationalMapEnterprisesQueryKey = ["operational", "sites", "v2"] as const;
 export const operationalNotificationsQueryKey = ["operational", "notifications"] as const;
-const operationalAlertsQueryKey = ["operational-alerts"] as const;
+export const operationalAlertsQueryKey = ["operational-alerts"] as const;
 
 type OperationalQueryKeys = {
   mapEnterprises: QueryKey;
   notifications: QueryKey;
   alerts: QueryKey;
+  activityLogs: QueryKey;
 };
 
 /** Builds protected keys without placing the bearer token in React Query state. */
@@ -30,6 +32,7 @@ export function createOperationalQueryKeys(user: AuthUser | null): OperationalQu
     mapEnterprises: [...operationalMapEnterprisesQueryKey, scope],
     notifications: [...operationalNotificationsQueryKey, scope],
     alerts: [...operationalAlertsQueryKey, scope],
+    activityLogs: [...activityLogsQueryKey, scope],
   };
 }
 
@@ -147,7 +150,7 @@ function useOperationalSyncSocket() {
         clearHeartbeat();
         reconcile();
         if (event.code === MANDATORY_UPGRADE_WEBSOCKET_CODE) {
-          window.location.reload();
+          announceClientUpgradeRequired({});
           return;
         }
         scheduleReconnect();
@@ -190,6 +193,10 @@ export function handleOperationalEnvelope(queryClient: QueryClient, keys: Operat
     }
     if (resourceType === "user_notification") {
       invalidate(queryClient, keys.notifications, operationalNotificationsQueryKey);
+      return;
+    }
+    if (resourceType === "activity_log") {
+      invalidate(queryClient, activityLogsQueryKey);
       return;
     }
     if (resourceType === "enterprise_report" || resourceType === "final_report" || resourceType === "reporting_period_compliance" || resourceType === "reporting_obligation") {

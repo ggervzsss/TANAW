@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from threading import Lock, RLock
+from time import monotonic
 
 from app.storage.local_schema import connect_local_database, initialize_local_database
 
@@ -18,6 +19,12 @@ class LedgerWriterInstrumentation:
     rolled_back_transaction_count: int = 0
     active_writer_count: int = 0
     maximum_concurrent_writers: int = 0
+    lock_wait_observations: int = 0
+    latest_lock_wait_ms: float = 0.0
+    maximum_lock_wait_ms: float = 0.0
+    transaction_duration_observations: int = 0
+    latest_transaction_duration_ms: float = 0.0
+    maximum_transaction_duration_ms: float = 0.0
 
 
 class SerializedLedgerWriter:
@@ -39,9 +46,18 @@ class SerializedLedgerWriter:
 
     @contextmanager
     def transaction(self, *, immediate: bool) -> Iterator[sqlite3.Connection]:
+        wait_started = monotonic()
         with self._lock:
+            transaction_started = monotonic()
             connection = self._runtime_connection()
             metrics = self._instrumentation
+            lock_wait_ms = max(0.0, (transaction_started - wait_started) * 1000)
+            metrics.lock_wait_observations += 1
+            metrics.latest_lock_wait_ms = round(lock_wait_ms, 6)
+            metrics.maximum_lock_wait_ms = max(
+                metrics.maximum_lock_wait_ms,
+                metrics.latest_lock_wait_ms,
+            )
             metrics.transaction_attempt_count += 1
             if immediate:
                 metrics.active_writer_count += 1
@@ -60,6 +76,13 @@ class SerializedLedgerWriter:
                 metrics.rolled_back_transaction_count += 1
                 raise
             finally:
+                transaction_duration_ms = max(0.0, (monotonic() - transaction_started) * 1000)
+                metrics.transaction_duration_observations += 1
+                metrics.latest_transaction_duration_ms = round(transaction_duration_ms, 6)
+                metrics.maximum_transaction_duration_ms = max(
+                    metrics.maximum_transaction_duration_ms,
+                    metrics.latest_transaction_duration_ms,
+                )
                 if immediate:
                     metrics.active_writer_count -= 1
 
@@ -70,7 +93,7 @@ class SerializedLedgerWriter:
         with self.transaction(immediate=True) as connection:
             operation(connection)
 
-    def instrumentation(self) -> dict[str, int]:
+    def instrumentation(self) -> dict[str, int | float]:
         with self._lock:
             return asdict(self._instrumentation)
 

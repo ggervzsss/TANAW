@@ -11,8 +11,8 @@ class LocalDataCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             app_data_dir = Path(directory)
             store = LocalLedger(str(app_data_dir), "enterprise@example.test")
-            store.append_count_event(_event("real", None))
-            store.append_count_event(_event("mock", "run-1"))
+            store.append_count_event(_event("official", None))
+            store.append_count_event(_event("simulation", "run-1"))
             forbidden_file = store._database_path.parent / "events.jsonl"
             forbidden_file.write_text("legacy duplicate", encoding="utf-8")
             legacy_session = store._database_path.parent / "active_session.json"
@@ -30,10 +30,10 @@ class LocalDataCliTest(unittest.TestCase):
             )
             self.assertEqual(
                 {
-                    (row["sourceKind"], row["mockRunId"], row["count"])
+                    (row["classification"], row["simulationRunId"], row["count"])
                     for row in ledger["eventProvenance"]
                 },
-                {("real", None, 1), ("mock", "run-1", 1)},
+                {("official", None, 1), ("simulation", "run-1", 1)},
             )
 
     def test_clear_enterprise_does_not_remove_other_ledger_or_browser_storage(self) -> None:
@@ -41,8 +41,8 @@ class LocalDataCliTest(unittest.TestCase):
             app_data_dir = Path(directory)
             first = LocalLedger(str(app_data_dir), "first@example.test")
             second = LocalLedger(str(app_data_dir), "second@example.test")
-            first.append_count_event(_event("real", None))
-            second.append_count_event(_event("real", None))
+            first.append_count_event(_event("official", None))
+            second.append_count_event(_event("official", None))
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)
             browser_file.write_text("camera settings", encoding="utf-8")
@@ -58,7 +58,7 @@ class LocalDataCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             app_data_dir = Path(directory)
             store = LocalLedger(str(app_data_dir), "enterprise@example.test")
-            store.append_count_event(_event("real", None))
+            store.append_count_event(_event("official", None))
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)
             browser_file.write_text("camera settings", encoding="utf-8")
@@ -72,7 +72,7 @@ class LocalDataCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as parent:
             app_data_dir = Path(parent) / "desktop-tanaw"
             store = LocalLedger(str(app_data_dir), "enterprise@example.test")
-            store.append_count_event(_event("real", None))
+            store.append_count_event(_event("official", None))
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)
             browser_file.write_text("camera settings", encoding="utf-8")
@@ -83,13 +83,13 @@ class LocalDataCliTest(unittest.TestCase):
             self.assertFalse(app_data_dir.exists())
 
 
-def _event(source_kind: str, mock_run_id: str | None) -> dict:
+def _event(classification: str, simulation_run_id: str | None) -> dict:
     return {
         "camera_id": 1,
         "camera_name": "Test Camera",
         "direction": "entry",
         "track_id": 1,
         "counts": {"entry": 1, "exit": 0, "occupancy": 1},
-        "source_kind": source_kind,
-        "mock_run_id": mock_run_id,
+        "classification": classification,
+        "simulation_run_id": simulation_run_id,
     }

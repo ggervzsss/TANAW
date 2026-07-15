@@ -465,10 +465,10 @@ function toMonotonicObservedAt(now: Date, baseline: CounterBaseline | null) {
 function assertOfficialEvidence(evidence: TelemetryEvidence) {
   const simulation = evidence.simulation as unknown;
   const metrics = evidence.metrics as unknown;
-  if (!isRecord(simulation) || !("mock_run_id" in simulation) || !("scenario" in simulation)) {
+  if (!isRecord(simulation) || !("simulation_run_id" in simulation) || !("scenario" in simulation)) {
     throw blocked("SIMULATION_STATUS_UNAVAILABLE", "Simulation isolation could not be verified, so official site telemetry is paused.");
   }
-  if (!isRecord(metrics) || !("source_kind" in metrics) || !("mock_run_id" in metrics)) {
+  if (!isRecord(metrics) || !("classification" in metrics) || !("simulation_run_id" in metrics)) {
     throw blocked("TELEMETRY_SOURCE_CLASSIFICATION_MISSING", "The local telemetry ledger did not provide explicit source classification, so official telemetry is paused.");
   }
   if (
@@ -476,10 +476,10 @@ function assertOfficialEvidence(evidence: TelemetryEvidence) {
     simulation.running !== false ||
     simulation.paused !== false ||
     simulation.mode !== null ||
-    simulation.mock_run_id !== null ||
+    simulation.simulation_run_id !== null ||
     simulation.scenario !== null ||
-    metrics.source_kind !== "real" ||
-    metrics.mock_run_id !== null
+    metrics.classification !== "official" ||
+    metrics.simulation_run_id !== null
   ) {
     throw blocked("SIMULATION_TELEMETRY_NOT_OFFICIAL", "Simulation-derived camera metrics are isolated locally and cannot be published as official site telemetry.");
   }

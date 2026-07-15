@@ -9,14 +9,14 @@ from starlette.responses import JSONResponse, Response
 from app.api.router import api_router
 from app.core.client_compatibility import (
     CLIENT_COMPATIBILITY_HEADERS,
-    DESKTOP_CLIENT_NAME,
-    desktop_request_requires_compatibility,
-    desktop_upgrade_required_response,
+    client_upgrade_required_response,
     is_supported_client_generation,
     request_client_generation,
+    request_requires_compatibility,
 )
 from app.core.config import Settings, get_settings
 from app.core.http_security import apply_security_headers
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.seed import seed_default_accounts
@@ -102,7 +102,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="2.0.0", lifespan=lifespan)
 
 
 app.add_middleware(
@@ -120,13 +120,16 @@ async def security_headers_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     response: Response
-    if desktop_request_requires_compatibility(request) and not is_supported_client_generation(
-        request_client_generation(request),
-        settings,
-        allowed_client_names=frozenset({DESKTOP_CLIENT_NAME}),
-    ):
-        response = desktop_upgrade_required_response(settings)
+    requires_compatibility = request_requires_compatibility(request, settings)
+    supported_generation = requires_compatibility and is_supported_client_generation(
+        request_client_generation(request), settings
+    )
+    if requires_compatibility and not supported_generation:
+        operational_observability.increment(OperationalCounter.OUTDATED_CLIENT_REJECTION)
+        response = client_upgrade_required_response(settings)
     else:
+        if supported_generation:
+            operational_observability.increment(OperationalCounter.TARGET_CLIENT_REQUEST)
         response = await call_next(request)
     apply_security_headers(request, response)
     return response

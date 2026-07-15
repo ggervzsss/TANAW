@@ -2,23 +2,32 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DotFormModal } from "./DotFormModal";
 import { ReportDraftPanel } from "./ReportDraftPanel";
 import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
+import { OutboxRecoveryPanel } from "./OutboxRecoveryPanel";
 import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { CanonicalReportingPeriod, DemoBreakdown, DemographicEvidence, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReports, recordLocalReportRevision } from "../../camera/services/ml-service";
-import type { LocalMetricsSummary, LocalReportRevision, LocalReportRecord } from "../../camera/services/ml-service";
+import {
+  DEFAULT_ML_SERVICE_BASE_URL,
+  getLocalMetricsSummary,
+  getMlServiceStatus,
+  listLocalReports,
+  listSyncOutboxRecoveryItems,
+  recordLocalReportRevision,
+  retrySyncOutboxItem,
+} from "../../camera/services/ml-service";
+import type { LocalMetricsSummary, LocalReportRevision, LocalReportRecord, LocalSyncOutboxRecoveryItem } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, readEnterpriseReport, type EnterpriseReportDetail, type EnterpriseReportHistoryItem } from "../services/report-history";
 import {
   DESKTOP_REPORT_SYNC_EVENT,
-  getDesktopMockPreparation,
-  prepareDesktopMockCounts,
+  getDesktopSimulationPreparation,
+  prepareDesktopSimulationCounts,
   reportingPeriodForPreparationCounts,
   syncDesktopReportSubmission,
-  type BackendMockPreparationCounts,
+  type BackendSimulationPreparationCounts,
 } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { buildDemographicFacts, demographicEvidenceFromFacts, getDemographicEvidenceStatus } from "../utils/demographics";
-import { notifyError } from "../../toasts/services/toast-service";
+import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { canonicalReportingPeriodFromSource, getReportingPeriodSubmissionError, requireCanonicalReportingPeriod, UNCLASSIFIED_REPORTING_PERIOD_LABEL } from "../services/reporting-period";
 
 type ReportsViewProps = {
@@ -50,9 +59,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const [liveMetrics, setLiveMetrics] = useState<Metrics>(EMPTY_METRICS);
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryItems, setRecoveryItems] = useState<LocalSyncOutboxRecoveryItem[]>([]);
+  const [retryingItemId, setRetryingItemId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPeriodChanging, setIsPeriodChanging] = useState(false);
-  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendMockPreparationCounts[]>([]);
+  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendSimulationPreparationCounts[]>([]);
   const reportsHistoryRef = useRef(reportsHistory);
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
@@ -132,9 +144,20 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
   }, [setReportsHistory]);
 
+  const refreshRecoveryItems = useCallback(async () => {
+    try {
+      const status = await getMlServiceStatus();
+      const items = await listSyncOutboxRecoveryItems(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
+      setRecoveryItems(items);
+      setRecoveryError(null);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "Unable to load report delivery recovery state.");
+    }
+  }, []);
+
   const refreshPendingPeriods = useCallback(async () => {
     try {
-      const preparation = await getDesktopMockPreparation();
+      const preparation = await getDesktopSimulationPreparation();
       const pendingCounts = preparation?.status === "active" ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : [];
       pendingCounts.forEach(reportingPeriodForPreparationCounts);
       setPendingPeriodCounts(pendingCounts);
@@ -155,6 +178,12 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     const intervalId = window.setInterval(() => void refreshLocalReports(), 15000);
     return () => window.clearInterval(intervalId);
   }, [refreshLocalReports]);
+
+  useEffect(() => {
+    void refreshRecoveryItems();
+    const intervalId = window.setInterval(() => void refreshRecoveryItems(), 15000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshRecoveryItems]);
 
   useEffect(() => {
     void refreshPendingPeriods();
@@ -213,7 +242,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
     setIsPeriodChanging(true);
     try {
-      const prepared = await prepareDesktopMockCounts(nextPeriod.periodId);
+      const prepared = await prepareDesktopSimulationCounts(nextPeriod.periodId);
       if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period_id !== nextPeriod.periodId)) {
         throw new Error(`No prepared count package is available for ${nextPeriod.label}.`);
       }
@@ -320,6 +349,24 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       });
     } catch (error) {
       notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+    }
+  };
+
+  const handleRetryOutboxItem = async (item: LocalSyncOutboxRecoveryItem, reason: string) => {
+    setRetryingItemId(item.outbox_item_id);
+    try {
+      const status = await getMlServiceStatus();
+      await retrySyncOutboxItem(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, item.outbox_item_id, reason);
+      setRecoveryItems((current) => current.filter((candidate) => candidate.outbox_item_id !== item.outbox_item_id));
+      notifySuccess(`Report ${item.report_id} revision ${item.revision_number} was requeued safely.`);
+      window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
+      window.setTimeout(() => void refreshRecoveryItems(), 1000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to requeue the exact report revision.";
+      setRecoveryError(message);
+      notifyError(message);
+    } finally {
+      setRetryingItemId(null);
     }
   };
 
@@ -509,6 +556,14 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
           onSelectReport={handleSelectLedgerRow}
         />
       </div>
+
+      <OutboxRecoveryPanel
+        error={recoveryError}
+        items={recoveryItems}
+        retryingItemId={retryingItemId}
+        onRefresh={() => void refreshRecoveryItems()}
+        onRetry={(item, reason) => void handleRetryOutboxItem(item, reason)}
+      />
     </div>
   );
 }
@@ -565,7 +620,7 @@ function metricsFromSummary(summary: LocalMetricsSummary): Metrics {
   };
 }
 
-function metricsFromPendingCounts(counts: BackendMockPreparationCounts): Metrics {
+function metricsFromPendingCounts(counts: BackendSimulationPreparationCounts): Metrics {
   return {
     entries: counts.entries,
     exits: counts.exits,
@@ -632,7 +687,7 @@ function buildLedgerRows({
   currentMetrics: Metrics;
   currentNotes: string;
   currentPeriod: CanonicalReportingPeriod | null;
-  pendingCounts: BackendMockPreparationCounts[];
+  pendingCounts: BackendSimulationPreparationCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
   const pendingPeriods = new Set<string>();
@@ -688,7 +743,7 @@ function buildLedgerRows({
   return rows;
 }
 
-function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRecord {
+function reportFromPendingCounts(counts: BackendSimulationPreparationCounts): ReportRecord {
   const reportingPeriod = reportingPeriodForPreparationCounts(counts);
   return {
     id: pendingReportId(reportingPeriod.periodId),
@@ -869,7 +924,7 @@ async function syncSubmittedReportToCloud(reportId: string, outboxItemId: string
 
 async function prepareNextWorkspaceMetrics() {
   try {
-    const prepared = await prepareDesktopMockCounts();
+    const prepared = await prepareDesktopSimulationCounts();
     return isPreparedMetrics(prepared) ? prepared : null;
   } catch {
     return null;

@@ -7,15 +7,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 
 
-class MockDataRun(Base):
-    __tablename__ = "mock_data_runs"
+class SimulationRun(Base):
+    __tablename__ = "simulation_runs"
     __table_args__ = (
-        CheckConstraint("range_end > range_start", name="ck_mock_data_runs_range"),
-        CheckConstraint("status IN ('active', 'removed')", name="ck_mock_data_runs_status"),
+        CheckConstraint("range_end > range_start", name="ck_simulation_runs_range"),
+        CheckConstraint("status IN ('active', 'removed')", name="ck_simulation_runs_status"),
         CheckConstraint(
             "(status = 'active' AND ended_at IS NULL) OR "
             "(status = 'removed' AND ended_at IS NOT NULL)",
-            name="ck_mock_data_runs_lifecycle",
+            name="ck_simulation_runs_lifecycle",
         ),
     )
 
@@ -27,7 +27,9 @@ class MockDataRun(Base):
     range_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     range_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     target_account_id: Mapped[str | None] = mapped_column(
-        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=False),
+        ForeignKey("accounts.id", name="fk_simulation_runs_target_account", ondelete="SET NULL"),
+        nullable=True,
     )
     target_enterprise_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     target_enterprise_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -39,15 +41,27 @@ class MockDataRun(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class MockDataRunAccount(Base):
-    __tablename__ = "mock_data_run_accounts"
-    __table_args__ = (Index("ix_mock_data_run_accounts_account_id", "account_id"),)
+class SimulationRunAccount(Base):
+    __tablename__ = "simulation_run_accounts"
+    __table_args__ = (Index("ix_simulation_run_accounts_account_id", "account_id"),)
 
     run_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), ForeignKey("mock_data_runs.id", ondelete="CASCADE"), primary_key=True
+        Uuid(as_uuid=False),
+        ForeignKey(
+            "simulation_runs.id",
+            name="simulation_run_accounts_run_id_fkey",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
     )
     account_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
+        Uuid(as_uuid=False),
+        ForeignKey(
+            "accounts.id",
+            name="simulation_run_accounts_account_id_fkey",
+            ondelete="CASCADE",
+        ),
+        primary_key=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

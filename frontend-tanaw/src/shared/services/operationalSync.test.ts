@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "../lib/apiClient";
-import { listOperationalMapEnterprises } from "./operationalSync";
+import { getLocationEvidenceWarning, listOperationalMapEnterprises } from "./operationalSync";
 
 vi.mock("../lib/apiClient", () => ({
   apiClient: { get: vi.fn() },
@@ -70,6 +70,18 @@ describe("target site registry adapter", () => {
 
     await expect(listOperationalMapEnterprises()).rejects.toThrow("repeated pagination cursor");
   });
+
+  it("flags materially different registered and geocoded addresses", () => {
+    expect(
+      getLocationEvidenceWarning({
+        address: "123 Main Street, Poblacion, San Pedro",
+        geocodedAddress: "National Highway, San Antonio, Biñan",
+        latitude: 14.34,
+        longitude: 121.04,
+        locationConfidence: 0.92,
+      }),
+    ).toContain("differ");
+  });
 });
 
 function siteResource(
@@ -90,6 +102,9 @@ function siteResource(
     barangay: "Poblacion",
     address: "123 Main Street",
     geocodedAddress: null,
+    locationSource: "registry",
+    locationConfidence: 0.95,
+    coordinatesUpdatedAt: "2026-07-13T07:00:00Z",
     latitude: 14.34,
     longitude: 121.04,
     topologyStatus: overrides.topologyStatus ?? "ready",

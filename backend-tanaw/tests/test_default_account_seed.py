@@ -10,7 +10,7 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    SystemConfiguration,
+    SeedState,
 )
 
 
@@ -73,11 +73,7 @@ async def test_fresh_database_creates_bootstrap_and_opt_in_development_accounts_
     assert db.flush.await_count == 4
     db.commit.assert_awaited_once()
 
-    states = [
-        call.args[0]
-        for call in db.add.call_args_list
-        if isinstance(call.args[0], SystemConfiguration)
-    ]
+    states = [call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], SeedState)]
     assert {state.id for state in states} == {
         seed.BOOTSTRAP_STATE_ID,
         seed.DEVELOPMENT_STATE_ID,
@@ -150,7 +146,7 @@ async def test_initialized_bootstrap_is_never_synchronized_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db = mock_session()
-    state = SystemConfiguration(id=seed.BOOTSTRAP_STATE_ID, values_json="{}")
+    state = SeedState(id=seed.BOOTSTRAP_STATE_ID, initialized_at=datetime.now(UTC), account_count=1)
     monkeypatch.setattr(
         seed,
         "get_settings",
@@ -172,7 +168,9 @@ async def test_initialized_bootstrap_is_never_synchronized_again(
 async def test_existing_development_accounts_keep_password_role_status_and_activation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    bootstrap_state = SystemConfiguration(id=seed.BOOTSTRAP_STATE_ID, values_json="{}")
+    bootstrap_state = SeedState(
+        id=seed.BOOTSTRAP_STATE_ID, initialized_at=datetime.now(UTC), account_count=1
+    )
     accounts = {
         "admin@email.com": Account(
             id="admin",

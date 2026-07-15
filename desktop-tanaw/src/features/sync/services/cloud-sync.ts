@@ -8,10 +8,10 @@ import {
   acknowledgeSyncOutboxItem,
   listLocalReports,
   listReadySyncOutboxItems,
-  prepareLocalMockCounts,
+  prepareLocalSimulationCounts,
   purgeLocalReportRawEvents,
   recordSyncOutboxFailure,
-  resetLocalMockData,
+  resetLocalSimulationData,
   type LocalSyncOutboxItem,
 } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory } from "../../reports/services/report-history";
@@ -20,7 +20,7 @@ import type { CanonicalReportingPeriod } from "../../../types/enterprise";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 
-export type BackendMockPreparationCounts = {
+export type BackendSimulationPreparationCounts = {
   entries: number;
   exits: number;
   uniqueCount: number;
@@ -33,48 +33,48 @@ export type BackendMockPreparationCounts = {
   };
 };
 
-export type BackendMockPreparation = {
+export type BackendSimulationPreparation = {
   runId: string;
   status: "active" | "removed";
   enterpriseId: string;
   enterpriseName: string;
-  counts: BackendMockPreparationCounts | null;
-  pendingCounts?: BackendMockPreparationCounts[];
+  counts: BackendSimulationPreparationCounts | null;
+  pendingCounts?: BackendSimulationPreparationCounts[];
 };
 
-export async function getDesktopMockPreparation() {
-  const response = await staffApi.get<BackendMockPreparation | null>("/operational/desktop/simulation-preparation/v2");
+export async function getDesktopSimulationPreparation() {
+  const response = await staffApi.get<BackendSimulationPreparation | null>("/operational/desktop/simulation-preparation/v2");
   return response.data;
 }
 
-export async function prepareDesktopMockCounts(periodId?: string) {
+export async function prepareDesktopSimulationCounts(periodId?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
   const simulation = await resolveOptional(() => getSimulationStatus(baseUrl));
-  if (simulation?.mock_run_id && simulation.scenario) return null;
+  if (simulation?.simulation_run_id && simulation.scenario) return null;
 
-  const preparation = await getDesktopMockPreparation();
+  const preparation = await getDesktopSimulationPreparation();
   if (!preparation) return null;
 
   if (preparation.status === "removed") {
-    return resetLocalMockData(baseUrl, preparation.runId);
+    return resetLocalSimulationData(baseUrl, preparation.runId);
   }
   let selectedPeriodId = periodId;
   if (!selectedPeriodId) {
     const currentMetrics = await getLocalMetricsSummary(baseUrl);
     const pendingPeriodIds = preparationCounts(preparation).map((counts) => reportingPeriodForPreparationCounts(counts).periodId);
-    if (currentMetrics.mock_run_id === preparation.runId && currentMetrics.period_id && pendingPeriodIds.includes(currentMetrics.period_id) && currentMetrics.unsubmitted_events > 0) {
+    if (currentMetrics.simulation_run_id === preparation.runId && currentMetrics.period_id && pendingPeriodIds.includes(currentMetrics.period_id) && currentMetrics.unsubmitted_events > 0) {
       return null;
     }
     selectedPeriodId = currentMetrics.period_id ?? undefined;
   }
   if (!selectedPeriodId) return null;
-  const counts = selectMockPreparationCounts(preparation, selectedPeriodId);
+  const counts = selectSimulationPreparationCounts(preparation, selectedPeriodId);
   if (!counts) return null;
   const reportingPeriod = reportingPeriodForPreparationCounts(counts);
 
-  return prepareLocalMockCounts(baseUrl, {
-    mockRunId: preparation.runId,
+  return prepareLocalSimulationCounts(baseUrl, {
+    simulationRunId: preparation.runId,
     enterpriseId: preparation.enterpriseId,
     enterpriseName: preparation.enterpriseName,
     entries: counts.entries,
@@ -87,7 +87,7 @@ export async function prepareDesktopMockCounts(periodId?: string) {
   });
 }
 
-export function reportingPeriodForPreparationCounts(counts: BackendMockPreparationCounts): CanonicalReportingPeriod {
+export function reportingPeriodForPreparationCounts(counts: BackendSimulationPreparationCounts): CanonicalReportingPeriod {
   return canonicalReportingPeriodFromSource({
     period_id: counts.periodKey,
     period: counts.period,
@@ -96,11 +96,11 @@ export function reportingPeriodForPreparationCounts(counts: BackendMockPreparati
   });
 }
 
-function preparationCounts(preparation: BackendMockPreparation) {
+function preparationCounts(preparation: BackendSimulationPreparation) {
   return preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : [];
 }
 
-function selectMockPreparationCounts(preparation: BackendMockPreparation, periodId: string) {
+function selectSimulationPreparationCounts(preparation: BackendSimulationPreparation, periodId: string) {
   return preparationCounts(preparation).find((counts) => reportingPeriodForPreparationCounts(counts).periodId === periodId) ?? null;
 }
 

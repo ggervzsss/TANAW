@@ -16,7 +16,7 @@ from app.features.reporting.obligations import (
 
 
 @pytest.mark.parametrize(
-    ("lifecycle", "barangay", "overlap", "status", "blocked"),
+    ("lifecycle", "barangay", "location_error", "status", "blocked"),
     [
         ("active", "Barangay Uno", False, "eligible", False),
         ("inactive", "Barangay Uno", False, "ineligible", False),
@@ -28,14 +28,16 @@ from app.features.reporting.obligations import (
 def test_eligibility_derivation_is_explicit_and_fail_closed(
     lifecycle: str,
     barangay: str | None,
-    overlap: bool,
+    location_error: bool,
     status: str,
     blocked: bool,
 ) -> None:
     decision = derive_eligibility(
         enterprise_lifecycle_state=lifecycle,
         frozen_barangay=barangay,
-        overlapping_site_versions=overlap,
+        location_resolution_error=(
+            "overlapping effective location versions" if location_error else None
+        ),
     )
 
     assert decision.status == status

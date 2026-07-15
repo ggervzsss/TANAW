@@ -186,6 +186,9 @@ describe("sequenced desktop telemetry v2 producer", () => {
     evidence.metrics.unsynced_events = 999;
     evidence.syncOutbox = {
       pending_count: 2,
+      retry_item_count: 1,
+      dead_letter_count: 0,
+      attempt_count: 1,
       oldest_pending_at: "2026-07-13T07:30:00.123456+00:00",
       last_acknowledged_at: "2026-07-13T07:00:00+00:00",
       last_failure_at: "2026-07-13T07:45:00+00:00",
@@ -210,6 +213,9 @@ describe("sequenced desktop telemetry v2 producer", () => {
     const evidence = officialEvidence({ entries: 10, exits: 4, uniqueCount: 7 });
     evidence.syncOutbox = {
       pending_count: 0,
+      retry_item_count: 0,
+      dead_letter_count: 0,
+      attempt_count: 0,
       oldest_pending_at: "2026-07-13T07:30:00+00:00",
       last_acknowledged_at: null,
       last_failure_at: null,
@@ -224,8 +230,8 @@ describe("sequenced desktop telemetry v2 producer", () => {
 
   it("never publishes simulation-derived evidence as official telemetry", async () => {
     const simulated = officialEvidence({ entries: 40, exits: 15, uniqueCount: 31 });
-    simulated.metrics.source_kind = "mock";
-    simulated.metrics.mock_run_id = "simulation-run";
+    simulated.metrics.classification = "simulation";
+    simulated.metrics.simulation_run_id = "simulation-run";
     const readiness = vi.fn();
     const harness = producerHarness({ evidence: [simulated], publishReadiness: readiness });
 
@@ -237,7 +243,7 @@ describe("sequenced desktop telemetry v2 producer", () => {
 
   it("fails closed when source classification or simulation isolation evidence is absent", async () => {
     const missingSource = officialEvidence({ entries: 1, exits: 0, uniqueCount: 1 });
-    delete (missingSource.metrics as Partial<typeof missingSource.metrics>).source_kind;
+    delete (missingSource.metrics as Partial<typeof missingSource.metrics>).classification;
     const missingSimulation = officialEvidence({ entries: 1, exits: 0, uniqueCount: 1 });
     (missingSimulation as unknown as { simulation: null }).simulation = null;
 
@@ -434,8 +440,8 @@ function officialEvidence(counters: { entries: number; exits: number; uniqueCoun
       unclassified_events: 0,
       first_event_at: "2026-07-13T07:00:00.000Z",
       last_event_at: "2026-07-13T08:00:00.000Z",
-      source_kind: "real",
-      mock_run_id: null,
+      classification: "official",
+      simulation_run_id: null,
       period_id: "month:Asia/Manila:2026-07",
       period: "Jul 1 - Jul 31, 2026",
       starts_at_utc: "2026-06-30T16:00:00.000Z",
@@ -474,7 +480,7 @@ function officialEvidence(counters: { entries: number; exits: number; uniqueCoun
       state: "idle",
       mode: null,
       scenario: null,
-      mock_run_id: null,
+      simulation_run_id: null,
       events_generated: 0,
       events_per_minute: 0,
       requires_real_camera: false,
@@ -494,6 +500,9 @@ function officialEvidence(counters: { entries: number; exits: number; uniqueCoun
     },
     syncOutbox: {
       pending_count: 0,
+      retry_item_count: 0,
+      dead_letter_count: 0,
+      attempt_count: 0,
       oldest_pending_at: null,
       last_acknowledged_at: null,
       last_failure_at: null,

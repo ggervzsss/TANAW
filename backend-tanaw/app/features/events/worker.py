@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.features.events.delivery import DeliveryBatchResult, DomainEventDeliveryEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -47,7 +48,14 @@ class DomainEventDeliveryWorker:
             await task
 
     async def run_once(self) -> DeliveryBatchResult:
-        return await self._engine.run_batch()
+        result = await self._engine.run_batch()
+        for _ in range(result.retry_scheduled):
+            operational_observability.increment(OperationalCounter.DOMAIN_EVENT_DELIVERY_RETRY)
+        for _ in range(result.dead_lettered):
+            operational_observability.increment(
+                OperationalCounter.DOMAIN_EVENT_DELIVERY_DEAD_LETTER
+            )
+        return result
 
     async def _run(self, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():

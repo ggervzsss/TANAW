@@ -331,12 +331,12 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         if (disposed) return;
 
         const occupancyPercent = simulation.capacity > 0 ? Math.round((simulation.current_occupancy / simulation.capacity) * 100) : 0;
-        if (!simulation.mock_run_id || !simulation.scenario || occupancyPercent < simulation.threshold_percent) {
+        if (!simulation.simulation_run_id || !simulation.scenario || occupancyPercent < simulation.threshold_percent) {
           setSimulationNotification(null);
           return;
         }
 
-        const source = `simulation:${simulation.mock_run_id}:occupancy-threshold`;
+        const source = `simulation:${simulation.simulation_run_id}:occupancy-threshold`;
         setSimulationNotification({
           id: stableNotificationId(source),
           type: "critical",

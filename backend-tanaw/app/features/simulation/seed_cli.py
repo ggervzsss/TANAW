@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-import httpx
 from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +18,7 @@ from app.db.session import AsyncSessionLocal, engine
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import generate_enterprise_id
 from app.features.reporting.contracts import monthly_reporting_period
-from app.features.simulation.models import MockDataRun, MockDataRunAccount
+from app.features.simulation.models import SimulationRun, SimulationRunAccount
 from app.features.topology.account_scope import (
     AccountTopology,
     require_account_topology,
@@ -29,6 +28,7 @@ from app.features.topology.models import (
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
@@ -38,7 +38,7 @@ REPORTING_STAFF_NAME = "Carla Mendoza"
 
 
 @dataclass(frozen=True)
-class MockEnterprise:
+class SimulationEnterprise:
     name: str
     category: str
     manager: str
@@ -51,7 +51,7 @@ class MockEnterprise:
 
 
 ENTERPRISES = (
-    MockEnterprise(
+    SimulationEnterprise(
         "Balon ni Lolo Uweng",
         "tourism",
         "Ma Regine Javier",
@@ -62,7 +62,7 @@ ENTERPRISES = (
         "balon.lolo.uweng@tanaw.test",
         "+639171110001",
     ),
-    MockEnterprise(
+    SimulationEnterprise(
         "San Pedro Apostol Parish",
         "tourism",
         "Irish May Arabaca",
@@ -73,7 +73,7 @@ ENTERPRISES = (
         "sanpedro.apostol@tanaw.test",
         "+639171110002",
     ),
-    MockEnterprise(
+    SimulationEnterprise(
         "Lolo Uweng Pilgrim Church",
         "tourism",
         "David Kristian Vallejera",
@@ -84,7 +84,7 @@ ENTERPRISES = (
         "lolo.uweng.church@tanaw.test",
         "+639171110003",
     ),
-    MockEnterprise(
+    SimulationEnterprise(
         "Tricia's Bar & Lounge",
         "business",
         "Kenneth Delicano",
@@ -95,7 +95,7 @@ ENTERPRISES = (
         "tricias.bar@tanaw.test",
         "+639171110004",
     ),
-    MockEnterprise(
+    SimulationEnterprise(
         "Hallow Ridge Filipinas Golf Inc.",
         "tourism",
         "Sebastien Bercasio",
@@ -138,10 +138,10 @@ LGU_ACCOUNTS = (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Manage TANAW mock data.")
+    parser = argparse.ArgumentParser(description="Manage TANAW simulation data.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    on_parser = subparsers.add_parser("on", help="Generate mock data.")
+    on_parser = subparsers.add_parser("on", help="Generate simulation data.")
     on_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
     on_parser.add_argument(
         "--scenario",
@@ -152,16 +152,11 @@ def main() -> None:
     on_parser.add_argument(
         "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
     )
-    on_parser.add_argument("--desktop-url")
-
-    off_parser = subparsers.add_parser("off", help="Remove active mock data.")
-    off_parser.add_argument("--desktop-url")
-
-    status_parser = subparsers.add_parser("status", help="Show mock data status.")
-    status_parser.add_argument("--desktop-url")
+    subparsers.add_parser("off", help="Remove active simulation data.")
+    subparsers.add_parser("status", help="Show simulation data status.")
 
     reset_parser = subparsers.add_parser(
-        "reset", help="Remove active mock data, then regenerate it."
+        "reset", help="Remove active simulation data, then regenerate it."
     )
     reset_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
     reset_parser.add_argument(
@@ -173,8 +168,6 @@ def main() -> None:
     reset_parser.add_argument(
         "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
     )
-    reset_parser.add_argument("--desktop-url")
-
     args = parser.parse_args()
     asyncio.run(run(args))
 
@@ -186,25 +179,22 @@ async def run(args: argparse.Namespace) -> None:
         async with AsyncSessionLocal() as db:
             runs = await list_runs(db)
         print(json.dumps({"runs": runs}, indent=2, sort_keys=True))
-        await desktop_status(args.desktop_url)
         return
 
-    require_mock_data_enabled()
+    require_simulation_enabled()
 
     if args.command == "off":
         async with AsyncSessionLocal() as db:
-            removed = await remove_active_mock_data(db)
-        await desktop_reset(args.desktop_url)
+            removed = await remove_active_simulation_data(db)
         print(json.dumps({"removed": removed}, indent=2, sort_keys=True))
         return
 
     if args.command == "reset":
         async with AsyncSessionLocal() as db:
-            removed = await remove_active_mock_data(db)
-            created = await generate_mock_data(
+            removed = await remove_active_simulation_data(db)
+            created = await generate_simulation_data(
                 db, args.range, args.scenario, args.seed, args.target_enterprise
             )
-        await desktop_prepare(args.desktop_url, created)
         print(json.dumps({"removed": removed, "created": created}, indent=2, sort_keys=True))
         return
 
@@ -214,10 +204,9 @@ async def run(args: argparse.Namespace) -> None:
             await ensure_active_target_matches(db, active, args.target_enterprise)
             result = run_result(active, status="already-active")
         else:
-            result = await generate_mock_data(
+            result = await generate_simulation_data(
                 db, args.range, args.scenario, args.seed, args.target_enterprise
             )
-    await desktop_prepare(args.desktop_url, result)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
@@ -226,23 +215,25 @@ async def validate_schema() -> None:
         await validate_database_migration_head(connection)
 
 
-def require_mock_data_enabled() -> None:
-    if not get_settings().allow_mock_data:
-        raise SystemExit("Refusing to manage mock data because TANAW_ALLOW_MOCK_DATA is not true.")
+def require_simulation_enabled() -> None:
+    if not get_settings().allow_simulation_data:
+        raise SystemExit(
+            "Refusing to manage simulation data because TANAW_ALLOW_SIMULATION_DATA is not true."
+        )
 
 
-async def active_run(db: AsyncSession) -> MockDataRun | None:
+async def active_run(db: AsyncSession) -> SimulationRun | None:
     result = await db.scalars(
-        select(MockDataRun)
-        .where(MockDataRun.status == "active")
-        .order_by(MockDataRun.created_at.desc())
+        select(SimulationRun)
+        .where(SimulationRun.status == "active")
+        .order_by(SimulationRun.created_at.desc())
     )
     return result.first()
 
 
 async def list_runs(db: AsyncSession) -> list[dict]:
     runs = (
-        await db.scalars(select(MockDataRun).order_by(MockDataRun.created_at.desc()).limit(20))
+        await db.scalars(select(SimulationRun).order_by(SimulationRun.created_at.desc()).limit(20))
     ).all()
     return [
         {
@@ -265,7 +256,7 @@ async def list_runs(db: AsyncSession) -> list[dict]:
     ]
 
 
-def run_result(run: MockDataRun, status: str) -> dict:
+def run_result(run: SimulationRun, status: str) -> dict:
     return {
         "runId": run.id,
         "status": status,
@@ -282,11 +273,11 @@ def run_result(run: MockDataRun, status: str) -> dict:
 
 
 async def ensure_active_target_matches(
-    db: AsyncSession, run: MockDataRun, requested_identifier: str | None
+    db: AsyncSession, run: SimulationRun, requested_identifier: str | None
 ) -> None:
     if not run.target_enterprise_id:
         raise SystemExit(
-            "The active mock-data run predates target-enterprise support. Run mock-data reset with --target-enterprise."
+            "The active simulation-data run predates target-enterprise support. Run simulation-data reset with --target-enterprise."
         )
     if not requested_identifier:
         return
@@ -294,17 +285,17 @@ async def ensure_active_target_matches(
     requested_target = await resolve_target_enterprise(db, requested_identifier, [])
     if requested_target.account.id != run.target_account_id:
         raise SystemExit(
-            f"The active mock-data run targets {run.target_enterprise_name} ({run.target_enterprise_id}). "
-            "Use mock-data reset to select a different target."
+            f"The active simulation-data run targets {run.target_enterprise_name} ({run.target_enterprise_id}). "
+            "Use simulation-data reset to select a different target."
         )
 
 
-async def generate_mock_data(
+async def generate_simulation_data(
     db: AsyncSession, range_value: str, scenario: str, seed: str, target_identifier: str | None
 ) -> dict:
     rng = random.Random(seed)
     range_start, range_end = reporting_range(range_value)
-    run = MockDataRun(
+    run = SimulationRun(
         id=str(uuid4()),
         scenario=scenario,
         seed=seed,
@@ -353,7 +344,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
         )
         db.add(account)
         await db.flush()
-        db.add(MockDataRunAccount(run_id=run_id, account_id=account.id))
+        db.add(SimulationRunAccount(run_id=run_id, account_id=account.id))
         lgu_accounts.append(account)
 
     enterprise_accounts: list[Account] = []
@@ -390,15 +381,6 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             classification="simulation",
             site_code="primary",
             name=f"{enterprise.name} Primary Site",
-            barangay=enterprise.barangay,
-            address=enterprise.address,
-            building_capacity=100,
-            latitude=enterprise.latitude,
-            longitude=enterprise.longitude,
-            location_source="geocoded",
-            location_confidence=1.0,
-            geocoded_address=enterprise.address,
-            coordinates_updated_at=datetime.now(UTC),
         )
         db.add_all(
             [
@@ -409,10 +391,28 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
                     membership_role="manager",
                 ),
                 site,
-                MockDataRunAccount(run_id=run_id, account_id=account.id),
+                SimulationRunAccount(run_id=run_id, account_id=account.id),
             ]
         )
         await db.flush()
+        db.add(
+            SiteLocationVersion(
+                site_id=site.id,
+                classification="simulation",
+                version=1,
+                barangay=enterprise.barangay,
+                address=enterprise.address,
+                timezone_name="Asia/Manila",
+                building_capacity=100,
+                latitude=enterprise.latitude,
+                longitude=enterprise.longitude,
+                location_source="geocoded",
+                location_confidence=1.0,
+                geocoded_address=enterprise.address,
+                coordinates_confirmed_at=datetime.now(UTC),
+                change_reason="simulation_seeded",
+            )
+        )
         db.add(
             EdgeDevice(
                 site_id=site.id,
@@ -431,7 +431,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
 def ensure_email_available(existing: Account | None, email: str) -> None:
     if existing is not None:
         raise SystemExit(
-            f"Cannot seed mock account {email}; an account with that email already exists."
+            f"Cannot seed simulation account {email}; an account with that email already exists."
         )
 
 
@@ -483,7 +483,7 @@ def create_prepared_report_counts(
             entries *= 2
         exits = max(0, entries - rng.randint(8, 55))
         prepared.append(
-            mock_preparation_counts(
+            simulation_preparation_counts(
                 month_start=month_start,
                 entries=entries,
                 exits=exits,
@@ -497,9 +497,9 @@ def create_prepared_report_counts(
     return prepared
 
 
-async def remove_active_mock_data(db: AsyncSession) -> dict:
+async def remove_active_simulation_data(db: AsyncSession) -> dict:
     active_runs = (
-        await db.scalars(select(MockDataRun).where(MockDataRun.status == "active"))
+        await db.scalars(select(SimulationRun).where(SimulationRun.status == "active"))
     ).all()
     run_ids = [run.id for run in active_runs]
     if not run_ids:
@@ -507,7 +507,7 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
 
     owned_account_ids = list(
         await db.scalars(
-            select(MockDataRunAccount.account_id).where(MockDataRunAccount.run_id.in_(run_ids))
+            select(SimulationRunAccount.account_id).where(SimulationRunAccount.run_id.in_(run_ids))
         )
     )
     simulation_enterprise_ids = list(
@@ -519,15 +519,15 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
         )
     )
     await _delete_target_simulation_records(db)
-    await db.execute(delete(MockDataRunAccount).where(MockDataRunAccount.run_id.in_(run_ids)))
+    await db.execute(delete(SimulationRunAccount).where(SimulationRunAccount.run_id.in_(run_ids)))
     accounts_result = await db.execute(delete(Account).where(Account.id.in_(owned_account_ids)))
     counts = {
         "simulationEnterprises": len(simulation_enterprise_ids),
         "accounts": affected_row_count(accounts_result),
     }
     await db.execute(
-        update(MockDataRun)
-        .where(MockDataRun.id.in_(run_ids))
+        update(SimulationRun)
+        .where(SimulationRun.id.in_(run_ids))
         .values(status="removed", ended_at=datetime.now(UTC))
     )
     await db.commit()
@@ -614,7 +614,7 @@ def period_label(month_start: datetime) -> str:
     return f"{short} 1 - {short} {last_day}, {month_start.year}"
 
 
-def mock_preparation_counts(
+def simulation_preparation_counts(
     *,
     month_start: datetime,
     entries: int,
@@ -638,97 +638,8 @@ def mock_preparation_counts(
     }
 
 
-def desktop_preparation_payload(
-    *,
-    run_id: str,
-    enterprise_id: str,
-    enterprise_name: object,
-    prepared: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        "mock_run_id": run_id,
-        "enterprise_id": enterprise_id,
-        "enterprise_name": enterprise_name,
-        "entries": prepared["entries"],
-        "exits": prepared["exits"],
-        "unique_count": prepared["uniqueCount"],
-        "peak_occupancy": prepared["peakOccupancy"],
-        "period_id": prepared["periodKey"],
-        "source_window": prepared["sourceWindow"],
-    }
-
-
 def _utc_contract_timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
-    if not desktop_url:
-        return
-
-    raw_target = result.get("target")
-    target: dict[str, Any] = raw_target if isinstance(raw_target, dict) else {}
-    raw_counts = result.get("counts")
-    counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
-    raw_prepared_reports = counts.get("targetPreparedReportCounts")
-    prepared_reports = raw_prepared_reports if isinstance(raw_prepared_reports, list) else []
-    raw_prepared = prepared_reports[0] if prepared_reports else None
-    prepared: dict[str, Any] = raw_prepared if isinstance(raw_prepared, dict) else {}
-    enterprise_id = target.get("enterpriseId")
-    if not isinstance(enterprise_id, str) or not enterprise_id:
-        raise SystemExit(
-            "The mock-data run has no target enterprise ID. Reset the run before preparing desktop data."
-        )
-    if not prepared:
-        raise SystemExit(
-            "The mock-data run has no prepared desktop count package. Reset the run before preparing desktop data."
-        )
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{desktop_url.rstrip('/')}/mock/prepare",
-                json=desktop_preparation_payload(
-                    run_id=result["runId"],
-                    enterprise_id=enterprise_id,
-                    enterprise_name=target.get("enterpriseName"),
-                    prepared=prepared,
-                ),
-            )
-            response.raise_for_status()
-            result["desktop"] = response.json()
-    except Exception as exc:
-        result["desktop"] = {
-            "prepared": False,
-            "delivery": "authenticated-desktop-pull",
-            "message": (
-                f"Direct desktop callback was unavailable ({type(exc).__name__}: {exc}). "
-                "The authenticated target desktop will pull the prepared count package automatically."
-            ),
-        }
-
-
-async def desktop_reset(desktop_url: str | None) -> None:
-    if not desktop_url:
-        return
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(f"{desktop_url.rstrip('/')}/mock/reset")
-            response.raise_for_status()
-    except Exception as exc:
-        print(f"Desktop mock reset skipped: {exc}")
-
-
-async def desktop_status(desktop_url: str | None) -> None:
-    if not desktop_url:
-        return
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{desktop_url.rstrip('/')}/mock/status")
-            response.raise_for_status()
-            print(json.dumps({"desktop": response.json()}, indent=2, sort_keys=True))
-    except Exception as exc:
-        print(f"Desktop mock status unavailable: {exc}")
 
 
 def affected_row_count(result: Any) -> int:

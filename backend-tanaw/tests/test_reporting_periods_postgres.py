@@ -25,7 +25,7 @@ from app.features.reporting.periods import (
     read_reporting_period,
     run_reporting_period_lifecycle,
 )
-from app.features.topology.models import Enterprise, EnterpriseSite
+from app.features.topology.models import Enterprise, EnterpriseSite, SiteLocationVersion
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 MANILA = ZoneInfo("Asia/Manila")
@@ -88,15 +88,22 @@ async def test_staff_lifecycle_discovers_empty_periods_and_freezes_pre_window_id
         classification="official",
         site_code="PRIMARY",
         name="Frozen Site Name",
+        registered_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    location = SiteLocationVersion(
+        id=str(uuid4()),
+        site_id=site.id,
+        classification="official",
+        version=1,
         barangay="Poblacion",
         timezone_name="Asia/Manila",
         building_capacity=100,
-        location_version=1,
         effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+        change_reason="test_fixture",
     )
     db.add_all([staff, enterprise_account, admin, enterprise])
     await db.flush()
-    db.add(site)
+    db.add_all([site, location])
     await db.flush()
 
     first_now = datetime(2026, 7, 10, 10, tzinfo=MANILA)

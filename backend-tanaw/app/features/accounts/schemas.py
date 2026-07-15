@@ -330,16 +330,6 @@ class EnterpriseAccountUpdate(BaseModel):
         return f"{address}, {SAN_PEDRO_ADDRESS_SUFFIX}"
 
 
-class DeliverySummary(BaseModel):
-    id: str
-    accountId: str
-    recipient: str
-    subject: str
-    body: str
-    status: str
-    createdAt: datetime
-
-
 class PasswordChangeRequest(BaseModel):
     currentPassword: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
     newPassword: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)

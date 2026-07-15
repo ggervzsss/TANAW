@@ -14,7 +14,11 @@ export const ML_OPERATION_NAMES = [
   "reports.list",
   "reports.purgeRaw",
   "sync.outbox.health",
+  "diagnostics.operations",
   "sync.outbox.ready",
+  "sync.outbox.recovery.list",
+  "sync.outbox.recovery.detail",
+  "sync.outbox.recovery.retry",
   "sync.outbox.acknowledge",
   "sync.outbox.failure",
   "session.restore",
@@ -52,7 +56,17 @@ type NoPayloadOperation = {
 
 type SpecialOperation = {
   method: "GET" | "POST";
-  payload: "include-submitted" | "limit" | "mock-run-id" | "report-id-purge" | "sync-outbox-acknowledgement" | "sync-outbox-failure" | "sync-outbox-limit";
+  payload:
+    | "include-submitted"
+    | "limit"
+    | "simulation-run-id"
+    | "report-id-purge"
+    | "sync-outbox-acknowledgement"
+    | "sync-outbox-failure"
+    | "sync-outbox-limit"
+    | "sync-outbox-recovery-limit"
+    | "sync-outbox-recovery-item"
+    | "sync-outbox-retry";
 };
 
 type OperationSpec = BodyOperation | NoPayloadOperation | SpecialOperation;
@@ -120,33 +134,37 @@ const operationSpecs: Record<MlOperation, OperationSpec> = {
   "reports.list": { method: "GET", payload: "limit" },
   "reports.purgeRaw": { method: "POST", payload: "report-id-purge" },
   "sync.outbox.health": { method: "GET", path: "/sync/outbox/health", payload: "none" },
+  "diagnostics.operations": { method: "GET", path: "/diagnostics/operations", payload: "none" },
   "sync.outbox.ready": { method: "GET", payload: "sync-outbox-limit" },
+  "sync.outbox.recovery.list": { method: "GET", payload: "sync-outbox-recovery-limit" },
+  "sync.outbox.recovery.detail": { method: "GET", payload: "sync-outbox-recovery-item" },
+  "sync.outbox.recovery.retry": { method: "POST", payload: "sync-outbox-retry" },
   "sync.outbox.acknowledge": { method: "POST", payload: "sync-outbox-acknowledgement" },
   "sync.outbox.failure": { method: "POST", payload: "sync-outbox-failure" },
   "session.restore": { method: "POST", path: "/session/restore", payload: "none" },
   "simulation.prepare": {
     method: "POST",
-    path: "/mock/prepare",
+    path: "/simulations/prepare",
     payload: "body",
-    allowedKeys: ["mock_run_id", "enterprise_id", "enterprise_name", "entries", "exits", "unique_count", "peak_occupancy", "period_id", "source_window"],
+    allowedKeys: ["simulation_run_id", "enterprise_id", "enterprise_name", "entries", "exits", "unique_count", "peak_occupancy", "period_id", "source_window"],
   },
   "simulation.start": {
     method: "POST",
-    path: "/mock/start",
+    path: "/simulations/start",
     payload: "body",
-    allowedKeys: ["mock_run_id", "mode", "scenario", "events_per_minute", "capacity", "starting_occupancy", "duration_minutes", "threshold_percent", "entry_probability", "unique_entry_rate"],
+    allowedKeys: ["simulation_run_id", "mode", "scenario", "events_per_minute", "capacity", "starting_occupancy", "duration_minutes", "threshold_percent", "entry_probability", "unique_entry_rate"],
   },
-  "simulation.pause": { method: "POST", path: "/mock/pause", payload: "none" },
-  "simulation.resume": { method: "POST", path: "/mock/resume", payload: "none" },
-  "simulation.stop": { method: "POST", path: "/mock/stop", payload: "none" },
+  "simulation.pause": { method: "POST", path: "/simulations/pause", payload: "none" },
+  "simulation.resume": { method: "POST", path: "/simulations/resume", payload: "none" },
+  "simulation.stop": { method: "POST", path: "/simulations/stop", payload: "none" },
   "simulation.event": {
     method: "POST",
-    path: "/mock/event",
+    path: "/simulations/event",
     payload: "body",
     allowedKeys: ["direction"],
   },
-  "simulation.reset": { method: "POST", payload: "mock-run-id" },
-  "simulation.status": { method: "GET", path: "/mock/status", payload: "none" },
+  "simulation.reset": { method: "POST", payload: "simulation-run-id" },
+  "simulation.status": { method: "GET", path: "/simulations/status", payload: "none" },
 };
 
 const MAX_IPC_PAYLOAD_BYTES = 1_048_576;
@@ -193,9 +211,23 @@ export function resolveMlOperationRequest(operationInput: unknown, payload: unkn
     const limit = getBoundedInteger(payload, "limit", 1, 500, 100);
     return { method: spec.method, path: `/sync/outbox/ready?limit=${limit}` };
   }
-  if (spec.payload === "mock-run-id") {
-    const mockRunId = getIdentifier(payload, "mockRunId");
-    return { method: spec.method, path: `/mock/reset?mock_run_id=${encodeURIComponent(mockRunId)}` };
+  if (spec.payload === "sync-outbox-recovery-limit") {
+    const limit = getBoundedInteger(payload, "limit", 1, 500, 100);
+    return { method: spec.method, path: `/sync/outbox/recovery?limit=${limit}` };
+  }
+  if (spec.payload === "sync-outbox-recovery-item") {
+    const outboxItemId = getOutboxItemId(payload);
+    assertOnlyKeys(payload, ["outboxItemId"]);
+    return { method: spec.method, path: `/sync/outbox/${outboxItemId}/recovery` };
+  }
+  if (spec.payload === "sync-outbox-retry") {
+    const outboxItemId = getOutboxItemId(payload);
+    const body = validateBodyWithoutKey(payload, "outboxItemId", ["reason"]);
+    return { method: spec.method, path: `/sync/outbox/${outboxItemId}/retry`, body };
+  }
+  if (spec.payload === "simulation-run-id") {
+    const simulationRunId = getIdentifier(payload, "simulationRunId");
+    return { method: spec.method, path: `/simulations/reset?simulation_run_id=${encodeURIComponent(simulationRunId)}` };
   }
   if (spec.payload === "sync-outbox-acknowledgement") {
     const outboxItemId = getOutboxItemId(payload);
@@ -223,6 +255,12 @@ export function resolveMlOperationRequest(operationInput: unknown, payload: unkn
 function assertNoPayload(payload: unknown) {
   if (payload !== undefined && payload !== null) {
     throw new Error("This ML service operation does not accept a payload.");
+  }
+}
+
+function assertOnlyKeys(payload: unknown, allowedKeys: readonly string[]) {
+  if (!isObjectRecord(payload) || Object.keys(payload).some((key) => !allowedKeys.includes(key))) {
+    throw new Error("Invalid ML service outbox payload.");
   }
 }
 

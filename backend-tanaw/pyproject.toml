@@ -1,6 +1,6 @@
 [project]
 name = "backend-tanaw"
-version = "0.1.0"
+version = "2.0.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -27,7 +27,7 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [project.scripts]
-mock-data = "app.features.mock_data.cli:main"
+simulation-data = "app.features.simulation.seed_cli:main"
 
 [dependency-groups]
 dev = [

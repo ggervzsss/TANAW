@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { subscribeMlCameraEvents, type MlCameraLiveState } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopMockCounts, syncDesktopReportSubmissions } from "../services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSimulationCounts, syncDesktopReportSubmissions } from "../services/cloud-sync";
 import { syncFleetSimulationTelemetry } from "../services/fleet-simulation";
 import { syncDesktopTelemetryV2 } from "../services/telemetry-v2";
 
@@ -36,7 +36,7 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
       if (syncStateRef.current.preparation || isDisposed) return;
       syncStateRef.current.preparation = true;
       try {
-        await prepareDesktopMockCounts();
+        await prepareDesktopSimulationCounts();
       } catch {
         // Preparation remains pending until the target camera session is running.
       } finally {

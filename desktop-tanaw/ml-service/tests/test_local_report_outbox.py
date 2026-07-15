@@ -15,6 +15,30 @@ JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
 
 
 class LocalReportOutboxTest(unittest.TestCase):
+    def test_central_binding_reuses_stable_local_camera_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalLedger(directory)
+            prebinding = _event("entry")
+            prebinding.pop("central_camera_id")
+            store.append_count_event(prebinding, "2026-06-10T00:00:00+00:00")
+            store.append_count_event(_event("entry"), "2026-06-10T00:01:00+00:00")
+
+            with closing(connect_local_database(_database_path(directory))) as connection:
+                cameras = connection.execute(
+                    "select camera_key, central_camera_id from local_cameras"
+                ).fetchall()
+                event_keys = {
+                    row[0] for row in connection.execute("select camera_key from count_events")
+                }
+
+            self.assertEqual(len(cameras), 1)
+            self.assertTrue(str(cameras[0]["camera_key"]).startswith("camera:"))
+            self.assertEqual(
+                cameras[0]["central_camera_id"],
+                "11111111-1111-4111-8111-111111111111",
+            )
+            self.assertEqual(event_keys, {cameras[0]["camera_key"]})
+
     def test_raw_demographic_counts_do_not_gain_invented_evidence_metadata(self) -> None:
         document = _revision_document(
             {
@@ -125,6 +149,9 @@ class LocalReportOutboxTest(unittest.TestCase):
                     order by camera_key, camera_event_sequence
                     """
                 ).fetchall()
+                camera_bindings = connection.execute(
+                    "select camera_key, central_camera_id from local_cameras order by central_camera_id"
+                ).fetchall()
                 outbox = connection.execute("select * from sync_outbox_items").fetchone()
 
             self.assertEqual(
@@ -141,12 +168,18 @@ class LocalReportOutboxTest(unittest.TestCase):
                 {"payload_json", "submitted_report_id", "synced_at"}.isdisjoint(event_columns)
             )
             self.assertEqual(
-                [tuple(row) for row in camera_sequences],
-                [
-                    ("11111111-1111-4111-8111-111111111111", 0),
-                    ("11111111-1111-4111-8111-111111111111", 1),
-                    ("22222222-2222-4222-8222-222222222222", 0),
-                ],
+                [row["camera_event_sequence"] for row in camera_sequences],
+                [0, 1, 0],
+            )
+            self.assertTrue(
+                all(str(row["camera_key"]).startswith("camera:") for row in camera_bindings)
+            )
+            self.assertEqual(
+                {row["central_camera_id"] for row in camera_bindings},
+                {
+                    "11111111-1111-4111-8111-111111111111",
+                    "22222222-2222-4222-8222-222222222222",
+                },
             )
             self.assertEqual(submission["revision_number"], 1)
             self.assertEqual(submission["outbox_item_id"], outbox["outbox_item_id"])
@@ -412,19 +445,88 @@ class LocalReportOutboxTest(unittest.TestCase):
             self.assertEqual(attempt["outcome"], "dead_letter")
             self.assertEqual(attempt["http_status"], 422)
 
+    def test_failed_official_submission_has_payload_free_recovery_and_audited_requeue(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalLedger(directory)
+            store.append_count_event(_event("entry"), "2026-06-10T00:00:00+00:00")
+            submission = store.create_local_report_revision("REP-JUNE", JUNE_PERIOD_ID)
+            outbox_item_id = str(submission["outbox_item_id"])
+            store.record_sync_outbox_failure(
+                outbox_item_id,
+                error_class="backend_rejected",
+                error_message="Temporary server-side validation issue.",
+                retryable=False,
+                http_status=422,
+                failed_at="2026-06-10T01:00:00+00:00",
+            )
+
+            recovery = store.list_sync_outbox_recovery_items()
+            self.assertEqual(len(recovery), 1)
+            self.assertEqual(recovery[0]["report_id"], "REP-JUNE")
+            self.assertEqual(recovery[0]["status"], "dead_letter")
+            self.assertNotIn("payload", recovery[0])
+            self.assertNotIn("idempotency_key", recovery[0])
+            self.assertEqual(store.get_sync_outbox_recovery_item(outbox_item_id), recovery[0])
+
+            requeued = store.requeue_sync_outbox_item(
+                outbox_item_id,
+                reason="Backend validation was corrected and this exact command was reviewed.",
+                requeued_at="2026-06-10T02:00:00+00:00",
+            )
+
+            self.assertEqual(requeued["status"], "ready")
+            self.assertEqual(store.list_sync_outbox_recovery_items(), [])
+            self.assertEqual(
+                [item["outbox_item_id"] for item in store.list_ready_sync_outbox_items()],
+                [outbox_item_id],
+            )
+            with closing(connect_local_database(_database_path(directory))) as connection:
+                attempts = connection.execute(
+                    """
+                    select outcome, error_class, error_message
+                    from sync_attempts
+                    where outbox_item_id = ?
+                    order by attempt_number
+                    """,
+                    (outbox_item_id,),
+                ).fetchall()
+            self.assertEqual(
+                [tuple(attempt) for attempt in attempts],
+                [
+                    (
+                        "dead_letter",
+                        "backend_rejected",
+                        "Temporary server-side validation issue.",
+                    ),
+                    (
+                        "retry",
+                        "manual_retry",
+                        "Backend validation was corrected and this exact command was reviewed.",
+                    ),
+                ],
+            )
+
+            with self.assertRaisesRegex(ValueError, "failed or dead-letter"):
+                store.requeue_sync_outbox_item(
+                    outbox_item_id,
+                    reason="A second requeue must not race the active delivery.",
+                )
+
     def test_simulation_derived_report_never_enters_official_ready_queue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(directory)
             event = _event("entry")
-            event["source_kind"] = "hybrid"
-            event["mock_run_id"] = "simulation-1"
+            event["classification"] = "simulation"
+            event["simulation_run_id"] = "simulation-1"
             store.append_count_event(event, "2026-06-10T00:00:00+00:00")
 
             submission = store.create_local_report_revision(
                 "REP-JUNE-SIMULATION",
                 JUNE_PERIOD_ID,
-                source_kind="hybrid",
-                mock_run_id="simulation-1",
+                classification="simulation",
+                simulation_run_id="simulation-1",
             )
 
             self.assertEqual(store.list_ready_sync_outbox_items(), [])
@@ -440,6 +542,9 @@ class LocalReportOutboxTest(unittest.TestCase):
                 store.sync_outbox_health(),
                 {
                     "pending_count": 0,
+                    "retry_item_count": 0,
+                    "dead_letter_count": 0,
+                    "attempt_count": 0,
                     "oldest_pending_at": None,
                     "last_acknowledged_at": None,
                     "last_failure_at": None,
@@ -482,6 +587,9 @@ class LocalReportOutboxTest(unittest.TestCase):
             pending = store.sync_outbox_health()
 
             self.assertEqual(pending["pending_count"], 1)
+            self.assertEqual(pending["retry_item_count"], 0)
+            self.assertEqual(pending["dead_letter_count"], 0)
+            self.assertEqual(pending["attempt_count"], 0)
             self.assertEqual(pending["oldest_pending_at"], submission["submitted_at"])
             self.assertIsNone(pending["last_acknowledged_at"])
             self.assertIsNone(pending["last_failure_at"])
@@ -497,6 +605,9 @@ class LocalReportOutboxTest(unittest.TestCase):
             failed = store.sync_outbox_health()
 
             self.assertEqual(failed["pending_count"], 1)
+            self.assertEqual(failed["retry_item_count"], 1)
+            self.assertEqual(failed["dead_letter_count"], 0)
+            self.assertEqual(failed["attempt_count"], 1)
             self.assertEqual(failed["oldest_pending_at"], submission["submitted_at"])
             self.assertEqual(failed["last_failure_at"], "2026-08-01T00:00:00+00:00")
             self.assertEqual(failed["last_failure_class"], "network_error")
@@ -510,6 +621,9 @@ class LocalReportOutboxTest(unittest.TestCase):
             recovered = LocalLedger(directory).sync_outbox_health()
 
             self.assertEqual(recovered["pending_count"], 0)
+            self.assertEqual(recovered["retry_item_count"], 0)
+            self.assertEqual(recovered["dead_letter_count"], 0)
+            self.assertEqual(recovered["attempt_count"], 2)
             self.assertIsNone(recovered["oldest_pending_at"])
             self.assertEqual(recovered["last_acknowledged_at"], "2026-08-01T00:00:03+00:00")
             self.assertEqual(recovered["last_failure_at"], "2026-08-01T00:00:00+00:00")
@@ -536,6 +650,9 @@ class LocalReportOutboxTest(unittest.TestCase):
                 store.sync_outbox_health(),
                 {
                     "pending_count": 1,
+                    "retry_item_count": 0,
+                    "dead_letter_count": 1,
+                    "attempt_count": 1,
                     "oldest_pending_at": submission["submitted_at"],
                     "last_acknowledged_at": None,
                     "last_failure_at": "2026-08-01T00:00:00+00:00",
@@ -571,8 +688,8 @@ def _revision_document(payload: dict[str, Any]) -> dict[str, Any]:
         unique_count=10,
         notes=None,
         payload=payload,
-        source_kind="real",
-        mock_run_id=None,
+        classification="official",
+        simulation_run_id=None,
         source_batches=[],
     )
 

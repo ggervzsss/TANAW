@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+RANGE="${TANAW_SIMULATION_RANGE:-6m}"
+SCENARIO="${TANAW_SIMULATION_SCENARIO:-full-workflow}"
+TARGET_ENTERPRISE="${TANAW_SIMULATION_TARGET_ENTERPRISE:-archies_001@tanaw.sanpedro}"
+
+cd "$REPO_ROOT"
+exec docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend \
+  uv run simulation-data on \
+  --range "$RANGE" \
+  --scenario "$SCENARIO" \
+  --target-enterprise "$TARGET_ENTERPRISE" \
+  "$@"

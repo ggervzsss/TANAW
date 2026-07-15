@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
@@ -24,14 +24,12 @@ const centeredTitleClassByPath = new Map<string, string>([
 
 export function AccountLayout({ role }: AccountLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
-  const typedBufferRef = useRef("");
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
   const logout = useAuthStore((state) => state.logout);
   const updateUser = useAuthStore((state) => state.updateUser);
   const title = useHeaderStore((state) => state.title);
-  const [isDevLogUnlocked, setIsDevLogUnlocked] = useState(false);
   const isMapView = pathname === routes.admin.mapview;
   const centeredTitleClassName = centeredTitleClassByPath.get(pathname) ?? "";
   const titleClassName = [
@@ -77,43 +75,17 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
     window.scrollTo({ top: 0, left: 0 });
-    typedBufferRef.current = "";
-    if (pathname !== routes.it.devLog) {
-      const resetDevLogUnlock = window.setTimeout(() => setIsDevLogUnlocked(false), 0);
-      return () => window.clearTimeout(resetDevLogUnlock);
-    }
     return undefined;
   }, [pathname]);
-
-  useEffect(() => {
-    if (role !== "it") return undefined;
-
-    const unlockPhrase = "devlog";
-    const handleDevLogShortcut = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key.length !== 1) return;
-
-      const nextBuffer = `${typedBufferRef.current}${event.key.toLowerCase()}`.slice(-unlockPhrase.length);
-      typedBufferRef.current = nextBuffer;
-
-      if (nextBuffer === unlockPhrase) {
-        setIsDevLogUnlocked(true);
-        typedBufferRef.current = "";
-      }
-    };
-
-    window.addEventListener("keydown", handleDevLogShortcut);
-    return () => window.removeEventListener("keydown", handleDevLogShortcut);
-  }, [role]);
 
   return (
     <section className={sectionClassName}>
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <PortalTopbar role={role} showDevLog={isDevLogUnlocked} />
+        <PortalTopbar role={role} />
         <main ref={mainRef} className={mainClassName}>
           <div className={mainContentClassName}>
             {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
-            {pathname === routes.it.devLog && !isDevLogUnlocked ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}
+            <Outlet />
           </div>
         </main>
       </div>

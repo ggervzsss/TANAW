@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-from app.config.camera_config import LocalReportRevisionRequest, MockPrepareRequest
+from app.config.camera_config import LocalReportRevisionRequest, SimulationPrepareRequest
 from app.storage.local_ledger import LocalLedger
 from app.storage.local_schema import (
     LOCAL_SCHEMA_VERSION,
@@ -149,9 +149,9 @@ class ReportingPeriodTest(unittest.TestCase):
                     _report_submission_request_payload(payload=report_payload)
                 )
 
-    def test_mock_preparation_contract_requires_explicit_selected_period(self) -> None:
+    def test_simulation_preparation_contract_requires_explicit_selected_period(self) -> None:
         payload = {
-            "mock_run_id": "run-1",
+            "simulation_run_id": "run-1",
             "enterprise_id": "enterprise-1",
             "entries": 4,
             "exits": 2,
@@ -165,11 +165,11 @@ class ReportingPeriodTest(unittest.TestCase):
         }
 
         self.assertEqual(
-            MockPrepareRequest.model_validate(payload).period_id,
+            SimulationPrepareRequest.model_validate(payload).period_id,
             JULY_PERIOD_ID,
         )
         with self.assertRaises(ValidationError):
-            MockPrepareRequest.model_validate({**payload, "period_id": "Current Period"})
+            SimulationPrepareRequest.model_validate({**payload, "period_id": "Current Period"})
 
 
 class LocalReportingLedgerTest(unittest.TestCase):

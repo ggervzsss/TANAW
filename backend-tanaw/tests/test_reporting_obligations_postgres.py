@@ -23,11 +23,12 @@ from app.features.reporting.obligations import (
     freeze_period_obligations,
     read_period_compliance,
 )
-from app.features.simulation.models import MockDataRun
+from app.features.simulation.models import SimulationRun
 from app.features.topology.models import (
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
@@ -103,7 +104,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
     staff = _account("staff", suffix, technical_now)
     admin = _account("admin", suffix, technical_now)
     enterprise_account = _account("enterprise", suffix, technical_now)
-    eligible, eligible_site = _enterprise_site(
+    eligible, eligible_site, eligible_location = _enterprise_site(
         suffix=f"eligible-{suffix}",
         lifecycle="active",
         classification="official",
@@ -111,7 +112,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         effective_from=effective_last_year,
         technical_created_at=technical_now,
     )
-    unresolved, unresolved_site = _enterprise_site(
+    unresolved, unresolved_site, unresolved_location = _enterprise_site(
         suffix=f"unresolved-{suffix}",
         lifecycle="active",
         classification="official",
@@ -119,7 +120,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         effective_from=effective_last_year,
         technical_created_at=technical_now,
     )
-    inactive, inactive_site = _enterprise_site(
+    inactive, inactive_site, inactive_location = _enterprise_site(
         suffix=f"inactive-{suffix}",
         lifecycle="inactive",
         classification="official",
@@ -127,7 +128,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         effective_from=effective_last_year,
         technical_created_at=technical_now,
     )
-    exempted, exempted_site = _enterprise_site(
+    exempted, exempted_site, exempted_location = _enterprise_site(
         suffix=f"exempted-{suffix}",
         lifecycle="active",
         classification="official",
@@ -135,7 +136,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         effective_from=effective_last_year,
         technical_created_at=technical_now,
     )
-    simulation, simulation_site = _enterprise_site(
+    simulation, simulation_site, simulation_location = _enterprise_site(
         suffix=f"simulation-{suffix}",
         lifecycle="active",
         classification="simulation",
@@ -143,7 +144,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
         effective_from=effective_last_year,
         technical_created_at=technical_now,
     )
-    simulation_run = MockDataRun(
+    simulation_run = SimulationRun(
         id=str(uuid4()),
         scenario="obligation-scope-test",
         seed=suffix,
@@ -183,6 +184,11 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
             inactive_site,
             exempted_site,
             simulation_site,
+            eligible_location,
+            unresolved_location,
+            inactive_location,
+            exempted_location,
+            simulation_location,
             membership,
         ]
     )
@@ -242,7 +248,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
             frozen_at=technical_now + timedelta(minutes=1),
         )
 
-    late_enterprise, late_site = _enterprise_site(
+    late_enterprise, late_site, late_location = _enterprise_site(
         suffix=f"late-{suffix}",
         lifecycle="active",
         classification="official",
@@ -252,7 +258,7 @@ async def test_period_freeze_is_historical_role_scoped_and_reminders_are_idempot
     )
     db.add(late_enterprise)
     await db.flush()
-    db.add(late_site)
+    db.add_all([late_site, late_location])
     await db.flush()
     rerun = await freeze_period_obligations(
         db,
@@ -413,7 +419,7 @@ async def test_zero_obligation_period_is_frozen_and_cannot_expand_on_rerun(
     assert first.resource.summary.totalFrozen == 0
     assert first.resource.summary.complete is True
 
-    backdated_enterprise, backdated_site = _enterprise_site(
+    backdated_enterprise, backdated_site, backdated_location = _enterprise_site(
         suffix=f"backdated-{suffix}",
         lifecycle="active",
         classification="official",
@@ -423,7 +429,7 @@ async def test_zero_obligation_period_is_frozen_and_cannot_expand_on_rerun(
     )
     db.add(backdated_enterprise)
     await db.flush()
-    db.add(backdated_site)
+    db.add_all([backdated_site, backdated_location])
     await db.flush()
 
     rerun = await freeze_period_obligations(
@@ -451,6 +457,94 @@ async def test_zero_obligation_period_is_frozen_and_cannot_expand_on_rerun(
 
 
 @pytest.mark.asyncio
+async def test_freeze_uses_period_effective_location_and_keeps_missing_evidence_visible(
+    obligation_session: AsyncSession,
+) -> None:
+    db = obligation_session
+    suffix = uuid4().hex
+    frozen_at = datetime(2026, 7, 15, tzinfo=UTC)
+    canonical = monthly_reporting_period(2025, 6)
+    period = ReportingPeriod(
+        id=str(uuid4()),
+        natural_key=canonical.natural_key,
+        cadence=canonical.cadence,
+        timezone_name=canonical.timezone,
+        local_start_date=canonical.local_start_date,
+        local_end_date=canonical.local_end_date,
+        starts_at=canonical.starts_at,
+        ends_at=canonical.ends_at,
+        submission_opens_at=canonical.submission_opens_at,
+        submission_closes_at=canonical.submission_closes_at,
+        status="closed",
+        label=canonical.label,
+    )
+    staff = _account("staff", suffix, frozen_at)
+    moved, moved_site, first_location = _enterprise_site(
+        suffix=f"moved-{suffix}",
+        lifecycle="active",
+        classification="official",
+        barangay="Barangay Period Start",
+        effective_from=canonical.starts_at - timedelta(days=30),
+        technical_created_at=frozen_at,
+    )
+    location_change_at = canonical.starts_at + timedelta(days=10)
+    first_location.effective_to = location_change_at
+    second_location = SiteLocationVersion(
+        site_id=moved_site.id,
+        classification="official",
+        version=2,
+        barangay="Barangay Later Address",
+        timezone_name="Asia/Manila",
+        building_capacity=120,
+        effective_from=location_change_at,
+        change_reason="address_changed",
+        created_at=frozen_at,
+    )
+    missing, missing_site, _unused_location = _enterprise_site(
+        suffix=f"missing-{suffix}",
+        lifecycle="active",
+        classification="official",
+        barangay="Not persisted",
+        effective_from=canonical.starts_at,
+        technical_created_at=frozen_at,
+    )
+    db.add_all([period, staff, moved, missing])
+    await db.flush()
+    db.add_all([moved_site, missing_site, first_location, second_location])
+    await db.flush()
+
+    result = await freeze_period_obligations(
+        db,
+        account=staff,
+        reporting_period_id=uuid4_from(period.id),
+        command=ObligationFreezeCommand.model_validate(
+            {"contractVersion": 2, "commandId": str(uuid4())}
+        ),
+        frozen_at=frozen_at,
+    )
+
+    moved_obligation = next(
+        item for item in result.resource.obligations if item.siteId == UUID(moved_site.id)
+    )
+    assert moved_obligation.eligibilityStatus == "eligible"
+    assert moved_obligation.frozenBarangay == "Barangay Period Start"
+    assert moved_obligation.acceptanceBlocked is False
+    missing_obligation = next(
+        item for item in result.resource.obligations if item.siteId == UUID(missing_site.id)
+    )
+    assert missing_obligation.eligibilityStatus == "unknown"
+    assert missing_obligation.eligibilityReason == (
+        "unresolved_topology: missing effective location version"
+    )
+    assert missing_obligation.frozenBarangay is None
+    assert missing_obligation.acceptanceBlocked is True
+    assert result.resource.summary.totalFrozen == 2
+    assert result.resource.summary.eligibleExpected == 1
+    assert result.resource.summary.unresolved == 1
+    assert result.resource.summary.complete is False
+
+
+@pytest.mark.asyncio
 async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registry_rows(
     obligation_session: AsyncSession,
 ) -> None:
@@ -473,7 +567,7 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         label=canonical.label,
     )
     staff = _account("staff", suffix, frozen_at)
-    legacy_enterprise, legacy_site = _enterprise_site(
+    legacy_enterprise, legacy_site, legacy_location = _enterprise_site(
         suffix=f"legacy-{suffix}",
         lifecycle="active",
         classification="official",
@@ -481,7 +575,7 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         effective_from=canonical.starts_at,
         technical_created_at=frozen_at,
     )
-    new_enterprise, new_site = _enterprise_site(
+    new_enterprise, new_site, new_location = _enterprise_site(
         suffix=f"new-{suffix}",
         lifecycle="active",
         classification="official",
@@ -491,7 +585,7 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
     )
     db.add_all([period, staff, legacy_enterprise, new_enterprise])
     await db.flush()
-    db.add_all([legacy_site, new_site])
+    db.add_all([legacy_site, new_site, legacy_location, new_location])
     await db.flush()
     legacy_obligation = ReportingObligation(
         id=str(uuid4()),
@@ -502,13 +596,13 @@ async def test_freeze_preserves_legacy_obligations_and_adds_only_missing_registr
         eligibility_status="unknown",
         eligibility_basis="migration_evidence",
         exemption_reason="Historical eligibility was not provable during migration.",
-        frozen_barangay=legacy_site.barangay,
+        frozen_barangay=legacy_location.barangay,
         enterprise_official_code=legacy_enterprise.official_code,
         enterprise_name=legacy_enterprise.name,
         site_code=legacy_site.site_code,
         site_name=legacy_site.name,
         timezone_name="Asia/Manila",
-        registration_effective_at=legacy_site.effective_from,
+        registration_effective_at=legacy_location.effective_from,
         acceptance_blocked=True,
     )
     db.add(legacy_obligation)
@@ -582,7 +676,7 @@ def _enterprise_site(
     barangay: str | None,
     effective_from: datetime,
     technical_created_at: datetime,
-) -> tuple[Enterprise, EnterpriseSite]:
+) -> tuple[Enterprise, EnterpriseSite, SiteLocationVersion]:
     enterprise = Enterprise(
         id=str(uuid4()),
         official_code=f"OBL-{suffix}",
@@ -597,14 +691,21 @@ def _enterprise_site(
         classification=classification,
         site_code=f"SITE-{suffix}",
         name=f"Obligation Site {suffix}",
+        registered_at=effective_from,
+        created_at=technical_created_at,
+    )
+    location = SiteLocationVersion(
+        site_id=site.id,
+        classification=classification,
+        version=1,
         barangay=barangay,
         timezone_name="Asia/Manila",
         building_capacity=100,
-        location_version=1,
         effective_from=effective_from,
+        change_reason="test_fixture",
         created_at=technical_created_at,
     )
-    return enterprise, site
+    return enterprise, site, location
 
 
 def uuid4_from(value: str) -> UUID:

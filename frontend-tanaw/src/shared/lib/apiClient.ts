@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useAuthStore } from "@/app/store/authStore";
 import { API_BASE_URL } from "@/shared/config/api.config";
-import { CLIENT_GENERATION_HEADERS } from "@/shared/config/client-generation";
+import { announceClientUpgradeRequired, CLIENT_GENERATION_HEADERS } from "@/shared/config/client-generation";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -24,6 +24,10 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 426) {
+      announceClientUpgradeRequired(error.response?.data);
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401 || error.response?.status === 403) {
       useAuthStore.getState().logout();
     }

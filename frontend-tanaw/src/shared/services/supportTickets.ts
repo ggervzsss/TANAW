@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "../config/api.config";
 import { apiClient } from "../lib/apiClient";
+import { collectCursorPages, type CursorPage } from "./cursorPagination";
 
 export type SupportTicketCategory = "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
 export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
@@ -48,8 +49,12 @@ export type SupportTicketDetail = SupportTicket & {
 const safeSupportTicketImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function listSupportTickets() {
-  const response = await apiClient.get<SupportTicket[]>("/operational/tickets");
-  return response.data;
+  return collectCursorPages(async (cursor) => {
+    const response = await apiClient.get<CursorPage<SupportTicket>>("/operational/tickets", {
+      params: { limit: 100, ...(cursor ? { cursor } : {}) },
+    });
+    return response.data;
+  }, "support ticket");
 }
 
 export async function getSupportTicket(ticketId: string) {

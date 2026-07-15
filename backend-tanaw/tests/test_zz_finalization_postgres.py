@@ -45,14 +45,14 @@ from app.features.reporting.models import (
     ReportMetricFact,
     ReportRevision,
 )
-from app.features.simulation.models import MockDataRun
-from app.features.topology.models import Enterprise, EnterpriseSite
+from app.features.simulation.models import SimulationRun
+from app.features.topology.models import Enterprise, EnterpriseSite, SiteLocationVersion
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 
 # Register the simulation-lineage target before SQLAlchemy sorts the topology
 # mapper dependencies in this deliberately isolated PostgreSQL module.
-assert MockDataRun.__tablename__ == "mock_data_runs"
+assert SimulationRun.__tablename__ == "simulation_runs"
 
 
 def _postgres_async_url(raw_url: str) -> str:
@@ -119,8 +119,25 @@ async def test_finalization_is_atomic_idempotent_and_exact(
     assert await _count(finalization_session, FinalReportEvent) == 1
     assert await _count(finalization_session, FinalReportArtifact) == 1
     assert await _count(finalization_session, FinalReportCommandReceipt) == 1
-    assert await _count(finalization_session, DomainEvent) == 1
-    assert await _count(finalization_session, DomainEventDelivery) == 2
+    assert (
+        await finalization_session.scalar(
+            select(func.count())
+            .select_from(DomainEvent)
+            .where(DomainEvent.aggregate_id == str(created.resource.reportFinalizationId))
+        )
+        == 1
+    )
+    assert (
+        await finalization_session.scalar(
+            select(func.count())
+            .select_from(DomainEventDelivery)
+            .join(DomainEvent, DomainEvent.id == DomainEventDelivery.domain_event_id)
+            .where(
+                DomainEvent.aggregate_id == str(created.resource.reportFinalizationId),
+            )
+        )
+        == 2
+    )
     old_activity = ActivityLog(
         id=str(uuid4()),
         timestamp=datetime(1900, 1, 1, tzinfo=UTC),
@@ -132,7 +149,7 @@ async def test_finalization_is_atomic_idempotent_and_exact(
         target=str(created.resource.reportFinalizationId),
         summary="A convenience log must not own the official finalization audit.",
         source_id=str(created.resource.reportFinalizationId),
-        source_kind="real",
+        classification="official",
     )
     finalization_session.add(old_activity)
     await finalization_session.flush([old_activity])
@@ -516,11 +533,18 @@ async def _seed_accepted_sources(
             classification="official",
             site_code="PRIMARY",
             name=f"Finalization Site {index}",
+            registered_at=now,
+        )
+        location = SiteLocationVersion(
+            id=str(uuid4()),
+            site_id=site.id,
+            classification="official",
+            version=1,
             barangay=barangay,
             timezone_name="Asia/Manila",
             building_capacity=100,
-            location_version=1,
             effective_from=now,
+            change_reason="test_fixture",
         )
         obligation = ReportingObligation(
             id=str(uuid4()),
@@ -577,7 +601,7 @@ async def _seed_accepted_sources(
         )
         db.add(enterprise)
         await db.flush([enterprise])
-        db.add(site)
+        db.add_all([site, location])
         await db.flush([site])
         db.add(obligation)
         await db.flush([obligation])

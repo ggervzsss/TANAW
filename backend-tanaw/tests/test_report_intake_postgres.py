@@ -29,13 +29,14 @@ from app.features.reporting.service import (
 )
 from app.features.reporting.workflow import transition_report
 from app.features.reporting.workflow_envelopes import ReportTransitionCommand
-from app.features.simulation.models import MockDataRun
+from app.features.simulation.models import SimulationRun
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
@@ -107,8 +108,23 @@ async def test_report_intake_is_idempotent_and_hash_conflicts_fail(
     assert await report_session.scalar(select(func.count()).select_from(ReportRevision)) == 1
     assert await report_session.scalar(select(func.count()).select_from(ReportReviewEvent)) == 1
     assert await report_session.scalar(select(func.count()).select_from(ReportIntakeReceipt)) == 1
-    assert await report_session.scalar(select(func.count()).select_from(DomainEvent)) == 1
-    assert await report_session.scalar(select(func.count()).select_from(DomainEventDelivery)) == 2
+    assert (
+        await report_session.scalar(
+            select(func.count())
+            .select_from(DomainEvent)
+            .where(DomainEvent.aggregate_id == str(created.resource.enterpriseReportId))
+        )
+        == 1
+    )
+    assert (
+        await report_session.scalar(
+            select(func.count())
+            .select_from(DomainEventDelivery)
+            .join(DomainEvent, DomainEvent.id == DomainEventDelivery.domain_event_id)
+            .where(DomainEvent.aggregate_id == str(created.resource.enterpriseReportId))
+        )
+        == 2
+    )
     source_batch_id = str(command.payload.sourceBatches[0].batchId)
     assert await report_session.get(ReportSourceBatch, source_batch_id) is not None
     review_event = await report_session.scalar(select(ReportReviewEvent))
@@ -260,8 +276,23 @@ async def test_staff_transition_is_versioned_idempotent_and_auditable(
     assert report is not None
     assert report.accepted_revision_id == str(submitted.resource.reportRevisionId)
     assert await report_session.scalar(select(func.count()).select_from(ReportReviewEvent)) == 2
-    assert await report_session.scalar(select(func.count()).select_from(DomainEvent)) == 2
-    assert await report_session.scalar(select(func.count()).select_from(DomainEventDelivery)) == 4
+    assert (
+        await report_session.scalar(
+            select(func.count())
+            .select_from(DomainEvent)
+            .where(DomainEvent.aggregate_id == str(submitted.resource.enterpriseReportId))
+        )
+        == 2
+    )
+    assert (
+        await report_session.scalar(
+            select(func.count())
+            .select_from(DomainEventDelivery)
+            .join(DomainEvent, DomainEvent.id == DomainEventDelivery.domain_event_id)
+            .where(DomainEvent.aggregate_id == str(submitted.resource.enterpriseReportId))
+        )
+        == 4
+    )
     review_events = list(
         await report_session.scalars(
             select(ReportReviewEvent).order_by(ReportReviewEvent.resulting_version)
@@ -282,7 +313,7 @@ async def test_staff_transition_is_versioned_idempotent_and_auditable(
         target=str(submitted.resource.enterpriseReportId),
         summary="A purgeable convenience log must not own official workflow history.",
         source_id=str(submitted.resource.enterpriseReportId),
-        source_kind="real",
+        classification="official",
     )
     report_session.add(old_activity)
     await report_session.flush([old_activity])
@@ -372,9 +403,9 @@ async def test_report_intake_rejects_invalid_effective_topology(
     elif invalid_scope == "inactive_enterprise":
         enterprise.lifecycle_state = "inactive"
     elif invalid_scope == "future_site":
-        site.effective_from = acknowledged_at + timedelta(seconds=1)
+        site.registered_at = acknowledged_at + timedelta(seconds=1)
     elif invalid_scope == "ended_site":
-        site.effective_to = acknowledged_at
+        site.retired_at = acknowledged_at
     elif invalid_scope == "retired_device":
         device.lifecycle_state = "retired"
     elif invalid_scope == "retired_camera":
@@ -429,7 +460,7 @@ async def test_report_intake_accepts_bounded_topology_effective_at_acknowledgeme
         camera_id=camera_id,
     )
     membership.ended_at = acknowledged_at + timedelta(seconds=1)
-    site.effective_to = acknowledged_at + timedelta(seconds=1)
+    site.retired_at = acknowledged_at + timedelta(seconds=1)
     await report_session.flush([membership, site])
 
     submitted = await submit_report_command(
@@ -468,7 +499,7 @@ async def _seed_scope(
         lifecycle_state="active",
     )
     simulation_run = (
-        MockDataRun(
+        SimulationRun(
             id=str(uuid4()),
             scenario="report-intake-scope-test",
             seed=suffix,
@@ -486,11 +517,18 @@ async def _seed_scope(
         classification=classification,
         site_code="PRIMARY",
         name="Report Intake Site",
+        registered_at=now,
+    )
+    location = SiteLocationVersion(
+        id=str(uuid4()),
+        site_id=site.id,
+        classification=classification,
+        version=1,
         barangay="Poblacion",
         timezone_name="Asia/Manila",
         building_capacity=100,
-        location_version=1,
         effective_from=now,
+        change_reason="test_fixture",
     )
     membership = EnterpriseMembership(
         id=str(uuid4()),
@@ -543,7 +581,7 @@ async def _seed_scope(
         classification=classification,
         eligibility_status="eligible",
         eligibility_basis="registry_snapshot",
-        frozen_barangay=site.barangay,
+        frozen_barangay=location.barangay,
         enterprise_official_code=enterprise.official_code,
         enterprise_name=enterprise.name,
         site_code=site.site_code,
@@ -556,7 +594,7 @@ async def _seed_scope(
         [account, *([simulation_run] if simulation_run is not None else []), enterprise, period]
     )
     await db.flush()
-    db.add_all([site, membership])
+    db.add_all([site, location, membership])
     await db.flush()
     db.add_all([device, obligation])
     await db.flush()

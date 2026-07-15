@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.features.accounts.models import Account, AccountRole
 from app.features.events.models import DomainEvent, DomainEventDelivery
 from app.features.final_reports.artifact_envelopes import FinalReportArtifactDetail
@@ -219,6 +220,8 @@ class FinalReportArtifactProcessor:
                 occurred_at=occurred_at,
             )
         except ArtifactGenerationFailure as exc:
+            if "HASH" in exc.code or "INTEGRITY" in exc.code:
+                operational_observability.increment(OperationalCounter.FINAL_ARTIFACT_HASH_FAILURE)
             self._mark_failed(artifact, code=exc.code, retryable=exc.retryable)
             await _record_artifact_lifecycle(
                 db,
@@ -228,6 +231,7 @@ class FinalReportArtifactProcessor:
                 occurred_at=occurred_at,
             )
         except (ArtifactStorageConflict, ArtifactStorageIntegrityError) as exc:
+            operational_observability.increment(OperationalCounter.FINAL_ARTIFACT_HASH_FAILURE)
             logger.error(
                 "Final-report artifact generation integrity failure artifact_id=%s type=%s",
                 artifact.id,
@@ -924,6 +928,7 @@ def _artifact_unavailable() -> FinalReportArtifactUnavailable:
 
 
 def _log_download_integrity_failure(artifact_id: str, reason: str) -> None:
+    operational_observability.increment(OperationalCounter.FINAL_ARTIFACT_HASH_FAILURE)
     logger.error(
         "Final-report artifact download blocked by integrity verification artifact_id=%s reason=%s",
         artifact_id,

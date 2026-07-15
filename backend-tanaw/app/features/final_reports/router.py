@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
@@ -127,9 +128,14 @@ async def finalize_reports_v2(
     try:
         acknowledgement = await finalize_report_command(db, account=account, command=command)
         await db.commit()
+        if acknowledgement.disposition == "replayed":
+            operational_observability.increment(OperationalCounter.FINALIZATION_COMMAND_REPLAY)
+        else:
+            operational_observability.record_finalization_scope(command.payload.scope.type)
         return acknowledgement
     except FinalizationConflict as exc:
         await db.rollback()
+        operational_observability.increment(OperationalCounter.FINALIZATION_CONFLICT)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": exc.code, "message": exc.message},

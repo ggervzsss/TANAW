@@ -65,7 +65,7 @@ class Enterprise(Base):
     classification: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
     simulation_run_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False),
-        ForeignKey("mock_data_runs.id", ondelete="RESTRICT"),
+        ForeignKey("simulation_runs.id", ondelete="RESTRICT"),
         index=True,
         nullable=True,
     )
@@ -119,8 +119,6 @@ class EnterpriseMembership(Base):
         Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
     )
     enterprise_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
-    # Cutover debt: accounts.id remains VARCHAR(36) until the authentication-principal
-    # migration converts it to native UUID without changing externally visible identity.
     account_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=False
     )
@@ -151,30 +149,7 @@ class EnterpriseSite(Base):
             name="ck_enterprise_sites_classification",
         ),
         CheckConstraint(
-            "building_capacity BETWEEN 1 AND 100000",
-            name="ck_enterprise_sites_building_capacity",
-        ),
-        CheckConstraint(
-            "((latitude IS NULL AND longitude IS NULL) OR "
-            "(latitude IS NOT NULL AND longitude IS NOT NULL AND "
-            "latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180))",
-            name="ck_enterprise_sites_coordinates",
-        ),
-        CheckConstraint(
-            "location_confidence IS NULL OR "
-            "(latitude IS NOT NULL AND location_confidence BETWEEN 0 AND 1)",
-            name="ck_enterprise_sites_location_confidence",
-        ),
-        CheckConstraint(
-            "timezone_name = 'Asia/Manila'",
-            name="ck_enterprise_sites_timezone",
-        ),
-        CheckConstraint(
-            "location_version >= 1",
-            name="ck_enterprise_sites_location_version",
-        ),
-        CheckConstraint(
-            "effective_to IS NULL OR effective_to > effective_from",
+            "retired_at IS NULL OR retired_at > registered_at",
             name="ck_enterprise_sites_effective_range",
         ),
         CheckConstraint(
@@ -184,8 +159,7 @@ class EnterpriseSite(Base):
         UniqueConstraint(
             "enterprise_id",
             "site_code",
-            "location_version",
-            name="uq_enterprise_sites_code_version",
+            name="uq_enterprise_sites_code",
         ),
         UniqueConstraint(
             "id",
@@ -194,16 +168,7 @@ class EnterpriseSite(Base):
             name="uq_enterprise_sites_identity_scope",
         ),
         UniqueConstraint("id", "classification", name="uq_enterprise_sites_id_classification"),
-        Index(
-            "uq_enterprise_sites_active_code",
-            "enterprise_id",
-            "site_code",
-            unique=True,
-            postgresql_where=text("effective_to IS NULL"),
-            sqlite_where=text("effective_to IS NULL"),
-        ),
-        Index("ix_enterprise_sites_enterprise_effective", "enterprise_id", "effective_to"),
-        Index("ix_enterprise_sites_barangay", "barangay"),
+        Index("ix_enterprise_sites_enterprise_retired", "enterprise_id", "retired_at"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -213,6 +178,75 @@ class EnterpriseSite(Base):
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     site_code: Mapped[str] = mapped_column(String(80), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    registered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class SiteLocationVersion(Base):
+    """Immutable location evidence for a stable enterprise-site identity."""
+
+    __tablename__ = "site_location_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["site_id", "classification"],
+            ["enterprise_sites.id", "enterprise_sites.classification"],
+            name="fk_site_location_versions_site_classification",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "classification IN ('official', 'simulation')",
+            name="ck_site_location_versions_classification",
+        ),
+        CheckConstraint("version >= 1", name="ck_site_location_versions_version"),
+        CheckConstraint(
+            "building_capacity BETWEEN 1 AND 100000",
+            name="ck_site_location_versions_building_capacity",
+        ),
+        CheckConstraint(
+            "timezone_name = 'Asia/Manila'",
+            name="ck_site_location_versions_timezone",
+        ),
+        CheckConstraint(
+            "((latitude IS NULL AND longitude IS NULL) OR "
+            "(latitude IS NOT NULL AND longitude IS NOT NULL AND "
+            "latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180))",
+            name="ck_site_location_versions_coordinates",
+        ),
+        CheckConstraint(
+            "location_confidence IS NULL OR "
+            "(latitude IS NOT NULL AND location_confidence BETWEEN 0 AND 1)",
+            name="ck_site_location_versions_confidence",
+        ),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to > effective_from",
+            name="ck_site_location_versions_effective_range",
+        ),
+        UniqueConstraint("site_id", "version", name="uq_site_location_versions_site_version"),
+        Index(
+            "uq_site_location_versions_current_site",
+            "site_id",
+            unique=True,
+            postgresql_where=text("effective_to IS NULL"),
+            sqlite_where=text("effective_to IS NULL"),
+        ),
+        Index("ix_site_location_versions_site_effective", "site_id", "effective_from"),
+        Index("ix_site_location_versions_barangay", "barangay"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    site_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    classification: Mapped[str] = mapped_column(String(20), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
     barangay: Mapped[str | None] = mapped_column(String(120), nullable=True)
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     timezone_name: Mapped[str] = mapped_column(String(64), nullable=False, default="Asia/Manila")
@@ -222,19 +256,16 @@ class EnterpriseSite(Base):
     location_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
     location_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     geocoded_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    coordinates_updated_at: Mapped[datetime | None] = mapped_column(
+    coordinates_confirmed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    location_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    change_reason: Mapped[str] = mapped_column(String(80), nullable=False)
     effective_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     effective_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
@@ -256,6 +287,10 @@ class EdgeDevice(Base):
             name="ck_edge_devices_lifecycle_state",
         ),
         CheckConstraint(
+            "device_role IN ('telemetry_aggregator', 'camera_node')",
+            name="ck_edge_devices_device_role",
+        ),
+        CheckConstraint(
             "credential_version >= 1",
             name="ck_edge_devices_credential_version",
         ),
@@ -275,6 +310,17 @@ class EdgeDevice(Base):
             name="uq_edge_devices_id_site_classification",
         ),
         Index("ix_edge_devices_site_lifecycle", "site_id", "lifecycle_state"),
+        Index(
+            "uq_edge_devices_active_aggregator_site",
+            "site_id",
+            unique=True,
+            postgresql_where=text(
+                "lifecycle_state = 'active' AND device_role = 'telemetry_aggregator'"
+            ),
+            sqlite_where=text(
+                "lifecycle_state = 'active' AND device_role = 'telemetry_aggregator'"
+            ),
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -284,6 +330,9 @@ class EdgeDevice(Base):
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
     device_key: Mapped[str] = mapped_column(String(120), nullable=False)
     display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    device_role: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="telemetry_aggregator"
+    )
     lifecycle_state: Mapped[str] = mapped_column(
         String(20), index=True, nullable=False, default="active"
     )

@@ -118,23 +118,23 @@ class CameraProcessingManager(
         self._effective_reid_mode = "fast"
         self._processing_frame_age_ms: float | None = None
         self._processing_frames_skipped = 0
-        self._mock_thread: threading.Thread | None = None
-        self._mock_stop_event: threading.Event | None = None
-        self._mock_run_id: str | None = None
-        self._mock_events_generated = 0
-        self._mock_events_per_minute = 12
-        self._mock_mode: str | None = None
-        self._mock_scenario: str | None = None
-        self._mock_state = "idle"
-        self._mock_paused = False
-        self._mock_capacity = 100
-        self._mock_threshold_percent = 90
-        self._mock_duration_minutes: int | None = None
-        self._mock_started_at: str | None = None
-        self._mock_started_monotonic: float | None = None
-        self._mock_completed_at: str | None = None
-        self._mock_entry_probability: float | None = None
-        self._mock_unique_entry_rate = 0.88
+        self._simulation_thread: threading.Thread | None = None
+        self._simulation_stop_event: threading.Event | None = None
+        self._simulation_run_id: str | None = None
+        self._simulation_events_generated = 0
+        self._simulation_events_per_minute = 12
+        self._simulation_mode: str | None = None
+        self._simulation_scenario: str | None = None
+        self._simulation_state = "idle"
+        self._simulation_paused = False
+        self._simulation_capacity = 100
+        self._simulation_threshold_percent = 90
+        self._simulation_duration_minutes: int | None = None
+        self._simulation_started_at: str | None = None
+        self._simulation_started_monotonic: float | None = None
+        self._simulation_completed_at: str | None = None
+        self._simulation_entry_probability: float | None = None
+        self._simulation_unique_entry_rate = 0.88
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
 
@@ -344,7 +344,7 @@ class CameraProcessingManager(
             self._persist_session_locked()
 
     def stop(self) -> None:
-        self.stop_mock_mode()
+        self.stop_simulation()
         threads: list[threading.Thread]
         session: ProcessingSession | None
         with self._lock:
@@ -447,9 +447,12 @@ class CameraProcessingManager(
 
     def session(self) -> dict:
         with self._lock:
-            if self._mock_mode == "virtual" and self._mock_state in {"running", "paused"}:
+            if self._simulation_mode == "virtual" and self._simulation_state in {
+                "running",
+                "paused",
+            }:
                 summary = self._runtime_store.metrics_summary(include_submitted=True)
-                simulation_running = self._mock_state == "running"
+                simulation_running = self._simulation_state == "running"
                 return {
                     "running": True,
                     "status": "simulating" if simulation_running else "simulation_paused",
@@ -463,7 +466,7 @@ class CameraProcessingManager(
                         "occupancy": summary["current_occupancy"],
                         "running": simulation_running,
                         "status": "simulating" if simulation_running else "simulation_paused",
-                        "started_at": self._mock_started_at,
+                        "started_at": self._simulation_started_at,
                         "error": None,
                     },
                     "updated_at": datetime.now(UTC).isoformat(),
@@ -497,7 +500,7 @@ class CameraProcessingManager(
         actor_id: str | None = None,
         actor_name: str | None = None,
         camera_id: int | None = None,
-        source_kind: str | None = None,
+        classification: str | None = None,
     ) -> dict:
         with self._lock:
             summary = self._runtime_store.metrics_summary(include_submitted=True)
@@ -513,8 +516,10 @@ class CameraProcessingManager(
                 if self._config
                 else None
             )
-            resolved_source_kind = source_kind or self._current_source_kind_locked()
-            mock_run_id = self._mock_run_id if resolved_source_kind in {"mock", "hybrid"} else None
+            resolved_classification = classification or self._current_classification_locked()
+            simulation_run_id = (
+                self._simulation_run_id if resolved_classification in {"simulation"} else None
+            )
 
         correction = self._runtime_store.record_occupancy_correction(
             enterprise_id=self._enterprise_id,
@@ -524,8 +529,8 @@ class CameraProcessingManager(
             reason=reason,
             actor_id=actor_id,
             actor_name=actor_name,
-            source_kind=resolved_source_kind,
-            mock_run_id=mock_run_id,
+            classification=resolved_classification,
+            simulation_run_id=simulation_run_id,
         )
 
         with self._lock:
@@ -589,8 +594,8 @@ class CameraProcessingManager(
         notes: str | None = None,
         payload: dict | None = None,
         metrics: dict | None = None,
-        source_kind: str | None = None,
-        mock_run_id: str | None = None,
+        classification: str | None = None,
+        simulation_run_id: str | None = None,
         *,
         idempotency_key: str | None = None,
         command_id: str | None = None,
@@ -601,8 +606,8 @@ class CameraProcessingManager(
             notes=notes,
             payload=payload,
             metrics=metrics,
-            source_kind=source_kind,
-            mock_run_id=mock_run_id,
+            classification=classification,
+            simulation_run_id=simulation_run_id,
             idempotency_key=idempotency_key,
             command_id=command_id,
         )
@@ -619,6 +624,28 @@ class CameraProcessingManager(
 
     def sync_outbox_health(self) -> dict[str, int | str | None]:
         return self._runtime_store.sync_outbox_health()
+
+    def list_sync_outbox_recovery_items(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._runtime_store.list_sync_outbox_recovery_items(limit=limit)
+
+    def get_sync_outbox_recovery_item(self, outbox_item_id: str) -> dict[str, Any] | None:
+        return self._runtime_store.get_sync_outbox_recovery_item(outbox_item_id)
+
+    def requeue_sync_outbox_item(
+        self,
+        outbox_item_id: str,
+        *,
+        reason: str,
+        requeued_at: str | None = None,
+    ) -> dict[str, Any]:
+        return self._runtime_store.requeue_sync_outbox_item(
+            outbox_item_id,
+            reason=reason,
+            requeued_at=requeued_at,
+        )
+
+    def operational_diagnostics(self) -> dict[str, Any]:
+        return self._runtime_store.operational_diagnostics()
 
     def acknowledge_sync_outbox_item(
         self,

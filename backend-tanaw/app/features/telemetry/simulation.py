@@ -92,7 +92,7 @@ async def list_simulation_enterprises(db: AsyncSession) -> list[FleetSimulationE
             enterpriseId=topology.enterprise.official_code,
             enterpriseName=topology.enterprise.name,
             category=topology.enterprise.category,
-            barangay=topology.site.barangay,
+            barangay=topology.location.barangay,
         )
         for topology in topologies.values()
         if topology is not None and topology.enterprise.classification == "simulation"

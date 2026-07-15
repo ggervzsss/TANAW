@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -443,7 +444,7 @@ class ReportMetricFact(Base):
             "definition_version >= 1", name="ck_report_metric_facts_definition_version"
         ),
         CheckConstraint(
-            "grain IN ('camera', 'site', 'enterprise')",
+            "grain IN ('site', 'enterprise')",
             name="ck_report_metric_facts_grain",
         ),
         CheckConstraint(
@@ -594,9 +595,9 @@ class ReportSourceBatch(Base):
     site_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     camera_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     classification: Mapped[str] = mapped_column(String(20), nullable=False)
-    event_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    event_sequence_start: Mapped[int] = mapped_column(Integer, nullable=False)
-    event_sequence_end_exclusive: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    event_sequence_start: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    event_sequence_end_exclusive: Mapped[int] = mapped_column(BigInteger, nullable=False)
     aggregate_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

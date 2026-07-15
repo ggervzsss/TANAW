@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 from app.features.maintenance.telemetry_retention import run_telemetry_retention
-from app.features.simulation.models import MockDataRun
+from app.features.simulation.models import SimulationRun
 from app.features.telemetry.models import (
     DeviceHealthSample,
     DeviceTelemetryEpoch,
@@ -29,7 +29,12 @@ from app.features.telemetry.models import (
     TelemetryMetricFact,
     TelemetryObservation,
 )
-from app.features.topology.models import EdgeDevice, Enterprise, EnterpriseSite
+from app.features.topology.models import (
+    EdgeDevice,
+    Enterprise,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_PREFIX = "tanaw-telemetry-retention-"
@@ -42,7 +47,7 @@ class PostgresRuntime:
     sessions: async_sessionmaker[AsyncSession]
     settings: Settings
     enterprise_ids: list[str] = field(default_factory=list)
-    mock_run_ids: list[str] = field(default_factory=list)
+    simulation_run_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -526,7 +531,7 @@ async def test_dynamic_utc_partitions_prune_queries_and_expire_only_as_whole_mon
 async def _seed_scope(runtime: PostgresRuntime, *, classification: str) -> Scope:
     async with runtime.sessions() as db:
         simulation_run = (
-            MockDataRun(
+            SimulationRun(
                 id=str(uuid4()),
                 scenario="telemetry-retention-scope-test",
                 seed=uuid4().hex,
@@ -540,7 +545,7 @@ async def _seed_scope(runtime: PostgresRuntime, *, classification: str) -> Scope
         if simulation_run is not None:
             db.add(simulation_run)
             await db.flush()
-            runtime.mock_run_ids.append(simulation_run.id)
+            runtime.simulation_run_ids.append(simulation_run.id)
         enterprise = Enterprise(
             official_code=f"{TEST_PREFIX}{uuid4().hex[:12]}",
             name="Telemetry retention test",
@@ -551,13 +556,23 @@ async def _seed_scope(runtime: PostgresRuntime, *, classification: str) -> Scope
         db.add(enterprise)
         await db.flush()
         site = EnterpriseSite(
+            id=str(uuid4()),
             enterprise_id=enterprise.id,
             classification=classification,
             site_code=f"site-{uuid4().hex[:8]}",
             name="Retention test site",
-            building_capacity=100,
+            registered_at=datetime(2020, 1, 1, tzinfo=UTC),
         )
-        db.add(site)
+        location = SiteLocationVersion(
+            site_id=site.id,
+            classification=classification,
+            version=1,
+            timezone_name="Asia/Manila",
+            building_capacity=100,
+            effective_from=datetime(2020, 1, 1, tzinfo=UTC),
+            change_reason="test_fixture",
+        )
+        db.add_all([site, location])
         await db.flush()
         device = EdgeDevice(
             site_id=site.id,
@@ -733,6 +748,7 @@ async def _clean_runtime(runtime: PostgresRuntime) -> None:
         "telemetry_observations",
         "device_telemetry_epochs",
         "edge_devices",
+        "site_location_versions",
         "enterprise_sites",
         "enterprises",
     )
@@ -767,10 +783,15 @@ async def _clean_runtime(runtime: PostgresRuntime) -> None:
             delete(DeviceTelemetryEpoch).where(DeviceTelemetryEpoch.edge_device_id.in_(device_ids))
         )
         await db.execute(delete(EdgeDevice).where(EdgeDevice.id.in_(device_ids)))
+        await db.execute(
+            delete(SiteLocationVersion).where(SiteLocationVersion.site_id.in_(site_ids))
+        )
         await db.execute(delete(EnterpriseSite).where(EnterpriseSite.id.in_(site_ids)))
         await db.execute(delete(Enterprise).where(Enterprise.id.in_(runtime.enterprise_ids)))
-        if runtime.mock_run_ids:
-            await db.execute(delete(MockDataRun).where(MockDataRun.id.in_(runtime.mock_run_ids)))
+        if runtime.simulation_run_ids:
+            await db.execute(
+                delete(SimulationRun).where(SimulationRun.id.in_(runtime.simulation_run_ids))
+            )
 
         for table_name in reversed(trigger_tables):
             await db.execute(text(f"ALTER TABLE {table_name} ENABLE TRIGGER USER"))

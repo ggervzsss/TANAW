@@ -1,4 +1,4 @@
-import { Activity, Bell, Building2, TicketCheck, Users, Wifi } from "lucide-react";
+import { Activity, Bell, Building2, DatabaseZap, RadioTower, TicketCheck, Users, Wifi } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
 import { listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
+import { getOperationalStatus } from "@/shared/services/operationalStatus";
 import type { PriorityAlert, SystemLog } from "@/shared/types";
 
 export function ITDashboardPage() {
@@ -19,6 +20,11 @@ export function ITDashboardPage() {
   const operationalSitesQuery = useOperationalMapEnterprises();
   const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
+  const operationsQuery = useQuery({
+    queryKey: ["maintenance", "operations"],
+    queryFn: getOperationalStatus,
+    refetchInterval: 30_000,
+  });
   const [selectedActivity, setSelectedActivity] = useState<SystemLog | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<PriorityAlert | null>(null);
   const { alerts } = useAlerts();
@@ -33,6 +39,10 @@ export function ITDashboardPage() {
   const delayedSites = operationalSites.filter((site) => site.gatewayStatus === "Sync Delayed").length;
   const offlineSites = operationalSites.filter((site) => site.gatewayStatus === "Offline" || site.gatewayStatus === "Not Linked").length;
   const recentActivities = logs.slice(0, 7);
+  const deliveryQueue = operationsQuery.data?.domainEventQueue;
+  const liveFreshness = operationsQuery.data?.officialLiveSites;
+  const deliveryBacklog = deliveryQueue ? deliveryQueue.pending + deliveryQueue.leased + deliveryQueue.retryScheduled : 0;
+  const degradedLiveSites = liveFreshness ? liveFreshness.stale + liveFreshness.offline + liveFreshness.unobserved : 0;
 
   const actionableAlerts = priorityAlerts.filter((alert) => alert.status !== "Resolved").slice(0, 4);
 
@@ -51,8 +61,24 @@ export function ITDashboardPage() {
           icon={Wifi}
         />
         <MetricCard label="Priority Alerts" value={activeAlertsCount} foot="Requires IT action" color="#dc2626" footClassName="text-red-600" icon={Bell} />
+        <MetricCard
+          label="Domain Event Backlog"
+          value={operationsQuery.isLoading ? "..." : deliveryBacklog}
+          foot={deliveryQueue ? `${deliveryQueue.retryScheduled} retry / ${deliveryQueue.deadLetter} dead letter` : "Durable delivery queue unavailable"}
+          color="#7c3aed"
+          footClassName={deliveryQueue?.deadLetter ? "text-red-600" : undefined}
+          icon={DatabaseZap}
+        />
+        <MetricCard
+          label="Live Sites Degraded"
+          value={operationsQuery.isLoading ? "..." : degradedLiveSites}
+          foot={liveFreshness ? `${liveFreshness.stale} stale / ${liveFreshness.offline} offline / ${liveFreshness.unobserved} unobserved` : "Freshness gauge unavailable"}
+          color="#d97706"
+          footClassName={degradedLiveSites ? "text-amber-700" : undefined}
+          icon={RadioTower}
+        />
       </motion.section>
-      {(lguAccountsQuery.isError || enterpriseAccountsQuery.isError || operationalSitesQuery.isError) && (
+      {(lguAccountsQuery.isError || enterpriseAccountsQuery.isError || operationalSitesQuery.isError || operationsQuery.isError) && (
         <p className="mt-4 text-sm font-semibold text-red-600">Some dashboard metrics could not be loaded from the database. Refresh or check the API connection.</p>
       )}
 

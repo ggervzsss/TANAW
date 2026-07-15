@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from pydantic import SecretStr
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 from app.core.security import hash_password, verify_password
-from app.features.accounts.models import Account, AccountRole, AccountStatus, DevDelivery
+from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.router import update_account_status, update_lgu_account
 from app.features.accounts.schemas import AccountStatusUpdate, LguAccountUpdate
 from app.features.accounts.service import NewEnterpriseTopology, create_account_with_activation
@@ -33,7 +33,12 @@ from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOut
 from app.features.mail.rendering import render_outbox_email
 from app.features.notifications.models import UserNotification
 from app.features.topology.account_scope import enterprise_official_code_for_account
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
+from app.features.topology.models import (
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_EMAIL_PATTERN = "tanaw-activation-pg-%@example.com"
@@ -135,7 +140,6 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                     AccountActivationToken.account_id.in_(account_ids)
                 )
             )
-            await db.execute(delete(DevDelivery).where(DevDelivery.account_id.in_(account_ids)))
             await db.execute(delete(ActivityLog).where(ActivityLog.source_id.in_(account_ids)))
             await db.execute(
                 delete(UserNotification).where(
@@ -143,6 +147,28 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                 )
             )
             if enterprise_ids:
+                await db.execute(
+                    text(
+                        "ALTER TABLE site_location_versions DISABLE TRIGGER "
+                        "trg_site_location_versions_immutable"
+                    )
+                )
+                site_ids = list(
+                    await db.scalars(
+                        select(EnterpriseSite.id).where(
+                            EnterpriseSite.enterprise_id.in_(enterprise_ids)
+                        )
+                    )
+                )
+                await db.execute(
+                    delete(SiteLocationVersion).where(SiteLocationVersion.site_id.in_(site_ids))
+                )
+                await db.execute(
+                    text(
+                        "ALTER TABLE site_location_versions ENABLE TRIGGER "
+                        "trg_site_location_versions_immutable"
+                    )
+                )
                 await db.execute(
                     delete(EnterpriseSite).where(EnterpriseSite.enterprise_id.in_(enterprise_ids))
                 )

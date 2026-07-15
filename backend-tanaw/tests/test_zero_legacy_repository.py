@@ -20,6 +20,8 @@ def test_target_release_source_inventory_has_no_forbidden_runtime_object() -> No
     assert inventory["status"] == "verified"
     assert inventory["contractVersion"] == 2
     assert inventory["packageVersions"] == {
+        "backend-tanaw/pyproject.toml": "2.0.0",
+        "desktop-tanaw/ml-service/pyproject.toml": "2.0.0",
         "desktop-tanaw/package.json": "2.0.0",
         "frontend-tanaw/package.json": "2.0.0",
     }

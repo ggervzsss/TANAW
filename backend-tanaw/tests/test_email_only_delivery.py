@@ -3,11 +3,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.features.accounts import service
-from app.features.accounts.models import AccountRole, DevDelivery
+from app.features.accounts.models import AccountRole
+from app.features.mail.models import EmailOutbox
 
 
-def test_delivery_records_do_not_have_a_channel_discriminator() -> None:
-    assert "channel" not in DevDelivery.__table__.columns
+def test_email_outbox_is_the_only_delivery_lifecycle() -> None:
+    assert EmailOutbox.__tablename__ == "email_outbox"
 
 
 @pytest.mark.asyncio

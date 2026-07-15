@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -10,9 +9,8 @@ from app.db.session import AsyncSessionLocal
 from app.features.accounts.models import (
     AccountEmailChangeRequest,
     AccountEmailChangeStatus,
-    DevDelivery,
-    SystemConfiguration,
 )
+from app.features.accounts.settings import get_system_settings, system_settings_values
 from app.features.activity_logs.models import ActivityLog
 from app.features.activity_logs.service import resolve_activity_log_retention_days
 from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
@@ -62,7 +60,6 @@ class RetentionCleanupCounts:
     password_reset_rate_buckets: int = 0
     expired_email_change_requests: int = 0
     email_change_requests: int = 0
-    development_deliveries: int = 0
     email_outbox_records: int = 0
     activity_logs: int = 0
     domain_events: int = 0
@@ -78,7 +75,6 @@ class RetentionCleanupCounts:
             + self.password_reset_challenges
             + self.password_reset_rate_buckets
             + self.email_change_requests
-            + self.development_deliveries
             + self.email_outbox_records
             + self.activity_logs
             + self.domain_events
@@ -131,11 +127,6 @@ async def run_retention_cleanup(
             cutoff=current - timedelta(days=settings.account_email_change_retention_days),
             batch_size=batch_size,
         ),
-        development_deliveries=await _delete_development_deliveries(
-            session_factory,
-            cutoff=current - timedelta(days=settings.development_delivery_retention_days),
-            batch_size=batch_size,
-        ),
         email_outbox_records=await _delete_email_outbox_records(
             session_factory,
             standard_cutoff=current - timedelta(days=settings.email_outbox_retention_days),
@@ -179,17 +170,7 @@ async def _delete_activity_logs(
     batch_size: int,
 ) -> int:
     async with session_factory() as db:
-        settings_record = await db.scalar(
-            select(SystemConfiguration).where(SystemConfiguration.id == "default")
-        )
-        values: dict[str, object] = {}
-        if settings_record is not None:
-            try:
-                candidate = json.loads(settings_record.values_json)
-            except TypeError, ValueError:
-                candidate = None
-            if isinstance(candidate, dict):
-                values = candidate
+        values = system_settings_values(await get_system_settings(db))
         cutoff = current - timedelta(days=resolve_activity_log_retention_days(values))
         ids = list(
             await db.scalars(
@@ -483,28 +464,6 @@ async def _delete_email_change_requests(
             await db.execute(
                 delete(AccountEmailChangeRequest).where(AccountEmailChangeRequest.id.in_(ids))
             )
-        await db.commit()
-        return len(ids)
-
-
-async def _delete_development_deliveries(
-    session_factory: SessionFactory,
-    *,
-    cutoff: datetime,
-    batch_size: int,
-) -> int:
-    async with session_factory() as db:
-        ids = list(
-            await db.scalars(
-                select(DevDelivery.id)
-                .where(DevDelivery.created_at < cutoff)
-                .order_by(DevDelivery.created_at.asc(), DevDelivery.id.asc())
-                .with_for_update(skip_locked=True)
-                .limit(batch_size)
-            )
-        )
-        if ids:
-            await db.execute(delete(DevDelivery).where(DevDelivery.id.in_(ids)))
         await db.commit()
         return len(ids)
 

@@ -1,4 +1,4 @@
-import { Activity, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
+import { Activity, AlertTriangle, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
 import type { EnterpriseStatus, GatewayStatus } from "@/shared/types";
@@ -13,6 +13,12 @@ type EnterpriseDetailsModalProps = {
 export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetailsModalProps) {
   return (
     <ModalFrame title={enterprise.name} eyebrow="Enterprise Site Details" onClose={onClose} maxWidthClassName="max-w-5xl">
+      {enterprise.locationWarning && (
+        <div role="alert" className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <span>{enterprise.locationWarning}</span>
+        </div>
+      )}
       <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
         <section className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-500/10">
           <div className="flex items-start gap-3">

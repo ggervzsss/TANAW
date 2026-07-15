@@ -13,7 +13,7 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
 from app.features.alerts.service import to_operational_alert_summary
 from app.features.events.models import DomainEvent, DomainEventDelivery
-from app.features.simulation.models import MockDataRun
+from app.features.simulation.models import SimulationRun
 from app.features.telemetry.envelopes import EpochStartCommand, TelemetryCommand
 from app.features.telemetry.models import (
     DeviceHealthSample,
@@ -43,6 +43,7 @@ from app.features.topology.models import (
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
@@ -199,9 +200,38 @@ async def test_epoch_and_observation_are_exactly_idempotent_and_auditable(
         await telemetry_session.scalar(select(func.count()).select_from(TelemetryMetricFact)) == 2
     )
     assert await telemetry_session.scalar(select(func.count()).select_from(DeviceHealthSample)) == 1
-    assert await telemetry_session.scalar(select(func.count()).select_from(DomainEvent)) == 2
     assert (
-        await telemetry_session.scalar(select(func.count()).select_from(DomainEventDelivery)) == 4
+        await telemetry_session.scalar(
+            select(func.count())
+            .select_from(DomainEvent)
+            .where(
+                DomainEvent.event_type.in_(
+                    (
+                        "telemetry.epoch_registered.v2",
+                        "telemetry.observation_recorded.v2",
+                    )
+                ),
+                DomainEvent.enterprise_id == scope["enterprise"],
+            )
+        )
+        == 2
+    )
+    assert (
+        await telemetry_session.scalar(
+            select(func.count())
+            .select_from(DomainEventDelivery)
+            .join(DomainEvent, DomainEvent.id == DomainEventDelivery.domain_event_id)
+            .where(
+                DomainEvent.event_type.in_(
+                    (
+                        "telemetry.epoch_registered.v2",
+                        "telemetry.observation_recorded.v2",
+                    )
+                ),
+                DomainEvent.enterprise_id == scope["enterprise"],
+            )
+        )
+        == 4
     )
 
     live = await telemetry_session.get(SiteLiveState, scope["site"])
@@ -640,22 +670,31 @@ async def test_site_registry_keeps_unlinked_sites_and_nests_freshness_safe_live_
 ) -> None:
     scope = await _seed_scope(telemetry_session, classification="official")
     unlinked_site_id = str(uuid4())
-    telemetry_session.add(
-        EnterpriseSite(
-            id=unlinked_site_id,
-            enterprise_id=scope["enterprise"],
-            classification="official",
-            site_code=f"UNLINKED-{uuid4().hex}",
-            name="Unlinked Site",
-            barangay="Test Barangay",
-            address="No device yet",
-            timezone_name="Asia/Manila",
-            building_capacity=50,
-            latitude=14.6,
-            longitude=120.99,
-            location_version=1,
-            effective_from=BASE_TIME - timedelta(days=1),
-        )
+    telemetry_session.add_all(
+        [
+            EnterpriseSite(
+                id=unlinked_site_id,
+                enterprise_id=scope["enterprise"],
+                classification="official",
+                site_code=f"UNLINKED-{uuid4().hex}",
+                name="Unlinked Site",
+                registered_at=BASE_TIME - timedelta(days=1),
+            ),
+            SiteLocationVersion(
+                id=str(uuid4()),
+                site_id=unlinked_site_id,
+                classification="official",
+                version=1,
+                barangay="Test Barangay",
+                address="No device yet",
+                timezone_name="Asia/Manila",
+                building_capacity=50,
+                latitude=14.6,
+                longitude=120.99,
+                effective_from=BASE_TIME - timedelta(days=1),
+                change_reason="test_fixture",
+            ),
+        ]
     )
     await telemetry_session.flush()
 
@@ -935,7 +974,7 @@ async def test_ambiguous_membership_and_invalid_site_device_scope_fail_closed(
     )
     future_site_row = await telemetry_session.get(EnterpriseSite, future_site["site"])
     assert future_site_row is not None
-    future_site_row.effective_from = BASE_TIME + timedelta(seconds=1)
+    future_site_row.registered_at = BASE_TIME + timedelta(seconds=1)
 
     retired_device = await _seed_scope(telemetry_session, classification="official")
     retired_epoch = await register_epoch_command(
@@ -1033,7 +1072,7 @@ async def _seed_scope(db: AsyncSession, *, classification: str) -> Scope:
     device_id = str(uuid4())
     camera_id = str(uuid4())
     simulation_run = (
-        MockDataRun(
+        SimulationRun(
             id=str(uuid4()),
             scenario="telemetry-scope-test",
             seed=suffix,
@@ -1070,22 +1109,31 @@ async def _seed_scope(db: AsyncSession, *, classification: str) -> Scope:
             started_at=BASE_TIME - timedelta(days=1),
         )
     )
-    db.add(
-        EnterpriseSite(
-            id=site_id,
-            enterprise_id=enterprise_id,
-            classification=classification,
-            site_code=f"SITE-{suffix}",
-            name=f"Site {suffix[:8]}",
-            barangay="Test Barangay",
-            address="Test Address",
-            timezone_name="Asia/Manila",
-            building_capacity=100,
-            latitude=14.5995,
-            longitude=120.9842,
-            location_version=1,
-            effective_from=BASE_TIME - timedelta(days=1),
-        )
+    db.add_all(
+        [
+            EnterpriseSite(
+                id=site_id,
+                enterprise_id=enterprise_id,
+                classification=classification,
+                site_code=f"SITE-{suffix}",
+                name=f"Site {suffix[:8]}",
+                registered_at=BASE_TIME - timedelta(days=1),
+            ),
+            SiteLocationVersion(
+                id=str(uuid4()),
+                site_id=site_id,
+                classification=classification,
+                version=1,
+                barangay="Test Barangay",
+                address="Test Address",
+                timezone_name="Asia/Manila",
+                building_capacity=100,
+                latitude=14.5995,
+                longitude=120.9842,
+                effective_from=BASE_TIME - timedelta(days=1),
+                change_reason="test_fixture",
+            ),
+        ]
     )
     await db.flush()
     db.add(

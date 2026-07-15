@@ -206,12 +206,12 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
   };
 
   const handleReset = async () => {
-    if (!status?.mock_run_id) return;
+    if (!status?.simulation_run_id) return;
     setShowResetConfirmation(false);
     setIsBusy(true);
     setError(null);
     try {
-      await resetSimulation(baseUrl, status.mock_run_id);
+      await resetSimulation(baseUrl, status.simulation_run_id);
       await refreshStatus();
     } catch (requestError) {
       setError(toErrorMessage(requestError));
@@ -352,7 +352,7 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
                 <Square size={14} /> Stop
               </button>
             )}
-            {status?.mock_run_id && status.scenario && (
+            {status?.simulation_run_id && status.scenario && (
               <button
                 type="button"
                 disabled={isBusy || isActive}

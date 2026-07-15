@@ -12,6 +12,7 @@ from app.core.client_compatibility import (
     DESKTOP_CLIENT_NAME,
     MANDATORY_UPGRADE_REASON,
     MANDATORY_UPGRADE_WEBSOCKET_CODE,
+    PORTAL_CLIENT_NAME,
     RELEASE_ID_HEADER,
     ClientGeneration,
     is_supported_client_generation,
@@ -62,7 +63,7 @@ def test_outdated_desktop_is_rejected_before_business_body_parsing() -> None:
         "contractVersion": 2,
         "error": {
             "code": "CLIENT_UPGRADE_REQUIRED",
-            "message": "Update TANAW Desktop before synchronizing.",
+            "message": "Update TANAW to the required target release before continuing.",
             "retryable": False,
             "minimumClientVersion": "2.0.0",
             "requiredContractVersion": 2,
@@ -80,6 +81,32 @@ def test_target_desktop_generation_passes_the_cutover_boundary() -> None:
     )
 
     assert response.status_code != 426
+
+
+def test_production_portal_generation_is_required_for_general_api_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import main as app_main
+
+    production_settings = Settings().model_copy(update={"environment": "production"})
+    monkeypatch.setattr(app_main, "settings", production_settings)
+    client = TestClient(app)
+
+    missing = client.get("/auth/me")
+    target = client.get(
+        "/auth/me",
+        headers={
+            CLIENT_NAME_HEADER: PORTAL_CLIENT_NAME,
+            CLIENT_VERSION_HEADER: "2.0.0",
+            CONTRACT_VERSION_HEADER: "2",
+            RELEASE_ID_HEADER: "target-cutover-release",
+        },
+    )
+    health = client.get("/health")
+
+    assert missing.status_code == 426
+    assert target.status_code != 426
+    assert health.status_code == 200
 
 
 @pytest.mark.asyncio

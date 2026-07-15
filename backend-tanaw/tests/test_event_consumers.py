@@ -351,6 +351,48 @@ async def test_notification_invalidation_reaches_only_the_recorded_account() -> 
 
 
 @pytest.mark.asyncio
+async def test_activity_log_uses_the_shared_resource_invalidation_stream() -> None:
+    envelopes: list[dict[str, Any]] = []
+
+    async def broadcast(envelope: Any) -> None:
+        envelopes.append(envelope.model_dump(mode="json"))
+
+    activity_log_id = str(uuid4())
+    base = _event(
+        event_type="activity_log.created.v2",
+        payload={
+            "contractVersion": 2,
+            "eventType": "activity_log.created.v2",
+            "activityLogId": activity_log_id,
+            "category": "IT Activity",
+            "actorRole": "IT Personnel",
+        },
+    )
+    event = replace(
+        base,
+        aggregate_type="activity_log",
+        aggregate_id=activity_log_id,
+        aggregate_version=1,
+        enterprise_id=None,
+        site_id=None,
+    )
+
+    await OperationalRealtimePublisher(broadcast=broadcast).publish(
+        topic="operational.resource-invalidations.v2",
+        event=event,
+        idempotency_key=event.event_key,
+    )
+
+    assert envelopes[0]["data"]["resource"] == {
+        "type": "activity_log",
+        "id": activity_log_id,
+        "version": 1,
+    }
+    assert envelopes[0]["data"]["invalidates"] == ["/activity-logs"]
+    assert envelopes[0]["data"]["audienceRoles"] == ["admin", "it"]
+
+
+@pytest.mark.asyncio
 async def test_notification_projection_ignores_simulation_and_audit_events() -> None:
     projection = ReportingNotificationProjection()
     db = AsyncMock()

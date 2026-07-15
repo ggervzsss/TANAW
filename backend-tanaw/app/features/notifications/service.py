@@ -1,21 +1,22 @@
-import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
+from app.core.keyset_pagination import decode_cursor, encode_cursor, filter_fingerprint
+from app.core.pagination_schemas import CursorPageInfo
+from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.settings import get_system_settings, system_settings_values
 from app.features.events.operational_resources import enqueue_operational_resource_event
 from app.features.notifications.models import UserNotification
-from app.features.notifications.schemas import UserNotificationSummary
+from app.features.notifications.schemas import UserNotificationPage, UserNotificationSummary
 from app.features.topology.account_scope import (
     get_enterprise_account_by_identifier,
     load_account_topology,
 )
 
-SYSTEM_SETTINGS_ID = "default"
 NOTIFY_FAILED_LOGIN_LOCKOUT_KEY = "notifications.failedLoginLockoutAlerts"
 
 
@@ -43,17 +44,8 @@ def to_user_notification_summary(notification: UserNotification) -> UserNotifica
 
 
 async def system_setting_enabled(db: AsyncSession, key: str, *, default: bool = True) -> bool:
-    record = await db.scalar(
-        select(SystemConfiguration).where(SystemConfiguration.id == SYSTEM_SETTINGS_ID)
-    )
-    if record is None:
-        return default
-    try:
-        values = json.loads(record.values_json)
-    except json.JSONDecodeError:
-        return default
     return resolve_system_setting_enabled(
-        values if isinstance(values, dict) else None, key, default=default
+        system_settings_values(await get_system_settings(db)), key, default=default
     )
 
 
@@ -65,15 +57,48 @@ def resolve_system_setting_enabled(
 
 
 async def list_user_notifications(
-    db: AsyncSession, account: Account
-) -> list[UserNotificationSummary]:
-    result = await db.scalars(
+    db: AsyncSession, account: Account, *, limit: int, cursor: str | None
+) -> UserNotificationPage:
+    fingerprint = filter_fingerprint({"accountId": str(account.id), "role": account.role.value})
+    statement = (
         select(UserNotification)
         .where(UserNotification.recipient_account_id == account.id)
-        .order_by(UserNotification.created_at.desc())
-        .limit(100)
+        .order_by(UserNotification.created_at.desc(), UserNotification.id.desc())
+        .limit(limit + 1)
     )
-    return [to_user_notification_summary(notification) for notification in result]
+    if cursor is not None:
+        cursor_at, cursor_id = decode_cursor(cursor, fingerprint=fingerprint)
+        statement = statement.where(
+            or_(
+                UserNotification.created_at < cursor_at,
+                and_(
+                    UserNotification.created_at == cursor_at,
+                    UserNotification.id < cursor_id,
+                ),
+            )
+        )
+    rows = (await db.scalars(statement)).all()
+    selected = rows[:limit]
+    has_more = len(rows) > limit
+    next_cursor = (
+        encode_cursor(
+            occurred_at=selected[-1].created_at,
+            resource_id=selected[-1].id,
+            fingerprint=fingerprint,
+        )
+        if has_more and selected
+        else None
+    )
+    items = [to_user_notification_summary(notification) for notification in selected]
+    return UserNotificationPage(
+        items=items,
+        page=CursorPageInfo(
+            limit=limit,
+            returnedCount=len(items),
+            hasMore=has_more,
+            nextCursor=next_cursor,
+        ),
+    )
 
 
 async def create_user_notification(

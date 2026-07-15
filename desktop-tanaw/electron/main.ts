@@ -740,7 +740,7 @@ function requireReadyMlLaunch() {
 
 function getMlRequestTimeout(requestPath: string) {
   if (requestPath === "/camera/start") return 30_000;
-  if (requestPath === "/mock/prepare" || requestPath === "/mock/start") return 15_000;
+  if (requestPath === "/simulations/prepare" || requestPath === "/simulations/start") return 15_000;
   if (requestPath === "/context/enterprise") return 10_000;
   return 8_000;
 }

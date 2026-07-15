@@ -81,7 +81,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
   const createMutation = useMutation({
     mutationFn: createEnterpriseAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       toast.success("Enterprise account created; activation email queued");
       onClose();
     },

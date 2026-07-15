@@ -6,6 +6,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
@@ -14,6 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.keyset_pagination import ReadCursorError
 from app.db.session import get_db
 from app.features.accounts.dependencies import (
     require_roles,
@@ -22,7 +24,6 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.assets.runtime import get_asset_storage
 from app.features.assets.storage import (
     AssetStorage,
@@ -43,6 +44,7 @@ from app.features.support.schemas import (
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
+    SupportTicketPage,
     SupportTicketStatusUpdate,
     SupportTicketSummary,
 )
@@ -67,12 +69,19 @@ EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 
 
-@router.get("/tickets", response_model=list[SupportTicketSummary])
+@router.get("/tickets", response_model=SupportTicketPage)
 async def list_tickets(
     account: TicketReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[SupportTicketSummary]:
-    return await list_support_tickets(db, account)
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> SupportTicketPage:
+    try:
+        return await list_support_tickets(db, account, limit=limit, cursor=cursor)
+    except ReadCursorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.get("/tickets/{ticket_id}", response_model=SupportTicketDetail)
@@ -402,7 +411,7 @@ async def record_operational_log(
     source_id: str,
     metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category=category,  # type: ignore[arg-type]
@@ -417,4 +426,3 @@ async def record_operational_log(
         ),
     )
     await db.commit()
-    await activity_log_manager.broadcast(log)

@@ -23,6 +23,7 @@ export type MapEnterprise = {
   gatewayStatus?: GatewayStatus;
   freshnessState?: "fresh" | "stale" | "offline";
   topologyStatus?: "ready" | "unlinked" | "ambiguous";
+  locationWarning?: string | null;
 };
 
 export type MapSite = Omit<MapEnterprise, "lat" | "lng"> & {

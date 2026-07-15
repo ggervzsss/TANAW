@@ -2,16 +2,15 @@ import random
 from datetime import UTC, datetime
 
 from app.core.password_policy import validate_password_policy
-from app.features.mock_data.cli import (
+from app.features.simulation.schemas import SimulationPreparationCounts
+from app.features.simulation.seed_cli import (
     ENTERPRISES,
     LGU_ACCOUNTS,
     REPORTING_STAFF_NAME,
     TEST_ACCOUNT_PASSWORD,
     create_prepared_report_counts,
-    desktop_preparation_payload,
-    mock_preparation_counts,
+    simulation_preparation_counts,
 )
-from app.features.simulation.schemas import MockPreparationCounts
 
 
 def test_generated_enterprises_match_configured_locations_and_contacts() -> None:
@@ -94,7 +93,7 @@ def test_generated_enterprises_match_configured_locations_and_contacts() -> None
     assert len({enterprise.phone for enterprise in ENTERPRISES}) == len(ENTERPRISES)
 
 
-def test_generated_account_content_has_no_mock_label() -> None:
+def test_generated_account_content_has_no_legacy_label() -> None:
     values = [TEST_ACCOUNT_PASSWORD, REPORTING_STAFF_NAME]
     for enterprise in ENTERPRISES:
         values.extend(
@@ -128,8 +127,8 @@ def test_prepared_counts_are_bounded_to_two_canonical_periods() -> None:
     ]
 
 
-def test_mock_preparation_persists_canonical_period_identity_and_manila_bounds() -> None:
-    counts = mock_preparation_counts(
+def test_simulation_preparation_persists_canonical_period_identity_and_manila_bounds() -> None:
+    counts = simulation_preparation_counts(
         month_start=datetime(2026, 6, 1, tzinfo=UTC),
         entries=100,
         exits=40,
@@ -138,7 +137,7 @@ def test_mock_preparation_persists_canonical_period_identity_and_manila_bounds()
         period_label_value="Jun 1 - Jun 30, 2026",
     )
 
-    parsed = MockPreparationCounts.model_validate(counts)
+    parsed = SimulationPreparationCounts.model_validate(counts)
 
     assert parsed.period == "Jun 1 - Jun 30, 2026"
     assert parsed.periodKey == "month:Asia/Manila:2026-06"
@@ -148,8 +147,8 @@ def test_mock_preparation_persists_canonical_period_identity_and_manila_bounds()
     }
 
 
-def test_mock_preparation_rejects_label_only_or_mismatched_period_identity() -> None:
-    counts = mock_preparation_counts(
+def test_simulation_preparation_rejects_label_only_or_mismatched_period_identity() -> None:
+    counts = simulation_preparation_counts(
         month_start=datetime(2026, 12, 1, tzinfo=UTC),
         entries=10,
         exits=4,
@@ -169,30 +168,8 @@ def test_mock_preparation_rejects_label_only_or_mismatched_period_identity() -> 
 
     for candidate in (invalid_key, invalid_window):
         try:
-            MockPreparationCounts.model_validate(candidate)
+            SimulationPreparationCounts.model_validate(candidate)
         except ValueError:
             pass
         else:  # pragma: no cover - assertion branch
-            raise AssertionError("Invalid mock-preparation period identity was accepted.")
-
-
-def test_optional_desktop_callback_forwards_canonical_period_contract() -> None:
-    counts = mock_preparation_counts(
-        month_start=datetime(2026, 6, 1, tzinfo=UTC),
-        entries=100,
-        exits=40,
-        unique_count=75,
-        peak_occupancy=61,
-        period_label_value="Jun 1 - Jun 30, 2026",
-    )
-
-    payload = desktop_preparation_payload(
-        run_id="run-1",
-        enterprise_id="enterprise-1",
-        enterprise_name="Enterprise One",
-        prepared=counts,
-    )
-
-    assert "period" not in payload
-    assert payload["period_id"] == "month:Asia/Manila:2026-06"
-    assert payload["source_window"] == counts["sourceWindow"]
+            raise AssertionError("Invalid simulation period identity was accepted.")

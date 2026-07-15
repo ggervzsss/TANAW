@@ -1,6 +1,7 @@
 import { staffApi } from "../../../lib/axios";
 import { appendClientGeneration } from "../../../config/client-generation";
 import { useAuthStore } from "../../login/stores/auth-store";
+import { collectCursorPages, type CursorPage } from "../../../lib/cursor-pagination";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -58,8 +59,12 @@ export function parseOperationalNotificationInvalidation(value: string, recipien
 }
 
 export async function listNotifications() {
-  const response = await staffApi.get<BackendNotification[]>("/operational/notifications");
-  return response.data;
+  return collectCursorPages(async (cursor) => {
+    const response = await staffApi.get<CursorPage<BackendNotification>>("/operational/notifications", {
+      params: { limit: 100, ...(cursor ? { cursor } : {}) },
+    });
+    return response.data;
+  }, "notification");
 }
 
 export async function updateNotificationRead(notificationId: string, read: boolean) {

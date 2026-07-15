@@ -443,6 +443,24 @@ def _invalidation(event: DomainEventEnvelope) -> _Invalidation | None:
             recipient_account_id=recipient_account_id,
         )
 
+    if event.event_type == "activity_log.created.v2":
+        activity_log_id = _string(payload.get("activityLogId"))
+        if (
+            activity_log_id is None
+            or activity_log_id != event.aggregate_id
+            or event.aggregate_type != "activity_log"
+            or event.enterprise_id is not None
+            or event.site_id is not None
+        ):
+            raise _invalid_realtime_event("An activity-log event has an invalid scope.")
+        return _Invalidation(
+            resource_type="activity_log",
+            resource_id=activity_log_id,
+            resource_version=event.aggregate_version,
+            invalidates=("/activity-logs",),
+            audience_roles=roles,
+        )
+
     if event.event_type.startswith("enterprise_report."):
         if event.event_type not in {
             "enterprise_report.revision_submitted",
@@ -568,6 +586,18 @@ def _audience_roles(event: DomainEventEnvelope) -> tuple[str, ...]:
     if event.event_type.startswith("user_notification."):
         recipient_role = _string(event.payload.get("recipientRole"))
         return (recipient_role,) if recipient_role in {"admin", "it", "staff", "enterprise"} else ()
+    if event.event_type == "activity_log.created.v2":
+        category = _string(event.payload.get("category"))
+        actor_role = _string(event.payload.get("actorRole"))
+        roles = ["admin"]
+        if (
+            category in {"System", "IT Activity", "Enterprise Activity"}
+            or actor_role == "IT Personnel"
+        ):
+            roles.append("it")
+        if category in {"Staff Submission", "Staff Operation"}:
+            roles.append("staff")
+        return tuple(roles)
     if event.event_type == "enterprise_report.revision_submitted":
         return ("staff", "enterprise")
     if event.event_type.startswith("enterprise_report."):

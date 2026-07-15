@@ -43,7 +43,7 @@ def test_log_retention_cutoff_uses_selected_days() -> None:
 
 
 @pytest.mark.asyncio
-async def test_purge_expired_activity_logs_deletes_before_cutoff_and_commits() -> None:
+async def test_purge_expired_activity_logs_uses_the_caller_owned_transaction() -> None:
     fake_db = _FakeAsyncSession(rowcount=4)
 
     deleted_count = await purge_expired_activity_logs(
@@ -53,7 +53,7 @@ async def test_purge_expired_activity_logs_deletes_before_cutoff_and_commits() -
     )
 
     assert deleted_count == 4
-    assert fake_db.committed is True
+    assert fake_db.committed is False
     assert fake_db.statement is not None
     statement_text = str(fake_db.statement)
     assert "DELETE FROM activity_logs" in statement_text

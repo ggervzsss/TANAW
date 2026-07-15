@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.core.pagination_schemas import CursorPageInfo
 
 ActivityLogCategory = Literal[
     "IT Activity",
@@ -29,7 +31,14 @@ class ActivityLogSummary(BaseModel):
     metadata: dict[str, str | int | float | bool | None] | None = None
 
 
+class ActivityLogPage(BaseModel):
+    items: list[ActivityLogSummary]
+    page: CursorPageInfo
+
+
 class ActivityLogCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     category: ActivityLogCategory
     severity: ActivityLogSeverity = "Info"
     actor: str = Field(min_length=1, max_length=120)
@@ -39,8 +48,6 @@ class ActivityLogCreate(BaseModel):
     summary: str = Field(min_length=1, max_length=1000)
     sourceId: str | None = Field(default=None, max_length=120)
     metadata: dict[str, str | int | float | bool | None] | None = None
-    sourceKind: Literal["real", "mock", "hybrid"] = "real"
-    mockRunId: str | None = Field(default=None, max_length=36)
 
 
 class ActivityLogPurgeResponse(BaseModel):

@@ -38,13 +38,13 @@ def record_metric_rollups(
             """
             insert into metric_rollups (
                 grain, bucket_start_at, bucket_end_at, reporting_period_id,
-                business_date, camera_key, source_kind, mock_run_key, entries,
+                business_date, camera_key, classification, simulation_run_key, entries,
                 exits, unique_entries, confirmed_unique_entries,
                 degraded_unique_entries, peak_occupancy, last_occupancy,
                 first_event_at, last_event_at, event_count, updated_at
             )
             values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-            on conflict(grain, bucket_start_at, camera_key, source_kind, mock_run_key)
+            on conflict(grain, bucket_start_at, camera_key, classification, simulation_run_key)
             do update set
                 entries = metric_rollups.entries + excluded.entries,
                 exits = metric_rollups.exits + excluded.exits,
@@ -69,8 +69,8 @@ def record_metric_rollups(
                 reporting_period.period_id,
                 business_date,
                 camera_key,
-                str(event.get("source_kind") or "real"),
-                str(event.get("mock_run_id") or ""),
+                str(event.get("classification") or "official"),
+                str(event.get("simulation_run_id") or ""),
                 values["entries"],
                 values["exits"],
                 values["unique_entries"],

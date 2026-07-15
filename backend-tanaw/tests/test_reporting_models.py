@@ -235,7 +235,6 @@ def _topology(engine: Engine) -> tuple[str, str, str]:
             classification="official",
             site_code="primary",
             name="Primary site",
-            building_capacity=100,
         )
         session.add(site)
         session.commit()

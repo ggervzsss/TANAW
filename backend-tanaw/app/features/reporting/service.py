@@ -351,10 +351,10 @@ async def _resolve_source_site(
             EdgeDevice.lifecycle_state == "active",
             EnterpriseSite.enterprise_id == access.enterprise_id,
             EnterpriseSite.classification == access.classification,
-            EnterpriseSite.effective_from <= evaluated_at,
+            EnterpriseSite.registered_at <= evaluated_at,
             or_(
-                EnterpriseSite.effective_to.is_(None),
-                EnterpriseSite.effective_to > evaluated_at,
+                EnterpriseSite.retired_at.is_(None),
+                EnterpriseSite.retired_at > evaluated_at,
             ),
         )
     )

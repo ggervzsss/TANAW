@@ -9,17 +9,11 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.core.pagination_schemas import CursorPageInfo
 from app.features.reporting.envelopes import ContractModel
 
 OfficialClassification = Literal["official"]
 ReportWorkflowState = Literal["submitted", "returned", "accepted", "consolidated"]
-
-
-class CursorPageInfo(ContractModel):
-    limit: int = Field(ge=1)
-    returnedCount: int = Field(ge=0)
-    hasMore: bool
-    nextCursor: str | None
 
 
 class ReportingPeriodResource(ContractModel):
@@ -87,7 +81,7 @@ class ReportMetricFactResource(ContractModel):
     definitionVersion: int = Field(ge=1)
     value: Decimal | None
     unit: str
-    grain: Literal["camera", "site", "enterprise"]
+    grain: Literal["site", "enterprise"]
     windowStart: datetime
     windowEnd: datetime
     timezone: Literal["Asia/Manila"]

@@ -5,9 +5,8 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
-    SystemConfiguration,
+    SeedState,
+    SystemSetting,
 )
 from app.features.activity_logs.models import ActivityLog
 from app.features.alerts.models import OperationalAlert, SiteSyncAlertState
@@ -58,7 +57,7 @@ from app.features.reporting.models import (
     ReportRevision,
     ReportSourceBatch,
 )
-from app.features.simulation.models import MockDataRun, MockDataRunAccount
+from app.features.simulation.models import SimulationRun, SimulationRunAccount
 from app.features.support.models import SupportTicket, SupportTicketMessage
 from app.features.telemetry.models import (
     DeviceHealthSample,
@@ -76,6 +75,7 @@ from app.features.topology.models import (
     EnterpriseMembership,
     EnterpriseSite,
     MembershipRole,
+    SiteLocationVersion,
     TopologyClassification,
 )
 
@@ -92,8 +92,6 @@ __all__ = [
     "ActivityLog",
     "Base",
     "Camera",
-    "DeliveryStatus",
-    "DevDelivery",
     "DeviceHealthSample",
     "DeviceTelemetryEpoch",
     "SiteTelemetryHourlyRollup",
@@ -121,8 +119,8 @@ __all__ = [
     "FinalReportScopeMember",
     "FinalReportSourceClaim",
     "FinalReportVersion",
-    "MockDataRun",
-    "MockDataRunAccount",
+    "SimulationRun",
+    "SimulationRunAccount",
     "MembershipRole",
     "OperationalAlert",
     "PasswordResetChallenge",
@@ -140,7 +138,9 @@ __all__ = [
     "SupportTicket",
     "SupportTicketMessage",
     "SupportAttachment",
-    "SystemConfiguration",
+    "SeedState",
+    "SiteLocationVersion",
+    "SystemSetting",
     "TelemetryMetricFact",
     "TelemetryObservation",
     "TopologyClassification",

@@ -32,9 +32,12 @@ from app.storage.local_schema import (
     upsert_reporting_period,
 )
 from app.storage.outbox import acknowledge as acknowledge_outbox
+from app.storage.outbox import get_recovery_item as get_outbox_recovery_item
 from app.storage.outbox import health as outbox_health
 from app.storage.outbox import list_ready_items as list_ready_outbox_items
+from app.storage.outbox import list_recovery_items as list_outbox_recovery_items
 from app.storage.outbox import record_failure as record_outbox_failure
+from app.storage.outbox import requeue as requeue_outbox_item
 from app.storage.report_contract import (
     REPORT_OUTBOX_CONTRACT_VERSION,
     REPORT_OUTBOX_ENDPOINT,
@@ -89,10 +92,10 @@ select
         when outbox.status = 'acknowledged' then 'synced'
         else 'pending_cloud_sync'
     end as sync_status,
-    revision.source_kind,
-    revision.mock_run_id,
+    revision.classification,
+    revision.simulation_run_id,
     outbox.outbox_item_id,
-    outbox.acknowledged_at as synced_at,
+    outbox.acknowledged_at,
     report.raw_purged_at
 from local_reports as report
 join reporting_periods as period
@@ -186,8 +189,9 @@ class LocalLedger:
 
         def write_event(connection: sqlite3.Connection) -> None:
             upsert_reporting_period(connection, reporting_period)
+            raw_central_camera_id = payload.get("central_camera_id", payload.get("centralCameraId"))
             central_camera_id = (
-                str(UUID(camera_key)) if not camera_key.startswith("unassigned:") else None
+                str(UUID(str(raw_central_camera_id))) if raw_central_camera_id is not None else None
             )
             upsert_local_camera(
                 connection,
@@ -223,8 +227,8 @@ class LocalLedger:
                     identity_confidence,
                     payload_schema_version,
                     attributes_json,
-                    source_kind,
-                    mock_run_id
+                    classification,
+                    simulation_run_id
                 )
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                 """,
@@ -248,8 +252,8 @@ class LocalLedger:
                     payload.get("reid_decision"),
                     payload.get("identity_confidence"),
                     attributes_json,
-                    payload.get("source_kind") or "real",
-                    payload.get("mock_run_id"),
+                    payload.get("classification") or "official",
+                    payload.get("simulation_run_id"),
                 ),
             )
             record_metric_rollups(
@@ -641,8 +645,15 @@ class LocalLedger:
                 ),
             ),
         )
+        raw_central_camera_id = payload.get(
+            "central_camera_id",
+            payload.get(
+                "centralCameraId",
+                camera_config.get("central_camera_id", camera_config.get("centralCameraId")),
+            ),
+        )
         central_camera_id = (
-            str(UUID(camera_key)) if not camera_key.startswith("unassigned:") else None
+            str(UUID(str(raw_central_camera_id))) if raw_central_camera_id is not None else None
         )
 
         def write_state(connection: sqlite3.Connection) -> None:
@@ -709,8 +720,8 @@ class LocalLedger:
         reason: str,
         actor_id: str | None = None,
         actor_name: str | None = None,
-        source_kind: str = "real",
-        mock_run_id: str | None = None,
+        classification: str = "official",
+        simulation_run_id: str | None = None,
         recorded_at: str | None = None,
     ) -> dict[str, Any]:
         correction_id = str(uuid4())
@@ -726,8 +737,8 @@ class LocalLedger:
             "reason": reason,
             "actor_id": actor_id,
             "actor_name": actor_name,
-            "source_kind": source_kind,
-            "mock_run_id": mock_run_id,
+            "classification": classification,
+            "simulation_run_id": simulation_run_id,
             "recorded_at": recorded_at,
         }
 
@@ -744,8 +755,8 @@ class LocalLedger:
                     reason,
                     actor_id,
                     actor_name,
-                    source_kind,
-                    mock_run_id,
+                    classification,
+                    simulation_run_id,
                     recorded_at,
                     payload_json
                 )
@@ -761,8 +772,8 @@ class LocalLedger:
                     reason,
                     actor_id,
                     actor_name,
-                    source_kind,
-                    mock_run_id,
+                    classification,
+                    simulation_run_id,
                     recorded_at,
                     json.dumps(payload, sort_keys=True),
                 ),
@@ -785,8 +796,8 @@ class LocalLedger:
                     reason,
                     actor_id,
                     actor_name,
-                    source_kind,
-                    mock_run_id,
+                    classification,
+                    simulation_run_id,
                     recorded_at
                 from occupancy_corrections
                 order by recorded_at desc
@@ -932,7 +943,8 @@ class LocalLedger:
         if include_submitted:
             source_rows = connection.execute(
                 f"""
-                select distinct source_kind, nullif(mock_run_key, '') as mock_run_id
+                select distinct classification,
+                    nullif(simulation_run_key, '') as simulation_run_id
                 from metric_rollups
                 where {rollup_filter}
                 """,
@@ -941,7 +953,7 @@ class LocalLedger:
         else:
             source_rows = connection.execute(
                 f"""
-                select distinct source_kind, mock_run_id
+                select distinct classification, simulation_run_id
                 from count_events
                 where {event_filter}
                 """,
@@ -967,7 +979,7 @@ class LocalLedger:
         normalized_correction_delta = _safe_int(correction_delta)
         current_occupancy = max(0, entries - exits + normalized_correction_delta)
         estimated_unique_count = _safe_int(row["unique_entries"])
-        source_kind, mock_run_id = _provenance_for_rows(source_rows)
+        classification, simulation_run_id = _classification_for_rows(source_rows)
         return {
             "entries": entries,
             "exits": exits,
@@ -986,8 +998,8 @@ class LocalLedger:
             "unclassified_events": _safe_int(unclassified_count),
             "first_event_at": row["first_event_at"],
             "last_event_at": row["last_event_at"],
-            "source_kind": source_kind,
-            "mock_run_id": mock_run_id,
+            "classification": classification,
+            "simulation_run_id": simulation_run_id,
             "period_id": selected_period.period_id if selected_period else None,
             "period": selected_period.label if selected_period else None,
             "starts_at_utc": (
@@ -1127,8 +1139,8 @@ class LocalLedger:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
-        source_kind: str | None = None,
-        mock_run_id: str | None = None,
+        classification: str | None = None,
+        simulation_run_id: str | None = None,
         *,
         idempotency_key: str | None = None,
         command_id: str | None = None,
@@ -1145,8 +1157,8 @@ class LocalLedger:
             "notes": notes,
             "metrics": requested_metrics,
             "payload": report_payload,
-            "sourceKind": source_kind,
-            "mockRunId": mock_run_id,
+            "classification": classification,
+            "simulationRunId": simulation_run_id,
         }
         request_hash = canonical_hash(request_document)
         resolved_idempotency_key = idempotency_key or f"local:{report_id}:{request_hash}"
@@ -1236,7 +1248,7 @@ class LocalLedger:
                     from count_events
                     where {_open_event_filter()}
                       and reporting_period_id is null
-                      and source_kind in ('real', 'hybrid')
+                      and classification = 'official'
                     """
                 ).fetchone()[0]
                 if unclassified_official_events:
@@ -1246,40 +1258,47 @@ class LocalLedger:
                         "instead of assigning them to the current month."
                     )
 
-            resolved_source_kind = source_kind or (
-                str(existing_report["source_kind"])
-                if existing_report is not None and existing_report["source_kind"]
-                else str(summary["source_kind"])
+            resolved_classification = classification or (
+                str(existing_report["classification"])
+                if existing_report is not None and existing_report["classification"]
+                else str(summary["classification"])
             )
-            resolved_mock_run_id = mock_run_id or (
-                str(existing_report["mock_run_id"])
-                if existing_report is not None and existing_report["mock_run_id"]
-                else str(summary["mock_run_id"])
-                if summary["mock_run_id"]
+            resolved_simulation_run_id = simulation_run_id or (
+                str(existing_report["simulation_run_id"])
+                if existing_report is not None and existing_report["simulation_run_id"]
+                else str(summary["simulation_run_id"])
+                if summary["simulation_run_id"]
                 else None
             )
-            if resolved_source_kind not in {"real", "mock", "hybrid"}:
-                raise ValueError("Report source kind must be real, mock, or hybrid.")
+            if resolved_classification not in {"official", "simulation"}:
+                raise ValueError("Report classification must be official or simulation.")
+            if (resolved_classification == "official") != (resolved_simulation_run_id is None):
+                raise ValueError(
+                    "Official reports cannot reference a simulation run, and simulation "
+                    "reports must reference one."
+                )
 
             selected_events: list[sqlite3.Row] = []
             if should_consume_open_events:
                 selected_events = connection.execute(
                     f"""
                     select
-                        event_id,
-                        recorded_at,
-                        camera_id,
-                        camera_name,
-                        camera_key,
-                        camera_event_sequence,
-                        source_kind,
-                        mock_run_id
-                    from count_events
-                    where {_open_event_filter()}
-                      and reporting_period_id = ?
-                      and recorded_at >= ?
-                      and recorded_at < ?
-                    order by recorded_at, event_id
+                        event.event_id,
+                        event.recorded_at,
+                        event.camera_id,
+                        event.camera_name,
+                        event.camera_key,
+                        event.camera_event_sequence,
+                        event.classification,
+                        event.simulation_run_id,
+                        camera.central_camera_id
+                    from count_events as event
+                    join local_cameras as camera on camera.camera_key = event.camera_key
+                    where {_open_event_filter("event")}
+                      and event.reporting_period_id = ?
+                      and event.recorded_at >= ?
+                      and event.recorded_at < ?
+                    order by event.recorded_at, event.event_id
                     """,
                     (
                         reporting_period.period_id,
@@ -1295,11 +1314,13 @@ class LocalLedger:
                         event.recorded_at,
                         event.camera_id,
                         event.camera_name,
-                        event.source_kind,
-                        event.mock_run_id,
+                        event.classification,
+                        event.simulation_run_id,
                         event.camera_key,
-                        event.camera_event_sequence
+                        event.camera_event_sequence,
+                        camera.central_camera_id
                     from count_events as event
+                    join local_cameras as camera on camera.camera_key = event.camera_key
                     join local_report_event_memberships as membership
                       on membership.event_id = event.event_id
                     where membership.report_revision_id = ?
@@ -1350,8 +1371,8 @@ class LocalLedger:
                 unique_count=_safe_int(summary["unique_count"]),
                 notes=notes,
                 payload=report_payload,
-                source_kind=resolved_source_kind,
-                mock_run_id=resolved_mock_run_id,
+                classification=resolved_classification,
+                simulation_run_id=resolved_simulation_run_id,
                 source_batches=[batch["document"] for batch in source_batches],
                 coverage_evidence=coverage,
             )
@@ -1398,8 +1419,8 @@ class LocalLedger:
                     notes,
                     payload_json,
                     canonical_payload_json,
-                    source_kind,
-                    mock_run_id
+                    classification,
+                    simulation_run_id
                 )
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -1420,8 +1441,8 @@ class LocalLedger:
                     notes,
                     canonical_json(report_payload),
                     canonical_payload,
-                    resolved_source_kind,
-                    resolved_mock_run_id,
+                    resolved_classification,
+                    resolved_simulation_run_id,
                 ),
             )
             _insert_source_batches_and_memberships(
@@ -1435,7 +1456,7 @@ class LocalLedger:
                 outbox_status = "dead_letter"
                 outbox_error_class = "missing_source_lineage"
                 outbox_error_message = "Report revision has no exact camera source batch."
-            elif resolved_source_kind != "real":
+            elif resolved_classification != "official":
                 outbox_status = "dead_letter"
                 outbox_error_class = "simulation_not_official"
                 outbox_error_message = "Simulation-derived reports cannot enter official intake."
@@ -1443,6 +1464,8 @@ class LocalLedger:
                 outbox_status = "ready"
                 outbox_error_class = None
                 outbox_error_message = None
+            initial_attempt_count = 1 if outbox_status == "dead_letter" else 0
+            initial_attempt_at = submitted_at if outbox_status == "dead_letter" else None
             connection.execute(
                 """
                 insert into sync_outbox_items (
@@ -1456,11 +1479,13 @@ class LocalLedger:
                     payload_hash,
                     status,
                     created_at,
-                    next_attempt_at
-                    ,last_error_class
-                    ,last_error_message
+                    next_attempt_at,
+                    attempt_count,
+                    last_attempt_at,
+                    last_error_class,
+                    last_error_message
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     outbox_item_id,
@@ -1474,10 +1499,29 @@ class LocalLedger:
                     outbox_status,
                     submitted_at,
                     submitted_at,
+                    initial_attempt_count,
+                    initial_attempt_at,
                     outbox_error_class,
                     outbox_error_message,
                 ),
             )
+            if outbox_status == "dead_letter":
+                connection.execute(
+                    """
+                    insert into sync_attempts (
+                        attempt_id, outbox_item_id, attempt_number, attempted_at,
+                        completed_at, outcome, error_class, error_message
+                    ) values (?, ?, 1, ?, ?, 'dead_letter', ?, ?)
+                    """,
+                    (
+                        str(uuid4()),
+                        outbox_item_id,
+                        submitted_at,
+                        submitted_at,
+                        outbox_error_class,
+                        outbox_error_message,
+                    ),
+                )
             connection.execute(
                 """
                 update local_reports
@@ -1512,6 +1556,29 @@ class LocalLedger:
     def sync_outbox_health(self) -> dict[str, int | str | None]:
         with self._connection() as connection:
             return outbox_health(connection)
+
+    def list_sync_outbox_recovery_items(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            return list_outbox_recovery_items(connection, limit=limit)
+
+    def get_sync_outbox_recovery_item(self, outbox_item_id: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            return get_outbox_recovery_item(connection, outbox_item_id=outbox_item_id)
+
+    def requeue_sync_outbox_item(
+        self,
+        outbox_item_id: str,
+        *,
+        reason: str,
+        requeued_at: str | None = None,
+    ) -> dict[str, Any]:
+        with self._connection(immediate=True) as connection:
+            return requeue_outbox_item(
+                connection,
+                outbox_item_id=outbox_item_id,
+                reason=reason,
+                requeued_at=requeued_at or _utc_now(),
+            )
 
     def acknowledge_sync_outbox_item(
         self,
@@ -1565,10 +1632,10 @@ class LocalLedger:
         with self._connection() as connection:
             return retention_inventory(connection, root=self._root)
 
-    def prepare_mock_counts(
+    def prepare_simulation_counts(
         self,
         *,
-        mock_run_id: str,
+        simulation_run_id: str,
         entries: int,
         exits: int,
         unique_count: int,
@@ -1585,21 +1652,21 @@ class LocalLedger:
                 f"""
                 select count(*)
                 from count_events
-                where mock_run_id = ?
+                where simulation_run_id = ?
                   and {_open_event_filter()}
                 """,
-                (mock_run_id,),
+                (simulation_run_id,),
             ).fetchone()[0]
             existing_open_period = connection.execute(
                 f"""
                 select reporting_period_id
                 from count_events
-                where mock_run_id = ?
+                where simulation_run_id = ?
                   and {_open_event_filter()}
                 order by recorded_at desc
                 limit 1
                 """,
-                (mock_run_id,),
+                (simulation_run_id,),
             ).fetchone()
             existing_period_report = connection.execute(
                 """
@@ -1607,10 +1674,10 @@ class LocalLedger:
                 from local_reports as report
                 join local_report_revisions as revision
                   on revision.revision_id = report.current_revision_id
-                where revision.mock_run_id = ?
+                where revision.simulation_run_id = ?
                   and report.reporting_period_id = ?
                 """,
-                (mock_run_id, reporting_period.period_id),
+                (simulation_run_id, reporting_period.period_id),
             ).fetchone()[0]
         if existing_period_report or (
             existing_open_events
@@ -1624,8 +1691,8 @@ class LocalLedger:
                 "prepared": False,
             }
 
-        self._remove_mock_metric_data(mock_run_id)
-        rng = random.Random(mock_run_id)
+        self._remove_simulation_metric_data(simulation_run_id)
+        rng = random.Random(simulation_run_id)
         entry_total = max(0, entries)
         exit_total = max(0, min(exits, entry_total))
         unique_total = max(0, min(unique_count, entry_total))
@@ -1690,8 +1757,8 @@ class LocalLedger:
                 "identity_confidence": "high"
                 if visitor_id
                 else ("degraded" if is_unique else None),
-                "source_kind": "mock",
-                "mock_run_id": mock_run_id,
+                "classification": "simulation",
+                "simulation_run_id": simulation_run_id,
                 "period": reporting_period.label,
                 "period_id": reporting_period.period_id,
                 "counts": {
@@ -1719,8 +1786,8 @@ class LocalLedger:
                     payload["reid_decision"],
                     payload["identity_confidence"],
                     _encode_event_attributes(payload),
-                    "mock",
-                    mock_run_id,
+                    "simulation",
+                    simulation_run_id,
                 )
             )
 
@@ -1751,7 +1818,7 @@ class LocalLedger:
                     entry_count, exit_count, occupancy_count, visitor_id, is_unique_entry,
                     reid_score, reid_decision, identity_confidence,
                     payload_schema_version, attributes_json,
-                    source_kind, mock_run_id
+                    classification, simulation_run_id
                 )
                     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                     """,
@@ -1772,34 +1839,34 @@ class LocalLedger:
             "prepared": True,
         }
 
-    def _remove_mock_metric_data(self, mock_run_id: str) -> None:
+    def _remove_simulation_metric_data(self, simulation_run_id: str) -> None:
         with self._connection() as connection:
             connection.execute(
-                "delete from count_events where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
-                (mock_run_id,),
+                "delete from count_events where simulation_run_id = ? and classification = 'simulation'",
+                (simulation_run_id,),
             )
             connection.execute(
-                "delete from metric_rollups where mock_run_key = ?",
-                (mock_run_id,),
+                "delete from metric_rollups where simulation_run_key = ?",
+                (simulation_run_id,),
             )
             connection.execute(
                 """
                 delete from occupancy_corrections
-                where mock_run_id = ?
-                  and source_kind in ('mock', 'hybrid')
+                where simulation_run_id = ?
+                  and classification = 'simulation'
                 """,
-                (mock_run_id,),
+                (simulation_run_id,),
             )
 
-    def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
-        if mock_run_id:
-            event_filter = "mock_run_id = ?"
-            params: tuple[str, ...] = (mock_run_id,)
-            report_filter = "revision.mock_run_id = ?"
+    def remove_simulation_data(self, simulation_run_id: str | None = None) -> dict[str, int]:
+        if simulation_run_id:
+            event_filter = "simulation_run_id = ?"
+            params: tuple[str, ...] = (simulation_run_id,)
+            report_filter = "revision.simulation_run_id = ?"
         else:
-            event_filter = "source_kind in ('mock', 'hybrid')"
+            event_filter = "classification = 'simulation'"
             params = ()
-            report_filter = "revision.source_kind in ('mock', 'hybrid')"
+            report_filter = "revision.classification = 'simulation'"
 
         with self._connection(immediate=True) as connection:
             count_events = connection.execute(
@@ -1831,7 +1898,7 @@ class LocalLedger:
                     join local_report_revisions as revision
                       on revision.revision_id = membership.report_revision_id
                     where revision.report_id in ({placeholders})
-                      and event.source_kind not in ('mock', 'hybrid')
+                      and event.classification = 'official'
                     """,
                     report_ids,
                 ).fetchone()[0]
@@ -1841,15 +1908,13 @@ class LocalLedger:
                 )
             connection.execute(f"delete from count_events where {event_filter}", params)
             connection.execute(f"delete from occupancy_corrections where {event_filter}", params)
-            if mock_run_id:
+            if simulation_run_id:
                 connection.execute(
-                    "delete from metric_rollups where mock_run_key = ?",
-                    (mock_run_id,),
+                    "delete from metric_rollups where simulation_run_key = ?",
+                    (simulation_run_id,),
                 )
             else:
-                connection.execute(
-                    "delete from metric_rollups where source_kind in ('mock', 'hybrid')"
-                )
+                connection.execute("delete from metric_rollups where classification = 'simulation'")
 
         return {
             "count_events": _safe_int(count_events),
@@ -1921,8 +1986,55 @@ class LocalLedger:
             retry_values["sleep"] = self._retry_sleep
         run_sqlite_write(operation_name, transaction, **retry_values)
 
-    def persistence_instrumentation(self) -> dict[str, int]:
+    def persistence_instrumentation(self) -> dict[str, int | float]:
         return self._ledger_writer.instrumentation()
+
+    def operational_diagnostics(self, *, observed_at: str | None = None) -> dict[str, Any]:
+        evaluated_at = parse_captured_at(observed_at or _utc_now())
+        period = monthly_period_for_captured_at(evaluated_at)
+        with self._connection() as connection:
+            persistence = connection.execute(
+                """
+                select
+                    count(*) as error_count,
+                    sum(case when resolved_at is null then 1 else 0 end) as unresolved_count,
+                    max(occurred_at) as last_error_at
+                from local_persistence_errors
+                """
+            ).fetchone()
+            reliability = connection.execute(
+                """
+                select
+                    coalesce(sum(reconnect_count), 0) as reconnect_attempts,
+                    sum(case when ended_at is null then 1 else 0 end) as active_sessions
+                from monitoring_sessions
+                """
+            ).fetchone()
+            coverage = build_coverage_summary(
+                connection,
+                period=period,
+                as_of=evaluated_at.isoformat(),
+            )
+        return {
+            "observed_at": evaluated_at.isoformat(),
+            "reporting_period_id": period.period_id,
+            "outbox": self.sync_outbox_health(),
+            "writer": self.persistence_instrumentation(),
+            "persistence": {
+                "error_count": _safe_int(persistence["error_count"]),
+                "unresolved_count": _safe_int(persistence["unresolved_count"]),
+                "last_error_at": persistence["last_error_at"],
+            },
+            "camera": {
+                "reconnect_attempts": _safe_int(reliability["reconnect_attempts"]),
+                "active_sessions": _safe_int(reliability["active_sessions"]),
+                "coverage_evidence_status": coverage["evidenceStatus"],
+                "monitored_seconds": coverage["monitoredSeconds"],
+                "expected_seconds": coverage["expectedSeconds"],
+                "coverage_ratio": coverage["coverageRatio"],
+                "gap_count": coverage["gapCount"],
+            },
+        }
 
     def ensure_initialized(self) -> None:
         self._initialize()
@@ -2017,8 +2129,8 @@ def _source_batches_for_events(
                 row["camera_key"],
                 row["camera_id"],
                 row["camera_name"],
-                str(row["source_kind"] or "real"),
-                row["mock_run_id"],
+                str(row["classification"] or "official"),
+                row["simulation_run_id"],
             )
         ].append(row)
 
@@ -2026,8 +2138,8 @@ def _source_batches_for_events(
     for key, rows in sorted(
         groups.items(), key=lambda item: tuple(str(value or "") for value in item[0])
     ):
-        camera_key, camera_id, camera_name, source_kind, mock_run_id = key
-        if str(camera_key).startswith("unassigned:") and source_kind in {"real", "hybrid"}:
+        camera_key, camera_id, camera_name, classification, simulation_run_id = key
+        if classification == "official" and rows[0]["central_camera_id"] is None:
             raise ValueError(
                 "Official camera events are not bound to a central camera UUID. "
                 "Synchronize camera topology before report submission."
@@ -2060,8 +2172,8 @@ def _source_batches_for_events(
                 "camera_id": camera_id,
                 "camera_name": camera_name,
                 "camera_key": camera_key,
-                "source_kind": source_kind,
-                "mock_run_id": mock_run_id,
+                "classification": classification,
+                "simulation_run_id": simulation_run_id,
                 "sequence_start": sequence_start,
                 "sequence_end": sequence_end,
                 "first_event_at": rows[0]["recorded_at"],
@@ -2092,9 +2204,9 @@ def _insert_source_batches_and_memberships(
                 reporting_period_id,
                 camera_id,
                 camera_name,
-                central_camera_key,
-                source_kind,
-                mock_run_id,
+                camera_key,
+                classification,
+                simulation_run_id,
                 event_sequence_start,
                 event_sequence_end_exclusive,
                 first_event_at,
@@ -2111,8 +2223,8 @@ def _insert_source_batches_and_memberships(
                 batch["camera_id"],
                 batch["camera_name"],
                 batch["camera_key"],
-                batch["source_kind"],
-                batch["mock_run_id"],
+                batch["classification"],
+                batch["simulation_run_id"],
                 batch["sequence_start"],
                 batch["sequence_end"],
                 batch["first_event_at"],
@@ -2142,6 +2254,23 @@ def _insert_source_batches_and_memberships(
             """,
             [(revision_id, str(row["event_id"]), batch["batch_id"], selected_at) for row in rows],
         )
+        persisted_event_ids = [
+            str(row["event_id"])
+            for row in connection.execute(
+                """
+                select event.event_id
+                from local_report_event_memberships as membership
+                join count_events as event on event.event_id = membership.event_id
+                where membership.batch_id = ?
+                order by event.camera_event_sequence
+                """,
+                (batch["batch_id"],),
+            ).fetchall()
+        ]
+        if len(persisted_event_ids) != int(document["eventCount"]):
+            raise RuntimeError("Report source-batch membership count did not persist exactly.")
+        if f"sha256:{canonical_hash(persisted_event_ids)}" != batch["event_checksum"]:
+            raise RuntimeError("Report source-batch membership hash did not persist exactly.")
 
 
 def _report_revision_record(connection: sqlite3.Connection, revision_id: str) -> dict[str, Any]:
@@ -2195,8 +2324,10 @@ def _revision_response_from_record(
         "unclassified_events": 0,
         "first_event_at": None,
         "last_event_at": None,
-        "source_kind": str(record["source_kind"]),
-        "mock_run_id": str(record["mock_run_id"]) if record["mock_run_id"] else None,
+        "classification": str(record["classification"]),
+        "simulation_run_id": (
+            str(record["simulation_run_id"]) if record["simulation_run_id"] else None
+        ),
         "period_id": str(record["period_id"]) if record["period_id"] else None,
         "period": str(record["period"]),
         "starts_at_utc": reporting_period.starts_at_utc.isoformat(),
@@ -2223,18 +2354,16 @@ def _safe_scope(value: str | None) -> str:
     return normalized[:160] or "unbound"
 
 
-def _provenance_for_rows(rows: list[sqlite3.Row]) -> tuple[str, str | None]:
+def _classification_for_rows(rows: list[sqlite3.Row]) -> tuple[str, str | None]:
     if not rows:
-        return "real", None
-    source_kinds = {str(row["source_kind"]) for row in rows}
-    run_ids = {str(row["mock_run_id"]) for row in rows if row["mock_run_id"]}
-    if "hybrid" in source_kinds or ("real" in source_kinds and "mock" in source_kinds):
-        source_kind = "hybrid"
-    elif source_kinds == {"mock"}:
-        source_kind = "mock"
-    else:
-        source_kind = "real"
-    return source_kind, run_ids.pop() if len(run_ids) == 1 else None
+        return "official", None
+    classifications = {str(row["classification"]) for row in rows}
+    run_ids = {str(row["simulation_run_id"]) for row in rows if row["simulation_run_id"]}
+    if classifications == {"official"}:
+        return "official", None
+    if classifications == {"simulation"} and len(run_ids) == 1:
+        return "simulation", run_ids.pop()
+    raise ValueError("Official and simulation evidence cannot be combined in one report scope.")
 
 
 def _open_event_filter(table_alias: str = "count_events") -> str:
@@ -2374,8 +2503,8 @@ def _local_report_row(row: sqlite3.Row) -> dict[str, Any]:
         "notes": row["notes"],
         "payload": payload if isinstance(payload, dict) else {},
         "sync_status": row["sync_status"],
-        "source_kind": row["source_kind"],
-        "mock_run_id": row["mock_run_id"],
-        "synced_at": row["synced_at"],
+        "classification": row["classification"],
+        "simulation_run_id": row["simulation_run_id"],
+        "acknowledged_at": row["acknowledged_at"],
         "raw_purged_at": row["raw_purged_at"],
     }

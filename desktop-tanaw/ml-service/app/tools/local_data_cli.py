@@ -261,16 +261,16 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
         if "count_events" in existing_tables:
             result["eventProvenance"] = [
                 {
-                    "sourceKind": row["source_kind"],
-                    "mockRunId": row["mock_run_id"],
+                    "classification": row["classification"],
+                    "simulationRunId": row["simulation_run_id"],
                     "count": row["record_count"],
                 }
                 for row in connection.execute(
                     """
-                    select source_kind, mock_run_id, count(*) as record_count
+                    select classification, simulation_run_id, count(*) as record_count
                     from count_events
-                    group by source_kind, mock_run_id
-                    order by source_kind, mock_run_id
+                    group by classification, simulation_run_id
+                    order by classification, simulation_run_id
                     """
                 )
             ]
@@ -298,7 +298,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                     """
                     select event.event_id, event.recorded_at, event.camera_name,
                            event.direction, event.occupancy_count, event.visitor_id,
-                           event.source_kind, event.mock_run_id, claim.report_id
+                           event.classification, event.simulation_run_id, claim.report_id
                     from count_events as event
                     left join local_report_event_claims as claim
                       on claim.event_id = event.event_id
@@ -316,8 +316,8 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                     select report.report_id, report.period_label as period,
                            revision.submitted_at, revision.entries, revision.exits,
                            revision.peak_occupancy, revision.unique_count,
-                           outbox.status as delivery_status, revision.source_kind,
-                           revision.mock_run_id, outbox.acknowledged_at
+                           outbox.status as delivery_status, revision.classification,
+                           revision.simulation_run_id, outbox.acknowledged_at
                     from local_reports as report
                     join local_report_revisions as revision
                       on revision.revision_id = report.current_revision_id
@@ -380,8 +380,8 @@ def _print_inspection(result: dict[str, Any]) -> None:
         print("  Event provenance:")
         if ledger["eventProvenance"]:
             for provenance in ledger["eventProvenance"]:
-                run = provenance["mockRunId"] or "-"
-                print(f"    {provenance['sourceKind']} / run {run}: {provenance['count']}")
+                run = provenance["simulationRunId"] or "-"
+                print(f"    {provenance['classification']} / run {run}: {provenance['count']}")
         else:
             print("    none")
         print("  Recent reports:")
@@ -389,7 +389,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             for report in ledger["recentReports"]:
                 print(
                     f"    {report['report_id']} | {report['period']} | "
-                    f"{report['source_kind']} | {report['delivery_status']}"
+                    f"{report['classification']} | {report['delivery_status']}"
                 )
         else:
             print("    none")
@@ -398,7 +398,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             for event in ledger["recentEvents"]:
                 print(
                     f"    {event['recorded_at']} | {event['direction']} | "
-                    f"{event['source_kind']} | report {event['report_id'] or '-'}"
+                    f"{event['classification']} | report {event['report_id'] or '-'}"
                 )
         else:
             print("    none")

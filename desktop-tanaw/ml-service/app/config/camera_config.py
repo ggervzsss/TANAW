@@ -25,7 +25,7 @@ RuntimeBackend = Literal["auto", "cuda", "openvino", "cpu"]
 TrackerProfile = Literal["auto", "bytetrack", "botsort"]
 ReIdMode = Literal["auto", "off", "fast", "quality"]
 UniqueCountingMode = Literal["entry_only", "estimated_reid"]
-SourceKind = Literal["real", "mock", "hybrid"]
+SourceClassification = Literal["official", "simulation"]
 SimulationMode = Literal["virtual", "hybrid"]
 SimulationScenario = Literal[
     "normal",
@@ -328,8 +328,8 @@ class MetricsSummaryResponse(BaseModel):
     unclassified_events: int = 0
     first_event_at: str | None = None
     last_event_at: str | None = None
-    source_kind: SourceKind = "real"
-    mock_run_id: str | None = None
+    classification: SourceClassification = "official"
+    simulation_run_id: str | None = None
     period_id: str | None = None
     period: str | None = None
     starts_at_utc: str | None = None
@@ -356,8 +356,8 @@ class OccupancyCorrectionResponse(BaseModel):
     reason: str
     actor_id: str | None = None
     actor_name: str | None = None
-    source_kind: SourceKind = "real"
-    mock_run_id: str | None = None
+    classification: SourceClassification = "official"
+    simulation_run_id: str | None = None
     recorded_at: str
 
 
@@ -523,8 +523,8 @@ class LocalReportRevisionResponse(MetricsSummaryResponse):
     sync_status: str
 
 
-class MockStartRequest(BaseModel):
-    mock_run_id: str = Field(..., min_length=1, max_length=80)
+class SimulationStartRequest(BaseModel):
+    simulation_run_id: str = Field(..., min_length=1, max_length=80)
     mode: SimulationMode = "virtual"
     scenario: SimulationScenario = "normal"
     events_per_minute: int = Field(default=12, ge=1, le=120)
@@ -536,7 +536,7 @@ class MockStartRequest(BaseModel):
     unique_entry_rate: float = Field(default=0.88, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
-    def validate_simulation_settings(self) -> MockStartRequest:
+    def validate_simulation_settings(self) -> SimulationStartRequest:
         if self.starting_occupancy is not None and self.starting_occupancy > self.capacity:
             raise ValueError("Starting occupancy cannot exceed venue capacity.")
         if self.scenario == "custom" and self.entry_probability is None:
@@ -544,12 +544,12 @@ class MockStartRequest(BaseModel):
         return self
 
 
-class MockManualEventRequest(BaseModel):
+class SimulationManualEventRequest(BaseModel):
     direction: Literal["entry", "exit"]
 
 
-class MockPrepareRequest(BaseModel):
-    mock_run_id: str = Field(..., min_length=1, max_length=80)
+class SimulationPrepareRequest(BaseModel):
+    simulation_run_id: str = Field(..., min_length=1, max_length=80)
     enterprise_id: str = Field(..., min_length=1, max_length=160)
     enterprise_name: str | None = Field(default=None, max_length=160)
     entries: int = Field(ge=1, le=100_000)
@@ -560,7 +560,7 @@ class MockPrepareRequest(BaseModel):
     source_window: ReportSourceWindow
 
     @model_validator(mode="after")
-    def validate_reporting_period(self) -> MockPrepareRequest:
+    def validate_reporting_period(self) -> SimulationPrepareRequest:
         monthly_period_from_identity(
             self.period_id,
             self.source_window.start,
@@ -569,20 +569,20 @@ class MockPrepareRequest(BaseModel):
         return self
 
 
-class MockPrepareResponse(MetricsSummaryResponse):
+class SimulationPrepareResponse(MetricsSummaryResponse):
     enterprise_id: str
     enterprise_name: str | None = None
     period: str | None = None
     prepared: bool = True
 
 
-class MockStatusResponse(BaseModel):
+class SimulationStatusResponse(BaseModel):
     running: bool
     paused: bool = False
     state: Literal["idle", "running", "paused", "stopped", "completed"] = "idle"
     mode: str | None = None
     scenario: str | None = None
-    mock_run_id: str | None = None
+    simulation_run_id: str | None = None
     events_generated: int = 0
     events_per_minute: int = 0
     requires_real_camera: bool = False
@@ -601,12 +601,12 @@ class MockStatusResponse(BaseModel):
     unsubmitted_events: int = 0
 
 
-class MockResetResponse(BaseModel):
+class SimulationResetResponse(BaseModel):
     stopped: bool
     removed: dict[str, int]
 
 
-class MockReportRequest(BaseModel):
+class SimulationReportRequest(BaseModel):
     report_id: str | None = Field(default=None, max_length=80)
     period_id: str = Field(..., min_length=1, max_length=80)
     source_window: ReportSourceWindow
@@ -614,7 +614,7 @@ class MockReportRequest(BaseModel):
     payload: dict | None = None
 
     @model_validator(mode="after")
-    def validate_reporting_period(self) -> MockReportRequest:
+    def validate_reporting_period(self) -> SimulationReportRequest:
         monthly_period_from_identity(
             self.period_id,
             self.source_window.start,
@@ -643,9 +643,9 @@ class LocalReportRecordResponse(BaseModel):
     notes: str | None = None
     payload: dict = Field(default_factory=dict)
     sync_status: str
-    source_kind: Literal["real", "mock", "hybrid"] = "real"
-    mock_run_id: str | None = None
-    synced_at: str | None = None
+    classification: SourceClassification = "official"
+    simulation_run_id: str | None = None
+    acknowledged_at: str | None = None
     raw_purged_at: str | None = None
 
 

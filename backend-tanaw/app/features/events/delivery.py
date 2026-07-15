@@ -13,6 +13,7 @@ from uuid import uuid4
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.features.events.contracts import (
     DeliveryResult,
     DomainEventDeliveryError,
@@ -93,6 +94,7 @@ class DeliveryQueueMetrics:
     retry_scheduled: int
     delivered: int
     dead_letter: int
+    oldest_pending_at: datetime | None
     oldest_ready_at: datetime | None
     oldest_lease_expiry_at: datetime | None
 
@@ -130,6 +132,7 @@ class DomainEventDeliveryEngine:
                     .join(DomainEvent, DomainEvent.id == DomainEventDelivery.domain_event_id)
                     .where(
                         DomainEvent.available_at <= claimed_at,
+                        DomainEventDelivery.destination.in_(tuple(self._handlers)),
                         or_(
                             and_(
                                 DomainEventDelivery.status.in_(("pending", "retry_scheduled")),
@@ -246,6 +249,9 @@ class DomainEventDeliveryEngine:
                     )
                 )
                 if receipt is not None:
+                    operational_observability.increment(
+                        OperationalCounter.DOMAIN_EVENT_CONSUMER_DEDUPLICATION
+                    )
                     if receipt.event_payload_hash != event.payload_hash:
                         raise DomainEventDeliveryError(
                             "The existing consumer receipt has a different event payload hash.",
@@ -286,6 +292,10 @@ class DomainEventDeliveryEngine:
                         started_at=claim.locked_at,
                         completed_at=completed_at,
                     )
+                )
+                operational_observability.observe_domain_event_publish_lag(
+                    available_at=event.available_at,
+                    delivered_at=completed_at,
                 )
             return DispatchOutcome.DELIVERED
         except DomainEventDeliveryError as exc:
@@ -404,6 +414,11 @@ async def read_delivery_queue_metrics(
             DomainEventDelivery.next_attempt_at <= observed_at,
         )
     )
+    oldest_pending_at = await db.scalar(
+        select(func.min(DomainEventDelivery.created_at)).where(
+            DomainEventDelivery.status.in_(("pending", "leased", "retry_scheduled"))
+        )
+    )
     oldest_lease_expiry_at = await db.scalar(
         select(func.min(DomainEventDelivery.lock_expires_at)).where(
             DomainEventDelivery.status == "leased"
@@ -415,6 +430,7 @@ async def read_delivery_queue_metrics(
         retry_scheduled=int(counts.get("retry_scheduled", 0)),
         delivered=int(counts.get("delivered", 0)),
         dead_letter=int(counts.get("dead_letter", 0)),
+        oldest_pending_at=oldest_pending_at,
         oldest_ready_at=oldest_ready_at,
         oldest_lease_expiry_at=oldest_lease_expiry_at,
     )

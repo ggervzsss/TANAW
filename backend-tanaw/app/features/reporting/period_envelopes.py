@@ -8,9 +8,9 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.core.pagination_schemas import CursorPageInfo
 from app.features.reporting.envelopes import ContractModel
 from app.features.reporting.obligation_envelopes import ObligationSummary
-from app.features.reporting.read_envelopes import CursorPageInfo
 
 ReportingPeriodStatus = Literal["scheduled", "open", "closed"]
 

@@ -12,22 +12,22 @@ logger = logging.getLogger(__name__)
 
 
 class SimulationRuntimeMixin:
-    _mock_thread: threading.Thread | None
-    _mock_stop_event: threading.Event | None
-    _mock_run_id: str | None
-    _mock_mode: str | None
-    _mock_scenario: str | None
-    _mock_started_at: str | None
-    _mock_started_monotonic: float | None
-    _mock_completed_at: str | None
+    _simulation_thread: threading.Thread | None
+    _simulation_stop_event: threading.Event | None
+    _simulation_run_id: str | None
+    _simulation_mode: str | None
+    _simulation_scenario: str | None
+    _simulation_started_at: str | None
+    _simulation_started_monotonic: float | None
+    _simulation_completed_at: str | None
 
     def __getattr__(self, name: str) -> Any:
         raise AttributeError(name)
 
-    def prepare_mock_counts(
+    def prepare_simulation_counts(
         self,
         *,
-        mock_run_id: str,
+        simulation_run_id: str,
         enterprise_id: str,
         enterprise_name: str | None,
         entries: int,
@@ -45,8 +45,8 @@ class SimulationRuntimeMixin:
             camera_id = self._config.camera_id if self._config else None
             camera_name = self._config.camera_name if self._config else None
 
-        summary = self._runtime_store.prepare_mock_counts(
-            mock_run_id=mock_run_id,
+        summary = self._runtime_store.prepare_simulation_counts(
+            simulation_run_id=simulation_run_id,
             entries=entries,
             exits=exits,
             unique_count=unique_count,
@@ -63,10 +63,10 @@ class SimulationRuntimeMixin:
             "prepared": bool(summary.get("prepared")),
         }
 
-    def start_mock_mode(
+    def start_simulation(
         self,
         *,
-        mock_run_id: str,
+        simulation_run_id: str,
         mode: str = "virtual",
         scenario: str = "normal",
         events_per_minute: int = 12,
@@ -81,59 +81,59 @@ class SimulationRuntimeMixin:
             if not self._enterprise_id:
                 raise ValueError("Log into an enterprise account before starting a simulation.")
             if mode == "hybrid" and (not self._state.running or self._config is None):
-                raise ValueError("Hybrid mock mode requires an active real camera session.")
+                raise ValueError("Hybrid simulation mode requires an active real camera session.")
 
-        self.stop_mock_mode()
+        self.stop_simulation()
         if starting_occupancy is not None:
-            self._set_mock_starting_occupancy(mock_run_id, mode, starting_occupancy)
+            self._set_simulation_starting_occupancy(simulation_run_id, mode, starting_occupancy)
 
         stop_event = threading.Event()
         with self._lock:
-            self._mock_stop_event = stop_event
-            self._mock_run_id = mock_run_id
-            self._mock_mode = mode
-            self._mock_scenario = scenario
-            self._mock_state = "running"
-            self._mock_paused = False
-            self._mock_events_per_minute = max(1, min(events_per_minute, 120))
-            self._mock_capacity = max(1, capacity)
-            self._mock_threshold_percent = max(1, min(threshold_percent, 100))
-            self._mock_duration_minutes = duration_minutes
-            self._mock_started_at = datetime.now(UTC).isoformat()
-            self._mock_started_monotonic = time.monotonic()
-            self._mock_completed_at = None
-            self._mock_entry_probability = entry_probability
-            self._mock_unique_entry_rate = max(0.0, min(unique_entry_rate, 1.0))
-            self._mock_events_generated = 0
-            self._mock_thread = threading.Thread(
-                target=self._mock_event_loop,
-                args=(stop_event, mock_run_id),
+            self._simulation_stop_event = stop_event
+            self._simulation_run_id = simulation_run_id
+            self._simulation_mode = mode
+            self._simulation_scenario = scenario
+            self._simulation_state = "running"
+            self._simulation_paused = False
+            self._simulation_events_per_minute = max(1, min(events_per_minute, 120))
+            self._simulation_capacity = max(1, capacity)
+            self._simulation_threshold_percent = max(1, min(threshold_percent, 100))
+            self._simulation_duration_minutes = duration_minutes
+            self._simulation_started_at = datetime.now(UTC).isoformat()
+            self._simulation_started_monotonic = time.monotonic()
+            self._simulation_completed_at = None
+            self._simulation_entry_probability = entry_probability
+            self._simulation_unique_entry_rate = max(0.0, min(unique_entry_rate, 1.0))
+            self._simulation_events_generated = 0
+            self._simulation_thread = threading.Thread(
+                target=self._simulation_event_loop,
+                args=(stop_event, simulation_run_id),
                 name="tanaw-live-simulation",
                 daemon=True,
             )
-            self._mock_thread.start()
-        return self.mock_status()
+            self._simulation_thread.start()
+        return self.simulation_status()
 
-    def pause_mock_mode(self) -> dict:
+    def pause_simulation(self) -> dict:
         with self._lock:
-            if self._mock_state != "running":
+            if self._simulation_state != "running":
                 raise ValueError("No running simulation is available to pause.")
-            self._mock_paused = True
-            self._mock_state = "paused"
-        return self.mock_status()
+            self._simulation_paused = True
+            self._simulation_state = "paused"
+        return self.simulation_status()
 
-    def resume_mock_mode(self) -> dict:
+    def resume_simulation(self) -> dict:
         with self._lock:
-            if self._mock_state != "paused" or self._mock_thread is None:
+            if self._simulation_state != "paused" or self._simulation_thread is None:
                 raise ValueError("No paused simulation is available to resume.")
-            self._mock_paused = False
-            self._mock_state = "running"
-        return self.mock_status()
+            self._simulation_paused = False
+            self._simulation_state = "running"
+        return self.simulation_status()
 
-    def stop_mock_mode(self) -> dict:
+    def stop_simulation(self) -> dict:
         with self._lock:
-            thread = self._mock_thread
-            stop_event = self._mock_stop_event
+            thread = self._simulation_thread
+            stop_event = self._simulation_stop_event
             if stop_event is not None:
                 stop_event.set()
 
@@ -141,71 +141,75 @@ class SimulationRuntimeMixin:
             thread.join(timeout=2)
 
         with self._lock:
-            self._mock_thread = None
-            self._mock_stop_event = None
-            self._mock_paused = False
-            if self._mock_state in {"running", "paused"}:
-                self._mock_state = "stopped"
-                self._mock_completed_at = datetime.now(UTC).isoformat()
-        return self.mock_status()
+            self._simulation_thread = None
+            self._simulation_stop_event = None
+            self._simulation_paused = False
+            if self._simulation_state in {"running", "paused"}:
+                self._simulation_state = "stopped"
+                self._simulation_completed_at = datetime.now(UTC).isoformat()
+        return self.simulation_status()
 
-    def reset_mock_data(self, mock_run_id: str | None = None) -> dict:
+    def reset_simulation_data(self, simulation_run_id: str | None = None) -> dict:
         with self._lock:
-            should_stop_current_run = mock_run_id is None or self._mock_run_id == mock_run_id
+            should_stop_current_run = (
+                simulation_run_id is None or self._simulation_run_id == simulation_run_id
+            )
         if should_stop_current_run:
-            self.stop_mock_mode()
-        removed = self._runtime_store.remove_mock_data(mock_run_id)
+            self.stop_simulation()
+        removed = self._runtime_store.remove_simulation_data(simulation_run_id)
         with self._lock:
-            if mock_run_id is None or self._mock_run_id == mock_run_id:
-                self._mock_run_id = None
-                self._mock_mode = None
-                self._mock_scenario = None
-                self._mock_state = "idle"
-                self._mock_events_generated = 0
-                self._mock_started_at = None
-                self._mock_started_monotonic = None
-                self._mock_completed_at = None
+            if simulation_run_id is None or self._simulation_run_id == simulation_run_id:
+                self._simulation_run_id = None
+                self._simulation_mode = None
+                self._simulation_scenario = None
+                self._simulation_state = "idle"
+                self._simulation_events_generated = 0
+                self._simulation_started_at = None
+                self._simulation_started_monotonic = None
+                self._simulation_completed_at = None
         return cast(dict, removed)
 
-    def append_mock_event(self, direction: str) -> dict:
+    def append_simulation_event(self, direction: str) -> dict:
         with self._lock:
-            if self._mock_state not in {"running", "paused"} or not self._mock_run_id:
+            if self._simulation_state not in {"running", "paused"} or not self._simulation_run_id:
                 raise ValueError("Start a simulation before adding manual events.")
-            mock_run_id = self._mock_run_id
-            mode = self._mock_mode or "virtual"
+            simulation_run_id = self._simulation_run_id
+            mode = self._simulation_mode or "virtual"
 
-        if not self._append_mock_count_event(direction, mock_run_id, mode):
+        if not self._append_simulation_count_event(direction, simulation_run_id, mode):
             if direction == "exit":
                 raise ValueError("An exit cannot be recorded while occupancy is zero.")
             raise ValueError("The simulated event could not be recorded.")
-        return self.mock_status()
+        return self.simulation_status()
 
-    def mock_status(self) -> dict:
+    def simulation_status(self) -> dict:
         summary = self._runtime_store.metrics_summary(include_submitted=True)
         with self._lock:
-            running = self._mock_thread is not None and self._mock_thread.is_alive()
+            running = self._simulation_thread is not None and self._simulation_thread.is_alive()
             prepared_run_id = (
-                summary["mock_run_id"] if summary["source_kind"] in {"mock", "hybrid"} else None
+                summary["simulation_run_id"]
+                if summary["classification"] in {"simulation"}
+                else None
             )
             return {
-                "running": running and self._mock_state == "running",
-                "paused": running and self._mock_state == "paused",
-                "state": self._mock_state,
-                "mode": self._mock_mode or ("prepared" if prepared_run_id else None),
-                "scenario": self._mock_scenario,
-                "mock_run_id": self._mock_run_id or prepared_run_id,
-                "events_generated": self._mock_events_generated
-                if self._mock_run_id
+                "running": running and self._simulation_state == "running",
+                "paused": running and self._simulation_state == "paused",
+                "state": self._simulation_state,
+                "mode": self._simulation_mode or ("prepared" if prepared_run_id else None),
+                "scenario": self._simulation_scenario,
+                "simulation_run_id": self._simulation_run_id or prepared_run_id,
+                "events_generated": self._simulation_events_generated
+                if self._simulation_run_id
                 else summary["total_events"],
-                "events_per_minute": self._mock_events_per_minute,
-                "requires_real_camera": self._mock_mode == "hybrid",
+                "events_per_minute": self._simulation_events_per_minute,
+                "requires_real_camera": self._simulation_mode == "hybrid",
                 "enterprise_id": self._enterprise_id,
                 "enterprise_name": self._enterprise_name,
-                "capacity": self._mock_capacity,
-                "threshold_percent": self._mock_threshold_percent,
-                "duration_minutes": self._mock_duration_minutes,
-                "started_at": self._mock_started_at,
-                "completed_at": self._mock_completed_at,
+                "capacity": self._simulation_capacity,
+                "threshold_percent": self._simulation_threshold_percent,
+                "duration_minutes": self._simulation_duration_minutes,
+                "started_at": self._simulation_started_at,
+                "completed_at": self._simulation_completed_at,
                 "entries": summary["entries"],
                 "exits": summary["exits"],
                 "current_occupancy": summary["current_occupancy"],
@@ -214,12 +218,12 @@ class SimulationRuntimeMixin:
                 "unsubmitted_events": summary["unsubmitted_events"],
             }
 
-    def _current_source_kind_locked(self) -> str:
-        if self._mock_state in {"running", "paused"}:
-            return "hybrid" if self._mock_mode == "hybrid" else "mock"
-        return "real"
+    def _current_classification_locked(self) -> str:
+        if self._simulation_state in {"running", "paused"}:
+            return "simulation"
+        return "official"
 
-    def generate_mock_report(
+    def generate_simulation_report(
         self,
         report_id: str | None,
         period_id: str,
@@ -227,15 +231,15 @@ class SimulationRuntimeMixin:
         payload: dict | None = None,
     ) -> dict:
         with self._lock:
-            mock_run_id = self._mock_run_id
-        if not mock_run_id:
-            raise ValueError("Hybrid mock mode is not running.")
+            simulation_run_id = self._simulation_run_id
+        if not simulation_run_id:
+            raise ValueError("Hybrid simulation mode is not running.")
 
         resolved_report_id = report_id or f"REP-{int(time.time()) % 1_000_000:06d}"
         report_payload = {
             "status": "Submitted",
-            "sourceKind": "hybrid",
-            "mockRunId": mock_run_id,
+            "classification": "simulation",
+            "simulationRunId": simulation_run_id,
             **(payload or {}),
         }
         return cast(
@@ -245,22 +249,22 @@ class SimulationRuntimeMixin:
                 period_id,
                 notes or "Monthly camera analytics submitted for LGU review.",
                 report_payload,
-                source_kind="hybrid",
-                mock_run_id=mock_run_id,
+                classification="simulation",
+                simulation_run_id=simulation_run_id,
             ),
         )
 
-    def _mock_event_loop(self, stop_event: threading.Event, mock_run_id: str) -> None:
-        rng = random.Random(mock_run_id)
+    def _simulation_event_loop(self, stop_event: threading.Event, simulation_run_id: str) -> None:
+        rng = random.Random(simulation_run_id)
         while not stop_event.is_set():
             with self._lock:
-                mode = self._mock_mode or "virtual"
+                mode = self._simulation_mode or "virtual"
                 if mode == "hybrid" and (not self._state.running or self._config is None):
                     break
-                paused = self._mock_paused
-                events_per_minute = self._mock_events_per_minute
-                duration_minutes = self._mock_duration_minutes
-                started_monotonic = self._mock_started_monotonic
+                paused = self._simulation_paused
+                events_per_minute = self._simulation_events_per_minute
+                duration_minutes = self._simulation_duration_minutes
+                started_monotonic = self._simulation_started_monotonic
 
             if paused:
                 stop_event.wait(0.25)
@@ -271,7 +275,7 @@ class SimulationRuntimeMixin:
                 break
 
             with self._lock:
-                if self._mock_paused:
+                if self._simulation_paused:
                     continue
 
             if (
@@ -280,31 +284,31 @@ class SimulationRuntimeMixin:
                 and time.monotonic() - started_monotonic >= duration_minutes * 60
             ):
                 with self._lock:
-                    self._mock_state = "completed"
-                    self._mock_completed_at = datetime.now(UTC).isoformat()
+                    self._simulation_state = "completed"
+                    self._simulation_completed_at = datetime.now(UTC).isoformat()
                 break
 
             summary = self._runtime_store.metrics_summary(include_submitted=True)
             occupancy = int(summary["current_occupancy"] or 0)
-            direction = self._next_mock_direction(rng, occupancy)
+            direction = self._next_simulation_direction(rng, occupancy)
             if direction is None:
                 with self._lock:
-                    self._mock_state = "completed"
-                    self._mock_completed_at = datetime.now(UTC).isoformat()
+                    self._simulation_state = "completed"
+                    self._simulation_completed_at = datetime.now(UTC).isoformat()
                 break
 
-            self._append_mock_count_event(direction, mock_run_id, mode, rng)
+            self._append_simulation_count_event(direction, simulation_run_id, mode, rng)
 
         with self._lock:
-            if self._mock_thread is threading.current_thread():
-                self._mock_thread = None
-                self._mock_stop_event = None
+            if self._simulation_thread is threading.current_thread():
+                self._simulation_thread = None
+                self._simulation_stop_event = None
 
-    def _next_mock_direction(self, rng: random.Random, occupancy: int) -> str | None:
+    def _next_simulation_direction(self, rng: random.Random, occupancy: int) -> str | None:
         with self._lock:
-            scenario = self._mock_scenario or "normal"
-            capacity = max(1, self._mock_capacity)
-            custom_probability = self._mock_entry_probability
+            scenario = self._simulation_scenario or "normal"
+            capacity = max(1, self._simulation_capacity)
+            custom_probability = self._simulation_entry_probability
 
         if scenario == "evacuation" and occupancy <= 0:
             return None
@@ -327,14 +331,14 @@ class SimulationRuntimeMixin:
 
         return "entry" if rng.random() < entry_probability else "exit"
 
-    def _append_mock_count_event(
+    def _append_simulation_count_event(
         self,
         direction: str,
-        mock_run_id: str,
+        simulation_run_id: str,
         mode: str,
         rng: random.Random | None = None,
     ) -> bool:
-        rng = rng or random.Random(f"{mock_run_id}:{time.time_ns()}")
+        rng = rng or random.Random(f"{simulation_run_id}:{time.time_ns()}")
         summary = self._runtime_store.metrics_summary(include_submitted=True)
         entries = int(summary["entries"] or 0)
         exits = int(summary["exits"] or 0)
@@ -346,12 +350,12 @@ class SimulationRuntimeMixin:
         next_exits = exits + (1 if direction == "exit" else 0)
         next_occupancy = max(0, occupancy + (1 if direction == "entry" else -1))
         with self._lock:
-            event_index = self._mock_events_generated + 1
+            event_index = self._simulation_events_generated + 1
             camera_id = self._config.camera_id if mode == "hybrid" and self._config else None
             camera_name = (
                 self._config.camera_name if mode == "hybrid" and self._config else "Simulation Lab"
             )
-            unique_entry_rate = self._mock_unique_entry_rate
+            unique_entry_rate = self._simulation_unique_entry_rate
 
         is_unique_entry = direction == "entry" and rng.random() < unique_entry_rate
         visitor_id = str(uuid4()) if is_unique_entry and rng.random() < 0.88 else None
@@ -373,8 +377,8 @@ class SimulationRuntimeMixin:
             "identity_state": "confirmed" if visitor_id else "unconfirmed",
             "identity_score": round(rng.uniform(0.7, 0.98), 3),
             "identity_source": "appearance" if visitor_id else "virtual-sensor",
-            "source_kind": "hybrid" if mode == "hybrid" else "mock",
-            "mock_run_id": mock_run_id,
+            "classification": "simulation",
+            "simulation_run_id": simulation_run_id,
             "counts": {
                 "entry": next_entries,
                 "exit": next_exits,
@@ -384,21 +388,21 @@ class SimulationRuntimeMixin:
         try:
             self._runtime_store.append_event(payload)
         except Exception as exc:
-            self._record_persistence_failure("append_mock_event", exc)
+            self._record_persistence_failure("append_simulation_event", exc)
             return False
 
         with self._lock:
-            self._mock_events_generated += 1
+            self._simulation_events_generated += 1
         return True
 
-    def _set_mock_starting_occupancy(
-        self, mock_run_id: str, mode: str, starting_occupancy: int
+    def _set_simulation_starting_occupancy(
+        self, simulation_run_id: str, mode: str, starting_occupancy: int
     ) -> None:
         summary = self._runtime_store.metrics_summary(include_submitted=True)
         current_occupancy = int(summary["current_occupancy"] or 0)
         direction = "entry" if starting_occupancy > current_occupancy else "exit"
         difference = abs(starting_occupancy - current_occupancy)
-        rng = random.Random(f"{mock_run_id}:starting-occupancy")
+        rng = random.Random(f"{simulation_run_id}:starting-occupancy")
         for _ in range(difference):
-            if not self._append_mock_count_event(direction, mock_run_id, mode, rng):
+            if not self._append_simulation_count_event(direction, simulation_run_id, mode, rng):
                 break

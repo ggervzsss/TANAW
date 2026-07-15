@@ -14,7 +14,6 @@ MONTHLY_PERIOD_KEY = re.compile(r"^month:Asia/Manila:(?P<year>[0-9]{4})-(?P<mont
 
 
 class MetricGrain(StrEnum):
-    CAMERA = "camera"
     SITE = "site"
     ENTERPRISE = "enterprise"
 

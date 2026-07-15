@@ -46,7 +46,14 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
         self.client.close()
 
     def test_missing_and_wrong_master_capabilities_fail_closed(self) -> None:
-        for path in ("/health", "/camera/health", "/counts", "/stream", "/sync/outbox/health"):
+        for path in (
+            "/health",
+            "/camera/health",
+            "/counts",
+            "/stream",
+            "/sync/outbox/health",
+            "/diagnostics/operations",
+        ):
             missing = self.client.get(path)
             wrong = self.client.get(
                 path,
@@ -57,6 +64,61 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
             self.assertEqual(missing.json(), {"detail": "Unauthorized"})
             self.assertNotIn(self.capability, missing.text)
             self.assertNotIn("Access-Control-Allow-Origin", missing.headers)
+
+    def test_operational_diagnostics_are_authenticated_and_payload_free(self) -> None:
+        diagnostics = {
+            "observed_at": "2026-07-15T08:00:00+00:00",
+            "reporting_period_id": "month:Asia/Manila:2026-07",
+            "outbox": {
+                "pending_count": 0,
+                "retry_item_count": 0,
+                "dead_letter_count": 0,
+                "attempt_count": 0,
+                "oldest_pending_at": None,
+                "last_acknowledged_at": None,
+                "last_failure_at": None,
+                "last_failure_class": None,
+            },
+            "writer": {
+                "connection_open_count": 1,
+                "transaction_attempt_count": 1,
+                "committed_transaction_count": 1,
+                "rolled_back_transaction_count": 0,
+                "active_writer_count": 0,
+                "maximum_concurrent_writers": 1,
+                "lock_wait_observations": 1,
+                "latest_lock_wait_ms": 0.1,
+                "maximum_lock_wait_ms": 0.1,
+                "transaction_duration_observations": 1,
+                "latest_transaction_duration_ms": 1.2,
+                "maximum_transaction_duration_ms": 1.2,
+            },
+            "persistence": {
+                "error_count": 0,
+                "unresolved_count": 0,
+                "last_error_at": None,
+            },
+            "camera": {
+                "reconnect_attempts": 0,
+                "active_sessions": 0,
+                "coverage_evidence_status": "not_recorded",
+                "monitored_seconds": None,
+                "expected_seconds": None,
+                "coverage_ratio": None,
+                "gap_count": None,
+            },
+        }
+        with patch("app.main.manager.operational_diagnostics", return_value=diagnostics):
+            response = self.client.get(
+                "/diagnostics/operations",
+                headers=_master_headers(self.capability, self.launch_id),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["outbox"]["pending_count"], 0)
+        self.assertNotIn("payload", response.text.lower())
+        self.assertNotIn("stream_url", response.text.lower())
 
     def test_stream_and_websocket_require_scoped_sessions_not_master_capability(self) -> None:
         master_stream = self.client.get(
@@ -234,6 +296,9 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
                 "app.main.manager.sync_outbox_health",
                 return_value={
                     "pending_count": 1,
+                    "retry_item_count": 1,
+                    "dead_letter_count": 0,
+                    "attempt_count": 1,
                     "oldest_pending_at": "2026-07-13T08:00:00Z",
                     "last_acknowledged_at": None,
                     "last_failure_at": "2026-07-13T08:14:00Z",
@@ -268,6 +333,7 @@ class LocalCapabilitySecurityTests(unittest.TestCase):
 
         self.assertEqual(health_response.status_code, 200)
         self.assertEqual(health_response.json()["pending_count"], 1)
+        self.assertEqual(health_response.json()["retry_item_count"], 1)
         self.assertEqual(ready_response.status_code, 200)
         self.assertEqual(acknowledge_response.status_code, 200)
         self.assertEqual(failure_response.status_code, 200)

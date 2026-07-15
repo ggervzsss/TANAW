@@ -123,7 +123,7 @@ async def test_two_workers_cannot_lease_or_deliver_one_destination_twice(
 ) -> None:
     now = datetime.now(UTC)
     _event_id, delivery_id = await _enqueue(event_runtime, now=now)
-    handler = RecordingHandler("test_projection", "test_projection_consumer")
+    handler = RecordingHandler(_destination(event_runtime), "test_projection_consumer")
     first = _engine(event_runtime, handler, worker_id="worker-a")
     second = _engine(event_runtime, handler, worker_id="worker-b")
 
@@ -151,7 +151,7 @@ async def test_expired_process_lease_is_recorded_and_recovered_after_restart(
 ) -> None:
     now = datetime.now(UTC)
     _event_id, delivery_id = await _enqueue(event_runtime, now=now)
-    handler = RecordingHandler("test_projection", "restart_safe_projection")
+    handler = RecordingHandler(_destination(event_runtime), "restart_safe_projection")
     config = DeliveryEngineConfig(
         lease_duration=timedelta(seconds=1),
         max_attempts=3,
@@ -201,7 +201,7 @@ async def test_retry_backoff_reaches_dead_letter_and_terminal_claim_is_fenced(
 ) -> None:
     now = datetime.now(UTC)
     _event_id, delivery_id = await _enqueue(event_runtime, now=now)
-    handler = RejectingHandler("test_projection", "rejecting_projection", retryable=True)
+    handler = RejectingHandler(_destination(event_runtime), "rejecting_projection", retryable=True)
     engine = _engine(
         event_runtime,
         handler,
@@ -254,7 +254,7 @@ async def test_payload_hash_mismatch_is_terminal_before_destination_side_effect(
         now=now,
         payload_hash=f"sha256:{'0' * 64}",
     )
-    handler = RecordingHandler("test_projection", "hash_guard_projection")
+    handler = RecordingHandler(_destination(event_runtime), "hash_guard_projection")
     engine = _engine(event_runtime, handler, worker_id="hash-worker")
 
     result = await engine.run_batch(now=now)
@@ -288,7 +288,7 @@ async def test_existing_consumer_receipt_short_circuits_duplicate_side_effect(
             )
         )
         await db.commit()
-    handler = RecordingHandler("test_projection", "receipt_projection")
+    handler = RecordingHandler(_destination(event_runtime), "receipt_projection")
     engine = _engine(event_runtime, handler, worker_id="receipt-worker")
 
     result = await engine.run_batch(now=now)
@@ -343,7 +343,7 @@ async def _enqueue(
     delivery = DomainEventDelivery(
         id=str(uuid4()),
         domain_event_id=event.id,
-        destination="test_projection",
+        destination=_destination(runtime),
         status="pending",
         attempt_count=0,
         next_attempt_at=now,
@@ -354,6 +354,10 @@ async def _enqueue(
         db.add(delivery)
         await db.commit()
     return event.id, delivery.id
+
+
+def _destination(runtime: EventRuntime) -> str:
+    return runtime.prefix.removesuffix(":").replace("delivery-test", "test-projection")
 
 
 async def _delivery_records(

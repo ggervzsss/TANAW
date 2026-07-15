@@ -9,8 +9,9 @@ from uuid import UUID
 
 from pydantic import Field
 
+from app.core.pagination_schemas import CursorPageInfo
 from app.features.reporting.envelopes import ContractModel
-from app.features.reporting.read_envelopes import CursorPageInfo, ReportingPeriodResource
+from app.features.reporting.read_envelopes import ReportingPeriodResource
 
 FinalScopeType = Literal["citywide", "barangay", "enterprise_selection"]
 

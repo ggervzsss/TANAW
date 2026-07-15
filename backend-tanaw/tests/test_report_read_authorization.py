@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.features.final_reports.router as final_reports_router_module
 import app.features.reporting.router as reporting_router_module
+from app.core.pagination_schemas import CursorPageInfo
 from app.db.session import get_db
 from app.features.accounts.dependencies import get_current_account
 from app.features.accounts.models import Account, AccountRole, AccountStatus
@@ -20,7 +21,7 @@ from app.features.reporting.period_envelopes import (
     ReportingPeriodLifecycleResult,
     ReportingPeriodPage,
 )
-from app.features.reporting.read_envelopes import CursorPageInfo, EnterpriseReportPage
+from app.features.reporting.read_envelopes import EnterpriseReportPage
 from app.features.reporting.router import router as reporting_router
 
 

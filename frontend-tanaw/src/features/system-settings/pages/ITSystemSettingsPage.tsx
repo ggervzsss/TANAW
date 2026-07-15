@@ -6,18 +6,10 @@ import { PageHeader } from "@/shared/components/layout";
 import { ModalFrame, PageMotion } from "@/shared/components/ui";
 import { SettingsDetailPanel } from "../components";
 import { settingSections } from "../data";
-import type { SettingField, SettingValue } from "../types";
+import { filterVisibleSettings } from "../settingsVisibility";
 import { getSystemSettings, updateSystemSettings } from "@/shared/services/accountManagement";
 import { purgeExpiredActivityLogs } from "@/shared/services/activityLogs";
 import { activityLogsQueryKey } from "@/shared/hooks/useActivityLogs";
-
-const visibleSettingKeys = new Set(settingSections.flatMap((section) => section.fields.map((field) => settingKey(section.id, field))));
-const legacyNotificationSettingKeys: Record<string, string> = {
-  "notifications.cameraSessionErrorAlerts": "notifications.Notify Camera Offline",
-  "notifications.gatewayServiceErrorAlerts": "notifications.Notify Gateway Offline",
-  "notifications.syncDelayAlerts": "notifications.Notify Sync Failed",
-  "notifications.failedLoginLockoutAlerts": "notifications.Notify Failed Login Threshold",
-};
 
 export function ITSystemSettingsPage() {
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
@@ -100,20 +92,6 @@ export function ITSystemSettingsPage() {
   );
 }
 
-function filterVisibleSettings(values: Record<string, SettingValue>) {
-  const visibleSettings = Object.fromEntries(Object.entries(values).filter(([key]) => visibleSettingKeys.has(key)));
-  const retentionDays = resolveExistingRetentionDays(values);
-  if (retentionDays !== null) {
-    visibleSettings["logs.retentionDays"] = retentionDays;
-  }
-  for (const [stableKey, legacyKey] of Object.entries(legacyNotificationSettingKeys)) {
-    if (typeof visibleSettings[stableKey] !== "boolean" && typeof values[legacyKey] === "boolean") {
-      visibleSettings[stableKey] = values[legacyKey];
-    }
-  }
-  return visibleSettings;
-}
-
 function formatSettingsMetadata(updatedBy: string | null, updatedAt: string | null) {
   if (!updatedBy && !updatedAt) return "Defaults active";
   const timestamp = updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updatedAt)) : null;
@@ -142,20 +120,4 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
       </button>
     </div>
   );
-}
-
-function settingKey(sectionId: string, field: SettingField) {
-  return `${sectionId}.${field.key ?? field.label}`;
-}
-
-function resolveExistingRetentionDays(values: Record<string, SettingValue>) {
-  const stableValue = values["logs.retentionDays"];
-  if (typeof stableValue === "number" && [90, 180, 365].includes(stableValue)) {
-    return stableValue;
-  }
-
-  const legacyValue = values["logs.Log Retention Period"];
-  if (typeof legacyValue !== "string") return null;
-  const days = Number(legacyValue.replace(" days", ""));
-  return [90, 180, 365].includes(days) ? days : null;
 }

@@ -112,7 +112,12 @@ class CaptureRuntimeMixin:
                         recoverable=True,
                         detail=safe_message,
                     )
-                    self._set_session_reconnecting(session, safe_message, delay)
+                    self._set_session_reconnecting(
+                        session,
+                        safe_message,
+                        delay,
+                        reason=failure.reason,
+                    )
                     if session.stop_event.wait(delay):
                         break
                     with self._lock:
@@ -256,6 +261,10 @@ class CaptureRuntimeMixin:
                 session.monitoring_session_id,
                 self._utc_now().isoformat(),
             )
+            logger.info(
+                "camera_stream_restored monitoring_session_id=%s",
+                session.monitoring_session_id,
+            )
         with self._raw_frame_condition:
             if not self._is_current_session_locked(session):
                 return
@@ -273,7 +282,12 @@ class CaptureRuntimeMixin:
             self._raw_frame_condition.notify_all()
 
     def _set_session_reconnecting(
-        self, session: ProcessingSession, message: str, delay_seconds: float
+        self,
+        session: ProcessingSession,
+        message: str,
+        delay_seconds: float,
+        *,
+        reason: str,
     ) -> None:
         with self._raw_frame_condition:
             if not self._is_current_session_locked(session):
@@ -293,3 +307,9 @@ class CaptureRuntimeMixin:
             self._latest_stream_frame_id += 1
             self._persist_session_locked()
             self._raw_frame_condition.notify_all()
+        logger.warning(
+            "camera_stream_reconnect_scheduled monitoring_session_id=%s delay_seconds=%.3f reason=%s",
+            session.monitoring_session_id,
+            delay_seconds,
+            reason,
+        )

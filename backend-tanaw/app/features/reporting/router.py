@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
@@ -305,15 +306,20 @@ async def ingest_report_submission_v2(
             command=command,
         )
         await db.commit()
+        if acknowledgement.disposition == "replayed":
+            operational_observability.increment(OperationalCounter.REPORT_COMMAND_REPLAY)
         return acknowledgement
     except ReportIntakeConflict as exc:
         await db.rollback()
+        _observe_report_conflict(exc.code)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": exc.code, "message": exc.message},
         ) from exc
     except ReportIntakeError as exc:
         await db.rollback()
+        if exc.code == "REPORTING_PERIOD_NOT_AVAILABLE":
+            operational_observability.increment(OperationalCounter.PERIOD_CLASSIFICATION_FAILURE)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": exc.code, "message": exc.message},
@@ -338,9 +344,12 @@ async def transition_enterprise_report_v2(
             command=command,
         )
         await db.commit()
+        if acknowledgement.disposition == "replayed":
+            operational_observability.increment(OperationalCounter.REPORT_COMMAND_REPLAY)
         return acknowledgement
     except ReportIntakeConflict as exc:
         await db.rollback()
+        _observe_report_conflict(exc.code)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": exc.code, "message": exc.message},
@@ -390,6 +399,16 @@ async def freeze_reporting_period_obligations_v2(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": exc.code, "message": exc.message},
         ) from exc
+
+
+def _observe_report_conflict(code: str) -> None:
+    if code == "IDEMPOTENCY_PAYLOAD_CONFLICT":
+        counter = OperationalCounter.REPORT_HASH_CONFLICT
+    elif code in {"REPORT_STATE_CONFLICT", "REPORT_ACCEPTANCE_BLOCKED"}:
+        counter = OperationalCounter.REPORT_STATE_TRANSITION_CONFLICT
+    else:
+        counter = OperationalCounter.REPORT_REVISION_CONFLICT
+    operational_observability.increment(counter)
 
 
 @router.get(

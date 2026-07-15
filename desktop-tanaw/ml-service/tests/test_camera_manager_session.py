@@ -63,8 +63,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             manager = _manager_with_store(directory)
             manager.bind_enterprise("simulation@tanaw.test", "Simulation Enterprise")
 
-            started = manager.start_mock_mode(
-                mock_run_id="simulation-run-1",
+            started = manager.start_simulation(
+                simulation_run_id="simulation-run-1",
                 mode="virtual",
                 scenario="normal",
                 events_per_minute=1,
@@ -75,10 +75,10 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                 entry_probability=None,
                 unique_entry_rate=0.8,
             )
-            paused = manager.pause_mock_mode()
-            after_entry = manager.append_mock_event("entry")
-            after_exit = manager.append_mock_event("exit")
-            stopped = manager.stop_mock_mode()
+            paused = manager.pause_simulation()
+            after_entry = manager.append_simulation_event("entry")
+            after_exit = manager.append_simulation_event("exit")
+            stopped = manager.stop_simulation()
 
             self.assertTrue(started["running"])
             self.assertFalse(started["requires_real_camera"])
@@ -86,14 +86,14 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(after_entry["current_occupancy"], 3)
             self.assertEqual(after_exit["current_occupancy"], 2)
             self.assertEqual(stopped["state"], "stopped")
-            self.assertEqual(manager.metrics_summary()["source_kind"], "mock")
+            self.assertEqual(manager.metrics_summary()["classification"], "simulation")
 
     def test_virtual_simulation_rejects_exit_when_occupancy_is_zero(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             manager.bind_enterprise("simulation@tanaw.test", "Simulation Enterprise")
-            manager.start_mock_mode(
-                mock_run_id="simulation-run-2",
+            manager.start_simulation(
+                simulation_run_id="simulation-run-2",
                 mode="virtual",
                 scenario="evacuation",
                 events_per_minute=1,
@@ -104,19 +104,19 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                 entry_probability=None,
                 unique_entry_rate=0.8,
             )
-            manager.pause_mock_mode()
+            manager.pause_simulation()
 
             with self.assertRaisesRegex(ValueError, "occupancy is zero"):
-                manager.append_mock_event("exit")
+                manager.append_simulation_event("exit")
 
-            manager.stop_mock_mode()
+            manager.stop_simulation()
 
-    def test_resetting_another_mock_run_does_not_stop_live_simulation(self) -> None:
+    def test_resetting_another_simulation_run_does_not_stop_live_simulation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             manager.bind_enterprise("simulation@tanaw.test", "Simulation Enterprise")
-            manager.start_mock_mode(
-                mock_run_id="live-run",
+            manager.start_simulation(
+                simulation_run_id="live-run",
                 mode="virtual",
                 scenario="normal",
                 events_per_minute=1,
@@ -128,12 +128,12 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                 unique_entry_rate=0.8,
             )
 
-            manager.reset_mock_data("historical-run")
-            status = manager.mock_status()
+            manager.reset_simulation_data("historical-run")
+            status = manager.simulation_status()
 
             self.assertTrue(status["running"])
-            self.assertEqual(status["mock_run_id"], "live-run")
-            manager.stop_mock_mode()
+            self.assertEqual(status["simulation_run_id"], "live-run")
+            manager.stop_simulation()
 
     def test_enterprise_binding_switches_runtime_store_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -154,8 +154,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             manager._enterprise_name = "Target Enterprise"
             manager._runtime_store = EdgeRuntimeStore(directory, "target@tanaw.test")
 
-            result = manager.prepare_mock_counts(
-                mock_run_id="run-1",
+            result = manager.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 enterprise_id="target@tanaw.test",
                 enterprise_name="Target Enterprise",
                 entries=20,
@@ -170,8 +170,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(result["enterprise_id"], "target@tanaw.test")
 
             with self.assertRaisesRegex(ValueError, "Desktop is bound"):
-                manager.prepare_mock_counts(
-                    mock_run_id="run-1",
+                manager.prepare_simulation_counts(
+                    simulation_run_id="run-1",
                     enterprise_id="other@tanaw.test",
                     enterprise_name="Other Enterprise",
                     entries=20,

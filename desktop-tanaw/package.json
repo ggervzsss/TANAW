@@ -24,8 +24,10 @@
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",
     "prettier": "prettier --write .",
-    "test": "vitest run --exclude=e2e/**",
-    "test:e2e": "playwright test",
+    "test": "vitest run --exclude=e2e/** --exclude=e2e-electron/**",
+    "test:e2e": "npm run test:e2e:renderer && npm run test:e2e:electron",
+    "test:e2e:renderer": "playwright test",
+    "test:e2e:electron": "npm run build && playwright test --config=playwright.electron.config.ts",
     "type": "tsc --noEmit"
   },
   "dependencies": {

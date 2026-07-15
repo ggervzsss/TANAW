@@ -2,6 +2,9 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.core.operational_observability import LagSnapshot, OperationalSnapshot
+from app.features.events.delivery import DeliveryQueueMetrics
+from app.features.maintenance.operations import LiveFreshnessMetrics, age_seconds
 from app.features.maintenance.retention import RetentionCleanupCounts
 from app.features.maintenance.runtime import RetentionRuntimeSnapshot
 from app.features.maintenance.telemetry_retention import (
@@ -37,7 +40,6 @@ class RetentionCleanupCountsResponse(BaseModel):
     passwordResetRateBuckets: int
     expiredEmailChangeRequests: int
     emailChangeRequests: int
-    developmentDeliveries: int
     emailOutboxRecords: int
     activityLogs: int
     domainEvents: int
@@ -67,6 +69,42 @@ class RetentionStatusResponse(BaseModel):
     totalCounts: RetentionCleanupCountsResponse
 
 
+class OperationalLagResponse(BaseModel):
+    observations: int
+    latestSeconds: float | None
+    maximumSeconds: float | None
+
+
+class DomainEventQueueResponse(BaseModel):
+    pending: int
+    leased: int
+    retryScheduled: int
+    delivered: int
+    deadLetter: int
+    oldestPendingAt: datetime | None
+    oldestPendingAgeSeconds: float | None
+    oldestReadyAt: datetime | None
+    oldestLeaseExpiryAt: datetime | None
+
+
+class LiveFreshnessResponse(BaseModel):
+    fresh: int
+    stale: int
+    offline: int
+    unobserved: int
+
+
+class OperationalStatusResponse(BaseModel):
+    observedAt: datetime
+    processInstanceOnly: bool
+    counters: dict[str, int]
+    finalizationScopes: dict[str, int]
+    telemetryObservedToReceivedLag: OperationalLagResponse
+    domainEventPublishLag: OperationalLagResponse
+    domainEventQueue: DomainEventQueueResponse
+    officialLiveSites: LiveFreshnessResponse
+
+
 def to_counts_response(counts: RetentionCleanupCounts) -> RetentionCleanupCountsResponse:
     return RetentionCleanupCountsResponse(
         activationTokens=counts.activation_tokens,
@@ -74,7 +112,6 @@ def to_counts_response(counts: RetentionCleanupCounts) -> RetentionCleanupCounts
         passwordResetRateBuckets=counts.password_reset_rate_buckets,
         expiredEmailChangeRequests=counts.expired_email_change_requests,
         emailChangeRequests=counts.email_change_requests,
-        developmentDeliveries=counts.development_deliveries,
         emailOutboxRecords=counts.email_outbox_records,
         activityLogs=counts.activity_logs,
         domainEvents=counts.domain_events,
@@ -138,4 +175,47 @@ def to_status_response(
         lastError=snapshot.last_error,
         lastCounts=to_counts_response(snapshot.last_counts),
         totalCounts=to_counts_response(snapshot.total_counts),
+    )
+
+
+def to_operational_status_response(
+    snapshot: OperationalSnapshot,
+    queue: DeliveryQueueMetrics,
+    live: LiveFreshnessMetrics,
+) -> OperationalStatusResponse:
+    return OperationalStatusResponse(
+        observedAt=snapshot.observed_at,
+        processInstanceOnly=True,
+        counters=snapshot.counters,
+        finalizationScopes=snapshot.finalization_scopes,
+        telemetryObservedToReceivedLag=_lag_response(snapshot.telemetry_lag),
+        domainEventPublishLag=_lag_response(snapshot.domain_event_publish_lag),
+        domainEventQueue=DomainEventQueueResponse(
+            pending=queue.pending,
+            leased=queue.leased,
+            retryScheduled=queue.retry_scheduled,
+            delivered=queue.delivered,
+            deadLetter=queue.dead_letter,
+            oldestPendingAt=queue.oldest_pending_at,
+            oldestPendingAgeSeconds=age_seconds(
+                queue.oldest_pending_at,
+                observed_at=snapshot.observed_at,
+            ),
+            oldestReadyAt=queue.oldest_ready_at,
+            oldestLeaseExpiryAt=queue.oldest_lease_expiry_at,
+        ),
+        officialLiveSites=LiveFreshnessResponse(
+            fresh=live.fresh,
+            stale=live.stale,
+            offline=live.offline,
+            unobserved=live.unobserved,
+        ),
+    )
+
+
+def _lag_response(lag: LagSnapshot) -> OperationalLagResponse:
+    return OperationalLagResponse(
+        observations=lag.observations,
+        latestSeconds=lag.latest_seconds,
+        maximumSeconds=lag.maximum_seconds,
     )

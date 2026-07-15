@@ -1,45 +1,64 @@
 # TANAW utility scripts
 
-Run these from the repository root.
+Run these target-generation utilities from the repository root.
 
 Linux, macOS, WSL, and Git Bash:
 
 ```shell
-./scripts/mockdata-on
-./scripts/mockdata-reset
-./scripts/mockdata-status
-./scripts/mockdata-off
-./scripts/local-mockdata-off
+./scripts/simulation-on
+./scripts/simulation-reset
+./scripts/simulation-status
+./scripts/simulation-off
+./scripts/local-data-reset
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\scripts\mockdata-on.ps1
-.\scripts\mockdata-reset.ps1
-.\scripts\mockdata-status.ps1
-.\scripts\mockdata-off.ps1
-.\scripts\local-mockdata-off.ps1
+.\scripts\simulation-on.ps1
+.\scripts\simulation-reset.ps1
+.\scripts\simulation-status.ps1
+.\scripts\simulation-off.ps1
+.\scripts\local-data-reset.ps1
 ```
 
-`mockdata-on` and `mockdata-reset` default to the full workflow scenario for
-`archies_001@tanaw.sanpedro`. Override the defaults with environment variables:
+`simulation-on` and `simulation-reset` default to the full workflow scenario
+for `archies_001@tanaw.sanpedro`. Override the defaults only for the individual
+command process:
 
 ```shell
-TANAW_MOCK_TARGET_ENTERPRISE="enterprise_id" ./scripts/mockdata-reset
-TANAW_MOCK_RANGE=12m TANAW_MOCK_SCENARIO=peak-traffic ./scripts/mockdata-on
+TANAW_SIMULATION_TARGET_ENTERPRISE="enterprise_id" ./scripts/simulation-reset
+TANAW_SIMULATION_RANGE=12m TANAW_SIMULATION_SCENARIO=peak-traffic ./scripts/simulation-on
 ```
 
 ```powershell
-$env:TANAW_MOCK_TARGET_ENTERPRISE = "enterprise_id"
-.\scripts\mockdata-reset.ps1
+$env:TANAW_SIMULATION_TARGET_ENTERPRISE = "enterprise_id"
+.\scripts\simulation-reset.ps1
 
-$env:TANAW_MOCK_RANGE = "12m"
-$env:TANAW_MOCK_SCENARIO = "peak-traffic"
-.\scripts\mockdata-on.ps1
+$env:TANAW_SIMULATION_RANGE = "12m"
+$env:TANAW_SIMULATION_SCENARIO = "peak-traffic"
+.\scripts\simulation-on.ps1
 ```
 
-`local-mockdata-off` removes every desktop local ledger, including rows created
-from real CCTV detections, mock runs, hybrid runs, reports, snapshots, and
-occupancy corrections. It preserves saved camera settings, Electron preferences,
-auth storage, and other desktop device state.
+Simulation is explicit, disabled by default, and server-classified. Never set
+`TANAW_ALLOW_SIMULATION_DATA=true` for a production service.
+
+`local-data-reset` removes every desktop local ledger, including rows created
+from official CCTV detections and simulation runs, reports, current-state
+projections, and occupancy corrections. It preserves saved camera settings,
+Electron preferences, authentication storage, and other device state. It does
+not remove central PostgreSQL data.
+
+`migrate_local_edge_ledger_v8.py` is the external pre-install cutover tool for
+an existing v5, v6, or v7 SQLite ledger. It is not packaged with the target
+desktop runtime. See
+[`docs/architecture/LOCAL_EDGE_LEDGER.md`](../docs/architecture/LOCAL_EDGE_LEDGER.md)
+before using it.
+
+`verify_target_release.py` produces the deterministic target release inventory.
+Run it with `--require-builds` only after both production applications have
+been built:
+
+```shell
+python3 scripts/verify_target_release.py --require-builds
+```

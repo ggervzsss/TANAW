@@ -2,6 +2,7 @@ import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
 import { appendClientGeneration } from "../config/client-generation";
 import type { GatewayStatus, MapEnterprise, MapSite } from "../types";
+import { collectCursorPages, type CursorPage } from "./cursorPagination";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -29,7 +30,7 @@ export type OperationalWebSocketEnvelope = {
     eventKey: string;
     eventType: string;
     resource: {
-      type: "site_live_state" | "operational_alert" | "user_notification" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation";
+      type: "site_live_state" | "operational_alert" | "user_notification" | "activity_log" | "enterprise_report" | "final_report" | "reporting_period_compliance" | "reporting_obligation";
       id: string;
       version: number;
     };
@@ -69,6 +70,9 @@ type EnterpriseSiteResponse = {
   barangay: string | null;
   address: string | null;
   geocodedAddress: string | null;
+  locationSource: string | null;
+  locationConfidence: number | null;
+  coordinatesUpdatedAt: string | null;
   latitude: number | null;
   longitude: number | null;
   topologyStatus: "ready" | "unlinked" | "ambiguous";
@@ -104,8 +108,12 @@ export async function listOperationalMapEnterprises() {
 }
 
 export async function listUserNotifications() {
-  const response = await apiClient.get<BackendNotification[]>("/operational/notifications");
-  return response.data;
+  return collectCursorPages(async (cursor) => {
+    const response = await apiClient.get<CursorPage<BackendNotification>>("/operational/notifications", {
+      params: { limit: 100, ...(cursor ? { cursor } : {}) },
+    });
+    return response.data;
+  }, "notification");
 }
 
 export async function updateUserNotificationRead(notificationId: string, read: boolean) {
@@ -139,7 +147,36 @@ function toMapSite(resource: EnterpriseSiteResponse): MapSite {
     gatewayStatus: gatewayStatus(resource),
     freshnessState: liveState?.freshnessState,
     topologyStatus: resource.topologyStatus,
+    locationWarning: getLocationEvidenceWarning(resource),
   };
+}
+
+export function getLocationEvidenceWarning(resource: {
+  address: string | null;
+  geocodedAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationConfidence?: number | null;
+  topologyStatus?: "ready" | "unlinked" | "ambiguous";
+}) {
+  if (resource.topologyStatus === "ambiguous") return "Multiple topology candidates exist; verify the site and map pin before relying on this location.";
+  if (resource.latitude === null || resource.longitude === null) return "This site has no verified map coordinates.";
+  if (resource.locationConfidence !== null && resource.locationConfidence !== undefined && resource.locationConfidence < 0.65) {
+    return "The saved map coordinates have low geocoding confidence and should be reviewed.";
+  }
+  if (resource.address && resource.geocodedAddress && addressesMateriallyDiffer(resource.address, resource.geocodedAddress)) {
+    return "The registered address and geocoded map address differ; verify the pin before using it operationally.";
+  }
+  return null;
+}
+
+function addressesMateriallyDiffer(left: string, right: string) {
+  const tokens = (value: string) => new Set(value.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((token) => token.length > 2));
+  const leftTokens = tokens(left);
+  const rightTokens = tokens(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) return false;
+  const shared = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return shared / Math.min(leftTokens.size, rightTokens.size) < 0.6;
 }
 
 function displaySiteName(enterpriseName: string, siteName: string) {

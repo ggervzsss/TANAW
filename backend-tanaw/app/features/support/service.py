@@ -4,10 +4,12 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import select, text, update
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.keyset_pagination import decode_cursor, encode_cursor, filter_fingerprint
+from app.core.pagination_schemas import CursorPageInfo
 from app.features.accounts.models import Account, AccountRole
 from app.features.assets.models import SupportAttachment
 from app.features.assets.storage import AssetStorage, ValidatedImage
@@ -18,6 +20,7 @@ from app.features.support.schemas import (
     SupportTicketDetail,
     SupportTicketMessageCreate,
     SupportTicketMessageSummary,
+    SupportTicketPage,
     SupportTicketStatusUpdate,
     SupportTicketSummary,
 )
@@ -73,21 +76,63 @@ def to_support_ticket_message_summary(message: SupportTicketMessage) -> SupportT
 
 
 async def list_support_tickets(
-    db: AsyncSession, account: Account, limit: int = 100
-) -> list[SupportTicketSummary]:
-    statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
+    db: AsyncSession, account: Account, *, limit: int, cursor: str | None
+) -> SupportTicketPage:
+    enterprise_id: str | None = None
     if account.role == AccountRole.ENTERPRISE:
         topology = await require_account_topology(db, account)
-        statement = statement.where(SupportTicket.enterprise_id == enterprise_identifier(topology))
-    tickets = (await db.scalars(statement)).all()
+        enterprise_id = enterprise_identifier(topology)
+    fingerprint = filter_fingerprint(
+        {
+            "accountId": str(account.id),
+            "role": account.role.value,
+            "enterpriseId": enterprise_id,
+        }
+    )
+    statement = (
+        select(SupportTicket)
+        .order_by(SupportTicket.created_at.desc(), SupportTicket.id.desc())
+        .limit(limit + 1)
+    )
+    if enterprise_id is not None:
+        statement = statement.where(SupportTicket.enterprise_id == enterprise_id)
+    if cursor is not None:
+        cursor_at, cursor_id = decode_cursor(cursor, fingerprint=fingerprint)
+        statement = statement.where(
+            or_(
+                SupportTicket.created_at < cursor_at,
+                and_(SupportTicket.created_at == cursor_at, SupportTicket.id < cursor_id),
+            )
+        )
+    rows = (await db.scalars(statement)).all()
+    tickets = rows[:limit]
     attachments_by_ticket = await _support_attachments_by_ticket(
         db,
         ticket_ids=[ticket.id for ticket in tickets],
     )
-    return [
+    items = [
         to_support_ticket_summary(ticket, attachments_by_ticket.get(ticket.id, ()))
         for ticket in tickets
     ]
+    has_more = len(rows) > limit
+    next_cursor = (
+        encode_cursor(
+            occurred_at=tickets[-1].created_at,
+            resource_id=tickets[-1].id,
+            fingerprint=fingerprint,
+        )
+        if has_more and tickets
+        else None
+    )
+    return SupportTicketPage(
+        items=items,
+        page=CursorPageInfo(
+            limit=limit,
+            returnedCount=len(items),
+            hasMore=has_more,
+            nextCursor=next_cursor,
+        ),
+    )
 
 
 async def get_support_ticket_for_account(

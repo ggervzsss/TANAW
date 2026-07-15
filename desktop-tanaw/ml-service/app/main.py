@@ -6,7 +6,7 @@ import os
 import re
 from datetime import datetime
 from time import monotonic
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -29,24 +29,25 @@ from app.config.camera_config import (
     LocalReportRevisionResponse,
     MetricsHistoryResponse,
     MetricsSummaryResponse,
-    MockManualEventRequest,
-    MockPrepareRequest,
-    MockPrepareResponse,
-    MockReportRequest,
-    MockResetResponse,
-    MockStartRequest,
-    MockStatusResponse,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
     ReportRawDataPurgeRequest,
     ReportRawDataPurgeResponse,
     SessionResponse,
+    SimulationManualEventRequest,
+    SimulationPrepareRequest,
+    SimulationPrepareResponse,
+    SimulationReportRequest,
+    SimulationResetResponse,
+    SimulationStartRequest,
+    SimulationStatusResponse,
 )
 from app.runtime.hardware import get_runtime_capabilities
 from app.security.local_capability import (
     LOCAL_CONTRACT_VERSION,
     LOCAL_RELEASE_ID,
     LOCAL_SERVICE_NAME,
+    LOCAL_SERVICE_VERSION,
     LocalCapabilityMiddleware,
     SessionMintRequest,
     SessionMintResponse,
@@ -145,10 +146,38 @@ class SyncOutboxFailureRequest(BaseModel):
     http_status: int | None = Field(default=None, ge=100, le=599)
 
 
+class SyncOutboxRecoveryItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outbox_item_id: UUID
+    report_id: str = Field(min_length=1, max_length=240)
+    report_revision_id: UUID
+    revision_number: int = Field(ge=1)
+    command_id: UUID
+    endpoint: Literal["/operational/desktop/report-submissions/v2"]
+    contract_version: Literal[2]
+    status: Literal["ready", "retry", "dead_letter"]
+    created_at: datetime
+    next_attempt_at: datetime
+    attempt_count: int = Field(ge=1)
+    last_attempt_at: datetime | None
+    last_error_class: str | None = Field(default=None, min_length=1, max_length=120)
+    last_error_message: str | None = Field(default=None, min_length=1, max_length=500)
+
+
+class SyncOutboxManualRetryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class SyncOutboxHealthResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     pending_count: int = Field(ge=0)
+    retry_item_count: int = Field(ge=0)
+    dead_letter_count: int = Field(ge=0)
+    attempt_count: int = Field(ge=0)
     oldest_pending_at: datetime | None
     last_acknowledged_at: datetime | None
     last_failure_at: datetime | None
@@ -165,14 +194,69 @@ class SyncOutboxHealthResponse(BaseModel):
                 raise ValueError("Sync outbox health timestamps must include a timezone.")
         if (self.pending_count == 0) != (self.oldest_pending_at is None):
             raise ValueError("The oldest pending timestamp must match the durable backlog.")
+        if (
+            self.retry_item_count > self.pending_count
+            or self.dead_letter_count > self.pending_count
+        ):
+            raise ValueError("Retry and dead-letter items must be part of the durable backlog.")
+        if self.attempt_count < self.retry_item_count + self.dead_letter_count:
+            raise ValueError("The durable attempt count cannot be lower than failed item counts.")
         if (self.last_failure_at is None) != (self.last_failure_class is None):
             raise ValueError("The last failure timestamp and class must be supplied together.")
         return self
 
 
+class LedgerWriterDiagnosticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connection_open_count: int = Field(ge=0)
+    transaction_attempt_count: int = Field(ge=0)
+    committed_transaction_count: int = Field(ge=0)
+    rolled_back_transaction_count: int = Field(ge=0)
+    active_writer_count: int = Field(ge=0)
+    maximum_concurrent_writers: int = Field(ge=0)
+    lock_wait_observations: int = Field(ge=0)
+    latest_lock_wait_ms: float = Field(ge=0)
+    maximum_lock_wait_ms: float = Field(ge=0)
+    transaction_duration_observations: int = Field(ge=0)
+    latest_transaction_duration_ms: float = Field(ge=0)
+    maximum_transaction_duration_ms: float = Field(ge=0)
+
+
+class LocalPersistenceDiagnosticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    error_count: int = Field(ge=0)
+    unresolved_count: int = Field(ge=0)
+    last_error_at: datetime | None
+
+
+class CameraReliabilityDiagnosticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reconnect_attempts: int = Field(ge=0)
+    active_sessions: int = Field(ge=0)
+    coverage_evidence_status: Literal["recorded", "not_recorded"]
+    monitored_seconds: float | None = Field(default=None, ge=0)
+    expected_seconds: float | None = Field(default=None, ge=0)
+    coverage_ratio: float | None = Field(default=None, ge=0, le=1)
+    gap_count: int | None = Field(default=None, ge=0)
+
+
+class LocalOperationalDiagnosticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observed_at: datetime
+    reporting_period_id: str = Field(pattern=r"^month:Asia/Manila:\d{4}-(0[1-9]|1[0-2])$")
+    outbox: SyncOutboxHealthResponse
+    writer: LedgerWriterDiagnosticsResponse
+    persistence: LocalPersistenceDiagnosticsResponse
+    camera: CameraReliabilityDiagnosticsResponse
+
+
 app = FastAPI(
     title="TANAW Local ML Camera Service",
-    version="0.1.0",
+    version=LOCAL_SERVICE_VERSION,
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
@@ -331,6 +415,53 @@ def get_sync_outbox_health() -> SyncOutboxHealthResponse:
     return SyncOutboxHealthResponse.model_validate(manager.sync_outbox_health())
 
 
+@app.get(
+    "/sync/outbox/recovery",
+    response_model=list[SyncOutboxRecoveryItemResponse],
+)
+def list_sync_outbox_recovery_items(
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[SyncOutboxRecoveryItemResponse]:
+    return [
+        SyncOutboxRecoveryItemResponse.model_validate(item)
+        for item in manager.list_sync_outbox_recovery_items(limit=limit)
+    ]
+
+
+@app.get(
+    "/sync/outbox/{outbox_item_id}/recovery",
+    response_model=SyncOutboxRecoveryItemResponse,
+)
+def get_sync_outbox_recovery_item(outbox_item_id: UUID) -> SyncOutboxRecoveryItemResponse:
+    item = manager.get_sync_outbox_recovery_item(str(outbox_item_id))
+    if item is None:
+        raise HTTPException(status_code=404, detail="Unknown official sync outbox item.")
+    return SyncOutboxRecoveryItemResponse.model_validate(item)
+
+
+@app.post(
+    "/sync/outbox/{outbox_item_id}/retry",
+    response_model=SyncOutboxRecoveryItemResponse,
+)
+def retry_sync_outbox_item(
+    outbox_item_id: UUID,
+    payload: SyncOutboxManualRetryRequest,
+) -> SyncOutboxRecoveryItemResponse:
+    try:
+        item = manager.requeue_sync_outbox_item(
+            str(outbox_item_id),
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return SyncOutboxRecoveryItemResponse.model_validate(item)
+
+
+@app.get("/diagnostics/operations", response_model=LocalOperationalDiagnosticsResponse)
+def get_operational_diagnostics() -> LocalOperationalDiagnosticsResponse:
+    return LocalOperationalDiagnosticsResponse.model_validate(manager.operational_diagnostics())
+
+
 @app.post("/sync/outbox/{outbox_item_id}/acknowledge")
 def acknowledge_sync_outbox_item(
     outbox_item_id: str,
@@ -382,12 +513,12 @@ def purge_local_report_raw_events(
     return ReportRawDataPurgeResponse(**result)
 
 
-@app.post("/mock/prepare", response_model=MockPrepareResponse)
-def prepare_mock_counts(payload: MockPrepareRequest) -> MockPrepareResponse:
+@app.post("/simulations/prepare", response_model=SimulationPrepareResponse)
+def prepare_simulation_counts(payload: SimulationPrepareRequest) -> SimulationPrepareResponse:
     try:
-        return MockPrepareResponse(
-            **manager.prepare_mock_counts(
-                mock_run_id=payload.mock_run_id,
+        return SimulationPrepareResponse(
+            **manager.prepare_simulation_counts(
+                simulation_run_id=payload.simulation_run_id,
                 enterprise_id=payload.enterprise_id,
                 enterprise_name=payload.enterprise_name,
                 entries=payload.entries,
@@ -401,12 +532,12 @@ def prepare_mock_counts(payload: MockPrepareRequest) -> MockPrepareResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/mock/start", response_model=MockStatusResponse)
-def start_mock_mode(payload: MockStartRequest) -> MockStatusResponse:
+@app.post("/simulations/start", response_model=SimulationStatusResponse)
+def start_simulation(payload: SimulationStartRequest) -> SimulationStatusResponse:
     try:
-        return MockStatusResponse(
-            **manager.start_mock_mode(
-                mock_run_id=payload.mock_run_id,
+        return SimulationStatusResponse(
+            **manager.start_simulation(
+                simulation_run_id=payload.simulation_run_id,
                 mode=payload.mode,
                 scenario=payload.scenario,
                 events_per_minute=payload.events_per_minute,
@@ -422,51 +553,51 @@ def start_mock_mode(payload: MockStartRequest) -> MockStatusResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/mock/pause", response_model=MockStatusResponse)
-def pause_mock_mode() -> MockStatusResponse:
+@app.post("/simulations/pause", response_model=SimulationStatusResponse)
+def pause_simulation() -> SimulationStatusResponse:
     try:
-        return MockStatusResponse(**manager.pause_mock_mode())
+        return SimulationStatusResponse(**manager.pause_simulation())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/mock/resume", response_model=MockStatusResponse)
-def resume_mock_mode() -> MockStatusResponse:
+@app.post("/simulations/resume", response_model=SimulationStatusResponse)
+def resume_simulation() -> SimulationStatusResponse:
     try:
-        return MockStatusResponse(**manager.resume_mock_mode())
+        return SimulationStatusResponse(**manager.resume_simulation())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/mock/stop", response_model=MockStatusResponse)
-def stop_mock_mode() -> MockStatusResponse:
-    return MockStatusResponse(**manager.stop_mock_mode())
+@app.post("/simulations/stop", response_model=SimulationStatusResponse)
+def stop_simulation() -> SimulationStatusResponse:
+    return SimulationStatusResponse(**manager.stop_simulation())
 
 
-@app.post("/mock/event", response_model=MockStatusResponse)
-def append_mock_event(payload: MockManualEventRequest) -> MockStatusResponse:
+@app.post("/simulations/event", response_model=SimulationStatusResponse)
+def append_simulation_event(payload: SimulationManualEventRequest) -> SimulationStatusResponse:
     try:
-        return MockStatusResponse(**manager.append_mock_event(payload.direction))
+        return SimulationStatusResponse(**manager.append_simulation_event(payload.direction))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/mock/reset", response_model=MockResetResponse)
-def reset_mock_data(mock_run_id: str | None = None) -> MockResetResponse:
-    removed = manager.reset_mock_data(mock_run_id)
-    return MockResetResponse(stopped=True, removed=removed)
+@app.post("/simulations/reset", response_model=SimulationResetResponse)
+def reset_simulation_data(simulation_run_id: str | None = None) -> SimulationResetResponse:
+    removed = manager.reset_simulation_data(simulation_run_id)
+    return SimulationResetResponse(stopped=True, removed=removed)
 
 
-@app.get("/mock/status", response_model=MockStatusResponse)
-def mock_status() -> MockStatusResponse:
-    return MockStatusResponse(**manager.mock_status())
+@app.get("/simulations/status", response_model=SimulationStatusResponse)
+def simulation_status() -> SimulationStatusResponse:
+    return SimulationStatusResponse(**manager.simulation_status())
 
 
-@app.post("/mock/generate-report", response_model=LocalReportRevisionResponse)
-def generate_mock_report(payload: MockReportRequest) -> LocalReportRevisionResponse:
+@app.post("/simulations/generate-report", response_model=LocalReportRevisionResponse)
+def generate_simulation_report(payload: SimulationReportRequest) -> LocalReportRevisionResponse:
     try:
         return LocalReportRevisionResponse(
-            **manager.generate_mock_report(
+            **manager.generate_simulation_report(
                 payload.report_id, payload.period_id, payload.notes, payload.payload
             )
         )

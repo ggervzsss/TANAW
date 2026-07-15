@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.core.pagination_schemas import CursorPageInfo
+
 NotificationSeverity = Literal["Info", "Warning", "Critical", "Success"]
 
 
@@ -20,6 +22,11 @@ class UserNotificationSummary(BaseModel):
     recipientEnterpriseId: str | None = None
     createdAt: str
     readAt: str | None = None
+
+
+class UserNotificationPage(BaseModel):
+    items: list[UserNotificationSummary]
+    page: CursorPageInfo
 
 
 class EnterpriseNotificationCreate(BaseModel):

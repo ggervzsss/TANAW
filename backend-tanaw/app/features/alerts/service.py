@@ -1,9 +1,11 @@
-from sqlalchemy import select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.accounts.models import AccountRole
+from app.core.keyset_pagination import decode_cursor, encode_cursor, filter_fingerprint
+from app.core.pagination_schemas import CursorPageInfo
+from app.features.accounts.models import Account, AccountRole
 from app.features.alerts.models import OperationalAlert
-from app.features.alerts.schemas import OperationalAlertSummary
+from app.features.alerts.schemas import OperationalAlertPage, OperationalAlertSummary
 from app.features.events.operational_resources import enqueue_operational_resource_event
 
 
@@ -91,9 +93,45 @@ async def create_operational_alert(
     return alert
 
 
-async def list_operational_alerts(db: AsyncSession) -> list[OperationalAlertSummary]:
-    result = await db.scalars(select(OperationalAlert).order_by(OperationalAlert.created_at.desc()))
-    return [to_operational_alert_summary(alert) for alert in result]
+async def list_operational_alerts(
+    db: AsyncSession, account: Account, *, limit: int, cursor: str | None
+) -> OperationalAlertPage:
+    fingerprint = filter_fingerprint({"accountId": str(account.id), "role": account.role.value})
+    statement = (
+        select(OperationalAlert)
+        .order_by(OperationalAlert.created_at.desc(), OperationalAlert.id.desc())
+        .limit(limit + 1)
+    )
+    if cursor is not None:
+        cursor_at, cursor_id = decode_cursor(cursor, fingerprint=fingerprint)
+        statement = statement.where(
+            or_(
+                OperationalAlert.created_at < cursor_at,
+                and_(OperationalAlert.created_at == cursor_at, OperationalAlert.id < cursor_id),
+            )
+        )
+    rows = (await db.scalars(statement)).all()
+    selected = rows[:limit]
+    has_more = len(rows) > limit
+    next_cursor = (
+        encode_cursor(
+            occurred_at=selected[-1].created_at,
+            resource_id=selected[-1].id,
+            fingerprint=fingerprint,
+        )
+        if has_more and selected
+        else None
+    )
+    items = [to_operational_alert_summary(alert) for alert in selected]
+    return OperationalAlertPage(
+        items=items,
+        page=CursorPageInfo(
+            limit=limit,
+            returnedCount=len(items),
+            hasMore=has_more,
+            nextCursor=next_cursor,
+        ),
+    )
 
 
 def can_view_operational_event(role: str, event_type: str) -> bool:

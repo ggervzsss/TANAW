@@ -28,7 +28,7 @@ describe("reporting v2 service", () => {
       const pageIndex = cursor ? cursors.indexOf(cursor) + 1 : 0;
       return {
         items: Array.from({ length: 100 }, (_, index) => pageIndex * 100 + index),
-        page: { hasMore: pageIndex < 5, nextCursor: pageIndex < 5 ? cursors[pageIndex]! : null },
+        page: { hasMore: pageIndex < 5, limit: 100, nextCursor: pageIndex < 5 ? cursors[pageIndex]! : null, returnedCount: 100 },
       };
     });
 
@@ -42,7 +42,9 @@ describe("reporting v2 service", () => {
   });
 
   it("rejects repeated cursors instead of looping or truncating", async () => {
-    await expect(collectCursorPages(async () => ({ items: [], page: { hasMore: true, nextCursor: "same-cursor" } }), "test resource")).rejects.toThrow("repeated continuation cursor");
+    await expect(
+      collectCursorPages(async () => ({ items: [], page: { hasMore: true, limit: 100, nextCursor: "same-cursor", returnedCount: 0 } }), "test resource"),
+    ).rejects.toThrow("repeated continuation cursor");
   });
 
   it("loads official report pages with filters and follows the backend cursor", async () => {

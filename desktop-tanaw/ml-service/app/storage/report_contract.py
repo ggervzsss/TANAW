@@ -49,13 +49,13 @@ def local_camera_key(
 ) -> str:
     if central_camera_id is not None:
         try:
-            return str(UUID(str(central_camera_id)))
+            UUID(str(central_camera_id))
         except ValueError as exc:
             raise ValueError("Central camera ID must be a valid UUID.") from exc
     normalized_name = str(camera_name or "unknown").strip().lower()
     suffix_source = f"{camera_id}:{normalized_name}"
     suffix = hashlib.sha256(suffix_source.encode("utf-8")).hexdigest()[:16]
-    return f"unassigned:{suffix}"
+    return f"camera:{suffix}"
 
 
 def allocate_camera_event_sequences(
@@ -97,8 +97,8 @@ def _revision_document(
     unique_count: int,
     notes: Any,
     payload: dict[str, Any],
-    source_kind: str,
-    mock_run_id: Any,
+    classification: str,
+    simulation_run_id: Any,
     source_batches: list[dict[str, Any]],
     coverage_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -130,7 +130,7 @@ def _revision_document(
             len(coverage.get("gaps", [])) if coverage.get("evidenceStatus") == "recorded" else None
         ),
     }
-    metric_provenance = "system_derived" if source_kind == "mock" else "camera_derived"
+    metric_provenance = "system_derived" if classification == "simulation" else "camera_derived"
     metrics = [
         _metric_command(
             "entries",

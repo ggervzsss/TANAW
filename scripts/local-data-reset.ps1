@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 if ($args.Count -ne 0) {
-    Write-Host "Usage: .\scripts\local-mockdata-off.ps1"
+    Write-Host "Usage: .\scripts\local-data-reset.ps1"
     Write-Host "Removes all local desktop ledger data while preserving camera settings."
     exit 2
 }

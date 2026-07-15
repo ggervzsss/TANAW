@@ -95,12 +95,6 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
       icon: Inbox,
     },
     {
-      id: "dev-log",
-      label: "Dev Log",
-      path: routes.it.devLog,
-      icon: Inbox,
-    },
-    {
       id: "system-settings",
       label: "System Settings",
       path: routes.it.systemSettings,

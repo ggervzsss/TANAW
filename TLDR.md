@@ -136,7 +136,7 @@ Sign in at <http://localhost:5173>. These startup-seeded passwords bypass
 first-login password-change onboarding.
 
 Create the persistent target account under **Enterprise Accounts** before
-loading mock data:
+loading simulation data:
 
 ```text
 Enterprise:    Archie's Event Place
@@ -161,15 +161,15 @@ and prepared previous-period plus current-period desktop counts for Archie's
 Event Place:
 
 ```shell
-./scripts/mockdata-on
+./scripts/simulation-on
 ```
 
-PowerShell: `.\scripts\mockdata-on.ps1`
+PowerShell: `.\scripts\simulation-on.ps1`
 
 All generated accounts use:
 
 ```text
-Password: TanawTest123!
+Password: Visitor simulation access phrase 2026
 ```
 
 Useful generated accounts:
@@ -190,18 +190,18 @@ Desktop password: the password selected during Archie's onboarding
 Check the simulation:
 
 ```shell
-./scripts/mockdata-status
+./scripts/simulation-status
 ```
 
-PowerShell: `.\scripts\mockdata-status.ps1`
+PowerShell: `.\scripts\simulation-status.ps1`
 
 If a simulation already exists or needs fresh dates, replace it:
 
 ```shell
-./scripts/mockdata-reset
+./scripts/simulation-reset
 ```
 
-PowerShell: `.\scripts\mockdata-reset.ps1`
+PowerShell: `.\scripts\simulation-reset.ps1`
 
 Other ranges are `30d` and `12m`. Other scenarios are `peak-traffic` and
 `camera-health`.
@@ -255,12 +255,13 @@ In the enterprise desktop:
 
 In the web portal:
 
-1. Sign in as `reports.staff@tanaw.test` with `TanawTest123!`.
+1. Sign in as `reports.staff@tanaw.test` with
+   `Visitor simulation access phrase 2026`.
 2. Open **Batch Reports** for the relevant reporting periods.
 3. Review the target reports.
 4. Mark them **Ready to Consolidate**.
 5. Generate the final report.
-6. Open **Final Reports Audit** and inspect its source rows.
+6. Open **Final Reports Audit** and inspect its exact immutable revision items.
 
 ## 9. Inspect the local ML simulation
 
@@ -272,15 +273,15 @@ Electron-owned ML child is intentionally unsupported.
 
 Close the desktop before clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows and mock
-runs, while preserving camera definitions, Electron preferences, authentication
+Remove all local desktop ledger data, including official CCTV-derived rows and
+simulation runs, while preserving camera definitions, Electron preferences, authentication
 storage, and caches:
 
 ```shell
-./scripts/local-mockdata-off
+./scripts/local-data-reset
 ```
 
-PowerShell: `.\scripts\local-mockdata-off.ps1`
+PowerShell: `.\scripts\local-data-reset.ps1`
 
 The lower-level inspection and full reset commands still run from
 `desktop-tanaw`.
@@ -331,15 +332,15 @@ Keep the target desktop signed in and the containers running, then remove all
 run-tagged simulation data from another terminal opened at the repository root:
 
 ```shell
-./scripts/mockdata-off
+./scripts/simulation-off
 ```
 
-PowerShell: `.\scripts\mockdata-off.ps1`
+PowerShell: `.\scripts\simulation-off.ps1`
 
 Confirm that the run is marked as removed:
 
 ```shell
-./scripts/mockdata-status
+./scripts/simulation-status
 ```
 
 Quit the desktop app. If `npm run dev` is still active, press `Ctrl+C` in its
@@ -372,7 +373,7 @@ and the default/temporary accounts:
 docker compose down -v
 ```
 
-Use `mock-data off` for normal simulation cleanup. Use `down -v` only when a
+Use `simulation-data off` for normal simulation cleanup. Use `down -v` only when a
 completely empty local database is intended.
 
 ## Everyday command cheat sheet
@@ -387,11 +388,11 @@ completely empty local database is intended.
 | Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
-| Generate mock data           | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                                                                                                         |
-| Show mock status             | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                                                                                                 |
-| Refresh mock data            | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                                                                                                   |
-| Remove mock data             | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                                                                                                       |
+| Generate simulation data     | `./scripts/simulation-on` or `.\scripts\simulation-on.ps1`                                                                                                     |
+| Show simulation status      | `./scripts/simulation-status` or `.\scripts\simulation-status.ps1`                                                                                             |
+| Refresh simulation data      | `./scripts/simulation-reset` or `.\scripts\simulation-reset.ps1`                                                                                               |
+| Remove simulation data       | `./scripts/simulation-off` or `.\scripts\simulation-off.ps1`                                                                                                   |
 | Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                                           |
-| Clear desktop local ledgers   | `./scripts/local-mockdata-off` or `.\scripts\local-mockdata-off.ps1`                                                                                          |
+| Clear desktop local ledgers  | `./scripts/local-data-reset` or `.\scripts\local-data-reset.ps1`                                                                                               |
 | Stop containers              | `docker compose down`                                                                                                                                           |
 | Delete Docker database       | `docker compose down -v`                                                                                                                                        |

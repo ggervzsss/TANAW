@@ -11,7 +11,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     Uuid,
     func,
     text,
@@ -150,49 +149,52 @@ class AccountEmailChangeRequest(Base):
     )
 
 
-class DeliveryStatus(StrEnum):
-    RECORDED = "recorded"
-    SENT = "sent"
-    ACCEPTED = "accepted"
-    FAILED = "failed"
+class SystemSetting(Base):
+    """The bounded, typed singleton of runtime-editable TANAW policy."""
 
-
-class DevDelivery(Base):
-    __tablename__ = "dev_deliveries"
-
-    id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
-    )
-    account_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=False),
-        ForeignKey("accounts.id", ondelete="RESTRICT"),
-        index=True,
-        nullable=False,
-    )
-    recipient: Mapped[str] = mapped_column(String(255), nullable=False)
-    subject: Mapped[str] = mapped_column(String(255), nullable=False)
-    body: Mapped[str] = mapped_column(Text, nullable=False)
-    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="local")
-    provider_message_id: Mapped[str | None] = mapped_column(
-        String(120), unique=True, index=True, nullable=True
-    )
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[DeliveryStatus] = mapped_column(
-        Enum(DeliveryStatus, name="delivery_status"),
-        nullable=False,
-        default=DeliveryStatus.RECORDED,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    __tablename__ = "system_settings"
+    __table_args__ = (
+        CheckConstraint("id = 'default'", name="ck_system_settings_singleton"),
+        CheckConstraint(
+            "login_attempt_limit IN (3, 5, 10)", name="ck_system_settings_login_attempt_limit"
+        ),
+        CheckConstraint(
+            "login_lock_minutes IN (5, 15, 30, 60)",
+            name="ck_system_settings_login_lock_minutes",
+        ),
+        CheckConstraint(
+            "log_retention_days IN (90, 180, 365)",
+            name="ck_system_settings_log_retention_days",
+        ),
     )
 
-
-class SystemConfiguration(Base):
-    __tablename__ = "system_configuration"
-
-    id: Mapped[str] = mapped_column(String(40), primary_key=True, default="default")
-    values_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
-    updated_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, default="default")
+    login_attempt_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    login_lock_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    log_retention_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
+    camera_session_error_alerts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    gateway_service_error_alerts: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    sync_delay_alerts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    failed_login_lockout_alerts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    updated_by_account_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("accounts.id", ondelete="RESTRICT"), nullable=True
+    )
+    updated_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class SeedState(Base):
+    """One-time startup seed completion, isolated from mutable runtime settings."""
+
+    __tablename__ = "seed_states"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    initialized_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    account_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

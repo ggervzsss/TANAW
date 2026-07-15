@@ -5,4 +5,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$REPO_ROOT"
-exec docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off "$@"
+exec docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend uv run simulation-data off "$@"

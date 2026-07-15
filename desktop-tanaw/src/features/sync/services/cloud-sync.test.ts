@@ -6,8 +6,8 @@ const {
   getMlServiceStatus,
   getLocalMetricsSummary,
   getSimulationStatus,
-  prepareLocalMockCounts,
-  resetLocalMockData,
+  prepareLocalSimulationCounts,
+  resetLocalSimulationData,
   listReadySyncOutboxItems,
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
@@ -20,8 +20,8 @@ const {
   getMlServiceStatus: vi.fn(),
   getLocalMetricsSummary: vi.fn(),
   getSimulationStatus: vi.fn(),
-  prepareLocalMockCounts: vi.fn(),
-  resetLocalMockData: vi.fn(),
+  prepareLocalSimulationCounts: vi.fn(),
+  resetLocalSimulationData: vi.fn(),
   listReadySyncOutboxItems: vi.fn(),
   acknowledgeSyncOutboxItem: vi.fn(),
   recordSyncOutboxFailure: vi.fn(),
@@ -36,8 +36,8 @@ vi.mock("../../camera/services/ml-service", () => ({
   getMlServiceStatus,
   getLocalMetricsSummary,
   getSimulationStatus,
-  prepareLocalMockCounts,
-  resetLocalMockData,
+  prepareLocalSimulationCounts,
+  resetLocalSimulationData,
   listReadySyncOutboxItems,
   acknowledgeSyncOutboxItem,
   recordSyncOutboxFailure,
@@ -46,7 +46,7 @@ vi.mock("../../camera/services/ml-service", () => ({
 }));
 vi.mock("../../reports/services/report-history", () => ({ listEnterpriseReportHistory }));
 
-import { prepareDesktopMockCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
+import { prepareDesktopSimulationCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
 
 const OUTBOX_ENDPOINT = "/operational/desktop/report-submissions/v2";
 
@@ -54,7 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getMlServiceStatus.mockResolvedValue({ baseUrl: "tanaw-ml://local", error: null, pid: 123, running: true });
   getSimulationStatus.mockResolvedValue(null);
-  prepareLocalMockCounts.mockResolvedValue({ prepared: true });
+  prepareLocalSimulationCounts.mockResolvedValue({ prepared: true });
   listLocalReports.mockResolvedValue([]);
   listEnterpriseReportHistory.mockResolvedValue([]);
   acknowledgeSyncOutboxItem.mockResolvedValue({ acknowledged: true });
@@ -62,7 +62,7 @@ beforeEach(() => {
   purgeLocalReportRawEvents.mockResolvedValue({ purged: true });
 });
 
-describe("canonical mock preparation periods", () => {
+describe("canonical simulation preparation periods", () => {
   const juneCounts = {
     entries: 10,
     exits: 3,
@@ -88,11 +88,11 @@ describe("canonical mock preparation periods", () => {
       },
     });
 
-    await prepareDesktopMockCounts(juneCounts.periodKey);
+    await prepareDesktopSimulationCounts(juneCounts.periodKey);
 
     expect(getLocalMetricsSummary).not.toHaveBeenCalled();
-    expect(prepareLocalMockCounts).toHaveBeenCalledWith("tanaw-ml://local", {
-      mockRunId: "run-1",
+    expect(prepareLocalSimulationCounts).toHaveBeenCalledWith("tanaw-ml://local", {
+      simulationRunId: "run-1",
       enterpriseId: "enterprise-1",
       enterpriseName: "Enterprise One",
       entries: 10,
@@ -118,9 +118,9 @@ describe("canonical mock preparation periods", () => {
     });
     getLocalMetricsSummary.mockResolvedValue({ period_id: null, period: null });
 
-    await expect(prepareDesktopMockCounts()).resolves.toBeNull();
+    await expect(prepareDesktopSimulationCounts()).resolves.toBeNull();
 
-    expect(prepareLocalMockCounts).not.toHaveBeenCalled();
+    expect(prepareLocalSimulationCounts).not.toHaveBeenCalled();
   });
 
   it("rejects prepared counts whose display label has no canonical identity", async () => {
@@ -134,8 +134,8 @@ describe("canonical mock preparation periods", () => {
       },
     });
 
-    await expect(prepareDesktopMockCounts("month:Asia/Manila:2026-06")).rejects.toThrow("No canonical reporting period");
-    expect(prepareLocalMockCounts).not.toHaveBeenCalled();
+    await expect(prepareDesktopSimulationCounts("month:Asia/Manila:2026-06")).rejects.toThrow("No canonical reporting period");
+    expect(prepareLocalSimulationCounts).not.toHaveBeenCalled();
   });
 });
 

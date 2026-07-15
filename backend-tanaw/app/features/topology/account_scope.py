@@ -20,6 +20,7 @@ from app.features.topology.models import (
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 
@@ -35,6 +36,7 @@ class AccountTopology:
     membership: EnterpriseMembership
     enterprise: Enterprise
     site: EnterpriseSite
+    location: SiteLocationVersion
     active_devices: tuple[EdgeDevice, ...]
     live_state: SiteLiveState | None
     evaluated_at: datetime
@@ -46,13 +48,16 @@ class AccountTopology:
 
     @property
     def gateway_status(self) -> str:
-        if not self.active_devices:
+        aggregators = tuple(
+            device for device in self.active_devices if device.device_role == "telemetry_aggregator"
+        )
+        if not aggregators:
             return "Not Linked"
-        if len(self.active_devices) != 1 or self.live_state is None:
+        if len(aggregators) != 1 or self.live_state is None:
             return "Offline"
 
         state = self.live_state
-        if state.edge_device_id != self.active_devices[0].id:
+        if state.edge_device_id != aggregators[0].id:
             return "Offline"
         evaluated_at = _as_utc(self.evaluated_at)
         if evaluated_at >= _as_utc(state.offline_after_at) or state.service_state == "unavailable":
@@ -185,7 +190,7 @@ async def load_account_topologies(
     sites = list(await db.scalars(_with_lock(site_statement, EnterpriseSite, lock)))
     sites_by_enterprise: dict[str, list[EnterpriseSite]] = defaultdict(list)
     for site in sites:
-        if _effective_at(site.effective_from, site.effective_to, evaluated_at):
+        if _effective_at(site.registered_at, site.retired_at, evaluated_at):
             sites_by_enterprise[site.enterprise_id].append(site)
 
     current_site_by_account: dict[str, EnterpriseSite] = {}
@@ -214,6 +219,25 @@ async def load_account_topologies(
         current_site_by_account[account_id] = site
 
     site_ids = {site.id for site in current_site_by_account.values()}
+    locations = list(
+        await db.scalars(
+            _with_lock(
+                select(SiteLocationVersion).where(
+                    SiteLocationVersion.site_id.in_(site_ids),
+                    SiteLocationVersion.effective_from <= evaluated_at,
+                    or_(
+                        SiteLocationVersion.effective_to.is_(None),
+                        SiteLocationVersion.effective_to > evaluated_at,
+                    ),
+                ),
+                SiteLocationVersion,
+                lock,
+            )
+        )
+    )
+    locations_by_site: dict[str, list[SiteLocationVersion]] = defaultdict(list)
+    for location in locations:
+        locations_by_site[location.site_id].append(location)
     device_statement = select(EdgeDevice).where(
         EdgeDevice.site_id.in_(site_ids), EdgeDevice.lifecycle_state == "active"
     )
@@ -250,11 +274,18 @@ async def load_account_topologies(
             raise AccountTopologyInvariantError(
                 f"Enterprise {enterprise.id} has a classification-mismatched active device."
             )
+        effective_locations = locations_by_site.get(site.id, [])
+        if len(effective_locations) != 1:
+            raise AccountTopologyInvariantError(
+                f"Enterprise site {site.id} must have exactly one location version effective "
+                f"at {evaluated_at.isoformat()}."
+            )
         resolved[account.id] = AccountTopology(
             account=account,
             membership=effective_membership,
             enterprise=enterprise,
             site=site,
+            location=effective_locations[0],
             active_devices=active_devices,
             live_state=live_state_by_site.get(site.id),
             evaluated_at=evaluated_at,
@@ -328,16 +359,77 @@ async def get_enterprise_account_by_identifier(
     return accounts[0] if accounts else None
 
 
-def invalidate_site_coordinates(site: EnterpriseSite) -> None:
-    """Invalidate coordinate evidence after the address meaning changes."""
+async def replace_site_location(
+    db: AsyncSession,
+    *,
+    site: EnterpriseSite,
+    current: SiteLocationVersion,
+    barangay: str | None,
+    address: str | None,
+    timezone_name: str,
+    building_capacity: int,
+    latitude: float | None,
+    longitude: float | None,
+    location_source: str | None,
+    location_confidence: float | None,
+    geocoded_address: str | None,
+    coordinates_confirmed_at: datetime | None,
+    change_reason: str,
+    changed_at: datetime | None = None,
+) -> SiteLocationVersion:
+    """Close current evidence and append its immutable successor."""
 
-    site.latitude = None
-    site.longitude = None
-    site.location_source = None
-    site.location_confidence = None
-    site.geocoded_address = None
-    site.coordinates_updated_at = None
-    site.location_version += 1
+    effective_from = _as_utc(changed_at or datetime.now(UTC))
+    current.effective_to = effective_from
+    successor = SiteLocationVersion(
+        site_id=site.id,
+        classification=site.classification,
+        version=current.version + 1,
+        barangay=barangay,
+        address=address,
+        timezone_name=timezone_name,
+        building_capacity=building_capacity,
+        latitude=latitude,
+        longitude=longitude,
+        location_source=location_source,
+        location_confidence=location_confidence,
+        geocoded_address=geocoded_address,
+        coordinates_confirmed_at=coordinates_confirmed_at,
+        change_reason=change_reason,
+        effective_from=effective_from,
+    )
+    db.add(successor)
+    await db.flush([current, successor])
+    return successor
+
+
+async def invalidate_site_coordinates(
+    db: AsyncSession,
+    site: EnterpriseSite,
+    current: SiteLocationVersion,
+    *,
+    barangay: str | None,
+    address: str | None,
+    building_capacity: int,
+) -> SiteLocationVersion:
+    """Version coordinate invalidation after the address meaning changes."""
+
+    return await replace_site_location(
+        db,
+        site=site,
+        current=current,
+        barangay=barangay,
+        address=address,
+        timezone_name=current.timezone_name,
+        building_capacity=building_capacity,
+        latitude=None,
+        longitude=None,
+        location_source=None,
+        location_confidence=None,
+        geocoded_address=None,
+        coordinates_confirmed_at=None,
+        change_reason="address_changed_reconfirmation_required",
+    )
 
 
 def _with_lock[ModelT](

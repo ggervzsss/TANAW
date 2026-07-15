@@ -307,6 +307,10 @@ class ResilienceLedgerTest(unittest.TestCase):
             self.assertEqual(instrumentation["active_writer_count"], 0)
             self.assertGreaterEqual(instrumentation["committed_transaction_count"], 2)
             self.assertEqual(instrumentation["rolled_back_transaction_count"], 0)
+            self.assertGreaterEqual(instrumentation["lock_wait_observations"], 2)
+            self.assertGreaterEqual(instrumentation["maximum_lock_wait_ms"], 0)
+            self.assertGreaterEqual(instrumentation["transaction_duration_observations"], 2)
+            self.assertGreaterEqual(instrumentation["maximum_transaction_duration_ms"], 0)
 
     def test_runtime_snapshot_and_typed_live_state_roll_back_as_one_transaction(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -469,7 +473,7 @@ def _event(*, central_camera_id: str | None = None) -> dict:
         "track_id": 1,
         "is_unique_entry": True,
         "counts": {"entry": 1, "exit": 0, "occupancy": 1},
-        "source_kind": "real",
+        "classification": "official",
     }
     if central_camera_id is not None:
         payload["central_camera_id"] = central_camera_id

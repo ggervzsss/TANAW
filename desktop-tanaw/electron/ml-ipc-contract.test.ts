@@ -28,7 +28,15 @@ describe("ML IPC operation allowlist", () => {
   it("maps only exact outbox acknowledgement and failure operations", () => {
     const outboxItemId = "11111111-1111-4111-8111-111111111111";
     expect(resolveMlOperationRequest("sync.outbox.health", undefined)).toEqual({ method: "GET", path: "/sync/outbox/health" });
+    expect(resolveMlOperationRequest("diagnostics.operations", undefined)).toEqual({ method: "GET", path: "/diagnostics/operations" });
     expect(resolveMlOperationRequest("sync.outbox.ready", { limit: 25 })).toEqual({ method: "GET", path: "/sync/outbox/ready?limit=25" });
+    expect(resolveMlOperationRequest("sync.outbox.recovery.list", { limit: 25 })).toEqual({ method: "GET", path: "/sync/outbox/recovery?limit=25" });
+    expect(resolveMlOperationRequest("sync.outbox.recovery.detail", { outboxItemId })).toEqual({ method: "GET", path: `/sync/outbox/${outboxItemId}/recovery` });
+    expect(resolveMlOperationRequest("sync.outbox.recovery.retry", { outboxItemId, reason: "Reviewed after backend correction." })).toEqual({
+      method: "POST",
+      path: `/sync/outbox/${outboxItemId}/retry`,
+      body: JSON.stringify({ reason: "Reviewed after backend correction." }),
+    });
     expect(resolveMlOperationRequest("sync.outbox.acknowledge", { outboxItemId, acknowledgement: { contractVersion: 2 } })).toEqual({
       method: "POST",
       path: `/sync/outbox/${outboxItemId}/acknowledge`,
@@ -40,6 +48,7 @@ describe("ML IPC operation allowlist", () => {
       body: JSON.stringify({ error_class: "network", error_message: "offline", retryable: true, http_status: null }),
     });
     expect(() => resolveMlOperationRequest("sync.outbox.acknowledge", { outboxItemId: "report-id", acknowledgement: {} })).toThrow("outbox identifier");
+    expect(() => resolveMlOperationRequest("sync.outbox.recovery.detail", { outboxItemId, extra: true })).toThrow("payload");
   });
 
   it("never accepts camera credentials in a camera control payload", () => {

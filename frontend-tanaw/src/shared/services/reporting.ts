@@ -1,4 +1,5 @@
 import { apiClient } from "../lib/apiClient";
+import { collectCursorPages } from "./cursorPagination";
 import type {
   EnterpriseReportDetail,
   EnterpriseReportListItem,
@@ -240,28 +241,7 @@ export async function fetchFinalReportArtifact(reportFinalizationId: string, fin
   };
 }
 
-export async function collectCursorPages<TItem>(
-  readPage: (cursor?: string) => Promise<{ items: TItem[]; page: { hasMore: boolean; nextCursor: string | null } }>,
-  resourceName: string,
-): Promise<TItem[]> {
-  const items: TItem[] = [];
-  const observedCursors = new Set<string>();
-  let cursor: string | undefined;
-
-  for (;;) {
-    const page = await readPage(cursor);
-    items.push(...page.items);
-    if (!page.page.hasMore) {
-      if (page.page.nextCursor !== null) throw new Error(`The ${resourceName} page returned a cursor after the final page.`);
-      return items;
-    }
-    const nextCursor = page.page.nextCursor;
-    if (!nextCursor) throw new Error(`The ${resourceName} page omitted its required continuation cursor.`);
-    if (observedCursors.has(nextCursor)) throw new Error(`The ${resourceName} page returned a repeated continuation cursor.`);
-    observedCursors.add(nextCursor);
-    cursor = nextCursor;
-  }
-}
+export { collectCursorPages } from "./cursorPagination";
 
 function assertOfficialPage(
   page: {

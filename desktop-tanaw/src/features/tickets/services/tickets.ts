@@ -1,4 +1,5 @@
 import { staffApi } from "../../../lib/axios";
+import { collectCursorPages, type CursorPage } from "../../../lib/cursor-pagination";
 
 export type SupportTicketCategory = "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
 export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
@@ -55,8 +56,12 @@ export type SupportTicketCreatePayload = {
 };
 
 export async function listSupportTickets() {
-  const response = await staffApi.get<SupportTicket[]>("/operational/tickets");
-  return response.data;
+  return collectCursorPages(async (cursor) => {
+    const response = await staffApi.get<CursorPage<SupportTicket>>("/operational/tickets", {
+      params: { limit: 100, ...(cursor ? { cursor } : {}) },
+    });
+    return response.data;
+  }, "support ticket");
 }
 
 export async function getSupportTicket(ticketId: string) {

@@ -47,7 +47,7 @@ const toneClasses: Record<PortalNotificationTone, { icon: string; dot: string; b
 
 export function NotificationsPage({ role }: NotificationsPageProps) {
   const navigate = useNavigate();
-  const { allNotifications, isLoading, markAllAsRead, markAsRead, unreadCount } = usePortalNotifications(role);
+  const { allNotifications, isLoading, markAllAsRead, markAsRead, readError, unreadCount } = usePortalNotifications(role);
   const copy = roleCopy[role];
   const totalCount = allNotifications.length;
 
@@ -61,6 +61,12 @@ export function NotificationsPage({ role }: NotificationsPageProps) {
   return (
     <PageMotion>
       <PageHeader title="Notifications" description={copy.description} />
+
+      {readError && (
+        <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-200">
+          {readError}
+        </div>
+      )}
 
       <Panel className="overflow-hidden">
         <PanelHeader

@@ -184,8 +184,8 @@ export type LocalMetricsSummary = {
   unclassified_events: number;
   first_event_at: string | null;
   last_event_at: string | null;
-  source_kind: "real" | "mock" | "hybrid";
-  mock_run_id: string | null;
+  classification: "official" | "simulation";
+  simulation_run_id: string | null;
   period_id: string | null;
   period: string | null;
   starts_at_utc: string | null;
@@ -246,11 +246,13 @@ export type LocalReportRecord = {
   notes: string | null;
   payload: Record<string, unknown>;
   sync_status: string;
-  source_kind?: "real" | "mock" | "hybrid";
-  mock_run_id?: string | null;
-  synced_at: string | null;
+  classification?: "official" | "simulation";
+  simulation_run_id?: string | null;
+  acknowledged_at: string | null;
   raw_purged_at?: string | null;
 };
+
+export type LocalSyncOutboxStatus = "ready" | "retry" | "in_flight" | "acknowledged" | "dead_letter";
 
 export type LocalSyncOutboxItem = {
   outbox_item_id: string;
@@ -261,7 +263,7 @@ export type LocalSyncOutboxItem = {
   contract_version: number;
   payload: Record<string, unknown>;
   payload_hash: string;
-  status: "ready" | "retry";
+  status: LocalSyncOutboxStatus;
   created_at: string;
   next_attempt_at: string;
   attempt_count: number;
@@ -272,8 +274,28 @@ export type LocalSyncOutboxItem = {
   acknowledgement: Record<string, unknown>;
 };
 
+export type LocalSyncOutboxRecoveryItem = {
+  outbox_item_id: string;
+  report_id: string;
+  report_revision_id: string;
+  revision_number: number;
+  command_id: string;
+  endpoint: "/operational/desktop/report-submissions/v2";
+  contract_version: 2;
+  status: "ready" | "retry" | "dead_letter";
+  created_at: string;
+  next_attempt_at: string;
+  attempt_count: number;
+  last_attempt_at: string | null;
+  last_error_class: string | null;
+  last_error_message: string | null;
+};
+
 export type LocalSyncOutboxHealth = {
   pending_count: number;
+  retry_item_count: number;
+  dead_letter_count: number;
+  attempt_count: number;
   oldest_pending_at: string | null;
   last_acknowledged_at: string | null;
   last_failure_at: string | null;
@@ -290,13 +312,13 @@ export type OccupancyCorrection = {
   reason: string;
   actor_id: string | null;
   actor_name: string | null;
-  source_kind: "real" | "mock" | "hybrid";
-  mock_run_id: string | null;
+  classification: "official" | "simulation";
+  simulation_run_id: string | null;
   recorded_at: string;
 };
 
-export type MockPreparationRequest = {
-  mockRunId: string;
+export type SimulationPreparationRequest = {
+  simulationRunId: string;
   enterpriseId: string;
   enterpriseName: string;
   entries: number;
@@ -328,7 +350,7 @@ export type SimulationStatus = {
   state: "idle" | "running" | "paused" | "stopped" | "completed";
   mode: string | null;
   scenario: SimulationScenario | null;
-  mock_run_id: string | null;
+  simulation_run_id: string | null;
   events_generated: number;
   events_per_minute: number;
   requires_real_camera: boolean;
@@ -489,6 +511,21 @@ export async function getSyncOutboxHealth(baseUrl: string): Promise<LocalSyncOut
   return requestMl<LocalSyncOutboxHealth>("sync.outbox.health");
 }
 
+export async function listSyncOutboxRecoveryItems(baseUrl: string, limit = 100): Promise<LocalSyncOutboxRecoveryItem[]> {
+  void baseUrl;
+  return requestMl<LocalSyncOutboxRecoveryItem[]>("sync.outbox.recovery.list", { limit });
+}
+
+export async function getSyncOutboxRecoveryItem(baseUrl: string, outboxItemId: string): Promise<LocalSyncOutboxRecoveryItem> {
+  void baseUrl;
+  return requestMl<LocalSyncOutboxRecoveryItem>("sync.outbox.recovery.detail", { outboxItemId });
+}
+
+export async function retrySyncOutboxItem(baseUrl: string, outboxItemId: string, reason: string): Promise<LocalSyncOutboxRecoveryItem> {
+  void baseUrl;
+  return requestMl<LocalSyncOutboxRecoveryItem>("sync.outbox.recovery.retry", { outboxItemId, reason });
+}
+
 export async function acknowledgeSyncOutboxItem(baseUrl: string, outboxItemId: string, acknowledgement: Record<string, unknown>): Promise<{ acknowledged: true; outbox_item_id: string }> {
   void baseUrl;
   return requestMl<{ acknowledged: true; outbox_item_id: string }>("sync.outbox.acknowledge", { outboxItemId, acknowledgement });
@@ -514,10 +551,10 @@ export async function purgeLocalReportRawEvents(baseUrl: string, reportId: strin
   return requestMl<{ report_id: string; revision_id: string; purged_events: number; purged_sightings: number; purged_identities: number; raw_purged_at: string | null }>("reports.purgeRaw", { reportId, consolidatedRevisionId });
 }
 
-export async function prepareLocalMockCounts(baseUrl: string, payload: MockPreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {
+export async function prepareLocalSimulationCounts(baseUrl: string, payload: SimulationPreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {
   void baseUrl;
   return requestMl<LocalMetricsSummary & { prepared: boolean }>("simulation.prepare", {
-    mock_run_id: payload.mockRunId,
+    simulation_run_id: payload.simulationRunId,
     enterprise_id: payload.enterpriseId,
     enterprise_name: payload.enterpriseName,
     entries: payload.entries,
@@ -532,9 +569,9 @@ export async function prepareLocalMockCounts(baseUrl: string, payload: MockPrepa
   });
 }
 
-export async function resetLocalMockData(baseUrl: string, mockRunId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
+export async function resetLocalSimulationData(baseUrl: string, simulationRunId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
   void baseUrl;
-  return requestMl<{ stopped: boolean; removed: Record<string, number> }>("simulation.reset", { mockRunId });
+  return requestMl<{ stopped: boolean; removed: Record<string, number> }>("simulation.reset", { simulationRunId });
 }
 
 export async function getSimulationStatus(baseUrl: string): Promise<SimulationStatus> {
@@ -545,7 +582,7 @@ export async function getSimulationStatus(baseUrl: string): Promise<SimulationSt
 export async function startSimulation(baseUrl: string, payload: SimulationStartRequest): Promise<SimulationStatus> {
   void baseUrl;
   return requestMl<SimulationStatus>("simulation.start", {
-    mock_run_id: payload.runId,
+    simulation_run_id: payload.runId,
     mode: "virtual",
     scenario: payload.scenario,
     events_per_minute: payload.eventsPerMinute,
@@ -579,7 +616,7 @@ export async function appendSimulationEvent(baseUrl: string, direction: "entry" 
 }
 
 export async function resetSimulation(baseUrl: string, runId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
-  return resetLocalMockData(baseUrl, runId);
+  return resetLocalSimulationData(baseUrl, runId);
 }
 
 export async function getMlDetections(baseUrl: string): Promise<MlDetections> {

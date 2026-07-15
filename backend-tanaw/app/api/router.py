@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from app.features.accounts.router import dev_router
 from app.features.accounts.router import router as accounts_router
 from app.features.activity_logs.router import router as activity_logs_router
 from app.features.alerts.router import router as alerts_router
@@ -24,7 +23,6 @@ api_router.include_router(mail_router)
 api_router.include_router(maintenance_router)
 api_router.include_router(notifications_router)
 api_router.include_router(operational_realtime_router)
-api_router.include_router(dev_router)
 api_router.include_router(final_reports_router)
 api_router.include_router(reporting_router)
 api_router.include_router(simulation_router)

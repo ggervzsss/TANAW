@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -40,8 +40,13 @@ from app.features.notifications.models import UserNotification
 from app.features.notifications.service import create_user_notification
 from app.features.reporting.contracts import monthly_reporting_period
 from app.features.reporting.models import ReportingObligation, ReportingPeriod
-from app.features.simulation.models import MockDataRun
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
+from app.features.simulation.models import SimulationRun
+from app.features.topology.models import (
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 
@@ -64,7 +69,7 @@ class ConsumerRuntime:
     prefix: str
     account_ids: list[str] = field(default_factory=list)
     enterprise_ids: list[str] = field(default_factory=list)
-    mock_run_ids: list[str] = field(default_factory=list)
+    simulation_run_ids: list[str] = field(default_factory=list)
     site_ids: list[str] = field(default_factory=list)
     obligation_ids: list[str] = field(default_factory=list)
     event_ids: list[str] = field(default_factory=list)
@@ -129,15 +134,32 @@ async def consumer_runtime() -> AsyncIterator[ConsumerRuntime]:
                 )
             if runtime.site_ids:
                 await db.execute(
+                    text(
+                        "ALTER TABLE site_location_versions DISABLE TRIGGER "
+                        "trg_site_location_versions_immutable"
+                    )
+                )
+                await db.execute(
+                    delete(SiteLocationVersion).where(
+                        SiteLocationVersion.site_id.in_(runtime.site_ids)
+                    )
+                )
+                await db.execute(
+                    text(
+                        "ALTER TABLE site_location_versions ENABLE TRIGGER "
+                        "trg_site_location_versions_immutable"
+                    )
+                )
+                await db.execute(
                     delete(EnterpriseSite).where(EnterpriseSite.id.in_(runtime.site_ids))
                 )
             if runtime.enterprise_ids:
                 await db.execute(
                     delete(Enterprise).where(Enterprise.id.in_(runtime.enterprise_ids))
                 )
-            if runtime.mock_run_ids:
+            if runtime.simulation_run_ids:
                 await db.execute(
-                    delete(MockDataRun).where(MockDataRun.id.in_(runtime.mock_run_ids))
+                    delete(SimulationRun).where(SimulationRun.id.in_(runtime.simulation_run_ids))
                 )
             if runtime.account_ids:
                 await db.execute(delete(Account).where(Account.id.in_(runtime.account_ids)))
@@ -374,11 +396,13 @@ async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
         results = await asyncio.gather(first.run_batch(now=now), second.run_batch(now=now))
         await asyncio.wait_for(asyncio.gather(ready_a.wait(), ready_b.wait()), timeout=5)
 
-        assert sum(result.delivered for result in results) == 1
-        assert received_a == received_b
-        assert len(received_a) == 1
-        assert received_a[0]["type"] == "resource.invalidated"
-        assert received_a[0]["data"] == {
+        assert sum(result.delivered for result in results) >= 1
+        received_event_a = [item for item in received_a if item["data"]["eventId"] == event.id]
+        received_event_b = [item for item in received_b if item["data"]["eventId"] == event.id]
+        assert received_event_a == received_event_b
+        assert len(received_event_a) == 1
+        assert received_event_a[0]["type"] == "resource.invalidated"
+        assert received_event_a[0]["data"] == {
             "contractVersion": 2,
             "eventId": event.id,
             "eventKey": event.event_key,
@@ -415,9 +439,21 @@ async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
             second.run_batch(now=now + timedelta(seconds=1)),
         )
         await asyncio.wait_for(asyncio.gather(ready_a.wait(), ready_b.wait()), timeout=5)
-        assert sum(result.delivered for result in second_results) == 1
-        assert received_a[-1]["data"]["eventId"] == second_event.id
-        assert received_b[-1]["data"]["eventId"] == second_event.id
+        assert sum(result.delivered for result in second_results) >= 1
+        assert sum(item["data"]["eventId"] == second_event.id for item in received_a) == 1
+        assert sum(item["data"]["eventId"] == second_event.id for item in received_b) == 1
+
+        async with consumer_runtime.sessions() as db:
+            deliveries = list(
+                await db.scalars(
+                    select(DomainEventDelivery).where(
+                        DomainEventDelivery.domain_event_id.in_([event.id, second_event.id])
+                    )
+                )
+            )
+        assert len(deliveries) == 2
+        assert all(delivery.status == "delivered" for delivery in deliveries)
+        assert all(delivery.attempt_count == 1 for delivery in deliveries)
 
         restarted = DomainEventDeliveryEngine(
             sessions=consumer_runtime.sessions,
@@ -426,7 +462,9 @@ async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
         )
         assert (await restarted.run_batch(now=now)).claimed == 0
         await asyncio.sleep(0.05)
-        assert len(received_a) == len(received_b) == 2
+        for expected_event in (event, second_event):
+            assert sum(item["data"]["eventId"] == expected_event.id for item in received_a) == 1
+            assert sum(item["data"]["eventId"] == expected_event.id for item in received_b) == 1
     finally:
         await subscriber_a.stop()
         await subscriber_b.stop()
@@ -435,7 +473,7 @@ async def test_postgres_broker_fans_one_delivery_out_to_two_api_runtimes(
 async def _enterprise(runtime: ConsumerRuntime, classification: str) -> Enterprise:
     now = datetime.now(UTC)
     simulation_run = (
-        MockDataRun(
+        SimulationRun(
             id=str(uuid4()),
             scenario="event-consumer-scope-test",
             seed=str(uuid4()),
@@ -457,7 +495,7 @@ async def _enterprise(runtime: ConsumerRuntime, classification: str) -> Enterpri
     runtime.enterprise_ids.append(enterprise.id)
     async with runtime.sessions() as db:
         if simulation_run is not None:
-            runtime.mock_run_ids.append(simulation_run.id)
+            runtime.simulation_run_ids.append(simulation_run.id)
             db.add(simulation_run)
         db.add(enterprise)
         await db.commit()
@@ -489,15 +527,22 @@ async def _site(runtime: ConsumerRuntime, enterprise: Enterprise) -> EnterpriseS
         classification=enterprise.classification,
         site_code=f"SITE-{str(uuid4())[:8]}",
         name="Consumer Test Site",
+        registered_at=datetime.now(UTC) - timedelta(days=30),
+    )
+    location = SiteLocationVersion(
+        id=str(uuid4()),
+        site_id=site.id,
+        classification=enterprise.classification,
+        version=1,
         barangay="San Antonio",
         timezone_name="Asia/Manila",
         building_capacity=100,
-        location_version=1,
         effective_from=datetime.now(UTC) - timedelta(days=30),
+        change_reason="test_fixture",
     )
     runtime.site_ids.append(site.id)
     async with runtime.sessions() as db:
-        db.add(site)
+        db.add_all([site, location])
         await db.commit()
     return site
 
@@ -535,7 +580,14 @@ async def _obligation(
 ) -> ReportingObligation:
     async with runtime.sessions() as db:
         enterprise = await db.get(Enterprise, site.enterprise_id)
+        location = await db.scalar(
+            select(SiteLocationVersion).where(
+                SiteLocationVersion.site_id == site.id,
+                SiteLocationVersion.effective_to.is_(None),
+            )
+        )
         assert enterprise is not None
+        assert location is not None
         obligation = ReportingObligation(
             id=str(uuid4()),
             reporting_period_id=period.id,
@@ -544,13 +596,13 @@ async def _obligation(
             classification=site.classification,
             eligibility_status="eligible",
             eligibility_basis="registry_snapshot",
-            frozen_barangay=site.barangay,
+            frozen_barangay=location.barangay,
             enterprise_official_code=enterprise.official_code,
             enterprise_name=enterprise.name,
             site_code=site.site_code,
             site_name=site.name,
             timezone_name="Asia/Manila",
-            registration_effective_at=site.effective_from,
+            registration_effective_at=site.registered_at,
             acceptance_blocked=False,
         )
         runtime.obligation_ids.append(obligation.id)

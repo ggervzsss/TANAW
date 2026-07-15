@@ -117,52 +117,49 @@ class LocalLedgerTest(unittest.TestCase):
             self.assertEqual(repeated["purged_events"], 0)
             self.assertEqual(repeated["raw_purged_at"], purged["raw_purged_at"])
 
-    def test_hybrid_mock_rows_are_tagged_and_removed_without_real_rows(self) -> None:
+    def test_simulation_rows_are_tagged_and_removed_without_official_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(str(Path(directory)))
-            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             hybrid_event = _event("entry", entry=2, exit=0, occupancy=2)
-            hybrid_event["source_kind"] = "hybrid"
-            hybrid_event["mock_run_id"] = "mock-run-1"
+            hybrid_event["classification"] = "simulation"
+            hybrid_event["simulation_run_id"] = "simulation-run-1"
             store.append_count_event(hybrid_event)
             store.create_local_report_revision(
                 "REP-260601",
                 CURRENT_PERIOD_ID,
                 "Monthly visitor count submitted for LGU review.",
-                {"source": "hybrid"},
-                source_kind="hybrid",
-                mock_run_id="mock-run-1",
+                {"classification": "simulation"},
+                classification="simulation",
+                simulation_run_id="simulation-run-1",
             )
 
             reports = store.list_local_reports()
-            self.assertEqual(reports[0]["source_kind"], "hybrid")
-            self.assertEqual(reports[0]["mock_run_id"], "mock-run-1")
+            self.assertEqual(reports[0]["classification"], "simulation")
+            self.assertEqual(reports[0]["simulation_run_id"], "simulation-run-1")
 
-            removed = store.remove_mock_data("mock-run-1")
+            removed = store.remove_simulation_data("simulation-run-1")
 
             self.assertEqual(removed["count_events"], 1)
             self.assertEqual(removed["local_reports"], 1)
-            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 1)
+            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 0)
 
-    def test_removing_hybrid_report_restores_real_camera_events_to_current_draft(self) -> None:
+    def test_official_and_simulation_evidence_cannot_share_a_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(str(Path(directory)))
             mock_event = _event("entry", entry=1, exit=0, occupancy=1)
-            mock_event["source_kind"] = "mock"
-            mock_event["mock_run_id"] = "mock-run-1"
+            mock_event["classification"] = "simulation"
+            mock_event["simulation_run_id"] = "simulation-run-1"
             store.append_count_event(mock_event)
             store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
 
-            submission = store.create_local_report_revision("REP-260601", CURRENT_PERIOD_ID)
-            self.assertEqual(submission["source_kind"], "hybrid")
-            self.assertEqual(submission["mock_run_id"], "mock-run-1")
-            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 0)
+            with self.assertRaisesRegex(ValueError, "cannot be combined"):
+                store.create_local_report_revision("REP-260601", CURRENT_PERIOD_ID)
 
-            removed = store.remove_mock_data("mock-run-1")
+            removed = store.remove_simulation_data("simulation-run-1")
 
             self.assertEqual(removed["count_events"], 1)
-            self.assertEqual(removed["local_reports"], 1)
-            self.assertEqual(removed["restored_real_events"], 1)
+            self.assertEqual(removed["local_reports"], 0)
+            self.assertEqual(removed["restored_real_events"], 0)
             self.assertEqual(store.list_local_reports(), [])
             self.assertEqual(store.metrics_summary()["entries"], 1)
             self.assertEqual(store.metrics_summary()["unsubmitted_events"], 1)
@@ -424,8 +421,8 @@ class LocalLedgerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(str(Path(directory)), "target@tanaw.test")
 
-            summary = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            summary = store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -439,14 +436,14 @@ class LocalLedgerTest(unittest.TestCase):
             self.assertEqual(summary["exits"], 31)
             self.assertEqual(summary["unique_count"], 24)
             self.assertEqual(summary["unsubmitted_events"], 71)
-            self.assertEqual(summary["source_kind"], "mock")
-            self.assertEqual(summary["mock_run_id"], "run-1")
+            self.assertEqual(summary["classification"], "simulation")
+            self.assertEqual(summary["simulation_run_id"], "run-1")
             self.assertEqual(summary["period"], "Jun 1 - Jun 30, 2026")
             self.assertTrue(summary["prepared"])
             self.assertEqual(store.list_local_reports(), [])
 
-            repeated = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            repeated = store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -462,8 +459,8 @@ class LocalLedgerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(str(Path(directory)), "target@tanaw.test")
 
-            first = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            first = store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -476,8 +473,8 @@ class LocalLedgerTest(unittest.TestCase):
 
             store.create_local_report_revision("REP-JUN", JUNE_PERIOD_ID)
 
-            second = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            second = store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=55,
                 exits=42,
                 unique_count=36,
@@ -496,8 +493,8 @@ class LocalLedgerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(str(Path(directory)), "target@tanaw.test")
 
-            first = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            first = store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -508,8 +505,8 @@ class LocalLedgerTest(unittest.TestCase):
             )
             self.assertTrue(first["prepared"])
 
-            second = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            second = store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=55,
                 exits=42,
                 unique_count=36,
@@ -535,14 +532,14 @@ class LocalLedgerTest(unittest.TestCase):
 
             report = store.list_local_reports()[0]
             self.assertEqual(report["sync_status"], "synced")
-            self.assertIsNotNone(report["synced_at"])
+            self.assertIsNotNone(report["acknowledged_at"])
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 0)
 
-    def test_mixed_real_and_prepared_counts_preserve_run_provenance(self) -> None:
+    def test_mixed_official_and_prepared_counts_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalLedger(str(Path(directory)), "target@tanaw.test")
-            store.prepare_mock_counts(
-                mock_run_id="run-1",
+            store.prepare_simulation_counts(
+                simulation_run_id="run-1",
                 entries=4,
                 exits=2,
                 unique_count=3,
@@ -553,16 +550,10 @@ class LocalLedgerTest(unittest.TestCase):
             )
             store.append_count_event(_event("entry", entry=5, exit=2, occupancy=3))
 
-            summary = store.metrics_summary()
-            self.assertEqual(summary["source_kind"], "hybrid")
-            self.assertEqual(summary["mock_run_id"], "run-1")
-
-            submission = store.create_local_report_revision("REP-002", CURRENT_PERIOD_ID)
-            report = store.list_local_reports()[0]
-            self.assertEqual(submission["source_kind"], "hybrid")
-            self.assertEqual(submission["mock_run_id"], "run-1")
-            self.assertEqual(report["source_kind"], "hybrid")
-            self.assertEqual(report["mock_run_id"], "run-1")
+            with self.assertRaisesRegex(ValueError, "cannot be combined"):
+                store.metrics_summary()
+            with self.assertRaisesRegex(ValueError, "cannot be combined"):
+                store.create_local_report_revision("REP-002", CURRENT_PERIOD_ID)
 
 
 def _event(

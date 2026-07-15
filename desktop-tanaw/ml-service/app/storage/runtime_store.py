@@ -149,8 +149,8 @@ class EdgeRuntimeStore:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
-        source_kind: str | None = None,
-        mock_run_id: str | None = None,
+        classification: str | None = None,
+        simulation_run_id: str | None = None,
         *,
         idempotency_key: str | None = None,
         command_id: str | None = None,
@@ -161,8 +161,8 @@ class EdgeRuntimeStore:
             notes=notes,
             payload=payload,
             metrics=metrics,
-            source_kind=source_kind,
-            mock_run_id=mock_run_id,
+            classification=classification,
+            simulation_run_id=simulation_run_id,
             idempotency_key=idempotency_key,
             command_id=command_id,
         )
@@ -177,6 +177,28 @@ class EdgeRuntimeStore:
 
     def sync_outbox_health(self) -> dict[str, int | str | None]:
         return self._ledger.sync_outbox_health()
+
+    def list_sync_outbox_recovery_items(self, limit: int = 100) -> list[dict[str, Any]]:
+        return self._ledger.list_sync_outbox_recovery_items(limit=limit)
+
+    def get_sync_outbox_recovery_item(self, outbox_item_id: str) -> dict[str, Any] | None:
+        return self._ledger.get_sync_outbox_recovery_item(outbox_item_id)
+
+    def requeue_sync_outbox_item(
+        self,
+        outbox_item_id: str,
+        *,
+        reason: str,
+        requeued_at: str | None = None,
+    ) -> dict[str, Any]:
+        return self._ledger.requeue_sync_outbox_item(
+            outbox_item_id,
+            reason=reason,
+            requeued_at=requeued_at,
+        )
+
+    def operational_diagnostics(self) -> dict[str, Any]:
+        return self._ledger.operational_diagnostics()
 
     def acknowledge_sync_outbox_item(
         self,
@@ -216,8 +238,8 @@ class EdgeRuntimeStore:
     ) -> dict[str, int | str | None]:
         return self._ledger.purge_report_raw_events(report_id, consolidated_revision_id)
 
-    def prepare_mock_counts(self, **values: Any) -> dict[str, int | str | None]:
-        return self._ledger.prepare_mock_counts(**values)
+    def prepare_simulation_counts(self, **values: Any) -> dict[str, int | str | None]:
+        return self._ledger.prepare_simulation_counts(**values)
 
-    def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
-        return self._ledger.remove_mock_data(mock_run_id)
+    def remove_simulation_data(self, simulation_run_id: str | None = None) -> dict[str, int]:
+        return self._ledger.remove_simulation_data(simulation_run_id)

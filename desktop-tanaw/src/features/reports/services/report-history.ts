@@ -1,4 +1,5 @@
 import { staffApi } from "../../../lib/axios";
+import { collectCursorPages } from "../../../lib/cursor-pagination";
 
 export type ReportWorkflowState = "submitted" | "returned" | "accepted" | "consolidated";
 
@@ -84,30 +85,13 @@ type EnterpriseReportPage = {
 };
 
 export async function listEnterpriseReportHistory() {
-  const items: EnterpriseReportHistoryItem[] = [];
-  const seenCursors = new Set<string>();
-  let cursor: string | null = null;
-
-  do {
+  return collectCursorPages(async (cursor) => {
     const response = await staffApi.get<unknown>("/operational/enterprise/reports/v2", {
       params: { limit: 100, ...(cursor ? { cursor } : {}) },
     });
     const page = requireReportPage(response.data);
-    items.push(...page.items);
-    cursor = page.page.nextCursor;
-    if (page.page.hasMore && !cursor) {
-      throw new Error("The report history response omitted its required continuation cursor.");
-    }
-    if (!page.page.hasMore && cursor) {
-      throw new Error("The report history response supplied a cursor after its terminal page.");
-    }
-    if (cursor && seenCursors.has(cursor)) {
-      throw new Error("The report history response repeated a continuation cursor.");
-    }
-    if (cursor) seenCursors.add(cursor);
-  } while (cursor);
-
-  return items;
+    return { items: page.items, page: page.page };
+  }, "report history");
 }
 
 export async function readEnterpriseReport(reportId: string) {

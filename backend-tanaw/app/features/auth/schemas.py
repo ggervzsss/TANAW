@@ -114,3 +114,31 @@ class SystemSettingsPayload(BaseModel):
     values: dict[str, str | bool | int]
     updatedBy: str | None = None
     updatedAt: datetime | None = None
+
+    @field_validator("values")
+    @classmethod
+    def validate_target_settings(
+        cls, values: dict[str, str | bool | int]
+    ) -> dict[str, str | bool | int]:
+        integer_options = {
+            "security.loginAttemptLimit": {3, 5, 10},
+            "security.loginLockMinutes": {5, 15, 30, 60},
+            "logs.retentionDays": {90, 180, 365},
+        }
+        boolean_keys = {
+            "notifications.cameraSessionErrorAlerts",
+            "notifications.gatewayServiceErrorAlerts",
+            "notifications.syncDelayAlerts",
+            "notifications.failedLoginLockoutAlerts",
+        }
+        expected = set(integer_options) | boolean_keys
+        if set(values) != expected:
+            raise ValueError("System settings must contain exactly the target setting keys.")
+        for key, options in integer_options.items():
+            value = values[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value not in options:
+                raise ValueError(f"Unsupported value for {key}.")
+        for key in boolean_keys:
+            if not isinstance(values[key], bool):
+                raise ValueError(f"{key} must be a boolean.")
+        return values

@@ -1,17 +1,21 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.keyset_pagination import ReadCursorError
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.alerts.models import OperationalAlert
-from app.features.alerts.schemas import OperationalAlertStatusUpdate, OperationalAlertSummary
+from app.features.alerts.schemas import (
+    OperationalAlertPage,
+    OperationalAlertStatusUpdate,
+    OperationalAlertSummary,
+)
 from app.features.alerts.service import list_operational_alerts, to_operational_alert_summary
 from app.features.events.operational_resources import enqueue_operational_resource_event
 
@@ -20,12 +24,19 @@ ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 AlertReadAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
 
 
-@router.get("/alerts", response_model=list[OperationalAlertSummary])
+@router.get("/alerts", response_model=OperationalAlertPage)
 async def list_alerts(
-    _: AlertReadAccount,
+    account: AlertReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[OperationalAlertSummary]:
-    return await list_operational_alerts(db)
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> OperationalAlertPage:
+    try:
+        return await list_operational_alerts(db, account, limit=limit, cursor=cursor)
+    except ReadCursorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.patch("/alerts/{alert_code}/status", response_model=OperationalAlertSummary)
@@ -63,7 +74,7 @@ async def update_alert_status(
     )
     await db.refresh(alert)
     summary = to_operational_alert_summary(alert)
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category="IT Activity",
@@ -76,7 +87,7 @@ async def update_alert_status(
             sourceId=alert.id,
             metadata={"previousStatus": previous_status, "newStatus": payload.status},
         ),
+        actor_account_id=actor.id,
     )
     await db.commit()
-    await activity_log_manager.broadcast(log)
     return summary

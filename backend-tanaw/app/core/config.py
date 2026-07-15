@@ -131,7 +131,6 @@ class Settings(BaseSettings):
     password_reset_retention_days: int = Field(default=30, ge=1, le=3650)
     password_reset_rate_bucket_retention_days: int = Field(default=2, ge=1, le=90)
     account_email_change_retention_days: int = Field(default=180, ge=30, le=3650)
-    development_delivery_retention_days: int = Field(default=7, ge=1, le=90)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
     read_notification_retention_days: int = Field(default=180, ge=30, le=3650)
@@ -141,7 +140,9 @@ class Settings(BaseSettings):
     telemetry_metric_fact_retention_days: int = Field(default=7, ge=1, le=90)
     telemetry_device_health_retention_days: int = Field(default=7, ge=1, le=90)
     telemetry_hourly_rollup_retention_days: int = Field(default=730, ge=30, le=3650)
-    allow_mock_data: bool = Field(default=False, validation_alias="TANAW_ALLOW_MOCK_DATA")
+    allow_simulation_data: bool = Field(
+        default=False, validation_alias="TANAW_ALLOW_SIMULATION_DATA"
+    )
 
     model_config = SettingsConfigDict(
         alias_generator=str.upper,

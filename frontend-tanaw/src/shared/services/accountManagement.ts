@@ -46,16 +46,6 @@ export type AccountSummary = {
   lastLoginAt: string | null;
 };
 
-export type DevDelivery = {
-  id: string;
-  accountId: string;
-  recipient: string;
-  subject: string;
-  body: string;
-  status: string;
-  createdAt: string;
-};
-
 export type EmailDelivery = {
   id: string;
   purpose: string;
@@ -206,11 +196,6 @@ export async function resendAccountActivation(accountId: string) {
 
 export async function updateAccountStatus(accountId: string, status: "active" | "inactive") {
   const response = await apiClient.patch<AccountSummary>(`/accounts/${accountId}/status`, { status });
-  return response.data;
-}
-
-export async function listDevDeliveries() {
-  const response = await apiClient.get<DevDelivery[]>("/dev/deliveries");
   return response.data;
 }
 

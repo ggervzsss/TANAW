@@ -16,7 +16,6 @@ const AdminAlertsMonitorPage = lazy(() =>
 const ITAlertsPage = lazy(() => import("@/features/alerts-monitor").then((module) => ({ default: module.ITAlertsPage })));
 const StaffAnalyticsPage = lazy(() => import("@/features/analytics").then((module) => ({ default: module.StaffAnalyticsPage })));
 const ITDashboardPage = lazy(() => import("@/features/dashboard").then((module) => ({ default: module.ITDashboardPage })));
-const ITDevLogPage = lazy(() => import("@/features/dev-log").then((module) => ({ default: module.ITDevLogPage })));
 const ITEmailDeliveriesPage = lazy(() =>
   import("@/features/email-deliveries").then((module) => ({
     default: module.ITEmailDeliveriesPage,
@@ -86,7 +85,6 @@ export function AppRouter() {
           <Route path="notifications" element={<NotificationsPage role="it" />} />
           <Route path="system-logs" element={<ITSystemLogsPage />} />
           <Route path="email-deliveries" element={<ITEmailDeliveriesPage />} />
-          <Route path="dev-log" element={<ITDevLogPage />} />
           <Route path="system-settings" element={<ITSystemSettingsPage />} />
           <Route path="profile" element={<AccountProfilePage role="it" />} />
           <Route path="security" element={<AccountSecurityPage />} />

@@ -15,15 +15,12 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
 )
 from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.schemas import (
     AccountProfileChangeRequest,
     AccountSummary,
     AuthUser,
-    DeliverySummary,
 )
 from app.features.assets.models import (
     AccountAsset,
@@ -47,6 +44,7 @@ from app.features.topology.models import (
     EnterpriseMembership,
     EnterpriseSite,
     MembershipRole,
+    SiteLocationVersion,
     TopologyClassification,
 )
 
@@ -78,7 +76,7 @@ def to_auth_user(
             f"Enterprise account {account.id} cannot be serialized without normalized topology."
         )
     enterprise = topology.enterprise if topology is not None else None
-    site = topology.site if topology is not None else None
+    location = topology.location if topology is not None else None
     return AuthUser(
         id=account.id,
         email=account.email,
@@ -92,9 +90,9 @@ def to_auth_user(
         enterpriseName=enterprise.name if enterprise is not None else None,
         category=format_enterprise_category(enterprise.category) if enterprise else None,
         managerName=account.display_name if enterprise is not None else None,
-        barangay=site.barangay if site is not None else None,
-        address=site.address if site is not None else None,
-        buildingCapacity=site.building_capacity if site is not None else 100,
+        barangay=location.barangay if location is not None else None,
+        address=location.address if location is not None else None,
+        buildingCapacity=location.building_capacity if location is not None else 100,
         displayImageUrl=profile_asset_url(profile_asset),
     )
 
@@ -120,7 +118,7 @@ def to_account_summary(
             f"Enterprise account {account.id} cannot be serialized without normalized topology."
         )
     enterprise = topology.enterprise if topology is not None else None
-    site = topology.site if topology is not None else None
+    location = topology.location if topology is not None else None
     return AccountSummary(
         id=account.id,
         email=account.email,
@@ -130,17 +128,17 @@ def to_account_summary(
         enterpriseName=enterprise.name if enterprise is not None else None,
         category=format_enterprise_category(enterprise.category) if enterprise else None,
         managerName=account.display_name if enterprise is not None else None,
-        barangay=site.barangay if site is not None else None,
-        address=site.address if site is not None else None,
-        latitude=site.latitude if site is not None else None,
-        longitude=site.longitude if site is not None else None,
-        locationSource=site.location_source if site is not None else None,
-        locationConfidence=site.location_confidence if site is not None else None,
-        geocodedAddress=site.geocoded_address if site is not None else None,
-        locationUpdatedAt=site.coordinates_updated_at if site is not None else None,
+        barangay=location.barangay if location is not None else None,
+        address=location.address if location is not None else None,
+        latitude=location.latitude if location is not None else None,
+        longitude=location.longitude if location is not None else None,
+        locationSource=location.location_source if location is not None else None,
+        locationConfidence=location.location_confidence if location is not None else None,
+        geocodedAddress=location.geocoded_address if location is not None else None,
+        locationUpdatedAt=(location.coordinates_confirmed_at if location is not None else None),
         enterpriseId=enterprise.official_code if enterprise is not None else None,
         gatewayStatus=topology.gateway_status if topology is not None else None,
-        buildingCapacity=site.building_capacity if site is not None else 100,
+        buildingCapacity=location.building_capacity if location is not None else 100,
         displayName=account.display_name,
         role=account.role.value,
         title=account.title,
@@ -257,23 +255,6 @@ async def to_account_summary_with_requests(
     account: Account,
 ) -> AccountSummary:
     return (await to_account_summaries_with_requests(db, [account]))[0]
-
-
-def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
-    status = (
-        DeliveryStatus.ACCEPTED.value
-        if delivery.status == DeliveryStatus.SENT
-        else delivery.status.value
-    )
-    return DeliverySummary(
-        id=delivery.id,
-        accountId=delivery.account_id,
-        recipient=delivery.recipient,
-        subject=delivery.subject,
-        body=delivery.body,
-        status=status,
-        createdAt=delivery.created_at,
-    )
 
 
 def is_protected_startup_account(account: Account) -> bool:
@@ -398,30 +379,37 @@ async def create_account_with_activation(
         )
         db.add(enterprise)
         await db.flush()
-        db.add_all(
-            [
-                EnterpriseMembership(
-                    enterprise_id=enterprise.id,
-                    account_id=account.id,
-                    classification=TopologyClassification.OFFICIAL,
-                    membership_role=MembershipRole.MANAGER,
-                ),
-                EnterpriseSite(
-                    enterprise_id=enterprise.id,
-                    classification=TopologyClassification.OFFICIAL,
-                    site_code="primary",
-                    name=f"{enterprise_topology.name} Primary Site",
-                    barangay=enterprise_topology.barangay,
-                    address=enterprise_topology.address,
-                    building_capacity=enterprise_topology.building_capacity,
-                    latitude=enterprise_topology.latitude,
-                    longitude=enterprise_topology.longitude,
-                    location_source=enterprise_topology.location_source,
-                    location_confidence=enterprise_topology.location_confidence,
-                    geocoded_address=enterprise_topology.geocoded_address,
-                    coordinates_updated_at=enterprise_topology.coordinates_updated_at,
-                ),
-            ]
+        membership = EnterpriseMembership(
+            enterprise_id=enterprise.id,
+            account_id=account.id,
+            classification=TopologyClassification.OFFICIAL,
+            membership_role=MembershipRole.MANAGER,
+        )
+        site = EnterpriseSite(
+            enterprise_id=enterprise.id,
+            classification=TopologyClassification.OFFICIAL,
+            site_code="primary",
+            name=f"{enterprise_topology.name} Primary Site",
+        )
+        db.add_all([membership, site])
+        await db.flush([site])
+        db.add(
+            SiteLocationVersion(
+                site_id=site.id,
+                classification=site.classification,
+                version=1,
+                barangay=enterprise_topology.barangay,
+                address=enterprise_topology.address,
+                timezone_name="Asia/Manila",
+                building_capacity=enterprise_topology.building_capacity,
+                latitude=enterprise_topology.latitude,
+                longitude=enterprise_topology.longitude,
+                location_source=enterprise_topology.location_source,
+                location_confidence=enterprise_topology.location_confidence,
+                geocoded_address=enterprise_topology.geocoded_address,
+                coordinates_confirmed_at=enterprise_topology.coordinates_updated_at,
+                change_reason="enterprise_registered",
+            )
         )
         await db.flush()
     await issue_account_activation(db, account, lock_account=False)
@@ -445,13 +433,3 @@ async def change_account_password(
     await db.commit()
     await db.refresh(account)
     return True
-
-
-async def list_dev_deliveries(db: AsyncSession) -> list[DevDelivery]:
-    result = await db.scalars(select(DevDelivery).order_by(DevDelivery.created_at.desc()))
-    return list(result)
-
-
-async def get_dev_delivery_by_id(db: AsyncSession, delivery_id: str) -> DevDelivery | None:
-    result = await db.scalars(select(DevDelivery).where(DevDelivery.id == delivery_id))
-    return result.first()

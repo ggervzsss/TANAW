@@ -13,6 +13,13 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.core.keyset_pagination import (
+    ReadCursorError,
+    decode_cursor,
+    encode_cursor,
+    filter_fingerprint,
+)
+from app.core.pagination_schemas import CursorPageInfo
 from app.features.accounts.models import Account, AccountRole
 from app.features.final_reports.models import (
     FinalReportArtifact,
@@ -41,13 +48,7 @@ from app.features.final_reports.read_envelopes import (
     FinalScopeType,
 )
 from app.features.reporting.models import ReportingPeriod
-from app.features.reporting.read_cursor import (
-    ReadCursorError,
-    decode_cursor,
-    encode_cursor,
-    filter_fingerprint,
-)
-from app.features.reporting.read_envelopes import CursorPageInfo, ReportingPeriodResource
+from app.features.reporting.read_envelopes import ReportingPeriodResource
 
 
 class FinalReportReadError(Exception):

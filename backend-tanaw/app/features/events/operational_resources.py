@@ -12,6 +12,7 @@ _OPERATIONAL_RESOURCE_EVENTS = {
     "operational_alert.resolved.v2",
     "user_notification.created.v2",
     "user_notification.updated.v2",
+    "activity_log.created.v2",
 }
 
 

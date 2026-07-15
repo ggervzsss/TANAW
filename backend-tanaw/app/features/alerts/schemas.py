@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.core.pagination_schemas import CursorPageInfo
+
 
 class OperationalAlertSummary(BaseModel):
     id: str
@@ -31,6 +33,11 @@ class OperationalAlertSummary(BaseModel):
     status: Literal["New", "In Review", "Resolved"]
     owner: Literal["IT", "Admin", "System"]
     time: str
+
+
+class OperationalAlertPage(BaseModel):
+    items: list[OperationalAlertSummary]
+    page: CursorPageInfo
 
 
 class OperationalAlertStatusUpdate(BaseModel):

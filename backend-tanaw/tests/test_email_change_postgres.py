@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from pydantic import SecretStr
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -47,7 +47,12 @@ from app.features.mail.models import (
 )
 from app.features.mail.rendering import render_outbox_email
 from app.features.notifications.models import UserNotification
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
+from app.features.topology.models import (
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
 TEST_EMAIL_PATTERN = "tanaw-email-change-pg-%@example.com"
@@ -186,6 +191,28 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
             )
             if enterprise_ids:
                 await db.execute(
+                    text(
+                        "ALTER TABLE site_location_versions DISABLE TRIGGER "
+                        "trg_site_location_versions_immutable"
+                    )
+                )
+                site_ids = list(
+                    await db.scalars(
+                        select(EnterpriseSite.id).where(
+                            EnterpriseSite.enterprise_id.in_(enterprise_ids)
+                        )
+                    )
+                )
+                await db.execute(
+                    delete(SiteLocationVersion).where(SiteLocationVersion.site_id.in_(site_ids))
+                )
+                await db.execute(
+                    text(
+                        "ALTER TABLE site_location_versions ENABLE TRIGGER "
+                        "trg_site_location_versions_immutable"
+                    )
+                )
+                await db.execute(
                     delete(EnterpriseSite).where(EnterpriseSite.enterprise_id.in_(enterprise_ids))
                 )
                 await db.execute(
@@ -233,6 +260,14 @@ async def _create_account(
             )
             db.add(enterprise)
             await db.flush()
+            site = EnterpriseSite(
+                id=str(uuid4()),
+                enterprise_id=enterprise.id,
+                classification="official",
+                site_code="primary",
+                name=f"Test {label} Primary Site",
+                registered_at=now,
+            )
             db.add_all(
                 [
                     EnterpriseMembership(
@@ -242,15 +277,17 @@ async def _create_account(
                         membership_role="manager",
                         started_at=now,
                     ),
-                    EnterpriseSite(
-                        enterprise_id=enterprise.id,
+                    site,
+                    SiteLocationVersion(
+                        site_id=site.id,
                         classification="official",
-                        site_code="primary",
-                        name=f"Test {label} Primary Site",
+                        version=1,
                         barangay="Poblacion",
                         address="Email Change Test, San Pedro, Laguna 4023",
+                        timezone_name="Asia/Manila",
                         building_capacity=100,
                         effective_from=now,
+                        change_reason="test_fixture",
                     ),
                 ]
             )

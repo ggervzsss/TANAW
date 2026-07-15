@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-TARGET_LOCAL_SCHEMA_VERSION = 7
+TARGET_LOCAL_SCHEMA_VERSION = 8
 
 TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
     """CREATE TABLE camera_runtime_state (
@@ -51,11 +51,15 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
             json_valid(attributes_json)
             and length(cast(attributes_json as blob)) <= 65536
         ),
-        source_kind text not null check (source_kind in ('real', 'mock', 'hybrid')),
-        mock_run_id text,
+        classification text not null check (classification in ('official', 'simulation')),
+        simulation_run_id text,
         foreign key (reporting_period_id) references reporting_periods(period_id) on delete restrict,
         foreign key (camera_key) references local_cameras(camera_key) on delete restrict,
-        unique (camera_key, camera_event_sequence)
+        unique (camera_key, camera_event_sequence),
+        check (
+            (classification = 'official' and simulation_run_id is null)
+            or (classification = 'simulation' and length(simulation_run_id) between 1 and 160)
+        )
     )""",
     """CREATE TABLE coverage_gaps (
         coverage_gap_id text primary key,
@@ -71,8 +75,8 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         recorded_at text not null,
         check (ended_at is null or ended_at >= started_at),
         check (duration_seconds is null or duration_seconds >= 0),
-        foreign key (monitoring_session_id)
-            references monitoring_sessions(monitoring_session_id) on delete cascade,
+        foreign key (monitoring_session_id, camera_key)
+            references monitoring_sessions(monitoring_session_id, camera_key) on delete cascade,
         foreign key (reporting_period_id) references reporting_periods(period_id),
         foreign key (camera_key) references local_cameras(camera_key) on delete restrict
     )""",
@@ -136,22 +140,29 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         notes text,
         payload_json text not null,
         canonical_payload_json text not null,
-        source_kind text not null check (source_kind in ('real', 'mock', 'hybrid')),
-        mock_run_id text,
+        classification text not null check (classification in ('official', 'simulation')),
+        simulation_run_id text,
         foreign key (report_id) references local_reports(report_id) on delete cascade,
         unique (report_id, revision_number),
         unique (report_id, idempotency_key),
-        unique (command_id)
+        unique (command_id),
+        check (
+            (classification = 'official' and simulation_run_id is null)
+            or (classification = 'simulation' and length(simulation_run_id) between 1 and 160)
+        ),
+        check (length(request_hash) = 64 and request_hash not glob '*[^0-9a-f]*'),
+        check (payload_hash glob 'sha256:*' and length(payload_hash) = 71),
+        check (json_valid(payload_json) and json_valid(canonical_payload_json))
     )""",
     """CREATE TABLE local_report_source_batches (
         batch_id text primary key,
         report_revision_id text not null,
-        reporting_period_id text,
+        reporting_period_id text not null,
         camera_id integer,
         camera_name text,
-        central_camera_key text not null,
-        source_kind text not null check (source_kind in ('real', 'mock', 'hybrid')),
-        mock_run_id text,
+        camera_key text not null,
+        classification text not null check (classification in ('official', 'simulation')),
+        simulation_run_id text,
         event_sequence_start integer not null check (event_sequence_start >= 0),
         event_sequence_end_exclusive integer not null
             check (event_sequence_end_exclusive >= event_sequence_start),
@@ -161,7 +172,17 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         event_checksum text not null,
         foreign key (report_revision_id)
             references local_report_revisions(revision_id) on delete cascade,
-        foreign key (reporting_period_id) references reporting_periods(period_id)
+        foreign key (reporting_period_id) references reporting_periods(period_id),
+        foreign key (camera_key) references local_cameras(camera_key) on delete restrict,
+        check (
+            (classification = 'official' and simulation_run_id is null)
+            or (classification = 'simulation' and length(simulation_run_id) between 1 and 160)
+        ),
+        check (event_count = event_sequence_end_exclusive - event_sequence_start),
+        check (event_count > 0),
+        check (first_event_at is not null and last_event_at is not null),
+        check (first_event_at <= last_event_at),
+        check (event_checksum glob 'sha256:*' and length(event_checksum) = 71)
     )""",
     """CREATE TABLE local_reports (
         report_id text primary key,
@@ -191,8 +212,8 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         reporting_period_id text not null,
         business_date text not null,
         camera_key text not null,
-        source_kind text not null check (source_kind in ('real', 'mock', 'hybrid')),
-        mock_run_key text not null default '',
+        classification text not null check (classification in ('official', 'simulation')),
+        simulation_run_key text not null default '',
         entries integer not null default 0 check (entries >= 0),
         exits integer not null default 0 check (exits >= 0),
         unique_entries integer not null default 0 check (unique_entries >= 0),
@@ -206,11 +227,15 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         last_event_at text not null,
         event_count integer not null default 0 check (event_count >= 0),
         updated_at text not null,
-        primary key (grain, bucket_start_at, camera_key, source_kind, mock_run_key),
+        primary key (grain, bucket_start_at, camera_key, classification, simulation_run_key),
         foreign key (reporting_period_id) references reporting_periods(period_id),
         foreign key (camera_key) references local_cameras(camera_key) on delete restrict,
         check (bucket_start_at < bucket_end_at),
-        check (first_event_at <= last_event_at)
+        check (first_event_at <= last_event_at),
+        check (
+            (classification = 'official' and simulation_run_key = '')
+            or (classification = 'simulation' and length(simulation_run_key) between 1 and 160)
+        )
     )""",
     """CREATE TABLE monitoring_sessions (
         monitoring_session_id text primary key,
@@ -228,7 +253,8 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         created_at text not null,
         updated_at text not null,
         foreign key (camera_key) references local_cameras(camera_key) on delete restrict,
-        check (ended_at is null or ended_at >= started_at)
+        check (ended_at is null or ended_at >= started_at),
+        unique (monitoring_session_id, camera_key)
     )""",
     """CREATE TABLE occupancy_corrections (
         correction_id text primary key,
@@ -240,10 +266,15 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
         reason text not null,
         actor_id text,
         actor_name text,
-        source_kind text not null default 'real',
-        mock_run_id text,
+        classification text not null default 'official'
+            check (classification in ('official', 'simulation')),
+        simulation_run_id text,
         recorded_at text not null,
-        payload_json text not null
+        payload_json text not null check (json_valid(payload_json)),
+        check (
+            (classification = 'official' and simulation_run_id is null)
+            or (classification = 'simulation' and length(simulation_run_id) between 1 and 160)
+        )
     )""",
     """CREATE TABLE reporting_periods (
             period_id text primary key,
@@ -279,10 +310,12 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
     report_revision_id text not null unique,
     command_id text not null unique,
     idempotency_key text not null unique,
-    endpoint text not null,
+    endpoint text not null check (endpoint = '/operational/desktop/report-submissions/v2'),
     contract_version integer not null check (contract_version = 2),
-    payload_json text not null,
-    payload_hash text not null,
+    payload_json text not null check (json_valid(payload_json)),
+    payload_hash text not null check (
+        payload_hash glob 'sha256:*' and length(payload_hash) = 71
+    ),
     status text not null check (
         status in ('ready', 'retry', 'in_flight', 'acknowledged', 'dead_letter')
     ),
@@ -295,7 +328,15 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
     acknowledged_at text,
     acknowledgement_json text,
     foreign key (report_revision_id)
-        references local_report_revisions(revision_id) on delete cascade
+        references local_report_revisions(revision_id) on delete cascade,
+    check (
+        (status = 'acknowledged' and acknowledged_at is not null
+            and acknowledgement_json is not null and json_valid(acknowledgement_json))
+        or (status != 'acknowledged' and acknowledged_at is null
+            and acknowledgement_json is null)
+    ),
+    check (status != 'retry' or attempt_count > 0),
+    check (status != 'dead_letter' or (attempt_count > 0 and last_error_class is not null))
 )""",
     """CREATE TABLE visitor_identities (
         visitor_id text primary key,
@@ -372,11 +413,15 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
     """CREATE INDEX idx_monitoring_sessions_camera_window
     on monitoring_sessions(camera_key, started_at, ended_at)
     """,
+    """CREATE UNIQUE INDEX idx_monitoring_sessions_one_open_per_camera
+    on monitoring_sessions(camera_key)
+    where ended_at is null
+    """,
     """CREATE INDEX idx_occupancy_corrections_recorded_at
     on occupancy_corrections(recorded_at)
     """,
-    """CREATE INDEX idx_occupancy_corrections_source
-    on occupancy_corrections(source_kind, mock_run_id)
+    """CREATE INDEX idx_occupancy_corrections_classification
+    on occupancy_corrections(classification, simulation_run_id)
     """,
     """CREATE INDEX idx_sync_attempts_outbox
         on sync_attempts(outbox_item_id, attempt_number)
@@ -400,6 +445,56 @@ TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
     before update on local_report_revisions
     begin
         select raise(abort, 'local report revisions are immutable');
+    end""",
+    """CREATE TRIGGER trg_local_report_source_batches_immutable
+    before update on local_report_source_batches
+    begin
+        select raise(abort, 'local report source batches are immutable');
+    end""",
+    """CREATE TRIGGER trg_local_report_memberships_immutable
+    before update on local_report_event_memberships
+    begin
+        select raise(abort, 'local report event memberships are immutable');
+    end""",
+    """CREATE TRIGGER trg_local_report_membership_consistency
+    before insert on local_report_event_memberships
+    begin
+        select case when not exists (
+            select 1
+            from local_report_source_batches as batch
+            join count_events as event on event.event_id = new.event_id
+            where batch.batch_id = new.batch_id
+              and batch.report_revision_id = new.report_revision_id
+              and event.reporting_period_id = batch.reporting_period_id
+              and event.camera_key = batch.camera_key
+              and event.classification = batch.classification
+              and coalesce(event.simulation_run_id, '') = coalesce(batch.simulation_run_id, '')
+              and event.camera_event_sequence >= batch.event_sequence_start
+              and event.camera_event_sequence < batch.event_sequence_end_exclusive
+        ) then raise(abort, 'report event membership conflicts with its source batch') end;
+        select case when (
+            select count(*) from local_report_event_memberships
+            where batch_id = new.batch_id
+        ) >= (
+            select event_count from local_report_source_batches where batch_id = new.batch_id
+        ) then raise(abort, 'report source batch contains too many event memberships') end;
+    end""",
+    """CREATE TRIGGER trg_sync_outbox_payload_identity_insert
+    before insert on sync_outbox_items
+    begin
+        select case when not exists (
+            select 1 from local_report_revisions as revision
+            where revision.revision_id = new.report_revision_id
+              and revision.command_id = new.command_id
+              and revision.payload_hash = new.payload_hash
+              and revision.canonical_payload_json = new.payload_json
+        ) then raise(abort, 'sync outbox payload does not match its report revision') end;
+    end""",
+    """CREATE TRIGGER trg_sync_outbox_payload_identity_immutable
+    before update of report_revision_id, command_id, idempotency_key, endpoint,
+        contract_version, payload_json, payload_hash on sync_outbox_items
+    begin
+        select raise(abort, 'sync outbox payload identity is immutable');
     end""",
 )
 

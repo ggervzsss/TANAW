@@ -11,7 +11,12 @@ from app.features.accounts.schemas import (
 )
 from app.features.accounts.service import to_account_summary, to_auth_user
 from app.features.topology.account_scope import AccountTopology
-from app.features.topology.models import Enterprise, EnterpriseMembership, EnterpriseSite
+from app.features.topology.models import (
+    Enterprise,
+    EnterpriseMembership,
+    EnterpriseSite,
+    SiteLocationVersion,
+)
 
 
 def test_enterprise_account_create_defaults_building_capacity() -> None:
@@ -97,9 +102,17 @@ def enterprise_topology(*, building_capacity: int) -> AccountTopology:
         classification="official",
         site_code="primary",
         name="Acme Mall Primary Site",
+        registered_at=observed_at,
+    )
+    location = SiteLocationVersion(
+        site_id=site.id,
+        classification="official",
+        version=1,
         barangay="Poblacion",
         address="123 Main Street, San Pedro, Laguna 4023",
+        timezone_name="Asia/Manila",
         building_capacity=building_capacity,
+        change_reason="registered",
         effective_from=observed_at,
     )
     return AccountTopology(
@@ -107,6 +120,7 @@ def enterprise_topology(*, building_capacity: int) -> AccountTopology:
         membership=membership,
         enterprise=enterprise,
         site=site,
+        location=location,
         active_devices=(),
         live_state=None,
         evaluated_at=observed_at,

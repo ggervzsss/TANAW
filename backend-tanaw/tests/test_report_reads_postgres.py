@@ -52,13 +52,14 @@ from app.features.reporting.read_service import (
     read_official_enterprise_report,
     read_owned_enterprise_report,
 )
-from app.features.simulation.models import MockDataRun
+from app.features.simulation.models import SimulationRun
 from app.features.topology.models import (
     Camera,
     EdgeDevice,
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 TEST_DATABASE_ENV = "TANAW_TEST_DATABASE_URL"
@@ -638,7 +639,7 @@ async def _seed_report(
         lifecycle_state="active",
     )
     simulation_run = (
-        MockDataRun(
+        SimulationRun(
             id=str(uuid4()),
             scenario="report-read-scope-test",
             seed=suffix,
@@ -656,11 +657,18 @@ async def _seed_report(
         classification=classification,
         site_code="PRIMARY",
         name=f"Read Site {ordinal}",
+        registered_at=period.starts_at,
+    )
+    location = SiteLocationVersion(
+        id=str(uuid4()),
+        site_id=site.id,
+        classification=classification,
+        version=1,
         barangay="Poblacion",
         timezone_name="Asia/Manila",
         building_capacity=100,
-        location_version=1,
         effective_from=period.starts_at,
+        change_reason="test_fixture",
     )
     device = EdgeDevice(
         id=str(uuid4()),
@@ -719,7 +727,7 @@ async def _seed_report(
         await db.flush([simulation_run])
     db.add(enterprise)
     await db.flush([enterprise])
-    db.add(site)
+    db.add_all([site, location])
     await db.flush([site])
     db.add(device)
     await db.flush([device])

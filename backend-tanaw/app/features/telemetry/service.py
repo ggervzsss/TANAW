@@ -10,6 +10,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.operational_observability import OperationalCounter, operational_observability
 from app.features.accounts.models import Account
 from app.features.alerts.sync_health import reconcile_site_sync_alert
 from app.features.events.models import DomainEvent, DomainEventDelivery
@@ -51,6 +52,7 @@ from app.features.topology.models import (
     EdgeDevice,
     Enterprise,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 LIVE_FRESH_FOR = timedelta(seconds=90)
@@ -288,8 +290,22 @@ async def ingest_telemetry_command(
     became_current = (
         epoch.status == "active"
         and evidence_is_fresh
-        and (current_ordering is None or ordering > current_ordering)
+        and (
+            current_ordering is None
+            or current is not None
+            and current.edge_device_id != device.id
+            or ordering > current_ordering
+        )
     )
+    if (
+        epoch.status == "active"
+        and evidence_is_fresh
+        and current_ordering is not None
+        and current is not None
+        and current.edge_device_id == device.id
+        and ordering <= current_ordering
+    ):
+        operational_observability.increment(OperationalCounter.TELEMETRY_PROJECTION_OUT_OF_ORDER)
     live_state_version = (
         (current.live_state_version + 1 if current is not None else 1) if became_current else None
     )
@@ -545,12 +561,13 @@ async def _owned_device_scope(
             EdgeDevice.id == device_id,
             EdgeDevice.classification == access.classification,
             EdgeDevice.lifecycle_state == "active",
+            EdgeDevice.device_role == "telemetry_aggregator",
             EnterpriseSite.enterprise_id == access.enterprise_id,
             EnterpriseSite.classification == access.classification,
-            EnterpriseSite.effective_from <= evaluated_at,
+            EnterpriseSite.registered_at <= evaluated_at,
             or_(
-                EnterpriseSite.effective_to.is_(None),
-                EnterpriseSite.effective_to > evaluated_at,
+                EnterpriseSite.retired_at.is_(None),
+                EnterpriseSite.retired_at > evaluated_at,
             ),
         )
     )
@@ -563,19 +580,20 @@ async def _owned_device_scope(
             "The device is not active topology owned by the authenticated enterprise.",
         )
     device, site = row
-    active_device_count = await db.scalar(
+    active_aggregator_count = await db.scalar(
         select(func.count())
         .select_from(EdgeDevice)
         .where(
             EdgeDevice.site_id == site.id,
             EdgeDevice.classification == site.classification,
             EdgeDevice.lifecycle_state == "active",
+            EdgeDevice.device_role == "telemetry_aggregator",
         )
     )
-    if active_device_count != 1:
+    if active_aggregator_count != 1:
         raise TelemetryIntakeError(
             "SITE_DEVICE_TOPOLOGY_AMBIGUOUS",
-            "Sequenced site live state requires exactly one active edge device per site.",
+            "Sequenced site live state requires exactly one active telemetry aggregator per site.",
         )
     return device, site
 
@@ -901,18 +919,13 @@ async def _list_live_sites(
     exact_site_id: str | None = None,
 ) -> SiteLiveStatePage:
     evaluated_at = _as_utc(evaluated_at or datetime.now(UTC))
-    single_active_device_sites = (
-        select(
-            EdgeDevice.site_id.label("site_id"),
-            EdgeDevice.classification.label("classification"),
-        )
-        .where(EdgeDevice.lifecycle_state == "active")
-        .group_by(EdgeDevice.site_id, EdgeDevice.classification)
-        .having(func.count(EdgeDevice.id) == 1)
-        .subquery()
-    )
     statement = (
-        select(SiteLiveState, EnterpriseSite, DeviceTelemetryEpoch.counter_epoch)
+        select(
+            SiteLiveState,
+            EnterpriseSite,
+            SiteLocationVersion,
+            DeviceTelemetryEpoch.counter_epoch,
+        )
         .join(
             EnterpriseSite,
             and_(
@@ -937,10 +950,11 @@ async def _list_live_sites(
             ),
         )
         .join(
-            single_active_device_sites,
+            SiteLocationVersion,
             and_(
-                single_active_device_sites.c.site_id == SiteLiveState.site_id,
-                single_active_device_sites.c.classification == SiteLiveState.classification,
+                SiteLocationVersion.site_id == SiteLiveState.site_id,
+                SiteLocationVersion.classification == SiteLiveState.classification,
+                SiteLocationVersion.effective_to.is_(None),
             ),
         )
         .join(DeviceTelemetryEpoch, DeviceTelemetryEpoch.id == SiteLiveState.telemetry_epoch_id)
@@ -951,10 +965,11 @@ async def _list_live_sites(
             Enterprise.lifecycle_state == "active",
             EdgeDevice.classification == classification,
             EdgeDevice.lifecycle_state == "active",
-            EnterpriseSite.effective_from <= evaluated_at,
+            EdgeDevice.device_role == "telemetry_aggregator",
+            EnterpriseSite.registered_at <= evaluated_at,
             or_(
-                EnterpriseSite.effective_to.is_(None),
-                EnterpriseSite.effective_to > evaluated_at,
+                EnterpriseSite.retired_at.is_(None),
+                EnterpriseSite.retired_at > evaluated_at,
             ),
         )
         .order_by(SiteLiveState.site_id)
@@ -970,8 +985,8 @@ async def _list_live_sites(
     has_more = len(rows) > limit
     selected = rows[:limit]
     items = [
-        _live_response(state, site, counter_epoch, evaluated_at)
-        for state, site, counter_epoch in selected
+        _live_response(state, site, location, counter_epoch, evaluated_at)
+        for state, site, location, counter_epoch in selected
     ]
     next_cursor = UUID(selected[-1][0].site_id) if has_more and selected else None
     return SiteLiveStatePage(items=items, nextCursor=next_cursor)
@@ -991,10 +1006,19 @@ async def _list_sites(
         select(
             EnterpriseSite,
             Enterprise,
+            SiteLocationVersion,
             SiteLiveState,
             DeviceTelemetryEpoch.counter_epoch,
         )
         .join(Enterprise, Enterprise.id == EnterpriseSite.enterprise_id)
+        .join(
+            SiteLocationVersion,
+            and_(
+                SiteLocationVersion.site_id == EnterpriseSite.id,
+                SiteLocationVersion.classification == EnterpriseSite.classification,
+                SiteLocationVersion.effective_to.is_(None),
+            ),
+        )
         .outerjoin(SiteLiveState, SiteLiveState.site_id == EnterpriseSite.id)
         .outerjoin(
             DeviceTelemetryEpoch,
@@ -1004,10 +1028,10 @@ async def _list_sites(
             EnterpriseSite.classification == classification,
             Enterprise.classification == classification,
             Enterprise.lifecycle_state == "active",
-            EnterpriseSite.effective_from <= evaluated_at,
+            EnterpriseSite.registered_at <= evaluated_at,
             or_(
-                EnterpriseSite.effective_to.is_(None),
-                EnterpriseSite.effective_to > evaluated_at,
+                EnterpriseSite.retired_at.is_(None),
+                EnterpriseSite.retired_at > evaluated_at,
             ),
         )
         .order_by(EnterpriseSite.id)
@@ -1021,7 +1045,7 @@ async def _list_sites(
     rows = (await db.execute(statement)).all()
     has_more = len(rows) > limit
     selected = rows[:limit]
-    site_ids = [site.id for site, _enterprise, _state, _epoch in selected]
+    site_ids = [site.id for site, _enterprise, _location, _state, _epoch in selected]
     devices_by_site: dict[str, list[EdgeDevice]] = {site_id: [] for site_id in site_ids}
     cameras_by_device: dict[str, list[Camera]] = {}
     if site_ids:
@@ -1059,13 +1083,14 @@ async def _list_sites(
         _site_resource(
             site=site,
             enterprise=enterprise,
+            location=location,
             state=state,
             counter_epoch=counter_epoch,
             devices=devices_by_site[site.id],
             cameras_by_device=cameras_by_device,
             evaluated_at=evaluated_at,
         )
-        for site, enterprise, state, counter_epoch in selected
+        for site, enterprise, location, state, counter_epoch in selected
     ]
     next_cursor = UUID(selected[-1][0].id) if has_more and selected else None
     return EnterpriseSitePage(
@@ -1079,25 +1104,27 @@ def _site_resource(
     *,
     site: EnterpriseSite,
     enterprise: Enterprise,
+    location: SiteLocationVersion,
     state: SiteLiveState | None,
     counter_epoch: str | None,
     devices: list[EdgeDevice],
     cameras_by_device: dict[str, list[Camera]],
     evaluated_at: datetime,
 ) -> EnterpriseSiteResource:
-    if len(devices) == 1:
+    aggregators = [device for device in devices if device.device_role == "telemetry_aggregator"]
+    if len(aggregators) == 1:
         topology_status = "ready"
-    elif devices:
+    elif aggregators:
         topology_status = "ambiguous"
     else:
         topology_status = "unlinked"
     live_state = (
-        _live_response(state, site, counter_epoch, evaluated_at)
+        _live_response(state, site, location, counter_epoch, evaluated_at)
         if (
             topology_status == "ready"
             and state is not None
             and counter_epoch is not None
-            and state.edge_device_id == devices[0].id
+            and state.edge_device_id == aggregators[0].id
         )
         else None
     )
@@ -1112,15 +1139,15 @@ def _site_resource(
             "classification": site.classification,
             "siteCode": site.site_code,
             "siteName": site.name,
-            "barangay": site.barangay,
-            "address": site.address,
-            "geocodedAddress": site.geocoded_address,
-            "latitude": site.latitude,
-            "longitude": site.longitude,
-            "buildingCapacity": site.building_capacity,
-            "timezone": site.timezone_name,
-            "locationVersion": site.location_version,
-            "coordinatesUpdatedAt": site.coordinates_updated_at,
+            "barangay": location.barangay,
+            "address": location.address,
+            "geocodedAddress": location.geocoded_address,
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "buildingCapacity": location.building_capacity,
+            "timezone": location.timezone_name,
+            "locationVersion": location.version,
+            "coordinatesUpdatedAt": location.coordinates_confirmed_at,
             "topologyStatus": topology_status,
             "devices": [
                 {
@@ -1151,6 +1178,7 @@ def _site_resource(
 def _live_response(
     state: SiteLiveState,
     site: EnterpriseSite,
+    location: SiteLocationVersion,
     counter_epoch: str,
     evaluated_at: datetime,
 ) -> SiteLiveStateResponse:
@@ -1167,9 +1195,9 @@ def _live_response(
         siteCode=site.site_code,
         siteName=site.name,
         classification=cast(Literal["official", "simulation"], state.classification),
-        latitude=site.latitude,
-        longitude=site.longitude,
-        buildingCapacity=site.building_capacity,
+        latitude=location.latitude,
+        longitude=location.longitude,
+        buildingCapacity=location.building_capacity,
         deviceId=UUID(state.edge_device_id),
         telemetryObservationId=UUID(state.telemetry_observation_id),
         counterEpoch=UUID(counter_epoch),

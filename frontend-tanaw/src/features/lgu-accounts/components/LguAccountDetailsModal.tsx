@@ -61,7 +61,7 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
       const emailVerificationQueued = account.isActivated && payload.email !== account.email && updatedAccount.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
       ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));

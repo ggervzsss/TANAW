@@ -1,4 +1,3 @@
-import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -16,7 +15,7 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    SystemConfiguration,
+    SeedState,
 )
 from app.features.accounts.service import get_account_by_email
 
@@ -86,8 +85,8 @@ async def initialize_development_accounts(
     db.add(build_seed_state(DEVELOPMENT_STATE_ID, accounts))
 
 
-async def get_seed_state(db: AsyncSession, state_id: str) -> SystemConfiguration | None:
-    result = await db.scalars(select(SystemConfiguration).where(SystemConfiguration.id == state_id))
+async def get_seed_state(db: AsyncSession, state_id: str) -> SeedState | None:
+    result = await db.scalars(select(SeedState).where(SeedState.id == state_id))
     return result.first()
 
 
@@ -117,14 +116,9 @@ def create_startup_account(spec: StartupAccountSpec, *, protected: bool = False)
     )
 
 
-def build_seed_state(state_id: str, accounts: list[Account]) -> SystemConfiguration:
-    return SystemConfiguration(
+def build_seed_state(state_id: str, accounts: list[Account]) -> SeedState:
+    return SeedState(
         id=state_id,
-        values_json=json.dumps(
-            {
-                "accountIds": [account.id for account in accounts],
-                "initializedAt": datetime.now(UTC).isoformat(),
-            },
-            sort_keys=True,
-        ),
+        initialized_at=datetime.now(UTC),
+        account_count=len(accounts),
     )

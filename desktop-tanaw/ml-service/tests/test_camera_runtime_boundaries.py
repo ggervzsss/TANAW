@@ -17,7 +17,7 @@ from app.storage.local_ledger import LocalLedger
 class CameraRuntimeBoundaryTest(unittest.TestCase):
     def test_target_runtime_modules_own_their_responsibilities(self) -> None:
         expected_owners = {
-            "prepare_mock_counts": SimulationRuntimeMixin,
+            "prepare_simulation_counts": SimulationRuntimeMixin,
             "_capture_loop": CaptureRuntimeMixin,
             "_start_monitoring_coverage": CoverageRuntimeMixin,
             "_processing_loop": ProcessingRuntimeMixin,

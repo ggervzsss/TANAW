@@ -41,8 +41,8 @@ class PersistenceRuntimeMixin:
                         "identity_state": track.identity_state,
                         "identity_score": track.identity_score,
                         "identity_source": track.identity_source,
-                        "source_kind": "real",
-                        "mock_run_id": None,
+                        "classification": "official",
+                        "simulation_run_id": None,
                         **visitor_fields,
                         "counts": counts,
                     }

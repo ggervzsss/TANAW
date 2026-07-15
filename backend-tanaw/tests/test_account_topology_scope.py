@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,29 +17,57 @@ from app.features.topology.models import (
     Enterprise,
     EnterpriseMembership,
     EnterpriseSite,
+    SiteLocationVersion,
 )
 
 
 class ScalarSequenceSession:
     def __init__(self, *responses: list[Any]) -> None:
         self.responses = iter(responses)
+        self.statements: list[object] = []
 
-    async def scalars(self, _statement: object) -> list[Any]:
+    async def scalars(self, statement: object) -> list[Any]:
+        self.statements.append(statement)
         return next(self.responses)
 
 
 @pytest.mark.asyncio
 async def test_enterprise_ownership_resolves_exactly_one_effective_scope() -> None:
-    account, membership, enterprise, site = _scope_rows()
-    db = ScalarSequenceSession([membership], [enterprise], [site], [], [], [])
+    account, membership, enterprise, site, location = _scope_rows()
+    db = ScalarSequenceSession([membership], [enterprise], [site], [location], [], [], [])
 
     topology = await load_account_topology(db, account, evaluated_at=_now())  # type: ignore[arg-type]
 
     assert topology is not None
     assert topology.enterprise is enterprise
     assert topology.site is site
+    assert topology.location is location
     assert topology.official_code == "ENT-001"
     assert topology.gateway_status == "Not Linked"
+    location_statement = db.statements[3]
+    rendered = str(location_statement)
+    assert "site_location_versions.effective_from <=" in rendered
+    assert "site_location_versions.effective_to >" in rendered
+
+
+@pytest.mark.asyncio
+async def test_enterprise_ownership_fails_closed_for_ambiguous_effective_location() -> None:
+    account, membership, enterprise, site, first = _scope_rows()
+    second = SiteLocationVersion(
+        id="00000000-0000-0000-0000-000000000107",
+        site_id=site.id,
+        classification="official",
+        version=2,
+        barangay="Nueva",
+        timezone_name="Asia/Manila",
+        building_capacity=100,
+        change_reason="invalid_overlap_fixture",
+        effective_from=_now() - timedelta(hours=1),
+    )
+    db = ScalarSequenceSession([membership], [enterprise], [site], [first, second], [], [], [])
+
+    with pytest.raises(AccountTopologyInvariantError, match="exactly one location version"):
+        await load_account_topology(db, account, evaluated_at=_now())  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -56,7 +85,7 @@ def test_gateway_status_uses_durable_backlog_thresholds(
     alert_active: bool,
     expected: str,
 ) -> None:
-    account, membership, enterprise, site = _scope_rows()
+    account, membership, enterprise, site, location = _scope_rows()
     now = _now()
     device = EdgeDevice(
         id="00000000-0000-0000-0000-000000000104",
@@ -64,6 +93,7 @@ def test_gateway_status_uses_durable_backlog_thresholds(
         classification="official",
         device_key="gateway-1",
         display_name="Gateway One",
+        device_role="telemetry_aggregator",
         lifecycle_state="active",
         counter_epoch="00000000-0000-0000-0000-000000000105",
     )
@@ -80,6 +110,7 @@ def test_gateway_status_uses_durable_backlog_thresholds(
         membership=membership,
         enterprise=enterprise,
         site=site,
+        location=location,
         active_devices=(device,),
         live_state=live_state,  # type: ignore[arg-type]
         evaluated_at=now,
@@ -93,7 +124,7 @@ def test_gateway_status_uses_durable_backlog_thresholds(
 
 @pytest.mark.asyncio
 async def test_enterprise_ownership_fails_closed_when_membership_is_missing() -> None:
-    account, _, _, _ = _scope_rows()
+    account, _, _, _, _ = _scope_rows()
     db = ScalarSequenceSession([])
 
     with pytest.raises(AccountTopologyInvariantError, match="exactly one effective membership"):
@@ -102,7 +133,7 @@ async def test_enterprise_ownership_fails_closed_when_membership_is_missing() ->
 
 @pytest.mark.asyncio
 async def test_lgu_principal_is_forbidden_from_owning_enterprise_topology() -> None:
-    account, membership, _, _ = _scope_rows()
+    account, membership, _, _, _ = _scope_rows()
     account.role = AccountRole.STAFF
     db = ScalarSequenceSession([membership])
 
@@ -110,30 +141,39 @@ async def test_lgu_principal_is_forbidden_from_owning_enterprise_topology() -> N
         await load_account_topology(db, account, evaluated_at=_now())  # type: ignore[arg-type]
 
 
-def test_address_invalidation_is_atomic_and_keeps_stable_site_scope_start() -> None:
-    _, _, _, site = _scope_rows()
-    effective_from = site.effective_from
-    site.latitude = 14.36
-    site.longitude = 121.06
-    site.location_source = "geocoder"
-    site.location_confidence = 0.9
-    site.geocoded_address = "Old Address"
-    site.coordinates_updated_at = _now()
-    site.location_version = 3
+@pytest.mark.asyncio
+async def test_address_invalidation_appends_location_and_keeps_stable_site_identity() -> None:
+    _, _, _, site, location = _scope_rows()
+    location.version = 3
+    location.latitude = 14.36
+    location.longitude = 121.06
+    location.location_source = "geocoder"
+    location.location_confidence = 0.9
+    location.geocoded_address = "Old Address"
+    location.coordinates_confirmed_at = _now()
+    db = MagicMock()
+    db.flush = AsyncMock()
 
-    invalidate_site_coordinates(site)
+    successor = await invalidate_site_coordinates(
+        db,
+        site,
+        location,
+        barangay="Poblacion",
+        address="New Address",
+        building_capacity=100,
+    )
 
-    assert site.location_version == 4
-    assert site.effective_from == effective_from
-    assert site.latitude is None
-    assert site.longitude is None
-    assert site.location_source is None
-    assert site.location_confidence is None
-    assert site.geocoded_address is None
-    assert site.coordinates_updated_at is None
+    assert successor.version == 4
+    assert successor.address == "New Address"
+    assert successor.latitude is None
+    assert successor.longitude is None
+    assert location.effective_to is not None
+    assert site.registered_at == _now()
 
 
-def _scope_rows() -> tuple[Account, EnterpriseMembership, Enterprise, EnterpriseSite]:
+def _scope_rows() -> tuple[
+    Account, EnterpriseMembership, Enterprise, EnterpriseSite, SiteLocationVersion
+]:
     now = _now()
     account = Account(
         id="account-1",
@@ -166,10 +206,21 @@ def _scope_rows() -> tuple[Account, EnterpriseMembership, Enterprise, Enterprise
         classification="official",
         site_code="primary",
         name="Enterprise One Primary Site",
+        registered_at=now,
+    )
+    location = SiteLocationVersion(
+        id="00000000-0000-0000-0000-000000000106",
+        site_id=site.id,
+        classification="official",
+        version=1,
+        barangay="Poblacion",
+        address="Old Address",
+        timezone_name="Asia/Manila",
         building_capacity=100,
+        change_reason="registered",
         effective_from=now,
     )
-    return account, membership, enterprise, site
+    return account, membership, enterprise, site, location
 
 
 def _now() -> datetime:
