@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import sqlite3
 
-TARGET_LOCAL_SCHEMA_VERSION = 6
+TARGET_LOCAL_SCHEMA_VERSION = 7
 
 TARGET_SCHEMA_STATEMENTS: tuple[str, ...] = (
+    """CREATE TABLE camera_runtime_state (
+        camera_key text primary key,
+        snapshot_json text not null check (
+            json_valid(snapshot_json)
+            and length(cast(snapshot_json as blob)) <= 65536
+        ),
+        updated_at text not null,
+        foreign key (camera_key) references local_cameras(camera_key) on delete cascade
+    )""",
     """CREATE TABLE camera_live_state (
         camera_key text primary key,
         observed_at text not null,

@@ -25,7 +25,7 @@ class ResilienceLedgerTest(unittest.TestCase):
                 _event(central_camera_id=CAMERA_UUID),
                 "2026-06-15T04:00:00+00:00",
             )
-            store.save_camera_live_state(
+            store.save_runtime_snapshot(
                 {
                     "camera_id": 1,
                     "camera_name": "Entrance",
@@ -176,7 +176,7 @@ class ResilienceLedgerTest(unittest.TestCase):
             event = _event(central_camera_id=CAMERA_UUID)
             event["visitor_id"] = "visitor-1"
             store.append_count_event(event, "2026-06-15T04:00:00+00:00")
-            store.save_camera_live_state(
+            store.save_runtime_snapshot(
                 {
                     "camera_id": 1,
                     "camera_name": "Entrance",
@@ -307,6 +307,44 @@ class ResilienceLedgerTest(unittest.TestCase):
             self.assertEqual(instrumentation["active_writer_count"], 0)
             self.assertGreaterEqual(instrumentation["committed_transaction_count"], 2)
             self.assertEqual(instrumentation["rolled_back_transaction_count"], 0)
+
+    def test_runtime_snapshot_and_typed_live_state_roll_back_as_one_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalLedger(directory)
+            store.ensure_initialized()
+            with closing(connect_local_database(store._database_path)) as connection:
+                connection.execute(
+                    """
+                    create trigger reject_runtime_snapshot
+                    before insert on camera_runtime_state
+                    begin
+                        select raise(abort, 'simulated runtime snapshot failure');
+                    end
+                    """
+                )
+                connection.commit()
+
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "simulated runtime snapshot"):
+                store.save_runtime_snapshot(
+                    {
+                        "camera_id": 1,
+                        "camera_name": "Entrance",
+                        "running": True,
+                        "status": "running",
+                        "counts": {"entry": 1, "exit": 0, "occupancy": 1},
+                    },
+                    "2026-06-15T04:00:01+00:00",
+                )
+
+            with closing(connect_local_database(store._database_path)) as connection:
+                counts = {
+                    table: connection.execute(f"select count(*) from {table}").fetchone()[0]
+                    for table in ("local_cameras", "camera_live_state", "camera_runtime_state")
+                }
+            self.assertEqual(
+                counts,
+                {"local_cameras": 0, "camera_live_state": 0, "camera_runtime_state": 0},
+            )
 
     def test_expired_identity_cleanup_removes_every_embedding_copy_but_keeps_rollups(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

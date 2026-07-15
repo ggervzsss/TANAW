@@ -1,51 +1,43 @@
-import json
 import tempfile
 import unittest
-from pathlib import Path
+from contextlib import closing
 
 from app.camera.camera_manager import CameraProcessingManager
+from app.storage.local_schema import connect_local_database
+from app.storage.runtime_store import EdgeRuntimeStore
 
 
 class SessionCredentialRedactionTest(unittest.TestCase):
-    def test_init_scrubs_credentials_from_untrusted_session_snapshot(self) -> None:
+    def test_runtime_snapshot_is_redacted_before_atomic_ledger_persistence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            secret_payload = _credential_bearing_session_payload()
-            session_path = Path(directory) / "ml-service" / "active_session.json"
-            session_path.parent.mkdir(parents=True)
-            session_path.write_text(json.dumps(secret_payload), encoding="utf-8")
+            store = EdgeRuntimeStore(directory)
+            store.save_session(_credential_bearing_session_payload())
 
-            manager = CameraProcessingManager(directory)
-
-            self.assertFalse(manager.restore_last_session())
-            persisted_text = session_path.read_text(encoding="utf-8")
-            persisted = json.loads(persisted_text)
+            persisted = store.load_session()
+            self.assertIsNotNone(persisted)
+            assert persisted is not None
             camera_config = persisted["camera_config"]
             self.assertIsNone(camera_config["username"])
             self.assertIsNone(camera_config["password"])
             self.assertTrue(camera_config["username_redacted"])
             self.assertTrue(camera_config["password_redacted"])
             self.assertTrue(camera_config["stream_url_credentials_redacted"])
-            self.assertNotIn("camera-user-secret", persisted_text)
-            self.assertNotIn("camera-password-secret", persisted_text)
+            with closing(connect_local_database(store._ledger._database_path)) as connection:
+                snapshot_json = connection.execute(
+                    "select snapshot_json from camera_runtime_state"
+                ).fetchone()[0]
+            self.assertNotIn("camera-user-secret", snapshot_json)
+            self.assertNotIn("camera-password-secret", snapshot_json)
 
-    def test_restore_load_scrubs_credentials_written_after_store_initialization(self) -> None:
+    def test_manager_restore_fails_closed_for_redacted_credential_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
+            store = EdgeRuntimeStore(directory)
+            store.save_session(_credential_bearing_session_payload())
             manager = CameraProcessingManager(directory)
-            session_path = Path(directory) / "ml-service" / "active_session.json"
-            session_path.parent.mkdir(parents=True, exist_ok=True)
-            session_path.write_text(
-                json.dumps(_credential_bearing_session_payload()),
-                encoding="utf-8",
-            )
 
             restored = manager.restore_last_session()
 
             self.assertFalse(restored)
-            persisted_text = session_path.read_text(encoding="utf-8")
-            self.assertNotIn("camera-user-secret", persisted_text)
-            self.assertNotIn("camera-password-secret", persisted_text)
-            self.assertIn('"username_redacted": true', persisted_text)
-            self.assertIn('"password_redacted": true', persisted_text)
 
 
 def _credential_bearing_session_payload() -> dict:

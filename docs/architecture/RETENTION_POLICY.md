@@ -87,8 +87,10 @@ the Manila business-day boundary plus the configured two-hour grace window.
 The retained rollups and coverage gaps preserve dashboard/report meaning after
 raw deletion.
 
-The target runtime writes no JSONL event copy, snapshot directory, image cache,
-or embedding file. `local-data inspect --json` reports forbidden disk artifacts
+The target runtime writes no active-session JSON file, JSONL event copy, snapshot
+directory, image cache, or embedding file. The bounded, credential-free restart
+snapshot is part of the same SQLite transaction as typed camera live state.
+`local-data inspect --json` reports forbidden disk artifacts
 for every ledger, while the retention inventory reports counts for raw event,
 identity, sighting, and embedding tables. The production acceptance scan must
 show an empty forbidden-artifact list on every enrolled device.

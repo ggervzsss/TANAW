@@ -15,6 +15,7 @@ LEDGER_TABLES = (
     "local_sites",
     "local_cameras",
     "local_camera_event_sequences",
+    "camera_runtime_state",
     "camera_live_state",
     "count_events",
     "reporting_periods",
@@ -35,7 +36,6 @@ LEDGER_TABLES = (
     "visitor_sightings",
 )
 UNBOUND_RUNTIME_FILES = (
-    "active_session.json",
     DATABASE_NAME,
     f"{DATABASE_NAME}-shm",
     f"{DATABASE_NAME}-wal",

@@ -1,7 +1,4 @@
-import json
-import os
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from app.storage.local_ledger import LocalLedger
@@ -10,48 +7,22 @@ from app.storage.session_credentials import scrub_session_snapshot
 
 class EdgeRuntimeStore:
     def __init__(self, app_data_dir: str | None = None, enterprise_id: str | None = None) -> None:
-        base_dir = app_data_dir or os.environ.get("TANAW_APP_DATA_DIR")
-        if base_dir:
-            root = Path(base_dir) / "ml-service"
-        else:
-            root = Path.home() / ".tanaw" / "ml-service"
-
-        scope = _safe_scope(enterprise_id)
-        self._root = root / "enterprises" / scope if enterprise_id else root
-
-        self._session_path = self._root / "active_session.json"
         self._ledger = LocalLedger(app_data_dir, enterprise_id)
-        self._scrub_session_credentials()
 
     def load_session(self) -> dict[str, Any] | None:
-        self._scrub_session_file()
-        if not self._session_path.exists():
+        payload = self._ledger.load_runtime_snapshot()
+        if payload is None:
             return None
-
-        try:
-            with self._session_path.open("r", encoding="utf-8") as file:
-                payload = json.load(file)
-        except (OSError, json.JSONDecodeError):
-            return None
-
-        return payload if isinstance(payload, dict) else None
+        scrubbed, _changed = scrub_session_snapshot(payload)
+        return scrubbed
 
     def save_session(self, payload: dict[str, Any]) -> None:
-        self._root.mkdir(parents=True, exist_ok=True)
         serializable = {
             **payload,
             "updated_at": datetime.now(UTC).isoformat(),
         }
-        temporary_path = self._session_path.with_suffix(".tmp")
-
-        with temporary_path.open("w", encoding="utf-8") as file:
-            json.dump(serializable, file, indent=2, sort_keys=True)
-
-        temporary_path.replace(self._session_path)
-        self._ledger.save_camera_live_state(
-            serializable,
-            recorded_at=str(serializable["updated_at"]),
-        )
+        scrubbed, _changed = scrub_session_snapshot(serializable)
+        self._ledger.save_runtime_snapshot(scrubbed, recorded_at=str(scrubbed["updated_at"]))
 
     def append_event(self, payload: dict[str, Any]) -> None:
         event = {
@@ -250,37 +221,3 @@ class EdgeRuntimeStore:
 
     def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
         return self._ledger.remove_mock_data(mock_run_id)
-
-    def _scrub_session_credentials(self) -> None:
-        self._scrub_session_file()
-
-    def _scrub_session_file(self) -> None:
-        if not self._session_path.exists():
-            return
-        try:
-            payload = json.loads(self._session_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
-        if not isinstance(payload, dict):
-            return
-        scrubbed, changed = scrub_session_snapshot(payload)
-        if not changed:
-            return
-        temporary_path = self._session_path.with_suffix(".tmp")
-        try:
-            with temporary_path.open("w", encoding="utf-8") as file:
-                json.dump(scrubbed, file, indent=2, sort_keys=True)
-            temporary_path.replace(self._session_path)
-        except OSError:
-            temporary_path.unlink(missing_ok=True)
-            raise
-
-
-def _safe_scope(value: str | None) -> str:
-    if not value:
-        return "unbound"
-    normalized = "".join(
-        character if character.isalnum() or character in "._-" else "_"
-        for character in value.strip()
-    )
-    return normalized[:160] or "unbound"

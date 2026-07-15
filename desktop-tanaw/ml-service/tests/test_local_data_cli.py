@@ -15,6 +15,8 @@ class LocalDataCliTest(unittest.TestCase):
             store.append_count_event(_event("mock", "run-1"))
             forbidden_file = store._database_path.parent / "events.jsonl"
             forbidden_file.write_text("legacy duplicate", encoding="utf-8")
+            legacy_session = store._database_path.parent / "active_session.json"
+            legacy_session.write_text("{}", encoding="utf-8")
 
             result = inspect_local_data(app_data_dir, "enterprise@example.test", limit=5)
 
@@ -22,7 +24,10 @@ class LocalDataCliTest(unittest.TestCase):
             self.assertTrue(ledger["exists"])
             self.assertEqual(ledger["tables"]["count_events"], 2)
             self.assertEqual(ledger["currentDraftEvents"], 2)
-            self.assertEqual(ledger["forbiddenDiskArtifacts"], ["events.jsonl"])
+            self.assertEqual(
+                ledger["forbiddenDiskArtifacts"],
+                ["active_session.json", "events.jsonl"],
+            )
             self.assertEqual(
                 {
                     (row["sourceKind"], row["mockRunId"], row["count"])

@@ -155,7 +155,12 @@ def retention_inventory(connection: sqlite3.Connection, *, root: Path) -> dict[s
 
 
 def forbidden_disk_artifacts(root: Path) -> list[str]:
-    forbidden_names = {"events.jsonl", "count_snapshots.jsonl", "identity_embeddings.npy"}
+    forbidden_names = {
+        "active_session.json",
+        "events.jsonl",
+        "count_snapshots.jsonl",
+        "identity_embeddings.npy",
+    }
     forbidden_directories = {"snapshots", "embeddings", "visitor-images"}
     return sorted(
         str(path.relative_to(root))

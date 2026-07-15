@@ -621,7 +621,7 @@ class LocalLedger:
             result = purge_expired_identity_data(connection, expires_at_or_before=now)
         return result["identities"]
 
-    def save_camera_live_state(
+    def save_runtime_snapshot(
         self, payload: dict[str, Any], recorded_at: str | None = None
     ) -> None:
         raw_counts = payload.get("counts")
@@ -629,6 +629,7 @@ class LocalLedger:
         raw_config = payload.get("camera_config")
         camera_config: dict[str, Any] = raw_config if isinstance(raw_config, dict) else {}
         observed_at = parse_captured_at(recorded_at or _utc_now()).isoformat()
+        snapshot_json = _encode_runtime_snapshot(payload)
         camera_key = local_camera_key(
             payload.get("camera_id"),
             payload.get("camera_name"),
@@ -666,8 +667,37 @@ class LocalLedger:
                 occupancy_count=_safe_int(counts.get("occupancy")),
                 error=payload.get("error"),
             )
+            connection.execute(
+                """
+                insert into camera_runtime_state (camera_key, snapshot_json, updated_at)
+                values (?, ?, ?)
+                on conflict(camera_key) do update set
+                    snapshot_json = excluded.snapshot_json,
+                    updated_at = excluded.updated_at
+                where excluded.updated_at >= camera_runtime_state.updated_at
+                """,
+                (camera_key, snapshot_json, observed_at),
+            )
 
-        self._write("save_camera_live_state", write_state)
+        self._write("save_runtime_snapshot", write_state)
+
+    def load_runtime_snapshot(self) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                select snapshot_json
+                from camera_runtime_state
+                order by updated_at desc, camera_key
+                limit 1
+                """
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(str(row["snapshot_json"]))
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
 
     def record_occupancy_correction(
         self,
@@ -1925,6 +1955,22 @@ def _encode_event_attributes(payload: dict[str, Any]) -> str:
         raise ValueError("Count-event attributes must contain only finite JSON values.") from exc
     if len(encoded.encode("utf-8")) > MAX_EVENT_ATTRIBUTES_BYTES:
         raise ValueError(f"Count-event attributes exceed {MAX_EVENT_ATTRIBUTES_BYTES} bytes.")
+    return encoded
+
+
+def _encode_runtime_snapshot(payload: dict[str, Any]) -> str:
+    try:
+        encoded = json.dumps(
+            payload,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Runtime snapshot must contain only finite JSON values.") from exc
+    if len(encoded.encode("utf-8")) > 65_536:
+        raise ValueError("Runtime snapshot must not exceed 65536 bytes.")
     return encoded
 
 
