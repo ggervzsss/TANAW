@@ -4,15 +4,14 @@ import type { DemoBreakdown } from "../../../types/enterprise";
 import { DemographicsBreakdown } from "./DemographicsBreakdown";
 
 describe("DemographicsBreakdown", () => {
-  it("offers manual facts only and renders missing totals as Not provided", () => {
-    const markup = renderToStaticMarkup(<DemographicsBreakdown demo={emptyDemo()} demographicEvidence={null} isReadOnly={false} setDemo={() => undefined} setDemographicEvidence={() => undefined} />);
+  it("offers manual and assisted entry while rendering missing totals as Not provided", () => {
+    const markup = renderToStaticMarkup(
+      <DemographicsBreakdown demo={emptyDemo()} demographicEvidence={null} isReadOnly={false} setDemo={() => undefined} setDemographicEvidence={() => undefined} uniqueCount={100} />,
+    );
 
-    expect(markup).toContain("Leave unknown values blank");
+    expect(markup).toContain("Manual");
+    expect(markup).toContain("Assisted");
     expect(markup).toContain("Not provided");
-    expect(markup).not.toContain("Assisted");
-    expect(markup).not.toContain("Fill Remaining");
-    expect(markup).not.toContain("50%");
-    expect(markup).not.toContain("Unique cap");
   });
 });
 

@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     account_activation_ttl_hours: int = Field(default=24, ge=1, le=168)
     account_email_change_ttl_hours: int = Field(default=24, ge=1, le=168)
     retention_cleanup_interval_seconds: int = Field(default=3600, ge=60, le=86_400)
+    reporting_period_lifecycle_interval_seconds: int = Field(default=3600, ge=60, le=86_400)
     retention_cleanup_batch_size: int = Field(default=500, ge=10, le=5000)
     activation_token_retention_days: int = Field(default=30, ge=1, le=3650)
     password_reset_retention_days: int = Field(default=30, ge=1, le=3650)

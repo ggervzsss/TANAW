@@ -7,6 +7,7 @@ import {
   formatDemographicValue,
   getDemographicEvidenceStatus,
   getExplicitDemographicTotals,
+  ESTIMATED_OPERATOR_DEMOGRAPHIC_EVIDENCE,
 } from "./demographics";
 
 describe("demographic evidence", () => {
@@ -66,6 +67,23 @@ describe("demographic evidence", () => {
 
     expect(buildDemographicFacts(demo, null)).toEqual([]);
     expect(demographicEvidenceFromFacts([], demo)).toBeNull();
+  });
+
+  it("preserves an assisted allocation as operator-entered estimated facts", () => {
+    const demo: DemoBreakdown = {
+      thisProvMale: "30",
+      thisProvFemale: "30",
+      otherProvMale: "15",
+      otherProvFemale: "15",
+      foreignMale: "5",
+      foreignFemale: "5",
+    };
+
+    const facts = buildDemographicFacts(demo, ESTIMATED_OPERATOR_DEMOGRAPHIC_EVIDENCE);
+
+    expect(facts).toHaveLength(6);
+    expect(facts.every((fact) => fact.provenance === "operator_entered" && fact.quality === "estimated")).toBe(true);
+    expect(demographicEvidenceFromFacts(facts, demo)).toEqual(ESTIMATED_OPERATOR_DEMOGRAPHIC_EVIDENCE);
   });
 
   it("preserves only entered partial facts without allocating the unique-count difference", () => {

@@ -65,6 +65,13 @@ legal/privacy policy explicitly makes them so. In the current contract,
 manual demographics are `operator_entered`. Missing demographics stay absent;
 no fixed residence, age, gender, or source ratio may be generated.
 
+The desktop MAY offer an assisted demographic allocation when the operator
+chooses the residence and sex percentages, applies them to the venue-local
+visitor estimate, and explicitly confirms the result. Those facts remain
+`operator_entered` with `estimated` quality. TANAW MUST NOT apply the allocation
+silently, reuse a prior report's mix, or label the result as measured or
+confirmed demographics.
+
 ## Quality and coverage
 
 | Quality     | Meaning                                                                                    |

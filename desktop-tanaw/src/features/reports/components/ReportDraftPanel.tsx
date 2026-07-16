@@ -56,13 +56,20 @@ export function ReportDraftPanel({
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodField
-          description={isCurrentReport ? "Use the Submission Ledger to switch between current and pending reporting periods." : "This is the period saved with the selected ledger report."}
+          description={isCurrentReport ? "TANAW selects this automatically." : "Saved with this report."}
           isLoading={isPeriodChanging}
           label={isCurrentReport ? "Current Reporting Period" : "Report Period"}
           period={period}
         />
         <SystemLockedMetrics demo={demo} demographicEvidence={demographicEvidence} metrics={metrics} />
-        <DemographicsBreakdown demo={demo} demographicEvidence={demographicEvidence} isReadOnly={isReadOnly} setDemo={setDemo} setDemographicEvidence={setDemographicEvidence} />
+        <DemographicsBreakdown
+          demo={demo}
+          demographicEvidence={demographicEvidence}
+          isReadOnly={isReadOnly}
+          setDemo={setDemo}
+          setDemographicEvidence={setDemographicEvidence}
+          uniqueCount={metrics.unique}
+        />
         <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
         <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onSubmitPrompt={onSubmitPrompt} />
         <ReportAuditTrail activeReport={activeReport} />

@@ -17,7 +17,14 @@ export function BatchReportsTable({ rows, isLoading, selectedReportIds, selectio
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead className="bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
-          <tr><th className="px-4 py-4">Select</th><th className="px-6 py-4">Enterprise / Site</th><th className="px-6 py-4">Frozen Barangay</th><th className="px-6 py-4">Eligibility</th><th className="px-6 py-4">Compliance</th><th className="px-6 py-4">Evidence</th></tr>
+          <tr>
+            <th className="px-4 py-4">Select</th>
+            <th className="px-6 py-4">Enterprise / Site</th>
+            <th className="px-6 py-4">Barangay</th>
+            <th className="px-6 py-4">Included</th>
+            <th className="px-6 py-4">Report Status</th>
+            <th className="px-6 py-4">Details</th>
+          </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 text-gray-800">
           {rows.map(({ obligation, report, enterpriseLabel, siteLabel }) => {
@@ -25,7 +32,14 @@ export function BatchReportsTable({ rows, isLoading, selectedReportIds, selectio
             return (
               <tr key={obligation.obligationId} className="group hover:bg-tgreen-dark/5 transition">
                 <td className="px-4 py-4">
-                  <input type="checkbox" aria-label={`Select ${enterpriseLabel} for finalization`} checked={Boolean(report && selectedReportIds.has(report.enterpriseReportId))} disabled={!selectable || selectionLocked} onChange={() => report && onToggleReport(report.enterpriseReportId)} className="h-4 w-4 accent-emerald-700 disabled:opacity-40" />
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${enterpriseLabel} for finalization`}
+                    checked={Boolean(report && selectedReportIds.has(report.enterpriseReportId))}
+                    disabled={!selectable || selectionLocked}
+                    onChange={() => report && onToggleReport(report.enterpriseReportId)}
+                    className="h-4 w-4 accent-emerald-700 disabled:opacity-40"
+                  />
                 </td>
                 <td className="px-6 py-4">
                   <button type="button" disabled={!report} onClick={() => report && onOpenReport(report.enterpriseReportId)} className="text-left disabled:cursor-default">
@@ -34,15 +48,38 @@ export function BatchReportsTable({ rows, isLoading, selectedReportIds, selectio
                   </button>
                 </td>
                 <td className="px-6 py-4 text-xs">{obligation.frozenBarangay ?? "Not recorded"}</td>
-                <td className="px-6 py-4"><ReportStatusBadge status={obligation.eligibilityStatus} /></td>
-                <td className="px-6 py-4"><ReportStatusBadge status={obligation.complianceStatus ?? "unknown"} /></td>
+                <td className="px-6 py-4">
+                  <ReportStatusBadge status={obligation.eligibilityStatus} />
+                </td>
+                <td className="px-6 py-4">
+                  <ReportStatusBadge status={obligation.complianceStatus ?? "unknown"} />
+                </td>
                 <td className="px-6 py-4 text-xs">
-                  {report ? <><span className="font-mono">rev {report.currentRevision.revisionNumber}</span><span className="mt-1 block text-gray-500">{report.currentRevision.evidenceStatus} · {report.currentRevision.coverage.evidenceStatus}</span></> : <span className="font-semibold text-red-700">No submitted report resource</span>}
+                  {report ? (
+                    <>
+                      <span className="font-mono">Version {report.currentRevision.revisionNumber}</span>
+                      <span className="mt-1 block text-gray-500">
+                        {report.currentRevision.evidenceStatus} · {report.currentRevision.coverage.evidenceStatus}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="font-semibold text-red-700">Not submitted</span>
+                  )}
                 </td>
               </tr>
             );
           })}
-          {rows.length === 0 && <tr><td colSpan={6}><EmptyState icon={ClipboardList} title={isLoading ? "Loading obligations" : "No frozen obligations"} description={isLoading ? "Fetching the authoritative period compliance snapshot." : "No obligation rows were returned for this period."} /></td></tr>}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={6}>
+                <EmptyState
+                  icon={ClipboardList}
+                  title={isLoading ? "Loading reports" : "No enterprises for this period"}
+                  description={isLoading ? "Loading submission tracking." : "Submission tracking has no entries yet."}
+                />
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

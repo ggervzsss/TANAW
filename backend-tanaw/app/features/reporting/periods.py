@@ -140,12 +140,13 @@ async def read_reporting_period(
 async def run_reporting_period_lifecycle(
     db: AsyncSession,
     *,
-    account: Account,
+    account: Account | None,
     now: datetime | None = None,
 ) -> ReportingPeriodLifecycleResult:
     """Ensure the fixed horizon and freeze periods at the seven-day lead exactly once."""
 
-    _require_staff(account)
+    if account is not None:
+        _require_staff(account)
     observed_at = _as_utc(now or datetime.now(UTC))
     if db.get_bind().dialect.name != "postgresql":
         raise ReportingPeriodError(

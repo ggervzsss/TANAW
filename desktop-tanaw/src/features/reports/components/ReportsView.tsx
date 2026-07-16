@@ -523,7 +523,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
-          <p className="mt-1 text-sm text-gray-500">Prepare unfinished monthly reports and review submitted report history.</p>
+          <p className="mt-1 text-sm text-gray-500">Prepare the monthly report and review earlier submissions.</p>
           {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
           {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report ledger unavailable: {ledgerError}</p>}
         </div>
@@ -597,7 +597,7 @@ function validateDemographicEvidence(demo: DemoBreakdown, evidence: DemographicE
   const factError = status.validationMessage;
   if (factError) return factError;
   if (status.hasAnyValue && !evidence) {
-    return "Confirm that the entered demographic counts are explicit operator-provided facts, or clear them to leave demographics Not provided.";
+    return "Confirm the entered demographic values, or clear them to leave demographics blank.";
   }
   return null;
 }

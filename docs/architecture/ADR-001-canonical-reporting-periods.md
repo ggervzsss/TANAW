@@ -58,6 +58,13 @@ submission time, receipt time, or the user’s currently displayed month. Events
 without an authoritative period are quarantined from official submission with
 an actionable error; no “current month” fallback is permitted.
 
+The central service automatically reconciles its canonical period horizon at
+startup and at least hourly. This server-owned lifecycle creates missing period
+resources, advances their status, and freezes due obligations without requiring
+a Staff user to press a start button. An empty edge ledger may expose the period
+derived from the ML service clock so the desktop can show its current workspace;
+this does not classify an event or make an empty report submittable.
+
 ## Period creation and timezone changes
 
 - Local calendar boundaries MUST be resolved with an IANA timezone database,

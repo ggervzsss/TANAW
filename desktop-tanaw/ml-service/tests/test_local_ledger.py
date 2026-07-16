@@ -13,6 +13,15 @@ JULY_PERIOD_ID = "month:Asia/Manila:2026-07"
 
 
 class LocalLedgerTest(unittest.TestCase):
+    def test_empty_ledger_exposes_the_current_canonical_reporting_period(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            summary = LocalLedger(str(Path(directory))).metrics_summary()
+
+            self.assertEqual(summary["period_id"], CURRENT_PERIOD_ID)
+            self.assertIsNotNone(summary["starts_at_utc"])
+            self.assertIsNotNone(summary["ends_at_utc"])
+            self.assertEqual(summary["entries"], 0)
+
     def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
         self.assertIsNotNone(
             reporting_period_submission_error(

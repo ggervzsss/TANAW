@@ -18,12 +18,12 @@ export function SystemLockedMetrics({ demo, demographicEvidence, metrics }: Syst
         <MetricRow label="Female" value={formatDemographicValue(totals?.female ?? null)} />
         <MetricRow label="Demographic Total" value={formatDemographicValue(totals?.grandTotal ?? null)} />
         <div className="flex items-center justify-between border-t border-gray-200 pt-3 text-sm">
-          <span className="font-semibold text-[#065f46]">Camera-derived venue-local unique estimate</span>
+          <span className="font-semibold text-[#065f46]">Camera visitor estimate</span>
           <div className="flex flex-col items-end">
             <span className="font-mono text-lg leading-none font-bold text-[#065f46]">{metrics.unique.toLocaleString()}</span>
           </div>
         </div>
-        <p className="text-[10px] leading-relaxed font-semibold text-gray-500">This camera-derived estimate is a separate evidence stream. It is not a demographic total, cap, or allocation target.</p>
+        <p className="text-[10px] leading-relaxed font-semibold text-gray-500">Assisted mode can use this total, while demographic values remain separately labeled as operator estimates.</p>
       </div>
     </div>
   );

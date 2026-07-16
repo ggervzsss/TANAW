@@ -7,7 +7,7 @@ import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { useEnterpriseReports, usePeriodCompliance, useReportingPeriods } from "@/shared/hooks/useReportWorkflow";
-import { createReminderIntents, finalizeReports, reportWorkflowQueryKey, runReportingPeriodLifecycle } from "@/shared/services/reporting";
+import { createReminderIntents, finalizeReports, reportWorkflowQueryKey } from "@/shared/services/reporting";
 import type { FinalReportScopeType, FinalizeReportsCommand } from "@/shared/types";
 import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, ReportActionConfirmDialog, ReportReviewModal } from "../components";
 import { acceptedRevisionIds, buildComplianceRows, deriveBatchReportView } from "../utils/reportWorkflow";
@@ -54,15 +54,6 @@ export function StaffBatchReportsPage() {
   const completeScope = batchView.complete;
   const canFinalize = Boolean(selectedPeriod && selectedReports.length > 0 && completeScope && !reportsQuery.isLoading && !complianceQuery.isLoading);
   const isComplianceMissing = isNotFound(complianceQuery.error);
-
-  const lifecycleMutation = useMutation({
-    mutationFn: runReportingPeriodLifecycle,
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: reportWorkflowQueryKey });
-      toast.success(`Server lifecycle evaluated ${result.ensuredPeriodCount} periods: ${result.createdCount} created, ${result.transitionedCount} transitioned, ${result.frozenCount} frozen.`);
-    },
-    onError: (error) => toast.error(apiErrorMessage(error, "The server reporting-period lifecycle could not be reconciled.")),
-  });
 
   const reminderMutation = useMutation({
     mutationFn: async () => {
@@ -124,40 +115,12 @@ export function StaffBatchReportsPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Batch Reports" description="Review official evidence, period obligations, and exact accepted revisions before immutable finalization." />
+      <PageHeader title="Batch Reports" description="Review enterprise submissions and create final reports." />
 
-      {loadError && <Notice tone="error">Official v2 report resources could not be loaded. Review and finalization remain unavailable until the authoritative service recovers.</Notice>}
-      {periods.length === 0 && !periodsQuery.isLoading && (
-        <Notice tone="warning">
-          No official reporting period was returned by the Staff discovery endpoint. TANAW will not invent one from the browser clock. Run the server lifecycle to ensure its configured period horizon.
-        </Notice>
-      )}
-      {selectedPeriod && isComplianceMissing && (
-        <Notice tone="warning">
-          This official period does not yet have a readable frozen compliance snapshot. Missing submissions are blocked rather than inferred from report absence. The server lifecycle determines when
-          the obligation snapshot is due.
-        </Notice>
-      )}
-      {selectedPeriod && complianceQuery.isError && !isComplianceMissing && (
-        <Notice tone="error">The authoritative compliance snapshot could not be read. Missing counts and finalization completeness are blocked.</Notice>
-      )}
-
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
-        <div>
-          <strong>Server-owned period lifecycle</strong>
-          <p className="mt-0.5 text-xs text-slate-500">
-            The backend evaluates its own clock, creates the configured horizon, advances status, and freezes due obligations. The browser sends no date, label, or period ID.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={lifecycleMutation.isPending}
-          onClick={() => lifecycleMutation.mutate()}
-          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800 disabled:opacity-50"
-        >
-          {lifecycleMutation.isPending ? "Running server lifecycle…" : "Run server period lifecycle"}
-        </button>
-      </div>
+      {loadError && <Notice tone="error">Reports could not be loaded. Please try again shortly.</Notice>}
+      {periods.length === 0 && !periodsQuery.isLoading && <Notice tone="warning">Reporting periods are being prepared automatically. This page will refresh shortly.</Notice>}
+      {selectedPeriod && isComplianceMissing && <Notice tone="warning">Submission tracking is being prepared for this period.</Notice>}
+      {selectedPeriod && complianceQuery.isError && !isComplianceMissing && <Notice tone="error">Submission tracking could not be loaded.</Notice>}
 
       <BatchReportsMetrics compliance={compliance} loadedReportCount={periodReports.length} />
 
@@ -193,7 +156,7 @@ export function StaffBatchReportsPage() {
               onClick={() => reminderMutation.mutate()}
               className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 disabled:opacity-50"
             >
-              {reminderMutation.isPending ? "Creating reminder intents…" : "Create idempotent reminder intents"}
+              {reminderMutation.isPending ? "Sending reminders…" : "Send reminders"}
             </button>
           </div>
         )}
@@ -211,11 +174,11 @@ export function StaffBatchReportsPage() {
         {selectedReportId && <ReportReviewModal enterpriseReportId={selectedReportId} onClose={() => setSelectedReportId(null)} />}
         {isFinalizeConfirmOpen && selectedPeriod && (
           <ReportActionConfirmDialog
-            title="Create immutable final report?"
-            eyebrow="Exact revision finalization"
-            message="This command claims only the listed accepted revision IDs and freezes the selected explicit scope into a new immutable final-report version."
+            title="Create final report?"
+            eyebrow="Final report"
+            message="TANAW will combine the accepted reports shown here. The result will be saved as an official version."
             tone="emerald"
-            confirmLabel="Finalize exact scope"
+            confirmLabel="Create final report"
             pendingLabel="Finalizing…"
             isPending={finalizationMutation.isPending}
             isConfirmDisabled={!canFinalize}
@@ -224,8 +187,8 @@ export function StaffBatchReportsPage() {
             details={[
               { label: "Period", value: `${selectedPeriod.label} · ${selectedPeriod.naturalKey}` },
               { label: "Scope", value: scopeType === "barangay" ? `Barangay · ${barangay}` : scopeType.replaceAll("_", " ") },
-              { label: "Exact revisions", value: acceptedRevisionIds(selectedReports).join(", ") },
-              { label: "Completeness", value: completeScope ? "Authoritative scope ready" : "Blocked by obligation status" },
+              { label: "Selected reports", value: String(selectedReports.length) },
+              { label: "Status", value: completeScope ? "Ready" : "More reports are required" },
             ]}
           />
         )}

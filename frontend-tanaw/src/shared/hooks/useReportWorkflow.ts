@@ -44,6 +44,7 @@ export function useReportingPeriods(filters: ReportingPeriodFilters = {}) {
     queryKey: [...reportingPeriodListQueryKey, reportingAccountScope(user), filters],
     queryFn: () => listAllReportingPeriods(filters),
     enabled: Boolean(token && user?.role === "staff"),
+    refetchInterval: (query) => (query.state.data?.length ? false : 5000),
   });
 }
 

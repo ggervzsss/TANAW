@@ -45,6 +45,11 @@ from app.features.maintenance.runtime import (
     start_retention_cleanup_worker,
     stop_retention_cleanup_worker,
 )
+from app.features.reporting.runtime import (
+    reporting_period_lifecycle_worker_ready,
+    start_reporting_period_lifecycle_worker,
+    stop_reporting_period_lifecycle_worker,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +74,11 @@ BACKGROUND_RUNTIMES = (
         name="retention_cleanup",
         start=start_retention_cleanup_worker,
         stop=stop_retention_cleanup_worker,
+    ),
+    BackgroundRuntime(
+        name="reporting_period_lifecycle",
+        start=start_reporting_period_lifecycle_worker,
+        stop=stop_reporting_period_lifecycle_worker,
     ),
     BackgroundRuntime(
         name="domain_event_delivery_and_realtime_subscription",
@@ -161,7 +171,7 @@ async def email_readiness() -> JSONResponse:
 @app.get("/ready/maintenance")
 @app.head("/ready/maintenance")
 async def maintenance_readiness() -> JSONResponse:
-    ready = retention_cleanup_worker_ready()
+    ready = retention_cleanup_worker_ready() and reporting_period_lifecycle_worker_ready()
     return JSONResponse(
         status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"status": "ready" if ready else "not_ready"},

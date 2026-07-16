@@ -40,6 +40,11 @@ export const CONFIRMED_OPERATOR_DEMOGRAPHIC_EVIDENCE: DemographicEvidence = {
   quality: "confirmed",
 };
 
+export const ESTIMATED_OPERATOR_DEMOGRAPHIC_EVIDENCE: DemographicEvidence = {
+  provenance: "operator_entered",
+  quality: "estimated",
+};
+
 const demographicFactDefinitions = [
   { field: "thisProvMale", value: "this_province_male" },
   { field: "thisProvFemale", value: "this_province_female" },
@@ -173,11 +178,7 @@ function explicitSum(values: Array<number | null>): number | null {
   return values.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
 
-const supportedDemographicEvidence: DemographicEvidence[] = [
-  CONFIRMED_OPERATOR_DEMOGRAPHIC_EVIDENCE,
-  { provenance: "operator_entered", quality: "degraded" },
-  { provenance: "operator_entered", quality: "estimated" },
-];
+const supportedDemographicEvidence: DemographicEvidence[] = [CONFIRMED_OPERATOR_DEMOGRAPHIC_EVIDENCE, { provenance: "operator_entered", quality: "degraded" }, ESTIMATED_OPERATOR_DEMOGRAPHIC_EVIDENCE];
 
 function isDemographicFactCandidate(value: unknown): value is DemographicFact {
   if (!value || typeof value !== "object") return false;

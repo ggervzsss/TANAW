@@ -222,6 +222,7 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
     settings = Settings()
 
     assert settings.retention_cleanup_interval_seconds == 3600
+    assert settings.reporting_period_lifecycle_interval_seconds == 3600
     assert settings.retention_cleanup_batch_size == 500
     assert settings.activation_token_retention_days == 30
     assert settings.password_reset_retention_days == 30
@@ -272,6 +273,8 @@ def test_final_report_artifact_settings_reject_unsafe_bounds(name: str, value: i
     [
         ("retention_cleanup_interval_seconds", 59),
         ("retention_cleanup_interval_seconds", 86_401),
+        ("reporting_period_lifecycle_interval_seconds", 59),
+        ("reporting_period_lifecycle_interval_seconds", 86_401),
         ("retention_cleanup_batch_size", 9),
         ("retention_cleanup_batch_size", 5001),
         ("activation_token_retention_days", 0),

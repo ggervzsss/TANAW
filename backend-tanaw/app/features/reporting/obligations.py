@@ -121,12 +121,13 @@ def compliance_status(
 async def freeze_period_obligations(
     db: AsyncSession,
     *,
-    account: Account,
+    account: Account | None,
     reporting_period_id: UUID,
     command: ObligationFreezeCommand,
     frozen_at: datetime | None = None,
 ) -> ObligationFreezeAcknowledgement:
-    _require_role(account, {"staff"})
+    if account is not None:
+        _require_role(account, {"staff"})
     observed_at = _as_utc(frozen_at or datetime.now(UTC))
     period_id = str(reporting_period_id)
     period = await db.scalar(
@@ -189,7 +190,7 @@ async def freeze_period_obligations(
                 aggregate_id=period.id,
                 enterprise_id=None,
                 site_id=None,
-                actor_account_id=account.id,
+                actor_account_id=account.id if account is not None else None,
                 correlation_id=str(command.commandId),
                 payload=replay_payload,
                 occurred_at=observed_at,
@@ -388,7 +389,7 @@ async def freeze_period_obligations(
         aggregate_id=period.id,
         enterprise_id=None,
         site_id=None,
-        actor_account_id=account.id,
+        actor_account_id=account.id if account is not None else None,
         correlation_id=str(command.commandId),
         payload=marker_payload,
         occurred_at=observed_at,
@@ -409,7 +410,7 @@ async def freeze_period_obligations(
             aggregate_id=period.id,
             enterprise_id=None,
             site_id=None,
-            actor_account_id=account.id,
+            actor_account_id=account.id if account is not None else None,
             correlation_id=str(command.commandId),
             payload=command_receipt_payload,
             occurred_at=observed_at,
@@ -433,10 +434,11 @@ async def freeze_period_obligations(
 async def read_period_compliance(
     db: AsyncSession,
     *,
-    account: Account,
+    account: Account | None,
     reporting_period_id: UUID,
 ) -> PeriodComplianceResource:
-    _require_role(account, {"staff", "admin", "enterprise"})
+    if account is not None:
+        _require_role(account, {"staff", "admin", "enterprise"})
     period_id = str(reporting_period_id)
     period = await db.get(ReportingPeriod, period_id)
     if period is None:
@@ -450,7 +452,7 @@ async def read_period_compliance(
         )
 
     enterprise_id: str | None = None
-    if account.role.value == "enterprise":
+    if account is not None and account.role.value == "enterprise":
         membership = await db.scalar(
             select(EnterpriseMembership).where(
                 EnterpriseMembership.account_id == account.id,
@@ -712,7 +714,7 @@ async def create_reminder_intents(
 async def _reconcile_frozen_obligations(
     db: AsyncSession,
     *,
-    account: Account,
+    account: Account | None,
     period: ReportingPeriod,
     command: ObligationFreezeCommand,
     request_payload: dict[str, object],
@@ -766,7 +768,7 @@ async def _reconcile_frozen_obligations(
         aggregate_id=period.id,
         enterprise_id=None,
         site_id=None,
-        actor_account_id=account.id,
+        actor_account_id=account.id if account is not None else None,
         correlation_id=str(command.commandId),
         payload=event_payload,
         occurred_at=changed_at,
@@ -893,7 +895,7 @@ def _domain_event(
     aggregate_id: str,
     enterprise_id: str | None,
     site_id: str | None,
-    actor_account_id: str,
+    actor_account_id: str | None,
     correlation_id: str,
     payload: dict[str, object],
     occurred_at: datetime,

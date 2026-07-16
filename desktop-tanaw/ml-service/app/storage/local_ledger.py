@@ -2417,7 +2417,15 @@ def _resolve_summary_period(
                     f"{row['reporting_period_id']}"
                 )
             return period
-        return None
+        correction_exists = connection.execute(
+            "select 1 from occupancy_corrections limit 1"
+        ).fetchone()
+        if correction_exists is not None:
+            return None
+        # An empty ledger still has an authoritative monthly workspace. Derive it
+        # from the ML service clock so the renderer never needs a browser-clock
+        # fallback. Captured events continue to carry their own immutable period.
+        return monthly_period_for_captured_at(datetime.now(UTC))
     period = monthly_period_from_id(str(row["reporting_period_id"]))
     if period is None:
         raise RuntimeError(
