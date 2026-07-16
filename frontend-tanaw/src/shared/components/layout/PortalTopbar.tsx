@@ -21,9 +21,10 @@ import { roleAccessLabel, roleNavigation, rolePortalLabel } from "./navigation";
 
 type PortalTopbarProps = {
   role: UserRole;
+  showDevLog?: boolean;
 };
 
-export function PortalTopbar({ role }: PortalTopbarProps) {
+export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
@@ -214,7 +215,11 @@ export function PortalTopbar({ role }: PortalTopbarProps) {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [openMenuId, showProfileMenu, showMobileNav, showNotifications]);
 
-  const navigation = useMemo(() => roleNavigation[role] ?? [], [role]);
+  const navigation = useMemo(() => {
+    const items = roleNavigation[role] ?? [];
+    if (role !== "it" || showDevLog) return items;
+    return items.filter((item) => item.id !== "dev-log");
+  }, [role, showDevLog]);
 
   type TopbarEntry = { type: "link"; item: NavigationItem } | { type: "menu"; id: string; label: string; icon: NavigationItem["icon"]; children: NavigationItem[] };
 
@@ -230,6 +235,7 @@ export function PortalTopbar({ role }: PortalTopbarProps) {
     const alerts = getItem("alerts");
     const systemLogs = getItem("system-logs");
     const emailDeliveries = getItem("email-deliveries");
+    const devLog = getItem("dev-log");
 
     const items: TopbarEntry[] = [];
 
@@ -248,7 +254,7 @@ export function PortalTopbar({ role }: PortalTopbarProps) {
       });
     }
 
-    const monitoringChildren = [alerts, systemLogs, emailDeliveries].filter(Boolean) as NavigationItem[];
+    const monitoringChildren = [alerts, systemLogs, emailDeliveries, devLog].filter(Boolean) as NavigationItem[];
     if (monitoringChildren.length) {
       items.push({
         type: "menu",

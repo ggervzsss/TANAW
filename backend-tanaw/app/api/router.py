@@ -4,6 +4,7 @@ from app.features.accounts.router import router as accounts_router
 from app.features.activity_logs.router import router as activity_logs_router
 from app.features.alerts.router import router as alerts_router
 from app.features.auth.router import router as auth_router
+from app.features.dev.router import router as dev_router
 from app.features.events.operational_router import router as operational_realtime_router
 from app.features.final_reports.router import router as final_reports_router
 from app.features.mail.router import router as mail_router
@@ -19,6 +20,7 @@ api_router.include_router(activity_logs_router)
 api_router.include_router(alerts_router)
 api_router.include_router(accounts_router)
 api_router.include_router(auth_router)
+api_router.include_router(dev_router)
 api_router.include_router(mail_router)
 api_router.include_router(maintenance_router)
 api_router.include_router(notifications_router)

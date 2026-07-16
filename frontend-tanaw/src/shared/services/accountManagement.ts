@@ -65,6 +65,18 @@ export type EmailDelivery = {
   acceptedAt: string | null;
 };
 
+export type DevDelivery = {
+  id: string;
+  accountId: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: string;
+  createdAt: string;
+  actionLink: string | null;
+  actionLabel: string | null;
+};
+
 export type CreateLguAccountPayload = {
   firstName: string;
   lastName: string;
@@ -206,6 +218,11 @@ export async function listEmailDeliveries() {
 
 export async function retryEmailDelivery(deliveryId: string) {
   const response = await apiClient.post<EmailDelivery>(`/mail/deliveries/${deliveryId}/retry`);
+  return response.data;
+}
+
+export async function listDevDeliveries() {
+  const response = await apiClient.get<DevDelivery[]>("/dev/deliveries");
   return response.data;
 }
 
