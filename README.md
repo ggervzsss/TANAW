@@ -262,9 +262,26 @@ Windows Command Prompt:
 if not exist .env copy .env.example .env
 ```
 
-Open `.env` in a text editor and replace the sample PostgreSQL password and JWT
-secret. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and inside
-`DATABASE_URL`. The important values should have this shape:
+Generate a strong JWT secret in your terminal.
+
+Linux/macOS:
+
+```shell
+openssl rand -hex 32
+```
+
+Windows PowerShell:
+
+```powershell
+$bytes = New-Object byte[] 32
+([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
+[BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
+```
+
+Open `.env` in a text editor and replace the sample PostgreSQL password and
+`JWT_SECRET_KEY` with the generated value. Use the same PostgreSQL password in
+`POSTGRES_PASSWORD` and inside `DATABASE_URL`. The important values should have
+this shape:
 
 ```dotenv
 TANAW_ENV=development

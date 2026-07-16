@@ -68,11 +68,27 @@ Windows PowerShell:
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
+Generate a strong JWT secret in your terminal.
+
+Linux:
+
+```shell
+openssl rand -hex 32
+```
+
+Windows PowerShell:
+
+```powershell
+$bytes = New-Object byte[] 32
+([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
+[BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
+```
+
 Open `.env` and replace:
 
 - `POSTGRES_PASSWORD`
 - the matching password inside `DATABASE_URL`
-- `JWT_SECRET_KEY`
+- `JWT_SECRET_KEY` with the generated JWT secret
 
 Keep `DATABASE_URL` pointed at the Docker hostname `db`:
 
