@@ -1020,7 +1020,16 @@ function buildRendererContentSecurityPolicy() {
   const connectSources = ["'self'", apiOrigin, websocketOrigin, developmentOrigin, developmentOrigin?.replace(/^http:/, "ws:").replace(/^https:/, "wss:")].filter((value): value is string =>
     Boolean(value),
   );
-  const scriptSources = ["'self'", ...(VITE_DEV_SERVER_URL ? ["'unsafe-eval'"] : [])];
+  const scriptSources = [
+    "'self'",
+    ...(VITE_DEV_SERVER_URL
+      ? [
+          // Vite React dev mode injects an inline Fast Refresh preamble before app modules load.
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+        ]
+      : []),
+  ];
   return [
     "default-src 'self'",
     "base-uri 'none'",
