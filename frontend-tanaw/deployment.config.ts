@@ -1,4 +1,4 @@
-import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
+import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config.ts";
 
 export const LOCAL_API_BASE_URL = "http://localhost:8000";
 
