@@ -158,30 +158,22 @@ Support requests and ticket replies are submitted directly to the TANAW API and
 stored in the Support Tickets queue. TANAW does not receive or parse inbound
 email.
 
-Secrets belong only in a private `.env` or deployment secret store:
-
-```dotenv
-EMAIL_DELIVERY_MODE=resend
-RESEND_API_KEY=replace_with_your_private_key
-EMAIL_FROM_NAME=TANAW
-EMAIL_FROM_ADDRESS=onboarding@resend.dev
-EMAIL_TEST_RECIPIENT=the-email-used-to-register-with-resend@example.com
-FRONTEND_PUBLIC_URL=http://localhost:5173
-ACCOUNT_ACTIVATION_TTL_HOURS=24
-ACCOUNT_EMAIL_CHANGE_TTL_HOURS=24
-```
+Secrets belong only in a private `.env` or deployment secret store. The root
+`.env.example` contains the few values used for local Resend testing, while this
+project's `.env.example` contains only the values required for production.
 
 When a verified LGU domain becomes available, change `EMAIL_FROM_ADDRESS` and
 remove `EMAIL_TEST_RECIPIENT`; no application code change is required.
 
 Production starts only with `EMAIL_DELIVERY_MODE=resend`, a non-placeholder
-Resend key, the official HTTPS API endpoint, a verified custom sender domain,
-no test-recipient restriction, and a bounded provider timeout. Create a Resend
-key with **Sending access** and scope it to the verified TANAW domain; TANAW does
-not need Full access. The process keeps one pooled HTTP client for its lifetime
-and closes it during shutdown. `/health` reports API process health, while
-`/ready/email` separately reports whether outbound email infrastructure is
-initialized; deployment readiness checks should use both endpoints.
+Resend key, a verified custom sender domain, and no test-recipient restriction.
+The official Resend endpoint and bounded provider timeout are code defaults.
+Create a Resend key with **Sending access** and scope it to the verified TANAW
+domain; TANAW does not need Full access. The process keeps one pooled HTTP client
+for its lifetime and closes it during shutdown. `/health` reports API process
+health, while `/ready/email` separately reports whether outbound email
+infrastructure is initialized; deployment readiness checks should use both
+endpoints.
 
 Production also requires `EMAIL_SECRET_DERIVATION_KEY`, a random secret of at
 least 32 characters that is different from `JWT_SECRET_KEY`. TANAW uses it to
@@ -218,23 +210,22 @@ that boundary and marks an ambiguous older result for provider reconciliation
 instead of risking a duplicate.
 
 Password recovery applies database-backed limits per client IP, per normalized
-email identifier, and globally within `PASSWORD_RESET_RATE_WINDOW_SECONDS`.
+email identifier, and globally within a bounded window.
 Identifiers and IP addresses are HMAC-fingerprinted before being stored in rate
 buckets or security telemetry. Public request responses remain generic for
 active, pending, inactive, and unknown accounts, use a minimum response-time
 floor, and state explicitly when an existing challenge is being reused during
-the resend cooldown. Configure the limits with `PASSWORD_RESET_PER_IP_LIMIT`,
-`PASSWORD_RESET_PER_IDENTIFIER_LIMIT`, `PASSWORD_RESET_GLOBAL_LIMIT`,
-`PASSWORD_RESET_RESEND_COOLDOWN_SECONDS`, and
-`PASSWORD_RESET_RESPONSE_FLOOR_SECONDS`.
+the resend cooldown. These operational limits are maintained as validated code
+defaults and intentionally omitted from deployment templates.
 
 ## Authentication and Email Data Retention
 
 The backend runs one bounded retention batch immediately after startup and then
-every `RETENTION_CLEANUP_INTERVAL_SECONDS`. Each record family is claimed with
-`FOR UPDATE SKIP LOCKED`, limited by `RETENTION_CLEANUP_BATCH_SIZE`, and committed
-separately so cleanup does not hold a long transaction or block another backend
-instance. Queued, leased, and retry-scheduled email is never age-deleted.
+on the interval maintained in the backend configuration. Each record family is
+claimed with `FOR UPDATE SKIP LOCKED`, limited by the configured code default,
+and committed separately so cleanup does not hold a long transaction or block
+another backend instance. Queued, leased, and retry-scheduled email is never
+age-deleted.
 
 The default policy retains consumed, invalidated, or expired activation tokens
 and password-reset challenges for 30 days; password-reset rate buckets for 2
@@ -249,9 +240,9 @@ secret, which is why they have the shortest retention period.
 `GET /maintenance/retention` exposes safe per-process counts and the most recent
 run to IT Personnel. `POST /maintenance/retention/run` starts the same serialized
 bounded cleanup manually and writes an activity log. `/ready/maintenance`
-reports whether the scheduler is running. Set the retention environment values
-only after the LGU confirms its records policy; increasing a period preserves
-more audit metadata, while decreasing it is irreversible after the next batch.
+reports whether the scheduler is running. Change the code defaults only after
+the LGU confirms its records policy; increasing a period preserves more audit
+metadata, while decreasing it is irreversible after the next batch.
 
 ## Password Policy
 

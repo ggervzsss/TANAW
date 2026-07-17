@@ -74,6 +74,31 @@ Open `.env` and replace:
 - the matching password inside `DATABASE_URL`
 - `JWT_SECRET_KEY`
 
+Generate a unique JWT secret for this environment, then copy the printed value
+into `JWT_SECRET_KEY` in `.env`.
+
+Linux:
+
+```shell
+openssl rand -base64 48
+```
+
+Windows PowerShell:
+
+```powershell
+$bytes = New-Object byte[] 48
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $rng.GetBytes($bytes)
+    [Convert]::ToBase64String($bytes)
+} finally {
+    $rng.Dispose()
+}
+```
+
+Keep the generated secret private, never commit it, and use a different value
+for each development or production environment.
+
 Keep `DATABASE_URL` pointed at the Docker hostname `db`:
 
 ```dotenv

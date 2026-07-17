@@ -260,21 +260,40 @@ Windows Command Prompt:
 if not exist .env copy .env.example .env
 ```
 
+Generate a cryptographically secure JWT secret and copy the printed value into
+`JWT_SECRET_KEY` in `.env`. Generate a different secret for every environment
+and never commit it.
+
+Linux:
+
+```shell
+openssl rand -base64 48
+```
+
+Windows PowerShell:
+
+```powershell
+$bytes = New-Object byte[] 48
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $rng.GetBytes($bytes)
+    [Convert]::ToBase64String($bytes)
+} finally {
+    $rng.Dispose()
+}
+```
+
 Open `.env` in a text editor and replace the sample PostgreSQL password and JWT
 secret. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and inside
-`DATABASE_URL`. The important values should have this shape:
+`DATABASE_URL`. The root template intentionally contains only local credentials
+and the optional Resend settings developers commonly change:
 
 ```dotenv
-TANAW_ENV=development
-
 POSTGRES_DB=tanaw_local
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-this-local-password
-
 DATABASE_URL=postgresql+asyncpg://postgres:change-this-local-password@db:5432/tanaw_local
 JWT_SECRET_KEY=replace-this-with-a-long-random-secret
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 BOOTSTRAP_IT_USERNAME=default@email.com
 BOOTSTRAP_IT_PASSWORD=default
@@ -286,17 +305,18 @@ DEVELOPMENT_STAFF_PASSWORD=staffstaff
 DEVELOPMENT_IT_USERNAME=it@email.com
 DEVELOPMENT_IT_PASSWORD=it123456
 
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
-VITE_API_BASE_URL=http://localhost:8000
-
-BACKEND_PORT=8000
-FRONTEND_PORT=5173
+EMAIL_DELIVERY_MODE=log
+RESEND_API_KEY=
+EMAIL_FROM_ADDRESS=onboarding@resend.dev
+EMAIL_TEST_RECIPIENT=
 ```
 
 Use the Compose hostname `db` in `DATABASE_URL`; `localhost` would point back
 to the backend container. Keep `.env` private and use a strong database password
 and JWT secret outside disposable local development. The root `.gitignore`
 excludes `.env`; commit `.env.example`, never the populated `.env`.
+Local URLs, ports, token lifetimes, polling, cooldowns, and retention policies
+use the defaults maintained in the codebase and do not need entries here.
 
 ### 3. Start the database, API, and web portal
 
@@ -638,7 +658,6 @@ Linux/macOS:
 
 ```shell
 cd backend-tanaw
-test -f .env || cp .env.example .env
 uv sync --frozen
 uv run alembic upgrade head
 uv run uvicorn main:app --reload
@@ -648,7 +667,6 @@ Windows PowerShell:
 
 ```powershell
 Set-Location backend-tanaw
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 uv sync --frozen
 uv run alembic upgrade head
 uv run uvicorn main:app --reload
@@ -658,14 +676,15 @@ Windows Command Prompt:
 
 ```bat
 cd backend-tanaw
-if not exist .env copy .env.example .env
 uv sync --frozen
 uv run alembic upgrade head
 uv run uvicorn main:app --reload
 ```
 
-For a host-run backend, `DATABASE_URL` should use `localhost` rather than the
-Docker service hostname `db`.
+Before starting a host-run backend, export the relevant development values from
+the root `.env`, changing `DATABASE_URL` to use `localhost` instead of the Docker
+service hostname `db`. The backend `.env.example` is production-only and should
+not be copied for local development.
 
 ### Web portal
 
@@ -728,65 +747,39 @@ support data.
 
 ## Environment configuration
 
-Docker Compose reads the root `.env` and passes it to the relevant services.
+The repository keeps development and production configuration separate:
 
-| Variable                      | Purpose                                                |
-| ----------------------------- | ------------------------------------------------------ |
-| `POSTGRES_DB`                 | PostgreSQL database created by the container           |
-| `POSTGRES_USER`               | PostgreSQL user                                        |
-| `POSTGRES_PASSWORD`           | PostgreSQL password                                    |
-| `DATABASE_URL`                | Async SQLAlchemy connection URL used by the backend    |
-| `JWT_SECRET_KEY`              | Token-signing secret                                   |
-| `JWT_ALGORITHM`               | JWT algorithm, normally `HS256`                        |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime                                  |
-| `BOOTSTRAP_IT_USERNAME`       | One-time IT bootstrap email for a database with no IT account |
-| `BOOTSTRAP_IT_PASSWORD`       | One-time IT bootstrap password; never reused to reset the account |
-| `TANAW_SEED_DEVELOPMENT_ACCOUNTS` | Explicit local-only switch for development accounts |
-| `DEVELOPMENT_ADMIN_USERNAME`  | Optional local development Admin email                 |
-| `DEVELOPMENT_ADMIN_PASSWORD`  | Optional local development Admin password              |
-| `DEVELOPMENT_STAFF_USERNAME`  | Optional local development Staff email                 |
-| `DEVELOPMENT_STAFF_PASSWORD`  | Optional local development Staff password              |
-| `DEVELOPMENT_IT_USERNAME`     | Optional local development IT email                    |
-| `DEVELOPMENT_IT_PASSWORD`     | Optional local development IT password                 |
-| `CORS_ORIGINS`                | Comma-separated web/desktop origins allowed by the API |
-| `VITE_API_BASE_URL`           | API URL compiled into or used by frontend clients      |
-| `FRONTEND_PUBLIC_URL`         | Public portal URL embedded in activation and email-verification links |
-| `TANAW_PUBLIC_DEPLOYMENT`     | Frontend build guard for non-Vercel public deployments; requires a public HTTPS API URL |
-| `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |
-| `FRONTEND_PORT`               | Host port mapped to the portal; defaults to `5173`     |
-| `TANAW_ALLOW_MOCK_DATA`       | Explicit simulation safety switch; false by default    |
-| `EMAIL_DELIVERY_MODE`         | `log` locally or `resend` for real email delivery       |
-| `RESEND_API_KEY`              | Backend-only Resend API credential                      |
-| `EMAIL_FROM_NAME`             | Display name used for TANAW transactional messages      |
-| `EMAIL_FROM_ADDRESS`          | Verified sender or Resend development sender            |
-| `EMAIL_TEST_RECIPIENT`        | Development-only recipient restriction                  |
-| `RESEND_API_BASE_URL`         | Official Resend HTTPS API endpoint                      |
-| `EMAIL_REQUEST_TIMEOUT_SECONDS` | Bounded timeout used for Resend connect/read/write/pool operations |
-| `EMAIL_SECRET_DERIVATION_KEY` | Separate stable secret used to derive queued activation and OTP values |
-| `EMAIL_OUTBOX_POLL_INTERVAL_SECONDS` | Delay between idle transactional-email queue polls |
-| `EMAIL_OUTBOX_LEASE_SECONDS` | Worker lease used to recover interrupted deliveries safely |
-| `EMAIL_OUTBOX_BATCH_SIZE` | Maximum concurrently claimed email records per worker |
-| `EMAIL_OUTBOX_MAX_ATTEMPTS` | Automatic delivery-attempt ceiling before IT review |
-| `PASSWORD_RESET_RATE_WINDOW_SECONDS` | Shared bounded window for recovery abuse controls |
-| `PASSWORD_RESET_PER_IP_LIMIT` | Maximum recovery requests per client IP and window |
-| `PASSWORD_RESET_PER_IDENTIFIER_LIMIT` | Maximum recovery requests per normalized email and window |
-| `PASSWORD_RESET_GLOBAL_LIMIT` | Global recovery-request ceiling per window |
-| `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS` | Delay before another recovery code can be requested |
-| `PASSWORD_RESET_RESPONSE_FLOOR_SECONDS` | Minimum generic recovery-request response time |
-| `ACCOUNT_ACTIVATION_TTL_HOURS` | Lifetime of each single-use account activation link    |
-| `ACCOUNT_EMAIL_CHANGE_TTL_HOURS` | Lifetime of a proposed-address ownership verification link |
-| `RETENTION_CLEANUP_INTERVAL_SECONDS` | Delay between bounded authentication/email cleanup passes |
-| `RETENTION_CLEANUP_BATCH_SIZE` | Maximum rows claimed per record family and cleanup pass |
-| `ACTIVATION_TOKEN_RETENTION_DAYS` | Retention for consumed, invalidated, or expired activation-token metadata |
-| `PASSWORD_RESET_RETENTION_DAYS` | Retention for used, invalidated, or expired recovery challenges |
-| `PASSWORD_RESET_RATE_BUCKET_RETENTION_DAYS` | Retention for inactive recovery abuse-control buckets |
-| `ACCOUNT_EMAIL_CHANGE_RETENTION_DAYS` | Retention for resolved email-ownership requests |
-| `DEVELOPMENT_DELIVERY_RETENTION_DAYS` | Short retention for local delivery bodies that can contain development secrets |
-| `EMAIL_OUTBOX_RETENTION_DAYS` | Retention for ordinary terminal transactional-email records |
-| `FAILED_EMAIL_OUTBOX_RETENTION_DAYS` | Longer audit retention for terminal failure and reconciliation records |
-| `TANAW_ML_SERVICE_HOST`       | Local ML bind host; defaults to `127.0.0.1`            |
-| `TANAW_ML_SERVICE_PORT`       | Local ML port; defaults to `8765`                      |
-| `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |
+- The root `.env.example` is the Docker Compose development template. It
+  contains local database and account credentials plus optional Resend testing.
+- `backend-tanaw/.env.example` is the backend production template.
+- `frontend-tanaw/.env.example` is the frontend production template.
+
+The backend production template contains only deployment-specific values:
+
+| Variable | Purpose |
+| --- | --- |
+| `TANAW_ENV` | Enables production validation |
+| `DATABASE_URL` | Managed PostgreSQL connection URL |
+| `JWT_SECRET_KEY` | Token-signing secret |
+| `CORS_ORIGINS` | Authorized public frontend origin |
+| `FRONTEND_PUBLIC_URL` | Public URL used in transactional links |
+| `BOOTSTRAP_IT_USERNAME`, `BOOTSTRAP_IT_PASSWORD` | One-time credentials for an empty database |
+| `EMAIL_DELIVERY_MODE` | Selects production Resend delivery |
+| `RESEND_API_KEY` | Backend-only Resend credential |
+| `EMAIL_SECRET_DERIVATION_KEY` | Separate secret for activation and recovery values |
+| `EMAIL_FROM_ADDRESS` | Sender on a verified domain |
+
+The frontend production template contains only `VITE_API_BASE_URL`, which is
+compiled into the browser bundle. Vercel supplies its own production marker;
+other public build systems should set `TANAW_PUBLIC_DEPLOYMENT=true` in their
+build configuration to enable the same public-URL validation.
+
+Ports, local origins, JWT algorithm and lifetime, provider endpoints, request
+timeouts, polling and lease behavior, rate limits, cooldowns, token lifetimes,
+and retention policies use validated defaults maintained in
+`backend-tanaw/app/core/config.py` or the relevant Compose/application code.
+They are intentionally omitted from the templates so routine deployments expose
+only values operators genuinely need to supply.
 
 Do not permanently enable `TANAW_ALLOW_MOCK_DATA` in production. The examples
 in this README inject it only for the individual CLI process.

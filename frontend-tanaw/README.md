@@ -68,7 +68,8 @@ The frontend expects the backend to provide:
 
 Runtime API configuration is controlled through `VITE_API_BASE_URL`. The root
 Docker Compose and TL;DR guide document the expected local value and startup
-flow.
+flow. This project's `.env.example` is intentionally a production deployment
+template and contains only that compiled API URL.
 
 ## Deployment Origins And CSP
 
