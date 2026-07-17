@@ -138,10 +138,10 @@ LGU_ACCOUNTS = (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Manage TANAW simulation data.")
+    parser = argparse.ArgumentParser(description="Manage TANAW mock data.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    on_parser = subparsers.add_parser("on", help="Generate simulation data.")
+    on_parser = subparsers.add_parser("on", help="Generate mock data.")
     on_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
     on_parser.add_argument(
         "--scenario",
@@ -152,11 +152,11 @@ def main() -> None:
     on_parser.add_argument(
         "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
     )
-    subparsers.add_parser("off", help="Remove active simulation data.")
-    subparsers.add_parser("status", help="Show simulation data status.")
+    subparsers.add_parser("off", help="Remove active mock data.")
+    subparsers.add_parser("status", help="Show mock-data status.")
 
     reset_parser = subparsers.add_parser(
-        "reset", help="Remove active simulation data, then regenerate it."
+        "reset", help="Remove active mock data, then regenerate it."
     )
     reset_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
     reset_parser.add_argument(
@@ -216,10 +216,8 @@ async def validate_schema() -> None:
 
 
 def require_simulation_enabled() -> None:
-    if not get_settings().allow_simulation_data:
-        raise SystemExit(
-            "Refusing to manage simulation data because TANAW_ALLOW_SIMULATION_DATA is not true."
-        )
+    if not get_settings().allow_mock_data:
+        raise SystemExit("Refusing to manage mock data because TANAW_ALLOW_MOCK_DATA is not true.")
 
 
 async def active_run(db: AsyncSession) -> SimulationRun | None:
@@ -277,8 +275,8 @@ async def ensure_active_target_matches(
 ) -> None:
     if not run.target_enterprise_id:
         raise SystemExit(
-            "The active simulation-data run does not identify an enterprise. "
-            "Run simulation-data reset with --target-enterprise."
+            "The active mockdata run does not identify an enterprise. "
+            "Run mockdata reset with --target-enterprise."
         )
     if not requested_identifier:
         return
@@ -286,8 +284,8 @@ async def ensure_active_target_matches(
     requested_target = await resolve_target_enterprise(db, requested_identifier, [])
     if requested_target.account.id != run.target_account_id:
         raise SystemExit(
-            f"The active simulation-data run targets {run.target_enterprise_name} ({run.target_enterprise_id}). "
-            "Use simulation-data reset to select a different target."
+            f"The active mockdata run targets {run.target_enterprise_name} ({run.target_enterprise_id}). "
+            "Use mockdata reset to select a different target."
         )
 
 
@@ -432,7 +430,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
 def ensure_email_available(existing: Account | None, email: str) -> None:
     if existing is not None:
         raise SystemExit(
-            f"Cannot seed simulation account {email}; an account with that email already exists."
+            f"Cannot seed mock account {email}; an account with that email already exists."
         )
 
 

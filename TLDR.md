@@ -169,7 +169,7 @@ Complete its temporary-password onboarding and remember the password selected
 for desktop login. Confirm the generated Enterprise ID; use the actual value if
 it is not `archies_001@tanaw.sanpedro`.
 
-## 6. Load the report simulation
+## 6. Load mock report data
 
 This command creates LGU accounts, enterprise accounts, six months of
 telemetry, historical submissions, closed-period final reports, activity logs,
@@ -177,10 +177,10 @@ and prepared previous-period plus current-period desktop counts for Archie's
 Event Place:
 
 ```shell
-./scripts/simulation-on
+./scripts/mockdata-on
 ```
 
-PowerShell: `.\scripts\simulation-on.ps1`
+PowerShell: `.\scripts\mockdata-on.ps1`
 
 All generated accounts use:
 
@@ -203,21 +203,21 @@ Desktop username: archies@email.com
 Desktop password: the password selected during Archie's onboarding
 ```
 
-Check the simulation:
+Check the mock-data run:
 
 ```shell
-./scripts/simulation-status
+./scripts/mockdata-status
 ```
 
-PowerShell: `.\scripts\simulation-status.ps1`
+PowerShell: `.\scripts\mockdata-status.ps1`
 
-If a simulation already exists or needs fresh dates, replace it:
+If mock data already exists or needs fresh dates, replace it:
 
 ```shell
-./scripts/simulation-reset
+./scripts/mockdata-reset
 ```
 
-PowerShell: `.\scripts\simulation-reset.ps1`
+PowerShell: `.\scripts\mockdata-reset.ps1`
 
 Other ranges are `30d` and `12m`. Other scenarios are `peak-traffic` and
 `camera-health`.
@@ -279,11 +279,13 @@ In the web portal:
 5. Generate the final report.
 6. Open **Final Reports Audit** and inspect its exact immutable revision items.
 
-## 9. Inspect the local ML simulation
+## 9. Inspect prepared mock data
 
-Use the signed-in desktop application's **Simulation Lab** and reporting-period
-selector. Direct browser, renderer fetch, PowerShell, and `curl` access to the
-Electron-owned ML child is intentionally unsupported.
+Use the signed-in desktop Dashboard and reporting-period selector. The desktop
+has no built-in simulator or Simulation Lab; mock data is loaded and removed
+only through the repository scripts. Direct browser, renderer fetch,
+PowerShell, and `curl` access to the Electron-owned ML child is intentionally
+unsupported.
 
 ## 10. Desktop local-data commands
 
@@ -348,15 +350,15 @@ Keep the target desktop signed in and the containers running, then remove all
 run-tagged simulation data from another terminal opened at the repository root:
 
 ```shell
-./scripts/simulation-off
+./scripts/mockdata-off
 ```
 
-PowerShell: `.\scripts\simulation-off.ps1`
+PowerShell: `.\scripts\mockdata-off.ps1`
 
 Confirm that the run is marked as removed:
 
 ```shell
-./scripts/simulation-status
+./scripts/mockdata-status
 ```
 
 Quit the desktop app. If `npm run dev` is still active, press `Ctrl+C` in its
@@ -377,7 +379,7 @@ Quit the desktop, then run:
 docker compose down
 ```
 
-The database and simulation remain available after the next
+The database and mock data remain available after the next
 `docker compose up -d`.
 
 ### Delete the entire Docker database
@@ -389,7 +391,7 @@ and the default/temporary accounts:
 docker compose down -v
 ```
 
-Use `simulation-data off` for normal simulation cleanup. Use `down -v` only when a
+Use `mockdata off` for normal mock-data cleanup. Use `down -v` only when a
 completely empty local database is intended.
 
 ## Everyday command cheat sheet
@@ -404,10 +406,10 @@ completely empty local database is intended.
 | Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
-| Generate simulation data     | `./scripts/simulation-on` or `.\scripts\simulation-on.ps1`                                                                                                     |
-| Show simulation status      | `./scripts/simulation-status` or `.\scripts\simulation-status.ps1`                                                                                             |
-| Refresh simulation data      | `./scripts/simulation-reset` or `.\scripts\simulation-reset.ps1`                                                                                               |
-| Remove simulation data       | `./scripts/simulation-off` or `.\scripts\simulation-off.ps1`                                                                                                   |
+| Generate mock data           | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                                                                                                       |
+| Show mock-data status        | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                                                                                               |
+| Refresh mock data            | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                                                                                                 |
+| Remove mock data             | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                                                                                                     |
 | Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                                           |
 | Clear desktop local ledgers  | `./scripts/local-data-reset` or `.\scripts\local-data-reset.ps1`                                                                                               |
 | Stop containers              | `docker compose down`                                                                                                                                           |

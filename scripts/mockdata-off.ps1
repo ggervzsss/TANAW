@@ -7,8 +7,8 @@ $ExitCode = 0
 
 Push-Location $RepoRoot
 try {
-    & docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend `
-        uv run simulation-data off `
+    & docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend `
+        uv run mockdata off `
         @ForwardedArgs
     $ExitCode = $LASTEXITCODE
 } finally {

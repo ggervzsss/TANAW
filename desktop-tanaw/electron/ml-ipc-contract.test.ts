@@ -116,4 +116,13 @@ describe("ML IPC operation allowlist", () => {
   it("contains no generic operation capable of selecting a URL", () => {
     expect(ML_OPERATION_NAMES.some((operation) => /fetch|request|url|command|shell/i.test(operation))).toBe(false);
   });
+
+  it("exposes mock-data preparation without interactive simulator controls", () => {
+    expect(ML_OPERATION_NAMES).toContain("simulation.prepare");
+    expect(ML_OPERATION_NAMES).toContain("simulation.reset");
+    expect(ML_OPERATION_NAMES).toContain("simulation.status");
+    for (const removedOperation of ["simulation.start", "simulation.pause", "simulation.resume", "simulation.stop", "simulation.event"]) {
+      expect(isMlOperation(removedOperation)).toBe(false);
+    }
+  });
 });

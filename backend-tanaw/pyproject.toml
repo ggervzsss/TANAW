@@ -27,7 +27,7 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [project.scripts]
-simulation-data = "app.features.simulation.seed_cli:main"
+mockdata = "app.features.simulation.seed_cli:main"
 
 [dependency-groups]
 dev = [

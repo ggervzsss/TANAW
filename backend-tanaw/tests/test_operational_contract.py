@@ -15,4 +15,10 @@ def test_openapi_exposes_report_and_telemetry_contracts() -> None:
     ):
         assert required_path in paths
 
+    for removed_simulator_path in (
+        "/operational/simulation/sites/v2",
+        "/operational/simulation/telemetry/v2",
+    ):
+        assert removed_simulator_path not in paths
+
     assert all("/v1" not in path for path in paths)

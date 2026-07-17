@@ -330,26 +330,12 @@ export type SimulationPreparationRequest = {
   endsAtUtc: string;
 };
 
-export type SimulationScenario = "normal" | "morning-rush" | "event-opening" | "overcrowding" | "evacuation" | "custom";
-
-export type SimulationStartRequest = {
-  runId: string;
-  scenario: SimulationScenario;
-  eventsPerMinute: number;
-  capacity: number;
-  startingOccupancy: number;
-  durationMinutes: number | null;
-  thresholdPercent: number;
-  entryProbability: number | null;
-  uniqueEntryRate: number;
-};
-
 export type SimulationStatus = {
   running: boolean;
   paused: boolean;
   state: "idle" | "running" | "paused" | "stopped" | "completed";
   mode: string | null;
-  scenario: SimulationScenario | null;
+  scenario: string | null;
   simulation_run_id: string | null;
   events_generated: number;
   events_per_minute: number;
@@ -577,46 +563,6 @@ export async function resetLocalSimulationData(baseUrl: string, simulationRunId:
 export async function getSimulationStatus(baseUrl: string): Promise<SimulationStatus> {
   void baseUrl;
   return requestMl<SimulationStatus>("simulation.status");
-}
-
-export async function startSimulation(baseUrl: string, payload: SimulationStartRequest): Promise<SimulationStatus> {
-  void baseUrl;
-  return requestMl<SimulationStatus>("simulation.start", {
-    simulation_run_id: payload.runId,
-    mode: "virtual",
-    scenario: payload.scenario,
-    events_per_minute: payload.eventsPerMinute,
-    capacity: payload.capacity,
-    starting_occupancy: payload.startingOccupancy,
-    duration_minutes: payload.durationMinutes,
-    threshold_percent: payload.thresholdPercent,
-    entry_probability: payload.entryProbability,
-    unique_entry_rate: payload.uniqueEntryRate,
-  });
-}
-
-export async function pauseSimulation(baseUrl: string): Promise<SimulationStatus> {
-  void baseUrl;
-  return requestMl<SimulationStatus>("simulation.pause");
-}
-
-export async function resumeSimulation(baseUrl: string): Promise<SimulationStatus> {
-  void baseUrl;
-  return requestMl<SimulationStatus>("simulation.resume");
-}
-
-export async function stopSimulation(baseUrl: string): Promise<SimulationStatus> {
-  void baseUrl;
-  return requestMl<SimulationStatus>("simulation.stop");
-}
-
-export async function appendSimulationEvent(baseUrl: string, direction: "entry" | "exit"): Promise<SimulationStatus> {
-  void baseUrl;
-  return requestMl<SimulationStatus>("simulation.event", { direction });
-}
-
-export async function resetSimulation(baseUrl: string, runId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
-  return resetLocalSimulationData(baseUrl, runId);
 }
 
 export async function getMlDetections(baseUrl: string): Promise<MlDetections> {

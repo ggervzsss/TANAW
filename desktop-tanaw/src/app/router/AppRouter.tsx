@@ -69,14 +69,6 @@ export function AppRouter() {
           }
         />
         <Route
-          path={routePaths.enterpriseSimulation}
-          element={
-            <RequireAuth>
-              <EnterpriseShell initialView="simulation" />
-            </RequireAuth>
-          }
-        />
-        <Route
           path={routePaths.enterpriseProfile}
           element={
             <RequireAuth>

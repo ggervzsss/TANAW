@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { announceClientUpgradeRequired, CLIENT_UPGRADE_REQUIRED_EVENT, MANDATORY_UPGRADE_WEBSOCKET_CODE, type ClientUpgradeRequiredDetail } from "../../config/client-generation";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
-import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import {
@@ -25,11 +25,6 @@ import { EnterpriseTopbar } from "./EnterpriseTopbar";
 const CameraManagementView = lazy(() =>
   import("../../features/camera/components/CameraManagementView").then((module) => ({
     default: module.CameraManagementView,
-  })),
-);
-const SimulationLab = lazy(() =>
-  import("../../features/camera/components/SimulationLab").then((module) => ({
-    default: module.SimulationLab,
   })),
 );
 const DashboardView = lazy(() =>
@@ -71,15 +66,11 @@ const viewRouteById: Record<EnterpriseView, string> = {
   dashboard: routePaths.enterpriseDashboard,
   cameras: routePaths.enterpriseCameras,
   reports: routePaths.enterpriseReports,
-  simulation: routePaths.enterpriseSimulation,
   profile: routePaths.enterpriseProfile,
   security: routePaths.enterpriseSecurity,
   notifications: routePaths.enterpriseNotifications,
   tickets: routePaths.enterpriseTickets,
 };
-
-const SIMULATION_UNLOCK_PHRASE = "simulation";
-const SIMULATION_UNLOCK_STORAGE_KEY = "tanaw:simulation-route-unlock";
 
 export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellProps) {
   const navigate = useNavigate();
@@ -89,9 +80,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const token = useAuthStore((state) => state.token);
   const updateUser = useAuthStore((state) => state.updateUser);
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  const typedBufferRef = useRef("");
   const [activeView, setActiveView] = useState<EnterpriseView>(initialView);
-  const [isSimulationUnlocked, setIsSimulationUnlocked] = useState(() => initialView === "simulation" && window.sessionStorage.getItem(SIMULATION_UNLOCK_STORAGE_KEY) === "true");
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [reportsHistory, setReportsHistory] = useState<ReportRecord[]>(EMPTY_REPORTS);
   const [cameras, setCameras] = useState<EnterpriseCamera[]>(EMPTY_CAMERAS);
@@ -102,10 +91,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
-  const [simulationNotification, setSimulationNotification] = useState<EnterpriseNotification | null>(null);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
-  const buildingCapacity = user?.buildingCapacity ?? 100;
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
 
@@ -161,42 +148,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
   useEffect(() => {
     setActiveView(initialView);
-    typedBufferRef.current = "";
-
-    if (initialView === "simulation") {
-      const hasPendingUnlock = window.sessionStorage.getItem(SIMULATION_UNLOCK_STORAGE_KEY) === "true";
-      window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
-      if (!hasPendingUnlock) {
-        setIsSimulationUnlocked(false);
-        navigate(routePaths.enterpriseCameras, { replace: true });
-        return;
-      }
-      setIsSimulationUnlocked(true);
-      return;
-    }
-
-    window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
-    setIsSimulationUnlocked(false);
-  }, [initialView, navigate]);
-
-  useEffect(() => {
-    const handleSimulationShortcut = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key.length !== 1) return;
-
-      const nextBuffer = `${typedBufferRef.current}${event.key.toLowerCase()}`.slice(-SIMULATION_UNLOCK_PHRASE.length);
-      typedBufferRef.current = nextBuffer;
-
-      if (nextBuffer === SIMULATION_UNLOCK_PHRASE) {
-        setIsSimulationUnlocked(true);
-        window.sessionStorage.setItem(SIMULATION_UNLOCK_STORAGE_KEY, "true");
-        typedBufferRef.current = "";
-      }
-    };
-
-    window.addEventListener("keydown", handleSimulationShortcut);
-    return () => window.removeEventListener("keydown", handleSimulationShortcut);
-  }, []);
+  }, [initialView]);
 
   useEffect(() => {
     setCameras(EMPTY_CAMERAS);
@@ -317,52 +269,10 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     contentScrollRef.current?.scrollTo({ top: 0, left: 0 });
   }, [activeView]);
 
-  useEffect(() => {
-    if (!mlContextReady) {
-      setSimulationNotification(null);
-      return undefined;
-    }
-
-    let disposed = false;
-    const refreshSimulationAlert = async () => {
-      try {
-        const status = await getMlServiceStatus();
-        const simulation = await getSimulationStatus(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-        if (disposed) return;
-
-        const occupancyPercent = simulation.capacity > 0 ? Math.round((simulation.current_occupancy / simulation.capacity) * 100) : 0;
-        if (!simulation.simulation_run_id || !simulation.scenario || occupancyPercent < simulation.threshold_percent) {
-          setSimulationNotification(null);
-          return;
-        }
-
-        const source = `simulation:${simulation.simulation_run_id}:occupancy-threshold`;
-        setSimulationNotification({
-          id: stableNotificationId(source),
-          type: "critical",
-          message: `Live occupancy reached ${simulation.current_occupancy} of ${simulation.capacity} people (${occupancyPercent}%), above the ${simulation.threshold_percent}% alert threshold.`,
-          time: simulation.started_at ?? new Date().toISOString(),
-          read: false,
-          target: "cameras",
-        });
-      } catch {
-        if (!disposed) setSimulationNotification(null);
-      }
-    };
-
-    void refreshSimulationAlert();
-    const intervalId = window.setInterval(() => void refreshSimulationAlert(), 2000);
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-    };
-  }, [mlContextReady]);
-
   const handleLogout = async () => {
     try {
       await logoutRequest();
     } finally {
-      window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       logout();
       notifySuccess("Logout complete");
@@ -381,8 +291,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   const notifications = useMemo(
-    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, simulationNotification, backendNotifications),
-    [backendNotifications, readNotificationIds, reportsHistory, simulationNotification],
+    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, backendNotifications),
+    [backendNotifications, readNotificationIds, reportsHistory],
   );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
@@ -420,7 +330,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         isNotificationsOpen={isNotificationsOpen}
         notifications={notifications}
         resolvedTheme={resolvedTheme}
-        showSimulation={isSimulationUnlocked}
         unreadCount={unreadCount}
         user={user}
         onLogout={handleLogout}
@@ -438,16 +347,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           ref={contentScrollRef}
-          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-[#0f172a] ${activeView === "cameras" || activeView === "simulation" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
+          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-[#0f172a] ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
-          <div className={`mx-auto max-w-470 ${activeView === "cameras" || activeView === "simulation" ? "h-full min-h-0" : ""}`}>
+          <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>
               {activeView === "dashboard" && mlContextReady && <DashboardView />}
               {activeView === "cameras" && mlContextReady && (
                 <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
               )}
               {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
-              {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultBuildingCapacity={buildingCapacity} />}
               {activeView === "profile" && <ProfileView />}
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}
@@ -491,11 +399,10 @@ function EnterpriseViewLoadingFallback() {
 function buildEnterpriseNotifications(
   reportsHistory: ReportRecord[],
   readNotificationIds: Set<number>,
-  simulationNotification: EnterpriseNotification | null,
   backendNotifications: BackendNotification[],
 ) {
   const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds));
-  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report)), ...(simulationNotification ? [simulationNotification] : [])]
+  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report))]
     .sort((left, right) => getNotificationSortValue(right) - getNotificationSortValue(left))
     .map((notification) => ({
       ...notification,

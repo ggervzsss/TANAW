@@ -118,23 +118,6 @@ class CameraProcessingManager(
         self._effective_reid_mode = "fast"
         self._processing_frame_age_ms: float | None = None
         self._processing_frames_skipped = 0
-        self._simulation_thread: threading.Thread | None = None
-        self._simulation_stop_event: threading.Event | None = None
-        self._simulation_run_id: str | None = None
-        self._simulation_events_generated = 0
-        self._simulation_events_per_minute = 12
-        self._simulation_mode: str | None = None
-        self._simulation_scenario: str | None = None
-        self._simulation_state = "idle"
-        self._simulation_paused = False
-        self._simulation_capacity = 100
-        self._simulation_threshold_percent = 90
-        self._simulation_duration_minutes: int | None = None
-        self._simulation_started_at: str | None = None
-        self._simulation_started_monotonic: float | None = None
-        self._simulation_completed_at: str | None = None
-        self._simulation_entry_probability: float | None = None
-        self._simulation_unique_entry_rate = 0.88
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
 
@@ -344,7 +327,6 @@ class CameraProcessingManager(
             self._persist_session_locked()
 
     def stop(self) -> None:
-        self.stop_simulation()
         threads: list[threading.Thread]
         session: ProcessingSession | None
         with self._lock:
@@ -447,31 +429,6 @@ class CameraProcessingManager(
 
     def session(self) -> dict:
         with self._lock:
-            if self._simulation_mode == "virtual" and self._simulation_state in {
-                "running",
-                "paused",
-            }:
-                summary = self._runtime_store.metrics_summary(include_submitted=True)
-                simulation_running = self._simulation_state == "running"
-                return {
-                    "running": True,
-                    "status": "simulating" if simulation_running else "simulation_paused",
-                    "error": None,
-                    "camera_id": None,
-                    "camera_name": "Simulation Lab",
-                    "camera_config": None,
-                    "counts": {
-                        "entry": summary["entries"],
-                        "exit": summary["exits"],
-                        "occupancy": summary["current_occupancy"],
-                        "running": simulation_running,
-                        "status": "simulating" if simulation_running else "simulation_paused",
-                        "started_at": self._simulation_started_at,
-                        "error": None,
-                    },
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }
-
             counts = self.counts()
             return {
                 "running": self._state.running,
@@ -516,9 +473,12 @@ class CameraProcessingManager(
                 if self._config
                 else None
             )
-            resolved_classification = classification or self._current_classification_locked()
+            resolved_classification = classification or str(summary["classification"])
             simulation_run_id = (
-                self._simulation_run_id if resolved_classification in {"simulation"} else None
+                str(summary["simulation_run_id"])
+                if resolved_classification == "simulation"
+                and summary["simulation_run_id"] is not None
+                else None
             )
 
         correction = self._runtime_store.record_occupancy_correction(

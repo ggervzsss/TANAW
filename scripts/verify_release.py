@@ -48,10 +48,10 @@ REQUIRED_PATHS = (
     Path("backend-tanaw/app/features/events"),
     Path("backend-tanaw/app/features/simulation"),
     Path("desktop-tanaw/ml-service/app/storage/local_ledger.py"),
-    Path("scripts/simulation-on"),
-    Path("scripts/simulation-reset"),
-    Path("scripts/simulation-status"),
-    Path("scripts/simulation-off"),
+    Path("scripts/mockdata-on"),
+    Path("scripts/mockdata-reset"),
+    Path("scripts/mockdata-status"),
+    Path("scripts/mockdata-off"),
     Path("scripts/local-data-reset"),
 )
 TEXT_SUFFIXES = {

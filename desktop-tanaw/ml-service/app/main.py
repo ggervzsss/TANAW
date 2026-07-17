@@ -34,12 +34,9 @@ from app.config.camera_config import (
     ReportRawDataPurgeRequest,
     ReportRawDataPurgeResponse,
     SessionResponse,
-    SimulationManualEventRequest,
     SimulationPrepareRequest,
     SimulationPrepareResponse,
-    SimulationReportRequest,
     SimulationResetResponse,
-    SimulationStartRequest,
     SimulationStatusResponse,
 )
 from app.runtime.hardware import get_runtime_capabilities
@@ -532,56 +529,6 @@ def prepare_simulation_counts(payload: SimulationPrepareRequest) -> SimulationPr
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/simulations/start", response_model=SimulationStatusResponse)
-def start_simulation(payload: SimulationStartRequest) -> SimulationStatusResponse:
-    try:
-        return SimulationStatusResponse(
-            **manager.start_simulation(
-                simulation_run_id=payload.simulation_run_id,
-                mode=payload.mode,
-                scenario=payload.scenario,
-                events_per_minute=payload.events_per_minute,
-                capacity=payload.capacity,
-                starting_occupancy=payload.starting_occupancy,
-                duration_minutes=payload.duration_minutes,
-                threshold_percent=payload.threshold_percent,
-                entry_probability=payload.entry_probability,
-                unique_entry_rate=payload.unique_entry_rate,
-            )
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/simulations/pause", response_model=SimulationStatusResponse)
-def pause_simulation() -> SimulationStatusResponse:
-    try:
-        return SimulationStatusResponse(**manager.pause_simulation())
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/simulations/resume", response_model=SimulationStatusResponse)
-def resume_simulation() -> SimulationStatusResponse:
-    try:
-        return SimulationStatusResponse(**manager.resume_simulation())
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/simulations/stop", response_model=SimulationStatusResponse)
-def stop_simulation() -> SimulationStatusResponse:
-    return SimulationStatusResponse(**manager.stop_simulation())
-
-
-@app.post("/simulations/event", response_model=SimulationStatusResponse)
-def append_simulation_event(payload: SimulationManualEventRequest) -> SimulationStatusResponse:
-    try:
-        return SimulationStatusResponse(**manager.append_simulation_event(payload.direction))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @app.post("/simulations/reset", response_model=SimulationResetResponse)
 def reset_simulation_data(simulation_run_id: str | None = None) -> SimulationResetResponse:
     removed = manager.reset_simulation_data(simulation_run_id)
@@ -591,18 +538,6 @@ def reset_simulation_data(simulation_run_id: str | None = None) -> SimulationRes
 @app.get("/simulations/status", response_model=SimulationStatusResponse)
 def simulation_status() -> SimulationStatusResponse:
     return SimulationStatusResponse(**manager.simulation_status())
-
-
-@app.post("/simulations/generate-report", response_model=LocalReportRevisionResponse)
-def generate_simulation_report(payload: SimulationReportRequest) -> LocalReportRevisionResponse:
-    try:
-        return LocalReportRevisionResponse(
-            **manager.generate_simulation_report(
-                payload.report_id, payload.period_id, payload.notes, payload.payload
-            )
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post(

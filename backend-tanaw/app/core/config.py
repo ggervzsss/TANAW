@@ -141,9 +141,7 @@ class Settings(BaseSettings):
     telemetry_metric_fact_retention_days: int = Field(default=7, ge=1, le=90)
     telemetry_device_health_retention_days: int = Field(default=7, ge=1, le=90)
     telemetry_hourly_rollup_retention_days: int = Field(default=730, ge=30, le=3650)
-    allow_simulation_data: bool = Field(
-        default=False, validation_alias="TANAW_ALLOW_SIMULATION_DATA"
-    )
+    allow_mock_data: bool = Field(default=False, validation_alias="TANAW_ALLOW_MOCK_DATA")
 
     model_config = SettingsConfigDict(
         alias_generator=str.upper,
@@ -265,6 +263,8 @@ class Settings(BaseSettings):
         ):
             raise ValueError("FRONTEND_PUBLIC_URL must use a public HTTPS URL in production.")
         if self.is_production:
+            if self.allow_mock_data:
+                raise ValueError("TANAW_ALLOW_MOCK_DATA cannot be enabled in production.")
             self._validate_production_credentials()
             self._validate_production_email()
             if not self.final_report_artifact_storage_root.is_absolute():

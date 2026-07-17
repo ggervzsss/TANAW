@@ -28,34 +28,12 @@ from app.features.telemetry.service import (
     list_official_sites,
     register_epoch_command,
 )
-from app.features.telemetry.simulation import (
-    FleetSimulationCommand,
-    FleetSimulationEnterprise,
-    FleetSimulationResult,
-    ingest_simulation_tick,
-    list_simulation_enterprises,
-)
 
 router = APIRouter(prefix="/operational", tags=["telemetry-v2"])
 
 EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 MapAccount = Annotated[Account, Depends(require_roles({"admin", "staff", "it"}))]
-SimulationAccount = Annotated[
-    Account,
-    Depends(require_roles({"admin", "it", "staff", "enterprise"})),
-]
 Database = Annotated[AsyncSession, Depends(get_db)]
-
-
-def _require_simulation_enabled() -> None:
-    from app.core.config import get_settings
-
-    settings = get_settings()
-    if settings.is_production and not settings.allow_simulation_data:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Simulation Lab endpoints are disabled in production.",
-        )
 
 
 @router.post(
@@ -200,47 +178,6 @@ async def get_enterprise_sites_v2(
             after_site_id=afterSiteId,
         )
     except TelemetryIntakeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={"code": exc.code, "message": exc.message},
-        ) from exc
-
-
-@router.get(
-    "/simulation/sites/v2",
-    response_model=list[FleetSimulationEnterprise],
-)
-async def list_simulation_sites_v2(
-    _: SimulationAccount,
-    db: Database,
-) -> list[FleetSimulationEnterprise]:
-    _require_simulation_enabled()
-    return await list_simulation_enterprises(db)
-
-
-@router.post(
-    "/simulation/telemetry/v2",
-    response_model=FleetSimulationResult,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def ingest_simulation_telemetry_v2(
-    command: FleetSimulationCommand,
-    _: SimulationAccount,
-    db: Database,
-) -> FleetSimulationResult:
-    _require_simulation_enabled()
-    try:
-        result = await ingest_simulation_tick(db, command=command)
-        await db.commit()
-        return result
-    except TelemetryIntakeConflict as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": exc.code, "message": exc.message},
-        ) from exc
-    except TelemetryIntakeError as exc:
-        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": exc.code, "message": exc.message},

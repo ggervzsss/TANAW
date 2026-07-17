@@ -37,7 +37,7 @@ and workflow events after they have been produced locally.
   final report generation, source-row audit data, and reporting activity logs.
 - **Activity logging**: account, operational, reporting, and system events used
   by LGU monitoring and audit screens.
-- **Test-data tooling**: explicit simulation-data generation and cleanup for local
+- **Test-data tooling**: explicit mock-data generation and cleanup for local
   demonstrations, QA, analytics, and end-to-end reporting tests.
 
 ## Project Structure
@@ -68,7 +68,7 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 ## Database Schema
 
 Alembic is the only schema authority. Apply the schema before starting any API
-or simulation-data process:
+or mockdata process:
 
 ```shell
 uv run alembic upgrade head
@@ -281,7 +281,7 @@ only through the operational APIs when appropriate.
 
 ## Mock Data Tooling
 
-The backend includes guarded simulation-data tooling for development and demos. It is
+The backend includes guarded mock-data tooling for development and demos. It is
 designed around a simple rule:
 
 ```text

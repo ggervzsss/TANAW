@@ -26,15 +26,6 @@ TrackerProfile = Literal["auto", "bytetrack", "botsort"]
 ReIdMode = Literal["auto", "off", "fast", "quality"]
 UniqueCountingMode = Literal["entry_only", "estimated_reid"]
 SourceClassification = Literal["official", "simulation"]
-SimulationMode = Literal["virtual", "hybrid"]
-SimulationScenario = Literal[
-    "normal",
-    "morning-rush",
-    "event-opening",
-    "overcrowding",
-    "evacuation",
-    "custom",
-]
 
 
 class TripwirePoint(BaseModel):
@@ -523,31 +514,6 @@ class LocalReportRevisionResponse(MetricsSummaryResponse):
     sync_status: str
 
 
-class SimulationStartRequest(BaseModel):
-    simulation_run_id: str = Field(..., min_length=1, max_length=80)
-    mode: SimulationMode = "virtual"
-    scenario: SimulationScenario = "normal"
-    events_per_minute: int = Field(default=12, ge=1, le=120)
-    capacity: int = Field(default=100, ge=1, le=100_000)
-    starting_occupancy: int | None = Field(default=None, ge=0, le=5_000)
-    duration_minutes: int | None = Field(default=None, ge=1, le=1440)
-    threshold_percent: int = Field(default=90, ge=1, le=100)
-    entry_probability: float | None = Field(default=None, ge=0.0, le=1.0)
-    unique_entry_rate: float = Field(default=0.88, ge=0.0, le=1.0)
-
-    @model_validator(mode="after")
-    def validate_simulation_settings(self) -> SimulationStartRequest:
-        if self.starting_occupancy is not None and self.starting_occupancy > self.capacity:
-            raise ValueError("Starting occupancy cannot exceed venue capacity.")
-        if self.scenario == "custom" and self.entry_probability is None:
-            raise ValueError("Custom simulations require an entry probability.")
-        return self
-
-
-class SimulationManualEventRequest(BaseModel):
-    direction: Literal["entry", "exit"]
-
-
 class SimulationPrepareRequest(BaseModel):
     simulation_run_id: str = Field(..., min_length=1, max_length=80)
     enterprise_id: str = Field(..., min_length=1, max_length=160)
@@ -604,26 +570,6 @@ class SimulationStatusResponse(BaseModel):
 class SimulationResetResponse(BaseModel):
     stopped: bool
     removed: dict[str, int]
-
-
-class SimulationReportRequest(BaseModel):
-    report_id: str | None = Field(default=None, max_length=80)
-    period_id: str = Field(..., min_length=1, max_length=80)
-    source_window: ReportSourceWindow
-    notes: str | None = Field(default=None, max_length=5000)
-    payload: dict | None = None
-
-    @model_validator(mode="after")
-    def validate_reporting_period(self) -> SimulationReportRequest:
-        monthly_period_from_identity(
-            self.period_id,
-            self.source_window.start,
-            self.source_window.end,
-        )
-        period_submission_error = reporting_period_submission_error(self.period_id)
-        if period_submission_error:
-            raise ValueError(period_submission_error)
-        return self
 
 
 class LocalReportRecordResponse(BaseModel):

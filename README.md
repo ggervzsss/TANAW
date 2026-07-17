@@ -434,9 +434,9 @@ the database, so removing those variables never makes the account editable or
 deactivatable. If an IT account already exists, no bootstrap credentials are
 required.
 
-## Seed and simulate reports
+## Load mock reporting data
 
-TANAW includes an explicit simulation CLI for development, demonstrations, QA,
+TANAW includes an explicit mock-data CLI for development, demonstrations, QA,
 analytics, and end-to-end reporting tests. It is disabled by default and never
 runs during normal backend startup.
 
@@ -468,19 +468,19 @@ With the account active and Docker services running, execute this from the
 repository root:
 
 ```shell
-./scripts/simulation-on
+./scripts/mockdata-on
 ```
 
 PowerShell users can run the matching wrapper:
 
 ```powershell
-.\scripts\simulation-on.ps1
+.\scripts\mockdata-on.ps1
 ```
 
 The script defaults to the six-month `full-workflow` scenario for
 `archies_001@tanaw.sanpedro`. To target a different enterprise, run it with
-`TANAW_SIMULATION_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
-`$env:TANAW_SIMULATION_TARGET_ENTERPRISE = "actual_enterprise_id"`.
+`TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
+`$env:TANAW_MOCK_TARGET_ENTERPRISE = "actual_enterprise_id"`.
 
 This creates:
 
@@ -497,7 +497,7 @@ This creates:
   steps for real desktop submissions.
 
 Archie's remains a normal, persistent account and is not deleted by
-`simulation-data off`. The five generated enterprises act as supporting participants
+`mockdata off`. The five generated enterprises act as supporting participants
 in the reporting scenario.
 
 A camera does not need to be running. The authenticated target desktop polls
@@ -509,7 +509,7 @@ later camera events continue to accumulate in the same draft.
 When multiple unfinished periods are available, the desktop report workspace
 shows them in the **Reporting Month** selector.
 
-### Simulation accounts
+### Mock accounts
 
 All generated accounts use:
 
@@ -539,7 +539,7 @@ Archie's Event Place is not a generated account. Sign in with
 `archies@email.com` and the password selected during its account onboarding,
 not `Visitor simulation access phrase 2026`.
 
-### Complete the end-to-end report simulation
+### Complete the end-to-end mock report workflow
 
 1. Start the desktop application and sign in to Archie's Event Place using
    `archies@email.com` and its configured password.
@@ -560,23 +560,23 @@ not `Visitor simulation access phrase 2026`.
 Desktop submissions are written to SQLite first, synchronized to PostgreSQL,
 and then marked as synced locally.
 
-### Inspect or refresh the simulation
+### Inspect or refresh the mock data
 
 Show recent simulation runs:
 
 ```shell
-./scripts/simulation-status
+./scripts/mockdata-status
 ```
 
-PowerShell: `.\scripts\simulation-status.ps1`
+PowerShell: `.\scripts\mockdata-status.ps1`
 
 Replace the active run with a fresh deterministic dataset:
 
 ```shell
-./scripts/simulation-reset
+./scripts/mockdata-reset
 ```
 
-PowerShell: `.\scripts\simulation-reset.ps1`
+PowerShell: `.\scripts\mockdata-reset.ps1`
 
 Supported ranges:
 
@@ -594,17 +594,17 @@ The date range is calculated when the command runs. An active run is a snapshot
 and does not automatically roll forward, so use `reset` when a new reporting
 month begins or before a demonstration.
 
-## Remove simulated data
+## Remove mock data
 
-### Safe simulation cleanup
+### Safe mock-data cleanup
 
 Keep the target enterprise signed in to the desktop when practical, then run:
 
 ```shell
-./scripts/simulation-off
+./scripts/mockdata-off
 ```
 
-PowerShell: `.\scripts\simulation-off.ps1`
+PowerShell: `.\scripts\mockdata-off.ps1`
 
 This removes records belonging to active simulation run IDs, including:
 
@@ -626,7 +626,7 @@ in and reconnects.
 Confirm the result:
 
 ```shell
-./scripts/simulation-status
+./scripts/mockdata-status
 ```
 
 ### Destructive full database reset
@@ -639,8 +639,8 @@ docker compose down -v
 docker compose up --build -d
 ```
 
-Use this only when a fully clean local database is intended. Normal simulation
-cleanup should use `simulation-data off`.
+Use this only when a fully clean local database is intended. Normal mock-data
+cleanup should use `mockdata off`.
 
 ## Optional host-run development
 
@@ -776,7 +776,7 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `TANAW_PUBLIC_DEPLOYMENT`     | Frontend build guard for non-Vercel public deployments; requires a public HTTPS API URL |
 | `BACKEND_PORT`                | Host port mapped to the API; defaults to `8000`        |
 | `FRONTEND_PORT`               | Host port mapped to the portal; defaults to `5173`     |
-| `TANAW_ALLOW_SIMULATION_DATA`       | Explicit simulation safety switch; false by default    |
+| `TANAW_ALLOW_MOCK_DATA`             | Explicit mock-data safety switch; false by default     |
 | `EMAIL_DELIVERY_MODE`         | `log` locally or `resend` for real email delivery       |
 | `RESEND_API_KEY`              | Backend-only Resend API credential                      |
 | `EMAIL_FROM_NAME`             | Display name used for TANAW transactional messages      |
@@ -815,7 +815,7 @@ Docker Compose reads the root `.env` and passes it to the relevant services.
 | `ASSET_ORPHAN_SCAN_MAX_OBJECTS` | Fail-closed bound for each authoritative asset inventory scan |
 | `TANAW_APP_DATA_DIR`          | Optional override for desktop/ML local data            |
 
-Do not permanently enable `TANAW_ALLOW_SIMULATION_DATA` in production. The examples
+Do not permanently enable `TANAW_ALLOW_MOCK_DATA` in production. The examples
 in this README inject it only for the individual CLI process.
 
 ## Local desktop data
@@ -835,7 +835,7 @@ Electron caches:
 PowerShell: `.\scripts\local-data-reset.ps1`
 
 The script does not remove backend data. If a backend simulation is active, run
-`./scripts/simulation-off` as well; otherwise the target desktop can download the
+`./scripts/mockdata-off` as well; otherwise the target desktop can download the
 active prepared package again after sign-in.
 
 Inspect all local ledgers:
@@ -975,14 +975,13 @@ another actively synchronized folder.
 - Keep the backend and desktop running for several seconds so the authenticated
   polling cycle can complete.
 - Restart the desktop after ML-service code or dependency changes.
-- Check the prepared state in the signed-in desktop **Simulation Lab** and
-  report-period selector. Direct ML-service requests are intentionally
-  unsupported.
+- Check the prepared state on the signed-in desktop Dashboard and report-period
+  selector. Direct ML-service requests are intentionally unsupported.
 
 ### A simulation account already exists
 
 The seed command refuses to overwrite an existing account with the same email.
-Run `simulation-data off` to remove the active generated run, or resolve the conflicting
+Run `mockdata off` to remove the active generated run, or resolve the conflicting
 account intentionally before seeding again.
 
 ### Source changes are not reflected in Docker

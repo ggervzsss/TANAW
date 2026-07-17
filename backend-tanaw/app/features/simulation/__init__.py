@@ -1,1 +1,1 @@
-"""Explicitly isolated simulation-data operations."""
+"""Explicitly isolated mock-data operations."""

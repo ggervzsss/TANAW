@@ -42,12 +42,17 @@ def test_database_url_preserves_explicit_driver() -> None:
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
 
 
-def test_simulation_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TANAW_ALLOW_SIMULATION_DATA", "true")
+def test_mock_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TANAW_ALLOW_MOCK_DATA", "true")
 
     settings = Settings()
 
-    assert settings.allow_simulation_data is True
+    assert settings.allow_mock_data is True
+
+
+def test_production_rejects_mock_data_flag() -> None:
+    with pytest.raises(ValueError, match="TANAW_ALLOW_MOCK_DATA"):
+        production_settings(allow_mock_data=True)
 
 
 def test_default_access_token_lifetime_supports_continuous_operation() -> None:
@@ -360,5 +365,5 @@ def test_unregistered_environment_aliases_are_ignored(
     assert settings.development_staff_username is None
     assert settings.development_it_username is None
     assert settings.environment == "development"
-    assert settings.allow_simulation_data is False
+    assert settings.allow_mock_data is False
     assert settings.seed_development_accounts is False

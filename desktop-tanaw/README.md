@@ -277,68 +277,55 @@ Default Linux development path:
 ~/.config/desktop-tanaw
 ```
 
-## Using Simulation Data
+## Using Mock Data
 
-There are two supported ways to use generated data in the desktop.
+The production desktop does not contain a Simulation Lab, hidden route, live
+event generator, or simulator controls. Mock records are loaded explicitly from
+the repository scripts and are never generated during normal app startup.
 
-### Hidden Simulation Lab
-
-Type `simulation` anywhere in the desktop application to reveal the temporary **Simulation Lab** navigation item. Open it to generate live entry and exit events without connecting a CCTV camera.
-
-The simulator writes to the same enterprise-scoped SQLite ledger used by camera detections, so the dashboard, report draft, cloud telemetry, Admin map, and alert workflow exercise the normal desktop data path.
-
-Available controls include scenario presets, venue capacity, starting occupancy, event rate, duration, alert threshold, pause/resume, manual entry/exit events, and per-run cleanup. Simulated rows remain internally tagged with their run identifier and can be removed without deleting real camera events.
-
-To remove simulation data and any other local ledger rows:
-
-1. Use the Simulation Lab reset/cleanup controls when the run is active.
-2. Or clear every local ledger while preserving camera definitions and settings:
-
-   ```bash
-   npm run local-data -- clear --all-ledgers --yes
-   ```
-
-PowerShell uses the same command.
-
-### Backend Prepared Counts
-
-The backend simulation-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves pending prepared packages through the authenticated backend connection and writes the selected period into the local ledger. For Archie's Event Place, the default scenario loads the overdue previous-period package first, exposes unfinished periods in the **Reporting Month** selector, then loads the current-period package after the overdue report syncs.
-
-Prepare from the project root:
+From the project root, load the default mock reporting workflow:
 
 ```bash
-docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend \
-  uv run simulation-data reset \
-  --range 6m \
-  --target-enterprise "archies_001@tanaw.sanpedro"
+./scripts/mockdata-on
 ```
 
 PowerShell:
 
 ```powershell
-docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend `
-  uv run simulation-data reset `
-  --range 6m `
-  --target-enterprise "archies_001@tanaw.sanpedro"
+.\scripts\mockdata-on.ps1
 ```
 
-Verify the prepared state in the signed-in desktop application's **Simulation
-Lab** and report-period selector. The authenticated Electron bridge is the only
-supported local service client; no direct ML-service status URL is exposed.
+The backend prepares counts for the selected target enterprise. When that
+enterprise signs in, the desktop retrieves the pending package through the
+authenticated backend connection and writes it to the enterprise-scoped local
+ledger. Internally, these records retain a `simulation` classification and run
+identifier so they cannot be submitted or retained as official camera evidence
+by accident.
 
-Remove generated backend and prepared desktop data:
+Use the Dashboard and **Reporting Month** selector to inspect the prepared data.
+The authenticated Electron bridge remains the only supported local-service
+client; no direct ML-service status URL is exposed.
+
+Remove generated backend and prepared desktop data from the project root:
 
 ```bash
-docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend uv run simulation-data off
+./scripts/mockdata-off
 ```
 
 PowerShell:
 
 ```powershell
-docker compose exec -e TANAW_ALLOW_SIMULATION_DATA=true backend uv run simulation-data off
+.\scripts\mockdata-off.ps1
 ```
 
-Run backend cleanup before clearing local ledgers when a generated backend run is still active. Otherwise, signing the target enterprise back in can prepare that active run again in a newly created local ledger.
+Run backend cleanup before clearing local ledgers when a generated run is still
+active. Otherwise, signing the target enterprise back in can prepare that run
+again in a newly created local ledger. To intentionally clear every local
+ledger while preserving camera definitions and settings, run:
+
+```bash
+npm run local-data -- clear --all-ledgers --yes
+```
 
 ## Occupancy Corrections
 

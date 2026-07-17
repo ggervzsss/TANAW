@@ -5,43 +5,43 @@ Run these TANAW utilities from the repository root.
 Linux, macOS, WSL, and Git Bash:
 
 ```shell
-./scripts/simulation-on
-./scripts/simulation-reset
-./scripts/simulation-status
-./scripts/simulation-off
+./scripts/mockdata-on
+./scripts/mockdata-reset
+./scripts/mockdata-status
+./scripts/mockdata-off
 ./scripts/local-data-reset
 ```
 
 Windows PowerShell:
 
 ```powershell
-.\scripts\simulation-on.ps1
-.\scripts\simulation-reset.ps1
-.\scripts\simulation-status.ps1
-.\scripts\simulation-off.ps1
+.\scripts\mockdata-on.ps1
+.\scripts\mockdata-reset.ps1
+.\scripts\mockdata-status.ps1
+.\scripts\mockdata-off.ps1
 .\scripts\local-data-reset.ps1
 ```
 
-`simulation-on` and `simulation-reset` default to the full workflow scenario
+`mockdata-on` and `mockdata-reset` default to the full workflow scenario
 for `archies_001@tanaw.sanpedro`. Override the defaults only for the individual
 command process:
 
 ```shell
-TANAW_SIMULATION_TARGET_ENTERPRISE="enterprise_id" ./scripts/simulation-reset
-TANAW_SIMULATION_RANGE=12m TANAW_SIMULATION_SCENARIO=peak-traffic ./scripts/simulation-on
+TANAW_MOCK_TARGET_ENTERPRISE="enterprise_id" ./scripts/mockdata-reset
+TANAW_MOCK_RANGE=12m TANAW_MOCK_SCENARIO=peak-traffic ./scripts/mockdata-on
 ```
 
 ```powershell
-$env:TANAW_SIMULATION_TARGET_ENTERPRISE = "enterprise_id"
-.\scripts\simulation-reset.ps1
+$env:TANAW_MOCK_TARGET_ENTERPRISE = "enterprise_id"
+.\scripts\mockdata-reset.ps1
 
-$env:TANAW_SIMULATION_RANGE = "12m"
-$env:TANAW_SIMULATION_SCENARIO = "peak-traffic"
-.\scripts\simulation-on.ps1
+$env:TANAW_MOCK_RANGE = "12m"
+$env:TANAW_MOCK_SCENARIO = "peak-traffic"
+.\scripts\mockdata-on.ps1
 ```
 
-Simulation is explicit, disabled by default, and server-classified. Never set
-`TANAW_ALLOW_SIMULATION_DATA=true` for a production service.
+Mock data loading is explicit, disabled by default, and server-classified. Never set
+`TANAW_ALLOW_MOCK_DATA=true` for a production service.
 
 `local-data-reset` removes every desktop local ledger, including rows created
 from official CCTV detections and simulation runs, reports, current-state
