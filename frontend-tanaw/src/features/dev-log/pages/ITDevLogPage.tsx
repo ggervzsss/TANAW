@@ -1,12 +1,52 @@
-import { Inbox, Mail, Search } from "lucide-react";
+import { Copy, Inbox, Mail, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { listDevDeliveries, type DevDelivery } from "@/shared/services/accountManagement";
+import { splitDevLogMessage } from "../utils/devLogMessage";
 
 const EMPTY_DELIVERIES: DevDelivery[] = [];
+
+async function copyLink(link: string) {
+  try {
+    await navigator.clipboard.writeText(link);
+    toast.success("Link copied to clipboard");
+  } catch {
+    toast.error("Unable to copy the link");
+  }
+}
+
+function DevLogMessage({ body }: { body: string }) {
+  const segments = splitDevLogMessage(body);
+
+  return (
+    <pre className="max-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed whitespace-pre-wrap text-slate-700">
+      {segments.map((segment, index) => {
+        if (segment.type === "text") return segment.value;
+
+        return (
+          <span key={`${segment.value}-${index}`} className="inline-flex max-w-full items-center gap-1 align-middle">
+            <a href={segment.value} target="_blank" rel="noreferrer" className="text-tgreen-dark break-all underline decoration-emerald-300 underline-offset-2 hover:text-emerald-700">
+              {segment.value}
+            </a>
+            <button
+              type="button"
+              onClick={() => void copyLink(segment.value)}
+              className="text-tgreen-dark inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-white transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+              aria-label="Copy link"
+              title="Copy link"
+            >
+              <Copy size={12} aria-hidden="true" />
+            </button>
+          </span>
+        );
+      })}
+    </pre>
+  );
+}
 
 export function ITDevLogPage() {
   const [query, setQuery] = useState("");
@@ -60,7 +100,7 @@ export function ITDevLogPage() {
                 </aside>
                 <section className="min-w-0">
                   <h2 className="mb-2 text-sm font-black text-slate-900">{delivery.subject}</h2>
-                  <pre className="max-h-64 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed whitespace-pre-wrap text-slate-700">{delivery.body}</pre>
+                  <DevLogMessage body={delivery.body} />
                 </section>
               </article>
             );

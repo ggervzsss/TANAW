@@ -99,12 +99,13 @@ export function AccountLayout({ role }: AccountLayoutProps) {
       if (nextBuffer === unlockPhrase) {
         setIsDevLogUnlocked(true);
         typedBufferRef.current = "";
+        navigate(routes.it.devLog);
       }
     };
 
     window.addEventListener("keydown", handleDevLogShortcut);
     return () => window.removeEventListener("keydown", handleDevLogShortcut);
-  }, [role]);
+  }, [navigate, role]);
 
   return (
     <section className={sectionClassName}>
