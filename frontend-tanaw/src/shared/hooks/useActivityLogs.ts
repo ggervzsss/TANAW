@@ -8,11 +8,13 @@ export const activityLogsQueryKey = ["activity-logs"];
 
 export function useActivityLogs() {
   const token = useAuthStore((state) => state.token);
+  const role = useAuthStore((state) => state.user?.role);
+  const canViewActivityLogs = role === "admin" || role === "it";
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: activityLogsQueryKey, queryFn: listActivityLogs, enabled: Boolean(token) });
+  const query = useQuery({ queryKey: activityLogsQueryKey, queryFn: listActivityLogs, enabled: Boolean(token) && canViewActivityLogs });
 
   useEffect(() => {
-    if (!token) return undefined;
+    if (!token || !canViewActivityLogs) return undefined;
 
     let socket: WebSocket | null = null;
     let reconnectTimer: number | undefined;
@@ -102,7 +104,7 @@ export function useActivityLogs() {
       }
       closeSocket();
     };
-  }, [queryClient, token]);
+  }, [canViewActivityLogs, queryClient, token]);
 
   return {
     ...query,

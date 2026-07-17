@@ -1,1 +1,1 @@
-export { AdminSystemLogsPage, ITSystemLogsPage, StaffSystemLogsPage } from "./pages";
+export { AdminSystemLogsPage, ITSystemLogsPage } from "./pages";

@@ -47,7 +47,6 @@ const ITSystemSettingsPage = lazy(() =>
 );
 const AdminSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.AdminSystemLogsPage })));
 const ITSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.ITSystemLogsPage })));
-const StaffSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.StaffSystemLogsPage })));
 const SupportTicketsPage = lazy(() =>
   import("@/features/support-tickets").then((module) => ({
     default: module.SupportTicketsPage,
@@ -123,7 +122,6 @@ export function AppRouter() {
           <Route path="final-reports-audit" element={<StaffFinalReportsAuditPage />} />
           <Route path="analytics" element={<StaffAnalyticsPage />} />
           <Route path="notifications" element={<NotificationsPage role="staff" />} />
-          <Route path="system-logs" element={<StaffSystemLogsPage />} />
           <Route path="profile" element={<AccountProfilePage role="staff" />} />
           <Route path="security" element={<AccountSecurityPage />} />
         </Route>

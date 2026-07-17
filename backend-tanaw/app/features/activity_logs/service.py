@@ -39,8 +39,6 @@ def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
             category in {"System", "IT Activity", "Enterprise Activity"}
             or actor_role == "IT Personnel"
         )
-    if role == AccountRole.STAFF.value:
-        return category in {"Staff Submission", "Staff Operation"}
     return False
 
 

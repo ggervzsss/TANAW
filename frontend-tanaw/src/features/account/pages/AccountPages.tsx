@@ -153,7 +153,9 @@ export function AccountProfilePage({ role }: AccountPageProps) {
               </label>
               <div className="min-w-0">
                 <h2 className="text-lg font-bold text-slate-950">Profile Photo</h2>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">This profile is shown in the {rolePortalLabel[role]} header, reports, audit trails, and account activity logs.</p>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+                  This profile is shown in the {rolePortalLabel[role]} header, reports, and other account-related records.
+                </p>
                 <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">{roleAccessLabel[role]}</span>
                 {displayImageFileName && <p className="mt-2 text-xs font-semibold text-emerald-700">{displayImageFileName}</p>}
                 {displayImageDataUrl && (

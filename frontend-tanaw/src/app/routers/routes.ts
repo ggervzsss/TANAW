@@ -35,7 +35,6 @@ export const routes = {
     finalReportsAudit: "/staff/final-reports-audit",
     analytics: "/staff/analytics",
     notifications: "/staff/notifications",
-    systemLogs: "/staff/system-logs",
     profile: "/staff/profile",
     security: "/staff/security",
   },

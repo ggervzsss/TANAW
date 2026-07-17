@@ -98,7 +98,6 @@ export function usePortalNotifications(role: UserRole) {
       return [
         ...persistedNotifications,
         ...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises, backendReportSourceIds),
-        ...buildLogNotifications(mergedLogs, "staff", backendReportSourceIds),
       ];
     }
 
@@ -196,7 +195,9 @@ function getBackendNotificationTargetPath(role: UserRole, notification: BackendN
     return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : routes.it.alerts;
   }
   if (role === "staff") {
-    return text.includes("report") || text.includes("batch") ? routes.staff.batchReports : routes.staff.systemLogs;
+    if (text.includes("report") || text.includes("batch")) return routes.staff.batchReports;
+    if (text.includes("security") || text.includes("password")) return routes.staff.security;
+    return routes.staff.notifications;
   }
   return undefined;
 }
@@ -232,10 +233,9 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"):
     }));
 }
 
-function buildLogNotifications(logs: SystemLog[], role: "admin" | "it" | "staff", backendReportSourceIds = new Set<string>()): DraftNotification[] {
+function buildLogNotifications(logs: SystemLog[], role: "admin" | "it"): DraftNotification[] {
   return logs
     .filter((log) => isRoleRelevantLog(log, role))
-    .filter((log) => !isDuplicateStaffReportSubmissionLog(log, role, backendReportSourceIds))
     .map((log) => ({
       id: `activity-log:${log.id}:${log.severity}`,
       title: `${log.severity} ${log.action}`,
@@ -300,23 +300,15 @@ function buildStaffReportNotifications(reports: IntakeReport[], finalReports: Fi
   return [...reportNotifications, ...enterpriseMissingNotifications, ...finalReportNotifications];
 }
 
-function isRoleRelevantLog(log: SystemLog, role: "admin" | "it" | "staff") {
+function isRoleRelevantLog(log: SystemLog, role: "admin" | "it") {
   if (role === "admin") {
     return log.severity === "Critical" || (log.severity === "Warning" && (log.category === "System" || log.action.toLowerCase().includes("alert")));
   }
 
-  if (role === "it") {
-    return (
-      (log.severity === "Critical" || log.severity === "Warning") &&
-      (log.category === "System" || log.category === "IT Activity" || log.category === "Enterprise Activity" || log.action.toLowerCase().includes("alert"))
-    );
-  }
-
-  return (log.category === "Staff Submission" || log.category === "Staff Operation") && (log.action.toLowerCase().includes("report") || log.severity === "Warning");
-}
-
-function isDuplicateStaffReportSubmissionLog(log: SystemLog, role: "admin" | "it" | "staff", backendReportSourceIds: Set<string>) {
-  return role === "staff" && log.category === "Staff Submission" && Boolean(log.sourceId && backendReportSourceIds.has(log.sourceId));
+  return (
+    (log.severity === "Critical" || log.severity === "Warning") &&
+    (log.category === "System" || log.category === "IT Activity" || log.category === "Enterprise Activity" || log.action.toLowerCase().includes("alert"))
+  );
 }
 
 function shouldNotifyStaffAboutReport(report: IntakeReport, backendReportSourceIds: Set<string>) {
@@ -345,10 +337,9 @@ function toneFromSeverity(severity: LogSeverity): PortalNotificationTone {
   return "info";
 }
 
-function getLogTargetPath(role: "admin" | "it" | "staff") {
+function getLogTargetPath(role: "admin" | "it") {
   if (role === "admin") return routes.admin.systemLogs;
-  if (role === "it") return routes.it.systemLogs;
-  return routes.staff.systemLogs;
+  return routes.it.systemLogs;
 }
 
 function mergeLogs(primaryLogs: SystemLog[], secondaryLogs: SystemLog[]) {

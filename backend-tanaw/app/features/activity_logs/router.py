@@ -35,6 +35,11 @@ async def list_activity_logs(
     account: Annotated[Account, Depends(get_current_operational_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ActivityLogSummary]:
+    if account.role not in {AccountRole.ADMIN, AccountRole.IT}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or IT Personnel access required.",
+        )
     return await list_activity_logs_for_account(db, account)
 
 
@@ -115,7 +120,7 @@ async def activity_logs_websocket(
     async with AsyncSessionLocal() as db:
         account = await authenticate_websocket_account(db, token)
 
-    if account is None:
+    if account is None or account.role not in {AccountRole.ADMIN, AccountRole.IT}:
         await websocket.close(code=1008)
         return
 
@@ -140,7 +145,10 @@ async def activity_logs_websocket(
                 receive_task = asyncio.create_task(websocket.receive_text())
             async with AsyncSessionLocal() as db:
                 current_account = await authenticate_websocket_account(db, token)
-            if current_account is None:
+            if current_account is None or current_account.role not in {
+                AccountRole.ADMIN,
+                AccountRole.IT,
+            }:
                 await websocket.close(code=1008)
                 return
             if message == "ping":

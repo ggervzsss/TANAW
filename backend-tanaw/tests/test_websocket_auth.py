@@ -96,6 +96,19 @@ def active_it_account() -> Account:
     )
 
 
+def active_staff_account() -> Account:
+    return Account(
+        id="websocket-staff-account-1",
+        email="websocket-staff@example.com",
+        password_hash="unused-password-hash",
+        role=AccountRole.STAFF,
+        display_name="WebSocket Staff",
+        title="LGU Staff",
+        status=AccountStatus.ACTIVE,
+        activated_at=datetime.now(UTC),
+    )
+
+
 @pytest.mark.asyncio
 async def test_operational_websocket_closes_when_session_is_invalidated(
     monkeypatch: pytest.MonkeyPatch,
@@ -148,6 +161,33 @@ async def test_activity_log_websocket_closes_when_session_is_invalidated(
     websocket.send_text.assert_not_awaited()
     assert authenticate.await_count == 2
     manager.disconnect.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_activity_log_websocket_rejects_staff_accounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    websocket = MagicMock()
+    websocket.close = AsyncMock()
+    manager = SimpleNamespace(connect=AsyncMock(), disconnect=MagicMock())
+    monkeypatch.setattr(
+        activity_logs_router,
+        "receive_websocket_bearer_token",
+        AsyncMock(return_value="access-token"),
+    )
+    monkeypatch.setattr(
+        activity_logs_router,
+        "authenticate_websocket_account",
+        AsyncMock(return_value=active_staff_account()),
+    )
+    monkeypatch.setattr(activity_logs_router, "AsyncSessionLocal", AsyncSessionContext)
+    monkeypatch.setattr(activity_logs_router, "activity_log_manager", manager)
+
+    await activity_logs_router.activity_logs_websocket(cast(WebSocket, websocket))
+
+    websocket.close.assert_awaited_once_with(code=1008)
+    manager.connect.assert_not_awaited()
+    manager.disconnect.assert_not_called()
 
 
 @pytest.mark.asyncio
