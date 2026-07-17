@@ -163,7 +163,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setPendingPeriodCounts(pendingCounts);
     } catch (error) {
       setPendingPeriodCounts([]);
-      setLedgerError(error instanceof Error ? error.message : "Prepared counts have no canonical reporting period.");
+      setLedgerError(error instanceof Error ? error.message : "Prepared camera counts do not have a reporting month yet.");
     }
   }, []);
 
@@ -281,7 +281,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setDemo(resolved.demo || emptyDemo());
       setDemographicEvidence(resolved.demographicEvidence ?? null);
     } catch (error) {
-      notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+      notifyError(error instanceof Error ? error.message : "Unable to load the report details.");
     }
   };
 
@@ -292,7 +292,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
 
     if (!row.report.reportingPeriod) {
-      const message = "This ledger row has no canonical reporting period. Refresh it before preparing a report.";
+      const message = "This report does not have a reporting month yet. Refresh and try again.";
       setMetricsError(message);
       notifyError(message);
       return;
@@ -318,7 +318,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         reportId: resolved.id,
       });
     } catch (error) {
-      notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+      notifyError(error instanceof Error ? error.message : "Unable to load the report details.");
     }
   };
 
@@ -348,7 +348,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         notes: resolved.notes ?? "",
       });
     } catch (error) {
-      notifyError(error instanceof Error ? error.message : "Unable to load the immutable report detail.");
+      notifyError(error instanceof Error ? error.message : "Unable to load the report details.");
     }
   };
 
@@ -377,7 +377,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       checkReportingPeriod: true,
     });
     if (submitValidationError || !reportingPeriod) {
-      notifyError(submitValidationError ?? "No canonical reporting period is selected.");
+      notifyError(submitValidationError ?? "The reporting month is not ready yet.");
       setIsSubmitting(false);
       return;
     }
@@ -523,9 +523,9 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
-          <p className="mt-1 text-sm text-gray-500">Prepare the monthly report and review earlier submissions.</p>
-          {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
-          {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report ledger unavailable: {ledgerError}</p>}
+          <p className="mt-1 text-sm text-gray-500">Review camera counts, add optional demographics, and submit the monthly report.</p>
+          {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Camera counts could not be loaded: {metricsError}</p>}
+          {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report history could not be loaded: {ledgerError}</p>}
         </div>
       </div>
 
@@ -709,23 +709,24 @@ function buildLedgerRows({
         demographicEvidence: currentDemographicEvidence ?? undefined,
         notes: currentNotes,
       },
-      reportLabel: "Current Reporting Period",
-      reportDescription: "Live workspace",
-      statusLabel: "Current Reporting Period",
+      reportLabel: "Current Month",
+      reportDescription: "Ready to prepare",
+      statusLabel: "Not Submitted",
     },
   ];
 
   for (const counts of pendingCounts) {
     const pendingPeriod = reportingPeriodForPreparationCounts(counts);
+    if (Date.parse(pendingPeriod.startsAtUtc) > Date.now()) continue;
     if (pendingPeriod.periodId === currentPeriod?.periodId || pendingPeriods.has(pendingPeriod.periodId)) continue;
     pendingPeriods.add(pendingPeriod.periodId);
     rows.push({
       key: draftLedgerKey(pendingPeriod),
       kind: "pending",
       report: reportFromPendingCounts(counts),
-      reportLabel: "Pending Submission",
-      reportDescription: "Prepared counts",
-      statusLabel: "Pending Submission",
+      reportLabel: "Previous Month",
+      reportDescription: "Ready to prepare",
+      statusLabel: "Not Submitted",
     });
   }
 
@@ -735,12 +736,20 @@ function buildLedgerRows({
       kind: "history" as const,
       report,
       reportLabel: report.id,
-      reportDescription: report.syncStatus ? `Sync: ${report.syncStatus}` : "Saved report",
-      statusLabel: report.status,
+      reportDescription: "Submitted report",
+      statusLabel: reportStatusLabel(report.status),
     })),
   );
 
   return rows;
+}
+
+function reportStatusLabel(status: string) {
+  if (status === "Submitted" || status === "Resubmitted") return "For Review";
+  if (status === "Returned for Revision") return "Needs Changes";
+  if (status === "Consolidated") return "Included in Final Report";
+  if (status === "Accepted") return "Accepted";
+  return status;
 }
 
 function reportFromPendingCounts(counts: BackendSimulationPreparationCounts): ReportRecord {
@@ -877,7 +886,7 @@ async function resolveCentralReportDetail(report: ReportRecord): Promise<ReportR
   const detail = await readEnterpriseReport(report.centralReportId);
   const revision = detail.revisions.find((item) => item.reportRevisionId === detail.currentRevisionId);
   if (!revision || revision.localRevisionId !== report.localRevisionId) {
-    throw new Error("The immutable report detail does not match the selected history revision.");
+    throw new Error("This saved report could not be verified. Refresh report history and try again.");
   }
   const demo = demographicBreakdownFromDetail(revision.demographics);
   return {
@@ -905,7 +914,7 @@ function demographicBreakdownFromDetail(facts: EnterpriseReportDetail["revisions
     const field = fieldByValue[fact.value];
     if (!field) continue;
     if (seen.has(fact.value)) {
-      throw new Error(`The immutable report contains duplicate demographic evidence for ${fact.value}.`);
+      throw new Error(`This report contains duplicate demographic values for ${fact.value}.`);
     }
     seen.add(fact.value);
     demo[field] = String(fact.count);

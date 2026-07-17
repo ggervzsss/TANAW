@@ -17,7 +17,7 @@ describe("dashboard demographic evidence presentation", () => {
     expect(chart).not.toContain("over cap");
     expect(chart).not.toContain("remaining");
     expect(ledger).toContain("Camera estimate");
-    expect(ledger).toContain("Explicit operator facts");
+    expect(ledger).toContain("Included");
     expect(ledger).not.toContain("over cap");
     expect(ledger).not.toContain("remaining");
   });

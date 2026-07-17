@@ -32,7 +32,7 @@ describe("report audit actor presentation", () => {
       </QueryClientProvider>,
     );
 
-    expect(html).toContain("Actor not recorded");
+    expect(html).toContain("Staff member not recorded");
     expect(html).toContain("Role not recorded");
     expect(html).not.toContain("System actor");
   });

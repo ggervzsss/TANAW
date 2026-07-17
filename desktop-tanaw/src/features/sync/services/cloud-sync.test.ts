@@ -134,7 +134,7 @@ describe("canonical simulation preparation periods", () => {
       },
     });
 
-    await expect(prepareDesktopSimulationCounts("month:Asia/Manila:2026-06")).rejects.toThrow("No canonical reporting period");
+    await expect(prepareDesktopSimulationCounts("month:Asia/Manila:2026-06")).rejects.toThrow("reporting month is still being prepared");
     expect(prepareLocalSimulationCounts).not.toHaveBeenCalled();
   });
 });

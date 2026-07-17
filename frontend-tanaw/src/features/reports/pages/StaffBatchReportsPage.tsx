@@ -10,14 +10,14 @@ import { useEnterpriseReports, usePeriodCompliance, useReportingPeriods } from "
 import { createReminderIntents, finalizeReports, reportWorkflowQueryKey } from "@/shared/services/reporting";
 import type { FinalReportScopeType, FinalizeReportsCommand } from "@/shared/types";
 import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, ReportActionConfirmDialog, ReportReviewModal } from "../components";
-import { acceptedRevisionIds, buildComplianceRows, deriveBatchReportView } from "../utils/reportWorkflow";
+import { acceptedRevisionIds, actionableReportingPeriods, buildComplianceRows, defaultReportingPeriodId, deriveBatchReportView } from "../utils/reportWorkflow";
 
 export function StaffBatchReportsPage() {
   const queryClient = useQueryClient();
   const periodsQuery = useReportingPeriods();
-  const periods = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
+  const periods = useMemo(() => actionableReportingPeriods(periodsQuery.data ?? []), [periodsQuery.data]);
   const [requestedPeriodId, setRequestedPeriodId] = useState("");
-  const selectedPeriodId = periods.some((period) => period.reportingPeriodId === requestedPeriodId) ? requestedPeriodId : (periods[0]?.reportingPeriodId ?? "");
+  const selectedPeriodId = useMemo(() => defaultReportingPeriodId(periods, requestedPeriodId), [periods, requestedPeriodId]);
   const selectedPeriod = periods.find((period) => period.reportingPeriodId === selectedPeriodId) ?? null;
   const reportsQuery = useEnterpriseReports({ reportingPeriodId: selectedPeriodId || undefined }, Boolean(selectedPeriodId));
   const reports = useMemo(() => reportsQuery.data ?? [], [reportsQuery.data]);
@@ -67,7 +67,7 @@ export function StaffBatchReportsPage() {
 
   const finalizationMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedPeriod || !canFinalize) throw new Error("The selected scope is not ready for exact finalization.");
+      if (!selectedPeriod || !canFinalize) throw new Error("The selected reports are not ready for a final report.");
       const commandId = crypto.randomUUID();
       const revisionIds = acceptedRevisionIds(selectedReports);
       const command: FinalizeReportsCommand = {
@@ -90,9 +90,9 @@ export function StaffBatchReportsPage() {
       await queryClient.invalidateQueries({ queryKey: reportWorkflowQueryKey });
       setIsFinalizeConfirmOpen(false);
       setManualSelectedReportIds(new Set());
-      toast.success(`${acknowledgement.resource.reportCode} finalized as immutable version ${acknowledgement.resource.versionNumber}.`);
+      toast.success(`${acknowledgement.resource.reportCode} was created successfully.`);
     },
-    onError: (error) => toast.error(apiErrorMessage(error, "The exact report scope could not be finalized.")),
+    onError: (error) => toast.error(apiErrorMessage(error, "The final report could not be created.")),
   });
 
   const changeScope = (next: FinalReportScopeType) => {
@@ -115,14 +115,14 @@ export function StaffBatchReportsPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Batch Reports" description="Review enterprise submissions and create final reports." />
+      <PageHeader title="Enterprise Reports" description="Review each monthly submission, then create the official final report." />
 
       {loadError && <Notice tone="error">Reports could not be loaded. Please try again shortly.</Notice>}
       {periods.length === 0 && !periodsQuery.isLoading && <Notice tone="warning">Reporting periods are being prepared automatically. This page will refresh shortly.</Notice>}
       {selectedPeriod && isComplianceMissing && <Notice tone="warning">Submission tracking is being prepared for this period.</Notice>}
       {selectedPeriod && complianceQuery.isError && !isComplianceMissing && <Notice tone="error">Submission tracking could not be loaded.</Notice>}
 
-      <BatchReportsMetrics compliance={compliance} loadedReportCount={periodReports.length} />
+      <BatchReportsMetrics compliance={compliance} />
 
       <Panel className="mt-6 overflow-hidden">
         <BatchReportsToolbar
@@ -164,7 +164,7 @@ export function StaffBatchReportsPage() {
           rows={batchView.visibleRows}
           isLoading={complianceQuery.isLoading}
           selectedReportIds={selectedReportIds}
-          selectionLocked={scopeType !== "enterprise_selection"}
+          showSelection={scopeType === "enterprise_selection"}
           onToggleReport={toggleReport}
           onOpenReport={setSelectedReportId}
         />
@@ -185,9 +185,9 @@ export function StaffBatchReportsPage() {
             onCancel={() => setIsFinalizeConfirmOpen(false)}
             onConfirm={() => finalizationMutation.mutate()}
             details={[
-              { label: "Period", value: `${selectedPeriod.label} · ${selectedPeriod.naturalKey}` },
-              { label: "Scope", value: scopeType === "barangay" ? `Barangay · ${barangay}` : scopeType.replaceAll("_", " ") },
-              { label: "Selected reports", value: String(selectedReports.length) },
+              { label: "Reporting month", value: selectedPeriod.label },
+              { label: "Coverage", value: scopeLabel(scopeType, barangay) },
+              { label: "Reports included", value: String(selectedReports.length) },
               { label: "Status", value: completeScope ? "Ready" : "More reports are required" },
             ]}
           />
@@ -204,6 +204,12 @@ function Notice({ tone, children }: { tone: "error" | "warning"; children: React
 
 function safeIdempotencySegment(value: string) {
   return value.replace(/[^A-Za-z0-9._-]/g, "-");
+}
+
+function scopeLabel(scopeType: FinalReportScopeType, barangay: string) {
+  if (scopeType === "barangay") return barangay ? `Barangay ${barangay}` : "One barangay";
+  if (scopeType === "enterprise_selection") return "Selected enterprises";
+  return "All enterprises";
 }
 
 function isNotFound(error: unknown) {

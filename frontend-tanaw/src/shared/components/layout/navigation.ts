@@ -40,13 +40,13 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
     },
     {
       id: "batch-reports",
-      label: "Batch Reports",
+      label: "Enterprise Reports",
       path: routes.staff.batchReports,
       icon: Layers,
     },
     {
       id: "final-reports-audit",
-      label: "Final Reports Audit",
+      label: "Final Reports",
       path: routes.staff.finalReportsAudit,
       icon: FileCheck2,
     },

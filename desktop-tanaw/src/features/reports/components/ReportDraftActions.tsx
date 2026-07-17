@@ -27,6 +27,7 @@ export function ReportDraftActions({ activeReport, isReadOnly, metricsError, val
         {activeReport?.status === "Returned for Revision" ? <RotateCcw size={14} /> : <Send size={14} />}
         {activeReport?.status === "Returned for Revision" ? "Resubmit Report" : "Submit Report"}
       </button>
+      {validationError && !metricsError && <p className="mt-2 text-center text-[10px] leading-4 font-semibold text-amber-700">{validationError}</p>}
     </div>
   );
 }

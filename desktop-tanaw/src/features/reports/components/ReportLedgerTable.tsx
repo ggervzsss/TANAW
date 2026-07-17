@@ -40,8 +40,8 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
     <Card className="flex flex-col overflow-hidden rounded-sm border border-gray-200 shadow-sm lg:col-span-2">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white p-5">
         <div>
-          <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Submission Ledger</h3>
-          <p className="mt-1 text-xs text-gray-500">Select a row to load its data into the workspace, or use View to open the DOT form preview.</p>
+          <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Report History</h3>
+          <p className="mt-1 text-xs text-gray-500">Choose a month to prepare its report or view an earlier submission.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <label className="relative block">
@@ -52,7 +52,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search reports"
-              className="h-9 w-44 rounded-sm border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] outline-none transition-colors focus:border-[#065f46]"
+              className="h-9 w-44 rounded-sm border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] transition-colors outline-none focus:border-[#065f46]"
             />
           </label>
           <label>
@@ -60,7 +60,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              className="h-9 rounded-sm border border-gray-200 bg-white px-3 text-xs font-semibold text-[#111827] outline-none transition-colors focus:border-[#065f46]"
+              className="h-9 rounded-sm border border-gray-200 bg-white px-3 text-xs font-semibold text-[#111827] transition-colors outline-none focus:border-[#065f46]"
             >
               <option value="All">All statuses</option>
               {statusOptions.map((status) => (
@@ -79,7 +79,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
             <tr>
               <th className="border-b border-gray-200 px-5 py-3">Report</th>
               <th className="border-b border-gray-200 px-5 py-3">Period</th>
-              <th className="border-b border-gray-200 px-5 py-3 text-right">Unique Pax</th>
+              <th className="border-b border-gray-200 px-5 py-3 text-right">Visitor Estimate</th>
               <th className="border-b border-gray-200 px-5 py-3">Status</th>
               <th className="border-b border-gray-200 px-5 py-3 text-right">Actions</th>
             </tr>
@@ -160,10 +160,10 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
 }
 
 function badgeVariant(row: ReportLedgerRow) {
-  if (row.kind === "current") return "success";
+  if (row.kind === "current") return "default";
   if (row.kind === "pending") return "warning";
-  if (row.report.status === "Consolidated") return "success";
-  if (row.report.status === "Submitted" || row.report.status === "Resubmitted") return "info";
-  if (row.report.status === "Returned for Revision") return "warning";
+  if (row.statusLabel === "Accepted" || row.statusLabel === "Included in Final Report") return "success";
+  if (row.statusLabel === "For Review") return "info";
+  if (row.statusLabel === "Needs Changes") return "warning";
   return "default";
 }

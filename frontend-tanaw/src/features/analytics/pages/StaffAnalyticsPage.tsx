@@ -7,14 +7,14 @@ import { PageHeader } from "@/shared/components/layout";
 import { EmptyState, PageMotion, stagger } from "@/shared/components/ui";
 import { useEnterpriseReports, usePeriodCompliance, useReportingPeriods } from "@/shared/hooks/useReportWorkflow";
 import { formatDecimal } from "@/features/reports/utils/decimal";
-import { officialAnalyticsReports } from "@/features/reports/utils/reportWorkflow";
+import { actionableReportingPeriods, defaultReportingPeriodId, officialAnalyticsReports } from "@/features/reports/utils/reportWorkflow";
 import { getBarangayCoverageRows, getComparisonPeriod, getEnterpriseMetricRows, getTrendLabel, sumMetric, type BarangayCoverageRow } from "../utils/reportAnalytics";
 
 export function StaffAnalyticsPage() {
   const periodsQuery = useReportingPeriods();
-  const periods = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
+  const periods = useMemo(() => actionableReportingPeriods(periodsQuery.data ?? []), [periodsQuery.data]);
   const [requestedPeriodId, setRequestedPeriodId] = useState("");
-  const selectedPeriodId = periods.some((period) => period.reportingPeriodId === requestedPeriodId) ? requestedPeriodId : (periods[0]?.reportingPeriodId ?? "");
+  const selectedPeriodId = useMemo(() => defaultReportingPeriodId(periods, requestedPeriodId), [periods, requestedPeriodId]);
   const comparisonPeriod = getComparisonPeriod(periods, selectedPeriodId);
   const reportsQuery = useEnterpriseReports({ reportingPeriodId: selectedPeriodId || undefined }, Boolean(selectedPeriodId));
   const comparisonReportsQuery = useEnterpriseReports({ reportingPeriodId: comparisonPeriod?.reportingPeriodId }, Boolean(comparisonPeriod));
@@ -31,7 +31,7 @@ export function StaffAnalyticsPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Dashboard" description="Summary of accepted enterprise reports." />
+      <PageHeader title="Dashboard" description="A clear summary of accepted reports for the selected month." />
 
       {periods.length === 0 && !periodsQuery.isLoading && (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Reporting periods are being prepared automatically. This page will refresh shortly.</p>
@@ -43,29 +43,23 @@ export function StaffAnalyticsPage() {
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
         <MetricCard
           color="#065f46"
-          label="Total Aggregated Entries"
+          label="Total Entries"
           value={formatDecimal(sumMetric(activeReports, "entries"))}
           foot={getTrendLabel(activeReports, comparisonPeriod, comparisonReports)}
           footClassName="text-tgreen-light"
           icon={Activity}
         />
-        <MetricCard
-          color="#2563eb"
-          label="Sum of Venue Estimates"
-          value={formatDecimal(sumMetric(activeReports, "unique_visitor_estimate"))}
-          foot="Site estimates; not distinct citywide people"
-          icon={Users}
-        />
+        <MetricCard color="#2563eb" label="Visitor Estimate" value={formatDecimal(sumMetric(activeReports, "unique_visitor_estimate"))} foot="Combined estimate from accepted reports" icon={Users} />
         <MetricCard
           color="#f59e0b"
-          label="Accepted Report Coverage"
+          label="Accepted Reports"
           value={expectedCount === null ? `${acceptedCount} / —` : `${acceptedCount} / ${expectedCount}`}
-          foot={compliance ? "From frozen obligations" : "Compliance unavailable"}
+          foot={compliance ? "Accepted out of expected reports" : "Submission status unavailable"}
           footClassName="text-yellow-600"
           icon={ClipboardCheck}
         />
         <div className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <span className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Reporting Period</span>
+          <span className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Reporting Month</span>
           <select
             value={selectedPeriodId}
             onChange={(event) => setRequestedPeriodId(event.target.value)}
@@ -75,7 +69,7 @@ export function StaffAnalyticsPage() {
             {periods.length === 0 && <option value="">Preparing periods…</option>}
             {periods.map((period) => (
               <option key={period.reportingPeriodId} value={period.reportingPeriodId}>
-                {period.label} · {period.status}
+                {period.label}
               </option>
             ))}
           </select>
@@ -84,13 +78,13 @@ export function StaffAnalyticsPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="col-span-2 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="mb-1 text-sm font-semibold text-gray-900">Official Enterprise Traffic Comparison</h3>
+          <h3 className="mb-1 text-sm font-semibold text-gray-900">Enterprise Traffic</h3>
           <p className="mb-5 text-[11px] text-slate-500">Accepted totals by enterprise.</p>
           <div className="h-72">
             {reportsQuery.isLoading ? (
-              <EmptyState icon={Activity} title="Loading official report facts" description="Following all keyset pages from the v2 endpoint." minHeightClassName="min-h-72" />
+              <EmptyState icon={Activity} title="Loading report totals" description="Preparing the accepted reports for this month." minHeightClassName="min-h-72" />
             ) : chartData.length === 0 ? (
-              <EmptyState icon={Activity} title="No official accepted facts" description="Pending and returned submissions are intentionally excluded." minHeightClassName="min-h-72" />
+              <EmptyState icon={Activity} title="No accepted reports yet" description="Enterprise totals will appear here after reports are accepted." minHeightClassName="min-h-72" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
@@ -100,7 +94,7 @@ export function StaffAnalyticsPage() {
                   <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} contentStyle={{ backgroundColor: "#1f2937", color: "#fff", border: "none", borderRadius: "8px", fontSize: "12px" }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
                   <Bar dataKey="entries" name="Total Entries" fill="#065f46" radius={[2, 2, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="unique" name="Venue-local visitor estimate" fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="unique" name="Visitor Estimate" fill="#3b82f6" radius={[2, 2, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -111,9 +105,9 @@ export function StaffAnalyticsPage() {
                 <thead className="bg-slate-50 text-[10px] tracking-wide text-slate-500 uppercase">
                   <tr>
                     <th className="px-3 py-2">Enterprise</th>
-                    <th className="px-3 py-2">Exact entries</th>
-                    <th className="px-3 py-2">Exact venue estimate</th>
-                    <th className="px-3 py-2">Official site reports</th>
+                    <th className="px-3 py-2">Entries</th>
+                    <th className="px-3 py-2">Visitor estimate</th>
+                    <th className="px-3 py-2">Accepted reports</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -132,12 +126,14 @@ export function StaffAnalyticsPage() {
         </section>
 
         <section className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="mb-6 text-sm font-semibold text-gray-900">Frozen obligation coverage</h3>
+          <h3 className="mb-6 text-sm font-semibold text-gray-900">Submission Status by Barangay</h3>
           <div className="max-h-75 space-y-4 overflow-y-auto pr-1">
             {coverageRows.map((row) => (
               <BarangayCoverageItem key={row.barangay} row={row} />
             ))}
-            {complianceQuery.isLoading && <EmptyState icon={ClipboardCheck} title="Loading compliance" description="Fetching the frozen obligation snapshot." minHeightClassName="min-h-45" />}
+            {complianceQuery.isLoading && (
+              <EmptyState icon={ClipboardCheck} title="Loading submission status" description="Preparing the report counts for each barangay." minHeightClassName="min-h-45" />
+            )}
             {!complianceQuery.isLoading && coverageRows.length === 0 && (
               <EmptyState icon={ClipboardCheck} title="Tracking not ready" description="Period tracking is still being prepared." minHeightClassName="min-h-45" />
             )}
@@ -154,11 +150,11 @@ function BarangayCoverageItem({ row }: { row: BarangayCoverageRow }) {
     <div className={`rounded-lg border p-3.5 ${complete ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
       <div className="flex items-center justify-between">
         <span className={`text-xs font-bold tracking-wide uppercase ${complete ? "text-emerald-800" : "text-amber-800"}`}>{row.barangay}</span>
-        <span className="font-mono text-[10px] text-gray-500">{row.total} eligible</span>
+        <span className="font-mono text-[10px] text-gray-500">{row.total} expected</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <CoverageValue label="Accepted" value={row.accepted} tone="emerald" />
-        <CoverageValue label="Awaiting" value={row.awaitingAcceptance} tone="amber" />
+        <CoverageValue label="Pending" value={row.awaitingAcceptance} tone="amber" />
       </div>
     </div>
   );

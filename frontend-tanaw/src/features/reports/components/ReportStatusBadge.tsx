@@ -3,7 +3,7 @@ import { readableToken } from "../utils/reportWorkflow";
 
 type ReportBadgeStatus = ReportWorkflowState | ComplianceStatus | "unknown" | "eligible" | "exempt" | "ineligible" | "pending" | "ready" | "failed" | "current" | "superseded";
 
-export function ReportStatusBadge({ status }: { status: ReportBadgeStatus }) {
+export function ReportStatusBadge({ status, label }: { status: ReportBadgeStatus; label?: string }) {
   const classes =
     {
       submitted: "border-amber-200 bg-amber-50 text-amber-700",
@@ -21,5 +21,5 @@ export function ReportStatusBadge({ status }: { status: ReportBadgeStatus }) {
       current: "border-emerald-200 bg-emerald-50 text-emerald-700",
       superseded: "border-slate-200 bg-slate-50 text-slate-600",
     }[status] ?? "border-gray-200 bg-gray-50 text-gray-600";
-  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide uppercase ${classes}`}>{readableToken(status)}</span>;
+  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide uppercase ${classes}`}>{label ?? readableToken(status)}</span>;
 }

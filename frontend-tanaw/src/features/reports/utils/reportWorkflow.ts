@@ -1,4 +1,4 @@
-import type { EnterpriseReportListItem, FinalReportScopeType, ObligationResource, PeriodComplianceResource, ReportMetricFactResource } from "@/shared/types";
+import type { EnterpriseReportListItem, FinalReportScopeType, ObligationResource, PeriodComplianceResource, ReportMetricFactResource, ReportingPeriodDiscoveryResource } from "@/shared/types";
 
 export type ComplianceRow = {
   obligation: ObligationResource;
@@ -6,6 +6,52 @@ export type ComplianceRow = {
   enterpriseLabel: string;
   siteLabel: string;
 };
+
+export type ReportPresentationStatus = {
+  badgeStatus: "not_submitted" | "submitted" | "returned" | "accepted" | "consolidated" | "unknown" | "ineligible";
+  label: string;
+};
+
+export function reportPresentationStatus({ obligation, report }: ComplianceRow): ReportPresentationStatus {
+  if (obligation.eligibilityStatus === "unknown") return { badgeStatus: "unknown", label: "Needs setup" };
+  if (obligation.eligibilityStatus === "exempt" || obligation.eligibilityStatus === "ineligible") {
+    return { badgeStatus: "ineligible", label: "Not required" };
+  }
+  if (!report || obligation.complianceStatus === "not_submitted" || obligation.complianceStatus === null) {
+    return { badgeStatus: "not_submitted", label: "Not submitted" };
+  }
+  if (report.workflowState === "submitted") return { badgeStatus: "submitted", label: "For review" };
+  if (report.workflowState === "returned") return { badgeStatus: "returned", label: "Needs changes" };
+  if (report.workflowState === "consolidated") return { badgeStatus: "consolidated", label: "Included in final report" };
+  return { badgeStatus: "accepted", label: "Accepted" };
+}
+
+export function actionableReportingPeriods(periods: ReportingPeriodDiscoveryResource[], now = new Date()) {
+  const nowTimestamp = now.getTime();
+  const hasOpenPeriod = periods.some((period) => period.status === "open");
+  return periods.filter((period) => {
+    const startsAt = Date.parse(period.startsAt);
+    const endsAt = Date.parse(period.endsAt);
+    const isCurrentMonth = Number.isFinite(nowTimestamp) && Number.isFinite(startsAt) && Number.isFinite(endsAt) && startsAt <= nowTimestamp && nowTimestamp < endsAt;
+    return (!hasOpenPeriod && isCurrentMonth) || period.status === "open" || hasReportingActivity(period);
+  });
+}
+
+export function defaultReportingPeriodId(periods: ReportingPeriodDiscoveryResource[], requestedPeriodId: string, now = new Date()) {
+  if (periods.some((period) => period.reportingPeriodId === requestedPeriodId)) return requestedPeriodId;
+  const openPeriod = periods.find((period) => period.status === "open");
+  if (openPeriod) return openPeriod.reportingPeriodId;
+  const activePeriod = periods.find(hasReportingActivity);
+  if (activePeriod) return activePeriod.reportingPeriodId;
+  const nowTimestamp = now.getTime();
+  const currentPeriod = periods.find((period) => Date.parse(period.startsAt) <= nowTimestamp && nowTimestamp < Date.parse(period.endsAt));
+  return currentPeriod?.reportingPeriodId ?? periods[0]?.reportingPeriodId ?? "";
+}
+
+function hasReportingActivity(period: ReportingPeriodDiscoveryResource) {
+  const summary = period.compliance;
+  return summary.submitted + summary.returned + summary.accepted + summary.consolidated > 0;
+}
 
 export function buildComplianceRows(compliance: PeriodComplianceResource, reports: EnterpriseReportListItem[]): ComplianceRow[] {
   const reportsById = new Map(reports.map((report) => [report.enterpriseReportId, report]));

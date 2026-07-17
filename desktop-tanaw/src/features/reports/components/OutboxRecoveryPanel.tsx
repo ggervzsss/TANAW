@@ -22,10 +22,8 @@ export function OutboxRecoveryPanel({ error, items, retryingItemId, onRefresh, o
         <div className="flex gap-3">
           <AlertTriangle className="mt-0.5 text-amber-700" size={18} aria-hidden="true" />
           <div>
-            <h3 className="text-sm font-bold tracking-wider text-amber-950 uppercase">Report delivery recovery</h3>
-            <p className="mt-1 max-w-3xl text-xs leading-5 text-amber-900">
-              These exact official revisions remain safely stored on this device. Review the failure before deliberately requeuing it; official submissions cannot be discarded.
-            </p>
+            <h3 className="text-sm font-bold tracking-wider text-amber-950 uppercase">Reports Waiting to Send</h3>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-amber-900">These reports are safely stored on this device but have not reached the staff portal yet.</p>
           </div>
         </div>
         <button type="button" onClick={onRefresh} className="flex items-center gap-2 text-xs font-semibold text-amber-800 hover:text-amber-950">
@@ -34,7 +32,7 @@ export function OutboxRecoveryPanel({ error, items, retryingItemId, onRefresh, o
         </button>
       </div>
 
-      {error && <p className="border-b border-amber-200 px-5 py-3 text-xs font-semibold text-red-700">Recovery status unavailable: {error}</p>}
+      {error && <p className="border-b border-amber-200 px-5 py-3 text-xs font-semibold text-red-700">Delivery status could not be checked: {error}</p>}
 
       <div className="divide-y divide-amber-200">
         {items.map((item) => {
@@ -44,17 +42,19 @@ export function OutboxRecoveryPanel({ error, items, retryingItemId, onRefresh, o
             <section key={item.outbox_item_id} className="grid gap-4 bg-white/70 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-mono text-xs font-bold text-[#111827]">{item.report_id}</p>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${item.status === "dead_letter" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
-                    {item.status === "dead_letter" ? "Intervention required" : "Retry scheduled"}
+                  <p className="text-xs font-bold text-[#111827]">Report {item.report_id}</p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase ${item.status === "dead_letter" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}
+                  >
+                    {item.status === "dead_letter" ? "Needs attention" : "Will retry"}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-gray-600">
-                  Revision {item.revision_number} · {item.attempt_count.toLocaleString()} recorded attempt{item.attempt_count === 1 ? "" : "s"}
+                  {item.attempt_count.toLocaleString()} send attempt{item.attempt_count === 1 ? "" : "s"}
                 </p>
                 <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                   <div>
-                    <dt className="font-semibold text-gray-500">Failure class</dt>
+                    <dt className="font-semibold text-gray-500">Issue type</dt>
                     <dd className="mt-0.5 wrap-break-word text-gray-900">{item.last_error_class ?? "Not recorded"}</dd>
                   </div>
                   <div>
@@ -70,7 +70,7 @@ export function OutboxRecoveryPanel({ error, items, retryingItemId, onRefresh, o
 
               <div className="self-center">
                 <label htmlFor={`requeue-reason-${item.outbox_item_id}`} className="text-xs font-semibold text-gray-700">
-                  Operator reason for retry
+                  Note before retrying
                 </label>
                 <textarea
                   id={`requeue-reason-${item.outbox_item_id}`}
@@ -87,7 +87,7 @@ export function OutboxRecoveryPanel({ error, items, retryingItemId, onRefresh, o
                   onClick={() => onRetry(item, reason.trim())}
                   className="mt-2 w-full rounded-sm bg-amber-800 px-3 py-2 text-xs font-bold tracking-wider text-white uppercase hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isRetrying ? "Requeuing…" : "Requeue exact revision"}
+                  {isRetrying ? "Retrying…" : "Retry Sending"}
                 </button>
               </div>
             </section>

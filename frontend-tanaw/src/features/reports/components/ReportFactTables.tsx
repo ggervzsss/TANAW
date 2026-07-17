@@ -4,65 +4,73 @@ import { readableToken } from "../utils/reportWorkflow";
 
 export function ReportMetricTable({ report }: { report: EnterpriseReportDetail }) {
   const revision = report.revisions.find((item) => item.reportRevisionId === report.currentRevisionId) ?? report.revisions.find((item) => item.isCurrent);
-  if (!revision) return <EvidenceUnavailable message="The authoritative current revision was not returned." />;
+  if (!revision) return <EvidenceUnavailable message="The submitted report details are unavailable." />;
 
   return (
     <div className="space-y-5">
       <section>
-        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Recorded metric facts</h3>
+        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Report totals</h3>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-[10px] tracking-wide text-slate-500 uppercase">
               <tr>
-                <th className="px-4 py-3">Definition</th>
-                <th className="px-4 py-3">Recorded value</th>
-                <th className="px-4 py-3">Provenance</th>
-                <th className="px-4 py-3">Quality</th>
-                <th className="px-4 py-3">Coverage</th>
+                <th className="px-4 py-3">Measure</th>
+                <th className="px-4 py-3 text-right">Value</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {revision.metrics.map((metric) => (
                 <tr key={metric.metricFactId}>
-                  <td className="px-4 py-3 font-semibold">
-                    {readableToken(metric.definition)} <span className="font-mono text-[10px] text-slate-400">v{metric.definitionVersion}</span>
+                  <td className="px-4 py-3 font-semibold">{metricLabel(metric.definition)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold">
+                    {formatDecimal(metric.value)} {readableToken(metric.unit)}
                   </td>
-                  <td className="px-4 py-3 font-mono font-bold">{formatDecimal(metric.value)} {metric.unit}</td>
-                  <td className="px-4 py-3">{readableToken(metric.provenance)}</td>
-                  <td className="px-4 py-3">{readableToken(metric.quality)}</td>
-                  <td className="px-4 py-3">{coverageText(metric.coverage)}</td>
                 </tr>
               ))}
-              {revision.metrics.length === 0 && <EmptyTableRow colSpan={5} text="No metric facts were recorded for this revision." />}
+              {revision.metrics.length === 0 && <EmptyTableRow colSpan={2} text="No totals were submitted." />}
             </tbody>
           </table>
         </div>
       </section>
 
       <section>
-        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Recorded demographic facts</h3>
+        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Demographics</h3>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-[10px] tracking-wide text-slate-500 uppercase">
-              <tr><th className="px-4 py-3">Dimension</th><th className="px-4 py-3">Value</th><th className="px-4 py-3">Count</th><th className="px-4 py-3">Percentage</th><th className="px-4 py-3">Evidence</th></tr>
+              <tr>
+                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3 text-right">Count</th>
+                <th className="px-4 py-3 text-right">Share</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {revision.demographics.map((fact) => (
                 <tr key={fact.demographicFactId}>
-                  <td className="px-4 py-3 font-semibold">{readableToken(fact.dimension)}</td>
-                  <td className="px-4 py-3">{fact.value}</td>
-                  <td className="px-4 py-3 font-mono">{fact.count.toLocaleString()}</td>
-                  <td className="px-4 py-3 font-mono">{fact.percentage === null ? "Not recorded" : `${formatDecimal(fact.percentage)}%`}</td>
-                  <td className="px-4 py-3">{readableToken(fact.provenance)} · {readableToken(fact.quality)}</td>
+                  <td className="px-4 py-3 font-semibold">{fact.value}</td>
+                  <td className="px-4 py-3 text-right font-mono">{fact.count.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-mono">{fact.percentage === null ? "—" : `${formatDecimal(fact.percentage)}%`}</td>
                 </tr>
               ))}
-              {revision.demographics.length === 0 && <EmptyTableRow colSpan={5} text="No demographic facts were recorded; TANAW does not estimate missing values." />}
+              {revision.demographics.length === 0 && <EmptyTableRow colSpan={3} text="No demographics were submitted." />}
             </tbody>
           </table>
         </div>
       </section>
     </div>
   );
+}
+
+function metricLabel(definition: string) {
+  const knownLabels: Record<string, string> = {
+    entries_count: "Entries",
+    exits_count: "Exits",
+    peak_occupancy: "Peak occupancy",
+    visitor_estimate: "Visitor estimate",
+    total_visitors: "Total visitors",
+  };
+  const readable = knownLabels[definition] ?? readableToken(definition);
+  return readable.charAt(0).toUpperCase() + readable.slice(1);
 }
 
 export function FinalSnapshotFactTable({ report }: { report: FinalReportDetail }) {
@@ -70,46 +78,50 @@ export function FinalSnapshotFactTable({ report }: { report: FinalReportDetail }
   return (
     <div className="space-y-5">
       <section>
-        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Immutable consolidated metric facts</h3>
+        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Final totals</h3>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-[10px] tracking-wide text-slate-500 uppercase">
-              <tr><th className="px-4 py-3">Definition</th><th className="px-4 py-3">Recorded value</th><th className="px-4 py-3">Aggregation</th><th className="px-4 py-3">Quality</th><th className="px-4 py-3">Source facts</th></tr>
+              <tr>
+                <th className="px-4 py-3">Measure</th>
+                <th className="px-4 py-3 text-right">Value</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {version.metrics.map((metric) => (
                 <tr key={metric.metricFactId}>
-                  <td className="px-4 py-3 font-semibold">{readableToken(metric.definition)} <span className="font-mono text-[10px] text-slate-400">v{metric.definitionVersion}</span></td>
-                  <td className="px-4 py-3 font-mono font-bold">{formatDecimal(metric.value)} {metric.unit}</td>
-                  <td className="px-4 py-3">{readableToken(metric.aggregationMethod)}</td>
-                  <td className="px-4 py-3">{readableToken(metric.quality)}</td>
-                  <td className="px-4 py-3 font-mono">{metric.sourceFactCount}</td>
+                  <td className="px-4 py-3 font-semibold">{metricLabel(metric.definition)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-bold">
+                    {formatDecimal(metric.value)} {readableToken(metric.unit)}
+                  </td>
                 </tr>
               ))}
-              {version.metrics.length === 0 && <EmptyTableRow colSpan={5} text="No consolidated metric facts were recorded." />}
+              {version.metrics.length === 0 && <EmptyTableRow colSpan={2} text="No totals are available." />}
             </tbody>
           </table>
         </div>
       </section>
 
       <section>
-        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Immutable consolidated demographic facts</h3>
+        <h3 className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">Demographics</h3>
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-[10px] tracking-wide text-slate-500 uppercase">
-              <tr><th className="px-4 py-3">Dimension</th><th className="px-4 py-3">Value</th><th className="px-4 py-3">Count</th><th className="px-4 py-3">Percentage</th><th className="px-4 py-3">Evidence</th></tr>
+              <tr>
+                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3 text-right">Count</th>
+                <th className="px-4 py-3 text-right">Share</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {version.demographics.map((fact) => (
                 <tr key={fact.demographicFactId}>
-                  <td className="px-4 py-3 font-semibold">{readableToken(fact.dimension)}</td>
-                  <td className="px-4 py-3">{fact.value}</td>
-                  <td className="px-4 py-3 font-mono">{fact.count.toLocaleString()}</td>
-                  <td className="px-4 py-3 font-mono">{fact.percentage === null ? "Not recorded" : `${formatDecimal(fact.percentage)}%`}</td>
-                  <td className="px-4 py-3">{readableToken(fact.quality)} · {fact.sourceFactCount} source facts</td>
+                  <td className="px-4 py-3 font-semibold">{fact.value}</td>
+                  <td className="px-4 py-3 text-right font-mono">{fact.count.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-mono">{fact.percentage === null ? "—" : `${formatDecimal(fact.percentage)}%`}</td>
                 </tr>
               ))}
-              {version.demographics.length === 0 && <EmptyTableRow colSpan={5} text="No demographic facts exist in this immutable version." />}
+              {version.demographics.length === 0 && <EmptyTableRow colSpan={3} text="No demographics were included." />}
             </tbody>
           </table>
         </div>
@@ -118,16 +130,16 @@ export function FinalSnapshotFactTable({ report }: { report: FinalReportDetail }
   );
 }
 
-function coverageText(coverage: { evidenceStatus: "recorded" | "not_recorded"; coverageRatio: number | null; monitoredSeconds: number | null; expectedSeconds: number | null; gapCount: number | null }) {
-  if (coverage.evidenceStatus === "not_recorded") return "Not recorded";
-  const ratio = coverage.coverageRatio === null ? "ratio unavailable" : `${(coverage.coverageRatio * 100).toFixed(1)}%`;
-  return `${ratio} · ${coverage.monitoredSeconds ?? "?"}/${coverage.expectedSeconds ?? "?"} sec · ${coverage.gapCount ?? "?"} gaps`;
-}
-
 function EvidenceUnavailable({ message }: { message: string }) {
   return <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{message}</p>;
 }
 
 function EmptyTableRow({ colSpan, text }: { colSpan: number; text: string }) {
-  return <tr><td colSpan={colSpan} className="px-4 py-6 text-center text-slate-500">{text}</td></tr>;
+  return (
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-6 text-center text-slate-500">
+        {text}
+      </td>
+    </tr>
+  );
 }

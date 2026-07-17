@@ -7,7 +7,7 @@ describe("ReportAuditTrail", () => {
   it("shows an unavailable state without inventing an actor or timestamp", () => {
     const markup = renderToStaticMarkup(<ReportAuditTrail activeReport={report()} />);
 
-    expect(markup).toContain("Durable server or ledger audit events are not available");
+    expect(markup).toContain("No review history is available");
     expect(markup).not.toContain("Enterprise User");
     expect(markup).not.toContain("LGU Staff");
     expect(markup).not.toContain("Jul 01, 2026");

@@ -56,12 +56,12 @@ export function ReportDraftPanel({
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodField
-          description={isCurrentReport ? "TANAW selects this automatically." : "Saved with this report."}
+          description={isCurrentReport ? "Selected automatically from your camera records." : "The month saved with this report."}
           isLoading={isPeriodChanging}
-          label={isCurrentReport ? "Current Reporting Period" : "Report Period"}
+          label={isCurrentReport ? "Reporting Month" : "Report Month"}
           period={period}
         />
-        <SystemLockedMetrics demo={demo} demographicEvidence={demographicEvidence} metrics={metrics} />
+        <SystemLockedMetrics metrics={metrics} />
         <DemographicsBreakdown
           demo={demo}
           demographicEvidence={demographicEvidence}

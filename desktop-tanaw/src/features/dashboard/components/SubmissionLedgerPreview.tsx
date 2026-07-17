@@ -28,12 +28,12 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Preview</h3>
-            <InfoTooltip content="Recent DOT report records available for review or export.">
+            <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Recent Reports</h3>
+            <InfoTooltip content="Open a recently submitted monthly report.">
               <Info size={14} className="text-gray-400 transition-colors hover:text-[#065f46] dark:text-slate-500 dark:hover:text-emerald-300" />
             </InfoTooltip>
           </div>
-          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Submission Ledger records from local desktop reports.</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Your most recent monthly submissions.</p>
         </div>
         <FileText size={18} className="text-[#065f46] dark:text-emerald-300" />
       </div>
@@ -52,7 +52,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
                   <p className="font-mono text-xs font-bold text-[#065f46] dark:text-emerald-300">{report.id}</p>
                   <h4 className="mt-2 text-base font-bold text-[#111827] dark:text-slate-100">{report.period ?? report.date}</h4>
                 </div>
-                <Badge variant={report.status === "Consolidated" ? "success" : report.status === "Returned for Revision" ? "warning" : "info"}>{report.status}</Badge>
+                <Badge variant={report.status === "Consolidated" ? "success" : report.status === "Returned for Revision" ? "warning" : "info"}>{reportStatusLabel(report.status)}</Badge>
               </div>
               <div className="mt-5 grid grid-cols-2 gap-3 text-xs">
                 <div>
@@ -64,7 +64,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
                   <p className="mt-1 font-semibold text-gray-600 dark:text-slate-200">{evidenceLabel(report)}</p>
                 </div>
               </div>
-              <p className="mt-4 text-[11px] font-bold tracking-wider text-gray-400 uppercase dark:text-slate-400">Open DOT Preview</p>
+              <p className="mt-4 text-[11px] font-bold tracking-wider text-gray-400 uppercase dark:text-slate-400">Open Report</p>
             </button>
           ) : (
             <div
@@ -75,7 +75,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
                 <p className="font-mono text-xs font-bold text-slate-400 dark:text-slate-600">EMPTY SLOT</p>
                 <h4 className="mt-2 text-base font-bold text-slate-500 dark:text-slate-300">No report yet</h4>
               </div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Submitted ledger records will appear here when available.</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Submitted reports will appear here.</p>
             </div>
           ),
         )}
@@ -87,7 +87,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
           disabled={currentPage === 0}
           onClick={() => setPage((value) => Math.max(0, value - 1))}
           className="rounded-sm border border-gray-200 p-1 text-gray-500 transition hover:text-[#065f46] disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-300"
-          aria-label="Previous submission ledger preview page"
+          aria-label="Previous recent reports page"
         >
           <ChevronLeft size={16} />
         </button>
@@ -99,7 +99,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
           disabled={currentPage >= maxPage}
           onClick={() => setPage((value) => Math.min(maxPage, value + 1))}
           className="rounded-sm border border-gray-200 p-1 text-gray-500 transition hover:text-[#065f46] disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-300"
-          aria-label="Next submission ledger preview page"
+          aria-label="Next recent reports page"
         >
           <ChevronRight size={16} />
         </button>
@@ -110,7 +110,14 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
 
 function evidenceLabel(report: ReportRecord) {
   const status = getDemographicEvidenceStatus(report.demo ?? emptyDemo());
-  if (status.validationMessage) return "Invalid facts";
+  if (status.validationMessage) return "Needs correction";
   if (!status.hasAnyValue) return "Not provided";
-  return report.demographicEvidence ? "Explicit operator facts" : "Evidence not confirmed";
+  return report.demographicEvidence ? "Included" : "Not confirmed";
+}
+
+function reportStatusLabel(status: string) {
+  if (status === "Submitted" || status === "Resubmitted") return "For Review";
+  if (status === "Returned for Revision") return "Needs Changes";
+  if (status === "Consolidated") return "Included in Final Report";
+  return status;
 }

@@ -38,9 +38,9 @@ describe("canonical reporting periods", () => {
   });
 
   it.each([
-    [{ ...JUNE, period_id: undefined }, "No canonical reporting period"],
-    [{ ...JUNE, period_id: "June 2026" }, "Expected month:Asia/Manila:YYYY-MM"],
-    [{ ...JUNE, starts_at_utc: undefined }, "missing its exact UTC source window"],
+    [{ ...JUNE, period_id: undefined }, "reporting month is still being prepared"],
+    [{ ...JUNE, period_id: "June 2026" }, "reporting month could not be recognized"],
+    [{ ...JUNE, starts_at_utc: undefined }, "reporting month is incomplete"],
     [{ ...JUNE, ends_at_utc: "2026-07-31T16:00:00Z" }, "does not match the exact Asia/Manila calendar boundary"],
   ])("blocks a missing or invalid canonical period: %#", (source, message) => {
     expect(() => canonicalReportingPeriodFromSource(source)).toThrow(message);
@@ -50,13 +50,13 @@ describe("canonical reporting periods", () => {
     const period = canonicalReportingPeriodFromSource(JUNE);
     expect(getReportingPeriodSubmissionError(period, new Date("2026-06-30T15:59:59.999Z"))).toContain("Submission opens after");
     expect(getReportingPeriodSubmissionError(period, new Date("2026-06-30T16:00:00.000Z"))).toBeNull();
-    expect(getReportingPeriodSubmissionError(null, new Date("2026-07-13T00:00:00Z"))).toContain("No canonical reporting period is selected");
+    expect(getReportingPeriodSubmissionError(null, new Date("2026-07-13T00:00:00Z"))).toContain("being selected automatically");
   });
 
   it("refuses to present or export a report without its canonical period", () => {
     const period = canonicalReportingPeriodFromSource(JUNE);
 
     expect(requireCanonicalReportingPeriod(period)).toBe(period);
-    expect(() => requireCanonicalReportingPeriod(undefined)).toThrow("This report has no canonical reporting period");
+    expect(() => requireCanonicalReportingPeriod(undefined)).toThrow("does not have a reporting month yet");
   });
 });

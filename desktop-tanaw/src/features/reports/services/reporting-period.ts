@@ -1,7 +1,7 @@
 import type { CanonicalReportingPeriod } from "../../../types/enterprise";
 
 export const REPORTING_TIME_ZONE = "Asia/Manila";
-export const UNCLASSIFIED_REPORTING_PERIOD_LABEL = "Reporting period unavailable";
+export const UNCLASSIFIED_REPORTING_PERIOD_LABEL = "Preparing reporting month…";
 
 const NATURAL_KEY_PATTERN = /^month:Asia\/Manila:(\d{4})-(0[1-9]|1[0-2])$/;
 
@@ -14,21 +14,21 @@ type CanonicalReportingPeriodSource = {
 
 export function canonicalReportingPeriodFromSource(source: CanonicalReportingPeriodSource): CanonicalReportingPeriod {
   if (typeof source.period_id !== "string" || !source.period_id.trim()) {
-    throw new Error("No canonical reporting period is available. Capture or select a classified period before submitting.");
+    throw new Error("The reporting month is still being prepared. Please wait a moment and try again.");
   }
   const periodId = source.period_id.trim();
   const naturalKey = NATURAL_KEY_PATTERN.exec(periodId);
   if (!naturalKey || Number(naturalKey[1]) < 1) {
-    throw new Error("The reporting period identity is invalid. Expected month:Asia/Manila:YYYY-MM.");
+    throw new Error("The reporting month could not be recognized. Refresh the report and try again.");
   }
   if (typeof source.starts_at_utc !== "string" || typeof source.ends_at_utc !== "string") {
-    throw new Error("The canonical reporting period is missing its exact UTC source window. Refresh the local ledger before submitting.");
+    throw new Error("The reporting month is incomplete. Refresh the report and try again.");
   }
 
   const startsAtUtc = canonicalUtcInstant(source.starts_at_utc, "start");
   const endsAtUtc = canonicalUtcInstant(source.ends_at_utc, "end");
   if (Date.parse(startsAtUtc) >= Date.parse(endsAtUtc)) {
-    throw new Error("The canonical reporting period UTC source window is invalid.");
+    throw new Error("The reporting month has invalid dates. Refresh the report and try again.");
   }
 
   const year = Number(naturalKey[1]);
@@ -47,7 +47,7 @@ export function canonicalReportingPeriodFromSource(source: CanonicalReportingPer
 
 export function getReportingPeriodSubmissionError(period: CanonicalReportingPeriod | null, now = new Date()): string | null {
   if (!period) {
-    return "No canonical reporting period is selected. Refresh local metrics or select a classified period before submitting.";
+    return "The reporting month is being selected automatically. Please wait a moment and try again.";
   }
   if (!Number.isFinite(now.getTime())) return "The current time is invalid. Correct the system clock before submitting.";
   if (now.getTime() >= Date.parse(period.endsAtUtc)) return null;
@@ -56,7 +56,7 @@ export function getReportingPeriodSubmissionError(period: CanonicalReportingPeri
 
 export function requireCanonicalReportingPeriod(period: CanonicalReportingPeriod | null | undefined): CanonicalReportingPeriod {
   if (!period) {
-    throw new Error("This report has no canonical reporting period. Refresh its target ledger record before viewing, previewing, or exporting it.");
+    throw new Error("This report does not have a reporting month yet. Refresh the report and try again.");
   }
   return period;
 }

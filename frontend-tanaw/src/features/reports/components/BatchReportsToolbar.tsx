@@ -46,18 +46,18 @@ export function BatchReportsToolbar({
           />
         </span>
       </label>
-      <SelectField label="Reporting period" value={selectedPeriodId} onChange={onPeriodChange} disabled={periods.length === 0}>
+      <SelectField label="Reporting month" value={selectedPeriodId} onChange={onPeriodChange} disabled={periods.length === 0}>
         {periods.length === 0 && <option value="">Preparing periods…</option>}
         {periods.map((period) => (
           <option key={period.reportingPeriodId} value={period.reportingPeriodId}>
-            {period.label} · {period.status}
+            {period.label}
           </option>
         ))}
       </SelectField>
-      <SelectField label="Report group" value={scopeType} onChange={(value) => onScopeChange(value as FinalReportScopeType)} disabled={!selectedPeriodId}>
-        <option value="citywide">Citywide</option>
-        <option value="barangay">Barangay</option>
-        <option value="enterprise_selection">Enterprise selection</option>
+      <SelectField label="Final report coverage" value={scopeType} onChange={(value) => onScopeChange(value as FinalReportScopeType)} disabled={!selectedPeriodId}>
+        <option value="citywide">All enterprises</option>
+        <option value="barangay">One barangay</option>
+        <option value="enterprise_selection">Selected enterprises</option>
       </SelectField>
       {scopeType === "barangay" && (
         <SelectField label="Barangay" value={barangay} onChange={onBarangayChange} disabled={availableBarangays.length === 0}>
@@ -75,7 +75,7 @@ export function BatchReportsToolbar({
         onClick={onGenerate}
         className="bg-tanaw-green inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
       >
-        <FileCheck2 size={16} /> Create final report ({selectedCount})
+        <FileCheck2 size={16} /> Create Final Report{scopeType === "enterprise_selection" && selectedCount > 0 ? ` (${selectedCount})` : ""}
       </button>
     </div>
   );
