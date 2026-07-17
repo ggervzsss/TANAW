@@ -2550,7 +2550,6 @@ def upgrade() -> None:
                 "report_revisions.classification",
             ],
             name="fk_enterprise_reports_accepted_revision_scope",
-            ondelete="RESTRICT",
             initially="DEFERRED",
             deferrable=True,
             use_alter=True,
@@ -2565,7 +2564,6 @@ def upgrade() -> None:
                 "report_revisions.classification",
             ],
             name="fk_enterprise_reports_current_revision_scope",
-            ondelete="RESTRICT",
             initially="DEFERRED",
             deferrable=True,
             use_alter=True,
@@ -3961,7 +3959,6 @@ def _install_deferred_foreign_keys() -> None:
         "report_revisions",
         ["current_revision_id", "id", "enterprise_id", "site_id", "classification"],
         ["id", "enterprise_report_id", "enterprise_id", "site_id", "classification"],
-        ondelete="RESTRICT",
         deferrable=True,
         initially="DEFERRED",
     )
@@ -3971,7 +3968,6 @@ def _install_deferred_foreign_keys() -> None:
         "report_revisions",
         ["accepted_revision_id", "id", "enterprise_id", "site_id", "classification"],
         ["id", "enterprise_report_id", "enterprise_id", "site_id", "classification"],
-        ondelete="RESTRICT",
         deferrable=True,
         initially="DEFERRED",
     )

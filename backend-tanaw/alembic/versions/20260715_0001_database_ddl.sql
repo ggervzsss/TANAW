@@ -209,6 +209,12 @@ CREATE OR REPLACE FUNCTION public.tanaw_guard_reporting_period_mutation()
  LANGUAGE plpgsql
 AS $function$
         BEGIN
+            IF current_setting('tanaw.mockdata_cleanup', true) = 'on' THEN
+                IF TG_OP = 'DELETE' THEN
+                    RETURN OLD;
+                END IF;
+                RETURN NEW;
+            END IF;
             IF TG_OP = 'DELETE' THEN
                 RAISE EXCEPTION
                     'reporting_periods is immutable; deletion is forbidden';
@@ -320,6 +326,12 @@ CREATE OR REPLACE FUNCTION public.tanaw_guard_site_location_version()
  LANGUAGE plpgsql
 AS $function$
         BEGIN
+            IF current_setting('tanaw.mockdata_cleanup', true) = 'on' THEN
+                IF TG_OP = 'DELETE' THEN
+                    RETURN OLD;
+                END IF;
+                RETURN NEW;
+            END IF;
             IF TG_OP = 'DELETE' THEN
                 RAISE EXCEPTION 'Site location history cannot be deleted';
             END IF;
@@ -409,6 +421,12 @@ CREATE OR REPLACE FUNCTION public.tanaw_reject_immutable_reporting_mutation()
  LANGUAGE plpgsql
 AS $function$
         BEGIN
+            IF current_setting('tanaw.mockdata_cleanup', true) = 'on' THEN
+                IF TG_OP = 'DELETE' THEN
+                    RETURN OLD;
+                END IF;
+                RETURN NEW;
+            END IF;
             RAISE EXCEPTION '% is immutable; create a new reporting record instead', TG_TABLE_NAME;
         END;
         $function$

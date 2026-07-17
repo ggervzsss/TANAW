@@ -440,9 +440,11 @@ TANAW includes an explicit mock-data CLI for development, demonstrations, QA,
 analytics, and end-to-end reporting tests. It is disabled by default and never
 runs during normal backend startup.
 
-The generated records use the same backend tables and workflow shapes as real
-operational data. Every generated record is tagged with a simulation run ID so
-it can be audited and removed safely.
+The generated fixtures use the same official backend tables and workflow shapes
+as real operational data so they appear in the normal Staff and enterprise
+screens. The run stores an exact resource-ID manifest for safe cleanup. Mock
+loading is guarded by `TANAW_ALLOW_MOCK_DATA` and must remain disabled in
+production.
 
 ### Create the default six-month workflow
 
@@ -455,7 +457,7 @@ Category:      Events Venue
 Manager:       Gervy Masbate
 Barangay:      San Antonio
 Address:       Narra Road, San Pedro, Laguna 4023
-Email:         archies@email.com
+Email:         your current enterprise login email
 Contact:       +639123456789
 Enterprise ID: archies_001@tanaw.sanpedro
 ```
@@ -479,32 +481,32 @@ PowerShell users can run the matching wrapper:
 
 The script defaults to the six-month `full-workflow` scenario for
 `archies_001@tanaw.sanpedro`. To target a different enterprise, run it with
-`TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
-`$env:TANAW_MOCK_TARGET_ENTERPRISE = "actual_enterprise_id"`.
+`TANAW_MOCK_TARGET_ENTERPRISE_ID="actual_enterprise_id"` or, in PowerShell,
+`$env:TANAW_MOCK_TARGET_ENTERPRISE_ID = "actual_enterprise_id"`.
+
+Mock-data targeting uses only this canonical Enterprise ID. It does not use the
+account email, so changing the enterprise's login email does not require a new
+mock-data target. The ID contains `@` (for example,
+`archies_001@tanaw.sanpedro`), not a dot before `tanaw.sanpedro`.
 
 This creates:
 
 - three LGU test accounts;
 - five enterprise test accounts;
-- sequenced telemetry observations and current live-site projections;
-- historical immutable enterprise report revisions and finalized city reports for closed
-  periods;
-- previous-period and current-period submissions ready for consolidation from
-  supporting enterprises;
-- activity/audit logs;
-- prepared previous-period and current-period counts for Archie's Event Place;
-- no previous-period or current-period submission for Archie's, leaving both
-  steps for real desktop submissions.
+- canonical reporting periods and frozen obligations across the requested range;
+- historical immutable enterprise report revisions for the five generated enterprises;
+- an already-submitted previous-month report for Archie's Event Place;
+- one current-month count package for Archie's desktop, which remains unavailable
+  for submission until that canonical month ends.
 
 Archie's remains a normal, persistent account and is not deleted by
 `mockdata off`. The five generated enterprises act as supporting participants
 in the reporting scenario.
 
-A camera does not need to be running. The authenticated target desktop polls
-the backend and loads the oldest finite prepared count package into its
-enterprise ledger. After the overdue report is submitted and synced, the
-desktop loads the current-period package. If a real camera is also running,
-later camera events continue to accumulate in the same draft.
+A camera does not need to be running. The authenticated target desktop reads
+Archie's submitted previous-month report from the backend and loads only the
+still-pending current-month count package into its enterprise ledger. A package
+whose submission window already closed is never presented as a pending draft.
 
 When multiple unfinished periods are available, the desktop report workspace
 shows them in the **Reporting Month** selector.
@@ -535,26 +537,25 @@ Enterprise accounts:
 | Tricia's Bar & Lounge            | `tricias.bar@tanaw.test`       |
 | Hallow Ridge Filipinas Golf Inc. | `hallowridge.golf@tanaw.test`  |
 
-Archie's Event Place is not a generated account. Sign in with
-`archies@email.com` and the password selected during its account onboarding,
-not `Visitor simulation access phrase 2026`.
+Archie's Event Place is not a generated account. Sign in with the current email
+attached to its Enterprise ID and the password selected during account
+onboarding, not `Visitor simulation access phrase 2026`.
 
 ### Complete the end-to-end mock report workflow
 
-1. Start the desktop application and sign in to Archie's Event Place using
-   `archies@email.com` and its configured password.
-2. Wait for the overdue prepared counts to appear on the desktop Dashboard.
-3. Open **Reports & Submissions**, select the overdue **Reporting Month** if it
-   is not already selected, review the locked system metrics, complete the
-   demographic fields, and submit the overdue report.
-4. Wait for the current-period prepared counts to load, then complete and
-   submit the current report.
-5. Sign in to the web portal as `reports.staff@tanaw.test` with
+1. Start the desktop application and sign in to Archie's Event Place using its
+   current account email and configured password.
+2. Open **Reports & Submissions** and confirm that the previous month appears in
+   submitted history.
+3. Confirm that current-month mock counts appear as the active draft. Submission
+   becomes available automatically after the month ends.
+4. Sign in to the web portal as `reports.staff@tanaw.test` with
    `Visitor simulation access phrase 2026`.
-6. Open **Batch Reports** for the relevant reporting periods.
-7. Review the target submissions and accept them as **Ready to Consolidate**.
-8. Generate the final report once all participating enterprises are ready.
-9. Open **Final Reports Audit** and inspect the consolidated totals and source
+5. Open **Batch Reports** for a historical reporting period and verify all six
+   enterprises and their submitted reports.
+6. Review the submissions and accept them as **Ready to Consolidate**.
+7. Generate the final report once all participating enterprises are ready.
+8. Open **Final Reports Audit** and inspect the consolidated totals and source
    rows.
 
 Desktop submissions are written to SQLite first, synchronized to PostgreSQL,
@@ -606,12 +607,13 @@ Keep the target enterprise signed in to the desktop when practical, then run:
 
 PowerShell: `.\scripts\mockdata-off.ps1`
 
-This removes records belonging to active simulation run IDs, including:
+This removes only resources recorded in the active mock run's ID manifest,
+including:
 
 - generated LGU and enterprise accounts;
-- generated telemetry and activity logs;
-- generated and manually submitted test reports associated with the run;
-- generated final report versions and exact immutable revision items;
+- generated obligations and immutable report revisions;
+- the target's mock-owned previous-month report and mock camera lineage;
+- mock-created historical reporting periods after their owned obligations are removed;
 - prepared target-enterprise desktop events and local test reports.
 
 Real records are not selected by names, dates, or email patterns. Cleanup uses
@@ -971,7 +973,9 @@ another actively synchronized folder.
 
 ### The desktop does not receive prepared counts
 
-- Sign in as the exact enterprise selected with `--target-enterprise`.
+- Sign in to the account belonging to the exact Enterprise ID selected with
+  `--target-enterprise-id`; its current login email may be different from the
+  original registration email.
 - Keep the backend and desktop running for several seconds so the authenticated
   polling cycle can complete.
 - Restart the desktop after ML-service code or dependency changes.

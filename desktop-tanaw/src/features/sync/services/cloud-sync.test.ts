@@ -105,6 +105,26 @@ describe("canonical simulation preparation periods", () => {
     });
   });
 
+  it("removes a stale local mock run before preparing the active backend run", async () => {
+    getSimulationStatus.mockResolvedValue({ simulation_run_id: "old-run", scenario: null });
+    get.mockResolvedValue({
+      data: {
+        runId: "run-1",
+        status: "active",
+        enterpriseId: "enterprise-1",
+        enterpriseName: "Enterprise One",
+        counts: juneCounts,
+        pendingCounts: [juneCounts],
+      },
+    });
+
+    await prepareDesktopSimulationCounts();
+
+    expect(resetLocalSimulationData).toHaveBeenCalledWith("tanaw-ml://local", "old-run");
+    expect(prepareLocalSimulationCounts).toHaveBeenCalled();
+    expect(resetLocalSimulationData.mock.invocationCallOrder[0]).toBeLessThan(prepareLocalSimulationCounts.mock.invocationCallOrder[0]);
+  });
+
   it("does not choose a device-clock month when the local ledger is unclassified", async () => {
     get.mockResolvedValue({
       data: {

@@ -4,8 +4,8 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..")
 $Range = if ($env:TANAW_MOCK_RANGE) { $env:TANAW_MOCK_RANGE } else { "6m" }
 $Scenario = if ($env:TANAW_MOCK_SCENARIO) { $env:TANAW_MOCK_SCENARIO } else { "full-workflow" }
-$TargetEnterprise = if ($env:TANAW_MOCK_TARGET_ENTERPRISE) {
-    $env:TANAW_MOCK_TARGET_ENTERPRISE
+$TargetEnterpriseId = if ($env:TANAW_MOCK_TARGET_ENTERPRISE_ID) {
+    $env:TANAW_MOCK_TARGET_ENTERPRISE_ID
 } else {
     "archies_001@tanaw.sanpedro"
 }
@@ -18,7 +18,7 @@ try {
         uv run mockdata reset `
         --range $Range `
         --scenario $Scenario `
-        --target-enterprise $TargetEnterprise `
+        --target-enterprise-id $TargetEnterpriseId `
         @ForwardedArgs
     $ExitCode = $LASTEXITCODE
 } finally {

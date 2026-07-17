@@ -51,15 +51,23 @@ export async function prepareDesktopSimulationCounts(periodId?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
   const simulation = await resolveOptional(() => getSimulationStatus(baseUrl));
-  if (simulation?.simulation_run_id && simulation.scenario) return null;
-
   const preparation = await getDesktopSimulationPreparation();
   if (!preparation) return null;
 
   if (preparation.status === "removed") {
     return resetLocalSimulationData(baseUrl, preparation.runId);
   }
+  let replacedStaleRun = false;
+  if (simulation?.simulation_run_id && simulation.simulation_run_id !== preparation.runId) {
+    await resetLocalSimulationData(baseUrl, simulation.simulation_run_id);
+    replacedStaleRun = true;
+  } else if (simulation?.simulation_run_id && simulation.scenario) {
+    return null;
+  }
   let selectedPeriodId = periodId;
+  if (!selectedPeriodId && replacedStaleRun) {
+    selectedPeriodId = preparationCounts(preparation)[0]?.periodKey;
+  }
   if (!selectedPeriodId) {
     const currentMetrics = await getLocalMetricsSummary(baseUrl);
     const pendingPeriodIds = preparationCounts(preparation).map((counts) => reportingPeriodForPreparationCounts(counts).periodId);

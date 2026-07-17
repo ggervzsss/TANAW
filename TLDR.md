@@ -152,7 +152,7 @@ Sign in at <http://localhost:5173>. These startup-seeded passwords bypass
 first-login password-change onboarding.
 
 Create the persistent target account under **Enterprise Accounts** before
-loading simulation data:
+loading mock data:
 
 ```text
 Enterprise:    Archie's Event Place
@@ -160,7 +160,7 @@ Category:      Events Venue
 Manager:       Gervy Masbate
 Barangay:      San Antonio
 Address:       Narra Road, San Pedro, Laguna 4023
-Email:         archies@email.com
+Email:         your current enterprise login email
 Contact:       +639123456789
 Enterprise ID: archies_001@tanaw.sanpedro
 ```
@@ -171,10 +171,10 @@ it is not `archies_001@tanaw.sanpedro`.
 
 ## 6. Load mock report data
 
-This command creates LGU accounts, enterprise accounts, six months of
-telemetry, historical submissions, closed-period final reports, activity logs,
-and prepared previous-period plus current-period desktop counts for Archie's
-Event Place:
+This command creates LGU and enterprise test accounts, canonical monthly
+obligations, historical submissions for the five generated enterprises, an
+already-submitted previous-month report for Archie's, and current-month desktop
+counts for Archie's:
 
 ```shell
 ./scripts/mockdata-on
@@ -199,7 +199,7 @@ Useful generated accounts:
 Archie's is user-created, not generated:
 
 ```text
-Desktop username: archies@email.com
+Desktop username: the current email attached to Archie's Enterprise ID
 Desktop password: the password selected during Archie's onboarding
 ```
 
@@ -249,32 +249,29 @@ npm.cmd run dev
 Sign in to the desktop:
 
 ```text
-Username: archies@email.com
+Username: the current email attached to Archie's Enterprise ID
 Password: the password selected during Archie's onboarding
 ```
 
-A camera is not required for this test. The desktop downloads the target
-enterprise's overdue prepared counts first, then loads the current-period
-counts after the overdue report syncs. If multiple unfinished periods are
-available, use the desktop **Reporting Month** selector.
+A camera is not required for this test. The desktop reads the previous-month
+submission from central history and loads only the current-month package as a
+draft. TANAW enables submission automatically after that month ends.
 
 ## 8. Complete the report test
 
 In the enterprise desktop:
 
-1. Wait for overdue prepared counts to appear on the Dashboard.
-2. Open **Reports & Submissions**.
-3. Select the overdue **Reporting Month** if needed.
-4. Complete the demographic fields and submit the overdue report.
-5. Wait for current-period prepared counts to appear.
-6. Complete the demographic fields and submit the current report.
+1. Open **Reports & Submissions**.
+2. Confirm that the previous month is present in submitted history.
+3. Confirm that current-month counts are available as a draft; submit them only
+   after the reporting month ends.
 
 In the web portal:
 
 1. Sign in as `reports.staff@tanaw.test` with
    `Visitor simulation access phrase 2026`.
-2. Open **Batch Reports** for the relevant reporting periods.
-3. Review the target reports.
+2. Open **Batch Reports** for a historical reporting period.
+3. Confirm the five generated enterprises and Archie's submitted reports.
 4. Mark them **Ready to Consolidate**.
 5. Generate the final report.
 6. Open **Final Reports Audit** and inspect its exact immutable revision items.
@@ -347,7 +344,7 @@ accounts or reports.
 ### Recommended clean ending
 
 Keep the target desktop signed in and the containers running, then remove all
-run-tagged simulation data from another terminal opened at the repository root:
+run-owned mock data from another terminal opened at the repository root:
 
 ```shell
 ./scripts/mockdata-off

@@ -198,6 +198,23 @@ async def test_report_intake_rejects_the_exact_half_open_submission_close(
 
 
 @pytest.mark.asyncio
+async def test_mock_fixture_intake_can_seed_a_closed_period_without_weakening_the_default(
+    report_session: AsyncSession,
+) -> None:
+    account, camera_id, period = await _seed_scope(report_session)
+
+    created = await submit_report_command(
+        report_session,
+        account=account,
+        command=ReportSubmissionCommand.model_validate(_command(camera_id, period)),
+        acknowledged_at=period.submission_closes_at + timedelta(days=30),
+        enforce_submission_window=False,
+    )
+
+    assert created.disposition == "created"
+
+
+@pytest.mark.asyncio
 async def test_staff_transition_is_versioned_idempotent_and_auditable(
     report_session: AsyncSession,
 ) -> None:

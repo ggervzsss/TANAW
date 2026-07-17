@@ -53,6 +53,7 @@ async def submit_report_command(
     account: Account,
     command: ReportSubmissionCommand,
     acknowledged_at: datetime | None = None,
+    enforce_submission_window: bool = True,
 ) -> ReportSubmissionAcknowledgement:
     acknowledged_at = _as_utc(acknowledged_at or datetime.now(UTC))
     payload_hash = canonical_payload_hash(command.payload)
@@ -80,12 +81,12 @@ async def submit_report_command(
             "REPORTING_PERIOD_NOT_AVAILABLE",
             "The reporting period has not been opened by the server.",
         )
-    if acknowledged_at < _as_utc(period.submission_opens_at):
+    if enforce_submission_window and acknowledged_at < _as_utc(period.submission_opens_at):
         raise ReportIntakeConflict(
             "REPORTING_WINDOW_NOT_OPEN",
             "The reporting period is not open for submissions yet.",
         )
-    if acknowledged_at >= _as_utc(period.submission_closes_at):
+    if enforce_submission_window and acknowledged_at >= _as_utc(period.submission_closes_at):
         raise ReportIntakeConflict(
             "REPORTING_WINDOW_CLOSED",
             "The reporting period submission window has closed.",

@@ -13,6 +13,12 @@ There is no `hybrid` official state.
 Simulation is test/training data. It may exercise the same application contracts, but
 it is never evidence for government reporting or operational health.
 
+The repository `mockdata-*` commands are a separate non-production fixture
+loader, not a simulation-data ingestion path. When explicitly enabled, they
+create official-shaped records so developers can exercise the normal Staff and
+enterprise UX. The loader records every owned resource ID, uses a
+transaction-local cleanup guard, and is forbidden in production.
+
 ## Isolation rules
 
 - Simulation enterprises/sites/devices are created only through explicitly
@@ -30,8 +36,10 @@ it is never evidence for government reporting or operational health.
 - A simulation record cannot be reclassified in place. Promotion requires a new
   official record generated from independently valid official evidence; test
   facts are never copied into it.
-- Seed/reset/purge jobs MUST target simulation classification explicitly and
-  MUST be incapable of deleting official records.
+- Simulation seed/reset/purge jobs MUST target simulation classification
+  explicitly. The separate mock fixture loader may delete only official-shaped
+  records whose exact IDs are present in its active run manifest; it must never
+  select real records by date, name, email, or broad classification.
 
 Database checks/FKs or transaction-level constraints MUST ensure that child
 classification matches its parent topology. Application filters alone are not
@@ -51,5 +59,6 @@ authoritative.
 - Client claims cannot promote simulation data to official.
 - Mixed-classification source selection rejects the whole finalization.
 - Official queries/caches/WebSocket subscriptions contain no simulation rows.
-- Simulation reset cannot modify official rows.
+- Simulation reset cannot modify official rows; mock fixture cleanup cannot
+  modify official rows outside its exact run manifest.
 - Simulation screenshots and PDFs remain visibly watermarked.

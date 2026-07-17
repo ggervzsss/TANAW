@@ -27,12 +27,12 @@ for `archies_001@tanaw.sanpedro`. Override the defaults only for the individual
 command process:
 
 ```shell
-TANAW_MOCK_TARGET_ENTERPRISE="enterprise_id" ./scripts/mockdata-reset
+TANAW_MOCK_TARGET_ENTERPRISE_ID="enterprise_id" ./scripts/mockdata-reset
 TANAW_MOCK_RANGE=12m TANAW_MOCK_SCENARIO=peak-traffic ./scripts/mockdata-on
 ```
 
 ```powershell
-$env:TANAW_MOCK_TARGET_ENTERPRISE = "enterprise_id"
+$env:TANAW_MOCK_TARGET_ENTERPRISE_ID = "enterprise_id"
 .\scripts\mockdata-reset.ps1
 
 $env:TANAW_MOCK_RANGE = "12m"
@@ -40,8 +40,14 @@ $env:TANAW_MOCK_SCENARIO = "peak-traffic"
 .\scripts\mockdata-on.ps1
 ```
 
-Mock data loading is explicit, disabled by default, and server-classified. Never set
-`TANAW_ALLOW_MOCK_DATA=true` for a production service.
+Mock data loading is explicit and disabled by default. It creates official-shaped
+development fixtures so the normal Staff and desktop pages can be tested. Never
+set `TANAW_ALLOW_MOCK_DATA=true` for a production service.
+
+The target is resolved exclusively through its canonical Enterprise ID, not its
+login email. Changing the account email does not change where prepared mock
+counts are delivered. Copy the exact ID from the IT portal or desktop Profile;
+the canonical format contains `@`, for example `archies_001@tanaw.sanpedro`.
 
 `local-data-reset` removes every desktop local ledger, including rows created
 from official CCTV detections and simulation runs, reports, current-state

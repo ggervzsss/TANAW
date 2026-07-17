@@ -60,7 +60,6 @@ async def get_desktop_simulation_preparation(
                     )
                     .where(
                         EnterpriseReport.enterprise_id == topology.enterprise.id,
-                        EnterpriseReport.classification == "simulation",
                         ReportingPeriod.natural_key.in_(candidate_period_keys),
                     )
                 )
