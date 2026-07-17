@@ -96,11 +96,11 @@ export function getBaseBoundaryStyle(name: string, theme: LeafletMapTheme, pane:
   const isAdmin = variant === "admin";
 
   return {
-    color: isDark ? "#9ee7c0" : "#2a3063",
-    weight: isAdmin ? 1.15 : 1,
-    opacity: isDark ? 0.94 : isAdmin ? 0.86 : 0.78,
-    fillColor: getGeoJsonColor(name),
-    fillOpacity: isDark ? (isAdmin ? 0.3 : 0.24) : isAdmin ? 0.48 : 0.34,
+    color: isDark ? "#7893aa" : "#2a3063",
+    weight: isAdmin ? 1.2 : 1,
+    opacity: isDark ? 0.78 : isAdmin ? 0.86 : 0.78,
+    fillColor: isDark ? mixHexColors(getGeoJsonColor(name), "#10243a", 0.58) : getGeoJsonColor(name),
+    fillOpacity: isDark ? (isAdmin ? 0.27 : 0.22) : isAdmin ? 0.48 : 0.34,
     pane,
     className: `${isAdmin ? "tanaw-boundary-path" : "tanaw-location-boundary-path"} outline-none`,
   };
@@ -109,10 +109,10 @@ export function getBaseBoundaryStyle(name: string, theme: LeafletMapTheme, pane:
 export function getActiveBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   if (theme === "dark") {
     return {
-      color: "#93c5fd",
-      fillOpacity: 0.46,
+      color: "#55e0b0",
+      fillOpacity: 0.48,
       opacity: 0.98,
-      weight: 2.6,
+      weight: 3,
     };
   }
 
@@ -122,10 +122,10 @@ export function getActiveBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
 export function getDimmedBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   if (theme === "dark") {
     return {
-      color: "#64748b",
-      fillOpacity: 0.12,
-      opacity: 0.62,
-      weight: 1.05,
+      color: "#53677d",
+      fillOpacity: 0.09,
+      opacity: 0.5,
+      weight: 1,
     };
   }
 
@@ -135,10 +135,10 @@ export function getDimmedBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
 export function getHoverBoundaryStyle(theme: LeafletMapTheme): L.PathOptions {
   if (theme === "dark") {
     return {
-      color: "#e0f2fe",
-      fillOpacity: 0.42,
+      color: "#b9e7ff",
+      fillOpacity: 0.39,
       opacity: 0.96,
-      weight: 2,
+      weight: 2.2,
     };
   }
 
@@ -203,6 +203,17 @@ export function getGeoJsonColor(name: string) {
   }
 
   return fallbackBarangayColors[Math.abs(hash) % fallbackBarangayColors.length];
+}
+
+function mixHexColors(source: string, target: string, targetWeight: number) {
+  const sourceValue = Number.parseInt(source.slice(1), 16);
+  const targetValue = Number.parseInt(target.slice(1), 16);
+  const sourceWeight = 1 - targetWeight;
+  const sourceChannels = [(sourceValue >> 16) & 255, (sourceValue >> 8) & 255, sourceValue & 255];
+  const targetChannels = [(targetValue >> 16) & 255, (targetValue >> 8) & 255, targetValue & 255];
+  const mixed = sourceChannels.map((channel, index) => Math.round(channel * sourceWeight + targetChannels[index] * targetWeight));
+
+  return `#${mixed.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function getFeatureValue(featureItem: GeoJSON.Feature | undefined, keys: string[], fallback = "") {

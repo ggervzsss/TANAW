@@ -259,12 +259,12 @@ html.dark .tanaw-login-edge-blur {
 
 .tanaw-auth-desktop-stage {
   align-items: safe center;
-  grid-template-columns: minmax(0, 1.04fr) minmax(380px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) minmax(26.25rem, min(36.25rem, 46vw));
   height: 100svh;
 }
 
 .tanaw-auth-shell {
-  gap: clamp(1.5rem, 3svh, 2.5rem);
+  gap: clamp(1.5rem, 3vw, 4rem);
   padding-block: clamp(1rem, 2.4svh, 2rem);
   padding-inline: clamp(1.25rem, 2.4vw, 2.5rem);
 }
@@ -287,7 +287,21 @@ html.dark .tanaw-login-edge-blur {
 }
 
 .tanaw-auth-card {
-  padding: clamp(1.5rem, 4svh, 2.5rem);
+  --tanaw-auth-input-bg: #ffffff;
+  --tanaw-auth-input-bg-hover: #fbfdfc;
+  --tanaw-auth-input-bg-disabled: #f1f5f9;
+  --tanaw-auth-input-text: #10241b;
+  --tanaw-auth-input-placeholder: #7b8492;
+  --tanaw-auth-input-icon: #6b7280;
+  --tanaw-auth-input-border: #cbd5d1;
+  --tanaw-auth-input-border-hover: #9caea4;
+  width: 100%;
+  max-width: 36.25rem;
+  max-height: calc(100svh - clamp(1.5rem, 4svh, 3rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(1.5rem, 2.7svh, 2.5rem) clamp(1.5rem, 2.25vw, 2.5rem);
+  scrollbar-gutter: stable;
   transition:
     background-color 220ms ease,
     border-color 220ms ease,
@@ -296,8 +310,16 @@ html.dark .tanaw-login-edge-blur {
 }
 
 html.dark .tanaw-auth-card {
+  --tanaw-auth-input-bg: #0c1728;
+  --tanaw-auth-input-bg-hover: #101e32;
+  --tanaw-auth-input-bg-disabled: #0d1625;
+  --tanaw-auth-input-text: #f4f7fb;
+  --tanaw-auth-input-placeholder: #8290a6;
+  --tanaw-auth-input-icon: #9eadc3;
+  --tanaw-auth-input-border: #32445f;
+  --tanaw-auth-input-border-hover: #46617f;
   border-color: rgb(148 163 184 / 0.34) !important;
-  background: rgb(18 28 49 / 0.94) !important;
+  background: rgb(16 28 48 / 0.96) !important;
   box-shadow:
     0 30px 90px rgb(0 0 0 / 0.48),
     inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
@@ -333,6 +355,8 @@ html.dark .tanaw-auth-card {
 
 .tanaw-auth-field {
   height: clamp(3rem, 6.2svh, 3.5rem);
+  border-color: var(--tanaw-auth-input-border);
+  background: var(--tanaw-auth-input-bg);
   transition:
     background-color 200ms ease,
     border-color 200ms ease,
@@ -340,22 +364,95 @@ html.dark .tanaw-auth-card {
     color 200ms ease;
 }
 
-html.dark .tanaw-auth-field {
-  border-color: var(--tanaw-border) !important;
-  background-color: rgb(15 23 42 / 0.86) !important;
+.tanaw-auth-field:hover:not(:has(.tanaw-auth-input:disabled)) {
+  border-color: var(--tanaw-auth-input-border-hover);
+  background: var(--tanaw-auth-input-bg-hover);
 }
 
-html.dark .tanaw-auth-field:focus-within {
-  border-color: rgb(52 211 153 / 0.72) !important;
-  box-shadow: 0 0 0 4px rgb(52 211 153 / 0.14) !important;
+.tanaw-auth-field:active:not(:has(.tanaw-auth-input:disabled)):not(:focus-within) {
+  border-color: color-mix(in srgb, var(--tanaw-green) 46%, var(--tanaw-auth-input-border));
 }
 
-html.dark .tanaw-auth-field :where(svg, button) {
-  color: #94a3b8;
+.tanaw-auth-field:focus-within {
+  border-color: color-mix(in srgb, var(--tanaw-green) 76%, transparent);
+  background: var(--tanaw-auth-input-bg-hover);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-green) 15%, transparent);
 }
 
-html.dark .tanaw-auth-field button:hover {
+.tanaw-auth-field[data-state="valid"]:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--tanaw-green) 38%, var(--tanaw-auth-input-border));
+}
+
+.tanaw-auth-field[data-state="invalid"] {
+  border-color: var(--tanaw-error);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-error) 11%, transparent);
+}
+
+.tanaw-auth-field:has(.tanaw-auth-input:disabled) {
+  border-color: color-mix(in srgb, var(--tanaw-auth-input-border) 72%, transparent);
+  background: var(--tanaw-auth-input-bg-disabled);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.tanaw-auth-input {
+  color: var(--tanaw-auth-input-text);
+  caret-color: var(--tanaw-green);
+}
+
+.tanaw-auth-input::placeholder {
+  color: var(--tanaw-auth-input-placeholder);
+  opacity: 1;
+}
+
+.tanaw-auth-input::selection {
+  background: color-mix(in srgb, var(--tanaw-green) 34%, transparent);
+  color: var(--tanaw-auth-input-text);
+}
+
+.tanaw-auth-field :where(.tanaw-auth-field-icon, .tanaw-auth-field-action) {
+  color: var(--tanaw-auth-input-icon);
+  transition: color 180ms ease;
+}
+
+.tanaw-auth-field:focus-within .tanaw-auth-field-icon,
+.tanaw-auth-field .tanaw-auth-field-action:hover {
   color: var(--tanaw-green);
+}
+
+.tanaw-auth-field .tanaw-auth-field-action:focus-visible {
+  --tw-ring-offset-color: var(--tanaw-auth-input-bg);
+  color: var(--tanaw-green);
+}
+
+/* Electron uses Chromium's autofill paint. Scope the override to Enterprise
+   authentication inputs so saved credentials inherit TANAW's controlled
+   light and dark surfaces without affecting operational forms. */
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:hover,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:focus,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:active,
+.tanaw-auth-card .tanaw-auth-input[data-com-onepassword-filled],
+.tanaw-auth-card .tanaw-auth-input[data-dashlane-rid] {
+  -webkit-box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  -webkit-text-fill-color: var(--tanaw-auth-input-text) !important;
+  caret-color: var(--tanaw-green) !important;
+  border-radius: 0.75rem;
+  background-clip: content-box !important;
+  transition:
+    background-color 9999s ease-out,
+    color 120ms ease-out;
+}
+
+.tanaw-auth-card .tanaw-auth-input:autofill,
+.tanaw-auth-card .tanaw-auth-input:autofill:hover,
+.tanaw-auth-card .tanaw-auth-input:autofill:focus,
+.tanaw-auth-card .tanaw-auth-input:autofill:active {
+  box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  color: var(--tanaw-auth-input-text) !important;
+  caret-color: var(--tanaw-green) !important;
+  background-color: var(--tanaw-auth-input-bg) !important;
 }
 
 html.dark .tanaw-auth-card :where(input, textarea, select),
@@ -551,7 +648,7 @@ html.dark .tanaw-auth-theme-toggle:hover {
 
 @media (max-width: 1120px) {
   .tanaw-auth-desktop-stage {
-    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 0.82fr);
+    grid-template-columns: minmax(0, 1fr) minmax(26.25rem, 47vw);
   }
 }
 
@@ -615,8 +712,7 @@ html.dark .tanaw-auth-theme-toggle:hover {
   contain: paint;
   isolation: isolate;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
+  background: radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
   opacity: 0.94;
   mix-blend-mode: screen;
   transition: opacity 180ms ease;
@@ -1483,9 +1579,7 @@ html.dark .enterprise-shell .tanaw-trend-chip--utilization {
 
 html.dark .enterprise-shell .tanaw-report-remarks {
   border-color: rgb(251 191 36 / 0.42) !important;
-  background:
-    linear-gradient(135deg, rgb(245 158 11 / 0.14), rgb(120 53 15 / 0.2)),
-    rgb(15 23 42 / 0.66) !important;
+  background: linear-gradient(135deg, rgb(245 158 11 / 0.14), rgb(120 53 15 / 0.2)), rgb(15 23 42 / 0.66) !important;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 

@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField } from "@/shared/components/ui";
 import { type CreateLguAccountPayload, createLguAccount } from "@/shared/services/accountManagement";
@@ -35,7 +36,11 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   const createMutation = useMutation({
     mutationFn: createLguAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
       toast.success("LGU account created; activation email queued");
       onClose();
     },
@@ -81,9 +86,11 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
             required
           />
         </div>
-        <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
-          <span className="bg-tanaw-green mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white shadow-sm">i</span>
-          <p className="text-sm leading-relaxed text-emerald-800">
+        <div className="tanaw-account-info-banner flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2 dark:border-emerald-400/25 dark:bg-[#0d2428] dark:ring-emerald-200/5">
+          <span className="bg-tanaw-green mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white shadow-sm dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-1 dark:ring-emerald-300/20">
+            <Info size={15} aria-hidden="true" />
+          </span>
+          <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-100/85">
             Once this account is saved, TANAW will queue a secure activation link for the registered email. The user will choose a private password on the activation page before signing in.
           </p>
         </div>

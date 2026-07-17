@@ -49,7 +49,7 @@ export function AdminSystemLogsPage() {
   const riskCount = logs.filter((log) => log.severity === "Critical" || log.severity === "Warning").length;
 
   return (
-    <PageMotion>
+    <PageMotion className="tanaw-data-page pb-12">
       <PageHeader title="System Logs" description="Centralized operational feed for IT activity, staff submissions, admin actions, and system-wide events." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
@@ -59,15 +59,15 @@ export function AdminSystemLogsPage() {
         <MetricCard label="Risk Signals" value={riskCount} foot="Warning and critical logs" color="#dc2626" footClassName="text-red-600" icon={AlertTriangle} />
       </motion.section>
 
-      <Panel className="mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
+      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
+        <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
           <div className="relative min-w-65 flex-1">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search actor, action, target, source, or summary"
-              className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+              className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
           <FilterSelect value={categoryFilter} onChange={(value) => setCategoryFilter(value as CategoryFilter)} options={categoryFilters} />
@@ -76,7 +76,7 @@ export function AdminSystemLogsPage() {
           <FilterSelect value={timeRange} onChange={(value) => setTimeRange(value as ActivityTimeRange)} options={activityTimeRanges} />
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="tanaw-data-table overflow-x-auto">
           <table className="w-full min-w-230 table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[15%]" />
@@ -86,7 +86,7 @@ export function AdminSystemLogsPage() {
               <col className="w-[18%]" />
               <col className="w-[28%]" />
             </colgroup>
-            <thead className="bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+            <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
                 {["Timestamp", "Category", "Severity", "Actor", "Action / Target", "Summary"].map((heading) => (
                   <th key={heading} className="px-4 py-4 whitespace-nowrap">
@@ -95,9 +95,9 @@ export function AdminSystemLogsPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-800">
+            <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
               {filteredLogs.map((log) => (
-                <tr key={log.id} onClick={() => setSelectedLog(log)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={log.id} onClick={() => setSelectedLog(log)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
                   <td className="px-4 py-4 font-mono text-xs text-gray-500">{log.timestamp}</td>
                   <td className="px-4 py-4">
                     <CategoryBadge category={log.category} />
@@ -131,7 +131,7 @@ export function AdminSystemLogsPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
+        <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
           <span>Showing {filteredLogs.length} records</span>
           <span>{timeRange}</span>
         </div>
@@ -196,7 +196,9 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
       </div>
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-700">This activity is tied to an enterprise support ticket. Open the supervision view to inspect the full ticket, photos, status, and IT conversation.</p>
+          <p className="text-sm font-semibold text-slate-700">
+            This activity is tied to an enterprise support ticket. Open the supervision view to inspect the full ticket, photos, status, and IT conversation.
+          </p>
           <button
             type="button"
             onClick={openTicket}

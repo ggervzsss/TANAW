@@ -101,13 +101,11 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
   };
 
   return (
-    <PageMotion>
+    <PageMotion className="tanaw-data-page pb-12">
       <PageHeader
         title="Support Tickets"
         description={
-          isItResponder
-            ? "Technical inbox for TANAW support requests, attachments, and IT responses."
-            : "Read-only supervision for TANAW support requests, IT responses, and ticket status."
+          isItResponder ? "Technical inbox for TANAW support requests, attachments, and IT responses." : "Read-only supervision for TANAW support requests, IT responses, and ticket status."
         }
       />
 
@@ -124,15 +122,15 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
         <MetricCard label="With Photos" value={ticketsWithAttachments.length} foot="Attachment-backed tickets" color="#0f766e" icon={ImageIcon} />
       </section>
 
-      <Panel className="mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
+      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
+        <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
           <div className="relative min-w-65 flex-1">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search ticket ID, enterprise, subject, category, or status"
-              className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+              className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
           <FilterSelect value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={statuses} />
@@ -141,14 +139,14 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
           <button
             type="button"
             onClick={() => void ticketsQuery.refetch()}
-            className="inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50"
+            className="tanaw-data-refresh inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50"
           >
             <RefreshCw size={14} className={ticketsQuery.isFetching ? "animate-spin" : ""} />
             Refresh
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="tanaw-data-table overflow-x-auto">
           <table className="w-full min-w-260 table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[12%]" />
@@ -159,7 +157,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
               <col className="w-[10%]" />
               <col className="w-[12%]" />
             </colgroup>
-            <thead className="bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+            <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
                 {["Ticket ID", "Enterprise", "Subject", "Category", "Priority", "Status", "Submitted"].map((heading) => (
                   <th key={heading} className="px-4 py-4 whitespace-nowrap">
@@ -168,9 +166,9 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-800">
+            <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
               {filteredTickets.map((ticket) => (
-                <tr key={ticket.id} onClick={() => openTicketDetails(ticket.id)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={ticket.id} onClick={() => openTicketDetails(ticket.id)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
                   <td className="px-4 py-4 align-top font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
                   <td className="px-4 py-4 align-top">
                     <p className="font-bold text-gray-950">{ticket.enterpriseName}</p>
@@ -219,15 +217,13 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
+        <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
           <span>Showing {filteredTickets.length} tickets</span>
           <span>{isItResponder ? "IT response queue" : "Read-only supervision"}</span>
         </div>
       </Panel>
 
-      <AnimatePresence>
-        {activeTicketId && <TicketDetailsModal mode={mode} ticketId={activeTicketId} onClose={closeTicketDetails} />}
-      </AnimatePresence>
+      <AnimatePresence>{activeTicketId && <TicketDetailsModal mode={mode} ticketId={activeTicketId} onClose={closeTicketDetails} />}</AnimatePresence>
     </PageMotion>
   );
 }
@@ -374,12 +370,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                   Conversation
                 </h4>
                 <div className="mt-4 space-y-3">
-                  <ConversationItem
-                    authorName={ticket.submittedBy}
-                    authorRole="requester"
-                    createdAt={ticket.createdAt}
-                    message={ticket.description}
-                  />
+                  <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} />
                   {ticket.messages.map((message) => (
                     <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} />
                   ))}
@@ -397,7 +388,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                         }}
                         rows={4}
                         placeholder="Write a response for the requester..."
-                        className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
+                        className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950 transition outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
                       />
                     </label>
                     {replyError && <p className="mt-2 text-xs font-bold text-red-700">{replyError}</p>}
@@ -457,7 +448,9 @@ function TicketAttachmentImage({ alt, attachment, className, isFullPreview = fal
 
 function AttachmentImageFallback({ className, icon = "error", isFullPreview, message }: { className: string; icon?: "error" | "loading"; isFullPreview: boolean; message: string }) {
   return (
-    <div className={`${className} flex ${isFullPreview ? "min-h-72" : ""} items-center justify-center border border-dashed border-slate-200 bg-white text-center text-slate-500 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-300`}>
+    <div
+      className={`${className} flex ${isFullPreview ? "min-h-72" : ""} items-center justify-center border border-dashed border-slate-200 bg-white text-center text-slate-500 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-300`}
+    >
       <span className="flex max-w-full flex-col items-center gap-2 px-3">
         {icon === "loading" ? <RefreshCw size={isFullPreview ? 28 : 18} className="animate-spin text-emerald-700" /> : <ImageIcon size={isFullPreview ? 30 : 18} className="text-slate-400" />}
         {isFullPreview && <span className="text-sm font-semibold">{message}</span>}
@@ -518,7 +511,9 @@ function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
 function ConversationItem({ authorName, authorRole, createdAt, message }: { authorName: string; authorRole: string; createdAt: string; message: string }) {
   const isRequester = authorRole === "enterprise" || authorRole === "requester";
   return (
-    <article className={`rounded-2xl border p-3 ${isRequester ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}>
+    <article
+      className={`rounded-2xl border p-3 ${isRequester ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-black text-slate-950">{authorName}</p>
         <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
@@ -550,7 +545,11 @@ function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
 }
 
 function CategoryBadge({ category }: { category: SupportTicketCategory }) {
-  return <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap text-emerald-700 uppercase ring-1 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20">{category}</span>;
+  return (
+    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap text-emerald-700 uppercase ring-1 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20">
+      {category}
+    </span>
+  );
 }
 
 function authorRoleLabel(role: string) {

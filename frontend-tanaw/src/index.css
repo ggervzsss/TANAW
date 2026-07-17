@@ -144,6 +144,10 @@
   --tanaw-surface-muted: #f8fafc;
   --tanaw-surface-subtle: #f1f5f9;
   --tanaw-surface-strong: #e2e8f0;
+  --tanaw-control-bg: #ffffff;
+  --tanaw-control-hover: #f8fafc;
+  --tanaw-control-focus: #ffffff;
+  --tanaw-secondary-text: #64748b;
   --tanaw-dark-surface: #121c31;
   --tanaw-dark-surface-muted: #0f172a;
   --tanaw-dark-surface-subtle: #172033;
@@ -157,18 +161,26 @@ html.dark {
   --tanaw-green-dark: #10b981;
   --tanaw-green-soft: #6ee7b7;
   --tanaw-gold: #fcd34d;
-  --tanaw-bg: #0b1120;
-  --tanaw-card: #121c31;
-  --tanaw-text: #f8fafc;
-  --tanaw-muted: #94a3b8;
-  --tanaw-border: #334155;
+  --tanaw-bg: #08111f;
+  --tanaw-card: #101c30;
+  --tanaw-text: #f4f7fb;
+  --tanaw-muted: #9eadc3;
+  --tanaw-border: #2c3c56;
   --tanaw-error: #f87171;
-  --tanaw-page-bg: #0f172a;
-  --tanaw-page-bg-gradient: linear-gradient(135deg, #0b1120 0%, #0f172a 54%, #111827 100%);
-  --tanaw-surface: #121c31;
-  --tanaw-surface-muted: #0f172a;
-  --tanaw-surface-subtle: #172033;
-  --tanaw-surface-strong: #1e293b;
+  --tanaw-page-bg: #08111f;
+  --tanaw-page-bg-gradient: radial-gradient(circle at 12% 0%, rgb(30 64 83 / 0.22), transparent 34rem), linear-gradient(145deg, #08111f 0%, #0b1424 52%, #0d1829 100%);
+  --tanaw-surface: #101c30;
+  --tanaw-surface-muted: #0c1728;
+  --tanaw-surface-subtle: #15233a;
+  --tanaw-surface-strong: #182840;
+  --tanaw-control-bg: #132139;
+  --tanaw-control-hover: #182840;
+  --tanaw-control-focus: #172941;
+  --tanaw-secondary-text: #9eadc3;
+  --tanaw-dark-surface: #101c30;
+  --tanaw-dark-surface-muted: #0c1728;
+  --tanaw-dark-surface-subtle: #15233a;
+  --tanaw-dark-border: #2c3c56;
   color-scheme: dark;
 }
 
@@ -242,19 +254,19 @@ html.dark {
 
 @layer utilities {
   html.dark :where(.bg-\[\#f8f9fa\], .bg-\[\#f8faf8\], .bg-slate-50, .bg-gray-50) {
-    background-color: #0f172a;
+    background-color: var(--tanaw-surface-muted);
   }
 
   html.dark :where(.bg-white, .bg-white\/96, .bg-white\/95, .bg-white\/90, .bg-white\/86, .bg-white\/80, .bg-white\/70, .bg-white\/60, .bg-white\/50) {
-    background-color: rgb(18 28 49 / 0.96);
+    background-color: rgb(16 28 48 / 0.96);
   }
 
   html.dark :where(.bg-slate-100, .bg-gray-100) {
-    background-color: #1e293b;
+    background-color: var(--tanaw-surface-subtle);
   }
 
   html.dark :where(.bg-slate-200, .bg-gray-200, .disabled\:bg-gray-100:disabled, .disabled\:bg-slate-200:disabled) {
-    background-color: #334155;
+    background-color: var(--tanaw-surface-strong);
   }
 
   html.dark :where(.bg-emerald-50, .bg-tgreen-dark\/5, .bg-tgreen-dark\/6, .bg-tgreen-dark\/10) {
@@ -294,7 +306,7 @@ html.dark {
   }
 
   html.dark :where(.border-gray-100, .border-gray-200, .border-gray-300, .border-slate-100, .border-slate-200, .border-slate-300, .border-white\/70, .border-white\/80, .border-white\/85) {
-    border-color: rgb(51 65 85 / 0.88);
+    border-color: rgb(44 60 86 / 0.9);
   }
 
   html.dark :where(.border-emerald-100, .border-emerald-200) {
@@ -323,12 +335,12 @@ html.dark {
 
   html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not(:last-child),
   html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
-    border-color: rgb(51 65 85 / 0.88);
+    border-color: rgb(44 60 86 / 0.9);
   }
 
   html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not(:last-child),
   html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
-    border-color: rgb(51 65 85 / 0.42);
+    border-color: rgb(44 60 86 / 0.62);
   }
 
   html.dark :where(.ring-white, .ring-slate-900\/4, .ring-slate-900\/5, .ring-emerald-950\/5, .ring-emerald-950\/6, .ring-black\/3, .ring-black\/4, .ring-black\/5) {
@@ -340,11 +352,11 @@ html.dark {
   }
 
   html.dark :where(.text-gray-800, .text-slate-800, .text-gray-700, .text-slate-700, .text-gray-600, .text-slate-600) {
-    color: #cbd5e1;
+    color: #c7d2e0;
   }
 
   html.dark :where(.text-gray-500, .text-slate-500, .text-gray-400, .text-slate-400, .disabled\:text-gray-400:disabled, .disabled\:text-slate-300:disabled) {
-    color: #94a3b8;
+    color: var(--tanaw-secondary-text);
   }
 
   html.dark :where(.text-tgreen-dark, .text-tanaw-green, .text-emerald-900, .text-emerald-800, .text-emerald-700, .text-emerald-600) {
@@ -376,11 +388,11 @@ html.dark {
   }
 
   html.dark :where(.hover\:bg-gray-50:hover, .hover\:bg-slate-50:hover, .focus\:bg-gray-50:focus, .focus\:bg-slate-50:focus) {
-    background-color: #1e293b;
+    background-color: var(--tanaw-control-hover);
   }
 
   html.dark :where(.hover\:bg-gray-100:hover, .hover\:bg-slate-100:hover) {
-    background-color: #334155;
+    background-color: #20324c;
   }
 
   html.dark :where(.hover\:bg-emerald-50:hover, .hover\:bg-emerald-50\/70:hover, .hover\:bg-tgreen-dark\/5:hover, .hover\:bg-tgreen-dark\/6:hover, .focus\:bg-tgreen-dark\/6:focus) {
@@ -476,6 +488,120 @@ html.dark {
   html.dark :where(.tanaw-document-preview .text-gray-500, .tanaw-document-preview .text-slate-500) {
     color: #6b7280;
   }
+}
+
+html.dark .it-portal-main {
+  background: var(--tanaw-page-bg-gradient);
+}
+
+.tanaw-metric-card,
+.tanaw-data-panel,
+.tanaw-data-toolbar,
+.tanaw-data-search,
+.tanaw-data-table-head,
+.tanaw-data-table-row,
+.tanaw-data-footer {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+
+html.dark .tanaw-metric-card {
+  border-color: var(--tanaw-dark-border);
+  background: linear-gradient(145deg, #13213a 0%, #101c30 100%);
+  box-shadow:
+    0 18px 42px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+html.dark .tanaw-metric-card:hover {
+  border-color: #3a4d69;
+  box-shadow:
+    0 24px 54px rgb(0 0 0 / 0.38),
+    inset 0 1px 0 rgb(255 255 255 / 0.045);
+}
+
+html.dark .tanaw-metric-card__icon {
+  border: 1px solid rgb(71 89 116 / 0.34);
+  background: #0c1729;
+  color: #a9b7ca;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+html.dark .tanaw-data-page .tanaw-data-panel {
+  border-color: var(--tanaw-dark-border);
+  background: var(--tanaw-surface);
+  box-shadow:
+    0 24px 56px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+
+html.dark .tanaw-data-page .tanaw-data-toolbar {
+  border-color: var(--tanaw-dark-border);
+  background: linear-gradient(180deg, #101d31 0%, #0d192b 100%);
+}
+
+html.dark .tanaw-data-page .tanaw-data-search,
+html.dark .tanaw-data-page .tanaw-data-filter,
+html.dark .tanaw-data-page .tanaw-data-refresh {
+  border-color: #30425e;
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.025);
+}
+
+html.dark .tanaw-data-page .tanaw-data-search:hover,
+html.dark .tanaw-data-page .tanaw-data-filter:hover,
+html.dark .tanaw-data-page .tanaw-data-refresh:hover {
+  border-color: #425a78;
+  background: var(--tanaw-control-hover);
+}
+
+html.dark .tanaw-data-page .tanaw-data-search:focus,
+html.dark .tanaw-data-page .tanaw-data-filter:focus,
+html.dark .tanaw-data-page .tanaw-data-refresh:focus-visible {
+  border-color: rgb(52 211 153 / 0.72);
+  background: var(--tanaw-control-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(52 211 153 / 0.13);
+}
+
+html.dark .tanaw-data-page .tanaw-data-table {
+  background: #101c30;
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-head {
+  border-color: var(--tanaw-dark-border);
+  background: #15233a;
+  color: #a8b6ca;
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-body {
+  color: #d4dce8;
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-row {
+  border-color: rgb(44 60 86 / 0.7);
+  background: #101c30;
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-row:hover {
+  background: #172941;
+}
+
+html.dark .tanaw-data-page .tanaw-data-footer {
+  border-color: var(--tanaw-dark-border);
+  background: #0c1728;
+  color: #9eadc3;
+}
+
+html.dark .tanaw-data-page .tanaw-data-empty-icon {
+  border: 1px solid rgb(52 211 153 / 0.18);
+  background: rgb(16 185 129 / 0.1);
+  color: #6ee7b7;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.2);
 }
 
 .tanaw-toast-viewport {
@@ -675,7 +801,7 @@ html.dark .tanaw-login-edge-blur {
 
 .tanaw-auth-shell {
   align-items: safe center;
-  gap: clamp(1.5rem, 3svh, 2.5rem);
+  gap: clamp(1.5rem, 3vw, 4rem);
   padding-block: clamp(1rem, 2.4svh, 2rem);
 }
 
@@ -697,12 +823,40 @@ html.dark .tanaw-login-edge-blur {
 }
 
 .tanaw-auth-card {
-  padding: clamp(1.5rem, 4svh, 2.5rem);
+  --tanaw-auth-input-bg: #ffffff;
+  --tanaw-auth-input-bg-hover: #fbfdfc;
+  --tanaw-auth-input-bg-disabled: #f1f5f9;
+  --tanaw-auth-input-text: #10241b;
+  --tanaw-auth-input-placeholder: #7b8492;
+  --tanaw-auth-input-icon: #6b7280;
+  --tanaw-auth-input-border: #cbd5d1;
+  --tanaw-auth-input-border-hover: #9caea4;
+  width: 100%;
+  max-width: 36.25rem;
+  padding: clamp(1.5rem, 2.7svh, 2.5rem) clamp(1.5rem, 2.25vw, 2.5rem);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   transition:
     background-color 220ms ease,
     border-color 220ms ease,
     box-shadow 220ms ease,
     color 220ms ease;
+}
+
+html.dark .tanaw-auth-card {
+  --tanaw-auth-input-bg: #0c1728;
+  --tanaw-auth-input-bg-hover: #101e32;
+  --tanaw-auth-input-bg-disabled: #0d1625;
+  --tanaw-auth-input-text: #f4f7fb;
+  --tanaw-auth-input-placeholder: #8290a6;
+  --tanaw-auth-input-icon: #9eadc3;
+  --tanaw-auth-input-border: #32445f;
+  --tanaw-auth-input-border-hover: #46617f;
+  border-color: rgb(91 112 143 / 0.52) !important;
+  background: rgb(16 28 48 / 0.96) !important;
+  box-shadow:
+    0 32px 90px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.055) !important;
 }
 
 .tanaw-auth-card-header {
@@ -735,11 +889,115 @@ html.dark .tanaw-login-edge-blur {
 
 .tanaw-auth-field {
   height: clamp(3rem, 6.2svh, 3.5rem);
+  border-color: var(--tanaw-auth-input-border);
+  background: var(--tanaw-auth-input-bg);
   transition:
     background-color 200ms ease,
     border-color 200ms ease,
     box-shadow 200ms ease,
     color 200ms ease;
+}
+
+.tanaw-auth-field:hover:not(:has(.tanaw-auth-input:disabled)) {
+  border-color: var(--tanaw-auth-input-border-hover);
+  background: var(--tanaw-auth-input-bg-hover);
+}
+
+.tanaw-auth-field:active:not(:has(.tanaw-auth-input:disabled)):not(:focus-within) {
+  border-color: color-mix(in srgb, var(--tanaw-green) 46%, var(--tanaw-auth-input-border));
+}
+
+.tanaw-auth-field:focus-within {
+  border-color: color-mix(in srgb, var(--tanaw-green) 76%, transparent);
+  background: var(--tanaw-auth-input-bg-hover);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-green) 15%, transparent);
+}
+
+.tanaw-auth-field[data-state="valid"]:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--tanaw-green) 38%, var(--tanaw-auth-input-border));
+}
+
+.tanaw-auth-field[data-state="invalid"] {
+  border-color: var(--tanaw-error);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-error) 11%, transparent);
+}
+
+.tanaw-auth-field:has(.tanaw-auth-input:disabled) {
+  border-color: color-mix(in srgb, var(--tanaw-auth-input-border) 72%, transparent);
+  background: var(--tanaw-auth-input-bg-disabled);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.tanaw-auth-input {
+  color: var(--tanaw-auth-input-text);
+  caret-color: var(--tanaw-green);
+}
+
+.tanaw-auth-input::placeholder {
+  color: var(--tanaw-auth-input-placeholder);
+  opacity: 1;
+}
+
+.tanaw-auth-input::selection {
+  background: color-mix(in srgb, var(--tanaw-green) 34%, transparent);
+  color: var(--tanaw-auth-input-text);
+}
+
+.tanaw-auth-field :where(.tanaw-auth-field-icon, .tanaw-auth-field-action) {
+  color: var(--tanaw-auth-input-icon);
+  transition: color 180ms ease;
+}
+
+.tanaw-auth-field:focus-within .tanaw-auth-field-icon,
+.tanaw-auth-field .tanaw-auth-field-action:hover {
+  color: var(--tanaw-green);
+}
+
+.tanaw-auth-field .tanaw-auth-field-action:focus-visible {
+  --tw-ring-offset-color: var(--tanaw-auth-input-bg);
+  color: var(--tanaw-green);
+}
+
+/* Chromium and Electron paint saved credentials inside the input. Keep that
+   paint scoped to TANAW authentication controls so autofill cannot introduce
+   browser-default olive or mustard surfaces. */
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:hover,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:focus,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:active,
+.tanaw-auth-card .tanaw-auth-input[data-com-onepassword-filled],
+.tanaw-auth-card .tanaw-auth-input[data-dashlane-rid] {
+  -webkit-box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  -webkit-text-fill-color: var(--tanaw-auth-input-text) !important;
+  caret-color: var(--tanaw-green) !important;
+  border-radius: 0.75rem;
+  background-clip: content-box !important;
+  transition:
+    background-color 9999s ease-out,
+    color 120ms ease-out;
+}
+
+.tanaw-auth-card .tanaw-auth-input:autofill,
+.tanaw-auth-card .tanaw-auth-input:autofill:hover,
+.tanaw-auth-card .tanaw-auth-input:autofill:focus,
+.tanaw-auth-card .tanaw-auth-input:autofill:active {
+  box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  color: var(--tanaw-auth-input-text) !important;
+  caret-color: var(--tanaw-green) !important;
+  background-color: var(--tanaw-auth-input-bg) !important;
+}
+
+@media (min-width: 1024px) {
+  .tanaw-auth-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(26.25rem, min(36.25rem, 46vw));
+  }
+
+  .tanaw-auth-card {
+    max-height: calc(100svh - clamp(1.5rem, 4svh, 3rem));
+    overflow-y: auto;
+  }
 }
 
 .tanaw-auth-control-gap {
@@ -915,8 +1173,7 @@ html.dark .tanaw-auth-theme-toggle:hover {
   contain: paint;
   isolation: isolate;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
+  background: radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
   opacity: 0.94;
   mix-blend-mode: screen;
   transition: opacity 180ms ease;
@@ -1203,9 +1460,13 @@ html.dark .tanaw-auth-theme-toggle:hover {
 .leaflet-popup-content-wrapper {
   background: #ffffff !important;
   border: 1px solid #e5e5e5 !important;
-  border-radius: 8px !important;
+  border-radius: 12px !important;
   color: #2a3063 !important;
   box-shadow: 0 10px 25px -5px rgb(0 0 0 / 30%) !important;
+}
+
+.leaflet-popup-content {
+  margin: 0.85rem 1rem !important;
 }
 
 .leaflet-popup-tip {
@@ -1217,30 +1478,47 @@ html.dark .tanaw-auth-theme-toggle:hover {
 }
 
 .tanaw-leaflet-map--dark {
-  background: #0b1120;
+  background: #0b1524;
+}
+
+.tanaw-leaflet-map--dark .leaflet-tile-pane {
+  filter: brightness(1.22) contrast(0.88) saturate(0.72) hue-rotate(4deg);
+}
+
+.tanaw-leaflet-map--dark .leaflet-tile {
+  opacity: 0.96;
 }
 
 .tanaw-leaflet-map--dark .leaflet-control-zoom {
-  border: 1px solid rgb(51 65 85 / 0.9) !important;
-  box-shadow: 0 14px 34px rgb(0 0 0 / 0.34);
+  overflow: hidden;
+  border: 1px solid rgb(73 93 121 / 0.82) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 16px 38px rgb(0 0 0 / 0.38);
 }
 
 .tanaw-leaflet-map--dark .leaflet-control-zoom a {
-  background: #121c31 !important;
-  border-bottom-color: rgb(51 65 85 / 0.9) !important;
-  color: #e2e8f0 !important;
+  width: 34px;
+  height: 34px;
+  background: rgb(16 28 48 / 0.95) !important;
+  border-bottom-color: rgb(73 93 121 / 0.74) !important;
+  color: #e8eef7 !important;
+  line-height: 32px;
 }
 
 .tanaw-leaflet-map--dark .leaflet-control-zoom a:hover,
 .tanaw-leaflet-map--dark .leaflet-control-zoom a:focus {
-  background: #172033 !important;
+  background: #1a2a43 !important;
   color: #6ee7b7 !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-control-attribution {
-  background: rgb(15 23 42 / 0.82) !important;
-  color: #cbd5e1 !important;
+  margin: 0 8px 8px 0 !important;
+  border: 1px solid rgb(73 93 121 / 0.5);
+  border-radius: 8px;
+  background: rgb(11 21 39 / 0.88) !important;
+  color: #b8c5d6 !important;
   box-shadow: 0 10px 24px rgb(0 0 0 / 0.28);
+  backdrop-filter: blur(10px);
 }
 
 .tanaw-leaflet-map--dark .leaflet-control-attribution a {
@@ -1248,37 +1526,40 @@ html.dark .tanaw-auth-theme-toggle:hover {
 }
 
 .tanaw-leaflet-map--dark .leaflet-popup-content-wrapper {
-  background: #121c31 !important;
-  border-color: rgb(51 65 85 / 0.9) !important;
-  color: #f8fafc !important;
-  box-shadow: 0 22px 48px rgb(0 0 0 / 0.45) !important;
+  background: #101c30 !important;
+  border-color: rgb(73 93 121 / 0.78) !important;
+  color: #f4f7fb !important;
+  box-shadow:
+    0 24px 54px rgb(0 0 0 / 0.48),
+    inset 0 1px 0 rgb(255 255 255 / 0.04) !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-popup-tip {
-  background: #121c31 !important;
+  background: #101c30 !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-tooltip {
-  background: #121c31 !important;
-  border-color: rgb(51 65 85 / 0.9) !important;
-  color: #f8fafc !important;
+  border-radius: 8px;
+  background: #101c30 !important;
+  border-color: rgb(73 93 121 / 0.78) !important;
+  color: #f4f7fb !important;
   box-shadow: 0 14px 34px rgb(0 0 0 / 0.4) !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-tooltip-top::before {
-  border-top-color: #121c31 !important;
+  border-top-color: #101c30 !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-tooltip-bottom::before {
-  border-bottom-color: #121c31 !important;
+  border-bottom-color: #101c30 !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-tooltip-left::before {
-  border-left-color: #121c31 !important;
+  border-left-color: #101c30 !important;
 }
 
 .tanaw-leaflet-map--dark .leaflet-tooltip-right::before {
-  border-right-color: #121c31 !important;
+  border-right-color: #101c30 !important;
 }
 
 .tanaw-map-tooltip {
@@ -1324,19 +1605,19 @@ html.dark .tanaw-auth-theme-toggle:hover {
 
 .tanaw-map-popup {
   min-width: 190px;
-  padding: 4px;
+  padding: 2px;
   font-family: "Bai Jamjuree", sans-serif;
 }
 
 .tanaw-map-popup__title {
-  margin: 0 0 2px;
+  margin: 0 0 4px;
   color: #2a3063;
   font-size: 13px;
   font-weight: 800;
 }
 
 .tanaw-map-popup__meta {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   color: #666666;
   font-size: 9px;
   letter-spacing: 1px;
@@ -1355,7 +1636,7 @@ html.dark .tanaw-auth-theme-toggle:hover {
   display: inline-block;
   padding: 2px 5px;
   border: 1px solid #055b25;
-  border-radius: 3px;
+  border-radius: 999px;
   color: #055b25;
   font-size: 9px;
   font-weight: 800;
@@ -1381,6 +1662,30 @@ html.dark .tanaw-auth-theme-toggle:hover {
 .tanaw-leaflet-map--dark .tanaw-map-popup__badge {
   border-color: #6ee7b7;
   color: #6ee7b7;
+  background: rgb(16 185 129 / 0.1);
+}
+
+html.dark .tanaw-map-directory {
+  border-color: rgb(95 116 145 / 0.5);
+  background: rgb(11 21 39 / 0.94);
+  box-shadow:
+    0 30px 84px rgb(0 0 0 / 0.58),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+html.dark .tanaw-map-directory__header {
+  background: linear-gradient(180deg, rgb(19 35 58 / 0.96), rgb(15 29 49 / 0.94));
+}
+
+html.dark .tanaw-map-directory__selector {
+  background: rgb(12 24 42 / 0.96);
+}
+
+html.dark .tanaw-map-directory__card {
+  border-color: rgb(74 94 123 / 0.5);
+  box-shadow:
+    0 12px 28px rgb(0 0 0 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.025);
 }
 
 #admin-enterprise-map .tanaw-boundary-path {

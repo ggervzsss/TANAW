@@ -23,6 +23,21 @@ type PortalTopbarProps = {
   showDevLog?: boolean;
 };
 
+export function PortalBrand({ role }: { role: UserRole }) {
+  return (
+    <div className="flex shrink-0 items-center gap-4">
+      <Link to={getRoleDashboardPath(role)} aria-label="Open TANAW dashboard" className="flex items-center gap-4">
+        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
+      </Link>
+      <span className="h-9 w-px bg-white/18 max-sm:h-7" aria-hidden="true" />
+      <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
+        {rolePortalLabel[role]}
+      </span>
+    </div>
+  );
+}
+
 export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -292,14 +307,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-white/18" />
 
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
-          <Link to={getRoleDashboardPath(role)} className="flex shrink-0 items-center gap-4">
-            <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
-            <div className="flex items-center gap-4 max-sm:gap-3">
-              <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
-              <span className="h-9 w-px bg-white/18 max-sm:h-7" />
-              <span className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">{rolePortalLabel[role]}</span>
-            </div>
-          </Link>
+          <PortalBrand role={role} />
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 

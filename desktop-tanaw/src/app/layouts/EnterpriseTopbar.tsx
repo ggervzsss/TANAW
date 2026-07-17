@@ -31,6 +31,23 @@ const enterpriseNavigation = [
   { id: "simulation", label: "Simulation Lab", icon: Activity },
 ] as const satisfies { id: EnterpriseView; label: string; icon: typeof LayoutDashboard }[];
 
+export function EnterpriseBrand({ onDashboard }: { onDashboard: () => void }) {
+  const sealUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
+
+  return (
+    <div className="flex shrink-0 items-center gap-4">
+      <button type="button" onClick={onDashboard} aria-label="Open TANAW dashboard" className="flex items-center gap-4">
+        <img src={sealUrl} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
+      </button>
+      <span className="h-9 w-px bg-white/18 max-sm:h-7" aria-hidden="true" />
+      <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
+        Enterprise Portal
+      </span>
+    </div>
+  );
+}
+
 export function EnterpriseTopbar({
   activeView,
   displayName,
@@ -97,8 +114,6 @@ export function EnterpriseTopbar({
   const profileEmail = user?.email ?? "No account email";
   const roleSubtitle = `${String(user?.role ?? "enterprise").toLowerCase()} Role`;
   const displayImageDataUrl = user?.displayImageDataUrl ?? null;
-  const sealUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
-
   const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 max-2xl:px-3.5";
   const navPillActive = "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
   const navPillInactive = "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
@@ -123,14 +138,7 @@ export function EnterpriseTopbar({
     <div className="sticky top-0 z-1000 w-full text-white">
       <div className="enterprise-topbar relative overflow-visible shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10">
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
-          <button type="button" onClick={() => onNavigate("dashboard")} className="flex shrink-0 items-center gap-4">
-            <img src={sealUrl} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
-            <div className="flex items-center gap-4 max-sm:gap-3">
-              <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
-              <span className="h-9 w-px bg-white/18 max-sm:h-7" />
-              <span className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">Enterprise Portal</span>
-            </div>
-          </button>
+          <EnterpriseBrand onDashboard={() => onNavigate("dashboard")} />
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 

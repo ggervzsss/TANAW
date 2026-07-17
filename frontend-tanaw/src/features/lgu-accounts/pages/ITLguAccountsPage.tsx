@@ -32,7 +32,11 @@ export function ITLguAccountsPage() {
   const activationMutation = useMutation({
     mutationFn: (accountId: string) => resendAccountActivation(accountId),
     onSuccess: async (updatedAccount) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
       toast.success("Activation email queued");
       setSelectedAccount((current) => (current?.id === updatedAccount.id ? updatedAccount : current));
       setPendingActivationResend(null);
@@ -105,27 +109,27 @@ function ConfirmActivationResendModal({ account, isPending, onClose, onConfirm }
   return (
     <ModalFrame title="Resend Activation Email" onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
-        <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
             <KeyRound size={20} />
           </span>
           <div>
             <p className="font-bold">This will issue a new activation link.</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-100/75">
               Any previous activation link for {account.displayName} will stop working. TANAW will email a new single-use link so the user can create their password securely.
             </p>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-600 dark:bg-[#0c1728]">
           <p className="text-xs font-bold tracking-wide text-slate-500 uppercase">Account</p>
-          <p className="mt-1 font-bold text-slate-900">{account.displayName}</p>
-          <p className="text-sm text-slate-600">{account.email}</p>
+          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">{account.displayName}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{account.email}</p>
         </div>
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:ring-4 focus:ring-slate-200 focus:outline-none"
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:ring-4 focus:ring-slate-200 focus:outline-none dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-slate-700"
           >
             Cancel
           </button>
@@ -160,13 +164,13 @@ function ConfirmAccountStatusModal({
   return (
     <ModalFrame title={actionLabel} onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
-        <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
             <AlertTriangle size={20} />
           </span>
           <div>
             <p className="font-bold">{isDeactivating ? "This account will lose TANAW access." : "This account will regain TANAW access."}</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-100/75">
               {isDeactivating
                 ? `${pendingStatusChange.account.displayName} will not be able to sign in until the account is reactivated.`
                 : pendingStatusChange.account.isActivated
@@ -175,16 +179,16 @@ function ConfirmAccountStatusModal({
             </p>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-600 dark:bg-[#0c1728]">
           <p className="text-xs font-bold tracking-wide text-slate-500 uppercase">Account</p>
-          <p className="mt-1 font-bold text-slate-900">{pendingStatusChange.account.displayName}</p>
-          <p className="text-sm text-slate-600">{pendingStatusChange.account.email}</p>
+          <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">{pendingStatusChange.account.displayName}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{pendingStatusChange.account.email}</p>
         </div>
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:ring-4 focus:ring-slate-200 focus:outline-none"
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:ring-4 focus:ring-slate-200 focus:outline-none dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus:ring-slate-700"
           >
             Cancel
           </button>

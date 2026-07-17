@@ -110,30 +110,33 @@ export function AdminEnterpriseMap() {
   const visibleEnterprises = selectedBarangayName ? selectedBarangayEnterprises : mapEnterprises;
   const selectedEnterprise = selectedEnterpriseId === null ? null : (mapEnterprises.find((enterprise) => enterprise.id === selectedEnterpriseId) ?? null);
 
-  const applyBoundarySelection = useCallback((barangayName: string | null) => {
-    const selectedKey = barangayName ? normalizeBarangayName(barangayName) : "";
+  const applyBoundarySelection = useCallback(
+    (barangayName: string | null) => {
+      const selectedKey = barangayName ? normalizeBarangayName(barangayName) : "";
 
-    boundaryLayerRef.current?.getLayers().forEach((layer) => {
-      if (!(layer instanceof L.Path)) return;
+      boundaryLayerRef.current?.getLayers().forEach((layer) => {
+        if (!(layer instanceof L.Path)) return;
 
-      if (!barangayName) {
-        boundaryLayerRef.current?.resetStyle(layer);
-        return;
-      }
+        if (!barangayName) {
+          boundaryLayerRef.current?.resetStyle(layer);
+          return;
+        }
 
-      const featureItem = "feature" in layer ? (layer.feature as GeoJSON.Feature | undefined) : undefined;
-      const layerKey = normalizeBarangayName(getBarangayLabel(featureItem));
+        const featureItem = "feature" in layer ? (layer.feature as GeoJSON.Feature | undefined) : undefined;
+        const layerKey = normalizeBarangayName(getBarangayLabel(featureItem));
 
-      if (layerKey === selectedKey) {
-        layer.setStyle(getActiveBoundaryStyle(mapTheme));
-        activeBoundaryRef.current = layer;
-        layer.bringToFront();
-        return;
-      }
+        if (layerKey === selectedKey) {
+          layer.setStyle(getActiveBoundaryStyle(mapTheme));
+          activeBoundaryRef.current = layer;
+          layer.bringToFront();
+          return;
+        }
 
-      layer.setStyle(getDimmedBoundaryStyle(mapTheme));
-    });
-  }, [mapTheme]);
+        layer.setStyle(getDimmedBoundaryStyle(mapTheme));
+      });
+    },
+    [mapTheme],
+  );
 
   const findBoundaryLayerByName = useCallback((barangayName: string) => {
     const selectedKey = normalizeBarangayName(barangayName);
@@ -366,12 +369,14 @@ export function AdminEnterpriseMap() {
 
     visibleEnterprises.forEach((enterprise) => {
       const color = getEnterpriseStatusColor(enterprise.status);
+      const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
+      const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
       const marker = L.marker([enterprise.lat, enterprise.lng], {
         icon: L.divIcon({
           className: enterprise.status === "Critical" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
           iconAnchor: [8, 8],
           popupAnchor: [0, -10],
-          html: `<span style="background-color:${color};width:18px;height:18px;display:block;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);"></span>`,
+          html: `<span style="background-color:${color};width:18px;height:18px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:${markerShadow};"></span>`,
         }),
       }).addTo(map);
 
@@ -389,7 +394,7 @@ export function AdminEnterpriseMap() {
       });
       markersRef.current[enterprise.id] = marker;
     });
-  }, [selectBarangay, visibleEnterprises]);
+  }, [mapTheme, selectBarangay, visibleEnterprises]);
 
   useEffect(() => {
     if (!selectedEnterpriseId || !mapRef.current || !markersRef.current[selectedEnterpriseId]) return;
@@ -410,6 +415,24 @@ export function AdminEnterpriseMap() {
         <div id={mapContainerId} className="h-full w-full" />
       </div>
 
+      <AnimatePresence>
+        {(isBoundaryLoading || isBoundaryError) && (
+          <motion.div
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className={`tanaw-map-status absolute top-4 right-4 z-420 flex max-w-xs items-center gap-3 rounded-xl border px-4 py-3 text-xs font-bold shadow-[0_18px_46px_rgba(0,0,0,0.38)] backdrop-blur-xl ${
+              isBoundaryError ? "border-red-300/30 bg-[#2b1620]/92 text-red-100" : "border-slate-400/30 bg-[#0d192b]/92 text-slate-100"
+            }`}
+          >
+            <RefreshCw size={16} className={isBoundaryLoading ? "animate-spin text-emerald-300" : "text-red-300"} aria-hidden="true" />
+            <span>{isBoundaryError ? "Barangay boundaries are temporarily unavailable." : "Loading barangay boundaries..."}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence initial={false}>
         {!isDirectoryCollapsed && (
           <motion.aside
@@ -418,10 +441,10 @@ export function AdminEnterpriseMap() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -24 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="absolute top-4 bottom-4 left-4 z-420 flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-white/15 bg-slate-950/65 shadow-[0_24px_70px_rgba(2,6,23,0.48)] backdrop-blur-md"
+            className="tanaw-map-directory absolute top-4 bottom-4 left-4 z-420 flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-400/35 bg-[#0b1527]/92 shadow-[0_28px_80px_rgba(0,0,0,0.52)] ring-1 ring-white/8 backdrop-blur-xl"
           >
             {/* Header section (Fixed size, shrink-0) */}
-            <div className="flex shrink-0 flex-col gap-3 border-b border-white/15 bg-black/30 px-4 py-3">
+            <div className="tanaw-map-directory__header flex shrink-0 flex-col gap-3 border-b border-slate-500/35 bg-[#111f34]/90 px-4 py-3.5">
               <div className="relative z-10 flex items-start justify-between gap-3">
                 <div>
                   <span className="flex items-center gap-2 text-[10px] font-black tracking-widest text-white uppercase">
@@ -466,7 +489,7 @@ export function AdminEnterpriseMap() {
             </div>
 
             {/* Dropdown Selector section (Fixed size, shrink-0, overflow-visible for dropdown menu) */}
-            <div className="relative z-20 shrink-0 overflow-visible border-b border-white/15 bg-black/20 px-4 py-3">
+            <div className="tanaw-map-directory__selector relative z-20 shrink-0 overflow-visible border-b border-slate-500/30 bg-[#0d192b]/92 px-4 py-3.5">
               <label className="mb-1 block text-[9px] font-black tracking-widest text-white/65 uppercase">Select Barangay</label>
               <div className="relative">
                 <button
@@ -587,7 +610,7 @@ export function AdminEnterpriseMap() {
                     </button>
 
                     {/* Selected Barangay Info */}
-                    <div className="shrink-0 rounded-lg border border-white/15 bg-white/8 p-3 shadow-sm shadow-black/20">
+                    <div className="tanaw-map-directory__card shrink-0 rounded-xl border border-slate-400/25 bg-[#15233a]/82 p-3.5 shadow-sm shadow-black/20">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-sm font-black tracking-wide text-white uppercase">Barangay {selectedBarangayName}</h3>
@@ -600,7 +623,7 @@ export function AdminEnterpriseMap() {
                     </div>
 
                     {/* Dedicated Enterprise List section at the bottom */}
-                    <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-white/15 bg-white/8 p-3 shadow-sm shadow-black/20">
+                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3.5 shadow-sm shadow-black/20">
                       <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
                         <h3 className="flex items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
                           <Building2 size={13} className="text-tanaw-sky" />
@@ -645,14 +668,14 @@ export function AdminEnterpriseMap() {
                     className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3"
                   >
                     {/* Prompt card */}
-                    <div className="shrink-0 rounded-lg border border-white/15 bg-white/8 p-3 text-center shadow-sm shadow-black/20">
+                    <div className="tanaw-map-directory__card shrink-0 rounded-xl border border-slate-400/25 bg-[#15233a]/82 p-3.5 text-center shadow-sm shadow-black/20">
                       <MapPin size={18} className="text-tanaw-sky mx-auto mb-1.5 animate-bounce" style={{ animationDuration: "3s" }} />
                       <h4 className="text-[10px] font-black tracking-widest text-white uppercase">No Barangay Selected</h4>
                       <p className="mt-1 text-[9px] leading-normal font-bold tracking-widest text-white/65 uppercase">Click a barangay boundary on the map or use the dropdown above to filter.</p>
                     </div>
 
                     {/* Dedicated Enterprise List section showing all enterprises */}
-                    <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-white/15 bg-white/8 p-3 shadow-sm shadow-black/20">
+                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3.5 shadow-sm shadow-black/20">
                       <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
                         <h3 className="flex items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
                           <Building2 size={13} className="text-tanaw-sky" />
@@ -721,7 +744,7 @@ export function AdminEnterpriseMap() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
           onClick={() => setIsDirectoryCollapsed(false)}
-          className="focus:ring-tanaw-sky absolute top-4 left-4 z-430 flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-slate-950/50 text-white shadow-2xl backdrop-blur-md transition hover:bg-slate-950/65 focus:ring-2 focus:outline-none"
+          className="focus:ring-tanaw-sky absolute top-4 left-4 z-430 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-400/35 bg-[#0b1527]/92 text-white shadow-[0_18px_46px_rgba(0,0,0,0.44)] backdrop-blur-xl transition hover:border-slate-300/45 hover:bg-[#132139] focus:ring-2 focus:outline-none"
         >
           <PanelLeftOpen size={18} />
         </motion.button>

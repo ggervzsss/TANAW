@@ -18,7 +18,16 @@ type TypeFilter = "All Types" | PriorityAlertType;
 
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info"];
 const statusFilters: StatusFilter[] = ["All Statuses", "New", "In Review", "Resolved"];
-const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Submission Delay", "Threshold Breach", "Foot Traffic Alert", "Occupancy Spike", "Failed Login Threshold"];
+const typeFilters: TypeFilter[] = [
+  "All Types",
+  "Maintenance Request",
+  "Password Reset Request",
+  "Submission Delay",
+  "Threshold Breach",
+  "Foot Traffic Alert",
+  "Occupancy Spike",
+  "Failed Login Threshold",
+];
 const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 
 export function AdminAlertsMonitorPage() {
@@ -51,7 +60,7 @@ export function AdminAlertsMonitorPage() {
   const resolvedAlerts = alerts.filter((alert) => alert.status === "Resolved");
 
   return (
-    <PageMotion>
+    <PageMotion className="tanaw-data-page pb-12">
       <PageHeader title="Alerts" description="Read-only system-wide alert visibility for IT requests, enterprise issues, reporting delays, occupancy spikes, and monitoring events." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
@@ -63,15 +72,15 @@ export function AdminAlertsMonitorPage() {
 
       <EnterpriseProfileRequestsPanel accounts={enterpriseAccounts} canResolve={false} onAccountUpdated={() => undefined} />
 
-      <Panel className="mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
+      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
+        <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
           <div className="relative min-w-65 flex-1">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search alert ID, enterprise, requester, type, or action"
-              className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+              className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
           <FilterSelect value={severityFilter} onChange={(value) => setSeverityFilter(value as SeverityFilter)} options={severityFilters} />
@@ -79,7 +88,7 @@ export function AdminAlertsMonitorPage() {
           <FilterSelect value={typeFilter} onChange={(value) => setTypeFilter(value as TypeFilter)} options={typeFilters} />
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="tanaw-data-table overflow-x-auto">
           <table className="w-full min-w-220 table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[12%]" />
@@ -89,7 +98,7 @@ export function AdminAlertsMonitorPage() {
               <col className="w-[32%]" />
               <col className="w-[12%]" />
             </colgroup>
-            <thead className="bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+            <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
                 {["Alert ID", "Type", "Priority", "Source", "Required Action", "Status"].map((heading) => (
                   <th key={heading} className="px-4 py-4 whitespace-nowrap">
@@ -98,9 +107,9 @@ export function AdminAlertsMonitorPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-800">
+            <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
               {filteredAlerts.map((alert) => (
-                <tr key={alert.id} onClick={() => setSelectedAlert(alert)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={alert.id} onClick={() => setSelectedAlert(alert)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
                   <td className="px-4 py-4 font-mono text-xs font-bold text-gray-600">{alert.id}</td>
                   <td className="px-4 py-4">
                     <div className="font-semibold text-gray-900">{alert.type}</div>
@@ -136,7 +145,7 @@ export function AdminAlertsMonitorPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
+        <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
           <span>Showing {filteredAlerts.length} alerts</span>
           <span>{alerts.length} total alerts</span>
         </div>

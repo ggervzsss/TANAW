@@ -20,7 +20,10 @@ export function PasswordRequirements({ password }: { password: string }) {
   const metCount = requirements.filter((requirement) => requirement.state === "met").length;
 
   return (
-    <section aria-label="Password requirements" className="mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 dark:border-emerald-500/20 dark:bg-emerald-950/20">
+    <section
+      aria-label="Password requirements"
+      className="tanaw-password-requirements mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 shadow-inner shadow-emerald-950/3 dark:border-emerald-400/20 dark:bg-[#0d2030] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+    >
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-bold tracking-wide text-emerald-900 uppercase dark:text-emerald-200">Password requirements</p>
         <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
