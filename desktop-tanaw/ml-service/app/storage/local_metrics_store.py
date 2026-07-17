@@ -1078,6 +1078,67 @@ class LocalMetricsStore:
 
         return [_report_submission_row(row) for row in rows]
 
+    def get_report_draft(self, draft_key: str) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                select draft_key, period, report_id, payload_json, updated_at
+                from report_drafts
+                where draft_key = ?
+                """,
+                (draft_key,),
+            ).fetchone()
+        return _report_draft_row(row) if row is not None else None
+
+    def save_report_draft(
+        self,
+        draft_key: str,
+        period: str,
+        payload: dict[str, Any],
+        report_id: str | None = None,
+    ) -> dict[str, Any]:
+        updated_at = _utc_now()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                insert into report_drafts (
+                    draft_key,
+                    period,
+                    report_id,
+                    payload_json,
+                    updated_at
+                )
+                values (?, ?, ?, ?, ?)
+                on conflict(draft_key) do update set
+                    period = excluded.period,
+                    report_id = excluded.report_id,
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    draft_key,
+                    period,
+                    report_id,
+                    json.dumps(payload, sort_keys=True),
+                    updated_at,
+                ),
+            )
+        return {
+            "draft_key": draft_key,
+            "period": period,
+            "report_id": report_id,
+            "payload": payload,
+            "updated_at": updated_at,
+        }
+
+    def delete_report_draft(self, draft_key: str) -> bool:
+        with self._connection() as connection:
+            cursor = connection.execute(
+                "delete from report_drafts where draft_key = ?",
+                (draft_key,),
+            )
+        return cursor.rowcount > 0
+
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         self._initialize()
@@ -1160,6 +1221,14 @@ class LocalMetricsStore:
                     mock_run_id text,
                     synced_at text,
                     raw_purged_at text
+                );
+
+                create table if not exists report_drafts (
+                    draft_key text primary key,
+                    period text not null,
+                    report_id text,
+                    payload_json text not null,
+                    updated_at text not null
                 );
 
                 create table if not exists occupancy_corrections (
@@ -1423,4 +1492,19 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
         "mock_run_id": row["mock_run_id"],
         "synced_at": row["synced_at"],
         "raw_purged_at": row["raw_purged_at"],
+    }
+
+
+def _report_draft_row(row: sqlite3.Row) -> dict[str, Any]:
+    try:
+        payload = json.loads(row["payload_json"]) if row["payload_json"] else {}
+    except json.JSONDecodeError:
+        payload = {}
+
+    return {
+        "draft_key": row["draft_key"],
+        "period": row["period"],
+        "report_id": row["report_id"],
+        "payload": payload if isinstance(payload, dict) else {},
+        "updated_at": row["updated_at"],
     }

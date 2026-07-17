@@ -5,7 +5,16 @@ import { ReportLedgerTable, type ReportLedgerRow } from "./ReportLedgerTable";
 import { SubmitReportDialog } from "./SubmitReportDialog";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions, recordLocalReportSubmission } from "../../camera/services/ml-service";
+import {
+  DEFAULT_ML_SERVICE_BASE_URL,
+  deleteLocalReportDraft,
+  getLocalMetricsSummary,
+  getLocalReportDraft,
+  getMlServiceStatus,
+  listLocalReportSubmissions,
+  recordLocalReportSubmission,
+  saveLocalReportDraft,
+} from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
 import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, syncDesktopReportSubmission, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
@@ -26,7 +35,9 @@ type DotPreviewState = {
   reportId: string;
 };
 
-const DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics";
+const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics:";
+const DEMOGRAPHIC_DRAFT_RETRY_DELAY_MS = 2000;
+const DEMOGRAPHIC_DRAFT_SAVE_DELAY_MS = 300;
 
 export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
   const currentReportingPeriod = useMemo(() => getCurrentReportingPeriod(), []);
@@ -48,7 +59,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
-  const demographicDraftStorageKey = useMemo(() => getDemographicDraftStorageKey(activeReportId, period), [activeReportId, period]);
+  const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
   const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
 
   const selectedPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, period)) ?? null;
@@ -69,7 +80,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const currentLedgerDemo =
     !activeReport && isSameReportingMonth(period, currentReportingPeriod)
       ? demo
-      : loadStoredDemographicDraft(getDemographicDraftStorageKey(null, currentReportingPeriod)) ?? emptyDemo();
+      : emptyDemo();
   const currentLedgerNotes = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "";
 
   const blockingMetricsError = activeReport ? null : metricsError;
@@ -157,22 +168,56 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   }, [refreshPendingPeriods]);
 
   useEffect(() => {
-    const storedDemo = isReadOnly ? null : loadStoredDemographicDraft(demographicDraftStorageKey);
-    if (storedDemo) {
-      setDemo(storedDemo);
-    } else if (activeReportId) {
-      const report = reportsHistoryRef.current.find((item) => item.id === activeReportId);
-      setDemo(report?.demo ?? emptyDemo());
-    } else {
-      setDemo(emptyDemo());
-    }
-    setHydratedDemographicDraftKey(demographicDraftStorageKey);
-  }, [activeReportId, demographicDraftStorageKey, isReadOnly]);
+    clearLegacyBrowserDemographicDrafts();
+  }, []);
 
   useEffect(() => {
-    if (isReadOnly || hydratedDemographicDraftKey !== demographicDraftStorageKey) return;
-    saveStoredDemographicDraft(demographicDraftStorageKey, demo);
-  }, [demo, demographicDraftStorageKey, hydratedDemographicDraftKey, isReadOnly]);
+    let cancelled = false;
+    let retryTimeoutId: number | null = null;
+    setHydratedDemographicDraftKey(null);
+
+    const hydrateDraft = async () => {
+      let storedDemo: DemoBreakdown | null = null;
+      if (!isReadOnly) {
+        try {
+          const status = await getMlServiceStatus();
+          const draft = await getLocalReportDraft(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, demographicDraftKey);
+          storedDemo = draft ? demoFromPayload(draft.payload.demo) : null;
+        } catch {
+          if (!cancelled) {
+            retryTimeoutId = window.setTimeout(() => void hydrateDraft(), DEMOGRAPHIC_DRAFT_RETRY_DELAY_MS);
+          }
+          return;
+        }
+      }
+      if (cancelled) return;
+
+      if (storedDemo) {
+        setDemo(storedDemo);
+      } else if (activeReportId) {
+        const report = reportsHistoryRef.current.find((item) => item.id === activeReportId);
+        setDemo(report?.demo ?? emptyDemo());
+      } else {
+        setDemo(emptyDemo());
+      }
+      setHydratedDemographicDraftKey(demographicDraftKey);
+    };
+
+    void hydrateDraft();
+    return () => {
+      cancelled = true;
+      if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
+    };
+  }, [activeReportId, demographicDraftKey, isReadOnly]);
+
+  useEffect(() => {
+    if (isReadOnly || hydratedDemographicDraftKey !== demographicDraftKey) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void persistDemographicDraft(demographicDraftKey, period, activeReportId, demo);
+    }, DEMOGRAPHIC_DRAFT_SAVE_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeReportId, demo, demographicDraftKey, hydratedDemographicDraftKey, isReadOnly, period]);
 
   const resetDraftWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
@@ -326,9 +371,11 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     };
 
     let submission: LocalReportSubmission;
+    let mlServiceBaseUrl = DEFAULT_ML_SERVICE_BASE_URL;
     try {
       const status = await getMlServiceStatus();
-      submission = await recordLocalReportSubmission(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, {
+      mlServiceBaseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+      submission = await recordLocalReportSubmission(mlServiceBaseUrl, {
         metrics: {
           entries: reportMetrics.entries,
           exits: reportMetrics.exits,
@@ -399,7 +446,11 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       setReportsHistory((prev) => upsertReport(prev, newReport));
     }
     setPendingPeriodCounts((prev) => prev.filter((counts) => counts.period !== period));
-    removeStoredDemographicDraft(demographicDraftStorageKey);
+    try {
+      await deleteLocalReportDraft(mlServiceBaseUrl, demographicDraftKey);
+    } catch {
+      // The submitted report is already durable; stale draft cleanup remains best-effort.
+    }
     setShowConfirm(false);
     setIsSubmitting(false);
     if (restoredWorkspaceMetrics) {
@@ -527,43 +578,38 @@ function isPreparedMetrics(value: unknown): value is LocalMetricsSummary & { pre
   return Boolean(value && typeof value === "object" && "entries" in value && "period" in value);
 }
 
-function getDemographicDraftStorageKey(activeReportId: string | null, period: string) {
-  const scope = activeReportId ? `report:${activeReportId}` : `period:${period || getCurrentReportingPeriod()}`;
-  return `${DEMOGRAPHIC_DRAFT_STORAGE_PREFIX}:${encodeURIComponent(scope)}`;
+function getDemographicDraftKey(activeReportId: string | null, period: string) {
+  return activeReportId ? `report:${activeReportId}` : `period:${period || getCurrentReportingPeriod()}`;
 }
 
-function loadStoredDemographicDraft(storageKey: string): DemoBreakdown | null {
+async function persistDemographicDraft(draftKey: string, period: string, reportId: string | null, demo: DemoBreakdown) {
   try {
-    const storedValue = window.localStorage.getItem(storageKey);
-    if (!storedValue) return null;
-    const parsed = JSON.parse(storedValue) as { demo?: unknown };
-    return demoFromPayload(parsed.demo);
-  } catch {
-    window.localStorage.removeItem(storageKey);
-    return null;
-  }
-}
-
-function saveStoredDemographicDraft(storageKey: string, demo: DemoBreakdown) {
-  try {
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        demo,
-        savedAt: new Date().toISOString(),
-        version: 1,
-      }),
-    );
+    const status = await getMlServiceStatus();
+    const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+    if (Object.values(demo).every((value) => value.trim() === "")) {
+      await deleteLocalReportDraft(baseUrl, draftKey);
+      return;
+    }
+    await saveLocalReportDraft(baseUrl, draftKey, {
+      period,
+      reportId,
+      reportPayload: { demo, version: 1 },
+    });
   } catch {
     // Local draft persistence is best-effort and must not block report editing.
   }
 }
 
-function removeStoredDemographicDraft(storageKey: string) {
+function clearLegacyBrowserDemographicDrafts() {
   try {
-    window.localStorage.removeItem(storageKey);
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX)) {
+        window.localStorage.removeItem(key);
+      }
+    }
   } catch {
-    // Local draft persistence is best-effort and must not block report submission.
+    // Obsolete draft cleanup must not affect the rest of the reports workspace.
   }
 }
 
@@ -644,7 +690,7 @@ function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRe
     peak: counts.peakOccupancy,
     unique: counts.uniqueCount,
     period: counts.period,
-    demo: loadStoredDemographicDraft(getDemographicDraftStorageKey(null, counts.period)) ?? emptyDemo(),
+    demo: emptyDemo(),
     notes: "",
   };
 }

@@ -611,6 +611,26 @@ class CameraProcessingManager:
     def list_report_submissions(self, limit: int = 100) -> list[dict]:
         return self._session_store.list_report_submissions(limit=limit)
 
+    def get_report_draft(self, draft_key: str) -> dict | None:
+        return self._session_store.get_report_draft(draft_key)
+
+    def save_report_draft(
+        self,
+        draft_key: str,
+        period: str,
+        payload: dict,
+        report_id: str | None = None,
+    ) -> dict:
+        return self._session_store.save_report_draft(
+            draft_key=draft_key,
+            period=period,
+            payload=payload,
+            report_id=report_id,
+        )
+
+    def delete_report_draft(self, draft_key: str) -> bool:
+        return self._session_store.delete_report_draft(draft_key)
+
     def mark_report_synced(self, report_id: str) -> bool:
         return self._session_store.mark_report_synced(report_id)
 

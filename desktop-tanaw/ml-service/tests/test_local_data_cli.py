@@ -13,12 +13,18 @@ class LocalDataCliTest(unittest.TestCase):
             store = LocalMetricsStore(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event("real", None))
             store.append_count_event(_event("mock", "run-1"))
+            store.save_report_draft(
+                "period:July 2026",
+                "July 2026",
+                {"demo": {"thisProvMale": "10"}},
+            )
 
             result = inspect_local_data(app_data_dir, "enterprise@example.test", limit=5)
 
             ledger = result["ledgers"][0]
             self.assertTrue(ledger["exists"])
             self.assertEqual(ledger["tables"]["count_events"], 2)
+            self.assertEqual(ledger["tables"]["report_drafts"], 1)
             self.assertEqual(ledger["currentDraftEvents"], 2)
             self.assertEqual(
                 {
@@ -51,6 +57,11 @@ class LocalDataCliTest(unittest.TestCase):
             app_data_dir = Path(directory)
             store = LocalMetricsStore(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event("real", None))
+            store.save_report_draft(
+                "period:July 2026",
+                "July 2026",
+                {"demo": {"thisProvMale": "10"}},
+            )
             legacy = app_data_dir / "ml-service" / "events.jsonl"
             legacy.parent.mkdir(parents=True, exist_ok=True)
             legacy.write_text("{}\n", encoding="utf-8")

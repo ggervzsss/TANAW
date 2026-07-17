@@ -219,7 +219,7 @@ PowerShell uses the same commands.
 Inspection output includes:
 
 - Electron app-data and SQLite ledger paths;
-- row counts for events, snapshots, reports, visitor identity tables, and occupancy corrections;
+- row counts for events, snapshots, report drafts, submitted reports, visitor identity tables, and occupancy corrections;
 - real, generated, and hybrid provenance totals;
 - current unsubmitted draft event count;
 - first and last event timestamps;
@@ -234,7 +234,7 @@ Sensitive embedding blobs and full event payloads are not printed.
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
-This deletes only that enterprise's local count events, snapshots, occupancy correction audit records, report submissions, current draft, visitor identity metadata, active ML camera session, and raw event log.
+This deletes only that enterprise's local count events, snapshots, occupancy correction audit records, demographic report drafts, report submissions, current count draft, visitor identity metadata, active ML camera session, and raw event log.
 
 It preserves other enterprise ledgers, saved camera definitions, device IDs, theme settings, authentication storage, and backend records.
 
@@ -244,7 +244,7 @@ It preserves other enterprise ledgers, saved camera definitions, device IDs, the
 npm run local-data -- clear --all-ledgers --yes
 ```
 
-This deletes all enterprise-scoped ledgers and the older legacy unscoped ledger. Chromium local storage and camera definitions remain.
+This deletes all enterprise-scoped ledgers, including demographic report drafts, and the older legacy unscoped ledger. Chromium local storage and camera definitions remain. Obsolete demographic draft keys from versions that used Chromium storage are removed automatically when the updated Reports page opens.
 
 ### Full Device Reset
 

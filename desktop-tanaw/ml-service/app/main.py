@@ -29,6 +29,8 @@ from app.config.camera_config import (
     MockStatusResponse,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
+    ReportDraftRequest,
+    ReportDraftResponse,
     ReportRawDataPurgeResponse,
     ReportSubmissionRecordResponse,
     ReportSubmissionRequest,
@@ -172,6 +174,29 @@ def list_local_report_submissions(limit: int = 100) -> list[ReportSubmissionReco
         ReportSubmissionRecordResponse(**submission)
         for submission in manager.list_report_submissions(limit=limit)
     ]
+
+
+@app.get("/reports/drafts/{draft_key}", response_model=ReportDraftResponse | None)
+def get_report_draft(draft_key: str) -> ReportDraftResponse | None:
+    draft = manager.get_report_draft(draft_key)
+    return ReportDraftResponse(**draft) if draft is not None else None
+
+
+@app.put("/reports/drafts/{draft_key}", response_model=ReportDraftResponse)
+def save_report_draft(draft_key: str, payload: ReportDraftRequest) -> ReportDraftResponse:
+    return ReportDraftResponse(
+        **manager.save_report_draft(
+            draft_key=draft_key,
+            period=payload.period,
+            report_id=payload.report_id,
+            payload=payload.payload,
+        )
+    )
+
+
+@app.delete("/reports/drafts/{draft_key}", response_model=SyncMarkResponse)
+def delete_report_draft(draft_key: str) -> SyncMarkResponse:
+    return SyncMarkResponse(updated=1 if manager.delete_report_draft(draft_key) else 0)
 
 
 @app.post("/reports/local/{report_id}/synced", response_model=SyncMarkResponse)

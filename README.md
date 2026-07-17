@@ -790,7 +790,7 @@ Desktop records are separate from PostgreSQL and are scoped by enterprise.
 Close the desktop app before manually clearing local data.
 
 Remove all local desktop ledger data, including real CCTV-derived rows, mock
-runs, hybrid runs, reports, snapshots, and occupancy corrections, while
+runs, hybrid runs, demographic report drafts, submitted reports, snapshots, and occupancy corrections, while
 preserving saved camera settings, authentication storage, preferences, and
 Electron caches:
 

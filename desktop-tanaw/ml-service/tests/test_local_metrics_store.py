@@ -67,6 +67,44 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["notes"], "notes")
             self.assertEqual(reports[0]["payload"]["demo"]["foreignMale"], "2")
 
+    def test_report_drafts_are_scoped_updated_and_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = LocalMetricsStore(str(Path(directory)), "first@example.test")
+            second = LocalMetricsStore(str(Path(directory)), "second@example.test")
+
+            first.save_report_draft(
+                "period:July 2026",
+                "July 2026",
+                {"demo": {"thisProvMale": "10"}},
+            )
+            second.save_report_draft(
+                "period:July 2026",
+                "July 2026",
+                {"demo": {"thisProvMale": "20"}},
+            )
+            updated = first.save_report_draft(
+                "period:July 2026",
+                "July 2026",
+                {"demo": {"thisProvMale": "11"}},
+            )
+            first_draft = first.get_report_draft("period:July 2026")
+            second_draft = second.get_report_draft("period:July 2026")
+            assert first_draft is not None
+            assert second_draft is not None
+
+            self.assertEqual(updated["payload"]["demo"]["thisProvMale"], "11")
+            self.assertEqual(
+                first_draft["payload"]["demo"]["thisProvMale"],
+                "11",
+            )
+            self.assertEqual(
+                second_draft["payload"]["demo"]["thisProvMale"],
+                "20",
+            )
+            self.assertTrue(first.delete_report_draft("period:July 2026"))
+            self.assertIsNone(first.get_report_draft("period:July 2026"))
+            self.assertFalse(first.delete_report_draft("period:July 2026"))
+
     def test_purging_report_raw_events_keeps_submission_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)))

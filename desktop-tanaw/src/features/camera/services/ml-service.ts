@@ -235,6 +235,14 @@ export type LocalReportSubmissionRecord = {
   raw_purged_at?: string | null;
 };
 
+export type LocalReportDraft = {
+  draft_key: string;
+  period: string;
+  report_id: string | null;
+  payload: Record<string, unknown>;
+  updated_at: string;
+};
+
 export type OccupancyCorrection = {
   correction_id: string;
   enterprise_id: string | null;
@@ -438,6 +446,33 @@ export async function recordLocalReportSubmission(
 export async function listLocalReportSubmissions(baseUrl: string, limit = 100): Promise<LocalReportSubmissionRecord[]> {
   const params = new URLSearchParams({ limit: String(limit) });
   return requestJson<LocalReportSubmissionRecord[]>(`${baseUrl}/reports/local?${params.toString()}`, { method: "GET" }, 2500);
+}
+
+export async function getLocalReportDraft(baseUrl: string, draftKey: string): Promise<LocalReportDraft | null> {
+  return requestJson<LocalReportDraft | null>(`${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`, { method: "GET" }, 2500);
+}
+
+export async function saveLocalReportDraft(
+  baseUrl: string,
+  draftKey: string,
+  payload: { period: string; reportId: string | null; reportPayload: Record<string, unknown> },
+): Promise<LocalReportDraft> {
+  return requestJson<LocalReportDraft>(
+    `${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        period: payload.period,
+        report_id: payload.reportId,
+        payload: payload.reportPayload,
+      }),
+    },
+    2500,
+  );
+}
+
+export async function deleteLocalReportDraft(baseUrl: string, draftKey: string): Promise<{ updated: number }> {
+  return requestJson<{ updated: number }>(`${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`, { method: "DELETE" }, 2500);
 }
 
 export async function markLocalReportSynced(baseUrl: string, reportId: string): Promise<{ updated: number }> {

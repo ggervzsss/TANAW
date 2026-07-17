@@ -13,6 +13,7 @@ LEDGER_TABLES = (
     "count_events",
     "count_snapshots",
     "occupancy_corrections",
+    "report_drafts",
     "report_submissions",
     "visitor_identities",
     "visitor_model_embeddings",

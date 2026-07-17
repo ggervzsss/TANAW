@@ -522,6 +522,17 @@ class ReportSubmissionResponse(MetricsSummaryResponse):
     sync_status: str
 
 
+class ReportDraftRequest(BaseModel):
+    period: str = Field(..., min_length=1, max_length=120)
+    report_id: str | None = Field(default=None, max_length=80)
+    payload: dict = Field(default_factory=dict)
+
+
+class ReportDraftResponse(ReportDraftRequest):
+    draft_key: str
+    updated_at: str
+
+
 class MockStartRequest(BaseModel):
     mock_run_id: str = Field(..., min_length=1, max_length=80)
     mode: SimulationMode = "virtual"

@@ -302,8 +302,8 @@ Invoke-RestMethod http://127.0.0.1:8765/mock/status
 
 Close the desktop before clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows and mock
-runs, while preserving camera definitions, Electron preferences, authentication
+Remove all local desktop ledger data, including real CCTV-derived rows, mock
+runs, and demographic report drafts, while preserving camera definitions, Electron preferences, authentication
 storage, and caches:
 
 ```shell
