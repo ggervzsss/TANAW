@@ -81,7 +81,11 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
   const createMutation = useMutation({
     mutationFn: createEnterpriseAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
       toast.success("Enterprise account created; activation email queued");
       onClose();
     },
@@ -166,7 +170,11 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
         return;
       }
 
-      setLocationNotice(nextAddress ? `${barangayPrefix} Detected address is available, but your typed street address was kept.${barangayNotice}` : `${barangayPrefix} Street-level address was not available from reverse geocoding.${barangayNotice}`);
+      setLocationNotice(
+        nextAddress
+          ? `${barangayPrefix} Detected address is available, but your typed street address was kept.${barangayNotice}`
+          : `${barangayPrefix} Street-level address was not available from reverse geocoding.${barangayNotice}`,
+      );
     },
     onError: () => {
       setLocationNotice("Address lookup failed. Keep the marker if the coordinates are correct, or adjust it manually.");
@@ -238,8 +246,22 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
           />
           <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
           <ContactNumberField name="contactNumber" label="Contact Number" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
-          <FormField name="enterpriseId" label="Enterprise ID Seed" placeholder="Leave blank to use enterprise name" value={form.enterpriseId} onChange={(value) => updateField("enterpriseId", value)} />
-          <FormField name="buildingCapacity" label="Building Capacity" type="number" value={form.buildingCapacity} onChange={(value) => updateField("buildingCapacity", value)} error={errors.buildingCapacity} required />
+          <FormField
+            name="enterpriseId"
+            label="Enterprise ID Seed"
+            placeholder="Leave blank to use enterprise name"
+            value={form.enterpriseId}
+            onChange={(value) => updateField("enterpriseId", value)}
+          />
+          <FormField
+            name="buildingCapacity"
+            label="Building Capacity"
+            type="number"
+            value={form.buildingCapacity}
+            onChange={(value) => updateField("buildingCapacity", value)}
+            error={errors.buildingCapacity}
+            required
+          />
           <FormField name="address" label="Block / Lot / Street" value={form.address} onChange={(value) => updateField("address", value)} error={errors.address} required />
           <SearchableDropdownField
             name="barangay"
@@ -291,7 +313,14 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
                 onChange={applySelectedLocation}
                 onReject={handleLocationRejected}
               />
-              <LocationStatusPanel address={form.address} barangay={form.barangay} detectedBarangay={detectedBarangay} location={location} locationError={locationError} locationNotice={locationNotice} />
+              <LocationStatusPanel
+                address={form.address}
+                barangay={form.barangay}
+                detectedBarangay={detectedBarangay}
+                location={location}
+                locationError={locationError}
+                locationNotice={locationNotice}
+              />
             </div>
 
             {locationError && (
@@ -302,10 +331,11 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             )}
           </div>
 
-          <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
-            <p className="text-sm leading-relaxed text-emerald-800">
-              TANAW will queue a secure activation link for the registered contact email. The enterprise user will choose a private password before signing in to the TANAW Enterprise desktop application.
+          <div className="tanaw-information-banner flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2 dark:ring-white/5">
+            <CheckCircle2 className="tanaw-information-banner__icon mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+            <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-100">
+              TANAW will queue a secure activation link for the registered contact email. The enterprise user will choose a private password before signing in to the TANAW Enterprise desktop
+              application.
             </p>
           </div>
 
@@ -530,7 +560,9 @@ function LocationStatusPanel({ address, barangay, detectedBarangay, location, lo
       </div>
 
       {(locationNotice || locationError) && (
-        <div className={`mt-4 rounded-xl border px-3 py-2 text-xs font-semibold ${locationError ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-100 bg-emerald-50 text-emerald-800"}`}>
+        <div
+          className={`mt-4 rounded-xl border px-3 py-2 text-xs font-semibold ${locationError ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-100 bg-emerald-50 text-emerald-800"}`}
+        >
           {locationError ?? locationNotice}
         </div>
       )}

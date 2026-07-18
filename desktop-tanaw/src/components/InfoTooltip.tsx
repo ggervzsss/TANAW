@@ -21,7 +21,7 @@ type TooltipPosition = {
 
 export function InfoTooltip({ align = "right", children, className = "", content, focusable = true }: InfoTooltipProps) {
   const tooltipId = useId();
-  const triggerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const tooltipRef = useRef<HTMLSpanElement>(null);
   const openTimerRef = useRef<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -103,36 +103,69 @@ export function InfoTooltip({ align = "right", children, className = "", content
     width: position.width,
   } as CSSProperties;
 
+  const tooltip =
+    isOpen && typeof document !== "undefined"
+      ? createPortal(
+          <span
+            ref={tooltipRef}
+            id={tooltipId}
+            role="tooltip"
+            style={tooltipStyle}
+            className="tanaw-info-tooltip pointer-events-none fixed z-1300 rounded-lg border border-emerald-100/90 bg-white/95 px-3 py-2 text-left text-[11px] leading-relaxed font-semibold text-slate-700 shadow-[0_16px_36px_rgba(15,23,42,0.16)] ring-1 ring-emerald-950/5 backdrop-blur-md dark:border-(--enterprise-border) dark:bg-(--enterprise-card-elevated-bg) dark:text-(--enterprise-text) dark:ring-white/6"
+          >
+            {content}
+          </span>,
+          document.body,
+        )
+      : null;
+
+  const sharedHandlers = {
+    onBlur: handleBlur,
+    onFocus: () => scheduleOpen(FOCUS_DELAY_MS),
+    onPointerEnter: () => scheduleOpen(HOVER_DELAY_MS),
+    onPointerLeave: closeTooltip,
+  };
+
+  if (focusable) {
+    return (
+      <button
+        ref={(node) => {
+          triggerRef.current = node;
+        }}
+        type="button"
+        className={`group inline-flex border-0 bg-transparent p-0 text-inherit ${className}`}
+        aria-label="More information"
+        aria-describedby={isOpen ? tooltipId : undefined}
+        aria-expanded={isOpen}
+        onClick={() => {
+          clearOpenTimer();
+          setIsOpen((current) => !current);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") closeTooltip();
+        }}
+        {...sharedHandlers}
+      >
+        {children}
+        {tooltip}
+      </button>
+    );
+  }
+
   return (
     <div
-      ref={triggerRef}
+      ref={(node) => {
+        triggerRef.current = node;
+      }}
       className={`group ${className}`}
-      aria-describedby={isOpen ? tooltipId : undefined}
-      tabIndex={focusable ? 0 : undefined}
-      onBlur={handleBlur}
-      onFocus={() => scheduleOpen(FOCUS_DELAY_MS)}
-      onPointerEnter={() => scheduleOpen(HOVER_DELAY_MS)}
-      onPointerLeave={closeTooltip}
+      {...sharedHandlers}
     >
       {children}
-      {isOpen && typeof document !== "undefined"
-        ? createPortal(
-            <span
-              ref={tooltipRef}
-              id={tooltipId}
-              role="tooltip"
-              style={tooltipStyle}
-              className="tanaw-info-tooltip pointer-events-none fixed z-1300 rounded-lg border border-emerald-100/90 bg-white/95 px-3 py-2 text-left text-[11px] leading-relaxed font-semibold text-slate-700 shadow-[0_16px_36px_rgba(15,23,42,0.16)] ring-1 ring-emerald-950/5 backdrop-blur-md dark:border-emerald-300/20 dark:bg-[#172033]/95 dark:text-slate-100 dark:ring-white/10"
-            >
-              {content}
-            </span>,
-            document.body,
-          )
-        : null}
+      {tooltip}
     </div>
   );
 
-  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+  function handleBlur(event: FocusEvent<HTMLElement>) {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
     closeTooltip();
   }

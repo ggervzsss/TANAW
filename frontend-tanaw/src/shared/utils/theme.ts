@@ -7,15 +7,23 @@ export function isThemePreference(value: string | null): value is ThemePreferenc
   return value === "light" || value === "dark" || value === "system";
 }
 
-export function getStoredThemePreference(): ThemePreference {
-  if (typeof window === "undefined") return "system";
+export function getStoredThemePreferenceOrNull(): ThemePreference | null {
+  if (typeof window === "undefined") return null;
   const storedTheme = window.localStorage.getItem(TANAW_THEME_STORAGE_KEY);
-  return isThemePreference(storedTheme) ? storedTheme : "system";
+  return isThemePreference(storedTheme) ? storedTheme : null;
+}
+
+export function getStoredThemePreference(): ThemePreference {
+  return getStoredThemePreferenceOrNull() ?? "system";
 }
 
 export function persistThemePreference(theme: ThemePreference) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(TANAW_THEME_STORAGE_KEY, theme);
+}
+
+export function chooseAuthenticatedThemePreference(localPreference: ThemePreference | null, accountPreference: ThemePreference): ThemePreference {
+  return localPreference ?? accountPreference;
 }
 
 export function resolveThemePreference(theme: ThemePreference): ResolvedTheme {

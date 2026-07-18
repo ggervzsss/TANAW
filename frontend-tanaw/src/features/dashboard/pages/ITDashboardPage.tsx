@@ -55,7 +55,7 @@ export function ITDashboardPage() {
       )}
 
       <div className="mt-7 grid grid-cols-[minmax(0,2fr)_minmax(360px,1fr)] gap-6 max-xl:grid-cols-1">
-        <section className="shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <section className="tanaw-dashboard-panel shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-7 py-6 max-sm:flex-col max-sm:items-start max-sm:px-5">
             <div>
               <h3 className="text-charcoal-800 m-0 text-lg font-bold">Recent System Activity</h3>
@@ -108,7 +108,7 @@ export function ITDashboardPage() {
         </section>
 
         <aside className="grid gap-6">
-          <section className="shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <section className="tanaw-dashboard-panel shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 px-7 py-6 max-sm:px-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -167,7 +167,9 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
       </div>
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-700">This activity is tied to a support ticket. Open the ticket queue to inspect the full enterprise request, photos, status, and reply thread.</p>
+          <p className="text-sm font-semibold text-slate-700">
+            This activity is tied to a support ticket. Open the ticket queue to inspect the full enterprise request, photos, status, and reply thread.
+          </p>
           <button
             type="button"
             onClick={openTicket}

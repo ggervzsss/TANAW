@@ -1,4 +1,4 @@
-import { Keyboard, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Info, Keyboard, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { DemoBreakdown } from "../../../types/enterprise";
@@ -159,13 +159,7 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
 
           <div className="space-y-3">
             {groups.map((group) => (
-              <AssistedGroupControls
-                key={group.id}
-                group={group}
-                previewDemo={assistedPreview}
-                settings={assistedSettings}
-                setSettings={setAssistedSettings}
-              />
+              <AssistedGroupControls key={group.id} group={group} previewDemo={assistedPreview} settings={assistedSettings} setSettings={setAssistedSettings} />
             ))}
           </div>
 
@@ -185,9 +179,12 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
       <div className="grid grid-cols-3 gap-2 rounded-sm border border-gray-200 bg-white p-2">
         {groups.map((group) => (
           <div key={group.title} className="min-w-0 border-r border-gray-100 pr-2 last:border-r-0 last:pr-0">
-            <InfoTooltip content={group.description} align="left">
-              <p className="mb-2 truncate text-[9px] font-bold text-[#111827] uppercase">{group.title}</p>
-            </InfoTooltip>
+            <div className="mb-2 flex min-w-0 items-center gap-1">
+              <p className="min-w-0 truncate text-[9px] font-bold text-[#111827] uppercase">{group.title}</p>
+              <InfoTooltip content={group.description} align="left">
+                <Info size={12} className="shrink-0 text-gray-400 transition-colors hover:text-[#065f46]" aria-hidden="true" />
+              </InfoTooltip>
+            </div>
             <div className="space-y-2">
               <DemographicInput demo={demo} disabled={isReadOnly} field={group.maleKey} label="Male" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
               <DemographicInput demo={demo} disabled={isReadOnly} field={group.femaleKey} label="Female" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
@@ -304,13 +301,7 @@ function PercentageControl({ balancedLabels, countLabel, label, onChange, value 
       </div>
       <div className="flex items-center gap-2">
         {countLabel && <CountPreview label={countLabel} />}
-        {balancedLabels && (
-          <PercentageInput
-            ariaLabel={`${balancedLabels.left} percentage`}
-            value={leftValue}
-            onChange={(nextValue) => onChange(100 - nextValue)}
-          />
-        )}
+        {balancedLabels && <PercentageInput ariaLabel={`${balancedLabels.left} percentage`} value={leftValue} onChange={(nextValue) => onChange(100 - nextValue)} />}
         <input type="range" min={0} max={100} value={value} onChange={(event) => onChange(clampPercentage(event.target.value))} className="min-w-0 flex-1 accent-[#065f46]" />
         <PercentageInput ariaLabel={`${balancedLabels?.right ?? label} percentage`} value={value} onChange={onChange} />
       </div>

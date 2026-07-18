@@ -23,22 +23,8 @@ export function PasswordVisibilityInput({ hasError = false, onChange, placeholde
 
   return (
     <div className="relative">
-      <input
-        type={isVisible ? "text" : "password"}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        autoComplete="current-password"
-        className={inputClass}
-      />
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={() => setIsVisible((current) => !current)}
-        className={buttonClass}
-        aria-label={isVisible ? "Hide password" : "Show password"}
-        aria-pressed={isVisible}
-      >
+      <input type={isVisible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete="current-password" className={inputClass} />
+      <button type="button" onClick={() => setIsVisible((current) => !current)} className={buttonClass} aria-label={isVisible ? "Hide password" : "Show password"} aria-pressed={isVisible}>
         <Icon size={variant === "modal" ? 17 : 14} />
       </button>
     </div>

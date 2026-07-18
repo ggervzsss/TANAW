@@ -7,12 +7,12 @@ type DashboardHeaderProps = {
 
 export function DashboardHeader({ error, summary }: DashboardHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+    <div className="flex items-center justify-between border-b border-gray-200 pb-3 dark:border-(--enterprise-border-soft)">
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-[#111827]">Enterprise Analytics</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-xl font-bold tracking-tight text-[#111827] dark:text-(--enterprise-text)">Enterprise Analytics</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-(--enterprise-muted)">
           Real-time edge metrics restricted to this establishment.
-          {summary?.last_event_at && <span className="ml-2 font-semibold text-[#065f46]">Last event {formatMetricTime(summary.last_event_at)}</span>}
+          {summary?.last_event_at && <span className="ml-2 font-semibold text-[#065f46] dark:text-emerald-300">Last event {formatMetricTime(summary.last_event_at)}</span>}
         </p>
         {error && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {error}</p>}
       </div>

@@ -398,7 +398,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   return (
-    <div className="enterprise-shell relative flex h-screen flex-col overflow-hidden bg-[#eef5f0] font-['Montserrat'] transition-colors duration-300 dark:bg-[#0b1120]">
+    <div className="enterprise-shell relative flex h-screen flex-col overflow-hidden bg-[#eef5f0] font-['Montserrat'] transition-colors duration-300 dark:bg-(--enterprise-app-bg)">
       <EnterpriseTopbar
         activeView={activeView}
         displayName={displayName}
@@ -424,7 +424,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           ref={contentScrollRef}
-          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-[#0f172a] ${activeView === "cameras" || activeView === "simulation" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
+          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" || activeView === "simulation" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" || activeView === "simulation" ? "h-full min-h-0" : ""}`}>
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>

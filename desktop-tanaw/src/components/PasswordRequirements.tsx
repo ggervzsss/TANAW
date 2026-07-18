@@ -22,7 +22,7 @@ export function PasswordRequirements({ password }: { password: string }) {
   return (
     <section
       aria-label="Password requirements"
-      className="tanaw-password-requirements mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 shadow-inner shadow-emerald-950/3 dark:border-emerald-400/20 dark:bg-[#0d2030] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+      className="tanaw-password-requirements mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 shadow-inner shadow-emerald-950/3 dark:border-emerald-400/20 dark:bg-(--tanaw-surface-inset) dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
     >
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-bold tracking-wide text-emerald-900 uppercase dark:text-emerald-200">Password requirements</p>

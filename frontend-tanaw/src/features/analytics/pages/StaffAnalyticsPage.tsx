@@ -133,7 +133,7 @@ export function StaffAnalyticsPage() {
   const complianceRows = useMemo(() => getBarangayComplianceRows(enterpriseRows), [enterpriseRows]);
 
   return (
-    <PageMotion>
+    <PageMotion className="tanaw-staff-dashboard pb-12">
       <PageHeader title="Dashboard" description="Compare enterprise performance to identify discrepancies before consolidation." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
@@ -154,7 +154,7 @@ export function StaffAnalyticsPage() {
           footClassName="text-yellow-600"
           icon={ClipboardCheck}
         />
-        <div className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="tanaw-dashboard-panel flex flex-col justify-between rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div>
             <span className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Reporting Period</span>
             <p className="mt-1 text-[11px] leading-snug text-gray-500">Filter comparative data and live update history by calendar month.</p>
@@ -163,7 +163,7 @@ export function StaffAnalyticsPage() {
             <select
               value={activePeriod?.key ?? ""}
               onChange={(event) => setSelectedPeriodKey(event.target.value)}
-              className="focus:ring-tgreen-dark focus:border-tgreen-dark w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition outline-none hover:border-gray-400 focus:ring-1"
+              className="focus:ring-tgreen-dark focus:border-tgreen-dark w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition outline-none hover:border-gray-400 focus:ring-1 dark:border-(--tanaw-border-subtle) dark:bg-(--tanaw-control-bg) dark:text-(--tanaw-text)"
             >
               {periods.map((period) => (
                 <option key={period.key} value={period.key}>
@@ -176,7 +176,7 @@ export function StaffAnalyticsPage() {
       </motion.section>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="col-span-2 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="tanaw-dashboard-panel col-span-2 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h3 className="mb-6 text-sm font-semibold text-gray-900">Enterprise Traffic Comparison</h3>
           <div className="h-72">
             {reportEnterprisesQuery.isLoading ? (
@@ -193,17 +193,18 @@ export function StaffAnalyticsPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.15} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} dy={10} />
-                  <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} dx={-10} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--tanaw-chart-grid)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--tanaw-chart-axis)" }} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--tanaw-chart-axis)" }} axisLine={false} tickLine={false} dx={-10} />
                   <Tooltip
                     cursor={{ fill: "rgba(0,0,0,0.04)" }}
                     contentStyle={{
-                      backgroundColor: "#1f2937",
-                      color: "#fff",
-                      border: "none",
+                      backgroundColor: "var(--tanaw-chart-tooltip-bg)",
+                      color: "var(--tanaw-chart-tooltip-text)",
+                      border: "1px solid var(--tanaw-border-subtle)",
                       borderRadius: "8px",
                       fontSize: "12px",
+                      boxShadow: "var(--tanaw-shadow-raised)",
                     }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
@@ -215,7 +216,7 @@ export function StaffAnalyticsPage() {
           </div>
         </section>
 
-        <section className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="tanaw-dashboard-panel flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-900">Compliance Status</h3>
             <span className="relative flex h-2 w-2">
@@ -277,17 +278,21 @@ function BarangayComplianceItem({ row }: { row: BarangayComplianceRow }) {
   const complete = row.pending === 0;
 
   return (
-    <div className={`rounded-lg border p-3.5 transition hover:shadow-sm ${complete ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
+    <div
+      className={`rounded-xl border p-3.5 transition-colors ${
+        complete ? "border-emerald-100 bg-emerald-50 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-amber-100 bg-amber-50 dark:border-amber-300/20 dark:bg-amber-400/10"
+      }`}
+    >
       <div className="flex items-center justify-between">
         <span className={`text-xs font-bold tracking-wide uppercase ${complete ? "text-emerald-800" : "text-amber-800"}`}>{row.barangay}</span>
         <span className="shrink-0 font-mono text-[10px] text-gray-500">{row.total} total</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-md border border-emerald-100 bg-white/60 px-2 py-1.5">
+        <div className="tanaw-dashboard-inset rounded-lg border border-emerald-100 bg-white/60 px-2 py-1.5 dark:border-emerald-300/20">
           <p className="text-[10px] font-bold tracking-wide text-emerald-700 uppercase">Complete</p>
           <p className="font-mono text-lg font-black text-emerald-800">{row.complete}</p>
         </div>
-        <div className="rounded-md border border-amber-100 bg-white/60 px-2 py-1.5">
+        <div className="tanaw-dashboard-inset rounded-lg border border-amber-100 bg-white/60 px-2 py-1.5 dark:border-amber-300/20">
           <p className="text-[10px] font-bold tracking-wide text-amber-700 uppercase">Pending</p>
           <p className="font-mono text-lg font-black text-amber-800">{row.pending}</p>
         </div>

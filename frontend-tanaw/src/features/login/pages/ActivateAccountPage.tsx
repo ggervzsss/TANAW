@@ -197,16 +197,16 @@ function ActivationForm({
 }) {
   return (
     <form onSubmit={onSubmit} noValidate>
-      <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4">
+      <div className="tanaw-activation-banner mb-6 rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-(--tanaw-green) text-white">
+          <span className="tanaw-activation-banner__icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-(--tanaw-green) text-white dark:bg-emerald-400/15">
             <KeyRound className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-bold tracking-wide text-emerald-700 uppercase">Verified activation link</p>
-            <h2 className="mt-1 font-['Montserrat'] text-xl font-extrabold text-(--tanaw-text)">Welcome, {details.displayName}</h2>
-            <p className="mt-1 text-sm leading-6 font-medium text-emerald-800">Create the password you will use for your {formatRole(details.role)} account.</p>
-            <p className="mt-1 text-xs font-medium text-emerald-700">Link expires {formatExpiration(details.expiresAt)}.</p>
+            <p className="tanaw-activation-banner__label text-xs font-bold tracking-wide text-emerald-700 uppercase">Verified activation link</p>
+            <h2 className="tanaw-activation-banner__title mt-1 font-['Montserrat'] text-xl font-extrabold text-(--tanaw-text)">Welcome, {details.displayName}</h2>
+            <p className="tanaw-activation-banner__copy mt-1 text-sm leading-6 font-medium text-emerald-800">Create the password you will use for your {formatRole(details.role)} account.</p>
+            <p className="tanaw-activation-banner__copy mt-1 text-xs font-medium text-emerald-700">Link expires {formatExpiration(details.expiresAt)}.</p>
           </div>
         </div>
       </div>
@@ -281,7 +281,7 @@ function PasswordField({
         {label}
       </label>
       <div
-        className={`tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
+        className={`tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-(--tanaw-auth-input-bg) transition duration-200 ${
           error
             ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
             : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
@@ -306,7 +306,6 @@ function PasswordField({
         {error ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" aria-hidden="true" /> : null}
         <button
           type="button"
-          tabIndex={-1}
           onClick={() => setIsVisible((current) => !current)}
           className="absolute right-4 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
           aria-label={isVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}

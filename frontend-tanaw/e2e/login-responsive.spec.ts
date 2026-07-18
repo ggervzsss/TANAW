@@ -1,5 +1,24 @@
 import { expect, test } from "@playwright/test";
 
+const staffUser = {
+  id: "staff-theme-test",
+  email: "staff-theme@example.com",
+  displayName: "Theme Test Staff",
+  role: "staff",
+  title: "LGU Staff",
+  phone: null,
+  firstName: "Theme",
+  lastName: "Test",
+  enterpriseId: null,
+  enterpriseName: null,
+  category: null,
+  managerName: null,
+  barangay: null,
+  address: null,
+  buildingCapacity: 100,
+  displayImageDataUrl: null,
+};
+
 const desktopViewports = [
   { width: 1280, height: 720 },
   { width: 1366, height: 768 },
@@ -56,4 +75,46 @@ test("uses application-controlled login input states in dark and light mode", as
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.getByLabel("Email", { exact: true }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+});
+
+test("keeps an explicit login theme through authentication, reload, and logout", async ({ page }) => {
+  let synchronizedTheme = "";
+  await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
+  await page.route("**/auth/login", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "theme-test-token", user: staffUser }),
+    }),
+  );
+  await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(staffUser) }));
+  await page.route("**/auth/preferences", async (route) => {
+    if (route.request().method() === "PATCH") {
+      const payload = route.request().postDataJSON() as { theme: string };
+      synchronizedTheme = payload.theme;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ theme: "light" }) });
+  });
+  await page.route("**/auth/logout", (route) => route.fulfill({ status: 204, body: "" }));
+  await page.goto("/login");
+
+  await page.getByLabel("Email", { exact: true }).fill(staffUser.email);
+  await page.getByLabel("Password", { exact: true }).fill("Theme continuity passphrase 2026");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page).toHaveURL(/\/staff\/analytics$/);
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect.poll(() => synchronizedTheme).toBe("dark");
+  expect(await page.evaluate(() => window.localStorage.getItem("tanaw-web-theme"))).toBe("dark");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("button", { name: "Logout" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  expect(await page.evaluate(() => window.localStorage.getItem("tanaw-web-theme"))).toBe("dark");
 });

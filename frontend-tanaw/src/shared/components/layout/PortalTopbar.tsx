@@ -11,7 +11,7 @@ import { CITY_SEAL } from "../../constants/branding";
 import { usePortalNotifications } from "../../hooks/usePortalNotifications";
 import { getAccountPreferences, updateAccountPreferences } from "../../services/accountManagement";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "../../utils/routeUtils";
-import { applyThemePreference, getStoredThemePreference, persistThemePreference, resolveThemePreference } from "../../utils/theme";
+import { applyThemePreference, chooseAuthenticatedThemePreference, getStoredThemePreference, getStoredThemePreferenceOrNull, persistThemePreference, resolveThemePreference } from "../../utils/theme";
 import type { ResolvedTheme, ThemePreference } from "../../utils/theme";
 import type { UserRole } from "../../types/role.types";
 import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
@@ -55,6 +55,9 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
   const skipNextThemeSaveRef = useRef(true);
+  const storedThemeAtMountRef = useRef<ThemePreference | null>(getStoredThemePreferenceOrNull());
+  const themeRef = useRef(theme);
+  const userSelectedThemeRef = useRef(false);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
 
   const profile = {
@@ -127,6 +130,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   };
 
   const toggleTheme = () => {
+    userSelectedThemeRef.current = true;
     setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
   };
 
@@ -135,8 +139,17 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     void getAccountPreferences()
       .then((preferences) => {
         if (disposed) return;
-        setTheme(preferences.theme);
-        persistThemePreference(preferences.theme);
+
+        const localPreference = userSelectedThemeRef.current ? themeRef.current : storedThemeAtMountRef.current;
+        const nextTheme = chooseAuthenticatedThemePreference(localPreference, preferences.theme);
+        if (nextTheme !== themeRef.current) {
+          themeRef.current = nextTheme;
+          setTheme(nextTheme);
+        }
+        persistThemePreference(nextTheme);
+        if (preferences.theme !== nextTheme) {
+          void updateAccountPreferences(nextTheme).catch(() => undefined);
+        }
         setPreferencesLoaded(true);
       })
       .catch(() => {
@@ -151,6 +164,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   }, []);
 
   useEffect(() => {
+    themeRef.current = theme;
     const applyTheme = () => {
       setResolvedTheme(applyThemePreference(theme));
     };

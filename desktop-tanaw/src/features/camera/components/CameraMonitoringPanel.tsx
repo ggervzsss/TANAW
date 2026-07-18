@@ -116,7 +116,9 @@ export function CameraMonitoringPanel({
       {(error || health?.error || serviceStatus?.error || counts.error) && (
         <div className="rounded-sm border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">{error ?? health?.error ?? serviceStatus?.error ?? counts.error}</div>
       )}
-      {health?.fallback_reason && <div className="rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">AI fallback mode is active. Counts may be less accurate.</div>}
+      {health?.fallback_reason && (
+        <div className="rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">AI fallback mode is active. Counts may be less accurate.</div>
+      )}
     </div>
   );
 }
@@ -138,7 +140,7 @@ function MetricBox({ icon: Icon, label, tone, tooltip, value }: MetricBoxProps) 
   }[tone];
 
   return (
-    <InfoTooltip content={tooltip} className="h-full">
+    <InfoTooltip content={tooltip} className="h-full" focusable={false}>
       <div className={`flex h-full min-h-21 flex-col rounded-sm border p-2.5 transition-transform duration-150 group-hover:-translate-y-0.5 group-focus:-translate-y-0.5 ${toneClass}`}>
         <div className="flex min-h-7 items-start justify-between gap-2">
           <span className="text-[9px] leading-tight font-bold tracking-wider uppercase">{label}</span>
@@ -165,7 +167,7 @@ function StatusRow({ icon: Icon, label, tone, tooltip }: StatusRowProps) {
   }[tone];
 
   return (
-    <InfoTooltip content={tooltip}>
+    <InfoTooltip content={tooltip} focusable={false}>
       <div className={`flex items-center justify-between gap-3 rounded-sm border px-3 py-2 text-[11px] font-bold transition-colors ${toneClass}`}>
         <span className="flex min-w-0 items-center gap-2">
           <Icon size={14} className="shrink-0" />

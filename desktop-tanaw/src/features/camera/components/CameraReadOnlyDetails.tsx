@@ -60,7 +60,7 @@ type DetailRowProps = {
 
 function DetailRow({ label, mono = false, tooltip, value }: DetailRowProps) {
   return (
-    <InfoTooltip content={tooltip}>
+    <InfoTooltip content={tooltip} focusable={false}>
       <div className="min-w-0 rounded-sm border border-gray-200 bg-gray-50 px-3 py-2 transition-colors group-hover:border-[#065f46]/30 group-focus:border-[#065f46]/30">
         <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
         <p className={`mt-1 text-xs leading-snug font-semibold wrap-break-word text-gray-800 ${mono ? "font-mono" : ""}`}>{value}</p>

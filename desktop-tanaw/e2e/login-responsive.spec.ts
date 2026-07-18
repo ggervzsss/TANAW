@@ -61,7 +61,8 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await expect(identifierShell).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
-test("renders the Enterprise Portal role label as static text", async ({ page }) => {
+test("keeps the theme through Enterprise authentication and renders the Portal label as static text", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
   await page.route("**/auth/login", (route) =>
     route.fulfill({
       status: 200,
@@ -81,6 +82,12 @@ test("renders the Enterprise Portal role label as static text", async ({ page })
   await page.getByPlaceholder("Enter your password").fill("Enterprise login passphrase 2026");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  expect(await page.evaluate(() => window.localStorage.getItem("tanaw-enterprise-theme"))).toBe("dark");
+
+  await page.reload();
+  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
+  await expect(page.locator("html")).toHaveClass(/dark/);
 
   const roleLabel = page.locator("[data-portal-role-label]", { hasText: "Enterprise Portal" });
   await expect(roleLabel).toBeVisible();
