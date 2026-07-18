@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { EmptyState, FilterSelect, PageMotion } from "@/shared/components/ui";
+import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { alertsQueryKey, useAlerts } from "@/shared/hooks/useAlerts";
 import { updateAlertStatus } from "@/shared/services/alerts";
 import type { AlertSeverity, PriorityAlert, PriorityAlertStatus, PriorityAlertType } from "@/shared/types";
@@ -117,12 +117,25 @@ export function ITAlertsPage() {
                     <SeverityBadge severity={alert.severity} />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="font-semibold text-gray-900">{alert.enterprise ?? alert.requester}</div>
-                    <div className="mt-1 text-[10px] font-bold tracking-wide text-gray-500 uppercase">{alert.requester}</div>
+                    <ExpandableTableText
+                      primary={alert.enterprise ?? alert.requester}
+                      secondary={alert.requester}
+                      ariaLabel="alert source"
+                      className="font-semibold text-gray-900"
+                      secondaryClassName="text-[10px] font-bold tracking-wide text-gray-500 uppercase"
+                      threshold={38}
+                    />
                   </td>
                   <td className="px-4 py-4">
-                    <p className="m-0 text-xs leading-relaxed font-semibold text-gray-700">{alert.summary}</p>
-                    <p className="mt-1 mb-0 text-xs leading-relaxed text-gray-500">{alert.requiredAction}</p>
+                    <ExpandableTableText
+                      primary={alert.summary}
+                      secondary={alert.requiredAction}
+                      ariaLabel="alert summary and required action"
+                      className="text-xs leading-relaxed font-semibold text-gray-700"
+                      secondaryClassName="text-xs leading-relaxed text-gray-500"
+                      threshold={76}
+                      twoLines
+                    />
                   </td>
                   <td className="px-4 py-4">
                     <AlertStatusBadge status={alert.status} />

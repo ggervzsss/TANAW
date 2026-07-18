@@ -6,7 +6,7 @@ import { routes } from "@/app/routers/routes";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, FilterSelect, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import type { LogSeverity, SystemLog, SystemLogActorRole, SystemLogCategory } from "@/shared/types";
 import { activityTimeRanges, isWithinActivityTimeRange } from "@/shared/utils";
@@ -106,14 +106,20 @@ export function AdminSystemLogsPage() {
                     <SeverityBadge severity={log.severity} />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="font-semibold text-gray-900">{log.actor}</div>
-                    <div className="mt-1 text-[10px] font-bold tracking-wide text-gray-500 uppercase">{log.actorRole}</div>
+                    <ExpandableTableText
+                      primary={log.actor}
+                      secondary={log.actorRole}
+                      ariaLabel="actor"
+                      className="font-semibold text-gray-900"
+                      secondaryClassName="text-[10px] font-bold tracking-wide text-gray-500 uppercase"
+                    />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="font-semibold text-gray-900">{log.action}</div>
-                    <div className="mt-1 truncate text-xs text-gray-500">{log.target}</div>
+                    <ExpandableTableText primary={log.action} secondary={log.target} ariaLabel="action and target" className="font-semibold text-gray-900" secondaryClassName="text-xs text-gray-500" />
                   </td>
-                  <td className="px-4 py-4 text-xs leading-relaxed text-gray-600">{log.summary}</td>
+                  <td className="px-4 py-4 text-xs leading-relaxed text-gray-600">
+                    <ExpandableTableText primary={log.summary} ariaLabel="summary" threshold={72} twoLines />
+                  </td>
                 </tr>
               ))}
               {filteredLogs.length === 0 && (
@@ -176,24 +182,7 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
 
   return (
     <ModalFrame title="Log Details" eyebrow={log.id} onClose={onClose} maxWidthClassName="max-w-4xl">
-      <div className="grid gap-4 md:grid-cols-2">
-        <DetailField label="Timestamp" value={formatLogTimestamp(log.timestamp)} />
-        <DetailField label="Source ID" value={log.sourceId ?? "N/A"} />
-        <DetailField label="Category" value={<CategoryBadge category={log.category} />} />
-        <DetailField label="Severity" value={<SeverityBadge severity={log.severity} />} />
-        <DetailField label="Actor" value={`${log.actor} (${log.actorRole})`} />
-        <DetailField label="Action" value={log.action} />
-        <DetailField label="Target" value={log.target} />
-        <div className="md:col-span-2">
-          <DetailField label="Summary" value={log.summary} />
-        </div>
-        {log.metadata && (
-          <section className="rounded-2xl border border-emerald-100 bg-slate-950 p-4 shadow-inner md:col-span-2">
-            <p className="mb-3 text-[10px] font-bold tracking-[0.18em] text-emerald-200 uppercase">Metadata</p>
-            <pre className="max-h-60 overflow-auto text-xs leading-relaxed whitespace-pre-wrap text-slate-100">{JSON.stringify(log.metadata, null, 2)}</pre>
-          </section>
-        )}
-      </div>
+      <AdminLogDetailFields log={log} />
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
           <p className="text-sm font-semibold text-slate-700">
@@ -210,6 +199,23 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
         </div>
       )}
     </ModalFrame>
+  );
+}
+
+export function AdminLogDetailFields({ log }: { log: SystemLog }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <DetailField label="Timestamp" value={formatLogTimestamp(log.timestamp)} />
+      <DetailField label="Source ID" value={log.sourceId ?? "N/A"} />
+      <DetailField label="Category" value={<CategoryBadge category={log.category} />} />
+      <DetailField label="Severity" value={<SeverityBadge severity={log.severity} />} />
+      <DetailField label="Actor" value={`${log.actor} (${log.actorRole})`} />
+      <DetailField label="Action" value={log.action} />
+      <DetailField label="Target" value={log.target} />
+      <div className="md:col-span-2">
+        <DetailField label="Summary" value={log.summary} />
+      </div>
+    </div>
   );
 }
 

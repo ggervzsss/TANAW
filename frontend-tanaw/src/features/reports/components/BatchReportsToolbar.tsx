@@ -1,4 +1,5 @@
 import { FileSignature, Search } from "lucide-react";
+import { FilterSelect } from "@/shared/components/ui";
 
 type BatchReportsToolbarProps = {
   query: string;
@@ -42,28 +43,9 @@ export function BatchReportsToolbar({
           className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
-      <select value={barangayFilter} onChange={(event) => onBarangayChange(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none">
-        <option value="all">All Barangays</option>
-        {availableBarangays.map((barangay) => (
-          <option key={barangay} value={barangay}>
-            {barangay}
-          </option>
-        ))}
-      </select>
-      <select value={monthFilter} onChange={(event) => onMonthChange(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none">
-        {availableMonths.map((month) => (
-          <option key={month} value={month}>
-            {month}
-          </option>
-        ))}
-      </select>
-      <select value={yearFilter} onChange={(event) => onYearChange(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none">
-        {availableYears.map((year) => (
-          <option key={year} value={year}>
-            {year}
-          </option>
-        ))}
-      </select>
+      <FilterSelect value={barangayFilter} onChange={onBarangayChange} options={[["all", "All Barangays"], ...availableBarangays.map((barangay) => [barangay, barangay] as const)]} ariaLabel="Barangay" searchable />
+      <FilterSelect value={monthFilter} onChange={onMonthChange} options={availableMonths} ariaLabel="Report month" />
+      <FilterSelect value={yearFilter} onChange={onYearChange} options={availableYears} ariaLabel="Report year" />
       <button
         onClick={onGenerate}
         disabled={!allReady}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Building2, Pause, Play, RadioTower, RotateCcw, Square, Users } from "lucide-react";
 import { ConfirmationDialog } from "../../../components/ConfirmationDialog";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 import {
   getFleetSimulationState,
   listFleetSimulationEnterprises,
@@ -279,18 +280,14 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
         <section className="space-y-4 rounded-sm border border-gray-200 bg-white p-4 shadow-sm">
           <div>
             <label className="text-[11px] font-black tracking-wider text-gray-500 uppercase">Scenario</label>
-            <select
+            <SelectDropdown
               value={scenario}
               disabled={isActive}
-              onChange={(event) => chooseScenario(event.target.value as SimulationScenario)}
-              className="mt-1.5 w-full rounded-sm border border-gray-300 px-3 py-2 text-sm font-bold text-[#111827] outline-none focus:border-[#065f46] disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              {Object.entries(scenarioPresets).map(([value, preset]) => (
-                <option key={value} value={value}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
+              onChange={(nextScenario) => chooseScenario(nextScenario as SimulationScenario)}
+              options={Object.entries(scenarioPresets).map(([value, preset]) => [value, preset.label] as const)}
+              ariaLabel="Simulation scenario"
+              className="mt-1.5"
+            />
             <p className="mt-2 text-xs leading-relaxed text-gray-500">{scenarioPresets[scenario].description}</p>
           </div>
 

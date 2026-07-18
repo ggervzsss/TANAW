@@ -9,7 +9,7 @@ type NotificationDropdownProps = {
   onMarkAllRead: () => void;
   onSelectNotification: (notification: EnterpriseNotification) => void;
   onViewAll: () => void;
-  triggerVariant?: "default" | "topbar";
+  triggerVariant?: "default" | "topbar" | "topbar-dark";
 };
 
 const notificationIconByType = (type: EnterpriseNotification["type"]) => {
@@ -30,7 +30,9 @@ export function NotificationDropdown({
 }: NotificationDropdownProps) {
   const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
   const triggerClassName =
-    triggerVariant === "topbar"
+    triggerVariant === "topbar-dark"
+      ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/14 bg-black/18 text-white/88 shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/24 hover:bg-emerald-200/9 hover:shadow-[0_10px_24px_rgba(0,0,0,0.4)] active:translate-y-0"
+      : triggerVariant === "topbar"
       ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
       : `relative rounded-full p-2.5 transition-colors ${isOpen ? "bg-gray-100 text-[#065f46]" : "border border-gray-100 bg-white text-gray-500 shadow-sm hover:bg-gray-50"}`;
 
@@ -41,7 +43,7 @@ export function NotificationDropdown({
         {unreadCount > 0 && (
           <span
             className={`bg-tanaw-red absolute flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 px-1 text-[10px] leading-none font-black text-white shadow-sm ${
-              triggerVariant === "topbar" ? "border-tanaw-green -top-1 -right-1" : "-top-1 -right-1 border-white"
+              triggerVariant === "topbar" || triggerVariant === "topbar-dark" ? "border-tanaw-green -top-1 -right-1" : "-top-1 -right-1 border-white"
             }`}
           >
             {countLabel}

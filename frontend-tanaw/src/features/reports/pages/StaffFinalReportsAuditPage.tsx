@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { EmptyState, PageMotion } from "@/shared/components/ui";
+import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { useOperationalFinalReports } from "@/shared/hooks/useOperationalSync";
 import type { FinalReport } from "@/shared/types";
 import { FinalReportViewer, ReportStatusBadge } from "../components";
@@ -59,26 +59,20 @@ export function StaffFinalReportsAuditPage() {
               className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
-          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none">
-            <option value="All">All Months</option>
-            {availableMonths.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none">
-            <option value="All">All Years</option>
-            {availableYears.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+          <FilterSelect value={monthFilter} onChange={setMonthFilter} options={["All", ...availableMonths].map((month) => [month, month === "All" ? "All Months" : month] as const)} ariaLabel="Report month" />
+          <FilterSelect value={yearFilter} onChange={setYearFilter} options={["All", ...availableYears].map((year) => [year, year === "All" ? "All Years" : year] as const)} ariaLabel="Report year" />
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-220 table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[15%]" />
+              <col className="w-[28%]" />
+              <col className="w-[14%]" />
+              <col className="w-[18%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+            </colgroup>
             <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
               <tr>
                 <th className="px-6 py-4">Artifact ID</th>
@@ -92,15 +86,23 @@ export function StaffFinalReportsAuditPage() {
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredReports.map((report) => (
                 <tr key={report.id} onClick={() => setSelectedReport(report)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
-                  <td className="group-hover:text-tgreen-dark px-6 py-4 font-mono text-xs font-bold text-gray-600 transition-colors">{report.id}</td>
-                  <td className="px-6 py-4 font-medium">
-                    {report.title}
-                    <div className="mt-0.5 text-[10px] font-normal text-gray-500">
-                      Coverage: {report.period} | Aggregated from {report.enterpriseCount} nodes
-                    </div>
+                  <td className="group-hover:text-tgreen-dark px-6 py-4 text-gray-600 transition-colors">
+                    <ExpandableTableText primary={report.id} ariaLabel="artifact ID" className="font-mono text-xs font-bold" threshold={24} />
+                  </td>
+                  <td className="px-6 py-4">
+                    <ExpandableTableText
+                      primary={report.title}
+                      secondary={`Coverage: ${report.period} | Aggregated from ${report.enterpriseCount} nodes`}
+                      ariaLabel="report title and period"
+                      className="font-medium"
+                      secondaryClassName="text-[10px] font-normal text-gray-500"
+                      threshold={58}
+                    />
                   </td>
                   <td className="px-6 py-4 text-xs">{report.generatedOn}</td>
-                  <td className="px-6 py-4 text-xs">{report.preparedBy}</td>
+                  <td className="px-6 py-4 text-xs">
+                    <ExpandableTableText primary={report.preparedBy} ariaLabel="report preparer" threshold={28} />
+                  </td>
                   <td className="px-6 py-4 font-mono text-xs">
                     <div>Entry: {report.totalEntry.toLocaleString()}</div>
                     <div>Unique: {report.totalUnique.toLocaleString()}</div>

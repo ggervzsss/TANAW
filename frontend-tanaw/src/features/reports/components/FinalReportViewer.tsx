@@ -1,14 +1,15 @@
-import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Printer, X } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Maximize2, Minimize2, Printer, X } from "lucide-react";
 import { motion } from "motion/react";
 import toast from "react-hot-toast/headless";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
 import { DotFinalReportTable } from "./DotReportTable";
+import { getFinalReportViewerEscapeAction, getFinalReportViewerLayout } from "./finalReportViewerState";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { downloadFinalReportPdf } from "../utils/pdf";
 
@@ -21,10 +22,13 @@ type FinalReportConfirmAction = "archive" | "finalize" | "restore" | "return" | 
 
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
+  const viewerRef = useRef<HTMLElement>(null);
   const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [returnRemarks, setReturnRemarks] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const viewerLayout = getFinalReportViewerLayout(isFullscreen);
   const statusMutation = useMutation({
     mutationFn: (status: FinalReportStatus) => updateFinalReportStatus(report.id, { status }),
     onSuccess: (updatedReport) => {
@@ -63,6 +67,51 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
         selectedSources: selectedReturnSources,
       })
     : [];
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => viewerRef.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus());
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleViewerKeys = (event: KeyboardEvent) => {
+      const hasNestedDialog = Boolean(showReturnDialog || confirmAction);
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        const action = getFinalReportViewerEscapeAction(isFullscreen, hasNestedDialog);
+        if (action === "ignore") return;
+        event.preventDefault();
+        if (action === "exit-fullscreen") setIsFullscreen(false);
+        else onClose();
+        return;
+      }
+
+      if (event.key !== "Tab" || hasNestedDialog || !viewerRef.current) return;
+      const focusable = Array.from(
+        viewerRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'),
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleViewerKeys);
+    return () => document.removeEventListener("keydown", handleViewerKeys);
+  }, [confirmAction, isFullscreen, onClose, showReturnDialog]);
 
   const requestArchive = () => {
     if (statusMutation.isPending) return;
@@ -121,13 +170,17 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     <>
       <ModalPortal>
         <motion.div
-          className="fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] p-4 backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none"
+          className={`fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none ${viewerLayout.backdrop}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none"
+            ref={viewerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${report.id} official artifact viewer`}
+            className={`print-container relative z-1301 flex w-full flex-col overflow-hidden border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 transition-[width,height,max-width,max-height,border-radius] duration-200 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none ${viewerLayout.panel}`}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -194,6 +247,16 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                   className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                 >
                   <Printer size={15} /> Print to PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen((current) => !current)}
+                  aria-label={isFullscreen ? "Exit fullscreen report view" : "Open fullscreen report view"}
+                  aria-pressed={isFullscreen}
+                  title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-emerald-200"
+                >
+                  {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                 </button>
                 <button
                   type="button"

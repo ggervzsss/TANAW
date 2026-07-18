@@ -1,5 +1,5 @@
 import { Users } from "lucide-react";
-import { EmptyState, StatusBadge } from "@/shared/components/ui";
+import { EmptyState, ExpandableTableText, StatusBadge } from "@/shared/components/ui";
 import type { AccountSummary } from "@/shared/services/accountManagement";
 import { lguRoleLabel } from "../utils";
 
@@ -14,6 +14,13 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-170 table-fixed text-left text-sm">
+        <colgroup>
+          <col className="w-[23%]" />
+          <col className="w-[25%]" />
+          <col className="w-[18%]" />
+          <col className="w-[16%]" />
+          <col className="w-[18%]" />
+        </colgroup>
         <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
           <tr>
             {["Name", "Email", "Role", "Status", "Last Login"].map((heading) => (
@@ -38,8 +45,12 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
               }}
               className="hover:bg-tgreen-dark/6 focus:bg-tgreen-dark/6 focus-visible:ring-tanaw-green/30 cursor-pointer transition outline-none focus-visible:ring-2"
             >
-              <td className="px-4 py-4 font-bold whitespace-nowrap text-gray-900">{account.displayName}</td>
-              <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-600">{account.email}</td>
+              <td className="px-4 py-4 text-gray-900">
+                <ExpandableTableText primary={account.displayName} ariaLabel="account name" className="font-bold" threshold={34} />
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-600">
+                <ExpandableTableText primary={account.email} ariaLabel="account email" threshold={36} />
+              </td>
               <td className="px-4 py-4 whitespace-nowrap">
                 <StatusBadge tone="blue">{lguRoleLabel[account.role] ?? account.role}</StatusBadge>
               </td>

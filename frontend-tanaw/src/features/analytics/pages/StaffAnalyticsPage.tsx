@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { EmptyState, PageMotion, stagger } from "@/shared/components/ui";
+import { EmptyState, FilterSelect, PageMotion, stagger } from "@/shared/components/ui";
 import { useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
@@ -161,17 +161,13 @@ export function StaffAnalyticsPage() {
             <p className="mt-1 text-[11px] leading-snug text-gray-500">Filter comparative data and live update history by calendar month.</p>
           </div>
           <div className="mt-4">
-            <select
+            <FilterSelect
               value={activePeriod?.key ?? ""}
-              onChange={(event) => setSelectedPeriodKey(event.target.value)}
-              className="focus:ring-tgreen-dark focus:border-tgreen-dark w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition outline-none hover:border-gray-400 focus:ring-1 dark:border-(--tanaw-border-subtle) dark:bg-(--tanaw-control-bg) dark:text-(--tanaw-text)"
-            >
-              {periods.map((period) => (
-                <option key={period.key} value={period.key}>
-                  {period.label}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedPeriodKey}
+              options={periods.map((period) => [period.key, period.label] as const)}
+              ariaLabel="Reporting period"
+              className="w-full"
+            />
           </div>
         </div>
       </motion.section>

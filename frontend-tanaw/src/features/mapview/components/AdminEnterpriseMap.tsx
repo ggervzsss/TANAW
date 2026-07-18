@@ -1,10 +1,11 @@
 import L, { type GeoJSONOptions, type Layer } from "leaflet";
-import { Activity, ArrowLeft, Building2, ChevronDown, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw, Search } from "lucide-react";
+import { Activity, ArrowLeft, Building2, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
+import { SelectDropdown } from "@/shared/components/ui";
 import { listEnterpriseAccounts, type AccountSummary } from "@/shared/services/accountManagement";
 import type { MapEnterprise } from "@/shared/types";
 import {
@@ -53,10 +54,8 @@ export function AdminEnterpriseMap() {
   const [isBoundaryError, setIsBoundaryError] = useState(false);
   const [isDirectoryCollapsed, setIsDirectoryCollapsed] = useState(false);
   const [showBoundaries, setShowBoundaries] = useState(true);
-  const [barangaySearch, setBarangaySearch] = useState("");
   const [selectedBarangayName, setSelectedBarangayName] = useState<string | null>(null);
   const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
   const token = useAuthStore((state) => state.token);
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
@@ -81,8 +80,6 @@ export function AdminEnterpriseMap() {
   }, [mapEnterprises]);
 
   const barangayDirectoryItems = useMemo(() => {
-    const searchKey = normalizeBarangayName(barangaySearch);
-
     return (boundary?.features ?? [])
       .filter(isBoundaryPolygonFeature)
       .map((featureItem) => {
@@ -98,9 +95,16 @@ export function AdminEnterpriseMap() {
           enterpriseCount,
         };
       })
-      .filter((item) => item.key.includes(searchKey))
       .sort((left, right) => left.label.localeCompare(right.label));
-  }, [barangaySearch, boundary, enterpriseCountsByBarangay]);
+  }, [boundary, enterpriseCountsByBarangay]);
+
+  const barangayDropdownOptions = useMemo(
+    () => [
+      { value: "", label: "All Barangays", meta: String(enterpriseAccounts.length) },
+      ...barangayDirectoryItems.map((item) => ({ value: item.label, label: `Barangay ${item.label}`, meta: String(item.enterpriseCount), searchText: item.subtitle })),
+    ],
+    [barangayDirectoryItems, enterpriseAccounts.length],
+  );
 
   const selectedBarangayEnterprises = useMemo(() => (selectedBarangayName ? getEnterprisesByBarangay(mapEnterprises, selectedBarangayName) : []), [mapEnterprises, selectedBarangayName]);
   const selectedBarangayUnpinnedEnterprises = useMemo(
@@ -490,102 +494,16 @@ export function AdminEnterpriseMap() {
 
             {/* Dropdown Selector section (Fixed size, shrink-0, overflow-visible for dropdown menu) */}
             <div className="tanaw-map-directory__selector relative z-20 shrink-0 overflow-visible border-b border-slate-500/30 bg-[#0d192b]/92 px-4 py-3.5">
-              <label className="mb-1 block text-[9px] font-black tracking-widest text-white/65 uppercase">Select Barangay</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="focus:ring-tanaw-sky flex w-full items-center justify-between gap-2 rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-left shadow-inner shadow-black/20 transition hover:border-white/25 hover:bg-slate-950/55 focus:ring-2 focus:outline-none"
-                >
-                  <span className="truncate text-[10px] font-bold tracking-widest text-white uppercase">{selectedBarangayName ? `Barangay ${selectedBarangayName}` : "All Barangays"}</span>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {selectedBarangayName && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          clearSelectedBarangay();
-                        }}
-                        className="rounded p-0.5 text-white/55 transition hover:bg-white/10 hover:text-white"
-                        title="Clear selection"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                          <path
-                            fillRule="evenodd"
-                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </button>
-                    )}
-                    <ChevronDown size={14} className={["text-white/65 transition-transform duration-200", isDropdownOpen ? "rotate-180" : ""].join(" ")} />
-                  </div>
-                </button>
-
-                <AnimatePresence>
-                  {isDropdownOpen && (
-                    <>
-                      {/* Dropdown overlay/backdrop */}
-                      <div className="fixed inset-0 z-30" onClick={() => setIsDropdownOpen(false)} />
-                      <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute right-0 left-0 z-40 mt-1 flex max-h-64 flex-col overflow-hidden rounded-lg border border-white/15 bg-slate-950/95 shadow-2xl backdrop-blur-md"
-                      >
-                        <div className="shrink-0 border-b border-white/10 bg-black/30 p-2">
-                          <label className="flex items-center gap-2 rounded-md border border-white/15 bg-black/35 px-2 py-1 text-white">
-                            <Search size={11} className="text-white/55" />
-                            <input
-                              value={barangaySearch}
-                              onChange={(event) => setBarangaySearch(event.target.value)}
-                              placeholder="Search barangay..."
-                              className="min-w-0 flex-1 bg-transparent text-[10px] font-bold tracking-widest text-white uppercase outline-none placeholder:text-white/40"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </label>
-                        </div>
-
-                        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              clearSelectedBarangay();
-                              setIsDropdownOpen(false);
-                            }}
-                            className={[
-                              "focus:ring-tanaw-sky flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left text-[9px] font-black tracking-widest uppercase transition focus:ring-1 focus:outline-none",
-                              !selectedBarangayName ? "border-tanaw-sky/35 bg-tanaw-sky/25 text-white" : "text-white/70 hover:border-white/10 hover:bg-white/10 hover:text-white",
-                            ].join(" ")}
-                          >
-                            <span>All Barangays</span>
-                            <span className="rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold opacity-60">{enterpriseAccounts.length}</span>
-                          </button>
-                          {barangayDirectoryItems.map((item) => (
-                            <button
-                              key={item.label}
-                              type="button"
-                              onClick={() => {
-                                selectBarangay(item.label);
-                                setIsDropdownOpen(false);
-                              }}
-                              className={[
-                                "focus:ring-tanaw-sky flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left text-[9px] font-black tracking-widest uppercase transition focus:ring-1 focus:outline-none",
-                                selectedBarangayName === item.label ? "border-tanaw-sky/35 bg-tanaw-sky/25 text-white" : "text-white/70 hover:border-white/10 hover:bg-white/10 hover:text-white",
-                              ].join(" ")}
-                            >
-                              <span className="truncate">Barangay {item.label}</span>
-                              <span className="rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold opacity-60">{item.enterpriseCount}</span>
-                            </button>
-                          ))}
-                          {barangayDirectoryItems.length === 0 && <div className="py-4 text-center text-[9px] font-bold tracking-widest text-white/30 uppercase">No matching barangays</div>}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
+              <SelectDropdown
+                label="Select Barangay"
+                ariaLabel="Select barangay"
+                value={selectedBarangayName ?? ""}
+                options={barangayDropdownOptions}
+                onChange={(barangayName) => (barangayName ? selectBarangay(barangayName) : clearSelectedBarangay())}
+                searchable
+                searchPlaceholder="Search barangay..."
+                variant="directory"
+              />
             </div>
 
             {/* Scrollable details and enterprise list container */}

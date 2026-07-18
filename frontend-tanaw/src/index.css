@@ -1591,8 +1591,30 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 
   html.dark .print-container,
   html.dark .print-container .tanaw-document-preview {
-    color: #e8eef7 !important;
-    background: #0b1220 !important;
+    color: #000 !important;
+    background: #fff !important;
+    color-scheme: light;
+  }
+
+  html.dark .print-container .tanaw-document-preview :where(*) {
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+
+  html.dark .print-container .tanaw-document-preview :where(.bg-white) {
+    background: #fff !important;
+  }
+
+  html.dark .print-container .tanaw-document-preview :where(.bg-gray-50, .bg-slate-50) {
+    background: #f8fafc !important;
+  }
+
+  html.dark .print-container .tanaw-document-preview :where(.bg-gray-100, .bg-slate-100) {
+    background: #f1f5f9 !important;
+  }
+
+  html.dark .print-container .tanaw-document-preview :where(.bg-gray-200, .bg-slate-200) {
+    background: #e2e8f0 !important;
   }
 
   .print-hide {

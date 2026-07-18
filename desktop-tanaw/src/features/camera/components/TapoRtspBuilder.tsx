@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RadioTower } from "lucide-react";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 import { buildTapoRtspUrl, parseRtspConnection, TAPO_STREAM_OPTIONS, type TapoStreamId } from "../utils/rtsp";
 
 type TapoRtspBuilderProps = {
@@ -61,17 +62,13 @@ export function TapoRtspBuilder({ layout = "responsive", streamUrl, onStreamUrlC
         </div>
         <div className="min-w-0">
           <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">RTSP Stream</label>
-          <select
+          <SelectDropdown
             value={streamId}
-            onChange={(event) => updateConnection(host, event.target.value as TapoStreamId)}
-            className="w-full min-w-0 rounded-sm border border-emerald-200 bg-white p-2 text-sm font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-          >
-            {TAPO_STREAM_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            onChange={(nextStreamId) => updateConnection(host, nextStreamId as TapoStreamId)}
+            options={TAPO_STREAM_OPTIONS.map((option) => [option.value, option.label] as const)}
+            ariaLabel="RTSP stream"
+            size="compact"
+          />
         </div>
       </div>
     </div>

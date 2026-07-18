@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
+import { getEnterpriseTopbarControlClasses } from "./enterpriseTopbarTheme";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -112,11 +113,17 @@ export function EnterpriseTopbar({
   }, [isNotificationsOpen, onNotificationsClose, showMobileNav, showProfileMenu]);
 
   const profileEmail = user?.email ?? "No account email";
+  const isDarkTopbar = resolvedTheme === "dark";
+  const controlClasses = getEnterpriseTopbarControlClasses(resolvedTheme);
   const roleSubtitle = `${String(user?.role ?? "enterprise").toLowerCase()} Role`;
   const displayImageDataUrl = user?.displayImageDataUrl ?? null;
   const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 max-2xl:px-3.5";
-  const navPillActive = "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
-  const navPillInactive = "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
+  const navPillActive = isDarkTopbar
+    ? "bg-emerald-300/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.46)] ring-1 ring-emerald-100/14"
+    : "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
+  const navPillInactive = isDarkTopbar
+    ? "text-white/72 hover:-translate-y-0.5 hover:bg-white/7 hover:text-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.38)]"
+    : "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
   const visibleNavigation = useMemo(() => enterpriseNavigation.filter((item) => item.id !== "simulation" || showSimulation), [showSimulation]);
 
   const navButtons = useMemo(
@@ -136,7 +143,7 @@ export function EnterpriseTopbar({
 
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
-      <div className="enterprise-topbar relative overflow-visible shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10">
+      <div data-topbar-theme={resolvedTheme} className="enterprise-topbar relative overflow-visible shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10">
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
           <EnterpriseBrand onDashboard={() => onNavigate("dashboard")} />
 
@@ -151,7 +158,7 @@ export function EnterpriseTopbar({
               type="button"
               aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
               onClick={() => setShowMobileNav((current) => !current)}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/25 bg-white/8 text-white shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/[0.14] hover:shadow-lg xl:hidden"
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${controlClasses.icon}`}
             >
               {showMobileNav ? <X size={18} /> : <Menu size={18} />}
             </button>
@@ -165,7 +172,7 @@ export function EnterpriseTopbar({
                 onNotificationsClose();
                 onToggleTheme();
               }}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.14] hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${controlClasses.icon}`}
             >
               {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -175,7 +182,7 @@ export function EnterpriseTopbar({
                 isOpen={isNotificationsOpen}
                 notifications={notifications}
                 unreadCount={unreadCount}
-                triggerVariant="topbar"
+                triggerVariant={isDarkTopbar ? "topbar-dark" : "topbar"}
                 onToggleOpen={() => {
                   setShowProfileMenu(false);
                   onNotificationsToggle();
@@ -194,7 +201,7 @@ export function EnterpriseTopbar({
                   setShowProfileMenu((current) => !current);
                   onNotificationsClose();
                 }}
-                className="flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5"
+                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${controlClasses.account}`}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {displayImageDataUrl ? <img src={displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -260,7 +267,7 @@ export function EnterpriseTopbar({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-tanaw-green/95 border-t border-white/10 px-6 pb-4 max-sm:px-4"
+            className={`border-t px-6 pb-4 max-sm:px-4 ${isDarkTopbar ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
           >
             <nav className="grid gap-2 pt-4" aria-label="Enterprise mobile navigation">
               {visibleNavigation.map((item) => {

@@ -16,8 +16,6 @@ type TextOptions = {
   size?: number;
 };
 
-export type ReportDocumentMode = "light" | "dark";
-
 type PdfPalette = {
   background: [number, number, number];
   text: [number, number, number];
@@ -28,32 +26,20 @@ type PdfPalette = {
   accent: [number, number, number];
 };
 
-const palettes: Record<ReportDocumentMode, PdfPalette> = {
-  light: {
-    background: [1, 1, 1],
-    text: [0.05, 0.08, 0.13],
-    muted: [0.31, 0.37, 0.46],
-    border: [0.4, 0.45, 0.52],
-    header: [0.94, 0.96, 0.98],
-    total: [0.86, 0.89, 0.93],
-    accent: [0.72, 0.54, 0.1],
-  },
-  dark: {
-    background: [0.043, 0.071, 0.125],
-    text: [0.91, 0.94, 0.98],
-    muted: [0.58, 0.66, 0.76],
-    border: [0.39, 0.46, 0.57],
-    header: [0.09, 0.14, 0.23],
-    total: [0.14, 0.21, 0.31],
-    accent: [0.83, 0.65, 0.2],
-  },
+const lightExportPalette: PdfPalette = {
+  background: [1, 1, 1],
+  text: [0.05, 0.08, 0.13],
+  muted: [0.31, 0.37, 0.46],
+  border: [0.4, 0.45, 0.52],
+  header: [0.94, 0.96, 0.98],
+  total: [0.86, 0.89, 0.93],
+  accent: [0.72, 0.54, 0.1],
 };
 
 const contentPalettes = new WeakMap<string[], PdfPalette>();
 
 export function downloadDotReportPdf(report: DotReportPdf) {
-  const mode = document.documentElement.classList.contains("dark") ? "dark" : "light";
-  const pdf = createDotReportPdf(report, mode);
+  const pdf = createDotReportPdf(report);
   const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -64,7 +50,7 @@ export function downloadDotReportPdf(report: DotReportPdf) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function createDotReportPdf(report: DotReportPdf, mode: ReportDocumentMode = "light") {
+export function createDotReportPdf(report: DotReportPdf) {
   const tpm = demographicCount(report.demo.thisProvMale);
   const tpf = demographicCount(report.demo.thisProvFemale);
   const opm = demographicCount(report.demo.otherProvMale);
@@ -73,13 +59,12 @@ export function createDotReportPdf(report: DotReportPdf, mode: ReportDocumentMod
   const ff = demographicCount(report.demo.foreignFemale);
   const totals = getDemographicTotals(report.demo);
   const content: string[] = [];
-  const palette = palettes[mode];
-  contentPalettes.set(content, palette);
-  content.push(`${rgbFill(palette.background)} 0 0 792 612 re f`);
+  contentPalettes.set(content, lightExportPalette);
+  content.push(`${rgbFill(lightExportPalette.background)} 0 0 792 612 re f`);
 
   drawText(content, "TANAW - DOT Visitor Attraction Report", 50, 564, { align: "center", bold: true, maxWidth: 694, size: 15 });
   drawText(content, report.reportId, 50, 544, { align: "center", maxWidth: 694, size: 9 });
-  content.push(`${rgbStroke(palette.accent)} 1 w 50 532 m 744 532 l S`);
+  content.push(`${rgbStroke(lightExportPalette.accent)} 1 w 50 532 m 744 532 l S`);
   drawText(content, "REPORTING PERIOD", 50, 512, { bold: true, size: 7 });
   drawText(content, report.period, 50, 498, { size: 9 });
   drawText(content, "UNIQUE COUNT CAP", 420, 512, { bold: true, size: 7 });
@@ -180,7 +165,7 @@ function drawText(content: string[], value: string, x: number, y: number, option
 }
 
 function paletteFor(content: string[]) {
-  return contentPalettes.get(content) ?? palettes.light;
+  return contentPalettes.get(content) ?? lightExportPalette;
 }
 
 function rgbFill([red, green, blue]: [number, number, number]) {

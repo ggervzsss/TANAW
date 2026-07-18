@@ -1083,6 +1083,12 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
+.dark .enterprise-topbar {
+  background-image: linear-gradient(90deg, #02090d 0%, #061714 48%, #0b2520 100%);
+  border-bottom-color: rgb(167 243 208 / 0.1);
+  box-shadow: 0 16px 44px rgb(0 0 0 / 0.58);
+}
+
 .enterprise-topbar::before {
   content: "";
   position: absolute;
@@ -1106,9 +1112,9 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 
 .dark .enterprise-topbar::before {
   background-image: url("/images/enterprise-topbar-building-night.png");
-  opacity: 0.72;
+  opacity: 0.26;
   mix-blend-mode: screen;
-  filter: saturate(0.92) contrast(1.04) brightness(0.84);
+  filter: saturate(0.66) contrast(1.02) brightness(0.56);
 }
 
 .enterprise-topbar::after {
@@ -1120,6 +1126,12 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
     radial-gradient(circle_at_top_right, rgba(69, 165, 73, 0.2), transparent 42%);
   pointer-events: none;
   z-index: 1;
+}
+
+.dark .enterprise-topbar::after {
+  background:
+    linear-gradient(90deg, rgb(1 8 11 / 0.99) 0%, rgb(4 24 20 / 0.96) 50%, rgb(8 38 30 / 0.82) 100%),
+    radial-gradient(circle at top left, rgb(110 231 183 / 0.055), transparent 34%), radial-gradient(circle at top right, rgb(52 211 153 / 0.08), transparent 44%);
 }
 
 .enterprise-shell aside.bg-\[\#065f46\] {

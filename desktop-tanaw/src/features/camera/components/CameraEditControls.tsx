@@ -1,6 +1,7 @@
 import React from "react";
 import { Maximize, Video } from "lucide-react";
 import type { Camera } from "../../../types/enterprise";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
 
@@ -66,32 +67,36 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
             />
           </CompactField>
           <CompactField label="Camera Type">
-            <select
+            <SelectDropdown
               value={editForm.cameraType}
-              onChange={(event) => onEditFormChange({ ...editForm, cameraType: event.target.value as Camera["cameraType"] })}
-              className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-            >
-              <option value="IP_WEBCAM">IP Webcam</option>
-              <option value="RTSP_CCTV">RTSP CCTV</option>
-              <option value="USB_WEBCAM">USB Webcam</option>
-              <option value="ONVIF_CCTV">ONVIF CCTV</option>
-            </select>
+              onChange={(cameraType) => onEditFormChange({ ...editForm, cameraType: cameraType as Camera["cameraType"] })}
+              options={[
+                ["IP_WEBCAM", "IP Webcam"],
+                ["RTSP_CCTV", "RTSP CCTV"],
+                ["USB_WEBCAM", "USB Webcam"],
+                ["ONVIF_CCTV", "ONVIF CCTV"],
+              ]}
+              ariaLabel="Camera type"
+              size="compact"
+            />
           </CompactField>
           <details className="rounded-sm border border-gray-200 bg-gray-50 p-2">
             <summary className="cursor-pointer text-[9px] font-bold tracking-wider text-gray-500 uppercase">Advanced Settings</summary>
             <div className="mt-2 space-y-2">
               <CompactField label="Processing Profile">
-                <select
+                <SelectDropdown
                   value={editForm.processingProfile}
-                  onChange={(event) => onEditFormChange({ ...editForm, processingProfile: event.target.value as Camera["processingProfile"] })}
-                  className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-                >
-                  <option value="auto">Auto Recommended</option>
-                  <option value="compatibility">Compatibility</option>
-                  <option value="balanced">Balanced</option>
-                  <option value="high_accuracy">High Accuracy</option>
-                  <option value="emergency">Emergency / Low Power</option>
-                </select>
+                  onChange={(processingProfile) => onEditFormChange({ ...editForm, processingProfile: processingProfile as Camera["processingProfile"] })}
+                  options={[
+                    ["auto", "Auto Recommended"],
+                    ["compatibility", "Compatibility"],
+                    ["balanced", "Balanced"],
+                    ["high_accuracy", "High Accuracy"],
+                    ["emergency", "Emergency / Low Power"],
+                  ]}
+                  ariaLabel="Processing profile"
+                  size="compact"
+                />
               </CompactField>
               <div className="grid grid-cols-2 gap-2">
                 <CompactField label="Counting Confidence">
@@ -119,26 +124,30 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <CompactField label="ReID Mode">
-                  <select
+                  <SelectDropdown
                     value={editForm.reidMode ?? "auto"}
-                    onChange={(event) => onEditFormChange({ ...editForm, reidMode: event.target.value as Camera["reidMode"] })}
-                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-                  >
-                    <option value="auto">Auto</option>
-                    <option value="off">Off</option>
-                    <option value="fast">Fast</option>
-                    <option value="quality">Quality</option>
-                  </select>
+                    onChange={(reidMode) => onEditFormChange({ ...editForm, reidMode: reidMode as Camera["reidMode"] })}
+                    options={[
+                      ["auto", "Auto"],
+                      ["off", "Off"],
+                      ["fast", "Fast"],
+                      ["quality", "Quality"],
+                    ]}
+                    ariaLabel="Re-identification mode"
+                    size="compact"
+                  />
                 </CompactField>
                 <CompactField label="Unique Mode">
-                  <select
+                  <SelectDropdown
                     value={editForm.uniqueCountingMode ?? "estimated_reid"}
-                    onChange={(event) => onEditFormChange({ ...editForm, uniqueCountingMode: event.target.value as Camera["uniqueCountingMode"] })}
-                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-                  >
-                    <option value="estimated_reid">Estimated ReID</option>
-                    <option value="entry_only">Entry Only</option>
-                  </select>
+                    onChange={(uniqueCountingMode) => onEditFormChange({ ...editForm, uniqueCountingMode: uniqueCountingMode as Camera["uniqueCountingMode"] })}
+                    options={[
+                      ["estimated_reid", "Estimated ReID"],
+                      ["entry_only", "Entry Only"],
+                    ]}
+                    ariaLabel="Unique counting mode"
+                    size="compact"
+                  />
                 </CompactField>
               </div>
               <div>

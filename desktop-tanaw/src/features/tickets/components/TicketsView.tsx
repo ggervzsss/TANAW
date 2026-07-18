@@ -1,7 +1,9 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Eye, LifeBuoy, MessageSquare, Paperclip, RefreshCw, Send, TicketCheck, UploadCloud, X } from "lucide-react";
 import { Card } from "../../../components/Card";
+import { ExpandableText } from "../../../components/ExpandableText";
 import { ModalPortal } from "../../../components/ModalPortal";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import {
@@ -332,8 +334,15 @@ export function TicketsView() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-mono text-xs font-bold text-[#065f46] dark:text-emerald-200">{ticket.code}</p>
-                      <h4 className="mt-1 text-sm font-black text-[#111827] dark:text-slate-100">{ticket.subject}</h4>
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500 dark:text-slate-300">{ticket.description}</p>
+                      <ExpandableText
+                        primary={ticket.subject}
+                        secondary={ticket.description}
+                        ariaLabel="ticket subject and description"
+                        className="mt-1 text-sm font-black text-[#111827] dark:text-slate-100"
+                        secondaryClassName="text-xs leading-relaxed text-gray-500 dark:text-slate-300"
+                        threshold={72}
+                        twoLines
+                      />
                     </div>
                     <StatusBadge status={ticket.status} />
                   </div>
@@ -707,16 +716,10 @@ type SelectFieldProps = {
 
 function SelectField({ label, onChange, options, value }: SelectFieldProps) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className={fieldClassName("font-semibold")}>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
+      <SelectDropdown value={value} onChange={onChange} options={options} ariaLabel={label} />
+    </div>
   );
 }
 

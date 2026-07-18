@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Download, FileText, Search } from "lucide-react";
 import { Badge } from "../../../components/Badge";
 import { Card } from "../../../components/Card";
+import { ExpandableText } from "../../../components/ExpandableText";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { ReportRecord } from "../../../types/enterprise";
 
 export type ReportLedgerRowKind = "current" | "pending" | "history";
@@ -55,26 +57,19 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
               className="h-9 w-44 rounded-sm border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] outline-none transition-colors focus:border-[#065f46]"
             />
           </label>
-          <label>
-            <span className="sr-only">Filter reports by status</span>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="h-9 rounded-sm border border-gray-200 bg-white px-3 text-xs font-semibold text-[#111827] outline-none transition-colors focus:border-[#065f46]"
-            >
-              <option value="All">All statuses</option>
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectDropdown value={statusFilter} onChange={setStatusFilter} options={[["All", "All statuses"], ...statusOptions.map((status) => [status, status] as const)]} ariaLabel="Filter reports by status" size="compact" />
         </div>
       </div>
 
       <div className="flex-1 overflow-auto bg-white p-0">
-        <table className="w-full text-left text-sm whitespace-nowrap">
+        <table className="w-full min-w-190 table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[31%]" />
+            <col className="w-[18%]" />
+            <col className="w-[14%]" />
+            <col className="w-[15%]" />
+            <col className="w-[22%]" />
+          </colgroup>
           <thead className="sticky top-0 bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
             <tr>
               <th className="border-b border-gray-200 px-5 py-3">Report</th>
@@ -105,8 +100,14 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                   className={`group cursor-pointer transition-colors focus-visible:bg-[#065f46]/5 focus-visible:outline-none ${isActive ? "bg-[#065f46]/5" : "hover:bg-gray-50"}`}
                 >
                   <td className="px-5 py-4">
-                    <p className="font-mono text-xs font-semibold text-[#111827]">{row.reportLabel}</p>
-                    <p className="mt-1 text-[10px] font-semibold tracking-wider text-gray-400 uppercase">{row.reportDescription}</p>
+                    <ExpandableText
+                      primary={row.reportLabel}
+                      secondary={row.reportDescription}
+                      ariaLabel="report name and description"
+                      className="font-mono text-xs font-semibold text-[#111827]"
+                      secondaryClassName="text-[10px] font-semibold tracking-wider text-gray-400 uppercase"
+                      threshold={48}
+                    />
                   </td>
                   <td className="px-5 py-4 text-sm font-medium text-gray-700">{report.period ?? report.date}</td>
                   <td className="px-5 py-4 text-right font-mono font-bold text-[#065f46]">{report.unique?.toLocaleString() || 0}</td>

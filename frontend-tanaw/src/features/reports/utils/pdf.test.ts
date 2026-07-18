@@ -18,13 +18,14 @@ const intakeReport: IntakeReport = {
 };
 
 describe("web report PDF generation", () => {
-  it("builds a dark intake document containing the preview content", () => {
-    const pdf = createIntakeReportPdf(intakeReport, "dark");
+  it("builds an official light intake document containing the report content", () => {
+    const pdf = createIntakeReportPdf(intakeReport);
     expect(pdf.startsWith("%PDF-1.4")).toBe(true);
     expect(pdf).toContain("TANAW - DOT Visitor Attraction Report");
     expect(pdf).toContain("Archie's Event Place");
     expect(pdf).toContain("Live Count Summary");
-    expect(pdf).toContain("0.043 0.071 0.125 rg 0 0 842 595 re f");
+    expect(pdf).toContain("1 1 1 rg 0 0 842 595 re f");
+    expect(pdf).not.toContain("0.043 0.071 0.125 rg");
     expect(pdf).toContain("/BaseFont /Helvetica-Bold");
   });
 
@@ -52,7 +53,7 @@ describe("web report PDF generation", () => {
       sources,
     };
 
-    const pdf = createFinalReportPdf(report, "light");
+    const pdf = createFinalReportPdf(report);
     expect(pdf).toContain("/Count 2");
     expect(pdf).toContain("Citywide Consolidated Total");
     expect(pdf).toContain("APPROVED BY");

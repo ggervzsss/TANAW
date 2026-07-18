@@ -1,6 +1,7 @@
 import { Check, RefreshCw, Shield, Video, X } from "lucide-react";
 import type { FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
+import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { CameraFormValues } from "../types/camera";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
@@ -80,16 +81,17 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Camera Type</label>
-                  <select
+                  <SelectDropdown
                     value={newCam.cameraType}
-                    onChange={(event) => onChange({ ...newCam, cameraType: event.target.value as CameraFormValues["cameraType"] })}
-                    className="w-full rounded-xl border border-gray-300 p-3 text-sm font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-                  >
-                    <option value="IP_WEBCAM">IP Webcam</option>
-                    <option value="RTSP_CCTV">RTSP CCTV</option>
-                    <option value="USB_WEBCAM">USB Webcam</option>
-                    <option value="ONVIF_CCTV">ONVIF CCTV</option>
-                  </select>
+                    onChange={(cameraType) => onChange({ ...newCam, cameraType: cameraType as CameraFormValues["cameraType"] })}
+                    options={[
+                      ["IP_WEBCAM", "IP Webcam"],
+                      ["RTSP_CCTV", "RTSP CCTV"],
+                      ["USB_WEBCAM", "USB Webcam"],
+                      ["ONVIF_CCTV", "ONVIF CCTV"],
+                    ]}
+                    ariaLabel="Camera type"
+                  />
                 </div>
               </div>
 

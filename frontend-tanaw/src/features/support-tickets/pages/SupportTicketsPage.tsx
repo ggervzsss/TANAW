@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
 import {
   fetchSupportTicketAttachmentBlob,
   getSupportTicket,
@@ -171,12 +171,25 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
                 <tr key={ticket.id} onClick={() => openTicketDetails(ticket.id)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
                   <td className="px-4 py-4 align-top font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
                   <td className="px-4 py-4 align-top">
-                    <p className="font-bold text-gray-950">{ticket.enterpriseName}</p>
-                    <p className="mt-1 font-mono text-[10px] font-semibold wrap-break-word text-gray-500">{ticket.enterpriseId}</p>
+                    <ExpandableTableText
+                      primary={ticket.enterpriseName}
+                      secondary={ticket.enterpriseId}
+                      ariaLabel="ticket enterprise and ID"
+                      className="font-bold text-gray-950"
+                      secondaryClassName="font-mono text-[10px] font-semibold text-gray-500"
+                      threshold={42}
+                    />
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <p className="font-bold text-gray-950">{ticket.subject}</p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{ticket.description}</p>
+                    <ExpandableTableText
+                      primary={ticket.subject}
+                      secondary={ticket.description}
+                      ariaLabel="ticket subject and description"
+                      className="font-bold text-gray-950"
+                      secondaryClassName="text-xs leading-relaxed text-gray-500"
+                      threshold={72}
+                      twoLines
+                    />
                     {ticket.attachments.length > 0 && (
                       <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
                         <Paperclip size={11} />

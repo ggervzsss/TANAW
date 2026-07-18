@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import type { SystemLog, SystemLogCategory } from "@/shared/types";
 import { activityTimeRanges, isWithinActivityTimeRange } from "@/shared/utils";
@@ -97,12 +97,21 @@ export function ITSystemLogsPage() {
                   <td className="px-3 py-4 whitespace-nowrap lg:px-4">
                     <TypeBadge type={activity.category} />
                   </td>
-                  <td className="px-3 py-4 text-sm whitespace-nowrap lg:px-4">
-                    <span className="block truncate font-bold text-gray-900">{activity.actor}</span>
-                    <span className="text-[11px] font-semibold text-gray-500 uppercase">{activity.actorRole}</span>
+                  <td className="px-3 py-4 text-sm lg:px-4">
+                    <ExpandableTableText
+                      primary={activity.actor}
+                      secondary={activity.actorRole}
+                      ariaLabel="actor"
+                      className="font-bold text-gray-900"
+                      secondaryClassName="text-[11px] font-semibold text-gray-500 uppercase"
+                    />
                   </td>
-                  <td className="truncate px-3 py-4 text-sm whitespace-nowrap text-gray-600 lg:px-4">{activity.target}</td>
-                  <td className="px-3 py-4 text-sm leading-relaxed text-gray-600 lg:px-4">{activity.summary}</td>
+                  <td className="px-3 py-4 text-sm text-gray-600 lg:px-4">
+                    <ExpandableTableText primary={activity.target} ariaLabel="target" />
+                  </td>
+                  <td className="px-3 py-4 text-sm leading-relaxed text-gray-600 lg:px-4">
+                    <ExpandableTableText primary={activity.summary} ariaLabel="summary" threshold={72} twoLines />
+                  </td>
                 </tr>
               ))}
               {filteredActivities.length === 0 && (
@@ -156,16 +165,7 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
 
   return (
     <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
-      <div className="grid gap-4 md:grid-cols-2">
-        <DetailField label="Type" value={activity.category} />
-        <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
-        <DetailField label="Timestamp" value={formatLogTimestamp(activity.timestamp)} />
-        <DetailField label="Target" value={activity.target} />
-        <DetailField label="Action" value={activity.action} />
-        <div className="md:col-span-2">
-          <DetailField label="Summary" value={activity.summary} />
-        </div>
-      </div>
+      <ActivityDetailFields activity={activity} />
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
           <p className="text-sm font-semibold text-slate-700">This activity is tied to a support ticket. Open the full ticket record to inspect fields, photos, status, and conversation history.</p>
@@ -180,6 +180,21 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
         </div>
       )}
     </ModalFrame>
+  );
+}
+
+export function ActivityDetailFields({ activity }: { activity: SystemLog }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <DetailField label="Type" value={activity.category} />
+      <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
+      <DetailField label="Timestamp" value={formatLogTimestamp(activity.timestamp)} />
+      <DetailField label="Target" value={activity.target} />
+      <DetailField label="Action" value={activity.action} />
+      <div className="md:col-span-2">
+        <DetailField label="Summary" value={activity.summary} />
+      </div>
+    </div>
   );
 }
 

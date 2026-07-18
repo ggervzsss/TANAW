@@ -7,7 +7,7 @@ import { routes } from "@/app/routers/routes";
 import { AlertDetailsModal, PriorityAlertListItem } from "@/features/alerts-monitor/components";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { DetailField, EmptyState, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
@@ -86,10 +86,10 @@ export function ITDashboardPage() {
                       <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
                         <td className="py-4 pr-2 pl-4 font-mono text-xs leading-snug text-gray-500 lg:pr-3 lg:pl-5">{formatCompactTimestamp(activity.timestamp)}</td>
                         <td className="text-charcoal-800 px-4 py-4 text-sm leading-snug font-semibold lg:px-5">
-                          <span className="line-clamp-3">{activity.summary}</span>
+                          <ExpandableTableText primary={activity.summary} ariaLabel="activity summary" threshold={80} twoLines />
                         </td>
-                        <td className="px-4 py-4 text-xs leading-snug font-semibold wrap-break-word text-gray-600 lg:px-5">
-                          <span className="line-clamp-3">{activity.actor}</span>
+                        <td className="px-4 py-4 text-xs leading-snug font-semibold text-gray-600 lg:px-5">
+                          <ExpandableTableText primary={activity.actor} ariaLabel="activity actor" />
                         </td>
                       </tr>
                     );

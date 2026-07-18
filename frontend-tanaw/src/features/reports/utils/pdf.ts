@@ -8,7 +8,6 @@ const FONT_ID = 3;
 const BOLD_FONT_ID = 4;
 
 type PdfCommand = string;
-export type ReportDocumentMode = "light" | "dark";
 
 type PdfPalette = {
   background: [number, number, number];
@@ -20,41 +19,25 @@ type PdfPalette = {
   accent: [number, number, number];
 };
 
-const palettes: Record<ReportDocumentMode, PdfPalette> = {
-  light: {
-    background: [1, 1, 1],
-    text: [0.06, 0.09, 0.14],
-    muted: [0.35, 0.4, 0.48],
-    border: [0.38, 0.43, 0.5],
-    header: [0.93, 0.95, 0.97],
-    total: [0.83, 0.87, 0.91],
-    accent: [0.71, 0.54, 0.1],
-  },
-  dark: {
-    background: [0.043, 0.071, 0.125],
-    text: [0.91, 0.94, 0.98],
-    muted: [0.58, 0.66, 0.76],
-    border: [0.39, 0.46, 0.57],
-    header: [0.09, 0.14, 0.23],
-    total: [0.14, 0.21, 0.31],
-    accent: [0.83, 0.65, 0.2],
-  },
+const lightExportPalette: PdfPalette = {
+  background: [1, 1, 1],
+  text: [0.06, 0.09, 0.14],
+  muted: [0.35, 0.4, 0.48],
+  border: [0.38, 0.43, 0.5],
+  header: [0.93, 0.95, 0.97],
+  total: [0.83, 0.87, 0.91],
+  accent: [0.71, 0.54, 0.1],
 };
 
 const commandPalettes = new WeakMap<PdfCommand[], PdfPalette>();
 
-function resolveDocumentMode(): ReportDocumentMode {
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
-}
-
-function initializePage(commands: PdfCommand[], mode: ReportDocumentMode) {
-  const palette = palettes[mode];
-  commandPalettes.set(commands, palette);
-  commands.push(`${rgbFill(palette.background)} 0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT} re f`);
+function initializePage(commands: PdfCommand[]) {
+  commandPalettes.set(commands, lightExportPalette);
+  commands.push(`${rgbFill(lightExportPalette.background)} 0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT} re f`);
 }
 
 function paletteFor(commands: PdfCommand[]) {
-  return commandPalettes.get(commands) ?? palettes.light;
+  return commandPalettes.get(commands) ?? lightExportPalette;
 }
 
 function rgbFill([red, green, blue]: [number, number, number]) {
@@ -78,11 +61,11 @@ type TableCell = {
 };
 
 export function downloadIntakeReportPdf(report: IntakeReport) {
-  const pdf = createIntakeReportPdf(report, resolveDocumentMode());
+  const pdf = createIntakeReportPdf(report);
   downloadPdf(pdf, `${report.id}.pdf`);
 }
 
-export function createIntakeReportPdf(report: IntakeReport, mode: ReportDocumentMode = "light") {
+export function createIntakeReportPdf(report: IntakeReport) {
   const demographics = getDotDemographics(report.metrics.unique, report.demographics ?? report.payload?.demo);
   const rows: TableCell[][] = [
     [{ value: report.enterprise, align: "left", bold: true }, { value: report.code }, ...Array.from({ length: 12 }, () => ({ value: "" }))],
@@ -105,7 +88,7 @@ export function createIntakeReportPdf(report: IntakeReport, mode: ReportDocument
   ];
 
   const commands: PdfCommand[] = [];
-  initializePage(commands, mode);
+  initializePage(commands);
   drawTitle(commands, "TANAW - DOT Visitor Attraction Report", report.id);
   drawMetadata(commands, [
     ["Enterprise", report.enterprise],
@@ -124,11 +107,11 @@ export function createIntakeReportPdf(report: IntakeReport, mode: ReportDocument
 }
 
 export function downloadFinalReportPdf(report: FinalReport) {
-  const pdf = createFinalReportPdf(report, resolveDocumentMode());
+  const pdf = createFinalReportPdf(report);
   downloadPdf(pdf, `${report.id}.pdf`);
 }
 
-export function createFinalReportPdf(report: FinalReport, mode: ReportDocumentMode = "light") {
+export function createFinalReportPdf(report: FinalReport) {
   const sourceRows = report.sources.map((source) => buildFinalReportSourceRow(source, report.period));
   const totalRows = buildFinalReportTotalRow(report);
   const pages: string[] = [];
@@ -137,7 +120,7 @@ export function createFinalReportPdf(report: FinalReport, mode: ReportDocumentMo
 
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
     const commands: PdfCommand[] = [];
-    initializePage(commands, mode);
+    initializePage(commands);
     const pageRows = sourceRows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage);
     const isLastPage = pageIndex === pageCount - 1;
 
