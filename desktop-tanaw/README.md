@@ -65,6 +65,12 @@ Electron starts the ML service automatically from `ml-service/main.py`. If
 another service is already listening on the ML port, the desktop attempts to
 connect to it and reports conflicts in the camera panel.
 
+In development, Electron launches the service through `uv run --frozen` so an
+existing `.venv` is synchronized with `ml-service/uv.lock` before Python
+starts. Packaged builds still prefer a prepared runtime under the packaged ML
+service directory when one is present, with the locked `uv` environment as the
+existing fallback.
+
 Override the ML port only when needed:
 
 Linux:

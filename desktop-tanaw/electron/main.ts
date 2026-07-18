@@ -5,6 +5,8 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { getMlServiceCommand } from "./ml-service-command";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // The built directory structure:
@@ -75,16 +77,6 @@ function getMlServiceDir() {
   return path.join(process.resourcesPath, "ml-service");
 }
 
-function getMlServiceCommand(serviceDir: string) {
-  const venvPython = process.platform === "win32" ? path.join(serviceDir, ".venv", "Scripts", "python.exe") : path.join(serviceDir, ".venv", "bin", "python");
-
-  if (existsSync(venvPython)) {
-    return { command: venvPython, args: ["main.py"] };
-  }
-
-  return { command: "uv", args: ["run", "python", "main.py"] };
-}
-
 async function startMlService() {
   if (isMlServiceRunning()) {
     return;
@@ -103,7 +95,7 @@ async function startMlService() {
     return;
   }
 
-  const { command, args } = getMlServiceCommand(serviceDir);
+  const { command, args } = getMlServiceCommand({ isPackaged: app.isPackaged, serviceDir });
   mlServiceError = null;
   mlServiceConnectedExternally = false;
 
