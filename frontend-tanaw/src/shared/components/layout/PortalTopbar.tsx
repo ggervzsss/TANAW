@@ -314,7 +314,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
         <div
           aria-hidden
           className="pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] bg-cover bg-center opacity-[0.38] mix-blend-screen max-lg:w-[76%]"
-          style={{ backgroundImage: "url('/images/it-topbar-building.png')" }}
+          style={{ backgroundImage: `url('${resolvedTheme === "dark" ? "/images/it-topbar-building-night.png" : "/images/it-topbar-building.png"}')` }}
         />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(4,45,17,0.98)_0%,rgba(5,81,37,0.88)_44%,rgba(6,93,42,0.48)_100%)]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]" />
@@ -447,7 +447,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                   setShowProfileMenu((current) => !current);
                   setShowNotifications(false);
                 }}
-                className="flex min-w-60.5 items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:min-w-56 max-sm:min-w-0 max-sm:pr-2.5"
+                className="flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -469,8 +469,12 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                     className="absolute right-0 z-1001 mt-3 w-72 overflow-hidden rounded-2xl border border-white/80 bg-white py-2 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/4"
                   >
                     <div className="mb-1 border-b border-slate-100 px-4 py-3.5">
-                      <p className="text-tanaw-navy text-sm font-bold">{profile.name}</p>
-                      <p className="text-xs text-gray-500">{profile.email}</p>
+                      <p title={profile.name} className="text-tanaw-navy truncate text-sm font-bold">
+                        {profile.name}
+                      </p>
+                      <p title={profile.email} className="truncate text-xs text-gray-500">
+                        {profile.email}
+                      </p>
                     </div>
                     <button type="button" onClick={() => openAccountPage("profile")} className={accountMenuButtonClass(profilePath)}>
                       <User size={14} /> Profile Settings

@@ -1,7 +1,7 @@
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { demographicCount, getDemographicTotals } from "./demographics";
 
-type DotReportPdf = {
+export type DotReportPdf = {
   reportId: string;
   period: string;
   metrics: Metrics;
@@ -12,11 +12,48 @@ type DotReportPdf = {
 type TextOptions = {
   align?: "center" | "left";
   bold?: boolean;
+  maxWidth?: number;
   size?: number;
 };
 
+export type ReportDocumentMode = "light" | "dark";
+
+type PdfPalette = {
+  background: [number, number, number];
+  text: [number, number, number];
+  muted: [number, number, number];
+  border: [number, number, number];
+  header: [number, number, number];
+  total: [number, number, number];
+  accent: [number, number, number];
+};
+
+const palettes: Record<ReportDocumentMode, PdfPalette> = {
+  light: {
+    background: [1, 1, 1],
+    text: [0.05, 0.08, 0.13],
+    muted: [0.31, 0.37, 0.46],
+    border: [0.4, 0.45, 0.52],
+    header: [0.94, 0.96, 0.98],
+    total: [0.86, 0.89, 0.93],
+    accent: [0.72, 0.54, 0.1],
+  },
+  dark: {
+    background: [0.043, 0.071, 0.125],
+    text: [0.91, 0.94, 0.98],
+    muted: [0.58, 0.66, 0.76],
+    border: [0.39, 0.46, 0.57],
+    header: [0.09, 0.14, 0.23],
+    total: [0.14, 0.21, 0.31],
+    accent: [0.83, 0.65, 0.2],
+  },
+};
+
+const contentPalettes = new WeakMap<string[], PdfPalette>();
+
 export function downloadDotReportPdf(report: DotReportPdf) {
-  const pdf = createDotReportPdf(report);
+  const mode = document.documentElement.classList.contains("dark") ? "dark" : "light";
+  const pdf = createDotReportPdf(report, mode);
   const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -27,7 +64,7 @@ export function downloadDotReportPdf(report: DotReportPdf) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function createDotReportPdf(report: DotReportPdf) {
+export function createDotReportPdf(report: DotReportPdf, mode: ReportDocumentMode = "light") {
   const tpm = demographicCount(report.demo.thisProvMale);
   const tpf = demographicCount(report.demo.thisProvFemale);
   const opm = demographicCount(report.demo.otherProvMale);
@@ -36,16 +73,22 @@ function createDotReportPdf(report: DotReportPdf) {
   const ff = demographicCount(report.demo.foreignFemale);
   const totals = getDemographicTotals(report.demo);
   const content: string[] = [];
+  const palette = palettes[mode];
+  contentPalettes.set(content, palette);
+  content.push(`${rgbFill(palette.background)} 0 0 792 612 re f`);
 
-  drawText(content, "TANAW - DOT Visitor Attraction Report", 50, 550, { bold: true, size: 12 });
-  drawText(content, `Report ID: ${report.reportId}`, 50, 528, { size: 10 });
-  drawText(content, `Reporting Period: ${report.period}`, 50, 512, { size: 10 });
-  drawText(content, `Unique Count Cap: ${report.metrics.unique.toLocaleString()}`, 50, 496, { size: 10 });
-  drawText(content, "VISITOR ATTRACTION", 50, 462, { bold: true, size: 15 });
+  drawText(content, "TANAW - DOT Visitor Attraction Report", 50, 564, { align: "center", bold: true, maxWidth: 694, size: 15 });
+  drawText(content, report.reportId, 50, 544, { align: "center", maxWidth: 694, size: 9 });
+  content.push(`${rgbStroke(palette.accent)} 1 w 50 532 m 744 532 l S`);
+  drawText(content, "REPORTING PERIOD", 50, 512, { bold: true, size: 7 });
+  drawText(content, report.period, 50, 498, { size: 9 });
+  drawText(content, "UNIQUE COUNT CAP", 420, 512, { bold: true, size: 7 });
+  drawText(content, report.metrics.unique.toLocaleString(), 420, 498, { size: 9 });
+  drawText(content, "VISITOR ATTRACTION", 50, 466, { bold: true, size: 13 });
 
   const table = {
     x: 50,
-    top: 430,
+    top: 448,
     code: 72,
     name: 154,
     demo: 42,
@@ -83,7 +126,7 @@ function createDotReportPdf(report: DotReportPdf) {
   drawCell(content, grandX, top, table.grand, 40, [totals.grandTotal ? String(totals.grandTotal) : ""], { bold: true, size: 10 });
 
   top -= 40;
-  for (let row = 0; row < 5; row += 1) {
+  for (let row = 0; row < 6; row += 1) {
     drawCell(content, table.x, top, table.code, 28, [""]);
     drawCell(content, table.x + table.code, top, table.name, 28, [""]);
     for (let column = 0; column < 9; column += 1) {
@@ -94,10 +137,12 @@ function createDotReportPdf(report: DotReportPdf) {
   }
 
   if (report.notes.trim()) {
-    drawText(content, "Supplementary Notes", 50, 106, { bold: true, size: 10 });
-    wrapText(report.notes.trim(), 112).slice(0, 4).forEach((line, index) => {
-      drawText(content, line, 50, 90 - index * 13, { size: 9 });
-    });
+    drawText(content, "Supplementary Notes", 50, 92, { bold: true, size: 10 });
+    wrapText(report.notes.trim(), 112)
+      .slice(0, 4)
+      .forEach((line, index) => {
+        drawText(content, line, 50, 76 - index * 12, { size: 8 });
+      });
   }
 
   return buildPdf(content.join("\n"));
@@ -105,7 +150,8 @@ function createDotReportPdf(report: DotReportPdf) {
 
 function drawCell(content: string[], x: number, top: number, width: number, height: number, lines: string[], options: TextOptions = {}) {
   const y = top - height;
-  content.push(`0.72 0.72 0.72 RG ${formatNumber(x)} ${formatNumber(y)} ${formatNumber(width)} ${formatNumber(height)} re S`);
+  const palette = paletteFor(content);
+  content.push(`${rgbStroke(palette.border)} ${formatNumber(x)} ${formatNumber(y)} ${formatNumber(width)} ${formatNumber(height)} re S`);
   const size = options.size ?? 8;
   const lineHeight = size + 3;
   const totalTextHeight = lines.length * lineHeight;
@@ -113,10 +159,11 @@ function drawCell(content: string[], x: number, top: number, width: number, heig
 
   lines.forEach((line, index) => {
     const textY = startY - index * lineHeight;
-    const textX = options.align === "left" ? x + 8 : x + width / 2;
+    const textX = options.align === "left" ? x + 8 : x;
     drawText(content, line, textX, textY, {
       align: options.align ?? "center",
       bold: options.bold,
+      maxWidth: options.align === "left" ? width - 16 : width,
       size,
     });
   });
@@ -126,8 +173,22 @@ function drawText(content: string[], value: string, x: number, y: number, option
   const size = options.size ?? 10;
   const escaped = escapePdf(value);
   const font = options.bold ? "F2" : "F1";
-  const alignTransform = options.align === "center" ? `(${escaped}) stringwidth pop 2 div neg 0 rmoveto ` : "";
-  content.push(`BT /${font} ${size} Tf ${formatNumber(x)} ${formatNumber(y)} Td ${alignTransform}(${escaped}) Tj ET`);
+  const maxWidth = options.maxWidth ?? 0;
+  const estimatedWidth = Math.min(maxWidth || Number.POSITIVE_INFINITY, value.length * size * 0.52);
+  const textX = options.align === "center" ? x + (maxWidth - estimatedWidth) / 2 : x;
+  content.push(`BT /${font} ${size} Tf ${rgbFill(paletteFor(content).text)} ${formatNumber(textX)} ${formatNumber(y)} Td (${escaped}) Tj ET`);
+}
+
+function paletteFor(content: string[]) {
+  return contentPalettes.get(content) ?? palettes.light;
+}
+
+function rgbFill([red, green, blue]: [number, number, number]) {
+  return `${red} ${green} ${blue} rg`;
+}
+
+function rgbStroke([red, green, blue]: [number, number, number]) {
+  return `${red} ${green} ${blue} RG`;
 }
 
 function buildPdf(content: string) {

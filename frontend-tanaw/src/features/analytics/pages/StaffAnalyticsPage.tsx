@@ -122,6 +122,7 @@ export function StaffAnalyticsPage() {
   const enterpriseRows = useMemo(() => getEnterpriseReportRows(reportEnterprises, activeReports), [activeReports, reportEnterprises]);
   const submittedRows = enterpriseRows.filter((row) => row.submitted);
   const totalReports = reportEnterprises.length;
+  const totalPendingReports = Math.max(0, totalReports - submittedRows.length);
   const submissionRate = totalReports === 0 ? 0 : Math.round((submittedRows.length / totalReports) * 100);
   const comparisonPeriod = periods[activePeriodIndex + 1];
   const chartData = enterpriseRows.map(({ enterprise, reports, submitted }) => ({
@@ -217,12 +218,22 @@ export function StaffAnalyticsPage() {
         </section>
 
         <section className="tanaw-dashboard-panel flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Compliance Status</h3>
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-            </span>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="text-sm font-semibold text-gray-900">Compliance Status</h3>
+              <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2" aria-label={`${submittedRows.length} complete reports and ${totalPendingReports} pending reports`}>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black tracking-wide text-emerald-800 uppercase dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                Complete <strong className="font-mono text-xs">{submittedRows.length}</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black tracking-wide text-amber-800 uppercase dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+                Pending <strong className="font-mono text-xs">{totalPendingReports}</strong>
+              </span>
+            </div>
           </div>
           <div className="max-h-75 space-y-4 overflow-y-auto pr-1">
             {complianceRows.map((row) => (

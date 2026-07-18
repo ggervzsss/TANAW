@@ -109,8 +109,10 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
             <div className="bg-tanaw-green flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white">
               {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
             </div>
-            <div className="hidden text-left md:block">
-              <p className="text-tanaw-navy text-sm leading-none font-bold">{profile.name}</p>
+            <div className="hidden max-w-48 min-w-0 text-left md:block">
+              <p title={profile.name} className="text-tanaw-navy truncate text-sm leading-none font-bold">
+                {profile.name}
+              </p>
               <p className="text-[10px] text-gray-500">{roleAccessLabel[role]}</p>
             </div>
             <ChevronDown size={14} className={`ml-1 text-gray-400 transition-transform duration-200 ${showProfileMenu ? "rotate-180" : ""}`} />
@@ -126,8 +128,12 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
                 className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-white/80 bg-white py-2 shadow-xl ring-1 ring-slate-900/4"
               >
                 <div className="mb-1 border-b border-slate-100 px-4 py-3">
-                  <p className="text-tanaw-navy text-sm font-bold">{profile.name}</p>
-                  <p className="text-xs text-gray-500">{profile.email}</p>
+                  <p title={profile.name} className="text-tanaw-navy truncate text-sm font-bold">
+                    {profile.name}
+                  </p>
+                  <p title={profile.email} className="truncate text-xs text-gray-500">
+                    {profile.email}
+                  </p>
                 </div>
                 <button type="button" onClick={() => openAccountPage("profile")} className="profile-menu-button">
                   <User size={14} /> Profile Settings

@@ -15,7 +15,20 @@ import {
 } from "../../login/api/login";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { readProfileImageFile } from "../../../utils/image-upload";
-import { normalizeEmail, normalizeName, toPhilippineLocalDigits, validateEmail, validateName, validatePhilippineContactNumber } from "../../../utils/form-validation";
+import {
+  PHILIPPINE_MOBILE_ERROR,
+  PERSON_NAME_MAX_LENGTH,
+  type PersonNameParts,
+  formatPersonName,
+  normalizeEmail,
+  normalizeMiddleInitial,
+  parsePersonName,
+  toPhilippineLocalDigits,
+  validateEmail,
+  validateMiddleInitial,
+  validateName,
+  validatePhilippineContactNumber,
+} from "../../../utils/form-validation";
 
 type EditableProfileField = "managerName" | "email" | "phone" | "buildingCapacity";
 
@@ -31,6 +44,8 @@ export function ProfileView() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [activeModal, setActiveModal] = useState<EditableProfileField | null>(null);
   const [modalValue, setModalValue] = useState("");
+  const [modalName, setModalName] = useState<PersonNameParts>({ firstName: "", middleInitial: "", lastName: "" });
+  const [modalNameErrors, setModalNameErrors] = useState<Partial<Record<keyof PersonNameParts, string>>>({});
   const [modalPhoneLocal, setModalPhoneLocal] = useState("");
   const [modalError, setModalError] = useState("");
   const [isModalSaving, setIsModalSaving] = useState(false);
@@ -187,7 +202,7 @@ export function ProfileView() {
 
           <form onSubmit={handleSave} noValidate className="space-y-6">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <ProfileDisplayField label="Full Name / Lead Admin" value={managerName} onEdit={() => openEditModal("managerName")} />
+              <ProfileDisplayField label="Lead Admin Name" value={managerName} onEdit={() => openEditModal("managerName")} />
               <ProfileDisplayField label="Business Email" value={businessEmail} onEdit={() => openEditModal("email")} />
               <ProfileDisplayField label="Contact Number" value={phoneDisplay} onEdit={() => openEditModal("phone")} />
               <ProfileDisplayField label="Building Capacity" value={`${buildingCapacity.toLocaleString()} people`} onEdit={() => openEditModal("buildingCapacity")} />
@@ -230,11 +245,22 @@ export function ProfileView() {
           error={modalError}
           isSaving={isModalSaving}
           phoneLocal={modalPhoneLocal}
+          nameValue={modalName}
+          nameErrors={modalNameErrors}
           value={modalValue}
           onCancel={closeEditModal}
           onPhoneChange={(value) => {
-            setModalPhoneLocal(toPhilippineLocalDigits(value));
+            const nextValue = toPhilippineLocalDigits(value);
+            if ((value && !/^\d*$/.test(value)) || (nextValue && !nextValue.startsWith("9"))) {
+              setModalError(PHILIPPINE_MOBILE_ERROR);
+              return;
+            }
+            setModalPhoneLocal(nextValue);
             setModalError("");
+          }}
+          onNameChange={(field, value) => {
+            setModalName((current) => ({ ...current, [field]: field === "middleInitial" ? normalizeMiddleInitial(value) : value }));
+            setModalNameErrors((current) => ({ ...current, [field]: undefined }));
           }}
           onSubmit={handleModalSubmit}
           onValueChange={(value) => {
@@ -249,9 +275,11 @@ export function ProfileView() {
   function openEditModal(field: EditableProfileField) {
     setActiveModal(field);
     setModalError("");
+    setModalNameErrors({});
     setAccountChangeStatus(null);
     if (field === "managerName") {
-      setModalValue(user?.managerName ?? "");
+      setModalName(parsePersonName(user?.managerName ?? ""));
+      setModalValue("");
       setModalPhoneLocal("");
     } else if (field === "email") {
       setModalValue(user?.email ?? "");
@@ -268,6 +296,8 @@ export function ProfileView() {
   function closeEditModal() {
     setActiveModal(null);
     setModalValue("");
+    setModalName({ firstName: "", middleInitial: "", lastName: "" });
+    setModalNameErrors({});
     setModalPhoneLocal("");
     setModalError("");
     setIsModalSaving(false);
@@ -284,7 +314,13 @@ export function ProfileView() {
     event.preventDefault();
     if (!activeModal) return;
 
-    const error = validateModalValue(activeModal, modalValue, modalPhoneLocal);
+    if (activeModal === "managerName") {
+      const nameErrors = validateStructuredName(modalName);
+      setModalNameErrors(nameErrors);
+      if (Object.keys(nameErrors).length > 0) return;
+    }
+
+    const error = activeModal === "managerName" ? "" : validateModalValue(activeModal, modalValue, modalPhoneLocal);
     if (error) {
       setModalError(error);
       return;
@@ -293,7 +329,7 @@ export function ProfileView() {
     setIsModalSaving(true);
     try {
       if (activeModal === "managerName") {
-        const updated = await updateLeadAdminName(normalizeName(modalValue));
+        const updated = await updateLeadAdminName(formatPersonName(modalName));
         updateUser(updated);
         setAccountChangeStatus({ message: "Lead admin name updated.", tone: "success" });
         notifySuccess("Lead admin name updated.");
@@ -385,7 +421,10 @@ type ProfileEditModalProps = {
   error: string;
   field: EditableProfileField;
   isSaving: boolean;
+  nameErrors: Partial<Record<keyof PersonNameParts, string>>;
+  nameValue: PersonNameParts;
   onCancel: () => void;
+  onNameChange: (field: keyof PersonNameParts, value: string) => void;
   onPhoneChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onValueChange: (value: string) => void;
@@ -393,8 +432,9 @@ type ProfileEditModalProps = {
   value: string;
 };
 
-function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPhoneChange, onSubmit, onValueChange, phoneLocal, value }: ProfileEditModalProps) {
+function ProfileEditModal({ currentValue, error, field, isSaving, nameErrors, nameValue, onCancel, onNameChange, onPhoneChange, onSubmit, onValueChange, phoneLocal, value }: ProfileEditModalProps) {
   const isPhone = field === "phone";
+  const isName = field === "managerName";
   const title = field === "managerName" ? "Update Lead Admin Name" : field === "email" ? "Change Business Email" : field === "phone" ? "Change Contact Number" : "Update Building Capacity";
   const label = field === "managerName" ? "New lead admin name" : field === "email" ? "New business email" : field === "phone" ? "New contact number" : "Building capacity";
   const description =
@@ -409,66 +449,122 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
-        <div role="dialog" aria-modal="true" aria-labelledby="profile-edit-title" className="w-full max-w-lg rounded-3xl border border-emerald-100 bg-white shadow-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-edit-title"
+          className={`enterprise-profile-edit-modal w-full rounded-3xl border border-emerald-100 bg-white shadow-2xl dark:border-emerald-300/20 dark:bg-[#121c31] dark:text-slate-100 ${isName ? "max-w-2xl" : "max-w-lg"}`}
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5 dark:border-slate-700">
             <div>
-              <h3 id="profile-edit-title" className="text-lg font-bold text-[#111827]">
+              <h3 id="profile-edit-title" className="text-lg font-bold text-[#111827] dark:text-slate-100">
                 {title}
               </h3>
-              <p className="mt-1 text-sm leading-relaxed text-gray-500">{description}</p>
+              <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-slate-400">{description}</p>
             </div>
-            <button type="button" aria-label="Close profile edit modal" onClick={onCancel} className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">
+            <button
+              type="button"
+              aria-label="Close profile edit modal"
+              onClick={onCancel}
+              className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            >
               <X size={18} />
             </button>
           </div>
 
           <form onSubmit={onSubmit} noValidate className="space-y-5 px-6 py-5">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-slate-700 dark:bg-[#0f172a]">
               <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">Current value</p>
-              <p className="mt-1 text-sm font-semibold wrap-break-word text-[#111827]">{currentValue}</p>
+              <p className="mt-1 text-sm font-semibold wrap-break-word text-[#111827] dark:text-slate-100">{currentValue}</p>
             </div>
 
-            <label className="block">
-              <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase">{label}</span>
-              {isPhone ? (
-                <div
-                  className={`flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-[#065f46] focus-within:ring-2 focus-within:ring-[#065f46]/12 ${error ? "border-tanaw-red" : "border-gray-200"}`}
-                >
-                  <span className="flex items-center border-r border-gray-200 bg-emerald-50/70 px-3 text-sm font-bold text-gray-700">+63</span>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel"
+            {isName ? (
+              <fieldset>
+                <legend className="mb-3 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">Structured lead admin name</legend>
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,1fr)]">
+                  <ProfileNameInput
+                    name="firstName"
+                    label="First Name"
+                    value={nameValue.firstName}
+                    error={nameErrors.firstName}
+                    maxLength={PERSON_NAME_MAX_LENGTH}
+                    autoComplete="given-name"
                     autoFocus
-                    value={phoneLocal}
-                    onChange={(event) => onPhoneChange(event.target.value)}
-                    onPaste={(event) => {
-                      event.preventDefault();
-                      onPhoneChange(event.clipboardData.getData("text"));
-                    }}
-                    placeholder="9123456789"
-                    className="min-w-0 flex-1 p-3.5 text-sm text-[#111827] outline-none"
+                    onChange={onNameChange}
+                  />
+                  <ProfileNameInput
+                    name="middleInitial"
+                    label="Middle Initial"
+                    value={nameValue.middleInitial}
+                    error={nameErrors.middleInitial}
+                    maxLength={1}
+                    autoComplete="additional-name"
+                    helperText="Optional"
+                    onChange={onNameChange}
+                  />
+                  <ProfileNameInput
+                    name="lastName"
+                    label="Last Name"
+                    value={nameValue.lastName}
+                    error={nameErrors.lastName}
+                    maxLength={PERSON_NAME_MAX_LENGTH}
+                    autoComplete="family-name"
+                    onChange={onNameChange}
                   />
                 </div>
-              ) : (
-                <input
-                  type={field === "email" ? "email" : field === "buildingCapacity" ? "number" : "text"}
-                  autoComplete={field === "email" ? "email" : field === "buildingCapacity" ? "off" : "name"}
-                  autoFocus
-                  value={value}
-                  onChange={(event) => onValueChange(event.target.value)}
-                  className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 ${error ? "border-tanaw-red" : "border-gray-200"}`}
-                />
-              )}
-              {error && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{error}</p>}
-            </label>
+              </fieldset>
+            ) : (
+              <label className="block">
+                <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">{label}</span>
+                {isPhone ? (
+                  <div
+                    className={`flex overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-[#065f46] focus-within:ring-2 focus-within:ring-[#065f46]/12 dark:bg-[#0f172a] ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                  >
+                    <span className="flex items-center border-r border-gray-200 bg-emerald-50/70 px-3 text-sm font-bold text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      +63
+                    </span>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      autoFocus
+                      value={phoneLocal}
+                      maxLength={10}
+                      pattern="9[0-9]{9}"
+                      aria-invalid={Boolean(error)}
+                      onChange={(event) => onPhoneChange(event.target.value)}
+                      onPaste={(event) => {
+                        event.preventDefault();
+                        onPhoneChange(event.clipboardData.getData("text"));
+                      }}
+                      placeholder="9123456789"
+                      className="min-w-0 flex-1 bg-transparent p-3.5 text-sm text-[#111827] outline-none dark:text-slate-100"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type={field === "email" ? "email" : field === "buildingCapacity" ? "number" : "text"}
+                    autoComplete={field === "email" ? "email" : field === "buildingCapacity" ? "off" : "name"}
+                    autoFocus
+                    value={value}
+                    maxLength={field === "email" ? 254 : undefined}
+                    aria-invalid={Boolean(error)}
+                    onChange={(event) => onValueChange(event.target.value)}
+                    className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+                  />
+                )}
+                <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
+                  {error || (isPhone ? "Use 10 digits beginning with 9." : field === "email" ? "Use an @gmail.com or @email.com address." : "Use a whole number from 1 to 100,000.")}
+                </p>
+              </label>
+            )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={onCancel}
                 disabled={isSaving}
-                className="rounded-full border border-gray-200 px-5 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-gray-200 px-5 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
@@ -488,11 +584,65 @@ function ProfileEditModal({ currentValue, error, field, isSaving, onCancel, onPh
   );
 }
 
+function ProfileNameInput({
+  autoComplete,
+  autoFocus = false,
+  error,
+  helperText,
+  label,
+  maxLength,
+  name,
+  onChange,
+  value,
+}: {
+  autoComplete: string;
+  autoFocus?: boolean;
+  error?: string;
+  helperText?: string;
+  label: string;
+  maxLength: number;
+  name: keyof PersonNameParts;
+  onChange: (field: keyof PersonNameParts, value: string) => void;
+  value: string;
+}) {
+  const descriptionId = `profile-${name}-description`;
+  return (
+    <label className="block min-w-0">
+      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-400">{label}</span>
+      <input
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        value={value}
+        maxLength={maxLength}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error || helperText ? descriptionId : undefined}
+        onChange={(event) => onChange(name, event.target.value)}
+        className={`w-full min-w-0 rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
+      />
+      {(error || helperText) && (
+        <p id={descriptionId} role={error ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
+          {error || helperText}
+        </p>
+      )}
+    </label>
+  );
+}
+
 function validateModalValue(field: EditableProfileField, value: string, phoneLocal: string) {
-  if (field === "managerName") return validateName(value, "Full name");
   if (field === "email") return validateEmail(value);
   if (field === "buildingCapacity") return validateBuildingCapacity(value);
   return validatePhilippineContactNumber(phoneLocal ? `+63${phoneLocal}` : "", true);
+}
+
+function validateStructuredName(value: PersonNameParts) {
+  const errors: Partial<Record<keyof PersonNameParts, string>> = {};
+  const firstNameError = validateName(value.firstName, "First name");
+  const middleInitialError = validateMiddleInitial(value.middleInitial);
+  const lastNameError = validateName(value.lastName, "Last name");
+  if (firstNameError) errors.firstName = firstNameError;
+  if (middleInitialError) errors.middleInitial = middleInitialError;
+  if (lastNameError) errors.lastName = lastNameError;
+  return errors;
 }
 
 function validateBuildingCapacity(value: string) {

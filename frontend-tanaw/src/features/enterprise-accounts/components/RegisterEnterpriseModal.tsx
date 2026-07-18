@@ -8,7 +8,17 @@ import { ContactNumberField, FormField, ModalFrame, ModalPortal, SearchableDropd
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { type CreateEnterpriseAccountPayload, createEnterpriseAccount, geocodeEnterpriseAddress, reverseGeocodeEnterpriseLocation } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { normalizeEmail, normalizePersonName, normalizePhilippineContactNumber, validateEmail, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
+import {
+  PERSON_NAME_MAX_LENGTH,
+  formatPersonName,
+  normalizeEmail,
+  normalizeMiddleInitial,
+  normalizePhilippineContactNumber,
+  validateEmail,
+  validateMiddleInitial,
+  validatePersonName,
+  validatePhilippineContactNumber,
+} from "@/shared/utils/accountValidation";
 import type { LocationDraft } from "../types";
 import { getLocationSummary } from "../utils";
 import { LocationPicker } from "./LocationPicker";
@@ -20,7 +30,9 @@ type RegisterEnterpriseModalProps = {
 type EnterpriseFormState = {
   enterpriseName: string;
   category: string;
-  managerName: string;
+  managerFirstName: string;
+  managerMiddleInitial: string;
+  managerLastName: string;
   email: string;
   contactLocal: string;
   enterpriseId: string;
@@ -55,7 +67,9 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
   const [form, setForm] = useState<EnterpriseFormState>({
     enterpriseName: "",
     category: "",
-    managerName: "",
+    managerFirstName: "",
+    managerMiddleInitial: "",
+    managerLastName: "",
     email: "",
     contactLocal: "",
     enterpriseId: "",
@@ -201,7 +215,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
     const payload: CreateEnterpriseAccountPayload = {
       enterpriseName: form.enterpriseName.trim(),
       category: form.category,
-      managerName: normalizePersonName(form.managerName),
+      managerName: formatPersonName({ firstName: form.managerFirstName, middleInitial: form.managerMiddleInitial, lastName: form.managerLastName }),
       email: normalizeEmail(form.email),
       contactNumber: normalizedPhone || undefined,
       barangay: form.barangay,
@@ -235,16 +249,49 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             error={errors.category}
             required
           />
+          <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
+            <FormField
+              name="managerFirstName"
+              label="Contact First Name"
+              value={form.managerFirstName}
+              onChange={(value) => updateField("managerFirstName", value)}
+              error={errors.managerFirstName}
+              required
+              autoComplete="given-name"
+              maxLength={PERSON_NAME_MAX_LENGTH}
+            />
+            <FormField
+              name="managerMiddleInitial"
+              label="Middle Initial"
+              value={form.managerMiddleInitial}
+              onChange={(value) => updateField("managerMiddleInitial", normalizeMiddleInitial(value))}
+              error={errors.managerMiddleInitial}
+              autoComplete="additional-name"
+              maxLength={1}
+              helperText="Optional"
+            />
+            <FormField
+              name="managerLastName"
+              label="Contact Last Name"
+              value={form.managerLastName}
+              onChange={(value) => updateField("managerLastName", value)}
+              error={errors.managerLastName}
+              required
+              autoComplete="family-name"
+              maxLength={PERSON_NAME_MAX_LENGTH}
+            />
+          </div>
           <FormField
-            name="managerName"
-            label="Contact Person / Manager"
-            value={form.managerName}
-            onChange={(value) => updateField("managerName", value)}
-            error={errors.managerName}
+            name="email"
+            label="Contact Email"
+            type="email"
+            value={form.email}
+            onChange={(value) => updateField("email", value)}
+            error={errors.email}
             required
-            autoComplete="name"
+            autoComplete="email"
+            helperText="Use an @gmail.com or @email.com address."
           />
-          <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
           <ContactNumberField name="contactNumber" label="Contact Number" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
           <FormField
             name="enterpriseId"
@@ -665,13 +712,17 @@ function validateEnterpriseForm(form: EnterpriseFormState) {
   const errors: EnterpriseFormErrors = {};
   const enterpriseName = form.enterpriseName.trim();
   const emailError = validateEmail(form.email);
-  const managerNameError = validatePersonName(form.managerName, "Contact person");
+  const managerFirstNameError = validatePersonName(form.managerFirstName, "First name");
+  const managerMiddleInitialError = validateMiddleInitial(form.managerMiddleInitial);
+  const managerLastNameError = validatePersonName(form.managerLastName, "Last name");
   const phoneError = validatePhilippineContactNumber(form.contactLocal ? `+63${form.contactLocal}` : "", false);
 
   if (!enterpriseName) errors.enterpriseName = "Enterprise name is required.";
   if (enterpriseName && enterpriseName.length < 2) errors.enterpriseName = "Enterprise name must be at least 2 characters.";
   if (!enterpriseCategoryValues.has(form.category)) errors.category = "Choose a valid enterprise type.";
-  if (managerNameError) errors.managerName = managerNameError;
+  if (managerFirstNameError) errors.managerFirstName = managerFirstNameError;
+  if (managerMiddleInitialError) errors.managerMiddleInitial = managerMiddleInitialError;
+  if (managerLastNameError) errors.managerLastName = managerLastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.contactLocal = phoneError;
   if (!form.address.trim()) errors.address = "Address is required.";

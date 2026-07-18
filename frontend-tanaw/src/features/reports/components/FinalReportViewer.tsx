@@ -5,7 +5,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
-import { CITY_SEAL } from "@/shared/constants/branding";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
@@ -128,7 +127,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -230,11 +229,18 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               </div>
 
               <div className="mb-6 border-b-2 border-black pb-4 text-center">
-                <img src={CITY_SEAL} className="mx-auto mb-3 h-16 w-16 grayscale" alt="San Pedro Seal" />
                 <h1 className="font-serif text-lg font-bold tracking-widest uppercase">City Government of San Pedro</h1>
                 <p className="mt-1 text-xs tracking-wider uppercase">Tourism & Economic Development Office</p>
                 <h2 className="mt-5 text-xl font-bold underline">{report.title}</h2>
                 <p className="mt-1 font-mono text-sm">Reporting Period: {report.period}</p>
+                <p className="mt-2 font-mono text-[10px] tracking-widest uppercase">{report.id}</p>
+              </div>
+
+              <div className="mb-6 grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
+                <DocumentDetail label="Generated On" value={report.generatedOn} />
+                <DocumentDetail label="Prepared By" value={`${report.preparedBy} (${report.preparedRole})`} />
+                <DocumentDetail label="Audit Status" value={report.status} />
+                <DocumentDetail label="Registered Sources" value={String(report.enterpriseCount)} />
               </div>
 
               <p className="mb-6 text-justify text-sm leading-relaxed">
@@ -302,7 +308,10 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-6 py-5 max-sm:px-5">
                 <div className="grid max-h-[38vh] gap-2 overflow-y-auto pr-1">
                   {report.sources.map((source) => (
-                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10">
+                    <label
+                      key={source.id}
+                      className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10"
+                    >
                       <span className="min-w-0">
                         <span className="block truncate font-semibold text-slate-900">{source.enterprise}</span>
                         <span className="mt-0.5 block font-mono text-xs text-slate-500">
@@ -327,7 +336,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                     onChange={(event) => setReturnRemarks(event.target.value)}
                     rows={4}
                     disabled={returnMutation.isPending}
-                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 transition outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder="Describe the discrepancy and what the enterprise needs to correct."
                   />
                 </label>
@@ -459,6 +468,15 @@ function finalReportConfirmDetails({
     { label: "Current Status", value: report.status },
     { label: "Next Status", value: action === "archive" ? "Archived" : action === "finalize" ? "Finalized" : getRestoreStatus(report) },
   ];
+}
+
+function DocumentDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
+      <p className="mt-0.5 font-semibold wrap-break-word">{value}</p>
+    </div>
+  );
 }
 
 function Signature({ label, sub }: { label: string; sub: string }) {

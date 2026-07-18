@@ -45,7 +45,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -80,9 +80,28 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               </div>
             </div>
 
-            <div className="grow overflow-y-auto bg-gray-100 p-6 print:bg-white print:p-0 dark:bg-[#0f172a]">
+            <div className="grow overflow-y-auto bg-gray-100 p-6 dark:bg-[#0f172a] print:bg-white print:p-0">
               <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm print:shadow-none">
+                <div className="mb-6 border-b-2 border-current pb-4">
+                  <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase dark:text-emerald-300">{report.id}</p>
+                  <h1 className="mt-1 text-xl font-bold">TANAW - DOT Visitor Attraction Report</h1>
+                  <div className="mt-4 grid gap-x-8 gap-y-2 text-xs sm:grid-cols-2">
+                    <DocumentDetail label="Enterprise" value={report.enterprise} />
+                    <DocumentDetail label="Category" value={report.category} />
+                    <DocumentDetail label="Barangay" value={report.barangay} />
+                    <DocumentDetail label="Reporting Period" value={report.period} />
+                    <DocumentDetail label="Submitted" value={report.submittedAt ?? report.submitted} />
+                    <DocumentDetail label="Review Status" value={report.status} />
+                  </div>
+                </div>
                 <DotSingleReportTable report={report} />
+                <div className="mt-6 border-t border-current/30 pt-4 text-xs leading-6">
+                  <h2 className="text-sm font-bold">Live Count Summary</h2>
+                  <p>
+                    Entries: {report.metrics.entry.toLocaleString()} | Exits: {report.metrics.exit.toLocaleString()} | Peak Occupancy: {report.metrics.peak}
+                  </p>
+                  <p>Remarks: {report.remarks || report.notes || "None recorded."}</p>
+                </div>
               </section>
 
               <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
@@ -176,6 +195,15 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
         />
       )}
     </>
+  );
+}
+
+function DocumentDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
+      <p className="mt-0.5 font-semibold wrap-break-word">{value}</p>
+    </div>
   );
 }
 

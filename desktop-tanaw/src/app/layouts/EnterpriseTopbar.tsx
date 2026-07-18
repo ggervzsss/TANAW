@@ -194,7 +194,7 @@ export function EnterpriseTopbar({
                   setShowProfileMenu((current) => !current);
                   onNotificationsClose();
                 }}
-                className="flex min-w-60.5 items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:min-w-56 max-sm:min-w-0 max-sm:pr-2.5"
+                className="flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5"
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {displayImageDataUrl ? <img src={displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -216,7 +216,9 @@ export function EnterpriseTopbar({
                     className="enterprise-profile-menu absolute top-full right-0 z-1003 mt-3 w-72 overflow-hidden rounded-3xl border border-white/85 bg-white py-2 text-slate-700 shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
                   >
                     <div className="enterprise-profile-menu__header mb-1 border-b border-emerald-100 bg-linear-to-r from-emerald-50/90 via-white to-amber-50/70 px-4 py-3.5">
-                      <p className="text-tanaw-navy text-sm font-bold">{displayName}</p>
+                      <p title={displayName} className="text-tanaw-navy truncate text-sm font-bold">
+                        {displayName}
+                      </p>
                       <p className="truncate text-xs text-gray-500">{profileEmail}</p>
                     </div>
                     <button

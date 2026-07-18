@@ -1090,7 +1090,7 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   bottom: 0;
   right: 0;
   width: 45%;
-  background-image: url("/6397Poblacion_City_Hall_San_Pedro_Laguna_04.jpg");
+  background-image: url("/images/enterprise-topbar-building.png");
   background-size: cover;
   background-position: right center;
   background-repeat: no-repeat;
@@ -1102,6 +1102,13 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   mask-repeat: no-repeat;
   pointer-events: none;
   z-index: 0;
+}
+
+.dark .enterprise-topbar::before {
+  background-image: url("/images/enterprise-topbar-building-night.png");
+  opacity: 0.72;
+  mix-blend-mode: screen;
+  filter: saturate(0.92) contrast(1.04) brightness(0.84);
 }
 
 .enterprise-topbar::after {
@@ -1902,4 +1909,20 @@ html.dark .enterprise-shell ::-webkit-scrollbar-thumb {
 
 html.dark .enterprise-shell ::-webkit-scrollbar-thumb:hover {
   background: rgb(174 188 201 / 0.4);
+}
+
+html.dark .enterprise-dot-document table,
+html.dark .enterprise-dot-document th,
+html.dark .enterprise-dot-document td,
+html.dark .enterprise-dot-document .border-black {
+  border-color: #64748b !important;
+}
+
+html.dark .enterprise-dot-document th,
+html.dark .enterprise-dot-document .bg-gray-50 {
+  background-color: #111c2f !important;
+}
+
+html.dark .enterprise-dot-document .bg-gray-100 {
+  background-color: #1e293b !important;
 }

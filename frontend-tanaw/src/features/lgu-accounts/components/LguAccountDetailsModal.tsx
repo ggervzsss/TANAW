@@ -7,10 +7,14 @@ import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailC
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import {
   normalizeEmail,
-  normalizePersonName,
+  PERSON_NAME_MAX_LENGTH,
+  composeApiPersonName,
   normalizePhilippineContactNumber,
+  normalizeMiddleInitial,
+  parsePersonName,
   toPhilippineLocalDigits,
   validateEmail,
+  validateMiddleInitial,
   validatePersonName,
   validatePhilippineContactNumber,
 } from "@/shared/utils/accountValidation";
@@ -27,6 +31,7 @@ type LguAccountDetailsModalProps = {
 
 type LguEditState = {
   firstName: string;
+  middleInitial: string;
   lastName: string;
   email: string;
   phoneLocal: string;
@@ -61,19 +66,15 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
       const emailVerificationQueued = account.isActivated && payload.email !== account.email && updatedAccount.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued || emailVerificationQueued
+          ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]
+          : []),
       ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));
       setPendingSave(null);
       setIsEditing(false);
-      toast.success(
-        activationEmailQueued
-          ? "LGU account updated; activation email queued"
-          : emailVerificationQueued
-            ? "LGU account updated; email verification queued"
-            : "LGU account updated",
-      );
+      toast.success(activationEmailQueued ? "LGU account updated; activation email queued" : emailVerificationQueued ? "LGU account updated; email verification queued" : "LGU account updated");
     },
     onError: (error) => toast.error(getApiErrorMessage(error, "Unable to update LGU account")),
   });
@@ -81,10 +82,7 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
   const emailResolutionMutation = useMutation({
     mutationFn: (action: "approve" | "decline") => resolveAccountEmailChangeRequest(account.id, action),
     onSuccess: async (updatedAccount, action) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
-      ]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialForm(updatedAccount));
       toast.success(`Email change request ${action === "approve" ? "approved" : "declined"}.`);
@@ -117,9 +115,10 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
     if (Object.keys(nextErrors).length > 0) return;
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
+    const apiName = composeApiPersonName(form);
     const payload: UpdateLguAccountPayload = {
-      firstName: normalizePersonName(form.firstName),
-      lastName: normalizePersonName(form.lastName),
+      firstName: apiName.firstName,
+      lastName: apiName.lastName,
       email: normalizeEmail(form.email),
       phone: normalizedPhone || undefined,
       role: form.role,
@@ -176,7 +175,9 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-black text-amber-950">Email change requested</p>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${emailChangeRequest.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${emailChangeRequest.canApprove ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                      >
                         {emailChangeRequest.canApprove ? "Ownership verified" : "Awaiting verification"}
                       </span>
                     </div>
@@ -246,9 +247,49 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
         ) : (
           <form onSubmit={handleEditSubmit} noValidate className="space-y-5">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <FormField name="firstName" label="First Name" value={form.firstName} onChange={(value) => updateField("firstName", value)} error={errors.firstName} required />
-              <FormField name="lastName" label="Last Name" value={form.lastName} onChange={(value) => updateField("lastName", value)} error={errors.lastName} required />
-              <FormField name="email" label="Email Address" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required />
+              <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
+                <FormField
+                  name="firstName"
+                  label="First Name"
+                  value={form.firstName}
+                  onChange={(value) => updateField("firstName", value)}
+                  error={errors.firstName}
+                  required
+                  autoComplete="given-name"
+                  maxLength={PERSON_NAME_MAX_LENGTH}
+                />
+                <FormField
+                  name="middleInitial"
+                  label="Middle Initial"
+                  value={form.middleInitial}
+                  onChange={(value) => updateField("middleInitial", normalizeMiddleInitial(value))}
+                  error={errors.middleInitial}
+                  autoComplete="additional-name"
+                  maxLength={1}
+                  helperText="Optional"
+                />
+                <FormField
+                  name="lastName"
+                  label="Last Name"
+                  value={form.lastName}
+                  onChange={(value) => updateField("lastName", value)}
+                  error={errors.lastName}
+                  required
+                  autoComplete="family-name"
+                  maxLength={PERSON_NAME_MAX_LENGTH}
+                />
+              </div>
+              <FormField
+                name="email"
+                label="Email Address"
+                type="email"
+                value={form.email}
+                onChange={(value) => updateField("email", value)}
+                error={errors.email}
+                required
+                autoComplete="email"
+                helperText="Use an @gmail.com or @email.com address."
+              />
               <ContactNumberField name="phone" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
               <SearchableDropdownField
                 name="role"
@@ -364,10 +405,11 @@ function ConfirmationPanel({ title, changes, isPending, onCancel, onConfirm }: {
 }
 
 function getInitialForm(account: AccountSummary): LguEditState {
-  const [fallbackFirstName, ...restName] = account.displayName.split(" ");
+  const name = parsePersonName([account.firstName, account.lastName].filter(Boolean).join(" ") || account.displayName);
   return {
-    firstName: account.firstName ?? fallbackFirstName ?? "",
-    lastName: account.lastName ?? restName.join(" ") ?? "",
+    firstName: name.firstName,
+    middleInitial: name.middleInitial,
+    lastName: name.lastName,
     email: account.email,
     phoneLocal: account.phone ? toPhilippineLocalDigits(account.phone) : "",
     role: account.role as LguEditState["role"],
@@ -378,11 +420,13 @@ function getInitialForm(account: AccountSummary): LguEditState {
 function validateLguEditForm(form: LguEditState) {
   const errors: LguEditErrors = {};
   const firstNameError = validatePersonName(form.firstName, "First name");
+  const middleInitialError = validateMiddleInitial(form.middleInitial);
   const lastNameError = validatePersonName(form.lastName, "Last name");
   const emailError = validateEmail(form.email);
   const phoneError = validatePhilippineContactNumber(form.phoneLocal ? `+63${form.phoneLocal}` : "", false);
 
   if (firstNameError) errors.firstName = firstNameError;
+  if (middleInitialError) errors.middleInitial = middleInitialError;
   if (lastNameError) errors.lastName = lastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;

@@ -5,7 +5,17 @@ import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField } from "@/shared/components/ui";
 import { type CreateLguAccountPayload, createLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { normalizeEmail, normalizePersonName, normalizePhilippineContactNumber, validateEmail, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
+import {
+  PERSON_NAME_MAX_LENGTH,
+  composeApiPersonName,
+  normalizeEmail,
+  normalizeMiddleInitial,
+  normalizePhilippineContactNumber,
+  validateEmail,
+  validateMiddleInitial,
+  validatePersonName,
+  validatePhilippineContactNumber,
+} from "@/shared/utils/accountValidation";
 
 type CreateLguAccountModalProps = {
   onClose: () => void;
@@ -13,6 +23,7 @@ type CreateLguAccountModalProps = {
 
 type LguFormState = {
   firstName: string;
+  middleInitial: string;
   lastName: string;
   email: string;
   phoneLocal: string;
@@ -27,6 +38,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<LguFormState>({
     firstName: "",
+    middleInitial: "",
     lastName: "",
     email: "",
     phoneLocal: "",
@@ -54,9 +66,10 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
     if (Object.keys(nextErrors).length > 0) return;
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
+    const apiName = composeApiPersonName(form);
     const payload: CreateLguAccountPayload = {
-      firstName: normalizePersonName(form.firstName),
-      lastName: normalizePersonName(form.lastName),
+      firstName: apiName.firstName,
+      lastName: apiName.lastName,
       email: normalizeEmail(form.email),
       phone: normalizedPhone || undefined,
       role: form.role,
@@ -67,9 +80,49 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   return (
     <ModalFrame title="Create LGU Account" onClose={onClose}>
       <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <FormField name="firstName" label="First Name" value={form.firstName} onChange={(value) => updateField("firstName", value)} error={errors.firstName} required autoComplete="given-name" />
-        <FormField name="lastName" label="Last Name" value={form.lastName} onChange={(value) => updateField("lastName", value)} error={errors.lastName} required autoComplete="family-name" />
-        <FormField name="email" label="Email Address" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
+        <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
+          <FormField
+            name="firstName"
+            label="First Name"
+            value={form.firstName}
+            onChange={(value) => updateField("firstName", value)}
+            error={errors.firstName}
+            required
+            autoComplete="given-name"
+            maxLength={PERSON_NAME_MAX_LENGTH}
+          />
+          <FormField
+            name="middleInitial"
+            label="Middle Initial"
+            value={form.middleInitial}
+            onChange={(value) => updateField("middleInitial", normalizeMiddleInitial(value))}
+            error={errors.middleInitial}
+            autoComplete="additional-name"
+            maxLength={1}
+            helperText="Optional"
+          />
+          <FormField
+            name="lastName"
+            label="Last Name"
+            value={form.lastName}
+            onChange={(value) => updateField("lastName", value)}
+            error={errors.lastName}
+            required
+            autoComplete="family-name"
+            maxLength={PERSON_NAME_MAX_LENGTH}
+          />
+        </div>
+        <FormField
+          name="email"
+          label="Email Address"
+          type="email"
+          value={form.email}
+          onChange={(value) => updateField("email", value)}
+          error={errors.email}
+          required
+          autoComplete="email"
+          helperText="Use an @gmail.com or @email.com address."
+        />
         <ContactNumberField name="phone" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
         <div className="md:col-span-2">
           <SearchableDropdownField
@@ -113,11 +166,13 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
 function validateLguForm(form: LguFormState) {
   const errors: LguFormErrors = {};
   const firstNameError = validatePersonName(form.firstName, "First name");
+  const middleInitialError = validateMiddleInitial(form.middleInitial);
   const lastNameError = validatePersonName(form.lastName, "Last name");
   const emailError = validateEmail(form.email);
   const phoneError = validatePhilippineContactNumber(form.phoneLocal ? `+63${form.phoneLocal}` : "", false);
 
   if (firstNameError) errors.firstName = firstNameError;
+  if (middleInitialError) errors.middleInitial = middleInitialError;
   if (lastNameError) errors.lastName = lastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;

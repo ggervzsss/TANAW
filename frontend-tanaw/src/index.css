@@ -492,53 +492,65 @@ html.dark {
   }
 
   html.dark :where(.tanaw-document-preview) {
-    background-color: #ffffff;
-    color: #000000;
-    color-scheme: light;
+    background-color: #0b1220 !important;
+    color: #e8eef7 !important;
+    color-scheme: dark;
   }
 
   html.dark :where(.tanaw-document-preview .bg-white) {
-    background-color: #ffffff;
+    background-color: #111b2f;
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-50, .tanaw-document-preview .bg-slate-50) {
-    background-color: #f9fafb;
+    background-color: #172238;
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-100, .tanaw-document-preview .bg-slate-100) {
-    background-color: #f3f4f6;
+    background-color: #1d2a42;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-200, .tanaw-document-preview .bg-slate-200) {
+    background-color: #263650;
   }
 
   html.dark :where(.tanaw-document-preview .bg-gray-300) {
-    background-color: #d1d5db;
+    background-color: #344762;
   }
 
   html.dark :where(.tanaw-document-preview .border-gray-200, .tanaw-document-preview .border-slate-200) {
-    border-color: #e5e7eb;
+    border-color: #52647c;
   }
 
   html.dark :where(.tanaw-document-preview .divide-gray-100, .tanaw-document-preview .divide-slate-100) > :not([hidden]) ~ :not([hidden]) {
-    border-color: #f3f4f6;
+    border-color: #42536a;
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-900, .tanaw-document-preview .text-slate-900) {
-    color: #111827;
+    color: #f8fafc;
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-800, .tanaw-document-preview .text-slate-800) {
-    color: #1f2937;
+    color: #edf2f7;
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-700, .tanaw-document-preview .text-slate-700) {
-    color: #374151;
+    color: #d7e0ec;
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-600, .tanaw-document-preview .text-slate-600) {
-    color: #4b5563;
+    color: #b9c7d8;
   }
 
   html.dark :where(.tanaw-document-preview .text-gray-500, .tanaw-document-preview .text-slate-500) {
-    color: #6b7280;
+    color: #91a4ba;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-black) {
+    color: #f8fafc;
+  }
+
+  html.dark :where(.tanaw-document-preview .border-black) {
+    border-color: #64748b;
   }
 }
 
@@ -1533,6 +1545,16 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   text-align: center;
 }
 
+.tanaw-document-preview {
+  color-scheme: light;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.tanaw-document-preview .dot-table {
+  color: inherit;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -1563,6 +1585,14 @@ html.dark ::-webkit-scrollbar-thumb:hover {
     width: 100%;
     color: black !important;
     background: white !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  html.dark .print-container,
+  html.dark .print-container .tanaw-document-preview {
+    color: #e8eef7 !important;
+    background: #0b1220 !important;
   }
 
   .print-hide {

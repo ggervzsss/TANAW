@@ -10,7 +10,16 @@ import { PageMotion } from "@/shared/components/ui";
 import { changePassword, updateCurrentProfile } from "@/shared/services/accountManagement";
 import type { UserRole } from "@/shared/types/role.types";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { normalizePersonName, normalizePhilippineContactNumber, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
+import {
+  PERSON_NAME_MAX_LENGTH,
+  composeApiPersonName,
+  normalizeMiddleInitial,
+  normalizePhilippineContactNumber,
+  parsePersonName,
+  validateMiddleInitial,
+  validatePersonName,
+  validatePhilippineContactNumber,
+} from "@/shared/utils/accountValidation";
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
@@ -53,6 +62,7 @@ export function AccountProfilePage({ role }: AccountPageProps) {
   const isImageDraftCurrent = displayImageDraft.sourceDataUrl === authDisplayImageDataUrl;
   const displayImageDataUrl = isImageDraftCurrent ? displayImageDraft.dataUrl : authDisplayImageDataUrl;
   const displayImageFileName = isImageDraftCurrent ? displayImageDraft.fileName : "";
+  const profileName = useMemo(() => parsePersonName([authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") || user.name), [authUser?.firstName, authUser?.lastName, user.name]);
   const initials = useMemo(
     () =>
       user.name
@@ -68,10 +78,14 @@ export function AccountProfilePage({ role }: AccountPageProps) {
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const fullName = String(formData.get("fullName") ?? "").trim();
-    const nameError = validatePersonName(fullName, "Full name");
-    if (nameError) {
-      toast.error(nameError);
+    const firstName = String(formData.get("firstName") ?? "");
+    const middleInitial = normalizeMiddleInitial(String(formData.get("middleInitial") ?? ""));
+    const lastName = String(formData.get("lastName") ?? "");
+    const firstNameError = validatePersonName(firstName, "First name");
+    const middleInitialError = validateMiddleInitial(middleInitial);
+    const lastNameError = validatePersonName(lastName, "Last name");
+    if (firstNameError || middleInitialError || lastNameError) {
+      toast.error(firstNameError || middleInitialError || lastNameError);
       return;
     }
     const phoneInput = String(formData.get("phone") ?? "");
@@ -80,19 +94,13 @@ export function AccountProfilePage({ role }: AccountPageProps) {
       toast.error(phoneError);
       return;
     }
-    const normalizedFullName = normalizePersonName(fullName);
-    const [firstName, ...lastNameParts] = normalizedFullName.split(/\s+/);
-    const lastName = lastNameParts.join(" ");
-    if (!firstName || !lastName) {
-      toast.error("Enter both first and last name.");
-      return;
-    }
+    const apiName = composeApiPersonName({ firstName, middleInitial, lastName });
     const normalizedPhone = normalizePhilippineContactNumber(phoneInput);
     setIsLoading(true);
     try {
       const updated = await updateCurrentProfile({
-        firstName,
-        lastName,
+        firstName: apiName.firstName,
+        lastName: apiName.lastName,
         email: user.email,
         phone: normalizedPhone || undefined,
         displayImageDataUrl,
@@ -175,10 +183,26 @@ export function AccountProfilePage({ role }: AccountPageProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field key={`fullName-${user.name}-${fieldResetSignal}`} name="fullName" label="Full Name" defaultValue={user.name} editable />
+              <Field
+                key={`firstName-${profileName.firstName}-${fieldResetSignal}`}
+                name="firstName"
+                label="First Name"
+                defaultValue={profileName.firstName}
+                maxLength={PERSON_NAME_MAX_LENGTH}
+                editable
+              />
+              <Field
+                key={`middleInitial-${profileName.middleInitial}-${fieldResetSignal}`}
+                name="middleInitial"
+                label="Middle Initial"
+                defaultValue={profileName.middleInitial}
+                maxLength={1}
+                editable
+              />
+              <Field key={`lastName-${profileName.lastName}-${fieldResetSignal}`} name="lastName" label="Last Name" defaultValue={profileName.lastName} maxLength={PERSON_NAME_MAX_LENGTH} editable />
               <Field label="Professional Email" defaultValue={user.email} type="email" />
               <Field label="Department" defaultValue={user.department} />
-              <Field key={`phone-${user.phone}-${fieldResetSignal}`} name="phone" label="Phone" defaultValue={user.phone} type="tel" editable />
+              <Field key={`phone-${user.phone}-${fieldResetSignal}`} name="phone" label="Phone" defaultValue={user.phone} type="tel" maxLength={18} editable />
             </div>
           </div>
         </Panel>
