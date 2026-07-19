@@ -339,6 +339,21 @@ export async function restoreMlSession(baseUrl: string): Promise<MlSession> {
   return requestJson<MlSession>(`${baseUrl}/session/restore`, { method: "POST" }, 8000);
 }
 
+export async function listLocalCameras(baseUrl: string): Promise<Camera[]> {
+  return requestJson<Camera[]>(`${baseUrl}/cameras`, { method: "GET" }, 2500);
+}
+
+export async function replaceLocalCameras(baseUrl: string, cameras: Camera[]): Promise<Camera[]> {
+  return requestJson<Camera[]>(
+    `${baseUrl}/cameras`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ cameras }),
+    },
+    5000,
+  );
+}
+
 export async function getLocalMetricsSummary(baseUrl: string, options: { includeSubmitted?: boolean } = {}): Promise<LocalMetricsSummary> {
   return requestJson<LocalMetricsSummary>(`${baseUrl}/metrics/summary${queryFromOptions(options)}`, { method: "GET" }, 2500);
 }

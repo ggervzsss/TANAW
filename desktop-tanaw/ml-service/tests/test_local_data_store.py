@@ -5,13 +5,113 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config.camera_config import reporting_period_submission_error
-from app.storage.local_metrics_store import LocalMetricsStore
+from app.storage.local_data_store import (
+    LOCAL_SCHEMA_VERSION,
+    LocalDatabaseResetRequiredError,
+    LocalDataStore,
+)
 
 
-class LocalMetricsStoreTest(unittest.TestCase):
+class LocalDataStoreTest(unittest.TestCase):
+    def test_canonical_schema_has_versioned_camera_and_session_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store.metrics_summary()
+
+            with sqlite3.connect(store._database_path) as connection:
+                tables = {
+                    str(row[0])
+                    for row in connection.execute(
+                        "select name from sqlite_master where type = 'table'"
+                    )
+                }
+                version = connection.execute(
+                    "select schema_version from schema_metadata where singleton_id = 1"
+                ).fetchone()
+                foreign_keys = connection.execute(
+                    "pragma foreign_key_list(count_events)"
+                ).fetchall()
+
+            self.assertIn("camera_profiles", tables)
+            self.assertIn("active_monitoring_state", tables)
+            self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
+            self.assertTrue(
+                any(
+                    row[2] == "report_submissions"
+                    and row[3] == "submitted_report_id"
+                    and row[4] == "report_id"
+                    for row in foreign_keys
+                )
+            )
+
+    def test_preversioned_database_requires_explicit_reset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store._database_path.parent.mkdir(parents=True)
+            with sqlite3.connect(store._database_path) as connection:
+                connection.execute("create table legacy_table (id integer primary key)")
+
+            with self.assertRaisesRegex(
+                LocalDatabaseResetRequiredError, "retired pre-versioned schema"
+            ):
+                store.metrics_summary()
+
+    def test_retired_database_filename_requires_explicit_reset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store._retired_database_path.parent.mkdir(parents=True)
+            with sqlite3.connect(store._retired_database_path) as connection:
+                connection.execute("create table count_events (id integer primary key)")
+
+            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "tanaw_metrics.sqlite3"):
+                store.metrics_summary()
+
+    def test_camera_profiles_are_persisted_without_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            camera = _camera_profile()
+
+            saved = store.replace_camera_profiles([camera])
+
+            self.assertEqual(saved, [camera])
+            self.assertEqual(store.list_camera_profiles(), [camera])
+            with self.assertRaisesRegex(ValueError, "credentials"):
+                store.replace_camera_profiles([{**camera, "password": "secret"}])
+            with self.assertRaisesRegex(ValueError, "stream credentials"):
+                store.replace_camera_profiles(
+                    [{**camera, "rtsp": "rtsp://user:secret@192.168.1.20/stream1"}]
+                )
+
+    def test_monitoring_state_is_stored_in_sqlite_without_json_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            state = {
+                "running": True,
+                "status": "running",
+                "error": None,
+                "camera_id": 101,
+                "camera_name": "Entrance",
+                "camera_config": {"camera_id": 101, "stream_url": "rtsp://camera/stream1"},
+                "counts": {
+                    "entry": 4,
+                    "exit": 2,
+                    "occupancy": 2,
+                    "started_at": "2026-07-20T00:00:00+00:00",
+                },
+            }
+
+            store.save_monitoring_state(state)
+            restored = store.load_monitoring_state()
+
+            assert restored is not None
+            self.assertTrue(restored["running"])
+            self.assertEqual(restored["camera_id"], 101)
+            self.assertEqual(restored["counts"]["entry"], 4)
+            self.assertFalse((store._database_path.parent / "active_session.json").exists())
+
     def test_local_schema_has_no_sample_data_provenance_columns(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "enterprise@example.test")
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
 
             with sqlite3.connect(store._database_path) as connection:
@@ -42,7 +142,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_duplicate_reporting_period_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.record_report_submission("REP-001", "June 2026", payload={"source": "test"})
 
@@ -51,7 +151,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_count_events_are_summarized_and_marked_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
 
@@ -73,7 +173,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_report_submissions_are_listed_with_payload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             store.record_report_submission(
@@ -89,8 +189,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_report_drafts_are_scoped_updated_and_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            first = LocalMetricsStore(str(Path(directory)), "first@example.test")
-            second = LocalMetricsStore(str(Path(directory)), "second@example.test")
+            first = LocalDataStore(str(Path(directory)), "first@example.test")
+            second = LocalDataStore(str(Path(directory)), "second@example.test")
 
             first.save_report_draft(
                 "period:July 2026",
@@ -127,7 +227,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_purging_report_raw_events_keeps_submission_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
             store.record_report_submission("REP-001", "Current Period", "notes", {"source": "test"})
@@ -150,7 +250,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_resubmitting_existing_report_preserves_metrics_when_no_new_events_exist(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.record_report_submission("REP-001", "Current Period", "first", {"notes": "first"})
 
@@ -167,7 +267,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_resubmitting_existing_report_uses_report_metrics_not_current_counts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.record_report_submission("REP-001", "June 2026", "first", {"notes": "first"})
             store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
@@ -196,7 +296,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_resubmitting_cloud_report_does_not_consume_current_open_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             resubmission = store.record_report_submission(
@@ -219,7 +319,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_metrics_history_groups_events_and_can_include_submitted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(
                 _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True),
                 "2026-06-11T00:15:00+00:00",
@@ -251,7 +351,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_unique_count_uses_identity_decision_fields(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.append_count_event(
                 _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
             )
@@ -270,7 +370,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_confirmed_and_degraded_unique_counts_are_separated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             confirmed = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
             confirmed["visitor_id"] = "visitor-1"
             confirmed["reid_decision"] = "new"
@@ -289,7 +389,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_occupancy_corrections_are_audited_and_included_in_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "enterprise-a")
+            store = LocalDataStore(str(Path(directory)), "enterprise-a")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.append_count_event(_event("exit", entry=1, exit=1, occupancy=0))
 
@@ -313,7 +413,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_expired_visitor_metadata_cleanup_preserves_count_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.upsert_visitor_identity(
                 visitor_id="visitor-1",
                 business_date="2026-06-07",
@@ -351,7 +451,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_secondary_model_embedding_is_persisted_with_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
+            store = LocalDataStore(str(Path(directory)))
             store.upsert_visitor_identity(
                 visitor_id="visitor-1",
                 business_date="2026-06-07",
@@ -384,8 +484,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_enterprise_scopes_use_separate_ledgers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            first = LocalMetricsStore(str(Path(directory)), "enterprise-a@tanaw.test")
-            second = LocalMetricsStore(str(Path(directory)), "enterprise-b@tanaw.test")
+            first = LocalDataStore(str(Path(directory)), "enterprise-a@tanaw.test")
+            second = LocalDataStore(str(Path(directory)), "enterprise-b@tanaw.test")
             first.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
 
             self.assertEqual(first.metrics_summary()["entries"], 1)
@@ -393,7 +493,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_prepared_counts_are_finite_and_report_ready(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
 
             summary = store.prepare_sample_counts(
                 report_id="SAMPLE-JUN",
@@ -429,7 +529,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_prepared_counts_allow_next_period_after_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
 
             first = store.prepare_sample_counts(
                 report_id="SAMPLE-JUN",
@@ -463,7 +563,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_prepared_counts_do_not_mix_open_periods(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
 
             first = store.prepare_sample_counts(
                 report_id="SAMPLE-JUN",
@@ -494,7 +594,7 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
     def test_sync_acknowledgements_update_local_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
+            store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
             store.record_report_submission("REP-001", "Current Period")
 
@@ -526,6 +626,34 @@ def _event(
         payload["is_unique_entry"] = is_unique_entry
     return {
         **payload,
+    }
+
+
+def _camera_profile() -> dict:
+    return {
+        "id": 101,
+        "name": "Main Entrance",
+        "status": "untested",
+        "zone": "Entrance",
+        "fps": 0.0,
+        "resolution": "Adaptive",
+        "type": "Entry/Exit",
+        "rtsp": "rtsp://192.168.1.20/stream1",
+        "cameraType": "RTSP_CCTV",
+        "processingProfile": "auto",
+        "confidence": 0.35,
+        "trackingConfidence": 0.15,
+        "reidMode": "auto",
+        "uniqueCountingMode": "estimated_reid",
+        "config": {
+            "tripwire": 50,
+            "tripwires": {
+                "entry": {"start": {"x": 0.4, "y": 0}, "end": {"x": 0.4, "y": 1}},
+                "exit": {"start": {"x": 0.6, "y": 0}, "end": {"x": 0.6, "y": 1}},
+            },
+            "roi": {"top": 0, "left": 0, "width": 100, "height": 100},
+            "reverse": False,
+        },
     }
 
 

@@ -119,7 +119,13 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
   const refreshLocalReports = useCallback(async () => {
     try {
       const status = await getMlServiceStatus();
-      const [submissions, cloudHistory] = await Promise.all([listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL), listEnterpriseReportHistory()]);
+      const submissions = await listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
+      let cloudHistory: Awaited<ReturnType<typeof listEnterpriseReportHistory>> = [];
+      try {
+        cloudHistory = await listEnterpriseReportHistory();
+      } catch {
+        // The local submission ledger remains available while the backend is offline.
+      }
       const localReports = submissions.map(reportFromLocalSubmission);
       const cloudReports = cloudHistory.map(reportFromCloudSubmission);
       setReportsHistory(mergeReportHistory(localReports, cloudReports));

@@ -8,7 +8,7 @@ import { CameraList } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
-import { maskStreamCredentials } from "../utils/rtsp";
+import { maskStreamCredentials, stripStreamCredentials } from "../utils/rtsp";
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
@@ -21,6 +21,8 @@ import {
   getMlSession,
   getPreviewStreamUrl,
   getMlServiceStatus,
+  listLocalCameras,
+  replaceLocalCameras,
   restartMlService,
   startCameraProcessing,
   stopCameraProcessing,
@@ -229,33 +231,22 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     setDetections(EMPTY_ML_DETECTIONS);
 
     const hydrateCameras = async () => {
-      const saved = window.localStorage.getItem(storageKey);
-      if (!saved) {
-        if (!disposed) {
-          setCameras([]);
-          setActiveCamId(null);
-          setHydratedFromStorage(true);
-        }
-        return;
-      }
-
       try {
-        const parsed = JSON.parse(saved) as Camera[];
-        const credentials = await loadCameraCredentials(storageKey);
-        const normalized = parsed.map((camera) => applyStoredCameraCredentials(normalizeCamera(camera), credentials));
+        const status = await getMlServiceStatus();
+        const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+        const [saved, credentials] = await Promise.all([listLocalCameras(baseUrl), loadCameraCredentials(storageKey)]);
+        const normalized = saved.map((camera) => applyStoredCameraCredentials(normalizeCamera(camera), credentials));
         if (!disposed) {
+          setServiceStatus(status);
           setCameras(normalized);
           setActiveCamId(normalized[0]?.id ?? null);
+          setHydratedFromStorage(true);
         }
-      } catch {
-        window.localStorage.removeItem(storageKey);
+      } catch (error) {
         if (!disposed) {
           setCameras([]);
           setActiveCamId(null);
-        }
-      } finally {
-        if (!disposed) {
-          setHydratedFromStorage(true);
+          setMonitoringError(toErrorMessage(error));
         }
       }
     };
@@ -268,9 +259,11 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   useEffect(() => {
     if (!hydratedFromStorage) return;
-    window.localStorage.setItem(storageKey, JSON.stringify(cameras.map(redactCameraForStorage)));
+    void replaceLocalCameras(mlBaseUrl, cameras.map(redactCameraForStorage)).catch((error: unknown) => {
+      setMonitoringError(toErrorMessage(error));
+    });
     void saveCameraCredentials(storageKey, getCameraCredentialRecords(cameras));
-  }, [cameras, hydratedFromStorage, storageKey]);
+  }, [cameras, hydratedFromStorage, mlBaseUrl, storageKey]);
 
   useEffect(() => {
     if (activeCamId !== null && cameras.some((camera) => camera.id === activeCamId)) return;
@@ -758,7 +751,7 @@ function redactCameraForStorage(camera: Camera): Camera {
   return {
     ...camera,
     password: undefined,
-    rtsp: maskStreamCredentials(camera.rtsp),
+    rtsp: stripStreamCredentials(camera.rtsp),
     username: undefined,
   };
 }

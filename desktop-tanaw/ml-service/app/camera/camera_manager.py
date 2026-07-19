@@ -188,8 +188,14 @@ class CameraProcessingManager:
                     "changed": False,
                     "session_restored": False,
                 }
+            should_stop_previous_context = (
+                self._enterprise_id is not None
+                or self._active_session is not None
+                or self._config is not None
+            )
 
-        self.stop()
+        if should_stop_previous_context:
+            self.stop()
         with self._lock:
             self._enterprise_id = normalized_id
             self._enterprise_name = normalized_name
@@ -373,7 +379,8 @@ class CameraProcessingManager:
             self._state.running = False
             if self._state.status != "error":
                 self._state.status = "stopped"
-            self._persist_session_locked()
+            if self._enterprise_id is not None or self._config is not None:
+                self._persist_session_locked()
 
     def counts(self) -> dict[str, int | str | bool | None]:
         with self._lock:
@@ -445,6 +452,12 @@ class CameraProcessingManager:
                 "updated_at": self._session_updated_at,
             }
 
+    def list_camera_profiles(self) -> list[dict]:
+        return self._session_store.list_camera_profiles()
+
+    def replace_camera_profiles(self, cameras: list[dict]) -> list[dict]:
+        return self._session_store.replace_camera_profiles(cameras)
+
     def metrics_summary(self, include_submitted: bool = False) -> dict:
         return self._session_store.metrics_summary(include_submitted=include_submitted)
 
@@ -504,7 +517,17 @@ class CameraProcessingManager:
                 "effective_reid_mode": self._effective_reid_mode,
                 "unique_counting_mode": self._config.unique_counting_mode if self._config else None,
             }
-        summary = self._session_store.metrics_summary(include_submitted=False)
+            has_local_context = self._enterprise_id is not None or self._config is not None
+        summary = (
+            self._session_store.metrics_summary(include_submitted=False)
+            if has_local_context
+            else {
+                "estimated_unique_count": 0,
+                "confirmed_unique_count": 0,
+                "degraded_unique_count": 0,
+                "repeat_entry_count": 0,
+            }
+        )
         quality_status = self._quality_reidentifier.status()
         quality_worker_status = self._quality_reid_worker.status()
         return {

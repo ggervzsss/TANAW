@@ -303,7 +303,7 @@ Invoke-RestMethod http://127.0.0.1:8765/metrics/summary
 
 Close the desktop before clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows and
+Remove all local desktop operational data, including real CCTV-derived rows and
 demographic report drafts, while preserving camera definitions, Electron preferences, authentication
 storage, and caches:
 
@@ -331,13 +331,13 @@ npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
 The Enterprise ID is shown in the desktop Profile and by the unfiltered
 `inspect` command. It is not the login email.
 
-Clear only one enterprise's local ledger:
+Completely remove one enterprise's local database, including camera profiles:
 
 ```shell
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
-Clear every enterprise ledger but preserve camera definitions and Electron
+Clear every enterprise's operational rows but preserve SQLite camera profiles and Electron
 preferences:
 
 ```shell

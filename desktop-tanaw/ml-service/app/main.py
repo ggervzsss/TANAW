@@ -3,13 +3,14 @@ import json
 from time import monotonic
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.camera.auth import redact_stream_credentials
 from app.camera.camera_manager import CameraProcessingManager
 from app.config.camera_config import (
+    CameraProfilesRequest,
     CameraStartRequest,
     CameraTestRequest,
     CameraTestResponse,
@@ -34,6 +35,7 @@ from app.config.camera_config import (
     SyncMarkResponse,
 )
 from app.runtime.hardware import get_runtime_capabilities
+from app.storage.local_data_store import LocalDatabaseResetRequiredError
 
 CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
@@ -58,6 +60,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(LocalDatabaseResetRequiredError)
+async def local_database_reset_required(
+    _request: Request, exc: LocalDatabaseResetRequiredError
+) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -101,6 +110,19 @@ def start_camera(payload: CameraStartRequest) -> dict[str, str]:
 def stop_camera() -> dict[str, str]:
     manager.stop()
     return {"message": "Camera processing stopped."}
+
+
+@app.get("/cameras", response_model=list[dict[str, Any]])
+def list_cameras() -> list[dict[str, Any]]:
+    return manager.list_camera_profiles()
+
+
+@app.put("/cameras", response_model=list[dict[str, Any]])
+def replace_cameras(payload: CameraProfilesRequest) -> list[dict[str, Any]]:
+    try:
+        return manager.replace_camera_profiles(payload.cameras)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/counts", response_model=CountResponse)

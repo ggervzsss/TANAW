@@ -18,6 +18,34 @@ from app.storage.session_store import SessionStore
 
 
 class CameraProcessingManagerSessionTest(unittest.TestCase):
+    def test_initial_enterprise_binding_does_not_write_unbound_retired_database(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            retired_database = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
+            retired_database.parent.mkdir(parents=True)
+            retired_database.write_bytes(b"retired")
+            manager = CameraProcessingManager(directory)
+
+            result = manager.bind_enterprise("enterprise-a@tanaw.test", "Enterprise A")
+
+            self.assertTrue(result["changed"])
+            self.assertEqual(
+                manager.enterprise_context()["enterprise_id"], "enterprise-a@tanaw.test"
+            )
+            self.assertEqual(retired_database.read_bytes(), b"retired")
+
+    def test_health_status_does_not_open_an_unbound_database(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            retired_database = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
+            retired_database.parent.mkdir(parents=True)
+            retired_database.write_bytes(b"retired")
+            manager = CameraProcessingManager(directory)
+
+            status = manager.model_status()
+
+            self.assertEqual(status["estimated_unique_count"], 0)
+            self.assertEqual(status["confirmed_unique_count"], 0)
+            self.assertEqual(retired_database.read_bytes(), b"retired")
+
     def test_enterprise_binding_switches_session_store_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager(directory)

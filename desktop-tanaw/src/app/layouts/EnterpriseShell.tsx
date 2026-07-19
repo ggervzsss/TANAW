@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
@@ -115,11 +116,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   }, [notificationStorageKey]);
 
   useEffect(() => {
-    if (currentUserQuery.isError) {
+    if (
+      currentUserQuery.isError &&
+      isAxiosError(currentUserQuery.error) &&
+      (currentUserQuery.error.response?.status === 401 || currentUserQuery.error.response?.status === 403)
+    ) {
       logout();
       navigate(routePaths.login, { replace: true });
     }
-  }, [currentUserQuery.isError, logout, navigate]);
+  }, [currentUserQuery.error, currentUserQuery.isError, logout, navigate]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");

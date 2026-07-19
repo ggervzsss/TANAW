@@ -343,6 +343,18 @@ class EnterpriseContextResponse(BaseModel):
     session_restored: bool
 
 
+class CameraProfilesRequest(BaseModel):
+    cameras: list[dict[str, Any]] = Field(default_factory=list, max_length=32)
+
+    @field_validator("cameras")
+    @classmethod
+    def reject_credentials(cls, cameras: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        for camera in cameras:
+            if camera.get("username") is not None or camera.get("password") is not None:
+                raise ValueError("Camera credentials must not be stored in SQLite.")
+        return cameras
+
+
 class MetricsSummaryResponse(BaseModel):
     entries: int
     exits: int

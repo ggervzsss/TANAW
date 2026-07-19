@@ -36,6 +36,19 @@ export function maskStreamCredentials(streamUrl: string) {
   }
 }
 
+export function stripStreamCredentials(streamUrl: string) {
+  try {
+    const url = new URL(streamUrl.trim());
+    if (!url.username && !url.password) return streamUrl;
+
+    url.username = "";
+    url.password = "";
+    return url.toString();
+  } catch {
+    return streamUrl.replace(/((?:rtsp|http|https):\/\/)([^/\s@]+(?::[^/\s@]*)?@)/gi, "$1");
+  }
+}
+
 function normalizeRtspHost(hostInput: string) {
   const withoutScheme = hostInput.trim().replace(/^rtsp:\/\//i, "");
   const withoutCredentials = withoutScheme.includes("@") ? withoutScheme.slice(withoutScheme.lastIndexOf("@") + 1) : withoutScheme;

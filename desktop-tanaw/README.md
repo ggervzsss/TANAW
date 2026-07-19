@@ -190,7 +190,36 @@ Unique visitor fields are estimates:
 
 ## Local Data And Ledgers
 
-TANAW Enterprise Desktop stores count events, occupancy corrections, report drafts, submitted local reports, visitor identity metadata, camera settings, and application preferences on the device.
+TANAW Enterprise Desktop stores structured enterprise data in one
+enterprise-scoped `tanaw_desktop.sqlite3` database. This includes camera
+profiles, active monitoring state, count events and snapshots, occupancy
+corrections, report drafts and submissions, and visitor identity metadata.
+
+Authentication tokens and camera credentials are intentionally excluded from
+SQLite. Electron protects those values with the operating system's secure
+storage. Theme, notification-read state, and other non-authoritative UI
+preferences remain in Chromium storage. Live camera frames remain in memory and
+are never stored as database rows.
+
+The canonical local relationships are:
+
+```mermaid
+erDiagram
+    CAMERA_PROFILES
+    ACTIVE_MONITORING_STATE
+    REPORT_SUBMISSIONS ||--o{ COUNT_EVENTS : groups
+    REPORT_DRAFTS
+    OCCUPANCY_CORRECTIONS
+    COUNT_SNAPSHOTS
+    VISITOR_IDENTITIES ||--o{ VISITOR_MODEL_EMBEDDINGS : has
+    VISITOR_IDENTITIES ||--o{ VISITOR_SIGHTINGS : records
+```
+
+Camera IDs and names on events, snapshots, corrections, identities, and active
+state are intentional historical snapshots. They remain usable after a camera
+profile is deleted and therefore are not foreign keys to `camera_profiles`.
+`report_drafts.report_id` can identify either a local or already-synchronized
+cloud report, so it is also intentionally unconstrained.
 
 Commands below run from `desktop-tanaw`. Close the desktop application before running any clear command.
 
@@ -225,7 +254,9 @@ PowerShell uses the same commands.
 Inspection output includes:
 
 - Electron app-data and SQLite ledger paths;
-- row counts for events, snapshots, report drafts, submitted reports, visitor identity tables, and occupancy corrections;
+- schema version and row counts for camera profiles, active state, events,
+  snapshots, report drafts, submitted reports, visitor identity tables, and
+  occupancy corrections;
 - current unsubmitted draft event count;
 - first and last event timestamps;
 - recent events and reports;
@@ -239,9 +270,13 @@ Sensitive embedding blobs and full event payloads are not printed.
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
-This deletes only that enterprise's local count events, snapshots, occupancy correction audit records, demographic report drafts, report submissions, current count draft, visitor identity metadata, active ML camera session, and raw event log.
+This deletes that enterprise's complete SQLite database, including camera
+profiles, local count events, snapshots, occupancy correction audit records,
+demographic report drafts, report submissions, visitor identity metadata,
+active monitoring state, and raw event log.
 
-It preserves other enterprise ledgers, saved camera definitions, device IDs, theme settings, authentication storage, and backend records.
+It preserves other enterprise databases, OS-protected credentials and
+authentication storage, device IDs, theme settings, and backend records.
 
 ### Clear Every Local Ledger
 
@@ -249,7 +284,19 @@ It preserves other enterprise ledgers, saved camera definitions, device IDs, the
 npm run local-data -- clear --all-ledgers --yes
 ```
 
-This deletes all enterprise-scoped ledgers, including demographic report drafts, and the older legacy unscoped ledger. Chromium local storage and camera definitions remain. Obsolete demographic draft keys from versions that used Chromium storage are removed automatically when the updated Reports page opens.
+This clears operational rows from every canonical enterprise database,
+including demographic drafts, events, reports, monitoring state, and visitor
+metadata. SQLite camera profiles, OS-protected camera credentials,
+authentication storage, and Chromium preferences remain. Retired
+`tanaw_metrics.sqlite3` databases, WAL files, and `active_session.json`
+sidecars are removed.
+
+Databases created before the canonical versioned schema are not silently
+migrated or deleted. Recreate one explicitly with:
+
+```bash
+npm run local-data -- clear --enterprise "<enterprise-id>" --yes
+```
 
 ### Full Device Reset
 
@@ -439,6 +486,8 @@ ml-service/scripts/       # Model setup, replay, and evaluation helpers
 
 Local data commands affect only the desktop computer. They do not delete backend accounts, backend reports, final LGU audit reports, or other cloud records.
 
-Camera configuration, authentication state, desktop local ledgers, and backend
-records are intentionally separate. Use central sample-data cleanup for backend
-rows and desktop local-data cleanup for local device state.
+Camera profiles and operational desktop records share the enterprise SQLite
+database. Authentication state and camera credentials remain in OS-protected
+Electron storage, while backend records remain in PostgreSQL. Use central
+sample-data cleanup for backend rows and desktop local-data cleanup for local
+device state.

@@ -1,6 +1,8 @@
 import { useEffect } from "react";
+import { isAxiosError } from "axios";
 import { restoreSession } from "../api/login";
-import { useAuthStore } from "../stores/auth-store";
+import type { LoginResponse } from "../types";
+import { isRememberEnabled, useAuthStore } from "../stores/auth-store";
 
 export function AuthSessionManager() {
   const setSession = useAuthStore((state) => state.setSession);
@@ -9,12 +11,17 @@ export function AuthSessionManager() {
   useEffect(() => {
     let disposed = false;
     void (async () => {
+      let savedSession: LoginResponse | null = null;
       try {
         const stored = await window.tanawAuthSession?.load();
-        const token = readStoredToken(stored);
-        const session = await restoreSession(token ?? undefined);
+        savedSession = readStoredSession(stored);
+        const session = await restoreSession(savedSession?.token);
         if (!disposed) setSession(session);
-      } catch {
+      } catch (error) {
+        if (savedSession && isRememberEnabled() && isBackendUnavailable(error)) {
+          if (!disposed) setSession(savedSession);
+          return;
+        }
         await window.tanawAuthSession?.clear();
         if (!disposed) markAnonymous();
       }
@@ -27,8 +34,13 @@ export function AuthSessionManager() {
   return null;
 }
 
-function readStoredToken(value: unknown) {
-  if (!value || typeof value !== "object" || !("token" in value)) return null;
-  const token = (value as { token?: unknown }).token;
-  return typeof token === "string" && token ? token : null;
+function readStoredSession(value: unknown): LoginResponse | null {
+  if (!value || typeof value !== "object" || !("token" in value) || !("user" in value)) return null;
+  const session = value as { token?: unknown; user?: unknown };
+  if (typeof session.token !== "string" || !session.token || !session.user || typeof session.user !== "object") return null;
+  return session as LoginResponse;
+}
+
+function isBackendUnavailable(error: unknown) {
+  return isAxiosError(error) && (!error.response || error.response.status >= 500);
 }

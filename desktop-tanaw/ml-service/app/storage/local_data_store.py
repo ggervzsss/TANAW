@@ -8,7 +8,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
+
+LOCAL_SCHEMA_VERSION = 1
+
+
+class LocalDatabaseResetRequiredError(RuntimeError):
+    """Raised when a pre-canonical local database must be explicitly recreated."""
 
 
 @dataclass
@@ -33,8 +40,9 @@ class _MetricsBucket:
         self.current_occupancy = occupancy
 
 
-class LocalMetricsStore:
+class LocalDataStore:
     def __init__(self, app_data_dir: str | None = None, enterprise_id: str | None = None) -> None:
+        self._enterprise_id = enterprise_id
         base_dir = app_data_dir or os.environ.get("TANAW_APP_DATA_DIR")
         if base_dir:
             root = Path(base_dir) / "ml-service"
@@ -43,8 +51,200 @@ class LocalMetricsStore:
 
         self._root = root / "enterprises" / _safe_scope(enterprise_id) if enterprise_id else root
 
-        self._database_path = self._root / "tanaw_metrics.sqlite3"
+        self._database_path = self._root / "tanaw_desktop.sqlite3"
+        self._retired_database_path = self._root / "tanaw_metrics.sqlite3"
         self._initialized = False
+
+    def load_monitoring_state(self) -> dict[str, Any] | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                select
+                    camera_id,
+                    camera_name_snapshot,
+                    running,
+                    status,
+                    error,
+                    started_at,
+                    entry_count,
+                    exit_count,
+                    occupancy_count,
+                    camera_config_json,
+                    updated_at
+                from active_monitoring_state
+                where singleton_id = 1
+                """
+            ).fetchone()
+        if row is None:
+            return None
+
+        camera_config = _load_json_object(row["camera_config_json"])
+        return {
+            "running": bool(row["running"]),
+            "status": row["status"],
+            "error": row["error"],
+            "camera_id": row["camera_id"],
+            "camera_name": row["camera_name_snapshot"],
+            "camera_config": camera_config,
+            "counts": {
+                "entry": _safe_int(row["entry_count"]),
+                "exit": _safe_int(row["exit_count"]),
+                "occupancy": _safe_int(row["occupancy_count"]),
+                "running": bool(row["running"]),
+                "status": row["status"],
+                "started_at": row["started_at"],
+                "error": row["error"],
+            },
+            "updated_at": row["updated_at"],
+        }
+
+    def save_monitoring_state(
+        self, payload: dict[str, Any], updated_at: str | None = None
+    ) -> dict[str, Any]:
+        updated_at = updated_at or _utc_now()
+        raw_counts = payload.get("counts")
+        counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
+        camera_config = payload.get("camera_config")
+        config_payload = camera_config if isinstance(camera_config, dict) else {}
+        with self._connection() as connection:
+            connection.execute(
+                """
+                insert into active_monitoring_state (
+                    singleton_id,
+                    camera_id,
+                    camera_name_snapshot,
+                    running,
+                    status,
+                    error,
+                    started_at,
+                    entry_count,
+                    exit_count,
+                    occupancy_count,
+                    camera_config_json,
+                    updated_at
+                )
+                values (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(singleton_id) do update set
+                    camera_id = excluded.camera_id,
+                    camera_name_snapshot = excluded.camera_name_snapshot,
+                    running = excluded.running,
+                    status = excluded.status,
+                    error = excluded.error,
+                    started_at = excluded.started_at,
+                    entry_count = excluded.entry_count,
+                    exit_count = excluded.exit_count,
+                    occupancy_count = excluded.occupancy_count,
+                    camera_config_json = excluded.camera_config_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    payload.get("camera_id"),
+                    payload.get("camera_name"),
+                    int(bool(payload.get("running"))),
+                    str(payload.get("status") or "stopped"),
+                    payload.get("error"),
+                    counts.get("started_at"),
+                    _safe_int(counts.get("entry")),
+                    _safe_int(counts.get("exit")),
+                    _safe_int(counts.get("occupancy")),
+                    json.dumps(config_payload, sort_keys=True),
+                    updated_at,
+                ),
+            )
+        return {**payload, "updated_at": updated_at}
+
+    def list_camera_profiles(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                select payload_json
+                from camera_profiles
+                order by created_at asc, camera_id asc
+                """
+            ).fetchall()
+        return [_load_json_object(row["payload_json"]) for row in rows]
+
+    def replace_camera_profiles(self, cameras: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized = [_normalized_camera_profile(camera) for camera in cameras]
+        camera_ids = [int(camera["id"]) for camera in normalized]
+        if len(camera_ids) != len(set(camera_ids)):
+            raise ValueError("Camera IDs must be unique.")
+
+        updated_at = _utc_now()
+        with self._connection() as connection:
+            if camera_ids:
+                placeholders = ", ".join("?" for _ in camera_ids)
+                connection.execute(
+                    f"delete from camera_profiles where camera_id not in ({placeholders})",
+                    camera_ids,
+                )
+            else:
+                connection.execute("delete from camera_profiles")
+
+            for camera in normalized:
+                connection.execute(
+                    """
+                    insert into camera_profiles (
+                        camera_id,
+                        name,
+                        zone,
+                        status,
+                        camera_type,
+                        stream_url,
+                        purpose,
+                        resolution,
+                        fps,
+                        processing_profile,
+                        tracking_confidence,
+                        counting_confidence,
+                        reid_mode,
+                        unique_counting_mode,
+                        config_json,
+                        payload_json,
+                        created_at,
+                        updated_at
+                    )
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    on conflict(camera_id) do update set
+                        name = excluded.name,
+                        zone = excluded.zone,
+                        status = excluded.status,
+                        camera_type = excluded.camera_type,
+                        stream_url = excluded.stream_url,
+                        purpose = excluded.purpose,
+                        resolution = excluded.resolution,
+                        fps = excluded.fps,
+                        processing_profile = excluded.processing_profile,
+                        tracking_confidence = excluded.tracking_confidence,
+                        counting_confidence = excluded.counting_confidence,
+                        reid_mode = excluded.reid_mode,
+                        unique_counting_mode = excluded.unique_counting_mode,
+                        config_json = excluded.config_json,
+                        payload_json = excluded.payload_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        camera["id"],
+                        camera["name"],
+                        camera["zone"],
+                        camera["status"],
+                        camera["cameraType"],
+                        camera["rtsp"],
+                        camera["type"],
+                        camera["resolution"],
+                        camera["fps"],
+                        camera["processingProfile"],
+                        camera.get("trackingConfidence"),
+                        camera["confidence"],
+                        camera.get("reidMode"),
+                        camera.get("uniqueCountingMode"),
+                        json.dumps(camera["config"], sort_keys=True),
+                        json.dumps(camera, sort_keys=True),
+                        updated_at,
+                        updated_at,
+                    ),
+                )
+        return normalized
 
     def append_count_event(self, payload: dict[str, Any], recorded_at: str | None = None) -> str:
         event_id = str(uuid4())
@@ -618,7 +818,7 @@ class LocalMetricsStore:
         with self._connection() as connection:
             connection.execute(
                 """
-                insert or replace into report_submissions (
+                insert into report_submissions (
                     report_id,
                     period,
                     submitted_at,
@@ -631,6 +831,17 @@ class LocalMetricsStore:
                     sync_status
                 )
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(report_id) do update set
+                    period = excluded.period,
+                    submitted_at = excluded.submitted_at,
+                    entries = excluded.entries,
+                    exits = excluded.exits,
+                    peak_occupancy = excluded.peak_occupancy,
+                    unique_count = excluded.unique_count,
+                    notes = excluded.notes,
+                    payload_json = excluded.payload_json,
+                    sync_status = excluded.sync_status,
+                    synced_at = null
                 """,
                 (
                     report_id,
@@ -996,6 +1207,7 @@ class LocalMetricsStore:
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("pragma foreign_keys = on")
+            connection.execute("pragma busy_timeout = 5000")
             yield connection
             connection.commit()
         finally:
@@ -1006,11 +1218,107 @@ class LocalMetricsStore:
             return
 
         self._root.mkdir(parents=True, exist_ok=True)
+        if not self._database_path.exists() and self._retired_database_path.exists():
+            reset_command = (
+                f'npm run local-data -- clear --enterprise "{self._enterprise_id}" --yes'
+                if self._enterprise_id
+                else "npm run local-data -- clear --full-device --yes"
+            )
+            raise LocalDatabaseResetRequiredError(
+                "The retired tanaw_metrics.sqlite3 database is still present. TANAW will not "
+                f"silently replace local data. Close TANAW and run `{reset_command}`, then "
+                "reopen the application."
+            )
+        database_exists = self._database_path.exists()
         connection = sqlite3.connect(self._database_path)
         connection.row_factory = sqlite3.Row
         try:
+            connection.execute("pragma foreign_keys = on")
+            connection.execute("pragma journal_mode = wal")
+            connection.execute("pragma synchronous = normal")
+            connection.execute("pragma busy_timeout = 5000")
+            existing_tables = {
+                str(row["name"])
+                for row in connection.execute("select name from sqlite_master where type = 'table'")
+            }
+            if database_exists and existing_tables and "schema_metadata" not in existing_tables:
+                raise LocalDatabaseResetRequiredError(
+                    "The local TANAW database uses the retired pre-versioned schema. "
+                    "Close TANAW and run `npm run local-data -- clear --enterprise "
+                    "<enterprise-id> --yes`, then reopen the application."
+                )
+            if "schema_metadata" in existing_tables:
+                version_row = connection.execute(
+                    "select schema_version from schema_metadata where singleton_id = 1"
+                ).fetchone()
+                current_version = _safe_int(
+                    version_row["schema_version"] if version_row is not None else None
+                )
+                if current_version != LOCAL_SCHEMA_VERSION:
+                    raise LocalDatabaseResetRequiredError(
+                        f"Local TANAW database schema {current_version} is incompatible with "
+                        f"the required schema {LOCAL_SCHEMA_VERSION}. Explicitly clear this "
+                        "enterprise's local data before reopening TANAW."
+                    )
+
             connection.executescript(
                 """
+                create table if not exists schema_metadata (
+                    singleton_id integer primary key check (singleton_id = 1),
+                    schema_version integer not null,
+                    applied_at text not null
+                );
+
+                create table if not exists camera_profiles (
+                    camera_id integer primary key,
+                    name text not null,
+                    zone text not null,
+                    status text not null check (
+                        status in ('untested', 'online', 'offline', 'running', 'stopped', 'error')
+                    ),
+                    camera_type text not null check (
+                        camera_type in ('IP_WEBCAM', 'RTSP_CCTV', 'USB_WEBCAM', 'ONVIF_CCTV')
+                    ),
+                    stream_url text not null,
+                    purpose text not null,
+                    resolution text not null,
+                    fps real not null default 0,
+                    processing_profile text not null check (
+                        processing_profile in (
+                            'auto', 'compatibility', 'balanced', 'high_accuracy', 'emergency'
+                        )
+                    ),
+                    tracking_confidence real,
+                    counting_confidence real not null,
+                    reid_mode text check (reid_mode in ('auto', 'off', 'fast', 'quality')),
+                    unique_counting_mode text check (
+                        unique_counting_mode in ('entry_only', 'estimated_reid')
+                    ),
+                    config_json text not null,
+                    payload_json text not null,
+                    created_at text not null,
+                    updated_at text not null
+                );
+
+                create table if not exists active_monitoring_state (
+                    singleton_id integer primary key check (singleton_id = 1),
+                    camera_id integer,
+                    camera_name_snapshot text,
+                    running integer not null default 0 check (running in (0, 1)),
+                    status text not null,
+                    error text,
+                    started_at text,
+                    entry_count integer not null default 0,
+                    exit_count integer not null default 0,
+                    occupancy_count integer not null default 0,
+                    camera_config_json text not null,
+                    updated_at text not null
+                );
+
+                insert or ignore into schema_metadata (
+                    singleton_id, schema_version, applied_at
+                ) values (1, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
                 create table if not exists count_events (
                     id integer primary key autoincrement,
                     event_id text not null unique,
@@ -1029,7 +1337,11 @@ class LocalMetricsStore:
                     identity_confidence text,
                     payload_json text not null,
                     submitted_report_id text,
-                    synced_at text
+                    synced_at text,
+                    constraint fk_count_events_report_submission
+                        foreign key (submitted_report_id)
+                        references report_submissions(report_id)
+                        on update cascade on delete set null
                 );
 
                 create index if not exists idx_count_events_recorded_at on count_events(recorded_at);
@@ -1054,7 +1366,7 @@ class LocalMetricsStore:
 
                 create table if not exists report_submissions (
                     report_id text primary key,
-                    period text not null,
+                    period text not null unique,
                     submitted_at text not null,
                     entries integer not null default 0,
                     exits integer not null default 0,
@@ -1115,7 +1427,10 @@ class LocalMetricsStore:
                     embedding_count integer not null default 1,
                     updated_at text not null,
                     primary key (visitor_id, model_name),
-                    foreign key (visitor_id) references visitor_identities(visitor_id) on delete cascade
+                    constraint fk_visitor_model_embeddings_identity
+                        foreign key (visitor_id)
+                        references visitor_identities(visitor_id)
+                        on update cascade on delete cascade
                 );
 
                 create index if not exists idx_visitor_model_embeddings_model on visitor_model_embeddings(model_name);
@@ -1134,7 +1449,10 @@ class LocalMetricsStore:
                     detection_confidence real,
                     bbox_json text,
                     payload_json text not null,
-                    foreign key (visitor_id) references visitor_identities(visitor_id)
+                    constraint fk_visitor_sightings_identity
+                        foreign key (visitor_id)
+                        references visitor_identities(visitor_id)
+                        on update cascade on delete cascade
                 );
 
                 create index if not exists idx_visitor_sightings_business_date on visitor_sightings(business_date);
@@ -1149,6 +1467,57 @@ class LocalMetricsStore:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _load_json_object(value: Any) -> dict[str, Any]:
+    if not isinstance(value, str):
+        return {}
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
+    required_string_fields = (
+        "name",
+        "status",
+        "zone",
+        "resolution",
+        "type",
+        "rtsp",
+        "cameraType",
+        "processingProfile",
+    )
+    if isinstance(camera.get("id"), bool) or not isinstance(camera.get("id"), int):
+        raise ValueError("Camera ID must be an integer.")
+    if int(camera["id"]) <= 0:
+        raise ValueError("Camera ID must be positive.")
+    for field in required_string_fields:
+        if not isinstance(camera.get(field), str) or not str(camera[field]).strip():
+            raise ValueError(f"Camera {field} is required.")
+    if camera.get("username") is not None or camera.get("password") is not None:
+        raise ValueError("Camera credentials must not be stored in SQLite.")
+    if not isinstance(camera.get("config"), dict):
+        raise ValueError("Camera configuration is required.")
+    stream_url = str(camera["rtsp"]).strip()
+    parsed_stream_url = urlparse(stream_url)
+    if parsed_stream_url.username is not None or parsed_stream_url.password is not None:
+        raise ValueError("Camera stream credentials must not be stored in SQLite.")
+
+    return {
+        **camera,
+        "id": int(camera["id"]),
+        "rtsp": stream_url,
+        "fps": float(camera.get("fps") or 0),
+        "confidence": float(camera.get("confidence") or 0.35),
+        "trackingConfidence": (
+            float(camera["trackingConfidence"])
+            if camera.get("trackingConfidence") is not None
+            else None
+        ),
+    }
 
 
 def _summary_with_report_metrics(

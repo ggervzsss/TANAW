@@ -48,8 +48,8 @@ enterprise operators. It provides:
   counting;
 - privacy-conscious unique visitor estimation using local person ReID rather
   than facial recognition;
-- local SQLite persistence for events, metrics, visitor identity metadata, and
-  report drafts;
+- one enterprise-scoped SQLite database for camera definitions, monitoring
+  state, events, metrics, visitor identity metadata, and reports;
 - offline-first report submission with retryable synchronization to the central
   API;
 - current and historical metrics, occupancy, reports, notifications, profile,
@@ -82,7 +82,7 @@ report consolidation, WebSocket updates, and guarded test-data tooling.
 ```mermaid
 flowchart LR
     Camera["CCTV / IP camera"] --> ML["Local ML service<br/>FastAPI + YOLO + ByteTrack + ReID"]
-    ML <--> SQLite[("Enterprise-scoped<br/>SQLite ledger")]
+    ML <--> SQLite[("Enterprise-scoped<br/>SQLite operational database")]
     ML <--> Desktop["Electron enterprise desktop"]
     Desktop -->|"Authenticated telemetry and report sync"| API["Central FastAPI API"]
     Portal["LGU React web portal"] <-->|"REST + WebSockets"| API
@@ -103,7 +103,8 @@ The main data flow is:
    monitoring and reporting workflows.
 
 Raw camera video is not uploaded to PostgreSQL. ReID processing and temporary
-appearance metadata stay on the enterprise device.
+appearance metadata stay on the enterprise device. Live frames remain in
+memory and are not stored as SQLite rows.
 
 ## Technology stack
 
@@ -513,8 +514,10 @@ row-level provenance, do not reuse these reserved identifiers for real records.
 Desktop counts are stored in the enterprise-scoped local SQLite ledger and are
 intentionally independent of PostgreSQL cleanup. To clear those local rows,
 close the desktop and run `./scripts/local-mockdata-off`. That command removes
-all local ledger rows—including real camera-derived rows—while preserving
-camera settings, authentication storage, preferences, and Electron caches.
+all local operational rows—including real camera-derived rows—while preserving
+SQLite camera profiles, authentication storage, preferences, and Electron caches.
+It also removes retired `tanaw_metrics.sqlite3` and `active_session.json`
+artifacts so they cannot block the canonical database.
 
 To use a different target or range:
 
@@ -669,7 +672,7 @@ Sample-data commands reject production environments.
 Desktop records are separate from PostgreSQL and are scoped by enterprise.
 Close the desktop app before manually clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows,
+Remove all local desktop operational data, including real CCTV-derived rows,
 demographic report drafts, submitted reports, snapshots, and occupancy corrections, while
 preserving saved camera settings, authentication storage, preferences, and
 Electron caches:
@@ -696,7 +699,7 @@ Inspect one enterprise:
 npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
 ```
 
-Clear one enterprise ledger:
+Completely recreate one enterprise database, including its camera profiles:
 
 ```shell
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
@@ -706,8 +709,8 @@ The local-data CLI expects the Enterprise ID shown in the desktop Profile, not
 the account email. Run the unfiltered `inspect` command first if the generated
 ID uses a different sequence number.
 
-Clear every enterprise ledger while preserving Electron preferences and saved
-camera definitions:
+Clear every enterprise's operational rows while preserving Electron preferences
+and SQLite camera profiles:
 
 ```shell
 npm run local-data -- clear --all-ledgers --yes
