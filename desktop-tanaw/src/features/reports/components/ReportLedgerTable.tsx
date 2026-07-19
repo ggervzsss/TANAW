@@ -54,29 +54,35 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search reports"
-              className="h-9 w-44 rounded-sm border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] outline-none transition-colors focus:border-[#065f46]"
+              className="h-9 w-44 rounded-sm border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] transition-colors outline-none focus:border-[#065f46]"
             />
           </label>
-          <SelectDropdown value={statusFilter} onChange={setStatusFilter} options={[["All", "All statuses"], ...statusOptions.map((status) => [status, status] as const)]} ariaLabel="Filter reports by status" size="compact" />
+          <SelectDropdown
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[["All", "All statuses"], ...statusOptions.map((status) => [status, status] as const)]}
+            ariaLabel="Filter reports by status"
+            size="compact"
+          />
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white p-0">
-        <table className="w-full min-w-190 table-fixed text-left text-sm">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-0">
+        <table className="w-full table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[31%]" />
-            <col className="w-[18%]" />
-            <col className="w-[14%]" />
+            <col className="w-[23%]" />
+            <col className="w-[11%]" />
+            <col className="w-[20%]" />
             <col className="w-[15%]" />
-            <col className="w-[22%]" />
           </colgroup>
           <thead className="sticky top-0 bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
             <tr>
-              <th className="border-b border-gray-200 px-5 py-3">Report</th>
-              <th className="border-b border-gray-200 px-5 py-3">Period</th>
-              <th className="border-b border-gray-200 px-5 py-3 text-right">Unique Pax</th>
-              <th className="border-b border-gray-200 px-5 py-3">Status</th>
-              <th className="border-b border-gray-200 px-5 py-3 text-right">Actions</th>
+              <th className="border-b border-gray-200 px-3 py-3 xl:px-5">Report</th>
+              <th className="border-b border-gray-200 px-3 py-3 whitespace-nowrap xl:px-5">Period</th>
+              <th className="border-b border-gray-200 px-3 py-3 text-right whitespace-nowrap xl:px-5">Unique Pax</th>
+              <th className="border-b border-gray-200 px-3 py-3 whitespace-nowrap xl:px-5">Status</th>
+              <th className="border-b border-gray-200 px-3 py-3 text-right whitespace-nowrap xl:px-5">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -99,7 +105,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                   }}
                   className={`group cursor-pointer transition-colors focus-visible:bg-[#065f46]/5 focus-visible:outline-none ${isActive ? "bg-[#065f46]/5" : "hover:bg-gray-50"}`}
                 >
-                  <td className="px-5 py-4">
+                  <td className="px-3 py-4 xl:px-5">
                     <ExpandableText
                       primary={row.reportLabel}
                       secondary={row.reportDescription}
@@ -109,35 +115,39 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                       threshold={48}
                     />
                   </td>
-                  <td className="px-5 py-4 text-sm font-medium text-gray-700">{report.period ?? report.date}</td>
-                  <td className="px-5 py-4 text-right font-mono font-bold text-[#065f46]">{report.unique?.toLocaleString() || 0}</td>
-                  <td className="px-5 py-4">
-                    <Badge variant={badgeVariant(row)}>{row.statusLabel}</Badge>
+                  <td className="px-3 py-4 text-sm font-medium text-gray-700 xl:px-5">{report.period ?? report.date}</td>
+                  <td className="px-3 py-4 text-right font-mono font-bold whitespace-nowrap text-[#065f46] xl:px-5">{report.unique?.toLocaleString() || 0}</td>
+                  <td className="px-3 py-4 whitespace-nowrap xl:px-5" title={row.statusLabel}>
+                    <Badge variant={badgeVariant(row)}>
+                      <span className="xl:hidden">{compactStatusLabel(row)}</span>
+                      <span className="hidden xl:inline">{row.statusLabel}</span>
+                    </Badge>
                   </td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex justify-end gap-3 opacity-70 transition-opacity group-hover:opacity-100">
+                  <td className="px-3 py-4 text-right whitespace-nowrap xl:px-5">
+                    <div className="flex flex-nowrap justify-end gap-3 opacity-70 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
+                        aria-label={`View ${row.reportLabel}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           onPreviewReport(report);
                         }}
-                        className="flex items-center gap-1 text-xs font-semibold tracking-wider text-[#065f46] uppercase hover:text-[#044a36]"
+                        className="flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wider whitespace-nowrap text-[#065f46] uppercase hover:text-[#044a36]"
+                        title="View report"
                       >
                         <FileText size={14} />
-                        View
                       </button>
                       <button
                         type="button"
+                        aria-label={`Download ${row.reportLabel}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           onDownloadReport(report);
                         }}
-                        className="flex items-center gap-1 text-xs font-semibold tracking-wider text-gray-500 uppercase hover:text-[#065f46]"
+                        className="flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wider whitespace-nowrap text-gray-500 uppercase hover:text-[#065f46]"
                         title="Download PDF"
                       >
                         <Download size={14} />
-                        Download
                       </button>
                     </div>
                   </td>
@@ -165,4 +175,11 @@ function badgeVariant(row: ReportLedgerRow) {
   if (row.report.status === "Submitted" || row.report.status === "Resubmitted") return "info";
   if (row.report.status === "Returned for Revision") return "warning";
   return "default";
+}
+
+function compactStatusLabel(row: ReportLedgerRow) {
+  if (row.kind === "current") return "Current";
+  if (row.kind === "pending") return "Pending";
+  if (row.report.status === "Returned for Revision") return "Returned";
+  return row.statusLabel;
 }
