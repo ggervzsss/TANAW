@@ -112,7 +112,7 @@ export function EnterpriseTopbar({
   const profileEmail = user?.email ?? "No account email";
   const isDarkTopbar = resolvedTheme === "dark";
   const controlClasses = getEnterpriseTopbarControlClasses(resolvedTheme);
-  const roleSubtitle = `${String(user?.role ?? "enterprise").toLowerCase()} Role`;
+  const accountSubtitle = user?.role === "enterprise" ? "Enterprise Account" : "TANAW Account";
   const displayImageDataUrl = user?.displayImageDataUrl ?? null;
   const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-[color,background-color,box-shadow,transform] duration-200 max-2xl:px-3.5";
   const navPillActive = isDarkTopbar
@@ -208,7 +208,7 @@ export function EnterpriseTopbar({
                 </div>
                 <div className="hidden min-w-0 flex-1 text-left lg:block">
                   <p className="truncate text-sm leading-tight font-bold text-white drop-shadow-sm">{displayName}</p>
-                  <p className="mt-0.5 text-[11px] leading-tight text-emerald-50/78">{roleSubtitle}</p>
+                  <p className="mt-0.5 text-[11px] leading-tight text-emerald-50/78">{accountSubtitle}</p>
                 </div>
                 <ChevronDown size={15} className={`ml-auto shrink-0 text-emerald-50/75 transition-transform duration-200 ${showProfileMenu ? "rotate-180" : ""}`} />
               </button>

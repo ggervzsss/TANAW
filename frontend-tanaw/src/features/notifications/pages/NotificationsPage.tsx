@@ -92,7 +92,7 @@ export function NotificationsPage({ role }: NotificationsPageProps) {
             </div>
             <p className="mt-4 text-sm font-black text-slate-900 dark:text-slate-100">{isLoading ? "Loading notifications" : "No notifications"}</p>
             <p className="mt-1 max-w-88 text-xs leading-relaxed text-slate-500 dark:text-slate-300">
-              {isLoading ? "Checking TANAW activity sources." : "New role-relevant activity will appear here."}
+              {isLoading ? "Checking TANAW activity sources." : "New activity relevant to your account will appear here."}
             </p>
           </div>
         )}

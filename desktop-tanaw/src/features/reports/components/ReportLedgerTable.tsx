@@ -44,7 +44,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
     <Card className="flex flex-col overflow-hidden rounded-sm border border-gray-200 shadow-sm lg:col-span-2">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white p-5">
         <div>
-          <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Submission Ledger</h3>
+          <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Report Submissions</h3>
           <p className="mt-1 text-xs text-gray-500">Select a row to load its data into the workspace, or use View to open the DOT form preview.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">

@@ -17,8 +17,10 @@ import {
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
+import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
 import { routePaths } from "../router/routePaths";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
@@ -79,6 +81,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const updateUser = useAuthStore((state) => state.updateUser);
+  const { timeFormat } = useSystemDisplayPreferences();
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<EnterpriseView>(initialView);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -287,8 +290,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   const notifications = useMemo(
-    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, backendNotifications),
-    [backendNotifications, readNotificationIds, reportsHistory],
+    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, backendNotifications, timeFormat),
+    [backendNotifications, readNotificationIds, reportsHistory, timeFormat],
   );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
@@ -396,9 +399,10 @@ function buildEnterpriseNotifications(
   reportsHistory: ReportRecord[],
   readNotificationIds: Set<number>,
   backendNotifications: BackendNotification[],
+  timeFormat: SystemTimeFormat,
 ) {
-  const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds));
-  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report))]
+  const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds, timeFormat));
+  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report, timeFormat))]
     .sort((left, right) => getNotificationSortValue(right) - getNotificationSortValue(left))
     .map((notification) => ({
       ...notification,
@@ -406,20 +410,25 @@ function buildEnterpriseNotifications(
     }));
 }
 
-function backendNotificationToEnterpriseNotification(notification: BackendNotification, readNotificationIds: Set<number>): EnterpriseNotification {
+function backendNotificationToEnterpriseNotification(
+  notification: BackendNotification,
+  readNotificationIds: Set<number>,
+  timeFormat: SystemTimeFormat,
+): EnterpriseNotification {
   const id = stableNotificationId(`backend-notification:${notification.id}`);
   return {
     id,
     backendId: notification.id,
     type: notificationTypeFromSeverity(notification.severity),
     message: `${notification.title}: ${notification.message}`,
-    time: formatNotificationDate(notification.createdAt),
+    time: formatNotificationDate(notification.createdAt, timeFormat),
+    sortTime: toTimestamp(notification.createdAt),
     read: Boolean(notification.readAt) || readNotificationIds.has(id),
     target: notificationTarget(notification),
   };
 }
 
-function buildReportNotifications(report: ReportRecord): EnterpriseNotification[] {
+function buildReportNotifications(report: ReportRecord, timeFormat: SystemTimeFormat): EnterpriseNotification[] {
   const notifications: EnterpriseNotification[] = [];
   const deadline = getReportDeadline(report);
   const isSubmitted = ["Submitted", "Resubmitted", "Consolidated"].includes(report.status);
@@ -429,37 +438,60 @@ function buildReportNotifications(report: ReportRecord): EnterpriseNotification[
     if (Number.isFinite(deadlineDate)) {
       const daysUntilDeadline = Math.ceil((deadlineDate - Date.now()) / 86_400_000);
       if (daysUntilDeadline < 0) {
-        notifications.push(createReportNotification(report, "critical", `${report.id} is overdue for ${formatNotificationDate(deadline)}.`, deadline));
+        notifications.push(createReportNotification(report, "critical", `${report.id} is overdue for ${formatNotificationDate(deadline, timeFormat)}.`, timeFormat, deadline));
       } else if (daysUntilDeadline <= 3) {
         notifications.push(
-          createReportNotification(report, "warning", `${report.id} is due ${daysUntilDeadline === 0 ? "today" : `in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? "" : "s"}`}.`, deadline),
+          createReportNotification(
+            report,
+            "warning",
+            `${report.id} is due ${daysUntilDeadline === 0 ? "today" : `in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? "" : "s"}`}.`,
+            timeFormat,
+            deadline,
+          ),
         );
       }
     }
   }
 
   if (report.status === "Returned for Revision") {
-    notifications.push(createReportNotification(report, "warning", `${report.id} was returned for revision. ${report.remarks ?? "Please review the ledger remarks."}`, getLatestAuditTime(report)));
+    notifications.push(
+      createReportNotification(
+        report,
+        "warning",
+        `${report.id} was returned for revision. ${report.remarks ?? "Please review the report remarks."}`,
+        timeFormat,
+        getLatestAuditTime(report),
+      ),
+    );
   }
 
   if (report.status === "Draft") {
-    notifications.push(createReportNotification(report, "warning", `${report.id} is still a draft for ${report.period ?? report.date}.`, getLatestAuditTime(report)));
+    notifications.push(createReportNotification(report, "warning", `${report.id} is still a draft for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)));
   }
 
   if (report.status === "Submitted" || report.status === "Resubmitted") {
-    notifications.push(createReportNotification(report, "success", `${report.id} was ${report.status.toLowerCase()} for ${report.period ?? report.date}.`, getLatestAuditTime(report)));
+    notifications.push(
+      createReportNotification(report, "success", `${report.id} was ${report.status.toLowerCase()} for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)),
+    );
   }
 
   return notifications;
 }
 
-function createReportNotification(report: ReportRecord, type: EnterpriseNotification["type"], message: string, timeSource?: string): EnterpriseNotification {
+function createReportNotification(
+  report: ReportRecord,
+  type: EnterpriseNotification["type"],
+  message: string,
+  timeFormat: SystemTimeFormat,
+  timeSource?: string,
+): EnterpriseNotification {
   const source = `report:${report.id}:${report.status}:${timeSource ?? report.date}`;
   return {
     id: stableNotificationId(source),
     type,
     message,
-    time: formatNotificationDate(timeSource ?? report.date),
+    time: formatNotificationDate(timeSource ?? report.date, timeFormat),
+    sortTime: toTimestamp(timeSource ?? report.date),
     read: false,
     target: "reports",
   };
@@ -499,20 +531,16 @@ function getLatestAuditTime(report: ReportRecord) {
 }
 
 function getNotificationSortValue(notification: EnterpriseNotification) {
-  const parsed = Date.parse(notification.time);
-  return Number.isFinite(parsed) ? parsed : notification.id;
+  return notification.sortTime ?? notification.id;
 }
 
-function formatNotificationDate(value: string) {
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(parsed));
+function formatNotificationDate(value: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(value, timeFormat);
+}
+
+function toTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function stableNotificationId(value: string) {

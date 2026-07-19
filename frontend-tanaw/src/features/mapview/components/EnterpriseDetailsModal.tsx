@@ -1,8 +1,10 @@
 import { Activity, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { EnterpriseStatus, GatewayStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
@@ -10,6 +12,8 @@ type EnterpriseDetailsModalProps = {
 };
 
 export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetailsModalProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
+
   return (
     <ModalFrame title={enterprise.name} eyebrow="Enterprise Details" onClose={onClose} maxWidthClassName="max-w-5xl">
       <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
@@ -20,7 +24,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
+                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Enterprise Overview</p>
               </div>
               <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
                 {enterprise.category} - Barangay {enterprise.barangay}
@@ -30,7 +34,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy.toLocaleString()} />
-            <EnterpriseMetricCard icon={<Users size={16} />} label="Est. Unique Count" value={enterprise.estimatedUniqueCount.toLocaleString()} />
+            <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount.toLocaleString()} />
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Status" value={<StatusBadge status={enterprise.status} />} />
             <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={enterprise.trend ?? "Stable"} />
           </div>
@@ -39,7 +43,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
         <section className="grid gap-3 sm:grid-cols-2">
           <EnterpriseDetailRow icon={<Building2 size={15} />} label="Category" value={enterprise.category} />
           <EnterpriseDetailRow icon={<Radio size={15} />} label="Desktop App Status" value={<DesktopAppStatusBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
-          <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ?? "No update recorded"} />
+          <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ? formatPhilippineDateTime(enterprise.lastSync, timeFormat) : "No update recorded"} />
           <EnterpriseDetailRow icon={<Phone size={15} />} label="Contact" value={enterprise.contact ?? "No contact listed"} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<MapPin size={15} />} label="Full Address" value={enterprise.fullAddress} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<Clock size={15} />} label="Operating Hours" value={enterprise.operatingHours ?? "Not specified"} />

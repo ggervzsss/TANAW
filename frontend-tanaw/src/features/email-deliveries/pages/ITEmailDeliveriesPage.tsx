@@ -7,6 +7,8 @@ import { Panel, PanelHeader } from "@/shared/components/panel";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { listEmailDeliveries, retryEmailDelivery, type EmailDelivery } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 const EMPTY_DELIVERIES: EmailDelivery[] = [];
 
@@ -23,6 +25,7 @@ const STATUS_LABELS: Record<EmailDelivery["status"], string> = {
 };
 
 export function ITEmailDeliveriesPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const deliveriesQuery = useQuery({
@@ -48,7 +51,7 @@ export function ITEmailDeliveriesPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Email Delivery" description="Monitor transactional email queued by TANAW and retry safe terminal failures." />
+      <PageHeader title="Email Delivery" description="Review emails sent by TANAW and retry failed deliveries when available." />
       <Panel className="overflow-hidden">
         <PanelHeader title="Outbound Email" icon={Inbox} />
         <div className="border-b border-slate-200 bg-slate-50 p-4">
@@ -67,10 +70,12 @@ export function ITEmailDeliveriesPage() {
                   <span className="text-xs font-bold tracking-wide text-slate-500 uppercase">{delivery.purpose.replaceAll("_", " ")}</span>
                 </div>
                 <p className="truncate font-bold text-slate-950">{delivery.recipient}</p>
-                <p className="text-xs text-slate-500">Queued {new Date(delivery.createdAt).toLocaleString()} · Attempt {delivery.attemptCount}/{delivery.maxAttempts}</p>
-                {delivery.providerMessageId ? <p className="font-mono text-[11px] text-slate-500">Provider ID: {delivery.providerMessageId}</p> : null}
+                <p className="text-xs text-slate-500">
+                  Queued {formatPhilippineDateTime(delivery.createdAt, timeFormat)} · Attempt {delivery.attemptCount}/{delivery.maxAttempts}
+                </p>
+                {delivery.providerMessageId ? <p className="font-mono text-[11px] text-slate-500">Resend Reference: {delivery.providerMessageId}</p> : null}
                 {delivery.failureReason ? <p className="max-w-3xl text-sm text-rose-700">{delivery.failureReason}</p> : null}
-                {delivery.status === "accepted" ? <p className="text-xs text-slate-500">Resend accepted this request. Final delivery or bounce details remain available in the Resend dashboard.</p> : null}
+                {delivery.status === "accepted" ? <p className="text-xs text-slate-500">Resend accepted the email. Delivery or bounce details remain available in the Resend dashboard.</p> : null}
               </div>
               {delivery.canRetry ? (
                 <button type="button" onClick={() => retryMutation.mutate(delivery.id)} disabled={retryMutation.isPending} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">

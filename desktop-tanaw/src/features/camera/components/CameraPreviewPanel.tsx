@@ -99,7 +99,7 @@ export function CameraPreviewPanel({
               >
                 <Edit2 size={14} />
               </button>
-              <button onClick={onDelete} className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-600 hover:text-red-600" aria-label="Delete node">
+              <button onClick={onDelete} className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-600 hover:text-red-600" aria-label="Delete camera">
                 <Trash2 size={14} />
               </button>
             </>

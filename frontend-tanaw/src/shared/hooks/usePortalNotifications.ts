@@ -6,6 +6,8 @@ import { updateUserNotificationRead, type BackendNotification, type BackendNotif
 import type { LogSeverity, PriorityAlert, SystemLog } from "@/shared/types";
 import type { UserRole } from "@/shared/types/role.types";
 import { isStaffReportSubmissionNotification } from "@/shared/utils/notificationRules";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 import { useActivityLogs } from "./useActivityLogs";
 import { useAlerts } from "./useAlerts";
 
@@ -39,6 +41,7 @@ const viewAllPathByRole: Record<UserRole, string | undefined> = {
 };
 
 export function usePortalNotifications(role: UserRole) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const authUser = useAuthStore((state) => state.user);
   const shouldLoadAlerts = role === "admin" || role === "it";
   const { alerts, isLoading: alertsLoading } = useAlerts(shouldLoadAlerts);
@@ -57,14 +60,14 @@ export function usePortalNotifications(role: UserRole) {
   const backendNotifications = backendNotificationsQuery.data ?? EMPTY_BACKEND_NOTIFICATIONS;
 
   const drafts = useMemo(() => {
-    const persistedNotifications = buildBackendNotifications(backendNotifications, role);
+    const persistedNotifications = buildBackendNotifications(backendNotifications, role, timeFormat);
 
     if (role === "admin") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin"), ...buildLogNotifications(mergedLogs, "admin")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin", timeFormat), ...buildLogNotifications(mergedLogs, "admin", timeFormat)];
     }
 
     if (role === "it") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it"), ...buildLogNotifications(mergedLogs, "it")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it", timeFormat), ...buildLogNotifications(mergedLogs, "it", timeFormat)];
     }
 
     if (role === "staff") {
@@ -72,7 +75,7 @@ export function usePortalNotifications(role: UserRole) {
     }
 
     return persistedNotifications;
-  }, [alerts, backendNotifications, mergedLogs, role]);
+  }, [alerts, backendNotifications, mergedLogs, role, timeFormat]);
 
   const allNotifications = useMemo(
     () =>
@@ -127,7 +130,7 @@ export function usePortalNotifications(role: UserRole) {
   };
 }
 
-function buildBackendNotifications(notifications: BackendNotification[], role: UserRole): DraftNotification[] {
+function buildBackendNotifications(notifications: BackendNotification[], role: UserRole, timeFormat: SystemTimeFormat): DraftNotification[] {
   return notifications
     .filter((notification) => role !== "staff" || isStaffReportSubmissionNotification(notification))
     .map((notification) => ({
@@ -135,7 +138,7 @@ function buildBackendNotifications(notifications: BackendNotification[], role: U
       backendId: notification.id,
       title: notification.title,
       message: notification.message,
-      time: formatTimestamp(notification.createdAt),
+      time: formatTimestamp(notification.createdAt, timeFormat),
       source: notification.type,
       statusLabel: notification.severity,
       tone: toneFromNotificationSeverity(notification.severity),
@@ -174,7 +177,7 @@ function getBackendNotificationTargetPath(role: UserRole, notification: BackendN
   return undefined;
 }
 
-function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"): DraftNotification[] {
+function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it", timeFormat: SystemTimeFormat): DraftNotification[] {
   return alerts
     .filter((alert) => alert.status !== "Resolved")
     .filter((alert) => (role === "admin" ? alert.owner === "Admin" || alert.owner === "System" || alert.severity === "Critical" : alert.owner === "IT"))
@@ -182,7 +185,7 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"):
       id: `alert:${alert.id}:${alert.status}`,
       title: `${alert.severity} ${alert.type}`,
       message: `${alert.enterprise ?? alert.requester}: ${alert.summary}`,
-      time: alert.time,
+      time: formatTimestamp(alert.time, timeFormat),
       source: "Alerts",
       statusLabel: alert.status,
       tone: toneFromSeverity(alert.severity),
@@ -191,14 +194,14 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"):
     }));
 }
 
-function buildLogNotifications(logs: SystemLog[], role: "admin" | "it"): DraftNotification[] {
+function buildLogNotifications(logs: SystemLog[], role: "admin" | "it", timeFormat: SystemTimeFormat): DraftNotification[] {
   return logs
     .filter((log) => isRoleRelevantLog(log, role))
     .map((log) => ({
       id: `activity-log:${log.id}:${log.severity}`,
       title: `${log.severity} ${log.action}`,
       message: log.summary,
-      time: formatTimestamp(log.timestamp),
+      time: formatTimestamp(log.timestamp, timeFormat),
       source: log.category,
       statusLabel: log.actorRole,
       tone: toneFromSeverity(log.severity),
@@ -241,16 +244,8 @@ function toSortTime(value: string) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function formatTimestamp(value: string) {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+function formatTimestamp(value: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(value, timeFormat);
 }
 
 function readStoredNotificationIds(key: string) {

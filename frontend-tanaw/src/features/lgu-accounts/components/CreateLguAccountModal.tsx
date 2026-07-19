@@ -117,7 +117,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
         <div className="md:col-span-2">
           <SearchableDropdownField
             name="role"
-            label="Role"
+            label="Account Type"
             options={[
               ["staff", "LGU Staff"],
               ["it", "IT Personnel"],
@@ -166,7 +166,7 @@ function validateLguForm(form: LguFormState) {
   if (lastNameError) errors.lastName = lastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;
-  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid role.";
+  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid account type.";
 
   return errors;
 }

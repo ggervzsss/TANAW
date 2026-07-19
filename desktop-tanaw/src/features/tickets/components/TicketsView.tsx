@@ -5,7 +5,9 @@ import { ExpandableText } from "../../../components/ExpandableText";
 import { ModalPortal } from "../../../components/ModalPortal";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { useAuthStore } from "../../login/stores/auth-store";
+import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
 import {
   createSupportTicket,
   getSupportTicket,
@@ -46,6 +48,7 @@ const emptyForm: TicketFormState = {
 
 export function TicketsView() {
   const user = useAuthStore((state) => state.user);
+  const { timeFormat } = useSystemDisplayPreferences();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [form, setForm] = useState<TicketFormState>(emptyForm);
@@ -235,7 +238,7 @@ export function TicketsView() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <InputField label="Affected Area" value={form.affectedArea} placeholder="Lobby, reports, account" onChange={(value) => setForm((current) => ({ ...current, affectedArea: value }))} />
-              <InputField label="Camera Node" value={form.cameraNode} placeholder="Optional camera name" onChange={(value) => setForm((current) => ({ ...current, cameraNode: value }))} />
+              <InputField label="Camera" value={form.cameraNode} placeholder="Optional camera name" onChange={(value) => setForm((current) => ({ ...current, cameraNode: value }))} />
             </div>
 
             <label className="block">
@@ -313,7 +316,7 @@ export function TicketsView() {
         </Card>
 
         <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_18px_44px_rgba(15,23,42,0.07)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.11)] dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.36)]">
-          <TicketPanelHeader icon={<TicketCheck size={20} />} title="Ticket Ledger" subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`} />
+          <TicketPanelHeader icon={<TicketCheck size={20} />} title="Support Requests" subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`} />
 
           {tickets.length > 0 ? (
             <div className="max-h-152 divide-y divide-gray-100 overflow-y-auto bg-white dark:divide-slate-700 dark:bg-[#121c31]">
@@ -359,7 +362,7 @@ export function TicketsView() {
                         </span>
                       </Badge>
                     )}
-                    <span className="ml-auto text-gray-400 dark:text-slate-300">{formatTicketTime(ticket.createdAt)}</span>
+                    <span className="ml-auto text-gray-400 dark:text-slate-300">{formatTicketTime(ticket.createdAt, timeFormat)}</span>
                     <span className="inline-flex items-center gap-1 text-[#065f46] dark:text-emerald-200">
                       <Eye size={11} />
                       Inspect
@@ -385,6 +388,7 @@ export function TicketsView() {
           error={selectedTicketError}
           isLoading={isDetailLoading}
           ticket={selectedTicket}
+          timeFormat={timeFormat}
           onClose={() => {
             setSelectedTicketId(null);
             setPreviewPhoto(null);
@@ -433,9 +437,10 @@ type TicketDetailModalProps = {
   onPreviewPhoto: (photo: SupportTicketAttachment) => void;
   onTicketUpdated: (ticket: SupportTicketDetail) => void;
   ticket: SupportTicketDetail | null;
+  timeFormat: SystemTimeFormat;
 };
 
-function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicketUpdated, ticket }: TicketDetailModalProps) {
+function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicketUpdated, ticket, timeFormat }: TicketDetailModalProps) {
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isReplying, setIsReplying] = useState(false);
@@ -529,9 +534,9 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
                     <DetailTile label="Enterprise" value={ticket.enterpriseName} />
                     <DetailTile label="Enterprise ID" value={ticket.enterpriseId} mono />
                     <DetailTile label="Category" value={ticket.category} />
-                    <DetailTile label="Submitted" value={formatTicketTime(ticket.createdAt)} />
+                    <DetailTile label="Submitted" value={formatTicketTime(ticket.createdAt, timeFormat)} />
                     <DetailTile label="Affected Area" value={ticket.affectedArea ?? "Not specified"} />
-                    <DetailTile label="Camera Node" value={ticket.cameraNode ?? "Not specified"} />
+                    <DetailTile label="Camera" value={ticket.cameraNode ?? "Not specified"} />
                   </section>
 
                   <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
@@ -573,9 +578,9 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
                     Conversation
                   </h4>
                   <div className="mt-4 space-y-3">
-                    <ConversationItem authorName={ticket.submittedBy} authorRole="enterprise" createdAt={ticket.createdAt} message={ticket.description} />
+                    <ConversationItem authorName={ticket.submittedBy} authorRole="enterprise" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                     {ticket.messages.map((message) => (
-                      <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} />
+                      <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
                     ))}
                   </div>
                   <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>
@@ -662,7 +667,19 @@ function DetailTile({ label, mono = false, value }: { label: string; mono?: bool
   );
 }
 
-function ConversationItem({ authorName, authorRole, createdAt, message }: { authorName: string; authorRole: string; createdAt: string; message: string }) {
+function ConversationItem({
+  authorName,
+  authorRole,
+  createdAt,
+  message,
+  timeFormat,
+}: {
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+  message: string;
+  timeFormat: SystemTimeFormat;
+}) {
   const isEnterprise = authorRole === "enterprise";
   return (
     <article
@@ -675,7 +692,7 @@ function ConversationItem({ authorName, authorRole, createdAt, message }: { auth
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-black text-[#111827] dark:text-slate-100">{authorName}</p>
         <p className="text-[10px] font-bold tracking-wide text-gray-500 uppercase dark:text-slate-300">
-          {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt)}
+          {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt, timeFormat)}
         </p>
       </div>
       <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-slate-200">{message}</p>
@@ -801,16 +818,8 @@ function trimOptional(value: string) {
   return trimmed ? trimmed : null;
 }
 
-function formatTicketTime(value: string) {
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(parsed));
+function formatTicketTime(value: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(value, timeFormat);
 }
 
 function formatFileSize(bytes: number) {

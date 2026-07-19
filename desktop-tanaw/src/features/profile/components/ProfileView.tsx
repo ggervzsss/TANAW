@@ -217,7 +217,7 @@ export function ProfileView() {
                 <Shield size={14} className="text-[#065f46]" /> Enterprise Identity (Read-Only)
               </h4>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <ReadOnlyIdentityField label="Current Node" value={enterpriseName} />
+                <ReadOnlyIdentityField label="Current Enterprise" value={enterpriseName} />
                 <ReadOnlyIdentityField label="LGU Affiliation" value={[user?.category ?? "Registered Enterprise", user?.barangay ? `Barangay ${user.barangay}` : "San Pedro City"].join(" - ")} />
                 <ReadOnlyIdentityField label="Enterprise ID" value={user?.enterpriseId ?? "Not assigned"} />
               </div>

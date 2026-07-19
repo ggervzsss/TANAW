@@ -1,4 +1,5 @@
 import type { FinalReport, FinalReportSource, IntakeReport } from "@/shared/types";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 import { getDotDemographics } from "./dotDemographics";
 
 const PAGE_WIDTH = 842;
@@ -85,12 +86,12 @@ const DOT_COLUMNS: TableColumn[] = [
 
 const DOT_HEADER_HEIGHT = 62;
 
-export function downloadIntakeReportPdf(report: IntakeReport) {
-  const pdf = createIntakeReportPdf(report);
+export function downloadIntakeReportPdf(report: IntakeReport, timeFormat: SystemTimeFormat = "12-hour") {
+  const pdf = createIntakeReportPdf(report, timeFormat);
   downloadPdf(pdf, `${report.code}.pdf`);
 }
 
-export function createIntakeReportPdf(report: IntakeReport) {
+export function createIntakeReportPdf(report: IntakeReport, timeFormat: SystemTimeFormat = "12-hour") {
   const demographics = getDotDemographics(report.metrics.unique, report.demographics ?? report.payload?.demo);
   const rows = createTableRows([
     [
@@ -120,7 +121,7 @@ export function createIntakeReportPdf(report: IntakeReport) {
     ["Barangay", report.barangay],
     ["Municipality", "City of San Pedro, Laguna"],
     ["Reporting Period", report.period],
-    ["Submitted", formatReportSubmittedDate(report.submittedAt ?? report.submitted)],
+    ["Submitted", formatReportSubmittedDate(report.submittedAt ?? report.submitted, timeFormat)],
     ["Review Status", report.status],
     ["Report Code", report.code],
   ]);
@@ -165,12 +166,12 @@ export function createFinalReportPdf(report: FinalReport) {
   const sourceRows = createTableRows(report.sources.map((source) => buildFinalReportSourceRow(source, report.period)));
   const totalRow = createTableRows([buildFinalReportTotalRow(report)], true)[0];
   const metadataRows: [string, string][] = [
-    ["Generated On", report.generatedOn],
+    ["Generated On", formatPhilippineDateTime(report.generatedOn, "12-hour", { dateStyle: "medium" })],
     ["Prepared By", `${report.preparedBy} (${report.preparedRole})`],
     ["Audit Status", report.status],
-    ["Registered Sources", String(report.enterpriseCount)],
+    ["Enterprise Reports", String(report.enterpriseCount)],
   ];
-  const certification = `This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. Aggregation relies on verified local camera records from ${report.enterpriseCount} monitored enterprise nodes.`;
+  const certification = `This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. The totals combine verified local camera records from ${report.enterpriseCount} enterprise reports.`;
   const estimationNote = "Residence and sex breakdowns may be estimated from validated unique-visitor totals when a source did not submit a complete allocation.";
   const metadataBottom = measureMetadataBottom(metadataRows, 442);
   const certificationY = metadataBottom - 3;
@@ -570,19 +571,11 @@ function sanitizePdfText(value: string) {
     .replace(/[^\x20-\x7E\xA0-\xFF\n]/g, "?");
 }
 
-export function formatReportSubmittedDate(value: string) {
+export function formatReportSubmittedDate(value: string, timeFormat: SystemTimeFormat = "12-hour") {
   if (!/^\d{4}-\d{2}-\d{2}T/.test(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "Asia/Manila",
-    timeZoneName: "short",
-  }).format(date);
+  return `${formatPhilippineDateTime(date, timeFormat)} Philippine Time`;
 }
 
 function safeFileName(value: string) {

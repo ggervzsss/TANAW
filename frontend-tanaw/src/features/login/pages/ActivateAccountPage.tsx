@@ -6,6 +6,7 @@ import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
@@ -342,5 +343,5 @@ function formatRole(role: AccountActivationDetails["role"]) {
 
 function formatExpiration(expiresAt: string) {
   const value = new Date(expiresAt);
-  return Number.isNaN(value.getTime()) ? "at the time stated in your email" : value.toLocaleString();
+  return Number.isNaN(value.getTime()) ? "at the time stated in your email" : formatPhilippineDateTime(value, "12-hour");
 }

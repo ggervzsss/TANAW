@@ -52,7 +52,7 @@ export function CameraMonitoringPanel({
   const processButtonClassName = isProcessRunning
     ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
     : "bg-[#065f46] text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
-  const processButtonTooltip = isProcessRunning ? "Stops the active live camera processing session." : "Starts live camera processing for this node.";
+  const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
 
   return (
     <div className="space-y-3">

@@ -31,7 +31,7 @@ describe("web report PDF generation", () => {
     expect(pdf).toContain("Foreign Country Residence");
     expect(pdf).toContain("Grand Total Number of Visitors");
     expect(pdf).toContain("Live Count Summary");
-    expect(pdf).toContain("May 31, 2026, 6:15 PM GMT+8");
+    expect(pdf).toContain("May 31, 2026, 6:15 PM Philippine Time");
     expect(pdf).toContain("Demographic splits and unique visitors are estimates");
     expect(pdf).not.toContain(intakeReport.id);
     expect(pdf).toContain("1 1 1 rg 0 0 842 595 re f");

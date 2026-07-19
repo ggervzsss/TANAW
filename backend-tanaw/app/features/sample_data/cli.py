@@ -503,7 +503,7 @@ async def create_operational_history(
                 and enterprise_index == 2
                 and month_start == current_month
                 else "running",
-                error="Desktop app synchronization delayed. Retrying automatically."
+                error="Desktop app updates delayed. Retrying automatically."
                 if scenario == "camera-health"
                 and enterprise_index == 2
                 and month_start == current_month

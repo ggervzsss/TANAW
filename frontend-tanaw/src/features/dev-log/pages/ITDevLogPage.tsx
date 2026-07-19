@@ -5,7 +5,9 @@ import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { listDevDeliveries, type DevDelivery } from "@/shared/services/accountManagement";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { splitDevLogMessage } from "../utils/devLogMessage";
 
 const EMPTY_DELIVERIES: DevDelivery[] = [];
@@ -50,6 +52,7 @@ function DevLogMessage({ body }: { body: string }) {
 
 export function ITDevLogPage() {
   const [query, setQuery] = useState("");
+  const { timeFormat } = useSystemDisplayPreferences();
   const deliveriesQuery = useQuery({
     queryKey: ["dev-deliveries"],
     queryFn: listDevDeliveries,
@@ -94,7 +97,7 @@ export function ITDevLogPage() {
                   </span>
                   <div>
                     <p className="text-sm font-black text-slate-950">{delivery.recipient}</p>
-                    <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{new Date(delivery.createdAt).toLocaleString()}</p>
+                    <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatPhilippineDateTime(delivery.createdAt, timeFormat)}</p>
                   </div>
                   <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600 uppercase">{delivery.status}</span>
                 </aside>

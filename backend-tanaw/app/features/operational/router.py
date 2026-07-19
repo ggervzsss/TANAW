@@ -150,10 +150,10 @@ async def ingest_desktop_telemetry(
             requester=account.display_name,
             enterprise=enterprise_name(account),
             summary=(
-                f"{payload.metrics.unsyncedEvents} telemetry event"
-                f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} remain unsynced."
+                f"{payload.metrics.unsyncedEvents} desktop record"
+                f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} waiting to upload."
             ),
-            required_action="Review cloud synchronization and retry failed telemetry sync.",
+            required_action="Review the desktop app connection and retry the upload.",
             resolution_mode="Remote Review",
             owner="IT",
             source_id=f"sync-failed:{account.id}",
@@ -195,9 +195,9 @@ async def ingest_desktop_telemetry(
             severity="Warning",
             actor=enterprise_name(account),
             actor_role="Enterprise Account",
-            action="Desktop App Sync Error",
+            action="Desktop App Update Error",
             target=enterprise_name(account),
-            summary=f"{enterprise_name(account)} reported desktop app sync status {payload.session.status}: {payload.session.error}",
+            summary=f"{enterprise_name(account)} reported desktop app update status {payload.session.status}: {payload.session.error}",
             source_id=snapshot.id,
             metadata={
                 "enterpriseId": snapshot.enterpriseId,

@@ -583,11 +583,11 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
           confirmLabel="Delete Camera"
           onCancel={() => setCameraPendingDelete(null)}
           onConfirm={confirmDeleteCamera}
-          title="Delete Camera Node"
+          title="Delete Camera"
           variant="danger"
         >
           <p>
-            Are you sure you want to delete <span className="font-bold text-[#111827]">{cameraPendingDelete.name}</span>? This will stop all edge counting on this node.
+            Are you sure you want to delete <span className="font-bold text-[#111827]">{cameraPendingDelete.name}</span>? This will stop visitor counting from this camera.
           </p>
         </ConfirmationDialog>
       )}
@@ -604,7 +604,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
           }}
           className="flex shrink-0 items-center gap-2 rounded-sm bg-[#065f46] px-3 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#044a36]"
         >
-          <Plus size={16} /> Add Camera Node
+          <Plus size={16} /> Add Camera
         </button>
       </div>
 

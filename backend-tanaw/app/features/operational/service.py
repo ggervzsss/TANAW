@@ -669,7 +669,7 @@ async def evaluate_telemetry_alerts(
     if should_resolve and existing is not None:
         existing.status = "Resolved"
         existing.summary = (
-            f"{existing.summary} The latest telemetry indicates that the threshold condition "
+            f"{existing.summary} The latest live data indicates that the threshold condition "
             "has cleared."
         )
         await db.commit()

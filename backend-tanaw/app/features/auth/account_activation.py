@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.date_time import format_philippine_datetime
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
 from app.features.accounts.models import Account, AccountStatus
@@ -109,7 +110,7 @@ async def issue_account_activation(
     db.add(token)
     await db.flush()
 
-    expires_label = token.expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    expires_label = format_philippine_datetime(token.expires_at)
     await enqueue_email(
         db,
         account_id=account.id,

@@ -100,6 +100,7 @@ export type EnterpriseNotification = {
   type: string;
   message: string;
   time: string;
+  sortTime?: number;
   read: boolean;
   target: EnterpriseView;
 };

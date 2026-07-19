@@ -11,6 +11,8 @@ import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import type { LogSeverity, SystemLog, SystemLogActorRole, SystemLogCategory } from "@/shared/types";
 import { activityTimeRanges, isWithinActivityTimeRange } from "@/shared/utils";
 import type { ActivityTimeRange } from "@/shared/utils";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type CategoryFilter = "All Categories" | SystemLogCategory;
 type ActorFilter = "All Actors" | SystemLogActorRole;
@@ -21,6 +23,7 @@ const actorFilters: ActorFilter[] = ["All Actors", "Admin", "IT Personnel", "LGU
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info", "Success"];
 
 export function AdminSystemLogsPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading } = useActivityLogs();
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All Categories");
@@ -50,13 +53,13 @@ export function AdminSystemLogsPage() {
 
   return (
     <PageMotion className="tanaw-data-page pb-12">
-      <PageHeader title="System Logs" description="Centralized operational feed for IT activity, staff submissions, admin actions, and system-wide events." />
+      <PageHeader title="System Logs" description="Recorded IT activity, staff submissions, admin actions, and system events." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
-        <MetricCard label="Total Logs" value={logs.length} foot="Centralized audit records" color="#2563eb" icon={Activity} />
+        <MetricCard label="Total Logs" value={logs.length} foot="Recorded system activity" color="#2563eb" icon={Activity} />
         <MetricCard label="Admin Operations" value={adminCount} foot="Recorded Admin actions" color="#065f46" icon={ShieldCheck} />
         <MetricCard label="Staff Activity" value={staffCount} foot="Submissions and report actions" color="#10b981" icon={Users} />
-        <MetricCard label="Risk Signals" value={riskCount} foot="Warning and critical logs" color="#dc2626" footClassName="text-red-600" icon={AlertTriangle} />
+        <MetricCard label="Warnings" value={riskCount} foot="Warning and critical logs" color="#dc2626" footClassName="text-red-600" icon={AlertTriangle} />
       </motion.section>
 
       <Panel className="tanaw-data-panel mt-6 overflow-hidden">
@@ -66,7 +69,7 @@ export function AdminSystemLogsPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search actor, action, target, source, or summary"
+              placeholder="Search name, action, target, or summary"
               className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
@@ -88,7 +91,7 @@ export function AdminSystemLogsPage() {
             </colgroup>
             <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
-                {["Timestamp", "Category", "Severity", "Actor", "Action / Target", "Summary"].map((heading) => (
+                {["Date and Time", "Category", "Severity", "Actor", "Action / Target", "Summary"].map((heading) => (
                   <th key={heading} className="px-4 py-4 whitespace-nowrap">
                     {heading}
                   </th>
@@ -98,7 +101,7 @@ export function AdminSystemLogsPage() {
             <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
               {filteredLogs.map((log) => (
                 <tr key={log.id} onClick={() => setSelectedLog(log)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
-                  <td className="px-4 py-4 font-mono text-xs text-gray-500">{log.timestamp}</td>
+                  <td className="px-4 py-4 font-mono text-xs text-gray-500">{formatPhilippineDateTime(log.timestamp, timeFormat)}</td>
                   <td className="px-4 py-4">
                     <CategoryBadge category={log.category} />
                   </td>
@@ -203,13 +206,14 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
 }
 
 export function AdminLogDetailFields({ log }: { log: SystemLog }) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const expandableValue = (value: string, label: string) => (
     <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" className="leading-relaxed font-semibold" />
   );
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <DetailField label="Timestamp" value={formatLogTimestamp(log.timestamp)} />
+      <DetailField label="Date and Time" value={formatPhilippineDateTime(log.timestamp, timeFormat)} />
       <DetailField label="Source ID" value={log.sourceId ?? "N/A"} />
       <DetailField label="Category" value={<CategoryBadge category={log.category} />} />
       <DetailField label="Severity" value={<SeverityBadge severity={log.severity} />} />
@@ -224,11 +228,6 @@ export function AdminLogDetailFields({ log }: { log: SystemLog }) {
 function getTimestampValue(timestamp: string) {
   const value = Date.parse(timestamp);
   return Number.isNaN(value) ? 0 : value;
-}
-
-function formatLogTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
 
 function getSupportTicketIdFromLog(log: SystemLog) {

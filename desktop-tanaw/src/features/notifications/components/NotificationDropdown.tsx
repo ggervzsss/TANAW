@@ -83,7 +83,7 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
                   <Inbox size={20} />
                 </div>
                 <p className="mt-4 text-sm font-black text-[#111827]">No notifications</p>
-                <p className="mt-1 max-w-68 text-xs leading-relaxed text-gray-500">Report deadline and submission workflow alerts will appear here when the ledger has matching data.</p>
+                <p className="mt-1 max-w-68 text-xs leading-relaxed text-gray-500">Report deadline and submission alerts will appear here when matching report data is available.</p>
               </div>
             )}
           </div>

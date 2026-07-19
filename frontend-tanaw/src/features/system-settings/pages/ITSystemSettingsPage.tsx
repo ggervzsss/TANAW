@@ -10,18 +10,21 @@ import type { SettingField, SettingValue } from "../types";
 import { getSystemSettings, updateSystemSettings } from "@/shared/services/accountManagement";
 import { purgeExpiredActivityLogs } from "@/shared/services/activityLogs";
 import { activityLogsQueryKey } from "@/shared/hooks/useActivityLogs";
+import { systemSettingsQueryKey, useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, PHILIPPINE_TIME_LABEL } from "@/shared/utils/dateTime";
 
 const visibleSettingKeys = new Set(settingSections.flatMap((section) => section.fields.map((field) => settingKey(section.id, field))));
 
 export function ITSystemSettingsPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
-  const settingsQuery = useQuery({ queryKey: ["system-settings"], queryFn: getSystemSettings });
+  const settingsQuery = useQuery({ queryKey: systemSettingsQueryKey, queryFn: getSystemSettings });
   const saveMutation = useMutation({
     mutationFn: updateSystemSettings,
     onSuccess: () => {
       toast.success("System settings saved.");
-      return queryClient.invalidateQueries({ queryKey: ["system-settings"] });
+      return queryClient.invalidateQueries({ queryKey: systemSettingsQueryKey });
     },
   });
   const purgeMutation = useMutation({
@@ -36,11 +39,11 @@ export function ITSystemSettingsPage() {
   });
   const systemSettings = settingsQuery.data;
   const storedValues = useMemo(() => filterVisibleSettings(systemSettings?.values ?? {}), [systemSettings?.values]);
-  const metadataLabel = formatSettingsMetadata(systemSettings?.updatedBy ?? null, systemSettings?.updatedAt ?? null);
+  const metadataLabel = formatSettingsMetadata(systemSettings?.updatedBy ?? null, systemSettings?.updatedAt ?? null, timeFormat);
 
   return (
     <PageMotion>
-      <PageHeader title="System Settings" description="Configure account security, logs, and technical notifications." />
+      <PageHeader title="System Settings" description="Configure account security, activity records, date and time, and service alerts." />
 
       <div>
         <SettingsDetailPanel
@@ -98,9 +101,9 @@ function filterVisibleSettings(values: Record<string, SettingValue>) {
   return Object.fromEntries(Object.entries(values).filter(([key]) => visibleSettingKeys.has(key)));
 }
 
-function formatSettingsMetadata(updatedBy: string | null, updatedAt: string | null) {
+function formatSettingsMetadata(updatedBy: string | null, updatedAt: string | null, timeFormat: "12-hour" | "24-hour") {
   if (!updatedBy && !updatedAt) return "Defaults active";
-  const timestamp = updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updatedAt)) : null;
+  const timestamp = updatedAt ? `${formatPhilippineDateTime(updatedAt, timeFormat)} ${PHILIPPINE_TIME_LABEL}` : null;
   if (updatedBy && timestamp) return `Last modified ${timestamp} by ${updatedBy}`;
   if (timestamp) return `Last modified ${timestamp}`;
   return `Last modified by ${updatedBy}`;

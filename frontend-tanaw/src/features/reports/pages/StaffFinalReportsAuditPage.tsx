@@ -5,13 +5,16 @@ import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { useOperationalFinalReports } from "@/shared/hooks/useOperationalSync";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { FinalReport } from "@/shared/types";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { FinalReportViewer, ReportStatusBadge } from "../components";
 
 const MONTH_ORDER = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const EMPTY_FINAL_REPORTS: FinalReport[] = [];
 
 export function StaffFinalReportsAuditPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const finalReportsQuery = useOperationalFinalReports();
   const finalReports = finalReportsQuery.data ?? EMPTY_FINAL_REPORTS;
   const [query, setQuery] = useState("");
@@ -92,14 +95,14 @@ export function StaffFinalReportsAuditPage() {
                   <td className="px-6 py-4">
                     <ExpandableTableText
                       primary={report.title}
-                      secondary={`Coverage: ${report.period} | Aggregated from ${report.enterpriseCount} nodes`}
+                      secondary={`Coverage: ${report.period} | Combined from ${report.enterpriseCount} enterprise reports`}
                       ariaLabel="report title and period"
                       className="font-medium"
                       secondaryClassName="text-[10px] font-normal text-gray-500"
                       threshold={58}
                     />
                   </td>
-                  <td className="px-6 py-4 text-xs">{report.generatedOn}</td>
+                  <td className="px-6 py-4 text-xs">{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</td>
                   <td className="px-6 py-4 text-xs">
                     <ExpandableTableText primary={report.preparedBy} ariaLabel="report preparer" threshold={28} />
                   </td>

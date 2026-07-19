@@ -179,7 +179,7 @@ export function StaffAnalyticsPage() {
             {reportEnterprisesQuery.isLoading ? (
               <EmptyState icon={Activity} title="Loading enterprises" description="Fetching registered enterprise accounts for analytics." minHeightClassName="min-h-72" />
             ) : reportsQuery.isLoading ? (
-              <EmptyState icon={Activity} title="Loading report intake" description="Fetching synchronized enterprise report submissions." minHeightClassName="min-h-72" />
+              <EmptyState icon={Activity} title="Loading report intake" description="Fetching the latest enterprise report submissions." minHeightClassName="min-h-72" />
             ) : chartData.length === 0 ? (
               <EmptyState
                 icon={Activity}
@@ -237,7 +237,7 @@ export function StaffAnalyticsPage() {
             ))}
             {reportEnterprisesQuery.isLoading && <EmptyState icon={ClipboardCheck} title="Loading registry" description="Fetching registered enterprise accounts." minHeightClassName="min-h-45" />}
             {!reportEnterprisesQuery.isLoading && reportsQuery.isLoading && (
-              <EmptyState icon={ClipboardCheck} title="Loading submissions" description="Fetching synchronized report intake records." minHeightClassName="min-h-45" />
+              <EmptyState icon={ClipboardCheck} title="Loading submissions" description="Fetching the latest report intake records." minHeightClassName="min-h-45" />
             )}
             {!reportEnterprisesQuery.isLoading && complianceRows.length === 0 && (
               <EmptyState icon={ClipboardCheck} title="No registered enterprises" description="Compliance status will appear once enterprise accounts are registered." minHeightClassName="min-h-45" />

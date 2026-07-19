@@ -47,7 +47,7 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
             </InfoTooltip>
           </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-            {report ? `${report.id} - ${report.period ?? report.date}` : "Male and female distribution by residence category from the selected submission ledger."}
+            {report ? `${report.id} - ${report.period ?? report.date}` : "Male and female distribution by residence category from the selected submitted report."}
           </p>
         </div>
         <PieChartIcon size={18} className="text-[#065f46] dark:text-emerald-300" />

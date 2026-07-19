@@ -112,8 +112,8 @@ export const rolePortalLabel: Record<UserRole, string> = {
 };
 
 export const roleAccessLabel: Record<UserRole, string> = {
-  admin: "Supervisory Access",
-  staff: "Processing Access",
-  it: "Technical Access",
-  enterprise: "Enterprise Access",
+  admin: "Administrator Account",
+  staff: "LGU Staff Account",
+  it: "IT Personnel Account",
+  enterprise: "Enterprise Account",
 };

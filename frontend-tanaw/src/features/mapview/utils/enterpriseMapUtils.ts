@@ -379,7 +379,7 @@ export function toMapEnterprise(account: AccountSummary): MapEnterprise | null {
     estimatedUniqueCount: 0,
     status: getEnterpriseMapStatus(account),
     contact: account.phone ?? account.email,
-    lastSync: account.locationUpdatedAt ? new Date(account.locationUpdatedAt).toLocaleString() : undefined,
+    lastSync: account.locationUpdatedAt ?? undefined,
     gatewayStatus: getGatewayStatus(account.gatewayStatus),
   };
 }
