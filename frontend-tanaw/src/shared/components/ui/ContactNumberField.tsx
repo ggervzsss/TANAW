@@ -46,7 +46,7 @@ export function ContactNumberField({ name, label, value, onChange, error, requir
           maxLength={10}
           pattern="9[0-9]{9}"
           aria-invalid={Boolean(displayedError)}
-          aria-describedby={descriptionId}
+          aria-describedby={displayedError ? descriptionId : undefined}
           onChange={(event) => handleValueChange(event.target.value)}
           onPaste={(event) => {
             event.preventDefault();
@@ -57,9 +57,11 @@ export function ContactNumberField({ name, label, value, onChange, error, requir
         />
       </div>
       <input type="hidden" name={name} value={normalizedValue} />
-      <p id={descriptionId} role={displayedError ? "alert" : undefined} className={`mt-1.5 text-xs font-semibold ${displayedError ? "text-red-600" : "text-slate-500"}`}>
-        {displayedError || "Use 10 digits beginning with 9."}
-      </p>
+      {displayedError && (
+        <p id={descriptionId} role="alert" className="mt-1.5 text-xs font-semibold text-red-600">
+          {displayedError}
+        </p>
+      )}
     </label>
   );
 }

@@ -553,9 +553,11 @@ function ProfileEditModal({ currentValue, error, field, isSaving, nameErrors, na
                     className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
                   />
                 )}
-                <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
-                  {error || (isPhone ? "Use 10 digits beginning with 9." : field === "email" ? "Use an @gmail.com or @email.com address." : "Use a whole number from 1 to 100,000.")}
-                </p>
+                {(error || !isPhone) && (
+                  <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
+                    {error || (field === "email" ? "Enter a valid email address." : "Use a whole number from 1 to 100,000.")}
+                  </p>
+                )}
               </label>
             )}
 

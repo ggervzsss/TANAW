@@ -281,17 +281,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
               maxLength={PERSON_NAME_MAX_LENGTH}
             />
           </div>
-          <FormField
-            name="email"
-            label="Contact Email"
-            type="email"
-            value={form.email}
-            onChange={(value) => updateField("email", value)}
-            error={errors.email}
-            required
-            autoComplete="email"
-            helperText="Use an @gmail.com or @email.com address."
-          />
+          <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
           <ContactNumberField name="contactNumber" label="Contact Number" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
           <FormField
             name="enterpriseId"

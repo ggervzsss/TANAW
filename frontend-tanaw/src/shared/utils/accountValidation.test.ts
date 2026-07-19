@@ -28,11 +28,12 @@ describe("account validation", () => {
     expect(validateMiddleInitial("ñ")).toBe("");
   });
 
-  it("only accepts the requested email domains", () => {
+  it("accepts valid email addresses from any provider", () => {
     expect(validateEmail("USER@GMAIL.COM")).toBe("");
-    expect(validateEmail("user@email.com")).toBe("");
-    expect(validateEmail("user@example.com")).toContain("@gmail.com or @email.com");
-    expect(validateEmail("user@gmail.com.invalid")).toContain("@gmail.com or @email.com");
+    expect(validateEmail("user@outlook.com")).toBe("");
+    expect(validateEmail("tourism.officer@municipality.gov.ph")).toBe("");
+    expect(validateEmail("invalid-address")).toBe("Enter a valid email address.");
+    expect(validateEmail("user@localhost")).toBe("Enter a valid email address.");
   });
 
   it("normalizes valid Philippine mobile formats and rejects non-9 local numbers", () => {

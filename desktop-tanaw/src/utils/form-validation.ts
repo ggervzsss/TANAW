@@ -1,6 +1,6 @@
 export const PHILIPPINE_MOBILE_ERROR = "Enter 10 digits starting with 9 after +63.";
 export const NAME_ERROR = "Use letters, spaces, hyphen, or apostrophe only.";
-export const EMAIL_ERROR = "Enter a valid email ending in @gmail.com or @email.com.";
+export const EMAIL_ERROR = "Enter a valid email address.";
 export const PERSON_NAME_MAX_LENGTH = 50;
 
 export type PersonNameParts = {
@@ -11,7 +11,6 @@ export type PersonNameParts = {
 
 const namePattern = /^[\p{L}][\p{L}\s'-]*$/u;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const allowedEmailDomainPattern = /@(gmail\.com|email\.com)$/i;
 const middleInitialPattern = /^\p{L}$/u;
 const surnameParticles = new Set(["da", "das", "de", "del", "dela", "della", "di", "dos", "san", "santa", "van", "von"]);
 
@@ -72,7 +71,7 @@ export function normalizeEmail(value: string) {
 export function validateEmail(value: string) {
   const normalized = normalizeEmail(value);
   if (!normalized) return "Email is required.";
-  if (!emailPattern.test(normalized) || !allowedEmailDomainPattern.test(normalized)) return EMAIL_ERROR;
+  if (!emailPattern.test(normalized)) return EMAIL_ERROR;
   return "";
 }
 
