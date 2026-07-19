@@ -4,7 +4,7 @@ services:
     env_file:
       - .env
     ports:
-      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - tanaw-postgres-data:/var/lib/postgresql/data
     healthcheck:

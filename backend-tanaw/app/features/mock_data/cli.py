@@ -25,8 +25,13 @@ from app.features.operational.models import (
     FinalReport,
     FinalReportSource,
     MockDataRun,
+    UserNotification,
 )
-from app.features.operational.service import generate_final_report_code
+from app.features.operational.service import (
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
+    generate_final_report_code,
+)
 
 TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
@@ -329,6 +334,9 @@ async def generate_mock_data(
     reports = await create_operational_history(
         db, run.id, range_start, range_end, scenario, rng, enterprises, target
     )
+    notifications = await create_staff_report_notifications(
+        db, accounts["lgu"], reports["staffNotificationReports"]
+    )
     final_reports = await create_final_reports(db, run.id, reports)
     logs = await create_activity_logs(db, run.id, reports, final_reports)
 
@@ -339,6 +347,7 @@ async def generate_mock_data(
         "telemetrySnapshots": len(reports["telemetry"]),
         "intakeReports": len(reports["reports"]),
         "finalReports": len(final_reports),
+        "staffNotifications": notifications,
         "activityLogs": logs,
         "targetPreparedCounts": reports["targetPreparedCounts"],
         "targetPreparedReportCounts": reports["targetPreparedReportCounts"],
@@ -593,6 +602,7 @@ async def create_operational_history(
             db.add(report)
             reports.append(report)
 
+    staff_notification_reports = prepare_staff_notification_reports(reports, current_month)
     await db.flush()
     if not target_prepared_counts:
         raise SystemExit(
@@ -600,10 +610,82 @@ async def create_operational_history(
         )
     return {
         "reports": reports,
+        "staffNotificationReports": staff_notification_reports,
         "telemetry": telemetry,
         "targetPreparedCounts": target_prepared_counts[0],
         "targetPreparedReportCounts": target_prepared_counts,
     }
+
+
+def prepare_staff_notification_reports(
+    reports: list[EnterpriseReportSubmission], current_month: datetime
+) -> list[tuple[EnterpriseReportSubmission, str]]:
+    candidates = [
+        report
+        for report in reports
+        if report.submitted_at.year == current_month.year
+        and report.submitted_at.month == current_month.month
+    ][:2]
+    prepared: list[tuple[EnterpriseReportSubmission, str]] = []
+
+    for index, report in enumerate(candidates):
+        is_resubmission = index == 1
+        notification_type = (
+            STAFF_REPORT_RESUBMITTED_NOTIFICATION
+            if is_resubmission
+            else STAFF_REPORT_SUBMITTED_NOTIFICATION
+        )
+        payload = json.loads(report.payload_json or "{}")
+        payload["status"] = "Resubmitted" if is_resubmission else "Submitted"
+        report.payload_json = json.dumps(payload, sort_keys=True)
+        report.review_status = "Pending Review"
+        report.notes = (
+            "Revised monthly visitor count resubmitted for LGU review."
+            if is_resubmission
+            else "Monthly visitor count submitted for LGU review."
+        )
+        report.remarks = None
+        prepared.append((report, notification_type))
+
+    return prepared
+
+
+async def create_staff_report_notifications(
+    db: AsyncSession,
+    lgu_accounts: list[Account],
+    report_notifications: list[tuple[EnterpriseReportSubmission, str]],
+) -> int:
+    staff_accounts = [account for account in lgu_accounts if account.role == AccountRole.STAFF]
+    count = 0
+    for staff_account in staff_accounts:
+        for report, notification_type in report_notifications:
+            action_label = (
+                "resubmitted"
+                if notification_type == STAFF_REPORT_RESUBMITTED_NOTIFICATION
+                else "submitted"
+            )
+            db.add(
+                UserNotification(
+                    recipient_account_id=staff_account.id,
+                    recipient_role=staff_account.role.value,
+                    recipient_enterprise_id=None,
+                    title=notification_type,
+                    message=(
+                        f"{report.enterprise_name} {action_label} "
+                        f"{report.report_id} for {report.period}."
+                    ),
+                    notification_type=notification_type,
+                    severity="Info",
+                    source_type="enterprise.report",
+                    source_id=report.id,
+                    created_by_account_id=report.enterprise_account_id,
+                    created_by_name=report.enterprise_name,
+                    created_at=report.submitted_at,
+                )
+            )
+            count += 1
+    await db.flush()
+    return count
 
 
 def build_demographic_breakdown(
@@ -746,6 +828,25 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
     final_report_ids = list(
         await db.scalars(select(FinalReport.id).where(FinalReport.mock_run_id.in_(run_ids)))
     )
+    intake_report_ids = list(
+        await db.scalars(
+            select(EnterpriseReportSubmission.id).where(
+                EnterpriseReportSubmission.mock_run_id.in_(run_ids)
+            )
+        )
+    )
+    account_ids = list(await db.scalars(select(Account.id).where(Account.mock_run_id.in_(run_ids))))
+    notification_filters = []
+    if intake_report_ids:
+        notification_filters.append(UserNotification.source_id.in_(intake_report_ids))
+    if account_ids:
+        notification_filters.append(UserNotification.recipient_account_id.in_(account_ids))
+    notification_count = 0
+    if notification_filters:
+        notifications_result = await db.execute(
+            delete(UserNotification).where(or_(*notification_filters))
+        )
+        notification_count = affected_row_count(notifications_result)
     if final_report_ids:
         await db.execute(
             delete(FinalReportSource).where(FinalReportSource.final_report_id.in_(final_report_ids))
@@ -770,6 +871,7 @@ async def remove_active_mock_data(db: AsyncSession) -> dict:
     counts = {
         "finalReportSources": len(final_report_ids),
         "finalReports": affected_row_count(final_reports_result),
+        "staffNotifications": notification_count,
         "intakeReports": affected_row_count(intake_reports_result),
         "telemetrySnapshots": affected_row_count(telemetry_snapshots_result),
         "activityLogs": affected_row_count(activity_logs_result),

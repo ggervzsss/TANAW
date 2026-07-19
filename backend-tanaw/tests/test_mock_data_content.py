@@ -1,6 +1,11 @@
+import json
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.core.password_policy import validate_password_policy
+from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.mock_data.cli import (
     DEMOGRAPHIC_FIELDS,
     ENTERPRISES,
@@ -8,8 +13,15 @@ from app.features.mock_data.cli import (
     REPORTING_STAFF_NAME,
     TEST_ACCOUNT_PASSWORD,
     build_demographic_breakdown,
+    create_staff_report_notifications,
+    prepare_staff_notification_reports,
     seeded_review_status,
     should_skip_target_report,
+)
+from app.features.operational.models import EnterpriseReportSubmission, UserNotification
+from app.features.operational.service import (
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
 )
 
 
@@ -134,3 +146,86 @@ def test_seeded_demographics_match_unique_visitor_count() -> None:
     assert set(demographics) == set(DEMOGRAPHIC_FIELDS)
     assert all(value.isdigit() for value in demographics.values())
     assert sum(int(value) for value in demographics.values()) == unique_count
+
+
+def test_staff_notification_reports_include_current_submission_and_resubmission() -> None:
+    current_month = datetime(2026, 7, 1, tzinfo=UTC)
+    older_report = _report("REP-260601", datetime(2026, 6, 18, tzinfo=UTC))
+    submitted_report = _report("REP-260701", datetime(2026, 7, 18, tzinfo=UTC))
+    resubmitted_report = _report("REP-260702", datetime(2026, 7, 19, tzinfo=UTC))
+    extra_current_report = _report("REP-260703", datetime(2026, 7, 20, tzinfo=UTC))
+
+    prepared = prepare_staff_notification_reports(
+        [older_report, submitted_report, resubmitted_report, extra_current_report],
+        current_month,
+    )
+
+    assert prepared == [
+        (submitted_report, STAFF_REPORT_SUBMITTED_NOTIFICATION),
+        (resubmitted_report, STAFF_REPORT_RESUBMITTED_NOTIFICATION),
+    ]
+    assert submitted_report.review_status == "Pending Review"
+    assert resubmitted_report.review_status == "Pending Review"
+    assert submitted_report.payload_json is not None
+    assert resubmitted_report.payload_json is not None
+    assert json.loads(submitted_report.payload_json)["status"] == "Submitted"
+    assert json.loads(resubmitted_report.payload_json)["status"] == "Resubmitted"
+    assert older_report.review_status == "Ready to Consolidate"
+    assert extra_current_report.review_status == "Ready to Consolidate"
+
+
+@pytest.mark.asyncio
+async def test_mock_staff_notifications_match_production_notification_shape() -> None:
+    staff = Account(
+        id="staff-account",
+        email="staff@example.com",
+        password_hash="hash",
+        role=AccountRole.STAFF,
+        display_name="Staff User",
+        title="LGU Staff",
+        status=AccountStatus.ACTIVE,
+    )
+    report = _report("REP-260701", datetime(2026, 7, 18, tzinfo=UTC))
+    db = MagicMock()
+    db.flush = AsyncMock()
+
+    count = await create_staff_report_notifications(
+        db,
+        [staff],
+        [(report, STAFF_REPORT_SUBMITTED_NOTIFICATION)],
+    )
+
+    assert count == 1
+    notification = db.add.call_args.args[0]
+    assert isinstance(notification, UserNotification)
+    assert notification.recipient_account_id == staff.id
+    assert notification.notification_type == STAFF_REPORT_SUBMITTED_NOTIFICATION
+    assert notification.source_type == "enterprise.report"
+    assert notification.source_id == report.id
+    db.flush.assert_awaited_once()
+
+
+def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmission:
+    return EnterpriseReportSubmission(
+        id=f"{report_id}-id",
+        report_id=report_id,
+        enterprise_account_id="enterprise-account",
+        enterprise_id="ENT-001",
+        enterprise_name="Test Enterprise",
+        category="Tourism",
+        barangay="Nueva",
+        period=f"{submitted_at:%b} 1 - {submitted_at:%b} 31, {submitted_at.year}",
+        month=submitted_at.strftime("%B"),
+        submitted_at=submitted_at,
+        entries=100,
+        exits=90,
+        peak_occupancy=20,
+        unique_count=80,
+        status="Submitted",
+        review_status="Ready to Consolidate",
+        notes="Monthly visitor count submitted for LGU review.",
+        sync_status="synced",
+        payload_json=json.dumps({"status": "Submitted"}),
+        source_kind="mock",
+        mock_run_id="run-id",
+    )

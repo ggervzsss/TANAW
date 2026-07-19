@@ -320,9 +320,9 @@ Local URLs, ports, token lifetimes, polling, cooldowns, and retention policies
 use the defaults maintained in the codebase and do not need entries here.
 
 To inspect the local database with DBeaver, create a PostgreSQL connection using
-host `localhost`, port `5433`, and the database, username, and password from
-`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. Port `5433` avoids the
-common local PostgreSQL port `5432`. The database is bound only to localhost.
+host `localhost`, port `5432`, and the database, username, and password from
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The database is bound
+only to localhost.
 Keep `DATABASE_URL` on `db:5432` because the backend connects from inside the
 Compose network.
 
