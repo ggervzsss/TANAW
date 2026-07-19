@@ -140,7 +140,7 @@ export function PortalNotificationDropdown({
                   </div>
                   <p className="mt-4 text-sm font-black text-slate-900">{isLoading ? "Loading notifications" : "No notifications"}</p>
                   <p className="mt-1 max-w-68 text-xs leading-relaxed text-slate-500">
-                    {isLoading ? "Checking TANAW activity sources." : "Role-specific alerts, logs, support requests, and report workflow items will appear here."}
+                    {isLoading ? "Checking TANAW activity sources." : "New role-relevant activity will appear here."}
                   </p>
                 </div>
               )}

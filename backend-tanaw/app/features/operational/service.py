@@ -59,6 +59,12 @@ NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
 NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
 NOTIFY_SYNC_DELAY_KEY = "notifications.syncDelayAlerts"
 NOTIFY_FAILED_LOGIN_LOCKOUT_KEY = "notifications.failedLoginLockoutAlerts"
+STAFF_REPORT_SUBMITTED_NOTIFICATION = "Enterprise Report Submitted"
+STAFF_REPORT_RESUBMITTED_NOTIFICATION = "Enterprise Report Resubmitted"
+STAFF_REPORT_NOTIFICATION_TYPES = (
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+)
 NOTIFICATION_SETTING_LEGACY_KEYS = {
     NOTIFY_CAMERA_SESSION_ERROR_KEY: ("notifications.Notify Camera Offline",),
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY: ("notifications.Notify Gateway Offline",),
@@ -169,12 +175,13 @@ def resolve_system_setting_enabled(
 async def list_user_notifications(
     db: AsyncSession, account: Account
 ) -> list[UserNotificationSummary]:
-    result = await db.scalars(
-        select(UserNotification)
-        .where(UserNotification.recipient_account_id == account.id)
-        .order_by(UserNotification.created_at.desc())
-        .limit(100)
-    )
+    statement = select(UserNotification).where(UserNotification.recipient_account_id == account.id)
+    if account.role == AccountRole.STAFF:
+        statement = statement.where(
+            UserNotification.source_type == "enterprise.report",
+            UserNotification.notification_type.in_(STAFF_REPORT_NOTIFICATION_TYPES),
+        )
+    result = await db.scalars(statement.order_by(UserNotification.created_at.desc()).limit(100))
     return [to_user_notification_summary(notification) for notification in result]
 
 

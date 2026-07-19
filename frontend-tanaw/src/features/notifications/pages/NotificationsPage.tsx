@@ -18,7 +18,7 @@ const roleCopy: Record<NotificationsPageProps["role"], { description: string }> 
     description: "Review system activity, enterprise support requests, priority alerts, and technical delivery updates.",
   },
   staff: {
-    description: "Review report submissions, final report audit updates, and staff-facing activity notifications.",
+    description: "Review enterprise report submissions and resubmissions that require staff action.",
   },
 };
 
@@ -92,7 +92,7 @@ export function NotificationsPage({ role }: NotificationsPageProps) {
             </div>
             <p className="mt-4 text-sm font-black text-slate-900 dark:text-slate-100">{isLoading ? "Loading notifications" : "No notifications"}</p>
             <p className="mt-1 max-w-88 text-xs leading-relaxed text-slate-500 dark:text-slate-300">
-              {isLoading ? "Checking TANAW activity sources." : "Role-specific alerts, logs, support requests, and report workflow items will appear here."}
+              {isLoading ? "Checking TANAW activity sources." : "New role-relevant activity will appear here."}
             </p>
           </div>
         )}

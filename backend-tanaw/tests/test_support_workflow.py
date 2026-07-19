@@ -7,8 +7,9 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.auth.router import create_support_request
 from app.features.auth.schemas import SupportRequest
 from app.features.operational.models import OperationalAlert, SupportTicket
+from app.features.operational.router import support_ticket_notification_roles
 from app.features.operational.schemas import SupportTicketDetail, SupportTicketMessageCreate
-from app.features.operational.service import create_support_ticket_message
+from app.features.operational.service import create_support_ticket_message, list_user_notifications
 
 
 def _account(*, role: AccountRole) -> Account:
@@ -23,6 +24,24 @@ def _account(*, role: AccountRole) -> Account:
         enterprise_id="ENT-001" if role == AccountRole.ENTERPRISE else None,
         enterprise_name="Test Enterprise" if role == AccountRole.ENTERPRISE else None,
     )
+
+
+def test_support_tickets_notify_admin_and_it_only() -> None:
+    assert support_ticket_notification_roles() == [AccountRole.ADMIN, AccountRole.IT]
+
+
+@pytest.mark.asyncio
+async def test_staff_notification_query_keeps_only_report_submissions() -> None:
+    db = MagicMock()
+    db.scalars = AsyncMock(return_value=[])
+
+    assert await list_user_notifications(db, _account(role=AccountRole.STAFF)) == []
+
+    statement = db.scalars.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "user_notifications.source_type = 'enterprise.report'" in sql
+    assert "Enterprise Report Submitted" in sql
+    assert "Enterprise Report Resubmitted" in sql
 
 
 @pytest.mark.asyncio

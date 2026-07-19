@@ -65,6 +65,8 @@ from app.features.operational.service import (
     NOTIFY_CAMERA_SESSION_ERROR_KEY,
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
     build_fleet_simulation_telemetry_payload,
@@ -677,7 +679,7 @@ async def create_enterprise_support_ticket(
     )
     notifications = await create_role_notifications(
         db,
-        recipient_roles=support_ticket_notification_roles(ticket.category),
+        recipient_roles=support_ticket_notification_roles(),
         title=f"{enterprise} submitted support ticket {ticket.code}.",
         message=f"{enterprise} submitted a {ticket.category.lower()} ticket: {ticket.subject}.{attachment_suffix}",
         notification_type="Enterprise Support Ticket",
@@ -766,7 +768,7 @@ async def create_ticket_message(
     else:
         notifications = await create_role_notifications(
             db,
-            recipient_roles=support_ticket_notification_roles(detail.category),
+            recipient_roles=support_ticket_notification_roles(),
             title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
             message=f"New enterprise response on {detail.code}: {detail.subject}.",
             notification_type="Enterprise Support Reply",
@@ -1184,7 +1186,9 @@ async def notify_staff_report_submission(
     is_resubmission = staff_report_notification_is_resubmission(report)
     action_label = "resubmitted" if is_resubmission else "submitted"
     notification_type = (
-        "Enterprise Report Resubmitted" if is_resubmission else "Enterprise Report Submitted"
+        STAFF_REPORT_RESUBMITTED_NOTIFICATION
+        if is_resubmission
+        else STAFF_REPORT_SUBMITTED_NOTIFICATION
     )
     notifications = await create_role_notifications(
         db,
@@ -1211,11 +1215,8 @@ def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bo
     return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"
 
 
-def support_ticket_notification_roles(category: str) -> list[AccountRole]:
-    roles = [AccountRole.ADMIN, AccountRole.IT]
-    if category == "Report Concern":
-        roles.append(AccountRole.STAFF)
-    return roles
+def support_ticket_notification_roles() -> list[AccountRole]:
+    return [AccountRole.ADMIN, AccountRole.IT]
 
 
 async def record_operational_log(
