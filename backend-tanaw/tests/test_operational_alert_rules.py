@@ -8,8 +8,6 @@ from app.features.operational.schemas import (
     FleetSimulationTarget,
 )
 from app.features.operational.service import (
-    NOTIFY_CAMERA_SESSION_ERROR_KEY,
-    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
     build_fleet_simulation_telemetry_payload,
@@ -174,29 +172,6 @@ def test_notification_setting_uses_stable_key_value() -> None:
             NOTIFY_SYNC_DELAY_KEY,
         )
         is False
-    )
-
-
-def test_notification_setting_reads_legacy_label_key() -> None:
-    assert (
-        resolve_system_setting_enabled(
-            {"notifications.Notify Failed Login Threshold": False},
-            NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
-        )
-        is False
-    )
-
-
-def test_notification_setting_prefers_stable_key_over_legacy_key() -> None:
-    assert (
-        resolve_system_setting_enabled(
-            {
-                NOTIFY_CAMERA_SESSION_ERROR_KEY: True,
-                "notifications.Notify Camera Offline": False,
-            },
-            NOTIFY_CAMERA_SESSION_ERROR_KEY,
-        )
-        is True
     )
 
 

@@ -29,6 +29,7 @@ from app.features.operational.models import (
     MockDataRun,
     OperationalAlert,
     SupportTicket,
+    SupportTicketMessage,
     UserNotification,
 )
 
@@ -56,6 +57,7 @@ __all__ = [
     "PasswordResetChallenge",
     "PasswordResetRateLimitBucket",
     "SupportTicket",
+    "SupportTicketMessage",
     "SystemConfiguration",
     "UserNotification",
 ]

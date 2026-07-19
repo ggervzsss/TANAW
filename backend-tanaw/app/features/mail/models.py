@@ -64,7 +64,12 @@ class EmailOutbox(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("accounts.id", name="fk_email_outbox_account_id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     purpose: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
     source_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -124,7 +129,11 @@ class EmailDeliveryAttempt(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     outbox_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("email_outbox.id", ondelete="CASCADE"),
+        ForeignKey(
+            "email_outbox.id",
+            name="fk_email_delivery_attempts_outbox_id",
+            ondelete="CASCADE",
+        ),
         index=True,
         nullable=False,
     )

@@ -748,10 +748,9 @@ installed from a packaged desktop build.
 
 For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
 pre-deploy or release command before replacing the backend process. TANAW refuses
-to start against an uninitialized or outdated database. Back up PostgreSQL before
-every production migration; revision `20260711_0016` is intentionally
-irreversible because rolling it back would require dropping operational and
-support data.
+to start against an uninitialized or outdated database. The canonical baseline
+starts a new migration history, so existing pre-release databases must be backed
+up and recreated before deployment.
 
 ## Environment configuration
 

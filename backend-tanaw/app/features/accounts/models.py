@@ -90,7 +90,17 @@ class Account(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     preferences_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    mock_run_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "mock_data_runs.id",
+            name="fk_accounts_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        index=True,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -126,7 +136,12 @@ class AccountEmailChangeRequest(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), index=True, nullable=False
+        String(36),
+        ForeignKey(
+            "accounts.id", name="fk_account_email_change_requests_account_id", ondelete="CASCADE"
+        ),
+        index=True,
+        nullable=False,
     )
     old_email: Mapped[str] = mapped_column(String(255), nullable=False)
     requested_email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
@@ -142,12 +157,28 @@ class AccountEmailChangeRequest(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), index=True, nullable=False
     )
-    requested_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    requested_by_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_account_email_change_requests_requested_by_account_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
     requested_by_name: Mapped[str] = mapped_column(String(120), nullable=False)
     requested_by_role: Mapped[str] = mapped_column(String(40), nullable=False)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    resolved_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    resolved_by_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_account_email_change_requests_resolved_by_account_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
     resolved_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     invalidated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), index=True, nullable=True
@@ -171,7 +202,12 @@ class DevDelivery(Base):
     __tablename__ = "dev_deliveries"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("accounts.id", name="fk_dev_deliveries_account_id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)

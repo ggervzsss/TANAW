@@ -273,9 +273,6 @@ async def get_desktop_mock_preparation(
         generated_counts = json.loads(run.generated_counts_json)
         raw_candidates = generated_counts.get("targetPreparedReportCounts")
         candidates = raw_candidates if isinstance(raw_candidates, list) else []
-        if not candidates:
-            fallback_candidate = generated_counts.get("targetPreparedCounts")
-            candidates = [fallback_candidate] if isinstance(fallback_candidate, dict) else []
         candidate_periods = [
             candidate["period"]
             for candidate in candidates

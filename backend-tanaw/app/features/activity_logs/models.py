@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -24,4 +24,14 @@ class ActivityLog(Base):
     source_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    mock_run_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "mock_data_runs.id",
+            name="fk_activity_logs_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        index=True,
+        nullable=True,
+    )

@@ -75,26 +75,11 @@ uv run uvicorn main:app
 
 Application startup validates the `alembic_version` revision and fails with an
 actionable error when the database is missing or outdated. It never creates,
-alters, or drops schema objects. Production deployments must back up PostgreSQL,
-run migrations as a separate pre-deploy/release step, and start the new API only
-after migration succeeds. Revision `20260711_0016` reconciles tables formerly
-created at runtime and is intentionally irreversible because dropping those
-tables would destroy operational and support records; recovery uses a verified
-pre-migration backup or a forward fix.
-
-The account-activation migration (`20260711_0014`) is also intentionally
-irreversible. TANAW discarded temporary passwords when activation links became
-authoritative, so a structural downgrade could not restore credentials for
-pending users. Activated and pending users remain usable on the migrated schema;
-if a release must be reverted, keep the database at the current revision and
-roll forward the application, or restore the application and database together
-from a verified pre-activation backup. Never deploy pre-activation backend code
-against the migrated database.
-
-The verified-email-change migration (`20260712_0019`) is intentionally
-irreversible as well. Its request history is security audit evidence and can
-contain an outstanding ownership proof. Roll forward or restore the application
-and database together from a verified backup instead of dropping that state.
+alters, or drops schema objects. Revision `20260720_0001` is the canonical TANAW
+baseline and replaces the pre-release migration history. Existing development
+databases from the old chain must be recreated before starting this version;
+the baseline intentionally contains no compatibility or reconciliation logic.
+Back up any data that must be retained before resetting PostgreSQL.
 
 ## Email Integration
 
@@ -125,7 +110,7 @@ Production configuration requires this value to be a public HTTPS URL.
 ## Startup Account Safety
 
 `BOOTSTRAP_IT_USERNAME` and `BOOTSTRAP_IT_PASSWORD` are used only when TANAW
-initializes a database that has no existing or legacy IT account. TANAW records
+initializes a database that has no existing IT account. TANAW records
 that initialization, persists the bootstrap account's protected identity in the
 database, and never synchronizes the account from environment values again.
 Removing the bootstrap variables after initialization does not remove that
@@ -135,11 +120,9 @@ reassign, deactivate, or delete the protected bootstrap identity.
 
 Optional Admin, Staff, and secondary IT development accounts are created only
 when `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`. Production rejects that switch,
-placeholder bootstrap credentials, and short or default JWT secrets. Existing
-deployments may continue using the legacy `DEFAULT_IT_*` and `TEMPORARY_*`
-environment names temporarily; the backend maps them to the new settings for
-backward compatibility, but new configuration should use `BOOTSTRAP_IT_*` and
-`DEVELOPMENT_*`.
+placeholder bootstrap credentials, and short or default JWT secrets. Only
+`BOOTSTRAP_IT_*` and `DEVELOPMENT_*` startup account environment names are
+supported.
 
 Normal IT account recovery should use the emailed password-reset OTP. If an IT
 account is inactive, another active IT account must review and reactivate it

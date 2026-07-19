@@ -349,7 +349,6 @@ async def generate_mock_data(
         "finalReports": len(final_reports),
         "staffNotifications": notifications,
         "activityLogs": logs,
-        "targetPreparedCounts": reports["targetPreparedCounts"],
         "targetPreparedReportCounts": reports["targetPreparedReportCounts"],
     }
     run.generated_counts_json = json.dumps(counts, sort_keys=True)
@@ -612,7 +611,6 @@ async def create_operational_history(
         "reports": reports,
         "staffNotificationReports": staff_notification_reports,
         "telemetry": telemetry,
-        "targetPreparedCounts": target_prepared_counts[0],
         "targetPreparedReportCounts": target_prepared_counts,
     }
 
@@ -964,7 +962,7 @@ async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
     counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
     raw_prepared_reports = counts.get("targetPreparedReportCounts")
     prepared_reports = raw_prepared_reports if isinstance(raw_prepared_reports, list) else []
-    raw_prepared = prepared_reports[0] if prepared_reports else counts.get("targetPreparedCounts")
+    raw_prepared = prepared_reports[0] if prepared_reports else None
     prepared: dict[str, Any] = raw_prepared if isinstance(raw_prepared, dict) else {}
     enterprise_id = target.get("enterpriseId")
     if not isinstance(enterprise_id, str) or not enterprise_id:

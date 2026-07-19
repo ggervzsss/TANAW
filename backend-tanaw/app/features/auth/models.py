@@ -21,7 +21,16 @@ class PasswordResetChallenge(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
-    account_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_password_reset_challenges_account_id",
+            ondelete="SET NULL",
+        ),
+        index=True,
+        nullable=True,
+    )
     code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), index=True, nullable=False
@@ -67,7 +76,12 @@ class AccountActivationToken(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     account_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("accounts.id", ondelete="CASCADE"), index=True, nullable=False
+        String(36),
+        ForeignKey(
+            "accounts.id", name="fk_account_activation_tokens_account_id", ondelete="CASCADE"
+        ),
+        index=True,
+        nullable=False,
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(

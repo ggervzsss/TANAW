@@ -21,8 +21,26 @@ class EnterpriseTelemetrySnapshot(Base):
     __tablename__ = "enterprise_telemetry_snapshots"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    enterprise_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    enterprise_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    enterprise_account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_enterprise_telemetry_snapshots_enterprise_account_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
+    enterprise_id: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey(
+            "accounts.enterprise_id",
+            name="fk_enterprise_telemetry_snapshots_enterprise_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
     enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
     camera_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     camera_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -48,7 +66,17 @@ class EnterpriseTelemetrySnapshot(Base):
     analytics_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    mock_run_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "mock_data_runs.id",
+            name="fk_enterprise_telemetry_snapshots_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        index=True,
+        nullable=True,
+    )
 
 
 class EnterpriseReportSubmission(Base):
@@ -59,8 +87,26 @@ class EnterpriseReportSubmission(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     report_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
-    enterprise_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    enterprise_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    enterprise_account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_enterprise_report_submissions_enterprise_account_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
+    enterprise_id: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey(
+            "accounts.enterprise_id",
+            name="fk_enterprise_report_submissions_enterprise_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
     enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     barangay: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -83,7 +129,17 @@ class EnterpriseReportSubmission(Base):
     sync_status: Mapped[str | None] = mapped_column(String(60), nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    mock_run_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "mock_data_runs.id",
+            name="fk_enterprise_report_submissions_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        index=True,
+        nullable=True,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -110,7 +166,17 @@ class FinalReport(Base):
     total_unique: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enterprise_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    mock_run_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "mock_data_runs.id",
+            name="fk_final_reports_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        index=True,
+        nullable=True,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -124,10 +190,35 @@ class FinalReportSource(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     final_report_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("final_reports.id", ondelete="CASCADE"), index=True, nullable=False
+        String(36),
+        ForeignKey(
+            "final_reports.id",
+            name="fk_final_report_sources_final_report_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=False,
     )
-    intake_report_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    enterprise_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    intake_report_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "enterprise_report_submissions.id",
+            name="fk_final_report_sources_intake_report_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
+    enterprise_id: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey(
+            "accounts.enterprise_id",
+            name="fk_final_report_sources_enterprise_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
     enterprise: Mapped[str] = mapped_column(String(120), nullable=False)
     code: Mapped[str] = mapped_column(String(80), nullable=False)
     unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -143,8 +234,26 @@ class MockDataRun(Base):
     seed: Mapped[str] = mapped_column(String(80), nullable=False)
     range_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     range_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    target_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    target_enterprise_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    target_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_mock_data_runs_target_account_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
+    )
+    target_enterprise_id: Mapped[str | None] = mapped_column(
+        String(120),
+        ForeignKey(
+            "accounts.enterprise_id",
+            name="fk_mock_data_runs_target_enterprise_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
+    )
     target_enterprise_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="active")
     generated_counts_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -181,10 +290,24 @@ class UserNotification(Base):
     __tablename__ = "user_notifications"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    recipient_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    recipient_account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id", name="fk_user_notifications_recipient_account_id", ondelete="CASCADE"
+        ),
+        index=True,
+        nullable=False,
+    )
     recipient_role: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
     recipient_enterprise_id: Mapped[str | None] = mapped_column(
-        String(120), index=True, nullable=True
+        String(120),
+        ForeignKey(
+            "accounts.enterprise_id",
+            name="fk_user_notifications_recipient_enterprise_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=True,
     )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
@@ -192,7 +315,15 @@ class UserNotification(Base):
     severity: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="Info")
     source_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     source_id: Mapped[str | None] = mapped_column(String(120), index=True, nullable=True)
-    created_by_account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by_account_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_user_notifications_created_by_account_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
     created_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -205,8 +336,26 @@ class SupportTicket(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     ticket_code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
-    enterprise_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    enterprise_id: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    enterprise_account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_support_tickets_enterprise_account_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
+    enterprise_id: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey(
+            "accounts.enterprise_id",
+            name="fk_support_tickets_enterprise_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
     enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
     category: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
     priority: Mapped[str] = mapped_column(String(20), index=True, nullable=False, default="Normal")
@@ -229,9 +378,25 @@ class SupportTicketMessage(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     ticket_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True, nullable=False
+        String(36),
+        ForeignKey(
+            "support_tickets.id",
+            name="fk_support_ticket_messages_ticket_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=False,
     )
-    author_account_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    author_account_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "accounts.id",
+            name="fk_support_ticket_messages_author_account_id",
+            ondelete="RESTRICT",
+        ),
+        index=True,
+        nullable=False,
+    )
     author_name: Mapped[str] = mapped_column(String(120), nullable=False)
     author_role: Mapped[str] = mapped_column(String(40), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)

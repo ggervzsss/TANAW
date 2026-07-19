@@ -4,7 +4,7 @@ from ipaddress import ip_address
 from typing import Self
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, EmailStr, Field, SecretStr, field_validator, model_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_OR_PRIVATE_HOSTNAMES = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
@@ -15,9 +15,7 @@ PLACEHOLDER_BOOTSTRAP_PASSWORDS = {"default", "change-me", "password"}
 
 class Settings(BaseSettings):
     app_name: str = "TANAW API"
-    environment: str = Field(
-        default="development", validation_alias=AliasChoices("TANAW_ENV", "ENVIRONMENT", "APP_ENV")
-    )
+    environment: str = Field(default="development", validation_alias="TANAW_ENV")
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/TanawDB"
     jwt_secret_key: str = DEVELOPMENT_JWT_SECRET
     jwt_algorithm: str = "HS256"
@@ -25,60 +23,39 @@ class Settings(BaseSettings):
     session_cookie_expire_minutes: int = Field(default=60 * 8, ge=60, le=60 * 24 * 30)
     bootstrap_it_username: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("BOOTSTRAP_IT_USERNAME", "DEFAULT_IT_USERNAME"),
+        validation_alias="BOOTSTRAP_IT_USERNAME",
     )
     bootstrap_it_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("BOOTSTRAP_IT_PASSWORD", "DEFAULT_IT_PASSWORD"),
+        validation_alias="BOOTSTRAP_IT_PASSWORD",
     )
     seed_development_accounts: bool = Field(
         default=False,
-        validation_alias=AliasChoices(
-            "TANAW_SEED_DEVELOPMENT_ACCOUNTS",
-            "SEED_DEVELOPMENT_ACCOUNTS",
-        ),
+        validation_alias="TANAW_SEED_DEVELOPMENT_ACCOUNTS",
     )
     development_admin_username: str | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "DEVELOPMENT_ADMIN_USERNAME",
-            "TEMPORARY_ADMIN_USERNAME",
-        ),
+        validation_alias="DEVELOPMENT_ADMIN_USERNAME",
     )
     development_admin_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "DEVELOPMENT_ADMIN_PASSWORD",
-            "TEMPORARY_ADMIN_PASSWORD",
-        ),
+        validation_alias="DEVELOPMENT_ADMIN_PASSWORD",
     )
     development_staff_username: str | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "DEVELOPMENT_STAFF_USERNAME",
-            "TEMPORARY_STAFF_USERNAME",
-        ),
+        validation_alias="DEVELOPMENT_STAFF_USERNAME",
     )
     development_staff_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "DEVELOPMENT_STAFF_PASSWORD",
-            "TEMPORARY_STAFF_PASSWORD",
-        ),
+        validation_alias="DEVELOPMENT_STAFF_PASSWORD",
     )
     development_it_username: str | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "DEVELOPMENT_IT_USERNAME",
-            "TEMPORARY_IT_USERNAME",
-        ),
+        validation_alias="DEVELOPMENT_IT_USERNAME",
     )
     development_it_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "DEVELOPMENT_IT_PASSWORD",
-            "TEMPORARY_IT_PASSWORD",
-        ),
+        validation_alias="DEVELOPMENT_IT_PASSWORD",
     )
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
@@ -112,9 +89,7 @@ class Settings(BaseSettings):
     development_delivery_retention_days: int = Field(default=7, ge=1, le=90)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
-    allow_mock_data: bool = Field(
-        default=False, validation_alias=AliasChoices("TANAW_ALLOW_MOCK_DATA", "ALLOW_MOCK_DATA")
-    )
+    allow_mock_data: bool = Field(default=False, validation_alias="TANAW_ALLOW_MOCK_DATA")
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", populate_by_name=True

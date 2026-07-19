@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.features.accounts.defaults import (
-    BOOTSTRAP_IT_DISPLAY_NAME,
     StartupAccountSpec,
     get_bootstrap_account_spec,
     get_development_account_specs,
@@ -47,9 +46,7 @@ async def initialize_bootstrap_account(
     if await get_seed_state(db, BOOTSTRAP_STATE_ID) is not None:
         return
 
-    account = await find_legacy_bootstrap_account(db)
-    if account is None:
-        account = await find_existing_it_account(db)
+    account = await find_existing_it_account(db)
     if account is None:
         if configured_spec is None:
             raise RuntimeError(
@@ -81,8 +78,6 @@ async def initialize_development_accounts(
     for spec in specs:
         account = await get_account_by_email(db, spec.email)
         if account is None:
-            account = await find_legacy_development_account(db, spec)
-        if account is None:
             account = create_startup_account(spec)
             db.add(account)
             await db.flush()
@@ -96,35 +91,10 @@ async def get_seed_state(db: AsyncSession, state_id: str) -> SystemConfiguration
     return result.first()
 
 
-async def find_legacy_bootstrap_account(db: AsyncSession) -> Account | None:
-    result = await db.scalars(
-        select(Account)
-        .where(Account.display_name == BOOTSTRAP_IT_DISPLAY_NAME)
-        .order_by(Account.created_at.asc())
-        .limit(1)
-    )
-    return result.first()
-
-
 async def find_existing_it_account(db: AsyncSession) -> Account | None:
     result = await db.scalars(
         select(Account)
         .where(Account.role == AccountRole.IT)
-        .order_by(Account.created_at.asc())
-        .limit(1)
-    )
-    return result.first()
-
-
-async def find_legacy_development_account(
-    db: AsyncSession, spec: StartupAccountSpec
-) -> Account | None:
-    result = await db.scalars(
-        select(Account)
-        .where(
-            Account.role == spec.role,
-            Account.display_name == spec.display_name,
-        )
         .order_by(Account.created_at.asc())
         .limit(1)
     )

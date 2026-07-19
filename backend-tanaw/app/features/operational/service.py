@@ -65,12 +65,6 @@ STAFF_REPORT_NOTIFICATION_TYPES = (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
 )
-NOTIFICATION_SETTING_LEGACY_KEYS = {
-    NOTIFY_CAMERA_SESSION_ERROR_KEY: ("notifications.Notify Camera Offline",),
-    NOTIFY_GATEWAY_SERVICE_ERROR_KEY: ("notifications.Notify Gateway Offline",),
-    NOTIFY_SYNC_DELAY_KEY: ("notifications.Notify Sync Failed",),
-    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: ("notifications.Notify Failed Login Threshold",),
-}
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
 FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
 FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
@@ -165,10 +159,6 @@ def resolve_system_setting_enabled(
     value = values.get(key)
     if isinstance(value, bool):
         return value
-    for legacy_key in NOTIFICATION_SETTING_LEGACY_KEYS.get(key, ()):
-        legacy_value = values.get(legacy_key)
-        if isinstance(legacy_value, bool):
-            return legacy_value
     return default
 
 
