@@ -20,7 +20,7 @@ import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../ser
 import { DESKTOP_REPORT_SYNC_EVENT, getDesktopSamplePreparation, prepareDesktopSampleCounts, syncDesktopReportSubmission, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
-import { isSameReportingMonth, reportingMonthKey, shouldPrepareDraftPeriod } from "../utils/reporting-period";
+import { formatReportingPeriodRange, isSameReportingMonth, reportingMonthKey, shouldPrepareDraftPeriod } from "../utils/reporting-period";
 import { notifyError } from "../../toasts/services/toast-service";
 
 type ReportsViewProps = {
@@ -234,15 +234,14 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
       return;
     }
 
-    const hasPreparedCounts = shouldPrepareDraftPeriod(nextPeriod, currentReportingPeriod, pendingPeriodCounts);
-    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && (isSameReportingMonth(livePeriod, nextPeriod) || !hasPreparedCounts)) return;
+    const requiresPreparation = shouldPrepareDraftPeriod(nextPeriod, currentReportingPeriod, livePeriod, pendingPeriodCounts);
+    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && !requiresPreparation) return;
 
-    if (!hasPreparedCounts) {
-      setActiveReportId(null);
-      setPeriod(nextPeriod);
-      setNotes("");
-      setDemo(emptyDemo());
-      setPreviewReport(null);
+    if (!requiresPreparation) {
+      if (isSameReportingMonth(nextPeriod, livePeriod)) {
+        setMetricsError(null);
+      }
+      resetDraftWorkspace(nextPeriod);
       return;
     }
 
@@ -309,7 +308,7 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
     downloadDotReportPdf({
       enterpriseName,
       reportId: report.id,
-      period: report.period ?? report.date,
+      period: formatReportingPeriodRange(report.period ?? report.date),
       metrics: reportMetrics,
       demo: reportDemo,
       notes: report.notes ?? "",

@@ -18,6 +18,22 @@ const currentRow: ReportLedgerRow = {
   statusLabel: "Current Reporting Period",
 };
 
+const pendingRow: ReportLedgerRow = {
+  key: "pending",
+  kind: "pending",
+  report: {
+    id: "SAMPLE-REP-260601",
+    date: "June 2026",
+    period: "June 2026",
+    status: "Draft",
+    entries: 519,
+    unique: 476,
+  },
+  reportLabel: "Pending Submission",
+  reportDescription: "Prepared counts",
+  statusLabel: "Pending Submission",
+};
+
 describe("ReportLedgerTable layout", () => {
   it("keeps long status labels and action controls on one line", () => {
     const markup = renderToStaticMarkup(
@@ -37,5 +53,14 @@ describe("ReportLedgerTable layout", () => {
     expect(markup).toContain('aria-label="Download Current Reporting Period"');
     expect(markup).not.toContain('<span class="hidden xl:inline">View</span>');
     expect(markup).toContain("Current Reporting Period</span>");
+  });
+
+  it("renders compact stored months as complete reporting ranges", () => {
+    const markup = renderToStaticMarkup(
+      <ReportLedgerTable activeLedgerKey="pending" ledgerRows={[pendingRow]} onDownloadReport={() => undefined} onPreviewReport={() => undefined} onSelectReport={() => undefined} />,
+    );
+
+    expect(markup).toContain("Jun 1 - Jun 30, 2026");
+    expect(markup).not.toContain(">June 2026<");
   });
 });

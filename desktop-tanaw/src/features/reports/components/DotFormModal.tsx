@@ -4,6 +4,7 @@ import { ModalPortal } from "../../../components/ModalPortal";
 import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
 import { demographicCount, getDemographicTotals } from "../utils/demographics";
 import { downloadDotReportPdf } from "../utils/pdf";
+import { formatReportingPeriodRange } from "../utils/reporting-period";
 
 type DotFormModalProps = {
   demo: DemoBreakdown;
@@ -17,6 +18,7 @@ type DotFormModalProps = {
 };
 
 export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: DotFormModalProps) {
+  const periodLabel = formatReportingPeriodRange(period);
   const tpm = demographicCount(demo.thisProvMale);
   const tpf = demographicCount(demo.thisProvFemale);
   const totalThisProv = tpm + tpf;
@@ -82,7 +84,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
               <div className="mb-6 grid gap-4 text-xs sm:grid-cols-3">
                 <div>
                   <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Reporting Period</p>
-                  <p className="mt-1 font-medium">{period}</p>
+                  <p className="mt-1 font-medium">{periodLabel}</p>
                 </div>
                 <div>
                   <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Municipality</p>
@@ -151,7 +153,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
                       <td className="border border-black p-2 text-left align-top leading-tight">
                         <span className="font-bold">{enterpriseName}</span>
                         <br />
-                        <span className="text-[10px]">{period}</span>
+                        <span className="text-[10px]">{periodLabel}</span>
                       </td>
                       <td className="border border-black p-2 text-xs font-semibold uppercase">{reportId}</td>
                       <td className="border border-black p-2">{tpm || ""}</td>
@@ -192,7 +194,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
             <button
               disabled={!canDownload}
               onClick={() => {
-                if (canDownload) downloadDotReportPdf({ enterpriseName, reportId, period, metrics, demo, notes });
+                if (canDownload) downloadDotReportPdf({ enterpriseName, reportId, period: periodLabel, metrics, demo, notes });
               }}
               className={`flex items-center gap-2 rounded-sm px-6 py-2 text-sm font-medium shadow-sm transition-colors ${
                 canDownload ? "bg-[#065f46] text-white hover:bg-[#044a36]" : "cursor-not-allowed bg-gray-300 text-gray-500"

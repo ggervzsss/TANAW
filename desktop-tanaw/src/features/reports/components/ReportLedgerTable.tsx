@@ -5,6 +5,7 @@ import { Card } from "../../../components/Card";
 import { ExpandableText } from "../../../components/ExpandableText";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { ReportRecord } from "../../../types/enterprise";
+import { formatReportingPeriodRange } from "../utils/reporting-period";
 
 export type ReportLedgerRowKind = "current" | "pending" | "history";
 
@@ -33,7 +34,8 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     return ledgerRows.filter((row) => {
       const matchesStatus = statusFilter === "All" || row.statusLabel === statusFilter;
-      const searchableText = [row.report.id, row.reportLabel, row.reportDescription, row.report.period ?? row.report.date, row.statusLabel].join(" ").toLowerCase();
+      const storedPeriod = row.report.period ?? row.report.date;
+      const searchableText = [row.report.id, row.reportLabel, row.reportDescription, storedPeriod, formatReportingPeriodRange(storedPeriod), row.statusLabel].join(" ").toLowerCase();
       return matchesStatus && (!normalizedSearchQuery || searchableText.includes(normalizedSearchQuery));
     });
   }, [ledgerRows, searchQuery, statusFilter]);
@@ -89,6 +91,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
             {filteredRows.map((row) => {
               const report = row.report;
               const isActive = activeLedgerKey === row.key;
+              const periodLabel = formatReportingPeriodRange(report.period ?? report.date);
               return (
                 <tr
                   key={row.key}
@@ -115,7 +118,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                       threshold={48}
                     />
                   </td>
-                  <td className="px-3 py-4 text-sm font-medium text-gray-700 xl:px-5">{report.period ?? report.date}</td>
+                  <td className="px-3 py-4 text-sm font-medium text-gray-700 xl:px-5">{periodLabel}</td>
                   <td className="px-3 py-4 text-right font-mono font-bold whitespace-nowrap text-[#065f46] xl:px-5">{report.unique?.toLocaleString() || 0}</td>
                   <td className="px-3 py-4 whitespace-nowrap xl:px-5" title={row.statusLabel}>
                     <Badge variant={badgeVariant(row)}>
