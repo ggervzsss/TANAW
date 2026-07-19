@@ -99,3 +99,23 @@ test("synchronizes explicit logout to another browser tab", async ({ context, pa
   await expect(page).toHaveURL(/\/login$/);
   await expect(secondTab).toHaveURL(/\/login$/);
 });
+
+test("synchronizes a server-rejected authenticated session to another browser tab", async ({ context, page }) => {
+  await context.addInitScript(() => {
+    Object.defineProperty(window, "BroadcastChannel", { configurable: true, value: undefined });
+  });
+  await mockAuthenticatedPortal(page, "admin", () => undefined);
+  await page.goto("/admin/alerts-monitor");
+  await expect(page.getByRole("heading", { name: "Alerts" })).toBeVisible();
+
+  const secondTab = await context.newPage();
+  await mockAuthenticatedPortal(secondTab, "admin", () => undefined);
+  await secondTab.goto("/admin/alerts-monitor");
+  await expect(secondTab.getByRole("heading", { name: "Alerts" })).toBeVisible();
+
+  await page.route("**/auth/me", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Session revoked" }) }));
+  await page.reload();
+
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(secondTab).toHaveURL(/\/login$/);
+});

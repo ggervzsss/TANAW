@@ -42,6 +42,22 @@ test("reads the fragment token, removes it immediately, and only validates on op
   expect(completionRequests).toBe(0);
 });
 
+test("opens a valid activation link in a clean browser without an existing session", async ({ page }) => {
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Not authenticated" }),
+    }),
+  );
+  await mockValidActivation(page);
+
+  await page.goto(`/activate-account#token=${validToken}`);
+
+  await expect(page.getByText("Welcome, Sample Staff")).toBeVisible();
+  await expect(page).toHaveURL(/\/activate-account$/);
+});
+
 test("shows a specific missing-token state without calling the backend", async ({ page }) => {
   let validationRequests = 0;
   await page.route("**/auth/account-activation/validate", async (route) => {
