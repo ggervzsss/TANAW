@@ -6,7 +6,7 @@ import type { IntakeReport } from "@/shared/types";
 import { DotSingleReportTable } from "./DotReportTable";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { ReportStatusBadge } from "./ReportStatusBadge";
-import { downloadIntakeReportPdf } from "../utils/pdf";
+import { downloadIntakeReportPdf, formatReportSubmittedDate } from "../utils/pdf";
 
 type ReportReviewModalProps = {
   report: IntakeReport;
@@ -83,15 +83,17 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
             <div className="grow overflow-y-auto bg-gray-100 p-6 dark:bg-[#0f172a] print:bg-white print:p-0">
               <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm print:shadow-none">
                 <div className="mb-6 border-b-2 border-current pb-4">
-                  <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase dark:text-emerald-300">{report.id}</p>
+                  <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase dark:text-emerald-300">{report.code}</p>
                   <h1 className="mt-1 text-xl font-bold">TANAW - DOT Visitor Attraction Report</h1>
                   <div className="mt-4 grid gap-x-8 gap-y-2 text-xs sm:grid-cols-2">
                     <DocumentDetail label="Enterprise" value={report.enterprise} />
                     <DocumentDetail label="Category" value={report.category} />
                     <DocumentDetail label="Barangay" value={report.barangay} />
+                    <DocumentDetail label="Municipality" value="City of San Pedro, Laguna" />
                     <DocumentDetail label="Reporting Period" value={report.period} />
-                    <DocumentDetail label="Submitted" value={report.submittedAt ?? report.submitted} />
+                    <DocumentDetail label="Submitted" value={formatReportSubmittedDate(report.submittedAt ?? report.submitted)} />
                     <DocumentDetail label="Review Status" value={report.status} />
+                    <DocumentDetail label="Report Code" value={report.code} />
                   </div>
                 </div>
                 <DotSingleReportTable report={report} />

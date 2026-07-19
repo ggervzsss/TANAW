@@ -28,7 +28,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
   const fm = demographicCount(demo.foreignMale);
   const ff = demographicCount(demo.foreignFemale);
   const totalForeign = fm + ff;
-  const grandTotal = getDemographicTotals(demo).grandTotal;
+  const totals = getDemographicTotals(demo);
   const canDownload = !validationMessage;
 
   return (
@@ -76,12 +76,17 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
               )}
               <div className="mb-6 border-b border-amber-600/70 pb-4 text-center">
                 <h2 className="text-xl font-bold tracking-wide uppercase">TANAW - DOT Visitor Attraction Report</h2>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Tourism Attraction Visitor Record - VAR 2</p>
                 <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{reportId}</p>
               </div>
-              <div className="mb-6 grid gap-4 text-xs sm:grid-cols-2">
+              <div className="mb-6 grid gap-4 text-xs sm:grid-cols-3">
                 <div>
                   <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Reporting Period</p>
                   <p className="mt-1 font-medium">{period}</p>
+                </div>
+                <div>
+                  <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Municipality</p>
+                  <p className="mt-1 font-medium">City of San Pedro, Laguna</p>
                 </div>
                 <div>
                   <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Unique Visitors</p>
@@ -94,24 +99,27 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
                 <table className="mb-8 w-full border-collapse border-2 border-black text-center text-xs text-black dark:text-slate-100">
                   <thead>
                     <tr>
-                      <th rowSpan={4} className="w-20 border border-black p-2">
-                        Report Code
-                      </th>
-                      <th rowSpan={4} className="w-48 border border-black p-2">
-                        Name/ Month
+                      <th colSpan={2} className="border border-black p-2">
+                        Visitor Attraction
                       </th>
                       <th colSpan={9} className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">
                         Place of Residence
                       </th>
-                      <th rowSpan={4} className="w-24 border border-black p-2">
+                      <th colSpan={3} rowSpan={3} className="border border-black p-2">
                         Grand Total Number of Visitors
                       </th>
                     </tr>
                     <tr>
+                      <th rowSpan={3} className="w-48 border border-black p-2">
+                        Name / Month
+                      </th>
+                      <th rowSpan={3} className="w-20 border border-black p-2">
+                        Report Code
+                      </th>
                       <th colSpan={6} className="border border-black bg-gray-50 p-1 print:bg-transparent">
                         Philippines
                       </th>
-                      <th colSpan={3} className="border border-black bg-gray-50 p-1 print:bg-transparent">
+                      <th colSpan={3} rowSpan={2} className="border border-black bg-gray-50 p-1 print:bg-transparent">
                         Foreign Country Residence
                       </th>
                     </tr>
@@ -122,9 +130,11 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
                       <th colSpan={3} className="border border-black p-1">
                         Other Province
                       </th>
-                      <th colSpan={3} className="border border-t-0 border-black p-1"></th>
                     </tr>
                     <tr>
+                      <th className="w-12 border border-black p-1">Male</th>
+                      <th className="w-12 border border-black p-1">Female</th>
+                      <th className="w-12 border border-black bg-gray-50 p-1 print:bg-transparent">Total</th>
                       <th className="w-12 border border-black p-1">Male</th>
                       <th className="w-12 border border-black p-1">Female</th>
                       <th className="w-12 border border-black bg-gray-50 p-1 print:bg-transparent">Total</th>
@@ -138,12 +148,12 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="border border-black p-2 text-xs font-semibold uppercase">{reportId}</td>
                       <td className="border border-black p-2 text-left align-top leading-tight">
                         <span className="font-bold">{enterpriseName}</span>
                         <br />
                         <span className="text-[10px]">{period}</span>
                       </td>
+                      <td className="border border-black p-2 text-xs font-semibold uppercase">{reportId}</td>
                       <td className="border border-black p-2">{tpm || ""}</td>
                       <td className="border border-black p-2">{tpf || ""}</td>
                       <td className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">{totalThisProv || ""}</td>
@@ -153,27 +163,15 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
                       <td className="border border-black p-2">{fm || ""}</td>
                       <td className="border border-black p-2">{ff || ""}</td>
                       <td className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">{totalForeign || ""}</td>
-                      <td className="border border-black bg-gray-100 p-2 text-sm font-bold print:bg-transparent">{grandTotal || ""}</td>
+                      <td className="border border-black bg-gray-100 p-2 font-bold print:bg-transparent">{totals.male || ""}</td>
+                      <td className="border border-black bg-gray-100 p-2 font-bold print:bg-transparent">{totals.female || ""}</td>
+                      <td className="border border-black bg-gray-100 p-2 text-sm font-bold print:bg-transparent">{totals.grandTotal || ""}</td>
                     </tr>
-                    {[...Array(6)].map((_, i) => (
-                      <tr key={i} className="h-8">
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black bg-gray-50 p-1 print:bg-transparent"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black bg-gray-50 p-1 print:bg-transparent"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black p-1"></td>
-                        <td className="border border-black bg-gray-50 p-1 print:bg-transparent"></td>
-                        <td className="border border-black bg-gray-100 p-1 print:bg-transparent"></td>
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>
+
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">Demographic splits and unique visitors are estimates derived from TANAW local camera records.</p>
 
               {notes && (
                 <div className="mt-4 border border-black bg-gray-50/50 p-4 dark:border-slate-500 dark:bg-[#111c2f]">
