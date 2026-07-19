@@ -102,7 +102,7 @@ for each development or production environment.
 Keep `DATABASE_URL` pointed at the Docker hostname `db`:
 
 ```dotenv
-DATABASE_URL=postgresql+asyncpg://postgres:your-password@db:5432/tanaw_local
+DATABASE_URL=postgresql+asyncpg://postgres:your-password@db:5432/TanawDB
 ```
 
 ## 4. Start PostgreSQL, the backend, and the web portal

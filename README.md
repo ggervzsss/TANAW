@@ -289,11 +289,11 @@ secret. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and inside
 and the optional Resend settings developers commonly change:
 
 ```dotenv
-POSTGRES_DB=tanaw_local
+POSTGRES_DB=TanawDB
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-this-local-password
 POSTGRES_HOST_PORT=5433
-DATABASE_URL=postgresql+asyncpg://postgres:change-this-local-password@db:5432/tanaw_local
+DATABASE_URL=postgresql+asyncpg://postgres:change-this-local-password@db:5432/TanawDB
 JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 
 BOOTSTRAP_IT_USERNAME=default@email.com

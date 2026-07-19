@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     environment: str = Field(
         default="development", validation_alias=AliasChoices("TANAW_ENV", "ENVIRONMENT", "APP_ENV")
     )
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/tanaw_local"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/TanawDB"
     jwt_secret_key: str = DEVELOPMENT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 30
