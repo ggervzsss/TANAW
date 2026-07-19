@@ -19,7 +19,6 @@ class SessionStore:
         self._root = root / "enterprises" / scope if enterprise_id else root
 
         self._session_path = self._root / "active_session.json"
-        self._events_path = self._root / "events.jsonl"
         self._metrics_store = LocalMetricsStore(app_data_dir, enterprise_id)
 
     def load_session(self) -> dict[str, Any] | None:
@@ -49,16 +48,10 @@ class SessionStore:
         self._metrics_store.save_count_snapshot(serializable, serializable["updated_at"])
 
     def append_event(self, payload: dict[str, Any]) -> None:
-        self._root.mkdir(parents=True, exist_ok=True)
         event = {
             **payload,
             "recorded_at": datetime.now(UTC).isoformat(),
         }
-
-        with self._events_path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(event, sort_keys=True))
-            file.write("\n")
-
         self._metrics_store.append_count_event(event, event["recorded_at"])
 
     def upsert_visitor_identity(
@@ -147,8 +140,6 @@ class SessionStore:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
-        source_kind: str | None = None,
-        mock_run_id: str | None = None,
     ) -> dict[str, int | str | None]:
         return self._metrics_store.record_report_submission(
             report_id=report_id,
@@ -156,8 +147,6 @@ class SessionStore:
             notes=notes,
             payload=payload,
             metrics=metrics,
-            source_kind=source_kind,
-            mock_run_id=mock_run_id,
         )
 
     def list_report_submissions(self, limit: int = 100) -> list[dict[str, Any]]:
@@ -192,11 +181,8 @@ class SessionStore:
     def mark_events_synced(self) -> int:
         return self._metrics_store.mark_events_synced()
 
-    def prepare_mock_counts(self, **values: Any) -> dict[str, int | str | None]:
-        return self._metrics_store.prepare_mock_counts(**values)
-
-    def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
-        return self._metrics_store.remove_mock_data(mock_run_id)
+    def prepare_sample_counts(self, **values: Any) -> dict[str, int | str | None]:
+        return self._metrics_store.prepare_sample_counts(**values)
 
 
 def _safe_scope(value: str | None) -> str:

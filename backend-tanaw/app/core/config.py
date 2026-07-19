@@ -86,10 +86,8 @@ class Settings(BaseSettings):
     password_reset_retention_days: int = Field(default=30, ge=1, le=3650)
     password_reset_rate_bucket_retention_days: int = Field(default=2, ge=1, le=90)
     account_email_change_retention_days: int = Field(default=180, ge=30, le=3650)
-    development_delivery_retention_days: int = Field(default=7, ge=1, le=90)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
-    allow_mock_data: bool = Field(default=False, validation_alias="TANAW_ALLOW_MOCK_DATA")
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", populate_by_name=True

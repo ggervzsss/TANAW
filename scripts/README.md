@@ -40,6 +40,6 @@ $env:TANAW_MOCK_SCENARIO = "peak-traffic"
 ```
 
 `local-mockdata-off` removes every desktop local ledger, including rows created
-from real CCTV detections, mock runs, hybrid runs, reports, snapshots, and
+from real CCTV detections, prepared sample counts, reports, snapshots, and
 occupancy corrections. It preserves saved camera settings, Electron preferences,
 auth storage, and other desktop device state.

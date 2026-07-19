@@ -2,7 +2,7 @@
 
 Revision ID: 20260720_0001
 Revises:
-Create Date: 2026-07-19 20:07:34.831618
+Create Date: 2026-07-19 22:22:12.715854
 """
 
 from collections.abc import Sequence
@@ -42,8 +42,6 @@ def upgrade() -> None:
         sa.Column("failed_login_attempts", sa.Integer(), nullable=False),
         sa.Column("locked_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("preferences_json", sa.Text(), nullable=True),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -57,17 +55,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_accounts_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_accounts_email"), "accounts", ["email"], unique=True)
-    op.create_index(op.f("ix_accounts_mock_run_id"), "accounts", ["mock_run_id"], unique=False)
     op.create_table(
         "activity_logs",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -83,24 +73,12 @@ def upgrade() -> None:
         sa.Column("summary", sa.Text(), nullable=False),
         sa.Column("source_id", sa.String(length=120), nullable=True),
         sa.Column("metadata_json", sa.Text(), nullable=True),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_activity_logs_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
         op.f("ix_activity_logs_actor_role"), "activity_logs", ["actor_role"], unique=False
     )
     op.create_index(op.f("ix_activity_logs_category"), "activity_logs", ["category"], unique=False)
-    op.create_index(
-        op.f("ix_activity_logs_mock_run_id"), "activity_logs", ["mock_run_id"], unique=False
-    )
     op.create_table(
         "final_reports",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -121,59 +99,20 @@ def upgrade() -> None:
         sa.Column("total_exit", sa.Integer(), nullable=False),
         sa.Column("total_unique", sa.Integer(), nullable=False),
         sa.Column("enterprise_count", sa.Integer(), nullable=False),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_final_reports_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
         op.f("ix_final_reports_generated_on"), "final_reports", ["generated_on"], unique=False
     )
-    op.create_index(
-        op.f("ix_final_reports_mock_run_id"), "final_reports", ["mock_run_id"], unique=False
-    )
     op.create_index(op.f("ix_final_reports_period"), "final_reports", ["period"], unique=False)
     op.create_index(
         op.f("ix_final_reports_report_code"), "final_reports", ["report_code"], unique=True
-    )
-    op.create_table(
-        "mock_data_runs",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("scenario", sa.String(length=80), nullable=False),
-        sa.Column("seed", sa.String(length=80), nullable=False),
-        sa.Column("range_start", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("range_end", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("target_enterprise_profile_id", sa.String(length=36), nullable=True),
-        sa.Column("target_enterprise_name", sa.String(length=120), nullable=True),
-        sa.Column("status", sa.String(length=40), nullable=False),
-        sa.Column("generated_counts_json", sa.Text(), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["target_enterprise_profile_id"],
-            ["enterprise_profiles.account_id"],
-            name="fk_mock_data_runs_target_enterprise_profile_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
         "operational_alerts",
@@ -412,41 +351,6 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("status IN ('pending_verification', 'verified')"),
         sqlite_where=sa.text("status IN ('pending_verification', 'verified')"),
-    )
-    op.create_table(
-        "dev_deliveries",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("account_id", sa.String(length=36), nullable=False),
-        sa.Column("recipient", sa.String(length=255), nullable=False),
-        sa.Column("subject", sa.String(length=255), nullable=False),
-        sa.Column("body", sa.Text(), nullable=False),
-        sa.Column("provider", sa.String(length=40), nullable=False),
-        sa.Column("provider_message_id", sa.String(length=120), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column(
-            "status",
-            sa.Enum("RECORDED", "SENT", "ACCEPTED", "FAILED", name="delivery_status"),
-            nullable=False,
-        ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["account_id"], ["accounts.id"], name="fk_dev_deliveries_account_id", ondelete="CASCADE"
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_dev_deliveries_account_id"), "dev_deliveries", ["account_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_dev_deliveries_provider_message_id"),
-        "dev_deliveries",
-        ["provider_message_id"],
-        unique=True,
     )
     op.create_table(
         "email_outbox",
@@ -767,8 +671,6 @@ def upgrade() -> None:
         sa.Column("remarks", sa.Text(), nullable=True),
         sa.Column("sync_status", sa.String(length=60), nullable=True),
         sa.Column("payload_json", sa.Text(), nullable=True),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
@@ -781,13 +683,6 @@ def upgrade() -> None:
             name="fk_enterprise_report_submissions_enterprise_profile_id",
             ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_enterprise_report_submissions_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "enterprise_profile_id", "report_id", name="uq_enterprise_report_submission"
@@ -797,12 +692,6 @@ def upgrade() -> None:
         op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
         "enterprise_report_submissions",
         ["enterprise_profile_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_mock_run_id"),
-        "enterprise_report_submissions",
-        ["mock_run_id"],
         unique=False,
     )
     op.create_index(
@@ -864,20 +753,11 @@ def upgrade() -> None:
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("analytics_fps", sa.Float(), nullable=True),
         sa.Column("payload_json", sa.Text(), nullable=True),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
         sa.ForeignKeyConstraint(
             ["enterprise_profile_id"],
             ["enterprise_profiles.account_id"],
             name="fk_enterprise_telemetry_snapshots_enterprise_profile_id",
             ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_enterprise_telemetry_snapshots_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -891,12 +771,6 @@ def upgrade() -> None:
         op.f("ix_enterprise_telemetry_snapshots_enterprise_profile_id"),
         "enterprise_telemetry_snapshots",
         ["enterprise_profile_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_mock_run_id"),
-        "enterprise_telemetry_snapshots",
-        ["mock_run_id"],
         unique=False,
     )
     op.create_index(
@@ -1041,67 +915,11 @@ def upgrade() -> None:
         ["ticket_id"],
         unique=False,
     )
-    op.create_foreign_key(
-        "fk_accounts_mock_run_id",
-        "accounts",
-        "mock_data_runs",
-        ["mock_run_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_activity_logs_mock_run_id",
-        "activity_logs",
-        "mock_data_runs",
-        ["mock_run_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_final_reports_mock_run_id",
-        "final_reports",
-        "mock_data_runs",
-        ["mock_run_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_mock_data_runs_target_enterprise_profile_id",
-        "mock_data_runs",
-        "enterprise_profiles",
-        ["target_enterprise_profile_id"],
-        ["account_id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_enterprise_report_submissions_mock_run_id",
-        "enterprise_report_submissions",
-        "mock_data_runs",
-        ["mock_run_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_enterprise_telemetry_snapshots_mock_run_id",
-        "enterprise_telemetry_snapshots",
-        "mock_data_runs",
-        ["mock_run_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_constraint("fk_accounts_mock_run_id", "accounts", type_="foreignkey")
-    op.drop_constraint("fk_activity_logs_mock_run_id", "activity_logs", type_="foreignkey")
-    op.drop_constraint("fk_final_reports_mock_run_id", "final_reports", type_="foreignkey")
-    op.drop_constraint(
-        "fk_mock_data_runs_target_enterprise_profile_id",
-        "mock_data_runs",
-        type_="foreignkey",
-    )
     op.drop_index(
         op.f("ix_support_ticket_messages_ticket_id"), table_name="support_ticket_messages"
     )
@@ -1131,10 +949,6 @@ def downgrade() -> None:
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_index(
-        op.f("ix_enterprise_telemetry_snapshots_mock_run_id"),
-        table_name="enterprise_telemetry_snapshots",
-    )
-    op.drop_index(
         op.f("ix_enterprise_telemetry_snapshots_enterprise_profile_id"),
         table_name="enterprise_telemetry_snapshots",
     )
@@ -1160,10 +974,6 @@ def downgrade() -> None:
     )
     op.drop_index(
         op.f("ix_enterprise_report_submissions_month"), table_name="enterprise_report_submissions"
-    )
-    op.drop_index(
-        op.f("ix_enterprise_report_submissions_mock_run_id"),
-        table_name="enterprise_report_submissions",
     )
     op.drop_index(
         op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
@@ -1214,9 +1024,6 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_email_outbox_created_at"), table_name="email_outbox")
     op.drop_index(op.f("ix_email_outbox_account_id"), table_name="email_outbox")
     op.drop_table("email_outbox")
-    op.drop_index(op.f("ix_dev_deliveries_provider_message_id"), table_name="dev_deliveries")
-    op.drop_index(op.f("ix_dev_deliveries_account_id"), table_name="dev_deliveries")
-    op.drop_table("dev_deliveries")
     op.drop_index(
         "uq_account_email_change_active_email",
         table_name="account_email_change_requests",
@@ -1281,20 +1088,15 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_operational_alerts_alert_type"), table_name="operational_alerts")
     op.drop_index(op.f("ix_operational_alerts_alert_code"), table_name="operational_alerts")
     op.drop_table("operational_alerts")
-    op.drop_table("mock_data_runs")
     op.drop_index(op.f("ix_final_reports_report_code"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_period"), table_name="final_reports")
-    op.drop_index(op.f("ix_final_reports_mock_run_id"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_generated_on"), table_name="final_reports")
     op.drop_table("final_reports")
-    op.drop_index(op.f("ix_activity_logs_mock_run_id"), table_name="activity_logs")
     op.drop_index(op.f("ix_activity_logs_category"), table_name="activity_logs")
     op.drop_index(op.f("ix_activity_logs_actor_role"), table_name="activity_logs")
     op.drop_table("activity_logs")
-    op.drop_index(op.f("ix_accounts_mock_run_id"), table_name="accounts")
     op.drop_index(op.f("ix_accounts_email"), table_name="accounts")
     op.drop_table("accounts")
-    op.execute("DROP TYPE delivery_status")
-    op.execute("DROP TYPE account_status")
-    op.execute("DROP TYPE account_role")
+    op.execute("DROP TYPE IF EXISTS account_status")
+    op.execute("DROP TYPE IF EXISTS account_role")
     # ### end Alembic commands ###

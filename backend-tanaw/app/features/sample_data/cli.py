@@ -5,10 +5,9 @@ import random
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid5
 
-import httpx
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -29,19 +28,30 @@ from app.features.operational.models import (
     EnterpriseTelemetrySnapshot,
     FinalReport,
     FinalReportSource,
-    MockDataRun,
+    OperationalAlert,
+    SupportTicket,
     UserNotification,
 )
 from app.features.operational.service import (
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
-    generate_final_report_code,
+)
+from app.features.sample_data.dataset import (
+    SAMPLE_ACCOUNT_EMAILS,
+    SAMPLE_CAMERA_PREFIX,
+    SAMPLE_DATASET_VERSION,
+    SAMPLE_FINAL_REPORT_PREFIX,
+    SAMPLE_REPORT_PREFIX,
+    SAMPLE_SOURCE_PREFIX,
+    prepared_counts,
+    sample_dataset_marker_email,
 )
 
-TEST_ACCOUNT_PASSWORD = "Visitor simulation access phrase 2026"
+TEST_ACCOUNT_PASSWORD = "Visitor sample access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
-DEFAULT_SEED = "tanaw-testing-v2"
+DEFAULT_SEED = "tanaw-sample-v1"
 REPORTING_STAFF_NAME = "Carla Mendoza"
+SAMPLE_UUID_NAMESPACE = UUID("b8df7e73-013f-4d10-8554-e8d54f90086f")
 DEMOGRAPHIC_FIELDS = (
     "thisProvMale",
     "thisProvFemale",
@@ -53,7 +63,7 @@ DEMOGRAPHIC_FIELDS = (
 
 
 @dataclass(frozen=True)
-class MockEnterprise:
+class SampleEnterprise:
     name: str
     category: str
     manager: str
@@ -66,7 +76,7 @@ class MockEnterprise:
 
 
 ENTERPRISES = (
-    MockEnterprise(
+    SampleEnterprise(
         "Balon ni Lolo Uweng",
         "tourism",
         "Ma Regine Javier",
@@ -77,7 +87,7 @@ ENTERPRISES = (
         "balon.lolo.uweng@tanaw.test",
         "+639171110001",
     ),
-    MockEnterprise(
+    SampleEnterprise(
         "San Pedro Apostol Parish",
         "tourism",
         "Irish May Arabaca",
@@ -88,7 +98,7 @@ ENTERPRISES = (
         "sanpedro.apostol@tanaw.test",
         "+639171110002",
     ),
-    MockEnterprise(
+    SampleEnterprise(
         "Lolo Uweng Pilgrim Church",
         "tourism",
         "David Kristian Vallejera",
@@ -99,7 +109,7 @@ ENTERPRISES = (
         "lolo.uweng.church@tanaw.test",
         "+639171110003",
     ),
-    MockEnterprise(
+    SampleEnterprise(
         "Tricia's Bar & Lounge",
         "business",
         "Kenneth Delicano",
@@ -110,7 +120,7 @@ ENTERPRISES = (
         "tricias.bar@tanaw.test",
         "+639171110004",
     ),
-    MockEnterprise(
+    SampleEnterprise(
         "Hallow Ridge Filipinas Golf Inc.",
         "tourism",
         "Sebastien Bercasio",
@@ -153,10 +163,10 @@ LGU_ACCOUNTS = (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Manage TANAW mock data.")
+    parser = argparse.ArgumentParser(description="Manage deterministic TANAW sample data.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    on_parser = subparsers.add_parser("on", help="Generate mock data.")
+    on_parser = subparsers.add_parser("on", help="Generate sample data.")
     on_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
     on_parser.add_argument(
         "--scenario",
@@ -167,16 +177,13 @@ def main() -> None:
     on_parser.add_argument(
         "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
     )
-    on_parser.add_argument("--desktop-url")
 
-    off_parser = subparsers.add_parser("off", help="Remove active mock data.")
-    off_parser.add_argument("--desktop-url")
+    subparsers.add_parser("off", help="Remove the deterministic sample dataset.")
 
-    status_parser = subparsers.add_parser("status", help="Show mock data status.")
-    status_parser.add_argument("--desktop-url")
+    subparsers.add_parser("status", help="Show sample-data status.")
 
     reset_parser = subparsers.add_parser(
-        "reset", help="Remove active mock data, then regenerate it."
+        "reset", help="Remove and regenerate the deterministic sample dataset."
     )
     reset_parser.add_argument("--range", default="6m", choices=["30d", "6m", "12m"])
     reset_parser.add_argument(
@@ -188,7 +195,6 @@ def main() -> None:
     reset_parser.add_argument(
         "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
     )
-    reset_parser.add_argument("--desktop-url")
 
     args = parser.parse_args()
     asyncio.run(run(args))
@@ -199,40 +205,35 @@ async def run(args: argparse.Namespace) -> None:
 
     if args.command == "status":
         async with AsyncSessionLocal() as db:
-            runs = await list_runs(db)
-        print(json.dumps({"runs": runs}, indent=2, sort_keys=True))
-        await desktop_status(args.desktop_url)
+            result = await sample_dataset_status(db)
+        print(json.dumps(result, indent=2, sort_keys=True))
         return
 
-    require_mock_data_enabled()
+    require_development_environment()
 
     if args.command == "off":
         async with AsyncSessionLocal() as db:
-            removed = await remove_active_mock_data(db)
-        await desktop_reset(args.desktop_url)
+            removed = await remove_sample_data(db)
         print(json.dumps({"removed": removed}, indent=2, sort_keys=True))
         return
 
     if args.command == "reset":
         async with AsyncSessionLocal() as db:
-            removed = await remove_active_mock_data(db)
-            created = await generate_mock_data(
+            removed = await remove_sample_data(db)
+            created = await generate_sample_data(
                 db, args.range, args.scenario, args.seed, args.target_enterprise
             )
-        await desktop_prepare(args.desktop_url, created)
         print(json.dumps({"removed": removed, "created": created}, indent=2, sort_keys=True))
         return
 
     async with AsyncSessionLocal() as db:
-        active = await active_run(db)
-        if active is not None:
-            await ensure_active_target_matches(db, active, args.target_enterprise)
-            result = run_result(active, status="already-active")
-        else:
-            result = await generate_mock_data(
-                db, args.range, args.scenario, args.seed, args.target_enterprise
+        if await sample_dataset_present(db):
+            raise SystemExit(
+                "Sample data already exists. Run mockdata-off or mockdata-reset first."
             )
-    await desktop_prepare(args.desktop_url, result)
+        result = await generate_sample_data(
+            db, args.range, args.scenario, args.seed, args.target_enterprise
+        )
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
@@ -241,118 +242,48 @@ async def validate_schema() -> None:
         await validate_database_migration_head(connection)
 
 
-def require_mock_data_enabled() -> None:
-    if not get_settings().allow_mock_data:
-        raise SystemExit("Refusing to manage mock data because TANAW_ALLOW_MOCK_DATA is not true.")
+def require_development_environment() -> None:
+    if get_settings().is_production:
+        raise SystemExit("Refusing to manage sample data in production.")
 
 
-async def active_run(db: AsyncSession) -> MockDataRun | None:
-    result = await db.scalars(
-        select(MockDataRun)
-        .where(MockDataRun.status == "active")
-        .order_by(MockDataRun.created_at.desc())
+async def sample_dataset_present(db: AsyncSession) -> bool:
+    return (
+        await db.scalar(select(Account.id).where(Account.email == sample_dataset_marker_email()))
+        is not None
     )
-    return result.first()
 
 
-async def list_runs(db: AsyncSession) -> list[dict]:
-    runs = (
-        await db.scalars(select(MockDataRun).order_by(MockDataRun.created_at.desc()).limit(20))
-    ).all()
-    return [
-        {
-            "id": run.id,
-            "scenario": run.scenario,
-            "seed": run.seed,
-            "status": run.status,
-            "rangeStart": run.range_start.isoformat(),
-            "rangeEnd": run.range_end.isoformat(),
-            "targetAccountId": run.target_enterprise_profile_id,
-            "targetEnterpriseId": (
-                run.target_enterprise_profile.enterprise_id
-                if run.target_enterprise_profile
-                else None
-            ),
-            "targetEnterpriseName": run.target_enterprise_name,
-            "createdAt": run.created_at.isoformat() if run.created_at else None,
-            "endedAt": run.ended_at.isoformat() if run.ended_at else None,
-            "generatedCounts": json.loads(run.generated_counts_json)
-            if run.generated_counts_json
-            else {},
-        }
-        for run in runs
-    ]
-
-
-def run_result(run: MockDataRun, status: str) -> dict:
+async def sample_dataset_status(db: AsyncSession) -> dict:
+    accounts = list(
+        await db.scalars(select(Account.email).where(Account.email.in_(SAMPLE_ACCOUNT_EMAILS)))
+    )
     return {
-        "runId": run.id,
-        "status": status,
-        "scenario": run.scenario,
-        "rangeStart": run.range_start.isoformat(),
-        "rangeEnd": run.range_end.isoformat(),
-        "target": {
-            "accountId": run.target_enterprise_profile_id,
-            "enterpriseId": (
-                run.target_enterprise_profile.enterprise_id
-                if run.target_enterprise_profile
-                else None
-            ),
-            "enterpriseName": run.target_enterprise_name,
-        },
-        "counts": json.loads(run.generated_counts_json) if run.generated_counts_json else {},
+        "active": bool(accounts),
+        "sampleAccounts": sorted(accounts),
+        "expectedSampleAccounts": len(SAMPLE_ACCOUNT_EMAILS),
     }
 
 
-async def ensure_active_target_matches(
-    db: AsyncSession, run: MockDataRun, requested_identifier: str | None
-) -> None:
-    if run.target_enterprise_profile is None:
-        raise SystemExit("The active mock-data run has no target enterprise profile.")
-    if not requested_identifier:
-        return
-
-    requested_target = await resolve_target_enterprise(db, requested_identifier, [])
-    if requested_target.id != run.target_enterprise_profile_id:
-        raise SystemExit(
-            f"The active mock-data run targets {run.target_enterprise_name} "
-            f"({run.target_enterprise_profile.enterprise_id}). "
-            "Use mock-data reset to select a different target."
-        )
-
-
-async def generate_mock_data(
+async def generate_sample_data(
     db: AsyncSession, range_value: str, scenario: str, seed: str, target_identifier: str | None
 ) -> dict:
     rng = random.Random(seed)
     range_start, range_end = reporting_range(range_value)
-    run = MockDataRun(
-        id=str(uuid4()),
-        scenario=scenario,
-        seed=seed,
-        range_start=range_start,
-        range_end=range_end,
-        status="active",
-    )
-    db.add(run)
-    await db.flush()
-
-    accounts = await create_accounts(db, run.id)
-    enterprises = await list_active_enterprises(db)
+    accounts = await create_accounts(db)
     target = await resolve_target_enterprise(db, target_identifier, accounts["enterprises"])
     target_profile = target.enterprise_profile
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
-    run.target_enterprise_profile_id = target_profile.account_id
-    run.target_enterprise_name = target_profile.enterprise_name
+    enterprises = [target, *accounts["enterprises"]]
     reports = await create_operational_history(
-        db, run.id, range_start, range_end, scenario, rng, enterprises, target
+        db, range_start, range_end, scenario, rng, enterprises, target
     )
     notifications = await create_staff_report_notifications(
         db, accounts["lgu"], reports["staffNotificationReports"]
     )
-    final_reports = await create_final_reports(db, run.id, reports)
-    logs = await create_activity_logs(db, run.id, reports, final_reports)
+    final_reports = await create_final_reports(db, reports)
+    logs = await create_activity_logs(db, reports, final_reports)
 
     counts = {
         "lguAccounts": len(accounts["lgu"]),
@@ -363,14 +294,24 @@ async def generate_mock_data(
         "finalReports": len(final_reports),
         "staffNotifications": notifications,
         "activityLogs": logs,
-        "targetPreparedReportCounts": reports["targetPreparedReportCounts"],
+        "targetPreparedReportCounts": prepared_counts(target_profile.enterprise_id),
     }
-    run.generated_counts_json = json.dumps(counts, sort_keys=True)
     await db.commit()
-    return run_result(run, status="created")
+    return {
+        "status": "created",
+        "scenario": scenario,
+        "rangeStart": range_start.isoformat(),
+        "rangeEnd": range_end.isoformat(),
+        "target": {
+            "accountId": target.id,
+            "enterpriseId": target_profile.enterprise_id,
+            "enterpriseName": target_profile.enterprise_name,
+        },
+        "counts": counts,
+    }
 
 
-async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Account]]:
+async def create_accounts(db: AsyncSession) -> dict[str, list[Account]]:
     password_hash = hash_password(validate_password_policy(TEST_ACCOUNT_PASSWORD))
     lgu_accounts: list[Account] = []
     for email, role, display_name, title, first_name, last_name in LGU_ACCOUNTS:
@@ -378,6 +319,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             await db.scalar(select(Account).where(Account.email == email)), email
         )
         account = Account(
+            id=sample_uuid("account", email),
             email=email,
             first_name=first_name,
             last_name=last_name,
@@ -387,8 +329,6 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             title=title,
             status=AccountStatus.ACTIVE,
             activated_at=datetime.now(UTC),
-            source_kind="mock",
-            mock_run_id=run_id,
         )
         db.add(account)
         lgu_accounts.append(account)
@@ -401,6 +341,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
         )
         enterprise_id = await generate_enterprise_id(db, enterprise.name)
         account = Account(
+            id=sample_uuid("account", enterprise.email),
             email=enterprise.email,
             phone=enterprise.phone,
             password_hash=password_hash,
@@ -409,8 +350,6 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             title="Enterprise Account",
             status=AccountStatus.ACTIVE,
             activated_at=datetime.now(UTC),
-            source_kind="mock",
-            mock_run_id=run_id,
             enterprise_profile=EnterpriseProfile(
                 enterprise_name=enterprise.name,
                 category=enterprise.category,
@@ -435,7 +374,7 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
 def ensure_email_available(existing: Account | None, email: str) -> None:
     if existing is not None:
         raise SystemExit(
-            f"Cannot seed mock account {email}; an account with that email already exists."
+            f"Cannot create sample account {email}; an account with that email already exists."
         )
 
 
@@ -487,7 +426,6 @@ async def resolve_target_enterprise(
 
 async def create_operational_history(
     db: AsyncSession,
-    run_id: str,
     range_start: datetime,
     range_end: datetime,
     scenario: str,
@@ -507,7 +445,7 @@ async def create_operational_history(
         for enterprise_index, enterprise in enumerate(enterprises):
             profile = enterprise.enterprise_profile
             if profile is None:
-                raise SystemExit("A mock enterprise account has no enterprise profile.")
+                raise SystemExit("A sample enterprise account has no enterprise profile.")
             base_entries = 460 + month_index * 42 + enterprise_index * 67 + rng.randint(0, 80)
             if (
                 scenario == "peak-traffic"
@@ -539,9 +477,14 @@ async def create_operational_history(
             demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
 
             snapshot = EnterpriseTelemetrySnapshot(
+                id=sample_uuid(
+                    "telemetry",
+                    profile.account_id,
+                    month_start.isoformat(),
+                ),
                 enterprise_profile_id=profile.account_id,
                 enterprise_name=profile.enterprise_name,
-                camera_id=f"camera-{enterprise_index + 1}",
+                camera_id=f"{SAMPLE_CAMERA_PREFIX}{enterprise_index + 1}",
                 camera_name=f"{profile.enterprise_name} Main Entrance",
                 captured_at=latest_capture_time(month_start, range_end),
                 entries=base_entries,
@@ -569,8 +512,6 @@ async def create_operational_history(
                 payload_json=json.dumps(
                     {"source": "desktop-camera", "period": period}, sort_keys=True
                 ),
-                source_kind="mock",
-                mock_run_id=run_id,
             )
             db.add(snapshot)
             telemetry.append(snapshot)
@@ -581,7 +522,12 @@ async def create_operational_history(
             review_status = seeded_review_status(month_start, current_month)
 
             report = EnterpriseReportSubmission(
-                report_id=f"REP-{month_start:%y%m}{enterprise_index + 1:02d}",
+                id=sample_uuid(
+                    "report",
+                    profile.account_id,
+                    month_start.isoformat(),
+                ),
+                report_id=(f"{SAMPLE_REPORT_PREFIX}{month_start:%y%m}{enterprise_index + 1:02d}"),
                 enterprise_profile_id=profile.account_id,
                 enterprise_name=profile.enterprise_name,
                 category=category_label(profile.category),
@@ -615,8 +561,6 @@ async def create_operational_history(
                     },
                     sort_keys=True,
                 ),
-                source_kind="mock",
-                mock_run_id=run_id,
             )
             db.add(report)
             reports.append(report)
@@ -684,6 +628,12 @@ async def create_staff_report_notifications(
             )
             db.add(
                 UserNotification(
+                    id=sample_uuid(
+                        "notification",
+                        staff_account.id,
+                        report.id,
+                        notification_type,
+                    ),
                     recipient_account_id=staff_account.id,
                     recipient_role=staff_account.role.value,
                     title=notification_type,
@@ -740,7 +690,7 @@ def split_gender(total: int, male_percent: int) -> tuple[int, int]:
     return male, total - male
 
 
-async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> list[FinalReport]:
+async def create_final_reports(db: AsyncSession, history: dict) -> list[FinalReport]:
     reports_by_period: dict[str, list[EnterpriseReportSubmission]] = {}
     for report in history["reports"]:
         if report.review_status == "Consolidated":
@@ -751,7 +701,8 @@ async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> 
     final_reports: list[FinalReport] = []
     for period, reports in sorted(reports_by_period.items()):
         final_report = FinalReport(
-            report_code=await generate_final_report_code(db, period),
+            id=sample_uuid("final-report", period),
+            report_code=f"{SAMPLE_FINAL_REPORT_PREFIX}{period.replace(' ', '-').upper()}",
             title="Citywide Tourism Aggregation",
             period=period,
             generated_on=max(report.submitted_at for report in reports) + timedelta(days=2),
@@ -762,14 +713,13 @@ async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> 
             total_exit=sum(report.exits for report in reports),
             total_unique=sum(report.unique_count for report in reports),
             enterprise_count=len({report.enterprise_profile_id for report in reports}),
-            source_kind="mock",
-            mock_run_id=run_id,
         )
         db.add(final_report)
         await db.flush()
         for report in reports:
             db.add(
                 FinalReportSource(
+                    id=sample_uuid("final-report-source", final_report.id, report.id),
                     final_report_id=final_report.id,
                     intake_report_id=report.id,
                     enterprise=report.enterprise_name,
@@ -785,12 +735,13 @@ async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> 
 
 
 async def create_activity_logs(
-    db: AsyncSession, run_id: str, history: dict, final_reports: list[FinalReport]
+    db: AsyncSession, history: dict, final_reports: list[FinalReport]
 ) -> int:
     count = 0
     for report in history["reports"]:
         db.add(
             ActivityLog(
+                id=sample_uuid("activity-report", report.id),
                 timestamp=report.submitted_at,
                 category="Staff Submission",
                 severity="Success",
@@ -799,7 +750,7 @@ async def create_activity_logs(
                 action="Submit Enterprise Report",
                 target=report.enterprise_name,
                 summary=f"{report.enterprise_name} submitted {report.report_id} for {report.period}.",
-                source_id=report.id,
+                source_id=f"{SAMPLE_SOURCE_PREFIX}report:{report.id}",
                 metadata_json=json.dumps(
                     {
                         "enterpriseId": report.enterprise_profile.enterprise_id,
@@ -807,14 +758,13 @@ async def create_activity_logs(
                     },
                     sort_keys=True,
                 ),
-                source_kind="mock",
-                mock_run_id=run_id,
             )
         )
         count += 1
     for final_report in final_reports:
         db.add(
             ActivityLog(
+                id=sample_uuid("activity-final-report", final_report.id),
                 timestamp=final_report.generated_on,
                 category="Staff Operation",
                 severity="Success",
@@ -823,13 +773,11 @@ async def create_activity_logs(
                 action="Generate Final Report",
                 target=final_report.report_code,
                 summary=f"{REPORTING_STAFF_NAME} generated {final_report.report_code} for {final_report.period}.",
-                source_id=final_report.report_code,
+                source_id=f"{SAMPLE_SOURCE_PREFIX}final-report:{final_report.id}",
                 metadata_json=json.dumps(
                     {"period": final_report.period, "reportCount": final_report.enterprise_count},
                     sort_keys=True,
                 ),
-                source_kind="mock",
-                mock_run_id=run_id,
             )
         )
         count += 1
@@ -837,73 +785,86 @@ async def create_activity_logs(
     return count
 
 
-async def remove_active_mock_data(db: AsyncSession) -> dict:
-    active_runs = (
-        await db.scalars(select(MockDataRun).where(MockDataRun.status == "active"))
-    ).all()
-    run_ids = [run.id for run in active_runs]
-    if not run_ids:
-        return {"runs": 0}
-
-    final_report_ids = list(
-        await db.scalars(select(FinalReport.id).where(FinalReport.mock_run_id.in_(run_ids)))
+async def remove_sample_data(db: AsyncSession) -> dict:
+    account_ids = list(
+        await db.scalars(select(Account.id).where(Account.email.in_(SAMPLE_ACCOUNT_EMAILS)))
     )
     intake_report_ids = list(
         await db.scalars(
             select(EnterpriseReportSubmission.id).where(
-                EnterpriseReportSubmission.mock_run_id.in_(run_ids)
+                EnterpriseReportSubmission.report_id.startswith(SAMPLE_REPORT_PREFIX)
             )
         )
     )
-    account_ids = list(await db.scalars(select(Account.id).where(Account.mock_run_id.in_(run_ids))))
-    notification_filters = []
-    if intake_report_ids:
-        notification_filters.append(UserNotification.source_id.in_(intake_report_ids))
-    if account_ids:
-        notification_filters.append(UserNotification.recipient_account_id.in_(account_ids))
-    notification_count = 0
-    if notification_filters:
-        notifications_result = await db.execute(
-            delete(UserNotification).where(or_(*notification_filters))
+    final_report_ids = list(
+        await db.scalars(
+            select(FinalReport.id)
+            .outerjoin(FinalReportSource, FinalReportSource.final_report_id == FinalReport.id)
+            .where(
+                (FinalReport.report_code.startswith(SAMPLE_FINAL_REPORT_PREFIX))
+                | (FinalReportSource.intake_report_id.in_(intake_report_ids))
+            )
+            .distinct()
         )
-        notification_count = affected_row_count(notifications_result)
+    )
+    notification_filters = [
+        UserNotification.source_id.in_(intake_report_ids),
+        UserNotification.recipient_account_id.in_(account_ids),
+        UserNotification.created_by_account_id.in_(account_ids),
+    ]
+    notifications_result = await db.execute(
+        delete(UserNotification).where(or_(*notification_filters))
+    )
     if final_report_ids:
         await db.execute(
             delete(FinalReportSource).where(FinalReportSource.final_report_id.in_(final_report_ids))
         )
     final_reports_result = await db.execute(
-        delete(FinalReport).where(FinalReport.mock_run_id.in_(run_ids))
+        delete(FinalReport).where(FinalReport.id.in_(final_report_ids))
     )
     intake_reports_result = await db.execute(
         delete(EnterpriseReportSubmission).where(
-            EnterpriseReportSubmission.mock_run_id.in_(run_ids)
+            EnterpriseReportSubmission.id.in_(intake_report_ids)
         )
     )
     telemetry_snapshots_result = await db.execute(
         delete(EnterpriseTelemetrySnapshot).where(
-            EnterpriseTelemetrySnapshot.mock_run_id.in_(run_ids)
+            EnterpriseTelemetrySnapshot.camera_id.startswith(SAMPLE_CAMERA_PREFIX)
+            | EnterpriseTelemetrySnapshot.enterprise_profile_id.in_(account_ids)
         )
     )
     activity_logs_result = await db.execute(
-        delete(ActivityLog).where(ActivityLog.mock_run_id.in_(run_ids))
+        delete(ActivityLog).where(
+            ActivityLog.source_id.startswith(SAMPLE_SOURCE_PREFIX)
+            | ActivityLog.source_id.in_(intake_report_ids)
+            | ActivityLog.source_id.in_(final_report_ids)
+        )
     )
-    accounts_result = await db.execute(delete(Account).where(Account.mock_run_id.in_(run_ids)))
+    alerts_result = await db.execute(
+        delete(OperationalAlert).where(
+            OperationalAlert.source_id.startswith(SAMPLE_SOURCE_PREFIX)
+            | OperationalAlert.source_id.in_(
+                [f"occupancy-threshold:{account_id}" for account_id in account_ids]
+            )
+        )
+    )
+    tickets_result = await db.execute(
+        delete(SupportTicket).where(SupportTicket.enterprise_profile_id.in_(account_ids))
+    )
+    accounts_result = await db.execute(delete(Account).where(Account.id.in_(account_ids)))
     counts = {
         "finalReportSources": len(final_report_ids),
         "finalReports": affected_row_count(final_reports_result),
-        "staffNotifications": notification_count,
+        "staffNotifications": affected_row_count(notifications_result),
         "intakeReports": affected_row_count(intake_reports_result),
         "telemetrySnapshots": affected_row_count(telemetry_snapshots_result),
         "activityLogs": affected_row_count(activity_logs_result),
+        "operationalAlerts": affected_row_count(alerts_result),
+        "supportTickets": affected_row_count(tickets_result),
         "accounts": affected_row_count(accounts_result),
     }
-    await db.execute(
-        update(MockDataRun)
-        .where(MockDataRun.id.in_(run_ids))
-        .values(status="removed", ended_at=datetime.now(UTC))
-    )
     await db.commit()
-    return {"runs": len(run_ids), **counts}
+    return counts
 
 
 def reporting_range(range_value: str) -> tuple[datetime, datetime]:
@@ -974,78 +935,9 @@ def seeded_review_status(month_start: datetime, current_month: datetime) -> str:
     )
 
 
-async def desktop_prepare(desktop_url: str | None, result: dict) -> None:
-    if not desktop_url:
-        return
-
-    raw_target = result.get("target")
-    target: dict[str, Any] = raw_target if isinstance(raw_target, dict) else {}
-    raw_counts = result.get("counts")
-    counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
-    raw_prepared_reports = counts.get("targetPreparedReportCounts")
-    prepared_reports = raw_prepared_reports if isinstance(raw_prepared_reports, list) else []
-    raw_prepared = prepared_reports[0] if prepared_reports else None
-    prepared: dict[str, Any] = raw_prepared if isinstance(raw_prepared, dict) else {}
-    enterprise_id = target.get("enterpriseId")
-    if not isinstance(enterprise_id, str) or not enterprise_id:
-        raise SystemExit(
-            "The mock-data run has no target enterprise ID. Reset the run before preparing desktop data."
-        )
-    if not prepared:
-        raise SystemExit(
-            "The mock-data run has no prepared desktop count package. Reset the run before preparing desktop data."
-        )
-
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{desktop_url.rstrip('/')}/mock/prepare",
-                json={
-                    "mock_run_id": result["runId"],
-                    "enterprise_id": enterprise_id,
-                    "enterprise_name": target.get("enterpriseName"),
-                    "entries": prepared["entries"],
-                    "exits": prepared["exits"],
-                    "unique_count": prepared["uniqueCount"],
-                    "peak_occupancy": prepared["peakOccupancy"],
-                    "period": prepared["period"],
-                },
-            )
-            response.raise_for_status()
-            result["desktop"] = response.json()
-    except Exception as exc:
-        result["desktop"] = {
-            "prepared": False,
-            "delivery": "authenticated-desktop-pull",
-            "message": (
-                f"Direct desktop callback was unavailable ({type(exc).__name__}: {exc}). "
-                "The authenticated target desktop will pull the prepared count package automatically."
-            ),
-        }
-
-
-async def desktop_reset(desktop_url: str | None) -> None:
-    if not desktop_url:
-        return
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(f"{desktop_url.rstrip('/')}/mock/reset")
-            response.raise_for_status()
-    except Exception as exc:
-        print(f"Desktop mock reset skipped: {exc}")
-
-
-async def desktop_status(desktop_url: str | None) -> None:
-    if not desktop_url:
-        return
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{desktop_url.rstrip('/')}/mock/status")
-            response.raise_for_status()
-            print(json.dumps({"desktop": response.json()}, indent=2, sort_keys=True))
-    except Exception as exc:
-        print(f"Desktop mock status unavailable: {exc}")
-
-
 def affected_row_count(result: Any) -> int:
     return int(getattr(result, "rowcount", 0) or 0)
+
+
+def sample_uuid(*parts: str) -> str:
+    return str(uuid5(SAMPLE_UUID_NAMESPACE, ":".join((SAMPLE_DATASET_VERSION, *parts))))

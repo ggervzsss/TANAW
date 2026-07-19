@@ -23,7 +23,6 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    DevDelivery,
     EnterpriseProfile,
 )
 from app.features.accounts.router import update_account_status, update_lgu_account
@@ -132,7 +131,6 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                     AccountActivationToken.account_id.in_(account_ids)
                 )
             )
-            await db.execute(delete(DevDelivery).where(DevDelivery.account_id.in_(account_ids)))
             await db.execute(delete(ActivityLog).where(ActivityLog.source_id.in_(account_ids)))
             await db.execute(
                 delete(UserNotification).where(
@@ -190,7 +188,6 @@ async def _create_active_it_actor(runtime: PostgresRuntime, *, label: str) -> Ac
         is_protected_system_account=False,
         activated_at=now,
         password_changed_at=now,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(actor)

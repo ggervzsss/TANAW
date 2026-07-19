@@ -20,13 +20,6 @@ from app.config.camera_config import (
     HealthResponse,
     MetricsHistoryResponse,
     MetricsSummaryResponse,
-    MockManualEventRequest,
-    MockPrepareRequest,
-    MockPrepareResponse,
-    MockReportRequest,
-    MockResetResponse,
-    MockStartRequest,
-    MockStatusResponse,
     OccupancyCorrectionRequest,
     OccupancyCorrectionResponse,
     ReportDraftRequest,
@@ -35,6 +28,8 @@ from app.config.camera_config import (
     ReportSubmissionRecordResponse,
     ReportSubmissionRequest,
     ReportSubmissionResponse,
+    SamplePrepareRequest,
+    SamplePrepareResponse,
     SessionResponse,
     SyncMarkResponse,
 )
@@ -139,7 +134,6 @@ def record_occupancy_correction(
             actor_id=payload.actor_id,
             actor_name=payload.actor_name,
             camera_id=payload.camera_id,
-            source_kind=payload.source_kind,
         )
     )
 
@@ -214,12 +208,12 @@ def mark_local_events_synced() -> SyncMarkResponse:
     return SyncMarkResponse(updated=manager.mark_events_synced())
 
 
-@app.post("/mock/prepare", response_model=MockPrepareResponse)
-def prepare_mock_counts(payload: MockPrepareRequest) -> MockPrepareResponse:
+@app.post("/sample/prepare", response_model=SamplePrepareResponse)
+def prepare_sample_counts(payload: SamplePrepareRequest) -> SamplePrepareResponse:
     try:
-        return MockPrepareResponse(
-            **manager.prepare_mock_counts(
-                mock_run_id=payload.mock_run_id,
+        return SamplePrepareResponse(
+            **manager.prepare_sample_counts(
+                report_id=payload.report_id,
                 enterprise_id=payload.enterprise_id,
                 enterprise_name=payload.enterprise_name,
                 entries=payload.entries,
@@ -227,79 +221,6 @@ def prepare_mock_counts(payload: MockPrepareRequest) -> MockPrepareResponse:
                 unique_count=payload.unique_count,
                 peak_occupancy=payload.peak_occupancy,
                 period=payload.period,
-            )
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/mock/start", response_model=MockStatusResponse)
-def start_mock_mode(payload: MockStartRequest) -> MockStatusResponse:
-    try:
-        return MockStatusResponse(
-            **manager.start_mock_mode(
-                mock_run_id=payload.mock_run_id,
-                mode=payload.mode,
-                scenario=payload.scenario,
-                events_per_minute=payload.events_per_minute,
-                capacity=payload.capacity,
-                starting_occupancy=payload.starting_occupancy,
-                duration_minutes=payload.duration_minutes,
-                threshold_percent=payload.threshold_percent,
-                entry_probability=payload.entry_probability,
-                unique_entry_rate=payload.unique_entry_rate,
-            )
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/mock/pause", response_model=MockStatusResponse)
-def pause_mock_mode() -> MockStatusResponse:
-    try:
-        return MockStatusResponse(**manager.pause_mock_mode())
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/mock/resume", response_model=MockStatusResponse)
-def resume_mock_mode() -> MockStatusResponse:
-    try:
-        return MockStatusResponse(**manager.resume_mock_mode())
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/mock/stop", response_model=MockStatusResponse)
-def stop_mock_mode() -> MockStatusResponse:
-    return MockStatusResponse(**manager.stop_mock_mode())
-
-
-@app.post("/mock/event", response_model=MockStatusResponse)
-def append_mock_event(payload: MockManualEventRequest) -> MockStatusResponse:
-    try:
-        return MockStatusResponse(**manager.append_mock_event(payload.direction))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/mock/reset", response_model=MockResetResponse)
-def reset_mock_data(mock_run_id: str | None = None) -> MockResetResponse:
-    removed = manager.reset_mock_data(mock_run_id)
-    return MockResetResponse(stopped=True, removed=removed)
-
-
-@app.get("/mock/status", response_model=MockStatusResponse)
-def mock_status() -> MockStatusResponse:
-    return MockStatusResponse(**manager.mock_status())
-
-
-@app.post("/mock/generate-report", response_model=ReportSubmissionResponse)
-def generate_mock_report(payload: MockReportRequest) -> ReportSubmissionResponse:
-    try:
-        return ReportSubmissionResponse(
-            **manager.generate_mock_report(
-                payload.report_id, payload.period, payload.notes, payload.payload
             )
         )
     except ValueError as exc:

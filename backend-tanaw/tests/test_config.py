@@ -40,14 +40,6 @@ def test_database_url_preserves_explicit_driver() -> None:
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
 
 
-def test_mock_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TANAW_ALLOW_MOCK_DATA", "true")
-
-    settings = Settings()
-
-    assert settings.allow_mock_data is True
-
-
 def test_default_access_token_lifetime_supports_continuous_operation() -> None:
     settings = Settings()
 
@@ -225,7 +217,6 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
     assert settings.password_reset_retention_days == 30
     assert settings.password_reset_rate_bucket_retention_days == 2
     assert settings.account_email_change_retention_days == 180
-    assert settings.development_delivery_retention_days == 7
     assert settings.email_outbox_retention_days == 180
     assert settings.failed_email_outbox_retention_days == 365
 
@@ -241,7 +232,6 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
         ("password_reset_retention_days", 0),
         ("password_reset_rate_bucket_retention_days", 0),
         ("account_email_change_retention_days", 29),
-        ("development_delivery_retention_days", 0),
         ("email_outbox_retention_days", 29),
         ("failed_email_outbox_retention_days", 29),
     ],

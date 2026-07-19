@@ -74,11 +74,9 @@ class LocalMetricsStore:
                     reid_score,
                     reid_decision,
                     identity_confidence,
-                    payload_json,
-                    source_kind,
-                    mock_run_id
+                    payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_id,
@@ -96,8 +94,6 @@ class LocalMetricsStore:
                     payload.get("reid_decision"),
                     payload.get("identity_confidence"),
                     json.dumps(payload, sort_keys=True),
-                    payload.get("source_kind") or "real",
-                    payload.get("mock_run_id"),
                 ),
             )
 
@@ -345,11 +341,9 @@ class LocalMetricsStore:
                     running,
                     status,
                     error,
-                    payload_json,
-                    source_kind,
-                    mock_run_id
+                    payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     recorded_at,
@@ -362,8 +356,6 @@ class LocalMetricsStore:
                     payload.get("status"),
                     payload.get("error"),
                     json.dumps(payload, sort_keys=True),
-                    payload.get("source_kind") or "real",
-                    payload.get("mock_run_id"),
                 ),
             )
 
@@ -377,8 +369,6 @@ class LocalMetricsStore:
         reason: str,
         actor_id: str | None = None,
         actor_name: str | None = None,
-        source_kind: str = "real",
-        mock_run_id: str | None = None,
         recorded_at: str | None = None,
     ) -> dict[str, Any]:
         correction_id = str(uuid4())
@@ -394,8 +384,6 @@ class LocalMetricsStore:
             "reason": reason,
             "actor_id": actor_id,
             "actor_name": actor_name,
-            "source_kind": source_kind,
-            "mock_run_id": mock_run_id,
             "recorded_at": recorded_at,
         }
 
@@ -412,12 +400,10 @@ class LocalMetricsStore:
                     reason,
                     actor_id,
                     actor_name,
-                    source_kind,
-                    mock_run_id,
                     recorded_at,
                     payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     correction_id,
@@ -429,8 +415,6 @@ class LocalMetricsStore:
                     reason,
                     actor_id,
                     actor_name,
-                    source_kind,
-                    mock_run_id,
                     recorded_at,
                     json.dumps(payload, sort_keys=True),
                 ),
@@ -453,8 +437,6 @@ class LocalMetricsStore:
                     reason,
                     actor_id,
                     actor_name,
-                    source_kind,
-                    mock_run_id,
                     recorded_at
                 from occupancy_corrections
                 order by recorded_at desc
@@ -492,13 +474,6 @@ class LocalMetricsStore:
             unsubmitted_count = connection.execute(
                 "select count(*) from count_events where submitted_report_id is null"
             ).fetchone()[0]
-            source_rows = connection.execute(
-                f"""
-                select distinct source_kind, mock_run_id
-                from count_events
-                {submitted_filter}
-                """
-            ).fetchall()
             payload_rows = connection.execute(
                 f"""
                 select payload_json
@@ -520,7 +495,6 @@ class LocalMetricsStore:
         correction_delta = _safe_int(correction_row["correction_delta"])
         current_occupancy = max(0, entries - exits + correction_delta)
         estimated_unique_count = _safe_int(row["unique_entries"])
-        source_kind, mock_run_id = _provenance_for_rows(source_rows)
         return {
             "entries": entries,
             "exits": exits,
@@ -538,8 +512,6 @@ class LocalMetricsStore:
             "unsynced_events": _safe_int(unsynced_count),
             "first_event_at": row["first_event_at"],
             "last_event_at": row["last_event_at"],
-            "source_kind": source_kind,
-            "mock_run_id": mock_run_id,
             "period": _period_for_payload_rows(payload_rows),
         }
 
@@ -615,8 +587,6 @@ class LocalMetricsStore:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
-        source_kind: str | None = None,
-        mock_run_id: str | None = None,
     ) -> dict[str, int | str | None]:
         submitted_at = _utc_now()
         summary = self.metrics_summary(include_submitted=False)
@@ -645,19 +615,6 @@ class LocalMetricsStore:
             report_payload.get("status") if isinstance(report_payload.get("status"), str) else None
         )
         should_consume_open_events = existing_submission is None and payload_status != "Resubmitted"
-        resolved_source_kind = source_kind or (
-            str(existing_submission["source_kind"])
-            if existing_submission is not None and existing_submission["source_kind"]
-            else str(summary["source_kind"])
-        )
-        resolved_mock_run_id = mock_run_id or (
-            str(existing_submission["mock_run_id"])
-            if existing_submission is not None and existing_submission["mock_run_id"]
-            else str(summary["mock_run_id"])
-            if summary["mock_run_id"]
-            else None
-        )
-
         with self._connection() as connection:
             connection.execute(
                 """
@@ -671,11 +628,9 @@ class LocalMetricsStore:
                     unique_count,
                     notes,
                     payload_json,
-                    sync_status,
-                    source_kind,
-                    mock_run_id
+                    sync_status
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     report_id,
@@ -688,8 +643,6 @@ class LocalMetricsStore:
                     notes,
                     json.dumps(report_payload, sort_keys=True),
                     "pending_cloud_sync",
-                    resolved_source_kind,
-                    resolved_mock_run_id,
                 ),
             )
             if should_consume_open_events:
@@ -766,10 +719,10 @@ class LocalMetricsStore:
             )
         return result.rowcount
 
-    def prepare_mock_counts(
+    def prepare_sample_counts(
         self,
         *,
-        mock_run_id: str,
+        report_id: str,
         entries: int,
         exits: int,
         unique_count: int,
@@ -779,45 +732,28 @@ class LocalMetricsStore:
         period: str,
     ) -> dict[str, int | str | None]:
         with self._connection() as connection:
-            existing_open_events = connection.execute(
-                """
-                select count(*)
-                from count_events
-                where mock_run_id = ?
-                  and submitted_report_id is null
-                """,
-                (mock_run_id,),
+            existing_report = connection.execute(
+                "select count(*) from report_submissions where report_id = ?",
+                (report_id,),
             ).fetchone()[0]
             existing_open_period = _period_for_payload_rows(
                 connection.execute(
                     """
                     select payload_json
                     from count_events
-                    where mock_run_id = ?
-                      and submitted_report_id is null
+                    where submitted_report_id is null
                     order by recorded_at asc
                     limit 25
-                    """,
-                    (mock_run_id,),
+                    """
                 ).fetchall()
             )
-            existing_period_report = connection.execute(
-                """
-                select count(*)
-                from report_submissions
-                where mock_run_id = ?
-                  and period = ?
-                """,
-                (mock_run_id, period),
-            ).fetchone()[0]
-        if existing_period_report or (existing_open_events and existing_open_period == period):
+        if existing_report or existing_open_period is not None:
             return {
                 **self.metrics_summary(include_submitted=False),
                 "prepared": False,
             }
 
-        self._remove_mock_metric_data(mock_run_id)
-        rng = random.Random(mock_run_id)
+        rng = random.Random(report_id)
         entry_total = max(0, entries)
         exit_total = max(0, min(exits, entry_total))
         unique_total = max(0, min(unique_count, entry_total))
@@ -856,7 +792,6 @@ class LocalMetricsStore:
             recorded_at = (
                 start + timedelta(seconds=(index + 1) * max(1, int((20 * 86400) / max(total, 1))))
             ).isoformat()
-            event_id = str(uuid4())
             payload = {
                 "camera_id": camera_id,
                 "camera_name": camera_name,
@@ -871,8 +806,6 @@ class LocalMetricsStore:
                 "identity_confidence": "high"
                 if visitor_id
                 else ("degraded" if is_unique else None),
-                "source_kind": "mock",
-                "mock_run_id": mock_run_id,
                 "period": period,
                 "counts": {
                     "entry": current_entries,
@@ -882,7 +815,7 @@ class LocalMetricsStore:
             }
             rows.append(
                 (
-                    event_id,
+                    str(uuid4()),
                     recorded_at,
                     camera_id,
                     camera_name,
@@ -897,8 +830,6 @@ class LocalMetricsStore:
                     payload["reid_decision"],
                     payload["identity_confidence"],
                     json.dumps(payload, sort_keys=True),
-                    "mock",
-                    mock_run_id,
                 )
             )
 
@@ -908,90 +839,15 @@ class LocalMetricsStore:
                 insert into count_events (
                     event_id, recorded_at, camera_id, camera_name, direction, track_id,
                     entry_count, exit_count, occupancy_count, visitor_id, is_unique_entry,
-                    reid_score, reid_decision, identity_confidence, payload_json,
-                    source_kind, mock_run_id
+                    reid_score, reid_decision, identity_confidence, payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
         return {
             **self.metrics_summary(include_submitted=False),
             "prepared": True,
-        }
-
-    def _remove_mock_metric_data(self, mock_run_id: str) -> None:
-        with self._connection() as connection:
-            connection.execute(
-                "delete from count_events where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
-                (mock_run_id,),
-            )
-            connection.execute(
-                "delete from count_snapshots where mock_run_id = ? and source_kind in ('mock', 'hybrid')",
-                (mock_run_id,),
-            )
-            connection.execute(
-                """
-                delete from occupancy_corrections
-                where mock_run_id = ?
-                  and source_kind in ('mock', 'hybrid')
-                """,
-                (mock_run_id,),
-            )
-
-    def remove_mock_data(self, mock_run_id: str | None = None) -> dict[str, int]:
-        if mock_run_id:
-            event_filter = "mock_run_id = ?"
-            params: tuple[str, ...] = (mock_run_id,)
-            preserved_event_filter = "(mock_run_id is null or mock_run_id != ?)"
-            preserved_event_params: tuple[str, ...] = (mock_run_id,)
-        else:
-            event_filter = "source_kind in ('mock', 'hybrid')"
-            params = ()
-            preserved_event_filter = "source_kind not in ('mock', 'hybrid')"
-            preserved_event_params = ()
-
-        with self._connection() as connection:
-            count_events = connection.execute(
-                f"select count(*) from count_events where {event_filter}", params
-            ).fetchone()[0]
-            count_snapshots = connection.execute(
-                f"select count(*) from count_snapshots where {event_filter}", params
-            ).fetchone()[0]
-            occupancy_corrections = connection.execute(
-                f"select count(*) from occupancy_corrections where {event_filter}", params
-            ).fetchone()[0]
-            report_rows = connection.execute(
-                f"select report_id from report_submissions where {event_filter}",
-                params,
-            ).fetchall()
-            report_ids = [str(row["report_id"]) for row in report_rows]
-            restored_real_events = 0
-            if report_ids:
-                placeholders = ", ".join("?" for _ in report_ids)
-                restored_real_events = (
-                    connection.execute(
-                        f"""
-                    update count_events
-                    set submitted_report_id = null
-                    where submitted_report_id in ({placeholders})
-                      and {preserved_event_filter}
-                    """,
-                        (*report_ids, *preserved_event_params),
-                    ).rowcount
-                    or 0
-                )
-            connection.execute(f"delete from count_events where {event_filter}", params)
-            connection.execute(f"delete from count_snapshots where {event_filter}", params)
-            connection.execute(f"delete from report_submissions where {event_filter}", params)
-            connection.execute(f"delete from occupancy_corrections where {event_filter}", params)
-
-        return {
-            "count_events": _safe_int(count_events),
-            "count_snapshots": _safe_int(count_snapshots),
-            "occupancy_corrections": _safe_int(occupancy_corrections),
-            "report_submissions": len(report_ids),
-            "restored_real_events": _safe_int(restored_real_events),
         }
 
     def _report_submission(self, report_id: str) -> dict[str, Any] | None:
@@ -1009,8 +865,6 @@ class LocalMetricsStore:
                     notes,
                     payload_json,
                     sync_status,
-                    source_kind,
-                    mock_run_id,
                     synced_at,
                     raw_purged_at
                 from report_submissions
@@ -1036,8 +890,6 @@ class LocalMetricsStore:
                     notes,
                     payload_json,
                     sync_status,
-                    source_kind,
-                    mock_run_id,
                     synced_at,
                     raw_purged_at
                 from report_submissions
@@ -1065,8 +917,6 @@ class LocalMetricsStore:
                     notes,
                     payload_json,
                     sync_status,
-                    source_kind,
-                    mock_run_id,
                     synced_at,
                     raw_purged_at
                 from report_submissions
@@ -1177,8 +1027,6 @@ class LocalMetricsStore:
                     reid_score real,
                     reid_decision text,
                     identity_confidence text,
-                    source_kind text not null default 'real',
-                    mock_run_id text,
                     payload_json text not null,
                     submitted_report_id text,
                     synced_at text
@@ -1199,8 +1047,6 @@ class LocalMetricsStore:
                     running integer not null default 0,
                     status text,
                     error text,
-                    source_kind text not null default 'real',
-                    mock_run_id text,
                     payload_json text not null
                 );
 
@@ -1217,8 +1063,6 @@ class LocalMetricsStore:
                     notes text,
                     payload_json text not null,
                     sync_status text not null default 'pending_cloud_sync',
-                    source_kind text not null default 'real',
-                    mock_run_id text,
                     synced_at text,
                     raw_purged_at text
                 );
@@ -1241,17 +1085,12 @@ class LocalMetricsStore:
                     reason text not null,
                     actor_id text,
                     actor_name text,
-                    source_kind text not null default 'real',
-                    mock_run_id text,
                     recorded_at text not null,
                     payload_json text not null
                 );
 
                 create index if not exists idx_occupancy_corrections_recorded_at
                     on occupancy_corrections(recorded_at);
-                create index if not exists idx_occupancy_corrections_source
-                    on occupancy_corrections(source_kind, mock_run_id);
-
                 create table if not exists visitor_identities (
                     visitor_id text primary key,
                     business_date text not null,
@@ -1301,44 +1140,6 @@ class LocalMetricsStore:
                 create index if not exists idx_visitor_sightings_business_date on visitor_sightings(business_date);
                 """
             )
-            _ensure_column(connection, "count_events", "visitor_id", "text")
-            _ensure_column(
-                connection, "count_events", "is_unique_entry", "integer not null default 0"
-            )
-            _ensure_column(connection, "count_events", "reid_score", "real")
-            _ensure_column(connection, "count_events", "reid_decision", "text")
-            _ensure_column(connection, "count_events", "identity_confidence", "text")
-            _ensure_column(
-                connection, "count_events", "source_kind", "text not null default 'real'"
-            )
-            _ensure_column(connection, "count_events", "mock_run_id", "text")
-            _ensure_column(
-                connection, "count_snapshots", "source_kind", "text not null default 'real'"
-            )
-            _ensure_column(connection, "count_snapshots", "mock_run_id", "text")
-            _ensure_column(
-                connection, "report_submissions", "source_kind", "text not null default 'real'"
-            )
-            _ensure_column(connection, "report_submissions", "mock_run_id", "text")
-            _ensure_column(connection, "report_submissions", "raw_purged_at", "text")
-            _ensure_column(connection, "occupancy_corrections", "enterprise_id", "text")
-            _ensure_column(
-                connection,
-                "occupancy_corrections",
-                "source_kind",
-                "text not null default 'real'",
-            )
-            _ensure_column(connection, "occupancy_corrections", "mock_run_id", "text")
-            connection.execute(
-                """
-                update count_events
-                set is_unique_entry = 1
-                where direction = 'entry'
-                    and reid_decision is null
-                    and (visitor_id is null or visitor_id = '')
-                    and is_unique_entry = 0
-                """
-            )
             connection.commit()
         finally:
             connection.close()
@@ -1378,20 +1179,6 @@ def _safe_scope(value: str | None) -> str:
     return normalized[:160] or "unbound"
 
 
-def _provenance_for_rows(rows: list[sqlite3.Row]) -> tuple[str, str | None]:
-    if not rows:
-        return "real", None
-    source_kinds = {str(row["source_kind"]) for row in rows}
-    run_ids = {str(row["mock_run_id"]) for row in rows if row["mock_run_id"]}
-    if "hybrid" in source_kinds or ("real" in source_kinds and "mock" in source_kinds):
-        source_kind = "hybrid"
-    elif source_kinds == {"mock"}:
-        source_kind = "mock"
-    else:
-        source_kind = "real"
-    return source_kind, run_ids.pop() if len(run_ids) == 1 else None
-
-
 def _period_for_payload_rows(rows: list[sqlite3.Row]) -> str | None:
     for row in rows:
         try:
@@ -1416,18 +1203,6 @@ def _safe_float(value: Any) -> float | None:
     if isinstance(value, int | float):
         return float(value)
     return None
-
-
-def _ensure_column(
-    connection: sqlite3.Connection, table_name: str, column_name: str, definition: str
-) -> None:
-    existing_columns = {
-        row["name"] for row in connection.execute(f"pragma table_info({table_name})").fetchall()
-    }
-    if column_name in existing_columns:
-        return
-
-    connection.execute(f"alter table {table_name} add column {column_name} {definition}")
 
 
 def _parse_recorded_at(value: Any) -> datetime:
@@ -1488,8 +1263,6 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
         "notes": row["notes"],
         "payload": payload if isinstance(payload, dict) else {},
         "sync_status": row["sync_status"],
-        "source_kind": row["source_kind"],
-        "mock_run_id": row["mock_run_id"],
         "synced_at": row["synced_at"],
         "raw_purged_at": row["raw_purged_at"],
     }

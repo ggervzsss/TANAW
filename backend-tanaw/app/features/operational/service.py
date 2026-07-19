@@ -2,8 +2,7 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from hashlib import sha256
-from math import ceil, sin
+from math import ceil
 from typing import cast
 
 from sqlalchemy import func, or_, select
@@ -28,10 +27,7 @@ from app.features.operational.models import (
     UserNotification,
 )
 from app.features.operational.schemas import (
-    DesktopHealthSummary,
-    DesktopMetricsSummary,
     DesktopReportSubmissionIngest,
-    DesktopSessionSummary,
     DesktopTelemetryIngest,
     FinalReportArchivedFromStatus,
     FinalReportCreate,
@@ -39,8 +35,6 @@ from app.features.operational.schemas import (
     FinalReportSourceSummary,
     FinalReportStatusUpdate,
     FinalReportSummary,
-    FleetSimulationEnterpriseSummary,
-    FleetSimulationTarget,
     IntakeReportSummary,
     OperationalAlertSummary,
     OperationalSummary,
@@ -608,25 +602,11 @@ def occupancy_alert_condition(
     payload: DesktopTelemetryIngest,
     building_capacity: int | None = None,
 ) -> OccupancyAlertCondition | None:
-    simulation = (payload.payload or {}).get("simulation")
-    if not isinstance(simulation, dict):
-        if payload.sourceKind != "real" or not is_valid_building_capacity(building_capacity):
-            return None
-        if building_capacity is None:
-            return None
-        capacity = building_capacity
-        threshold_percent = OCCUPANCY_ALERT_THRESHOLD_PERCENT
-    else:
-        raw_capacity = simulation.get("capacity")
-        raw_threshold_percent = simulation.get("thresholdPercent")
-        if not is_valid_occupancy_threshold(raw_capacity, raw_threshold_percent):
-            return None
-        assert isinstance(raw_capacity, int) and not isinstance(raw_capacity, bool)
-        assert isinstance(raw_threshold_percent, int) and not isinstance(
-            raw_threshold_percent, bool
-        )
-        capacity = raw_capacity
-        threshold_percent = raw_threshold_percent
+    if not is_valid_building_capacity(building_capacity):
+        return None
+    assert building_capacity is not None
+    capacity = building_capacity
+    threshold_percent = OCCUPANCY_ALERT_THRESHOLD_PERCENT
 
     threshold_count = max(1, ceil(capacity * threshold_percent / 100))
     recovery_percent = max(0, threshold_percent - 10)
@@ -642,20 +622,6 @@ def occupancy_alert_condition(
 
 def is_valid_building_capacity(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
-
-
-def is_valid_occupancy_threshold(capacity: object, threshold_percent: object) -> bool:
-    if (
-        not isinstance(capacity, int)
-        or isinstance(capacity, bool)
-        or capacity <= 0
-        or not isinstance(threshold_percent, int)
-        or isinstance(threshold_percent, bool)
-        or threshold_percent <= 0
-        or threshold_percent > 100
-    ):
-        return False
-    return True
 
 
 async def evaluate_telemetry_alerts(
@@ -746,8 +712,6 @@ async def ingest_telemetry(
         error=payload.session.error,
         analytics_fps=payload.health.analyticsFps,
         payload_json=json.dumps(payload.model_dump(mode="json"), sort_keys=True),
-        source_kind=payload.sourceKind,
-        mock_run_id=payload.mockRunId,
     )
     db.add(snapshot)
     if update_account_gateway:
@@ -759,152 +723,6 @@ async def ingest_telemetry(
     await db.commit()
     await db.refresh(snapshot)
     return to_telemetry_summary(snapshot, account)
-
-
-async def list_fleet_simulation_enterprises(
-    db: AsyncSession, actor: Account
-) -> list[FleetSimulationEnterpriseSummary]:
-    enterprises = (
-        await db.scalars(
-            select(Account)
-            .join(Account.enterprise_profile)
-            .where(
-                Account.role == AccountRole.ENTERPRISE,
-                Account.status == AccountStatus.ACTIVE,
-                Account.activated_at.is_not(None),
-            )
-            .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
-        )
-    ).all()
-    current_enterprise_id = (
-        enterprise_identifier(actor) if actor.role == AccountRole.ENTERPRISE else None
-    )
-    return [
-        FleetSimulationEnterpriseSummary(
-            enterpriseId=enterprise_identifier(enterprise),
-            enterpriseName=enterprise_name(enterprise),
-            category=format_enterprise_category(require_enterprise_profile(enterprise).category),
-            barangay=require_enterprise_profile(enterprise).barangay,
-            isCurrent=enterprise_identifier(enterprise) == current_enterprise_id,
-        )
-        for enterprise in enterprises
-    ]
-
-
-async def enterprise_accounts_by_identifier(
-    db: AsyncSession, enterprise_ids: set[str]
-) -> dict[str, Account]:
-    if not enterprise_ids:
-        return {}
-    accounts = (
-        await db.scalars(
-            select(Account)
-            .join(Account.enterprise_profile)
-            .where(
-                Account.role == AccountRole.ENTERPRISE,
-                Account.status == AccountStatus.ACTIVE,
-                Account.activated_at.is_not(None),
-                (EnterpriseProfile.enterprise_id.in_(enterprise_ids))
-                | (Account.id.in_(enterprise_ids)),
-            )
-        )
-    ).all()
-    return {enterprise_identifier(account): account for account in accounts}
-
-
-def build_fleet_simulation_telemetry_payload(
-    *,
-    target: FleetSimulationTarget,
-    enterprise: Account,
-    run_id: str,
-    started_at: datetime,
-    elapsed_seconds: int,
-) -> DesktopTelemetryIngest:
-    now = datetime.now(UTC)
-    seed = stable_simulation_seed(run_id, target.enterpriseId)
-    capacity = target.capacity
-    threshold_count = max(1, ceil(capacity * target.thresholdPercent / 100))
-    current_occupancy = fleet_occupancy_for_lane(target, elapsed_seconds, seed)
-    if target.lane == "one-minute-breach" and 20 <= elapsed_seconds % 180 < 80:
-        current_occupancy = max(current_occupancy, threshold_count)
-
-    peak_occupancy = max(
-        current_occupancy,
-        fleet_peak_for_lane(target, elapsed_seconds),
-    )
-    event_rate = fleet_events_per_minute(target.lane)
-    tick_index = max(0, elapsed_seconds // 5)
-    entries = max(
-        current_occupancy, tick_index * max(1, event_rate // 6) + current_occupancy + seed % 19
-    )
-    exits = max(0, entries - current_occupancy)
-    total_events = entries + exits
-    unique_count = max(current_occupancy, int(entries * 0.82))
-    confirmed_unique_count = int(unique_count * 0.9)
-    degraded_unique_count = max(0, unique_count - confirmed_unique_count)
-    unsynced_events = 3 + seed % 4 if target.lane == "warning" else 0
-    session_status = "sync_delayed" if target.lane == "warning" else "running"
-
-    return DesktopTelemetryIngest(
-        deviceId=None,
-        capturedAt=now,
-        metrics=DesktopMetricsSummary(
-            entries=entries,
-            exits=exits,
-            peakOccupancy=peak_occupancy,
-            currentOccupancy=current_occupancy,
-            uniqueCount=unique_count,
-            confirmedUniqueCount=confirmed_unique_count,
-            degradedUniqueCount=degraded_unique_count,
-            totalEvents=total_events,
-            unsubmittedEvents=0,
-            unsyncedEvents=unsynced_events,
-            firstEventAt=started_at,
-            lastEventAt=now,
-        ),
-        session=DesktopSessionSummary(
-            running=True,
-            status=session_status,
-            error=None,
-            cameraId="fleet-sim",
-            cameraName="Fleet Simulation Lab",
-            updatedAt=now,
-        ),
-        health=DesktopHealthSummary(
-            analyticsFps=24.0,
-            processingProfile="simulation",
-            detectorP50Ms=0.0,
-            detectorP95Ms=0.0,
-            processingFrameAgeMs=0.0,
-            processingFramesSkipped=0,
-            modelReady=True,
-            reidReady=True,
-            qualityReidReady=True,
-            reidQueueDepth=0,
-            qualityReidQueueDepth=0,
-        ),
-        sourceKind="mock",
-        mockRunId=run_id,
-        payload={
-            "simulation": {
-                "runId": run_id,
-                "mode": "fleet",
-                "scenario": target.lane,
-                "state": "running",
-                "capacity": target.capacity,
-                "thresholdPercent": target.thresholdPercent,
-                "eventsPerMinute": event_rate,
-                "durationMinutes": None,
-                "startedAt": started_at.isoformat(),
-                "fleet": True,
-                "lane": target.lane,
-                "elapsedSeconds": elapsed_seconds,
-                "enterpriseId": enterprise_identifier(enterprise),
-                "enterpriseName": enterprise_name(enterprise),
-            },
-            "syncedAt": now.isoformat(),
-        },
-    )
 
 
 async def ingest_report_submission(
@@ -951,8 +769,6 @@ async def ingest_report_submission(
             notes=payload.notes,
             sync_status=payload.syncStatus,
             payload_json=json.dumps(payload.payload or {}, sort_keys=True),
-            source_kind=payload.sourceKind,
-            mock_run_id=payload.mockRunId,
         )
         db.add(report)
     else:
@@ -972,8 +788,6 @@ async def ingest_report_submission(
         report.notes = payload.notes
         report.sync_status = payload.syncStatus
         report.payload_json = json.dumps(payload.payload or {}, sort_keys=True)
-        report.source_kind = payload.sourceKind
-        report.mock_run_id = payload.mockRunId
         if report.review_status == "Returned" and report_status in {"Submitted", "Resubmitted"}:
             report.review_status = "Pending Review"
 
@@ -1126,8 +940,6 @@ async def create_final_report(
         total_exit=sum(item.exits for item in source_reports),
         total_unique=sum(item.unique_count for item in source_reports),
         enterprise_count=len({item.enterprise_profile_id for item in source_reports}),
-        source_kind=source_kind_for_reports(source_reports),
-        mock_run_id=mock_run_id_for_reports(source_reports),
     )
     db.add(report)
     await db.flush()
@@ -1270,8 +1082,6 @@ def to_telemetry_summary(
         error=snapshot.error,
         analyticsFps=snapshot.analytics_fps,
         gatewayStatus=gateway_status_for_snapshot(snapshot),
-        sourceKind=snapshot.source_kind,  # type: ignore[arg-type]
-        mockRunId=snapshot.mock_run_id,
     )
 
 
@@ -1522,87 +1332,6 @@ def validate_final_report_revision_return(
         raise InvalidReportWorkflowError(
             f"Selected source reports do not belong to this final report: {joined_ids}."
         )
-
-
-def source_kind_for_reports(reports: Sequence[EnterpriseReportSubmission]) -> str:
-    source_kinds = {report.source_kind for report in reports}
-    if "hybrid" in source_kinds:
-        return "hybrid"
-    if source_kinds == {"mock"}:
-        return "mock"
-    return "real"
-
-
-def mock_run_id_for_reports(reports: Sequence[EnterpriseReportSubmission]) -> str | None:
-    run_ids = {report.mock_run_id for report in reports if report.mock_run_id}
-    return run_ids.pop() if len(run_ids) == 1 else None
-
-
-def fleet_occupancy_for_lane(target: FleetSimulationTarget, elapsed_seconds: int, seed: int) -> int:
-    if target.lane == "warning":
-        threshold_count = max(1, ceil(target.capacity * target.thresholdPercent / 100))
-        warning_count = max(0, threshold_count - max(1, ceil(target.capacity * 0.08)))
-        wave = int(sin((elapsed_seconds + seed % 37) / 18) * max(1, target.capacity * 0.02))
-        return clamp_int(warning_count + wave, 0, max(0, threshold_count - 1))
-
-    if target.lane == "one-minute-breach":
-        phase = elapsed_seconds % 180
-        if phase < 20:
-            percent = interpolate(
-                max(5.0, target.thresholdPercent - 35), target.thresholdPercent + 4, phase / 20
-            )
-        elif phase < 80:
-            percent = target.thresholdPercent + 5 + sin((phase + seed % 23) / 12) * 2
-        elif phase < 120:
-            percent = interpolate(
-                target.thresholdPercent + 4,
-                max(0.0, target.thresholdPercent - 15),
-                (phase - 80) / 40,
-            )
-        else:
-            percent = normal_occupancy_percent(target.thresholdPercent, elapsed_seconds, seed)
-        return occupancy_from_percent(target.capacity, percent)
-
-    return occupancy_from_percent(
-        target.capacity, normal_occupancy_percent(target.thresholdPercent, elapsed_seconds, seed)
-    )
-
-
-def fleet_peak_for_lane(target: FleetSimulationTarget, elapsed_seconds: int) -> int:
-    if target.lane == "one-minute-breach" and elapsed_seconds % 180 >= 20:
-        return occupancy_from_percent(target.capacity, min(100.0, target.thresholdPercent + 8))
-    return 0
-
-
-def normal_occupancy_percent(threshold_percent: int, elapsed_seconds: int, seed: int) -> float:
-    upper_bound = max(5.0, threshold_percent - 22)
-    center = min(55.0, max(8.0, upper_bound - 8))
-    return min(upper_bound, max(0.0, center + sin((elapsed_seconds + seed % 53) / 24) * 7))
-
-
-def occupancy_from_percent(capacity: int, percent: float) -> int:
-    return clamp_int(round(capacity * percent / 100), 0, capacity)
-
-
-def fleet_events_per_minute(lane: str) -> int:
-    if lane == "warning":
-        return 34
-    if lane == "one-minute-breach":
-        return 52
-    return 22
-
-
-def stable_simulation_seed(*parts: str) -> int:
-    digest = sha256(":".join(parts).encode()).hexdigest()
-    return int(digest[:8], 16)
-
-
-def interpolate(start: float, end: float, ratio: float) -> float:
-    return start + (end - start) * max(0.0, min(1.0, ratio))
-
-
-def clamp_int(value: int, lower: int, upper: int) -> int:
-    return min(upper, max(lower, value))
 
 
 def gateway_status_for_snapshot(snapshot: EnterpriseTelemetrySnapshot) -> str:

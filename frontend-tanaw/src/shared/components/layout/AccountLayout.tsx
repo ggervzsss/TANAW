@@ -81,7 +81,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   }, [pathname]);
 
   useEffect(() => {
-    if (role !== "it") return undefined;
+    if (role !== "it" || import.meta.env.PROD) return undefined;
 
     const unlockPhrase = "devlog";
     const handleDevLogShortcut = (event: KeyboardEvent) => {
@@ -105,11 +105,11 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   return (
     <section className={sectionClassName}>
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <PortalTopbar role={role} showDevLog={isDevLogUnlocked} />
+        <PortalTopbar role={role} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
         <main ref={mainRef} className={mainClassName}>
           <div className={mainContentClassName}>
             {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
-            {pathname === routes.it.devLog && !isDevLogUnlocked ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}
+            {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}
           </div>
         </main>
       </div>

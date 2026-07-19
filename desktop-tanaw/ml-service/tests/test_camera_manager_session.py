@@ -18,83 +18,6 @@ from app.storage.session_store import SessionStore
 
 
 class CameraProcessingManagerSessionTest(unittest.TestCase):
-    def test_virtual_simulation_runs_without_camera_and_records_manual_events(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            manager.bind_enterprise("simulation@tanaw.test", "Simulation Enterprise")
-
-            started = manager.start_mock_mode(
-                mock_run_id="simulation-run-1",
-                mode="virtual",
-                scenario="normal",
-                events_per_minute=1,
-                capacity=100,
-                starting_occupancy=2,
-                duration_minutes=None,
-                threshold_percent=90,
-                entry_probability=None,
-                unique_entry_rate=0.8,
-            )
-            paused = manager.pause_mock_mode()
-            after_entry = manager.append_mock_event("entry")
-            after_exit = manager.append_mock_event("exit")
-            stopped = manager.stop_mock_mode()
-
-            self.assertTrue(started["running"])
-            self.assertFalse(started["requires_real_camera"])
-            self.assertTrue(paused["paused"])
-            self.assertEqual(after_entry["current_occupancy"], 3)
-            self.assertEqual(after_exit["current_occupancy"], 2)
-            self.assertEqual(stopped["state"], "stopped")
-            self.assertEqual(manager.metrics_summary()["source_kind"], "mock")
-
-    def test_virtual_simulation_rejects_exit_when_occupancy_is_zero(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            manager.bind_enterprise("simulation@tanaw.test", "Simulation Enterprise")
-            manager.start_mock_mode(
-                mock_run_id="simulation-run-2",
-                mode="virtual",
-                scenario="evacuation",
-                events_per_minute=1,
-                capacity=100,
-                starting_occupancy=0,
-                duration_minutes=None,
-                threshold_percent=90,
-                entry_probability=None,
-                unique_entry_rate=0.8,
-            )
-            manager.pause_mock_mode()
-
-            with self.assertRaisesRegex(ValueError, "occupancy is zero"):
-                manager.append_mock_event("exit")
-
-            manager.stop_mock_mode()
-
-    def test_resetting_another_mock_run_does_not_stop_live_simulation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            manager = _manager_with_store(directory)
-            manager.bind_enterprise("simulation@tanaw.test", "Simulation Enterprise")
-            manager.start_mock_mode(
-                mock_run_id="live-run",
-                mode="virtual",
-                scenario="normal",
-                events_per_minute=1,
-                capacity=100,
-                starting_occupancy=1,
-                duration_minutes=None,
-                threshold_percent=90,
-                entry_probability=None,
-                unique_entry_rate=0.8,
-            )
-
-            manager.reset_mock_data("historical-run")
-            status = manager.mock_status()
-
-            self.assertTrue(status["running"])
-            self.assertEqual(status["mock_run_id"], "live-run")
-            manager.stop_mock_mode()
-
     def test_enterprise_binding_switches_session_store_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager(directory)
@@ -114,8 +37,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             manager._enterprise_name = "Target Enterprise"
             manager._session_store = SessionStore(directory, "target@tanaw.test")
 
-            result = manager.prepare_mock_counts(
-                mock_run_id="run-1",
+            result = manager.prepare_sample_counts(
+                report_id="SAMPLE-REPORT-1",
                 enterprise_id="target@tanaw.test",
                 enterprise_name="Target Enterprise",
                 entries=20,
@@ -130,8 +53,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(result["enterprise_id"], "target@tanaw.test")
 
             with self.assertRaisesRegex(ValueError, "Desktop is bound"):
-                manager.prepare_mock_counts(
-                    mock_run_id="run-1",
+                manager.prepare_sample_counts(
+                    report_id="SAMPLE-REPORT-1",
                     enterprise_id="other@tanaw.test",
                     enterprise_name="Other Enterprise",
                     entries=20,

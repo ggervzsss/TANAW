@@ -21,9 +21,6 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
-                {enterprise.sourceKind && enterprise.sourceKind !== "real" && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black tracking-[0.14em] text-amber-800 uppercase">Simulated Live Data</span>
-                )}
               </div>
               <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
                 {enterprise.category} - Barangay {enterprise.barangay}

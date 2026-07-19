@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.location_validation import is_inside_san_pedro
@@ -29,11 +30,9 @@ from app.features.accounts.service import (
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
-    get_dev_delivery_by_id,
     get_pending_profile_change_request,
     is_protected_startup_account,
     list_accounts_by_roles,
-    list_dev_deliveries,
     to_account_summaries_with_requests,
     to_account_summary_with_requests,
     to_delivery_summary,
@@ -52,6 +51,12 @@ from app.features.auth.email_change import (
     invalidate_account_email_change_requests,
     request_account_email_change,
     resolve_account_email_change,
+)
+from app.features.mail.dev_log import (
+    get_dev_delivery as find_dev_delivery,
+)
+from app.features.mail.dev_log import (
+    list_dev_deliveries as list_ephemeral_dev_deliveries,
 )
 from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import create_user_notification
@@ -861,9 +866,9 @@ async def record_account_log(
 @dev_router.get("/deliveries", response_model=list[DeliverySummary])
 async def get_dev_deliveries(
     _: ITAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[DeliverySummary]:
-    deliveries = await list_dev_deliveries(db)
+    ensure_dev_log_available()
+    deliveries = list_ephemeral_dev_deliveries()
     return [to_delivery_summary(delivery) for delivery in deliveries]
 
 
@@ -871,9 +876,14 @@ async def get_dev_deliveries(
 async def get_dev_delivery(
     delivery_id: str,
     _: ITAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeliverySummary:
-    delivery = await get_dev_delivery_by_id(db, delivery_id)
+    ensure_dev_log_available()
+    delivery = find_dev_delivery(delivery_id)
     if delivery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found.")
     return to_delivery_summary(delivery)
+
+
+def ensure_dev_log_available() -> None:
+    if get_settings().is_production:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")

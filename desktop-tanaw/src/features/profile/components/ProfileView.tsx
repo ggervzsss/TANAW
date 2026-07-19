@@ -444,7 +444,7 @@ function ProfileEditModal({ currentValue, error, field, isSaving, nameErrors, na
         ? "TANAW sends a single-use verification link to the proposed address and a warning to your current address. IT can approve the change only after ownership is verified."
         : field === "phone"
           ? "This sends a contact number change request to IT and Admin for review."
-          : "This updates the occupancy capacity used by TANAW alerts and simulation defaults.";
+          : "This updates the occupancy capacity used by TANAW alerts.";
 
   return (
     <ModalPortal>

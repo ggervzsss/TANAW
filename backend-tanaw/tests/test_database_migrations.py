@@ -30,7 +30,7 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         for constraint in table.foreign_key_constraints
     }
 
-    assert len(relationships) == 24
+    assert len(relationships) == 17
     assert {
         ("enterprise_profiles", ("account_id",), ("accounts.id",)),
         (
@@ -60,8 +60,13 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
             ("accounts.id",),
         ),
         ("email_outbox", ("account_id",), ("accounts.id",)),
-        ("dev_deliveries", ("account_id",), ("accounts.id",)),
     } <= relationships
+
+    assert "dev_deliveries" not in Base.metadata.tables
+    assert "mock_data_runs" not in Base.metadata.tables
+    for table in Base.metadata.tables.values():
+        assert "source_kind" not in table.columns
+        assert "mock_run_id" not in table.columns
 
     account_columns = set(Base.metadata.tables["accounts"].columns.keys())
     assert {

@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from datetime import UTC, datetime
@@ -8,6 +9,25 @@ from app.storage.local_metrics_store import LocalMetricsStore
 
 
 class LocalMetricsStoreTest(unittest.TestCase):
+    def test_local_schema_has_no_sample_data_provenance_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalMetricsStore(str(Path(directory)), "enterprise@example.test")
+            store.metrics_summary()
+
+            with sqlite3.connect(store._database_path) as connection:
+                for table in (
+                    "count_events",
+                    "count_snapshots",
+                    "report_submissions",
+                    "occupancy_corrections",
+                ):
+                    columns = {
+                        str(row[1])
+                        for row in connection.execute(f"pragma table_info({table})").fetchall()
+                    }
+                    self.assertNotIn("source_kind", columns)
+                    self.assertNotIn("mock_run_id", columns)
+
     def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
         self.assertIsNotNone(
             reporting_period_submission_error(
@@ -127,56 +147,6 @@ class LocalMetricsStoreTest(unittest.TestCase):
             repeated = store.purge_report_raw_events("REP-001")
             self.assertEqual(repeated["purged_events"], 0)
             self.assertEqual(repeated["raw_purged_at"], purged["raw_purged_at"])
-
-    def test_hybrid_mock_rows_are_tagged_and_removed_without_real_rows(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
-            store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            hybrid_event = _event("entry", entry=2, exit=0, occupancy=2)
-            hybrid_event["source_kind"] = "hybrid"
-            hybrid_event["mock_run_id"] = "mock-run-1"
-            store.append_count_event(hybrid_event)
-            store.record_report_submission(
-                "REP-260601",
-                "Current Period",
-                "Monthly visitor count submitted for LGU review.",
-                {"source": "hybrid"},
-                source_kind="hybrid",
-                mock_run_id="mock-run-1",
-            )
-
-            reports = store.list_report_submissions()
-            self.assertEqual(reports[0]["source_kind"], "hybrid")
-            self.assertEqual(reports[0]["mock_run_id"], "mock-run-1")
-
-            removed = store.remove_mock_data("mock-run-1")
-
-            self.assertEqual(removed["count_events"], 1)
-            self.assertEqual(removed["report_submissions"], 1)
-            self.assertEqual(store.metrics_summary(include_submitted=True)["entries"], 1)
-
-    def test_removing_hybrid_report_restores_real_camera_events_to_current_draft(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)))
-            mock_event = _event("entry", entry=1, exit=0, occupancy=1)
-            mock_event["source_kind"] = "mock"
-            mock_event["mock_run_id"] = "mock-run-1"
-            store.append_count_event(mock_event)
-            store.append_count_event(_event("entry", entry=2, exit=0, occupancy=2))
-
-            submission = store.record_report_submission("REP-260601", "Current Period")
-            self.assertEqual(submission["source_kind"], "hybrid")
-            self.assertEqual(submission["mock_run_id"], "mock-run-1")
-            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 0)
-
-            removed = store.remove_mock_data("mock-run-1")
-
-            self.assertEqual(removed["count_events"], 1)
-            self.assertEqual(removed["report_submissions"], 1)
-            self.assertEqual(removed["restored_real_events"], 1)
-            self.assertEqual(store.list_report_submissions(), [])
-            self.assertEqual(store.metrics_summary()["entries"], 1)
-            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 1)
 
     def test_resubmitting_existing_report_preserves_metrics_when_no_new_events_exist(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -425,8 +395,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
 
-            summary = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            summary = store.prepare_sample_counts(
+                report_id="SAMPLE-JUN",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -440,14 +410,12 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(summary["exits"], 31)
             self.assertEqual(summary["unique_count"], 24)
             self.assertEqual(summary["unsubmitted_events"], 71)
-            self.assertEqual(summary["source_kind"], "mock")
-            self.assertEqual(summary["mock_run_id"], "run-1")
             self.assertEqual(summary["period"], "Jun 1 - Jun 30, 2026")
             self.assertTrue(summary["prepared"])
             self.assertEqual(store.list_report_submissions(), [])
 
-            repeated = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            repeated = store.prepare_sample_counts(
+                report_id="SAMPLE-JUN",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -463,8 +431,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
 
-            first = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            first = store.prepare_sample_counts(
+                report_id="SAMPLE-JUN",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -477,8 +445,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
 
             store.record_report_submission("REP-JUN", "Jun 1 - Jun 30, 2026")
 
-            second = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            second = store.prepare_sample_counts(
+                report_id="SAMPLE-JUL",
                 entries=55,
                 exits=42,
                 unique_count=36,
@@ -493,12 +461,12 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(second["period"], "Jul 1 - Jul 31, 2026")
             self.assertEqual(len(store.list_report_submissions()), 1)
 
-    def test_prepared_counts_can_switch_open_periods(self) -> None:
+    def test_prepared_counts_do_not_mix_open_periods(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
 
-            first = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            first = store.prepare_sample_counts(
+                report_id="SAMPLE-JUN",
                 entries=40,
                 exits=31,
                 unique_count=24,
@@ -509,8 +477,8 @@ class LocalMetricsStoreTest(unittest.TestCase):
             )
             self.assertTrue(first["prepared"])
 
-            second = store.prepare_mock_counts(
-                mock_run_id="run-1",
+            second = store.prepare_sample_counts(
+                report_id="SAMPLE-JUL",
                 entries=55,
                 exits=42,
                 unique_count=36,
@@ -520,10 +488,9 @@ class LocalMetricsStoreTest(unittest.TestCase):
                 period="Jul 1 - Jul 31, 2026",
             )
 
-            self.assertTrue(second["prepared"])
-            self.assertEqual(second["entries"], 55)
-            self.assertEqual(second["period"], "Jul 1 - Jul 31, 2026")
-            self.assertEqual(store.metrics_summary()["period"], "Jul 1 - Jul 31, 2026")
+            self.assertFalse(second["prepared"])
+            self.assertEqual(second["entries"], 40)
+            self.assertEqual(second["period"], "Jun 1 - Jun 30, 2026")
 
     def test_sync_acknowledgements_update_local_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -539,32 +506,6 @@ class LocalMetricsStoreTest(unittest.TestCase):
             self.assertEqual(report["sync_status"], "synced")
             self.assertIsNotNone(report["synced_at"])
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 0)
-
-    def test_mixed_real_and_prepared_counts_preserve_run_provenance(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalMetricsStore(str(Path(directory)), "target@tanaw.test")
-            store.prepare_mock_counts(
-                mock_run_id="run-1",
-                entries=4,
-                exits=2,
-                unique_count=3,
-                peak_occupancy=3,
-                camera_id=1,
-                camera_name="Main Entrance",
-                period="Current Period",
-            )
-            store.append_count_event(_event("entry", entry=5, exit=2, occupancy=3))
-
-            summary = store.metrics_summary()
-            self.assertEqual(summary["source_kind"], "hybrid")
-            self.assertEqual(summary["mock_run_id"], "run-1")
-
-            submission = store.record_report_submission("REP-002", "Current Period")
-            report = store.list_report_submissions()[0]
-            self.assertEqual(submission["source_kind"], "hybrid")
-            self.assertEqual(submission["mock_run_id"], "run-1")
-            self.assertEqual(report["source_kind"], "hybrid")
-            self.assertEqual(report["mock_run_id"], "run-1")
 
 
 def _event(

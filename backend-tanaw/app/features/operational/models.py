@@ -61,18 +61,6 @@ class EnterpriseTelemetrySnapshot(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     analytics_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey(
-            "mock_data_runs.id",
-            name="fk_enterprise_telemetry_snapshots_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        index=True,
-        nullable=True,
-    )
     enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
 
 
@@ -119,18 +107,6 @@ class EnterpriseReportSubmission(Base):
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     sync_status: Mapped[str | None] = mapped_column(String(60), nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey(
-            "mock_data_runs.id",
-            name="fk_enterprise_report_submissions_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        index=True,
-        nullable=True,
-    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -157,18 +133,6 @@ class FinalReport(Base):
     total_exit: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_unique: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enterprise_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="real")
-    mock_run_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey(
-            "mock_data_runs.id",
-            name="fk_final_reports_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        index=True,
-        nullable=True,
-    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -207,34 +171,6 @@ class FinalReportSource(Base):
     entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     exits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     intake_report: Mapped[EnterpriseReportSubmission] = relationship(lazy="joined")
-
-
-class MockDataRun(Base):
-    __tablename__ = "mock_data_runs"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    scenario: Mapped[str] = mapped_column(String(80), nullable=False)
-    seed: Mapped[str] = mapped_column(String(80), nullable=False)
-    range_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    range_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    target_enterprise_profile_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey(
-            "enterprise_profiles.account_id",
-            name="fk_mock_data_runs_target_enterprise_profile_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        nullable=True,
-    )
-    target_enterprise_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default="active")
-    generated_counts_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    target_enterprise_profile: Mapped[EnterpriseProfile | None] = relationship(lazy="joined")
 
 
 class OperationalAlert(Base):

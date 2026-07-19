@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import binascii
-import json
 from contextlib import suppress
 from typing import Annotated
 
@@ -30,7 +29,6 @@ from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
     EnterpriseReportSubmission,
-    MockDataRun,
     OperationalAlert,
 )
 from app.features.operational.schemas import (
@@ -41,18 +39,15 @@ from app.features.operational.schemas import (
     FinalReportRevisionReturn,
     FinalReportStatusUpdate,
     FinalReportSummary,
-    FleetSimulationEnterpriseSummary,
-    FleetSimulationTickIngest,
-    FleetSimulationTickSummary,
     IntakeReportSummary,
-    MockPreparationCounts,
-    MockPreparationSummary,
     NotificationReadUpdate,
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
     OperationalSummary,
     OperationalWebSocketEnvelope,
     ReportStatusUpdate,
+    SamplePreparationCounts,
+    SamplePreparationSummary,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
@@ -69,7 +64,6 @@ from app.features.operational.service import (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
-    build_fleet_simulation_telemetry_payload,
     create_final_report,
     create_operational_alert,
     create_role_notifications,
@@ -77,7 +71,6 @@ from app.features.operational.service import (
     create_support_ticket_message,
     create_support_ticket_message_with_record,
     create_user_notification,
-    enterprise_accounts_by_identifier,
     enterprise_identifier,
     enterprise_name,
     evaluate_telemetry_alerts,
@@ -87,7 +80,6 @@ from app.features.operational.service import (
     get_support_ticket_for_account,
     ingest_report_submission,
     ingest_telemetry,
-    list_fleet_simulation_enterprises,
     list_intake_reports,
     list_latest_telemetry,
     list_operational_alerts,
@@ -107,6 +99,7 @@ from app.features.operational.service import (
     list_final_reports as list_final_report_records,
 )
 from app.features.operational.websocket import operational_ws_manager
+from app.features.sample_data.dataset import prepared_counts, sample_dataset_marker_email
 
 router = APIRouter(prefix="/operational", tags=["operational"])
 WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
@@ -255,135 +248,41 @@ async def ingest_desktop_report_submission(
     return report
 
 
-@router.get("/desktop/mock-preparation", response_model=MockPreparationSummary | None)
-async def get_desktop_mock_preparation(
+@router.get("/desktop/sample-preparation", response_model=SamplePreparationSummary | None)
+async def get_desktop_sample_preparation(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> MockPreparationSummary | None:
-    run = await db.scalar(
-        select(MockDataRun)
-        .where(
-            MockDataRun.target_enterprise_profile_id == account.id,
-        )
-        .order_by(MockDataRun.created_at.desc())
-    )
-    if run is None:
+) -> SamplePreparationSummary | None:
+    if get_settings().is_production:
         return None
-
-    pending_counts: list[MockPreparationCounts] = []
-    if run.status == "active" and run.generated_counts_json:
-        generated_counts = json.loads(run.generated_counts_json)
-        raw_candidates = generated_counts.get("targetPreparedReportCounts")
-        candidates = raw_candidates if isinstance(raw_candidates, list) else []
-        candidate_periods = [
-            candidate["period"]
-            for candidate in candidates
-            if isinstance(candidate, dict) and isinstance(candidate.get("period"), str)
-        ]
-        submitted_periods = set(
-            (
-                await db.scalars(
-                    select(EnterpriseReportSubmission.period).where(
-                        EnterpriseReportSubmission.enterprise_profile_id == account.id,
-                        EnterpriseReportSubmission.period.in_(candidate_periods),
-                    )
+    marker = await db.scalar(
+        select(Account.id).where(Account.email == sample_dataset_marker_email())
+    )
+    if marker is None:
+        return None
+    enterprise_id = enterprise_identifier(account)
+    candidates = prepared_counts(enterprise_id)
+    candidate_periods = [str(candidate["period"]) for candidate in candidates]
+    submitted_periods = set(
+        (
+            await db.scalars(
+                select(EnterpriseReportSubmission.period).where(
+                    EnterpriseReportSubmission.enterprise_profile_id == account.id,
+                    EnterpriseReportSubmission.period.in_(candidate_periods),
                 )
-            ).all()
-            if candidate_periods
-            else []
-        )
-        pending_counts = [
-            MockPreparationCounts.model_validate(candidate)
-            for candidate in candidates
-            if isinstance(candidate, dict) and candidate.get("period") not in submitted_periods
-        ]
-
-    return MockPreparationSummary(
-        runId=run.id,
-        status=run.status,  # type: ignore[arg-type]
-        enterpriseId=(
-            run.target_enterprise_profile.enterprise_id
-            if run.target_enterprise_profile is not None
-            else enterprise_identifier(account)
-        ),
-        enterpriseName=run.target_enterprise_name or enterprise_name(account),
+            )
+        ).all()
+    )
+    pending_counts = [
+        SamplePreparationCounts.model_validate(candidate)
+        for candidate in candidates
+        if candidate["period"] not in submitted_periods
+    ]
+    return SamplePreparationSummary(
+        enterpriseId=enterprise_id,
+        enterpriseName=enterprise_name(account),
         counts=pending_counts[0] if pending_counts else None,
         pendingCounts=pending_counts,
-    )
-
-
-@router.get(
-    "/simulation/fleet/enterprises",
-    response_model=list[FleetSimulationEnterpriseSummary],
-)
-async def list_fleet_simulation_targets(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[FleetSimulationEnterpriseSummary]:
-    ensure_simulation_api_allowed()
-    return await list_fleet_simulation_enterprises(db, account)
-
-
-@router.post(
-    "/simulation/fleet/tick",
-    response_model=FleetSimulationTickSummary,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def ingest_fleet_simulation_tick(
-    payload: FleetSimulationTickIngest,
-    _: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FleetSimulationTickSummary:
-    ensure_simulation_api_allowed()
-    accounts = await enterprise_accounts_by_identifier(
-        db, {target.enterpriseId for target in payload.targets}
-    )
-    snapshots: list[TelemetrySnapshotSummary] = []
-    alerts: list[OperationalAlertSummary] = []
-
-    for target in payload.targets:
-        enterprise = accounts.get(target.enterpriseId)
-        if enterprise is None:
-            continue
-
-        telemetry_payload = build_fleet_simulation_telemetry_payload(
-            target=target,
-            enterprise=enterprise,
-            run_id=payload.runId,
-            started_at=payload.startedAt,
-            elapsed_seconds=payload.elapsedSeconds,
-        )
-        snapshot = await ingest_telemetry(
-            db,
-            enterprise,
-            telemetry_payload,
-            update_account_gateway=False,
-        )
-        snapshots.append(snapshot)
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="telemetry.snapshot", data=snapshot.model_dump(mode="json")
-            )
-        )
-
-        for event_type, alert_summary in await evaluate_telemetry_alerts(
-            db, enterprise, telemetry_payload
-        ):
-            alerts.append(alert_summary)
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type=event_type,  # type: ignore[arg-type]
-                    data=alert_summary.model_dump(mode="json"),
-                )
-            )
-
-    if snapshots:
-        await broadcast_summary(db)
-
-    return FleetSimulationTickSummary(
-        runId=payload.runId,
-        snapshots=snapshots,
-        alerts=alerts,
     )
 
 
@@ -973,8 +872,6 @@ async def list_map_enterprises(
                 "gatewayStatus": telemetry.gatewayStatus
                 if telemetry
                 else profile.gateway_status or "Not Linked",
-                "sourceKind": telemetry.sourceKind if telemetry else "real",
-                "mockRunId": telemetry.mockRunId if telemetry else None,
             }
         )
     return enterprises
@@ -1136,15 +1033,6 @@ async def broadcast_summary(db: AsyncSession) -> None:
     await operational_ws_manager.broadcast(
         OperationalWebSocketEnvelope(type="summary.updated", data=summary.model_dump(mode="json"))
     )
-
-
-def ensure_simulation_api_allowed() -> None:
-    settings = get_settings()
-    if settings.is_production and not settings.allow_mock_data:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Simulation Lab fleet endpoints are disabled in production.",
-        )
 
 
 async def notify_enterprise_ticket_update(

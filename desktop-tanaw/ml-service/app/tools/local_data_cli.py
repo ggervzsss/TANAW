@@ -19,13 +19,6 @@ LEDGER_TABLES = (
     "visitor_model_embeddings",
     "visitor_sightings",
 )
-LEGACY_FILES = (
-    "active_session.json",
-    "events.jsonl",
-    DATABASE_NAME,
-    f"{DATABASE_NAME}-shm",
-    f"{DATABASE_NAME}-wal",
-)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -134,12 +127,6 @@ def clear_local_data(
         removed_bytes += _directory_size(enterprise_root)
         removed_paths.append(str(enterprise_root))
         shutil.rmtree(enterprise_root)
-    for name in LEGACY_FILES:
-        path = ml_root / name
-        if path.exists():
-            removed_bytes += path.stat().st_size
-            removed_paths.append(str(path))
-            path.unlink()
     return {
         "scope": "all-ledgers",
         "path": str(ml_root),
@@ -170,7 +157,7 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser(
-        "inspect", help="Show ledger locations, row counts, provenance, and recent records."
+        "inspect", help="Show ledger locations, row counts, and recent records."
     )
     inspect_parser.add_argument("--enterprise", help="Inspect only one enterprise ID.")
     inspect_parser.add_argument(
@@ -186,7 +173,7 @@ def _parser() -> argparse.ArgumentParser:
     selection.add_argument(
         "--all-ledgers",
         action="store_true",
-        help="Delete every enterprise ledger and the legacy unscoped ledger.",
+        help="Delete every enterprise ledger.",
     )
     selection.add_argument(
         "--full-device",
@@ -206,9 +193,6 @@ def _ledger_paths(app_data_dir: Path, enterprise_id: str | None) -> list[tuple[s
         return [(enterprise_id, ml_root / "enterprises" / scope / DATABASE_NAME)]
 
     paths: list[tuple[str, Path]] = []
-    legacy_path = ml_root / DATABASE_NAME
-    if legacy_path.exists():
-        paths.append(("legacy-unscoped", legacy_path))
     enterprise_root = ml_root / "enterprises"
     if enterprise_root.exists():
         for database_path in sorted(enterprise_root.glob(f"*/{DATABASE_NAME}")):
@@ -223,7 +207,6 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
         "exists": database_path.exists(),
         "sizeBytes": database_path.stat().st_size if database_path.exists() else 0,
         "tables": {},
-        "eventProvenance": [],
         "currentDraftEvents": 0,
         "eventRange": {"first": None, "last": None},
         "recentEvents": [],
@@ -244,21 +227,6 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
             for table in LEDGER_TABLES
         }
         if "count_events" in existing_tables:
-            result["eventProvenance"] = [
-                {
-                    "sourceKind": row["source_kind"],
-                    "mockRunId": row["mock_run_id"],
-                    "count": row["record_count"],
-                }
-                for row in connection.execute(
-                    """
-                    select source_kind, mock_run_id, count(*) as record_count
-                    from count_events
-                    group by source_kind, mock_run_id
-                    order by source_kind, mock_run_id
-                    """
-                )
-            ]
             result["currentDraftEvents"] = connection.execute(
                 "select count(*) from count_events where submitted_report_id is null"
             ).fetchone()[0]
@@ -274,7 +242,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                 for row in connection.execute(
                     """
                     select event_id, recorded_at, camera_name, direction, occupancy_count,
-                           visitor_id, source_kind, mock_run_id, submitted_report_id, synced_at
+                           visitor_id, submitted_report_id, synced_at
                     from count_events
                     order by recorded_at desc
                     limit ?
@@ -288,7 +256,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                 for row in connection.execute(
                     """
                     select report_id, period, submitted_at, entries, exits, peak_occupancy,
-                           unique_count, sync_status, source_kind, mock_run_id, synced_at
+                           unique_count, sync_status, synced_at
                     from report_submissions
                     order by submitted_at desc
                     limit ?
@@ -344,20 +312,10 @@ def _print_inspection(result: dict[str, Any]) -> None:
         print("  Tables:")
         for table, count in ledger["tables"].items():
             print(f"    {table}: {count}")
-        print("  Event provenance:")
-        if ledger["eventProvenance"]:
-            for provenance in ledger["eventProvenance"]:
-                run = provenance["mockRunId"] or "-"
-                print(f"    {provenance['sourceKind']} / run {run}: {provenance['count']}")
-        else:
-            print("    none")
         print("  Recent reports:")
         if ledger["recentReports"]:
             for report in ledger["recentReports"]:
-                print(
-                    f"    {report['report_id']} | {report['period']} | "
-                    f"{report['source_kind']} | {report['sync_status']}"
-                )
+                print(f"    {report['report_id']} | {report['period']} | {report['sync_status']}")
         else:
             print("    none")
         print("  Recent events:")
@@ -365,7 +323,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             for event in ledger["recentEvents"]:
                 print(
                     f"    {event['recorded_at']} | {event['direction']} | "
-                    f"{event['source_kind']} | report {event['submitted_report_id'] or '-'}"
+                    f"report {event['submitted_report_id'] or '-'}"
                 )
         else:
             print("    none")

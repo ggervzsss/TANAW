@@ -203,7 +203,6 @@ async def _create_account(
         is_protected_system_account=False,
         activated_at=now if activated else None,
         password_changed_at=now if activated else None,
-        source_kind="real",
         enterprise_profile=(
             EnterpriseProfile(
                 enterprise_id=f"test_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",

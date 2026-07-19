@@ -6,18 +6,15 @@ import {
   getMlHealth,
   getMlServiceStatus,
   getMlSession,
-  getSimulationStatus,
   listLocalReportSubmissions,
   markLocalEventsSynced,
   markLocalReportSynced,
-  prepareLocalMockCounts,
+  prepareLocalSampleCounts,
   purgeLocalReportRawEvents,
-  resetLocalMockData,
   type LocalReportSubmissionRecord,
   type MlHealth,
   type MlServiceStatus,
   type MlSession,
-  type SimulationStatus,
 } from "../../camera/services/ml-service";
 import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 
@@ -63,52 +60,42 @@ type DesktopTelemetryPayload = {
     reidQueueDepth: number;
     qualityReidQueueDepth: number;
   };
-  sourceKind: "real" | "mock" | "hybrid";
-  mockRunId: string | null;
   payload: Record<string, unknown>;
 };
 
-export type BackendMockPreparationCounts = {
+export type BackendSamplePreparationCounts = {
   entries: number;
   exits: number;
   uniqueCount: number;
   peakOccupancy: number;
   period: string;
+  reportId: string;
 };
 
-export type BackendMockPreparation = {
-  runId: string;
-  status: "active" | "removed";
+export type BackendSamplePreparation = {
   enterpriseId: string;
   enterpriseName: string;
-  counts: BackendMockPreparationCounts | null;
-  pendingCounts?: BackendMockPreparationCounts[];
+  counts: BackendSamplePreparationCounts | null;
+  pendingCounts?: BackendSamplePreparationCounts[];
 };
 
-export async function getDesktopMockPreparation() {
-  const response = await staffApi.get<BackendMockPreparation | null>("/operational/desktop/mock-preparation");
+export async function getDesktopSamplePreparation() {
+  const response = await staffApi.get<BackendSamplePreparation | null>("/operational/desktop/sample-preparation");
   return response.data;
 }
 
-export async function prepareDesktopMockCounts(period?: string) {
+export async function prepareDesktopSampleCounts(period?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const simulation = await resolveOptional(() => getSimulationStatus(baseUrl));
-  if (simulation?.mock_run_id && simulation.scenario) return null;
-
-  const preparation = await getDesktopMockPreparation();
+  const preparation = await getDesktopSamplePreparation();
   if (!preparation) return null;
 
-  if (preparation.status === "removed") {
-    return resetLocalMockData(baseUrl, preparation.runId);
-  }
   if (!period) {
     const currentMetrics = await getLocalMetricsSummary(baseUrl);
     const pendingPeriods =
       preparation.pendingCounts?.map((counts) => counts.period) ??
       (preparation.counts ? [preparation.counts.period] : []);
     if (
-      currentMetrics.mock_run_id === preparation.runId &&
       currentMetrics.period &&
       pendingPeriods.includes(currentMetrics.period) &&
       currentMetrics.unsubmitted_events > 0
@@ -116,11 +103,10 @@ export async function prepareDesktopMockCounts(period?: string) {
       return null;
     }
   }
-  const counts = selectMockPreparationCounts(preparation, period);
+  const counts = selectSamplePreparationCounts(preparation, period);
   if (!counts) return null;
 
-  return prepareLocalMockCounts(baseUrl, {
-    mockRunId: preparation.runId,
+  return prepareLocalSampleCounts(baseUrl, {
     enterpriseId: preparation.enterpriseId,
     enterpriseName: preparation.enterpriseName,
     entries: counts.entries,
@@ -128,25 +114,18 @@ export async function prepareDesktopMockCounts(period?: string) {
     uniqueCount: counts.uniqueCount,
     peakOccupancy: counts.peakOccupancy,
     period: counts.period,
+    reportId: counts.reportId,
   });
 }
 
-function selectMockPreparationCounts(preparation: BackendMockPreparation, period?: string) {
+function selectSamplePreparationCounts(preparation: BackendSamplePreparation, period?: string) {
   if (!period) {
-    const currentPeriod = currentReportingPeriodLabel();
-    return preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, currentPeriod)) ?? preparation.counts;
+    return preparation.counts ?? preparation.pendingCounts?.[0] ?? null;
   }
   return (
     preparation.pendingCounts?.find((counts) => isSameReportingMonth(counts.period, period)) ??
     (preparation.counts && isSameReportingMonth(preparation.counts.period, period) ? preparation.counts : null)
   );
-}
-
-function currentReportingPeriodLabel() {
-  const now = reportingDate(new Date());
-  const month = monthName(now.monthIndex);
-  const lastDay = lastDayOfMonth(now.year, now.monthIndex);
-  return `${month} 1 - ${month} ${lastDay}, ${now.year}`;
 }
 
 function isSameReportingMonth(first: string, second: string) {
@@ -175,41 +154,10 @@ function monthKey(monthLabel: string, yearLabel: string) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 }
 
-type CalendarDate = {
-  day: number;
-  monthIndex: number;
-  year: number;
-};
-
-function reportingDate(value: Date): CalendarDate {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: REPORTING_TIME_ZONE,
-    year: "numeric",
-  }).formatToParts(value);
-  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-  return {
-    day: partValue("day"),
-    monthIndex: partValue("month") - 1,
-    year: partValue("year"),
-  };
-}
-
 function monthIndexFromLabel(monthLabel: string): number | null {
   const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
   return typeof monthIndex === "number" ? monthIndex : null;
 }
-
-function lastDayOfMonth(year: number, monthIndex: number) {
-  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-}
-
-function monthName(monthIndex: number) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
-}
-
-const REPORTING_TIME_ZONE = "Asia/Manila";
 
 const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
   jan: 0,
@@ -229,13 +177,11 @@ const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
 export async function syncDesktopTelemetry() {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const [metrics, session, health, simulation] = await Promise.all([
+  const [metrics, session, health] = await Promise.all([
     getLocalMetricsSummary(baseUrl, { includeSubmitted: true }),
     resolveOptional(() => getMlSession(baseUrl)),
     resolveOptional(() => getMlHealth(baseUrl)),
-    resolveOptional(() => getSimulationStatus(baseUrl)),
   ]);
-  const simulationRunId = activeSimulationRunId(simulation);
 
   const payload: DesktopTelemetryPayload = {
     deviceId: getDesktopDeviceId(),
@@ -256,11 +202,8 @@ export async function syncDesktopTelemetry() {
     },
     session: sessionSummary(session, serviceStatus),
     health: healthSummary(health),
-    sourceKind: simulationRunId ? (simulation?.mode === "hybrid" ? "hybrid" : "mock") : sourceKindFromPayload(metrics),
-    mockRunId: simulationRunId ?? mockRunIdFromPayload(metrics),
     payload: {
       service: serviceStatus,
-      simulation: simulationPayload(simulation),
       syncedAt: new Date().toISOString(),
     },
   };
@@ -308,8 +251,6 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
     uniqueCount: metrics.uniqueCount,
     notes: submission.notes,
     syncStatus: submission.sync_status,
-    sourceKind: sourceKindFromPayload(submission),
-    mockRunId: mockRunIdFromPayload(submission),
     payload: {
       ...submission.payload,
       localLedger: {
@@ -369,39 +310,6 @@ async function purgeFinalizedLocalReportRawData(baseUrl: string) {
 
 function isLockedFinalReport(report: EnterpriseFinalReport) {
   return report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized");
-}
-
-function activeSimulationRunId(simulation: SimulationStatus | null) {
-  if (!simulation?.mock_run_id || !simulation.scenario) return null;
-  return simulation.mock_run_id;
-}
-
-function simulationPayload(simulation: SimulationStatus | null) {
-  if (!simulation?.mock_run_id || !simulation.scenario) return null;
-  return {
-    runId: simulation.mock_run_id,
-    mode: simulation.mode,
-    scenario: simulation.scenario,
-    state: simulation.state,
-    capacity: simulation.capacity,
-    thresholdPercent: simulation.threshold_percent,
-    eventsPerMinute: simulation.events_per_minute,
-    durationMinutes: simulation.duration_minutes,
-    startedAt: simulation.started_at,
-    completedAt: simulation.completed_at,
-  };
-}
-
-function sourceKindFromPayload(payload: unknown): "real" | "mock" | "hybrid" {
-  const candidate = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-  const sourceKind = candidate.source_kind ?? candidate.sourceKind;
-  return sourceKind === "mock" || sourceKind === "hybrid" ? sourceKind : "real";
-}
-
-function mockRunIdFromPayload(payload: unknown) {
-  const candidate = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-  const value = candidate.mock_run_id ?? candidate.mockRunId;
-  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function sessionSummary(session: MlSession | null, serviceStatus: MlServiceStatus): DesktopTelemetryPayload["session"] {

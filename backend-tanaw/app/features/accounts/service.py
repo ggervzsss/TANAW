@@ -15,8 +15,6 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
     EnterpriseProfile,
 )
 from app.features.accounts.options import format_enterprise_category
@@ -32,6 +30,7 @@ from app.features.auth.challenge_service import invalidate_password_reset_challe
 from app.features.auth.email_change import (
     ACTIVE_EMAIL_CHANGE_STATUSES,
 )
+from app.features.mail.dev_log import DevDeliveryEvent
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
 PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
@@ -258,19 +257,14 @@ async def to_account_summary_with_requests(
     return (await to_account_summaries_with_requests(db, [account]))[0]
 
 
-def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
-    status = (
-        DeliveryStatus.ACCEPTED.value
-        if delivery.status == DeliveryStatus.SENT
-        else delivery.status.value
-    )
+def to_delivery_summary(delivery: DevDeliveryEvent) -> DeliverySummary:
     return DeliverySummary(
         id=delivery.id,
         accountId=delivery.account_id,
         recipient=delivery.recipient,
         subject=delivery.subject,
         body=delivery.body,
-        status=status,
+        status=delivery.status,
         createdAt=delivery.created_at,
     )
 
@@ -410,13 +404,3 @@ async def change_account_password(
     await db.commit()
     await db.refresh(account)
     return True
-
-
-async def list_dev_deliveries(db: AsyncSession) -> list[DevDelivery]:
-    result = await db.scalars(select(DevDelivery).order_by(DevDelivery.created_at.desc()))
-    return list(result)
-
-
-async def get_dev_delivery_by_id(db: AsyncSession, delivery_id: str) -> DevDelivery | None:
-    result = await db.scalars(select(DevDelivery).where(DevDelivery.id == delivery_id))
-    return result.first()

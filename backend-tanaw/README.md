@@ -37,7 +37,7 @@ and workflow events after they have been produced locally.
   final report generation, source-row audit data, and reporting activity logs.
 - **Activity logging**: account, operational, reporting, and system events used
   by LGU monitoring and audit screens.
-- **Test-data tooling**: explicit mock-data generation and cleanup for local
+- **Test-data tooling**: explicit sample-data generation and cleanup for local
   demonstrations, QA, analytics, and end-to-end reporting tests.
 
 ## Project Structure
@@ -52,7 +52,7 @@ app/
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
     mail/              # Outbound Resend delivery and email templates
-    mock_data/         # Explicit CLI-driven test-data tooling
+    sample_data/       # Development-only sample-data tooling
     operational/       # Telemetry, sync, intake reports, and final reports
 alembic/               # Database migration files
 tests/                 # Backend unit and integration tests
@@ -66,7 +66,7 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 ## Database Migrations
 
 Alembic is the only schema authority. Apply migrations before starting any API
-or mock-data process:
+or sample-data process:
 
 ```shell
 uv run alembic upgrade head
@@ -84,7 +84,7 @@ Back up any data that must be retained before resetting PostgreSQL.
 ### Canonical account and enterprise ownership
 
 The `accounts` table stores shared identity, authentication, role, status,
-preferences, security state, audit timestamps, and mock-data provenance.
+preferences, security state, and audit timestamps.
 Enterprise-only business, location, capacity, and gateway fields live in
 `enterprise_profiles`, whose `account_id` is both its primary key and a
 one-to-one foreign key to `accounts.id`.
@@ -92,8 +92,8 @@ one-to-one foreign key to `accounts.id`.
 Operational records use that enterprise-profile key as their single owner
 reference. API serializers derive the public enterprise ID through the
 relationship, so child tables do not keep account-ID and enterprise-ID copies
-that can disagree. Reports, telemetry, tickets, final-report sources, and mock
-runs retain only descriptive or metric snapshots needed to preserve what the
+that can disagree. Reports, telemetry, tickets, and final-report sources retain
+only descriptive or metric snapshots needed to preserve what the
 record represented when it was created. Admin, IT, and Staff accounts do not
 have separate profile tables because they have no role-specific persisted
 fields.
@@ -229,13 +229,13 @@ age-deleted.
 
 The default policy retains consumed, invalidated, or expired activation tokens
 and password-reset challenges for 30 days; password-reset rate buckets for 2
-days; local development delivery bodies for 7 days; completed email-change
-requests and normal terminal outbox records for 180 days; and terminal failures
-or reconciliation records for 365 days. Active expired email-change requests
-are first invalidated and their unsent verification messages are cancelled.
-Production outbox rows never contain raw OTPs or activation/email-change links;
-local `DevDelivery` bodies are the only debugging records that can contain a raw
-secret, which is why they have the shortest retention period.
+days; completed email-change requests and normal terminal outbox records for
+180 days; and terminal failures or reconciliation records for 365 days. Active
+expired email-change requests are first invalidated and their unsent
+verification messages are cancelled. Production outbox rows never contain raw
+OTPs or activation/email-change links. Development delivery previews live only
+in a bounded in-memory feed and disappear when the backend process restarts;
+the feed endpoint returns 404 in production.
 
 `GET /maintenance/retention` exposes safe per-process counts and the most recent
 run to IT Personnel. `POST /maintenance/retention/run` starts the same serialized
@@ -274,18 +274,19 @@ draft metrics, occupancy corrections, visitor identity metadata, camera
 settings, and local ML state are stored on the desktop device and synchronized
 only through the operational APIs when appropriate.
 
-## Mock Data Tooling
+## Sample Data Tooling
 
-The backend includes guarded mock-data tooling for development and demos. It is
-designed around a simple rule:
+The backend includes development-only sample-data tooling for demos and QA. It
+is designed around a simple rule:
 
 ```text
-mock producer, real pipeline
+sample producer, real pipeline
 ```
 
-Generated records use the same tables and workflow shapes as real operational
-records, but they are tagged with run provenance so they can be audited and
-removed safely. Mock execution is explicit and disabled by default.
+Sample records use the same tables and workflow shapes as real operational
+records. No mock-data table or provenance columns exist. Cleanup uses reserved
+deterministic identifiers and relationships, so those identifiers must not be
+reused for production records. The commands refuse to run in production.
 
 The root [TL;DR test guide](../TLDR.md) contains the supported commands for
 creating, refreshing, inspecting, and removing generated data.

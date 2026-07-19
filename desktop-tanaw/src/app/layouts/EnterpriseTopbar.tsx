@@ -1,4 +1,4 @@
-import { Activity, Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, Sun, User, X } from "lucide-react";
+import { Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, Sun, User, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
@@ -13,7 +13,6 @@ type EnterpriseTopbarProps = {
   isNotificationsOpen: boolean;
   notifications: EnterpriseNotification[];
   resolvedTheme: "light" | "dark";
-  showSimulation: boolean;
   unreadCount: number;
   user?: AuthUser | null;
   onLogout: () => void;
@@ -29,7 +28,6 @@ const enterpriseNavigation = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "cameras", label: "Camera Setup", icon: Camera },
   { id: "reports", label: "Reports", icon: FileText },
-  { id: "simulation", label: "Simulation Lab", icon: Activity },
 ] as const satisfies { id: EnterpriseView; label: string; icon: typeof LayoutDashboard }[];
 
 export function EnterpriseBrand({ onDashboard }: { onDashboard: () => void }) {
@@ -56,7 +54,6 @@ export function EnterpriseTopbar({
   isNotificationsOpen,
   notifications,
   resolvedTheme,
-  showSimulation,
   unreadCount,
   user,
   onLogout,
@@ -124,11 +121,9 @@ export function EnterpriseTopbar({
   const navPillInactive = isDarkTopbar
     ? "text-white/72 hover:-translate-y-0.5 hover:bg-white/7 hover:text-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.38)]"
     : "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
-  const visibleNavigation = useMemo(() => enterpriseNavigation.filter((item) => item.id !== "simulation" || showSimulation), [showSimulation]);
-
   const navButtons = useMemo(
     () =>
-      visibleNavigation.map((item) => {
+      enterpriseNavigation.map((item) => {
         const Icon = item.icon;
         const isActive = activeView === item.id;
         return (
@@ -138,7 +133,7 @@ export function EnterpriseTopbar({
           </button>
         );
       }),
-    [activeView, navPillActive, navPillBase, navPillInactive, onNavigate, visibleNavigation],
+    [activeView, navPillActive, navPillBase, navPillInactive, onNavigate],
   );
 
   return (
@@ -275,7 +270,7 @@ export function EnterpriseTopbar({
             className={`border-t px-6 pb-4 max-sm:px-4 ${isDarkTopbar ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
           >
             <nav className="grid gap-2 pt-4" aria-label="Enterprise mobile navigation">
-              {visibleNavigation.map((item) => {
+              {enterpriseNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeView === item.id;
                 return (

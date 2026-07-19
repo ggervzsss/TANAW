@@ -68,8 +68,6 @@ async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> A
         summary=payload.summary,
         source_id=payload.sourceId,
         metadata_json=json.dumps(payload.metadata) if payload.metadata else None,
-        source_kind=payload.sourceKind,
-        mock_run_id=payload.mockRunId,
     )
     db.add(log)
     await db.commit()

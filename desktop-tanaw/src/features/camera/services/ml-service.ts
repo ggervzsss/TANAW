@@ -181,8 +181,6 @@ export type LocalMetricsSummary = {
   unsynced_events: number;
   first_event_at: string | null;
   last_event_at: string | null;
-  source_kind?: "real" | "mock" | "hybrid";
-  mock_run_id?: string | null;
   period?: string | null;
 };
 
@@ -229,8 +227,6 @@ export type LocalReportSubmissionRecord = {
   notes: string | null;
   payload: Record<string, unknown>;
   sync_status: string;
-  source_kind?: "real" | "mock" | "hybrid";
-  mock_run_id?: string | null;
   synced_at: string | null;
   raw_purged_at?: string | null;
 };
@@ -253,13 +249,10 @@ export type OccupancyCorrection = {
   reason: string;
   actor_id: string | null;
   actor_name: string | null;
-  source_kind: "real" | "mock" | "hybrid";
-  mock_run_id: string | null;
   recorded_at: string;
 };
 
-export type MockPreparationRequest = {
-  mockRunId: string;
+export type SamplePreparationRequest = {
   enterpriseId: string;
   enterpriseName: string;
   entries: number;
@@ -267,45 +260,7 @@ export type MockPreparationRequest = {
   uniqueCount: number;
   peakOccupancy: number;
   period: string;
-};
-
-export type SimulationScenario = "normal" | "morning-rush" | "event-opening" | "overcrowding" | "evacuation" | "custom";
-
-export type SimulationStartRequest = {
-  runId: string;
-  scenario: SimulationScenario;
-  eventsPerMinute: number;
-  capacity: number;
-  startingOccupancy: number;
-  durationMinutes: number | null;
-  thresholdPercent: number;
-  entryProbability: number | null;
-  uniqueEntryRate: number;
-};
-
-export type SimulationStatus = {
-  running: boolean;
-  paused: boolean;
-  state: "idle" | "running" | "paused" | "stopped" | "completed";
-  mode: string | null;
-  scenario: SimulationScenario | null;
-  mock_run_id: string | null;
-  events_generated: number;
-  events_per_minute: number;
-  requires_real_camera: boolean;
-  enterprise_id: string | null;
-  enterprise_name: string | null;
-  capacity: number;
-  threshold_percent: number;
-  duration_minutes: number | null;
-  started_at: string | null;
-  completed_at: string | null;
-  entries: number;
-  exits: number;
-  current_occupancy: number;
-  peak_occupancy: number;
-  unique_count: number;
-  unsubmitted_events: number;
+  reportId: string;
 };
 
 export type CameraTestResult = {
@@ -487,13 +442,12 @@ export async function markLocalEventsSynced(baseUrl: string): Promise<{ updated:
   return requestJson<{ updated: number }>(`${baseUrl}/metrics/mark-synced`, { method: "POST" }, 2500);
 }
 
-export async function prepareLocalMockCounts(baseUrl: string, payload: MockPreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {
+export async function prepareLocalSampleCounts(baseUrl: string, payload: SamplePreparationRequest): Promise<LocalMetricsSummary & { prepared: boolean }> {
   return requestJson<LocalMetricsSummary & { prepared: boolean }>(
-    `${baseUrl}/mock/prepare`,
+    `${baseUrl}/sample/prepare`,
     {
       method: "POST",
       body: JSON.stringify({
-        mock_run_id: payload.mockRunId,
         enterprise_id: payload.enterpriseId,
         enterprise_name: payload.enterpriseName,
         entries: payload.entries,
@@ -501,61 +455,11 @@ export async function prepareLocalMockCounts(baseUrl: string, payload: MockPrepa
         unique_count: payload.uniqueCount,
         peak_occupancy: payload.peakOccupancy,
         period: payload.period,
+        report_id: payload.reportId,
       }),
     },
     15_000,
   );
-}
-
-export async function resetLocalMockData(baseUrl: string, mockRunId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
-  const params = new URLSearchParams({ mock_run_id: mockRunId });
-  return requestJson<{ stopped: boolean; removed: Record<string, number> }>(`${baseUrl}/mock/reset?${params.toString()}`, { method: "POST" }, 5000);
-}
-
-export async function getSimulationStatus(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/status`, { method: "GET" }, 2500);
-}
-
-export async function startSimulation(baseUrl: string, payload: SimulationStartRequest): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(
-    `${baseUrl}/mock/start`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        mock_run_id: payload.runId,
-        mode: "virtual",
-        scenario: payload.scenario,
-        events_per_minute: payload.eventsPerMinute,
-        capacity: payload.capacity,
-        starting_occupancy: payload.startingOccupancy,
-        duration_minutes: payload.durationMinutes,
-        threshold_percent: payload.thresholdPercent,
-        entry_probability: payload.entryProbability,
-        unique_entry_rate: payload.uniqueEntryRate,
-      }),
-    },
-    15_000,
-  );
-}
-
-export async function pauseSimulation(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/pause`, { method: "POST" }, 5000);
-}
-
-export async function resumeSimulation(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/resume`, { method: "POST" }, 5000);
-}
-
-export async function stopSimulation(baseUrl: string): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/stop`, { method: "POST" }, 5000);
-}
-
-export async function appendSimulationEvent(baseUrl: string, direction: "entry" | "exit"): Promise<SimulationStatus> {
-  return requestJson<SimulationStatus>(`${baseUrl}/mock/event`, { method: "POST", body: JSON.stringify({ direction }) }, 5000);
-}
-
-export async function resetSimulation(baseUrl: string, runId: string): Promise<{ stopped: boolean; removed: Record<string, number> }> {
-  return resetLocalMockData(baseUrl, runId);
 }
 
 export async function getMlDetections(baseUrl: string): Promise<MlDetections> {

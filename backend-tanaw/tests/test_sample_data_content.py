@@ -6,7 +6,12 @@ import pytest
 
 from app.core.password_policy import validate_password_policy
 from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.mock_data.cli import (
+from app.features.operational.models import EnterpriseReportSubmission, UserNotification
+from app.features.operational.service import (
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
+)
+from app.features.sample_data.cli import (
     DEMOGRAPHIC_FIELDS,
     ENTERPRISES,
     LGU_ACCOUNTS,
@@ -18,14 +23,9 @@ from app.features.mock_data.cli import (
     seeded_review_status,
     should_skip_target_report,
 )
-from app.features.operational.models import EnterpriseReportSubmission, UserNotification
-from app.features.operational.service import (
-    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
-    STAFF_REPORT_SUBMITTED_NOTIFICATION,
-)
 
 
-def test_generated_enterprises_match_configured_locations_and_contacts() -> None:
+def test_sample_enterprises_match_configured_locations_and_contacts() -> None:
     expected_enterprises = (
         (
             "Balon ni Lolo Uweng",
@@ -225,6 +225,4 @@ def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmissio
         notes="Monthly visitor count submitted for LGU review.",
         sync_status="synced",
         payload_json=json.dumps({"status": "Submitted"}),
-        source_kind="mock",
-        mock_run_id="run-id",
     )

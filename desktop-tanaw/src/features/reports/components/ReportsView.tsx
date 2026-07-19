@@ -17,7 +17,7 @@ import {
 } from "../../camera/services/ml-service";
 import type { LocalMetricsSummary, LocalReportSubmission, LocalReportSubmissionRecord } from "../../camera/services/ml-service";
 import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../services/report-history";
-import { DESKTOP_REPORT_SYNC_EVENT, getDesktopMockPreparation, prepareDesktopMockCounts, syncDesktopReportSubmission, type BackendMockPreparationCounts } from "../../sync/services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, getDesktopSamplePreparation, prepareDesktopSampleCounts, syncDesktopReportSubmission, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { notifyError } from "../../toasts/services/toast-service";
@@ -55,7 +55,7 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPeriodChanging, setIsPeriodChanging] = useState(false);
-  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendMockPreparationCounts[]>([]);
+  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendSamplePreparationCounts[]>([]);
   const reportsHistoryRef = useRef(reportsHistory);
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
@@ -131,8 +131,8 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
 
   const refreshPendingPeriods = useCallback(async () => {
     try {
-      const preparation = await getDesktopMockPreparation();
-      const pendingCounts = preparation?.status === "active" ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : [];
+      const preparation = await getDesktopSamplePreparation();
+      const pendingCounts = preparation ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : [];
       setPendingPeriodCounts(pendingCounts);
     } catch {
       setPendingPeriodCounts([]);
@@ -237,7 +237,7 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
 
     setIsPeriodChanging(true);
     try {
-      const prepared = await prepareDesktopMockCounts(nextPeriod);
+      const prepared = await prepareDesktopSampleCounts(nextPeriod);
       if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period !== nextPeriod)) {
         throw new Error(`No prepared count package is available for ${nextPeriod}.`);
       }
@@ -557,7 +557,7 @@ function metricsFromSummary(summary: LocalMetricsSummary): Metrics {
   };
 }
 
-function metricsFromPendingCounts(counts: BackendMockPreparationCounts): Metrics {
+function metricsFromPendingCounts(counts: BackendSamplePreparationCounts): Metrics {
   return {
     entries: counts.entries,
     exits: counts.exits,
@@ -617,7 +617,7 @@ function buildLedgerRows({
   currentMetrics: Metrics;
   currentNotes: string;
   currentPeriod: SystemLogPeriod;
-  pendingCounts: BackendMockPreparationCounts[];
+  pendingCounts: BackendSamplePreparationCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
   const reportedPeriods = new Set(reportsHistory.map((report) => reportingMonthKey(report.period ?? report.date)));
@@ -672,9 +672,9 @@ function buildLedgerRows({
   return rows;
 }
 
-function reportFromPendingCounts(counts: BackendMockPreparationCounts): ReportRecord {
+function reportFromPendingCounts(counts: BackendSamplePreparationCounts): ReportRecord {
   return {
-    id: pendingReportId(counts.period),
+    id: counts.reportId,
     date: counts.period,
     status: "Draft",
     entries: counts.entries,
@@ -693,15 +693,6 @@ function draftLedgerKey(period: string) {
 
 function historyLedgerKey(reportId: string) {
   return `history:${reportId}`;
-}
-
-function pendingReportId(period: string) {
-  const normalizedPeriod = period
-    .trim()
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-|-$/g, "")
-    .toUpperCase();
-  return normalizedPeriod ? `PENDING-${normalizedPeriod}` : "PENDING-REPORT";
 }
 
 function reportFromLocalSubmission(submission: LocalReportSubmissionRecord): ReportRecord {
@@ -794,7 +785,7 @@ async function syncSubmittedReportToCloud(reportId: string) {
 
 async function prepareNextWorkspaceMetrics() {
   try {
-    const prepared = await prepareDesktopMockCounts();
+    const prepared = await prepareDesktopSampleCounts();
     return isPreparedMetrics(prepared) ? prepared : null;
   } catch {
     return null;

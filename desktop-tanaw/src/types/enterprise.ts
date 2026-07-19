@@ -92,7 +92,7 @@ export type Camera = {
   };
 };
 export type ThemePreference = "light" | "dark" | "system";
-export type EnterpriseView = "dashboard" | "cameras" | "reports" | "simulation" | "profile" | "security" | "notifications" | "tickets";
+export type EnterpriseView = "dashboard" | "cameras" | "reports" | "profile" | "security" | "notifications" | "tickets";
 
 export type EnterpriseNotification = {
   id: number;
