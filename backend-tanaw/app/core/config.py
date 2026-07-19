@@ -81,10 +81,6 @@ class Settings(BaseSettings):
         ),
     )
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
-    geocoder_provider: str = "nominatim"
-    geocoder_api_key: str | None = None
-    geocoder_base_url: str | None = None
-    geocoder_user_agent: str = "TANAW/1.0 local-development"
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     email_delivery_mode: str = "log"
     resend_api_key: SecretStr | None = None

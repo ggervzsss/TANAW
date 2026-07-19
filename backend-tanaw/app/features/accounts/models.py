@@ -58,9 +58,6 @@ class Account(Base):
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    location_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    location_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    geocoded_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     location_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

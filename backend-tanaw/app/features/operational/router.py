@@ -957,9 +957,7 @@ async def list_map_enterprises(
                 "name": enterprise.enterprise_name or enterprise.display_name,
                 "barangay": enterprise.barangay or "Unassigned",
                 "category": format_enterprise_category(enterprise.category) or "Uncategorized",
-                "fullAddress": enterprise.address
-                or enterprise.geocoded_address
-                or "Address not provided",
+                "fullAddress": enterprise.address or "Address not provided",
                 "lat": enterprise.latitude,
                 "lng": enterprise.longitude,
                 "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,

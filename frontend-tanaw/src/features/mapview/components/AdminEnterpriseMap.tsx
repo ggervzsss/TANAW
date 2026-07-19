@@ -716,7 +716,7 @@ function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) 
           <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
           <div className="mt-1 flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-white/70 uppercase">
             <MapPin size={10} className="shrink-0" />
-            <span className="truncate">{enterprise.address ?? enterprise.geocodedAddress ?? "Address not provided"}</span>
+            <span className="truncate">{enterprise.address ?? "Address not provided"}</span>
           </div>
         </div>
         <span className="flex shrink-0 items-center rounded border border-amber-400/30 bg-amber-900/35 px-1.5 py-0.5 text-[9px] font-black tracking-widest text-amber-100 uppercase">

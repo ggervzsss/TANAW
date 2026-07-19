@@ -48,6 +48,8 @@ def enterprise_create_payload(**overrides: object) -> dict[str, object]:
         "contactNumber": "+639171234567",
         "barangay": "Poblacion",
         "address": "123 Main Street",
+        "latitude": 14.3511152,
+        "longitude": 121.0315758,
     }
     payload.update(overrides)
     return payload

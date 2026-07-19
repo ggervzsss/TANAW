@@ -372,7 +372,7 @@ export function toMapEnterprise(account: AccountSummary): MapEnterprise | null {
     name: account.enterpriseName ?? account.displayName,
     barangay: account.barangay ?? "Unassigned",
     category: account.category ?? "Uncategorized",
-    fullAddress: account.address ?? account.geocodedAddress ?? "Address not provided",
+    fullAddress: account.address ?? "Address not provided",
     lat: account.latitude,
     lng: account.longitude,
     totalLiveOccupancy: 0,

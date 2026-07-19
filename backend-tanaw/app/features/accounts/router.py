@@ -8,13 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
-from app.features.accounts.geocoding import (
-    GeocodingNoResult,
-    GeocodingUnavailable,
-    geocode_enterprise_address,
-    is_inside_san_pedro,
-    reverse_geocode_enterprise_location,
-)
+from app.features.accounts.location_validation import is_inside_san_pedro
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.schemas import (
     AccountEmailChangeRequestResolution,
@@ -23,11 +17,7 @@ from app.features.accounts.schemas import (
     DeliverySummary,
     EnterpriseAccountCreate,
     EnterpriseAccountUpdate,
-    EnterpriseGeocodeRequest,
-    EnterpriseGeocodeResult,
     EnterpriseProfileChangeRequestResolution,
-    EnterpriseReverseGeocodeRequest,
-    EnterpriseReverseGeocodeResult,
     LguAccountCreate,
     LguAccountUpdate,
     ProfileChangeRequestType,
@@ -252,58 +242,6 @@ async def list_enterprise_accounts(
     return await to_account_summaries_with_requests(db, accounts)
 
 
-@router.post("/enterprises/geocode", response_model=EnterpriseGeocodeResult)
-async def geocode_enterprise_location(
-    payload: EnterpriseGeocodeRequest,
-    _: ITAccount,
-) -> EnterpriseGeocodeResult:
-    try:
-        candidate = await geocode_enterprise_address(
-            payload.address, payload.barangay, payload.enterpriseName
-        )
-    except GeocodingNoResult as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except GeocodingUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
-
-    return EnterpriseGeocodeResult(
-        latitude=candidate.latitude,
-        longitude=candidate.longitude,
-        displayAddress=candidate.display_address,
-        confidence=candidate.confidence,
-        provider=candidate.provider,
-        source=candidate.source,
-    )
-
-
-@router.post("/enterprises/reverse-geocode", response_model=EnterpriseReverseGeocodeResult)
-async def reverse_geocode_enterprise_location_endpoint(
-    payload: EnterpriseReverseGeocodeRequest,
-    _: ITAccount,
-) -> EnterpriseReverseGeocodeResult:
-    try:
-        candidate = await reverse_geocode_enterprise_location(payload.latitude, payload.longitude)
-    except GeocodingNoResult as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except GeocodingUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
-
-    return EnterpriseReverseGeocodeResult(
-        latitude=candidate.latitude,
-        longitude=candidate.longitude,
-        displayAddress=candidate.display_address,
-        confidence=candidate.confidence,
-        provider=candidate.provider,
-        source=candidate.source,
-        address=candidate.address,
-        barangay=candidate.barangay,
-    )
-
-
 @router.post("/enterprises", response_model=AccountSummary, status_code=status.HTTP_201_CREATED)
 async def create_enterprise_account(
     payload: EnterpriseAccountCreate,
@@ -317,42 +255,11 @@ async def create_enterprise_account(
             detail="An account with this email already exists.",
         )
 
-    latitude = payload.latitude
-    longitude = payload.longitude
-    location_source = payload.locationSource
-    location_confidence = payload.locationConfidence
-    geocoded_address = payload.geocodedAddress
-    location_updated_at = None
-
-    if (latitude is None) != (longitude is None):
+    if not is_inside_san_pedro(payload.latitude, payload.longitude):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Latitude and longitude must be provided together.",
+            detail="Enterprise location must be inside San Pedro, Laguna.",
         )
-
-    if latitude is not None and longitude is not None:
-        if not is_inside_san_pedro(latitude, longitude):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Enterprise location must be inside San Pedro, Laguna.",
-            )
-        location_source = location_source or "manual"
-        location_updated_at = datetime.now(UTC)
-    else:
-        try:
-            candidate = await geocode_enterprise_address(
-                payload.address, payload.barangay, payload.enterpriseName
-            )
-        except GeocodingNoResult, GeocodingUnavailable:
-            candidate = None
-
-        if candidate is not None:
-            latitude = candidate.latitude
-            longitude = candidate.longitude
-            location_source = candidate.source
-            location_confidence = candidate.confidence
-            geocoded_address = candidate.display_address
-            location_updated_at = datetime.now(UTC)
 
     enterprise_id = await generate_enterprise_id(db, payload.enterpriseId or payload.enterpriseName)
     account = await create_account_with_activation(
@@ -367,12 +274,9 @@ async def create_enterprise_account(
         manager_name=payload.managerName,
         barangay=payload.barangay,
         address=payload.address,
-        latitude=latitude,
-        longitude=longitude,
-        location_source=location_source,
-        location_confidence=location_confidence,
-        geocoded_address=geocoded_address,
-        location_updated_at=location_updated_at,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        location_updated_at=datetime.now(UTC),
         enterprise_id=enterprise_id,
         gateway_status="Not Linked",
         building_capacity=payload.buildingCapacity,
