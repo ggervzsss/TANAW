@@ -35,8 +35,16 @@ const finalReport = {
 };
 
 async function signInAsStaff(page: Page) {
+  let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
-  await page.route("**/auth/login", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "ui-test-token", user: staffUser }) }));
+  await page.route("**/auth/login", (route) => {
+    signedIn = true;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "ui-test-token", user: staffUser }) });
+  });
+  await page.route("**/auth/session", (route) => {
+    if (!signedIn) return route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Not authenticated" }) });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "ui-test-token", user: staffUser }) });
+  });
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(staffUser) }));
   await page.route("**/auth/preferences", async (route) => {
     const body = route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme: "dark" };

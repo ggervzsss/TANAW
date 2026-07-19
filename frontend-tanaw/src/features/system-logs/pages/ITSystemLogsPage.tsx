@@ -184,15 +184,17 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
 }
 
 export function ActivityDetailFields({ activity }: { activity: SystemLog }) {
+  const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />;
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <DetailField label="Type" value={activity.category} />
-      <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
+      <DetailField label="Actor" value={expandableValue(`${activity.actor} (${activity.actorRole})`, "actor")} />
       <DetailField label="Timestamp" value={formatLogTimestamp(activity.timestamp)} />
-      <DetailField label="Target" value={activity.target} />
-      <DetailField label="Action" value={activity.action} />
+      <DetailField label="Target" value={expandableValue(activity.target, "target")} />
+      <DetailField label="Action" value={expandableValue(activity.action, "action")} />
       <div className="md:col-span-2">
-        <DetailField label="Summary" value={activity.summary} />
+        <DetailField label="Summary" value={expandableValue(activity.summary, "summary")} />
       </div>
     </div>
   );

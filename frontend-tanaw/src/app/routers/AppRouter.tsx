@@ -55,10 +55,16 @@ const SupportTicketsPage = lazy(() =>
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
+  const status = useAuthStore((state) => state.status);
+  if (status === "checking") return <RouteLoadingFallback />;
   return <Navigate to={user ? getRoleDashboardPath(user.role) : routes.login} replace />;
 }
 
 export function AppRouter() {
+  const status = useAuthStore((state) => state.status);
+
+  if (status === "checking") return <RouteLoadingFallback />;
+
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>

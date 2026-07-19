@@ -157,12 +157,15 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
     <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-2">
         <DetailField label="Type" value={activity.category} />
-        <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
+        <DetailField
+          label="Actor"
+          value={<ExpandableTableText primary={`${activity.actor} (${activity.actorRole})`} ariaLabel="actor" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />}
+        />
         <DetailField label="Timestamp" value={formatCompactTimestamp(activity.timestamp)} />
-        <DetailField label="Target" value={activity.target} />
-        <DetailField label="Action" value={activity.action} />
+        <DetailField label="Target" value={<ExpandableTableText primary={activity.target} ariaLabel="target" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
+        <DetailField label="Action" value={<ExpandableTableText primary={activity.action} ariaLabel="action" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
         <div className="md:col-span-2">
-          <DetailField label="Summary" value={activity.summary} />
+          <DetailField label="Summary" value={<ExpandableTableText primary={activity.summary} ariaLabel="summary" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
         </div>
       </div>
       {supportTicketId && (

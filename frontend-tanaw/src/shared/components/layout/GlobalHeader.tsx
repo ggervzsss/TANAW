@@ -93,7 +93,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
         <button
           type="button"
           aria-label="Notifications"
-          className="text-tanaw-navy hover:text-tanaw-green relative rounded-full border border-white/80 bg-white p-2 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+          className="text-tanaw-navy hover:text-tanaw-green relative rounded-full border border-white/80 bg-white p-2 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
         >
           <Bell size={18} />
           <span className="bg-tanaw-red absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white" />
@@ -104,7 +104,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
             type="button"
             aria-label="Open account menu"
             onClick={() => setShowProfileMenu((current) => !current)}
-            className="flex items-center gap-3 rounded-full border border-white/80 bg-white py-1 pr-3 pl-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md active:translate-y-0"
+            className="flex items-center gap-3 rounded-full border border-white/80 bg-white py-1 pr-3 pl-1.5 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md active:translate-y-0"
           >
             <div className="bg-tanaw-green flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white">
               {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}

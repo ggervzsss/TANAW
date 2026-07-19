@@ -79,14 +79,26 @@ test("uses application-controlled login input states in dark and light mode", as
 
 test("keeps an explicit login theme through authentication, reload, and logout", async ({ page }) => {
   let synchronizedTheme = "";
+  let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
-  await page.route("**/auth/login", (route) =>
-    route.fulfill({
+  await page.route("**/auth/login", (route) => {
+    signedIn = true;
+    return route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ token: "theme-test-token", user: staffUser }),
-    }),
-  );
+    });
+  });
+  await page.route("**/auth/session", (route) => {
+    if (!signedIn) {
+      return route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Not authenticated" }) });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "theme-test-token", user: staffUser }),
+    });
+  });
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(staffUser) }));
   await page.route("**/auth/preferences", async (route) => {
     if (route.request().method() === "PATCH") {

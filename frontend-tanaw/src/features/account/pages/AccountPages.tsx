@@ -281,7 +281,7 @@ export function AccountSecurityPage() {
                   label="New Password"
                   name="newPassword"
                   defaultValue=""
-                  placeholder="Use a long passphrase"
+                  placeholder="Use a long password"
                   type="password"
                   minLength={PASSWORD_MIN_LENGTH}
                   maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
@@ -294,7 +294,7 @@ export function AccountSecurityPage() {
                   label="Confirm New Password"
                   name="confirmPassword"
                   defaultValue=""
-                  placeholder="Repeat the passphrase"
+                  placeholder="Repeat the password"
                   type="password"
                   minLength={PASSWORD_MIN_LENGTH}
                   maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}

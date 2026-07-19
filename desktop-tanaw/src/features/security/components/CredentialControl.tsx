@@ -116,7 +116,7 @@ function PasswordInput({ ariaLabel, className, isVisible, maxLength, minLength, 
         type={isVisible ? "text" : "password"}
         minLength={minLength}
         maxLength={maxLength}
-        placeholder="Use a long passphrase"
+        placeholder="Use a long password"
         className={className}
         value={value}
         onChange={(event) => onChange?.(event.target.value)}

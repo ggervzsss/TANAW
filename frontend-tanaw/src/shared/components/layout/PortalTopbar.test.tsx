@@ -30,7 +30,9 @@ describe("portal topbar theme treatment", () => {
     const dark = getPortalTopbarThemeClasses("dark");
     expect(light.frame).toContain("#043817");
     expect(dark.frame).toContain("#02090d");
-    expect(dark.overlay).toContain("rgba(1,8,11,0.99)");
-    expect(dark.image).not.toBe(light.image);
+    expect(dark.overlay).toContain("rgba(1,8,11,0.98)");
+    expect(dark.dayImage).toContain("opacity-0");
+    expect(dark.nightImage).toContain("opacity-[0.5]");
+    expect(dark.imageTreatment).not.toBe(light.imageTreatment);
   });
 });

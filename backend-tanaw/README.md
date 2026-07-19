@@ -246,8 +246,8 @@ metadata, while decreasing it is irreversible after the next batch.
 
 ## Password Policy
 
-TANAW uses a passphrase-first policy aligned with NIST SP 800-63B-4 for its
-single-factor account passwords. New and changed passwords must contain 15 to
+TANAW uses a length-first password policy aligned with NIST SP 800-63B-4 for
+its single-factor accounts. New and changed passwords must contain 15 to
 128 Unicode code points. Spaces, password-manager output, and Unicode are
 accepted; mandatory uppercase, lowercase, number, and symbol mixtures are not
 used. TANAW normalizes new passwords to Unicode NFC before hashing and accepts

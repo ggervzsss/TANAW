@@ -22,17 +22,12 @@ const itUser = {
 
 test("typing devlog opens the page and its generated link can be copied", async ({ context, page }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.addInitScript(
-    ({ user }) => {
-      sessionStorage.setItem(
-        "tanaw-auth",
-        JSON.stringify({
-          state: { token: "dev-log-test-token", user },
-          version: 0,
-        }),
-      );
-    },
-    { user: itUser },
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "dev-log-test-token", user: itUser }),
+    }),
   );
   await page.route("**/auth/me", (route) =>
     route.fulfill({

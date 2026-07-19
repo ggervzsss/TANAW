@@ -62,14 +62,26 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
 });
 
 test("keeps the theme through Enterprise authentication and renders the Portal label as static text", async ({ page }) => {
+  let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
-  await page.route("**/auth/login", (route) =>
-    route.fulfill({
+  await page.route("**/auth/login", (route) => {
+    signedIn = true;
+    return route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ token: "enterprise-brand-token", user: enterpriseUser }),
-    }),
-  );
+    });
+  });
+  await page.route("**/auth/session", (route) => {
+    if (!signedIn) {
+      return route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Not authenticated" }) });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "enterprise-brand-token", user: enterpriseUser }),
+    });
+  });
   await page.route("**/auth/me", (route) =>
     route.fulfill({
       status: 200,

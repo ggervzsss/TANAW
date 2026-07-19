@@ -6,14 +6,20 @@ from datetime import UTC, datetime
 from time import monotonic
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_access_token
 from app.db.session import get_db
-from app.features.accounts.dependencies import get_current_account
+from app.features.accounts.dependencies import (
+    bearer_scheme,
+    get_account_from_access_token,
+    get_current_account,
+)
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -105,6 +111,7 @@ from app.features.operational.websocket import operational_ws_manager
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 SYSTEM_SETTINGS_ID = "default"
+AUTH_SESSION_COOKIE = "tanaw_session"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
     AccountRole.IT,
@@ -240,6 +247,41 @@ def set_pending_account_change(account: Account, key: str, value: dict[str, str]
     set_account_preferences(account, preferences)
 
 
+def set_auth_session_cookie(response: Response, token: str, *, remember: bool) -> None:
+    settings = get_settings()
+    max_age_minutes = (
+        settings.access_token_expire_minutes
+        if remember
+        else min(settings.session_cookie_expire_minutes, settings.access_token_expire_minutes)
+    )
+    response.set_cookie(
+        key=AUTH_SESSION_COOKIE,
+        value=token,
+        max_age=max_age_minutes * 60,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="none" if settings.is_production else "lax",
+        path="/auth",
+    )
+
+
+def clear_auth_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=AUTH_SESSION_COOKIE,
+        httponly=True,
+        secure=get_settings().is_production,
+        samesite="none" if get_settings().is_production else "lax",
+        path="/auth",
+    )
+
+
+def token_remember_preference(token: str) -> bool:
+    try:
+        return decode_access_token(token).get("remember") is True
+    except jwt.PyJWTError:
+        return False
+
+
 @router.post(
     "/account-activation/validate",
     response_model=AccountActivationValidateResponse,
@@ -323,7 +365,9 @@ async def verify_email_change_link(
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
-    payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    payload: LoginRequest,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoginResponse:
     candidate = await get_account_by_login_identifier(db, payload.username, for_update=True)
     lockout_candidate = (
@@ -377,7 +421,10 @@ async def login(
 
     clear_login_failures(account)
     account.last_login_at = datetime.now(UTC)
-    token = create_access_token(account.id, {"role": account.role.value})
+    token = create_access_token(
+        account.id,
+        {"role": account.role.value, "remember": payload.rememberMe},
+    )
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -389,7 +436,43 @@ async def login(
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
     )
+    set_auth_session_cookie(response, token, remember=payload.rememberMe)
     return LoginResponse(token=token, user=to_auth_user(account))
+
+
+@router.post("/session", response_model=LoginResponse)
+async def restore_session(
+    request: Request,
+    response: Response,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> LoginResponse:
+    token = (
+        credentials.credentials
+        if credentials is not None
+        else request.cookies.get(AUTH_SESSION_COOKIE)
+    )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+
+    try:
+        account = await get_account_from_access_token(token, db)
+    except HTTPException:
+        clear_auth_session_cookie(response)
+        raise
+    remember = token_remember_preference(token)
+    refreshed_token = create_access_token(
+        account.id,
+        {"role": account.role.value, "remember": remember},
+    )
+    set_auth_session_cookie(response, refreshed_token, remember=remember)
+    return LoginResponse(token=refreshed_token, user=to_auth_user(account))
 
 
 @router.get("/me", response_model=AuthUser)
@@ -399,6 +482,7 @@ async def me(account: Annotated[Account, Depends(get_current_account)]) -> AuthU
 
 @router.post("/logout")
 async def logout(
+    response: Response,
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
@@ -414,12 +498,18 @@ async def logout(
         source_id=account.id,
     )
     await invalidate_account_tokens(db, account)
+    clear_auth_session_cookie(response)
     return {"status": "ok"}
 
 
 @router.post("/change-password", response_model=LoginResponse)
 async def change_password(
     payload: PasswordChangeRequest,
+    response: Response,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoginResponse:
@@ -451,7 +541,14 @@ async def change_password(
         notification_type="Enterprise Security Updated",
         source_type="enterprise.password",
     )
-    token = create_access_token(account.id, {"role": account.role.value})
+    remember = (
+        token_remember_preference(credentials.credentials) if credentials is not None else False
+    )
+    token = create_access_token(
+        account.id,
+        {"role": account.role.value, "remember": remember},
+    )
+    set_auth_session_cookie(response, token, remember=remember)
     return LoginResponse(token=token, user=to_auth_user(account))
 
 

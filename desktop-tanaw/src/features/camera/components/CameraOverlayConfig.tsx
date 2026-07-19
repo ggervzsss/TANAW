@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { GripVertical, Minus, Move, Plus, RotateCcw, Trash2, Waves } from "lucide-react";
 import type { Camera, TripwireLine, TripwirePoint } from "../../../types/enterprise";
-import {
-  buildTripwireSvgPath,
-  clampPoint,
-  createTripwireLine,
-  getTripwireAnchors,
-  normalizeTripwireLine,
-  pointDistance,
-} from "../utils/tripwire-path";
+import { clampFloatingToolbarPosition, hasExceededDragThreshold } from "../utils/floating-toolbar";
+import { buildTripwireSvgPath, clampPoint, createTripwireLine, getTripwireAnchors, normalizeTripwireLine, pointDistance } from "../utils/tripwire-path";
 
 type CameraOverlayConfigProps = {
   config: Camera["config"];
@@ -19,19 +13,26 @@ type CameraOverlayConfigProps = {
 type TripwireKind = "entry" | "exit";
 type SelectedPoint = { line: TripwireKind; pointIndex: number };
 type ToolbarPosition = { x: number; y: number };
-type ToolbarDragState = { offsetX: number; offsetY: number; pointerId: number };
-type DragState =
-  | { mode: "point"; line: TripwireKind; pointIndex: number }
-  | { mode: "path"; line: TripwireKind; origin: TripwirePoint; originalPoints: TripwirePoint[] };
+type ToolbarDragState = {
+  offsetX: number;
+  offsetY: number;
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  moved: boolean;
+};
+type DragState = { mode: "point"; line: TripwireKind; pointIndex: number } | { mode: "path"; line: TripwireKind; origin: TripwirePoint; originalPoints: TripwirePoint[] };
 
 const lineStyles: Record<TripwireKind, { color: string; label: string; textClass: string }> = {
   entry: { color: "#22c55e", label: "ENTRY", textClass: "bg-emerald-400 text-black" },
   exit: { color: "#ef4444", label: "EXIT", textClass: "bg-red-500 text-white" },
 };
+const TOOLBAR_DRAG_THRESHOLD_PX = 5;
 
 export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: CameraOverlayConfigProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const suppressToolbarClickRef = useRef(false);
   const [activeLine, setActiveLine] = useState<TripwireKind>("entry");
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<SelectedPoint | null>(null);
@@ -60,13 +61,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
     const bounds = overlay.getBoundingClientRect();
     const toolbarWidth = toolbarRef.current?.offsetWidth ?? 0;
     const toolbarHeight = toolbarRef.current?.offsetHeight ?? 0;
-    const maxX = Math.max(padding, bounds.width - toolbarWidth - padding);
-    const maxY = Math.max(padding, bounds.height - toolbarHeight - padding);
-
-    return {
-      x: Math.min(maxX, Math.max(padding, position.x)),
-      y: Math.min(maxY, Math.max(padding, position.y)),
-    };
+    return clampFloatingToolbarPosition(position, { width: bounds.width, height: bounds.height }, { width: toolbarWidth, height: toolbarHeight }, padding);
   }, []);
 
   useEffect(() => {
@@ -209,10 +204,14 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    suppressToolbarClickRef.current = false;
     setToolbarDragState({
       offsetX: event.clientX - overlayBounds.left - toolbarPosition.x,
       offsetY: event.clientY - overlayBounds.top - toolbarPosition.y,
       pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      moved: false,
     });
   };
 
@@ -223,8 +222,16 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
     if (!overlay) return;
 
     const overlayBounds = overlay.getBoundingClientRect();
+    const moved =
+      toolbarDragState.moved || hasExceededDragThreshold({ x: toolbarDragState.startClientX, y: toolbarDragState.startClientY }, { x: event.clientX, y: event.clientY }, TOOLBAR_DRAG_THRESHOLD_PX);
+    if (!moved) return;
+
     event.preventDefault();
     event.stopPropagation();
+    suppressToolbarClickRef.current = true;
+    if (!toolbarDragState.moved) {
+      setToolbarDragState((current) => (current ? { ...current, moved: true } : current));
+    }
     setToolbarPosition(
       clampToolbarPosition({
         x: event.clientX - overlayBounds.left - toolbarDragState.offsetX,
@@ -265,8 +272,19 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
           {isToolbarCollapsed ? (
             <button
               type="button"
-              onClick={() => setIsToolbarCollapsed(false)}
-              className="flex items-center gap-1.5 rounded-sm bg-white/10 px-2 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-white/20"
+              onClick={() => {
+                if (suppressToolbarClickRef.current) {
+                  suppressToolbarClickRef.current = false;
+                  return;
+                }
+                setIsToolbarCollapsed(false);
+              }}
+              onPointerDown={handleToolbarDragStart}
+              onPointerMove={handleToolbarDragMove}
+              onPointerUp={handleToolbarDragEnd}
+              onPointerCancel={handleToolbarDragEnd}
+              onLostPointerCapture={() => setToolbarDragState(null)}
+              className="flex cursor-grab touch-none items-center gap-1.5 rounded-sm bg-white/10 px-2 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-white/20 active:cursor-grabbing"
               aria-label="Show tripwire toolbar"
             >
               <Waves size={13} /> Tripwire
@@ -331,9 +349,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
                   <Minus size={13} />
                 </button>
               </div>
-              <p className="mt-1 max-w-96 text-[9px] leading-snug font-semibold text-white/70">
-                Drag anchors or the path. Double-click to add an anchor, select one and press Delete to remove it.
-              </p>
+              <p className="mt-1 max-w-96 text-[9px] leading-snug font-semibold text-white/70">Drag anchors or the path. Double-click to add an anchor, select one and press Delete to remove it.</p>
             </>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, Tray } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -32,6 +32,7 @@ let isQuitting = false;
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const CAMERA_CREDENTIAL_STORE_FILE = "camera-credentials.json";
+const AUTH_SESSION_STORE_FILE = "auth-session.json";
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const SPLASH_MIN_DISPLAY_MS = 1400;
 const execFileAsync = promisify(execFile);
@@ -55,6 +56,17 @@ type CameraCredentialStoreFile =
       scopes: CameraCredentialStore;
       version: 1;
     };
+
+type StoredAuthSession = {
+  token: string;
+  user: Record<string, unknown>;
+};
+
+type AuthSessionStoreFile = {
+  encoding: "safeStorage";
+  payload: string;
+  version: 1;
+};
 
 if (process.platform === "linux") {
   // TANAW's camera analysis runs in the Python ML service. Electron only renders
@@ -285,6 +297,48 @@ function saveCameraCredentials(scopeInput: unknown, recordsInput: unknown): Came
   return records;
 }
 
+function getAuthSessionStorePath() {
+  return path.join(app.getPath("userData"), AUTH_SESSION_STORE_FILE);
+}
+
+function loadAuthSession(): StoredAuthSession | null {
+  const storePath = getAuthSessionStorePath();
+  if (!existsSync(storePath) || !safeStorage.isEncryptionAvailable()) return null;
+
+  try {
+    const raw = JSON.parse(readFileSync(storePath, "utf8")) as unknown;
+    if (!isObjectRecord(raw) || raw.version !== 1 || raw.encoding !== "safeStorage" || typeof raw.payload !== "string") return null;
+    return normalizeAuthSession(JSON.parse(safeStorage.decryptString(Buffer.from(raw.payload, "base64"))) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+function saveAuthSession(sessionInput: unknown) {
+  const session = normalizeAuthSession(sessionInput);
+  if (!session || !safeStorage.isEncryptionAvailable()) return false;
+
+  const storePath = getAuthSessionStorePath();
+  mkdirSync(path.dirname(storePath), { recursive: true });
+  const payload: AuthSessionStoreFile = {
+    encoding: "safeStorage",
+    payload: safeStorage.encryptString(JSON.stringify(session)).toString("base64"),
+    version: 1,
+  };
+  writeFileSync(storePath, JSON.stringify(payload), { encoding: "utf8", mode: 0o600 });
+  return true;
+}
+
+function clearAuthSession() {
+  const storePath = getAuthSessionStorePath();
+  if (existsSync(storePath)) unlinkSync(storePath);
+}
+
+function normalizeAuthSession(value: unknown): StoredAuthSession | null {
+  if (!isObjectRecord(value) || typeof value.token !== "string" || !value.token || !isObjectRecord(value.user)) return null;
+  return { token: value.token, user: value.user };
+}
+
 function normalizeCredentialScope(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error("Camera credential scope is required.");
@@ -506,6 +560,12 @@ function registerCameraCredentialIpc() {
   ipcMain.handle("camera-credentials:save", (_event, scope: unknown, records: unknown) => saveCameraCredentials(scope, records));
 }
 
+function registerAuthSessionIpc() {
+  ipcMain.handle("auth-session:load", () => loadAuthSession());
+  ipcMain.handle("auth-session:save", (_event, session: unknown) => saveAuthSession(session));
+  ipcMain.handle("auth-session:clear", () => clearAuthSession());
+}
+
 function createTray() {
   if (tray) return;
 
@@ -723,6 +783,7 @@ if (gotSingleInstanceLock) {
 
     registerMlServiceIpc();
     registerCameraCredentialIpc();
+    registerAuthSessionIpc();
     createTray();
     createWindow({ showSplash: true });
     splashStartedAt = Date.now();

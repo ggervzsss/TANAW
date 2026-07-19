@@ -37,7 +37,7 @@ export function PasswordRequirements({ password }: { password: string }) {
       </ul>
       <p className="mt-2 flex items-start gap-2 text-xs leading-5 font-medium text-(--tanaw-muted) dark:text-slate-300">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" />
-        <span>Passphrases, spaces, Unicode, and password managers are supported. No special-character mix is required.</span>
+        <span>Passwords, spaces, Unicode, and password managers are supported. No special-character mix is required.</span>
       </p>
       <span className="sr-only" aria-live="polite">
         {status.hasValue ? `${metCount} of ${requirements.length} password requirements met.` : "Enter a new password to check its requirements."}

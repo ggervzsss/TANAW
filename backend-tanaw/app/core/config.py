@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = DEVELOPMENT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 30
+    session_cookie_expire_minutes: int = Field(default=60 * 8, ge=60, le=60 * 24 * 30)
     bootstrap_it_username: str | None = Field(
         default=None,
         validation_alias=AliasChoices("BOOTSTRAP_IT_USERNAME", "DEFAULT_IT_USERNAME"),

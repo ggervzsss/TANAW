@@ -117,7 +117,7 @@ export function EnterpriseTopbar({
   const controlClasses = getEnterpriseTopbarControlClasses(resolvedTheme);
   const roleSubtitle = `${String(user?.role ?? "enterprise").toLowerCase()} Role`;
   const displayImageDataUrl = user?.displayImageDataUrl ?? null;
-  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 max-2xl:px-3.5";
+  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-[color,background-color,box-shadow,transform] duration-200 max-2xl:px-3.5";
   const navPillActive = isDarkTopbar
     ? "bg-emerald-300/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.46)] ring-1 ring-emerald-100/14"
     : "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
@@ -144,6 +144,11 @@ export function EnterpriseTopbar({
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
       <div data-topbar-theme={resolvedTheme} className="enterprise-topbar relative overflow-visible shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10">
+        <div className="enterprise-topbar__building" aria-hidden="true">
+          <div data-topbar-image="day" className="enterprise-topbar__image enterprise-topbar__image--day" />
+          <div data-topbar-image="night" className="enterprise-topbar__image enterprise-topbar__image--night" />
+        </div>
+        <div className="enterprise-topbar__overlay" aria-hidden="true" />
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
           <EnterpriseBrand onDashboard={() => onNavigate("dashboard")} />
 
@@ -172,7 +177,7 @@ export function EnterpriseTopbar({
                 onNotificationsClose();
                 onToggleTheme();
               }}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${controlClasses.icon}`}
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${controlClasses.icon}`}
             >
               {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -201,7 +206,7 @@ export function EnterpriseTopbar({
                   setShowProfileMenu((current) => !current);
                   onNotificationsClose();
                 }}
-                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${controlClasses.account}`}
+                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${controlClasses.account}`}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {displayImageDataUrl ? <img src={displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -281,7 +286,7 @@ export function EnterpriseTopbar({
                       onNavigate(item.id);
                       setShowMobileNav(false);
                     }}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${isActive ? "bg-[#45a549]/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
+                    className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow] ${isActive ? "bg-[#45a549]/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
                   >
                     <Icon size={16} className="shrink-0" />
                     {item.label}

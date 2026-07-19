@@ -18,6 +18,7 @@ import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
 import type { NavigationItem } from "./navigation";
 import { roleAccessLabel, roleNavigation, rolePortalLabel } from "./navigation";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
+import { publishSessionEvent } from "../../utils/sessionSync";
 
 type PortalTopbarProps = {
   role: UserRole;
@@ -89,6 +90,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     } finally {
       queryClient.removeQueries({ queryKey: ["current-user"] });
       logout();
+      publishSessionEvent({ type: "logout", occurredAt: Date.now() });
       toast.success("Logout complete");
       navigate(routes.login, { replace: true });
     }
@@ -303,7 +305,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 
   const isDarkTopbar = resolvedTheme === "dark";
   const topbarThemeClasses = getPortalTopbarThemeClasses(resolvedTheme);
-  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 max-2xl:px-3.5";
+  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-[color,background-color,box-shadow,transform] duration-200 max-2xl:px-3.5";
   const navPillActive = isDarkTopbar
     ? "bg-emerald-300/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.46)] ring-1 ring-emerald-100/14"
     : "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
@@ -324,13 +326,22 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
       <div data-topbar-theme={resolvedTheme} className={`relative overflow-visible ${topbarThemeClasses.frame}`}>
-        <div
-          aria-hidden
-          className={`pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] bg-cover bg-center mix-blend-screen max-lg:w-[76%] ${topbarThemeClasses.image}`}
-          style={{ backgroundImage: `url('${resolvedTheme === "dark" ? "/images/it-topbar-building-night.png" : "/images/it-topbar-building.png"}')` }}
-        />
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] max-lg:w-[76%]">
+          <div
+            data-topbar-image="day"
+            className={`absolute inset-0 bg-cover bg-center mix-blend-screen transition-opacity duration-350 motion-reduce:transition-none ${topbarThemeClasses.imageTreatment} ${topbarThemeClasses.dayImage}`}
+            style={{ backgroundImage: "url('/images/it-topbar-building.png')" }}
+          />
+          <div
+            data-topbar-image="night"
+            className={`absolute inset-0 bg-cover bg-center mix-blend-screen transition-opacity duration-350 motion-reduce:transition-none ${topbarThemeClasses.imageTreatment} ${topbarThemeClasses.nightImage}`}
+            style={{ backgroundImage: "url('/images/it-topbar-building-night.png')" }}
+          />
+        </div>
         <div className={`pointer-events-none absolute inset-0 ${topbarThemeClasses.overlay}`} />
-        <div className={`pointer-events-none absolute inset-0 ${isDarkTopbar ? "bg-[radial-gradient(circle_at_top_left,rgba(110,231,183,0.055),transparent_34%),radial-gradient(circle_at_top_right,rgba(52,211,153,0.08),transparent_44%)]" : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]"}`} />
+        <div
+          className={`pointer-events-none absolute inset-0 ${isDarkTopbar ? "bg-[radial-gradient(circle_at_top_left,rgba(110,231,183,0.055),transparent_34%),radial-gradient(circle_at_top_right,rgba(52,211,153,0.08),transparent_44%)]" : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]"}`}
+        />
         <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-px ${isDarkTopbar ? "bg-emerald-100/10" : "bg-white/18"}`} />
 
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
@@ -429,7 +440,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                 setOpenMenuId(null);
                 toggleTheme();
               }}
-              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${topbarIconButton}`}
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${topbarIconButton}`}
             >
               {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -461,7 +472,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                   setShowProfileMenu((current) => !current);
                   setShowNotifications(false);
                 }}
-                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${accountButtonTheme}`}
+                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${accountButtonTheme}`}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -537,7 +548,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                       onClick={() => setShowMobileNav(false)}
                       className={({ isActive }) =>
                         [
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all",
+                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow]",
                           isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white",
                         ].join(" ")
                       }
@@ -565,7 +576,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                             onClick={() => setShowMobileNav(false)}
                             className={({ isActive }) =>
                               [
-                                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all",
+                                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow]",
                                 isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white",
                               ].join(" ")
                             }

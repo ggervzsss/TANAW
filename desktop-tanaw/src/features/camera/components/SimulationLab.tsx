@@ -458,7 +458,10 @@ export function SimulationLab({ baseUrl, defaultBuildingCapacity }: SimulationLa
               )}
             </div>
             <div className="mt-4 h-3 overflow-hidden rounded-full bg-gray-100">
-              <div className={`h-full rounded-full transition-all duration-500 ${thresholdBreached ? "bg-red-600" : "bg-[#45a549]"}`} style={{ width: `${Math.min(100, occupancyPercent)}%` }} />
+              <div
+                className={`h-full rounded-full transition-[width,background-color] duration-500 ${thresholdBreached ? "bg-red-600" : "bg-[#45a549]"}`}
+                style={{ width: `${Math.min(100, occupancyPercent)}%` }}
+              />
             </div>
           </div>
 

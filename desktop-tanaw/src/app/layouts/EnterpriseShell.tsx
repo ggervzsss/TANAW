@@ -363,7 +363,12 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   const toggleTheme = () => {
-    setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
+    setTheme((currentTheme) => {
+      const nextTheme = resolveThemePreference(currentTheme) === "dark" ? "light" : "dark";
+      persistThemePreference(nextTheme);
+      setResolvedTheme(applyThemePreference(nextTheme));
+      return nextTheme;
+    });
   };
 
   const notifications = useMemo(

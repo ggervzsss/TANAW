@@ -51,8 +51,18 @@ test("applies the complete Enterprise night topbar and preserves the daytime var
   const darkTopbar = page.locator('[data-topbar-theme="dark"]');
   await expect(darkTopbar).toBeVisible();
   expect(await darkTopbar.evaluate((element) => getComputedStyle(element).backgroundImage)).toContain("rgb(2, 9, 13)");
+  const dayImage = page.locator('[data-topbar-image="day"]');
+  const nightImage = page.locator('[data-topbar-image="night"]');
+  await expect(dayImage).toHaveCSS("opacity", "0");
+  await expect(nightImage).toHaveCSS("opacity", "0.5");
+  await expect(nightImage).toHaveCSS("background-image", /enterprise-topbar-building-night\.png/);
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator('[data-topbar-theme="light"]')).toBeVisible();
+  await expect(dayImage).toHaveCSS("opacity", "0.55");
+  await expect(nightImage).toHaveCSS("opacity", "0");
+  await expect(dayImage).toHaveCSS("background-image", /enterprise-topbar-building\.png/);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(dayImage).toHaveCSS("transition-duration", "0s");
 });
 
 for (const identifier of [enterpriseUser.enterpriseId, enterpriseUser.email]) {

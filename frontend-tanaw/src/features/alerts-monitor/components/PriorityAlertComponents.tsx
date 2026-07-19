@@ -1,5 +1,5 @@
 import { Bell } from "lucide-react";
-import { DetailField, EmptyState, ModalFrame } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, ModalFrame } from "@/shared/components/ui";
 import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode } from "@/shared/types";
 
 type PriorityAlertListItemProps = {
@@ -26,7 +26,9 @@ export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemPr
 }
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
-  const relatedEntity = alert.enterprise ? <DetailField label="Enterprise" value={alert.enterprise} /> : null;
+  const expandableValue = (value: string, label: string) => (
+    <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" className="leading-relaxed font-semibold" />
+  );
 
   return (
     <ModalFrame title="Priority Alert Details" eyebrow={alert.id} onClose={onClose}>
@@ -37,12 +39,10 @@ export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; on
         <DetailField label="Status" value={<AlertStatusBadge status={alert.status} />} />
         <DetailField label="Requester" value={alert.requester} />
         <DetailField label="Resolution Mode" value={<ResolutionBadge mode={alert.resolutionMode} />} />
-        {relatedEntity}
+        <DetailField label="Enterprise" value={expandableValue(alert.enterprise ?? "Not specified", "enterprise")} />
+        <DetailField label="Summary" value={expandableValue(alert.summary, "summary")} />
         <div className="md:col-span-2">
-          <DetailField label="Summary" value={alert.summary} />
-        </div>
-        <div className="md:col-span-2">
-          <DetailField label="Required Action" value={alert.requiredAction} />
+          <DetailField label="Required Action" value={expandableValue(alert.requiredAction, "required action")} />
         </div>
       </div>
     </ModalFrame>

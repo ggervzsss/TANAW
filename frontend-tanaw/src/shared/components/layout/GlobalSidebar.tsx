@@ -28,7 +28,7 @@ export function GlobalSidebar({ role, showDevLog = false }: GlobalSidebarProps) 
               to={item.path}
               className={({ isActive }) =>
                 [
-                  "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 active:scale-[0.99]",
+                  "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow,transform] duration-200 active:scale-[0.99]",
                   isActive ? "text-tanaw-green bg-white shadow-lg shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white hover:shadow-sm",
                 ].join(" ")
               }

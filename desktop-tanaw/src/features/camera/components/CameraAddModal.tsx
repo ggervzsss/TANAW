@@ -22,16 +22,22 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/70 p-4 backdrop-blur-md" onPointerDown={onClose}>
-        <div className="animate-in fade-in max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-white/80 bg-white shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="register-camera-node-title"
+          className="animate-in fade-in max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-white/80 bg-white shadow-2xl dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_28px_80px_rgba(0,0,0,0.58)]"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           <div className="h-1.5 rounded-t-2xl bg-linear-to-r from-[#065f46] via-emerald-500 to-[#45a549]" />
           <div className="max-h-[calc(92vh-0.375rem)] overflow-auto p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-lg font-bold text-[#111827]">
-                <Video size={20} className="text-[#065f46]" /> Register Camera Node
+              <h3 id="register-camera-node-title" className="flex items-center gap-2 text-lg font-bold text-[#111827] dark:text-white">
+                <Video size={20} className="text-[#065f46] dark:text-emerald-300" /> Register Camera Node
               </h3>
               <button
                 onClick={onClose}
-                className="rounded-full border border-gray-200 bg-white p-2 text-gray-400 shadow-sm transition hover:bg-emerald-50 hover:text-[#065f46]"
+                className="rounded-full border border-gray-200 bg-white p-2 text-gray-400 shadow-sm transition-colors hover:bg-emerald-50 hover:text-[#065f46] dark:border-slate-600 dark:bg-[#172033] dark:text-slate-300 dark:hover:bg-[#1d2940] dark:hover:text-emerald-200"
                 aria-label="Close dialog"
               >
                 <X size={20} />
@@ -41,26 +47,26 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
             <form onSubmit={onSubmit} noValidate className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Camera Name</label>
+                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Camera Name</label>
                   <input
                     required
                     type="text"
                     value={newCam.name}
                     onChange={(event) => onChange({ ...newCam, name: event.target.value })}
                     placeholder="e.g., Main Entrance Camera"
-                    className={`w-full rounded-xl border p-3 text-sm transition outline-none focus:border-[#065f46] ${errors.name ? "border-tanaw-red" : "border-gray-300"}`}
+                    className={`w-full rounded-xl border bg-white p-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${errors.name ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`}
                   />
                   {errors.name && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.name}</p>}
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Assigned Zone</label>
+                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Assigned Zone</label>
                   <input
                     required
                     type="text"
                     value={newCam.zone}
                     onChange={(event) => onChange({ ...newCam, zone: event.target.value })}
                     placeholder="e.g., Lobby"
-                    className={`w-full rounded-xl border p-3 text-sm transition outline-none focus:border-[#065f46] ${errors.zone ? "border-tanaw-red" : "border-gray-300"}`}
+                    className={`w-full rounded-xl border bg-white p-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${errors.zone ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`}
                   />
                   {errors.zone && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.zone}</p>}
                 </div>
@@ -68,19 +74,19 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
 
               <div className="grid gap-4 md:grid-cols-[1fr_180px]">
                 <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Stream URL</label>
+                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Stream URL</label>
                   <input
                     required
                     type="text"
                     value={newCam.rtsp}
                     onChange={(event) => onChange({ ...newCam, rtsp: event.target.value })}
                     placeholder={streamPlaceholder}
-                    className={`w-full rounded-xl border p-3 font-mono text-sm transition outline-none focus:border-[#065f46] ${errors.rtsp ? "border-tanaw-red" : "border-gray-300"}`}
+                    className={`w-full rounded-xl border bg-white p-3 font-mono text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${errors.rtsp ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`}
                   />
                   {errors.rtsp && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.rtsp}</p>}
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Camera Type</label>
+                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Camera Type</label>
                   <SelectDropdown
                     value={newCam.cameraType}
                     onChange={(cameraType) => onChange({ ...newCam, cameraType: cameraType as CameraFormValues["cameraType"] })}
@@ -99,30 +105,40 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Username</label>
+                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Username</label>
                   <input
                     type="text"
                     value={newCam.username}
                     onChange={(event) => onChange({ ...newCam, username: event.target.value })}
                     placeholder="Optional"
-                    className="w-full rounded-xl border border-gray-300 p-3 text-sm transition outline-none focus:border-[#065f46]"
+                    className="w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:border-slate-600 dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500"
                   />
                   {errors.username && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.username}</p>}
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase">Password</label>
-                  <PasswordVisibilityInput value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} placeholder="Optional" variant="modal" hasError={Boolean(errors.password)} />
+                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Password</label>
+                  <PasswordVisibilityInput
+                    value={newCam.password}
+                    onChange={(password) => onChange({ ...newCam, password })}
+                    placeholder="Optional"
+                    variant="modal"
+                    hasError={Boolean(errors.password)}
+                  />
                   {errors.password && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.password}</p>}
                 </div>
               </div>
 
-              <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 text-xs text-emerald-800">
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100">
                 <Shield size={16} className="mt-0.5 shrink-0" />
                 <p>Credentials and video processing stay on this enterprise device. RTSP credentials are passed to the local ML service without embedding them in the visible stream URL.</p>
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-                <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50">
+              <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-[#1d2940]"
+                >
                   Cancel
                 </button>
                 <button

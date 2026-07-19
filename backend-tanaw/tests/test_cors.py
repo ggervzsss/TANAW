@@ -29,7 +29,7 @@ def build_cors_test_client() -> TestClient:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
     )
@@ -49,7 +49,7 @@ def test_trusted_production_origin_receives_cors_header() -> None:
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == TRUSTED_FRONTEND_ORIGIN
     assert response.headers["access-control-allow-origin"] != "*"
-    assert "access-control-allow-credentials" not in response.headers
+    assert response.headers["access-control-allow-credentials"] == "true"
 
 
 def test_unknown_origin_does_not_receive_cors_header() -> None:
@@ -59,7 +59,7 @@ def test_unknown_origin_does_not_receive_cors_header() -> None:
 
     assert response.status_code == 200
     assert "access-control-allow-origin" not in response.headers
-    assert "access-control-allow-credentials" not in response.headers
+    assert response.headers["access-control-allow-credentials"] == "true"
 
 
 def test_options_preflight_works_for_trusted_origin() -> None:
@@ -77,6 +77,7 @@ def test_options_preflight_works_for_trusted_origin() -> None:
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == TRUSTED_FRONTEND_ORIGIN
     assert response.headers["access-control-allow-origin"] != "*"
+    assert response.headers["access-control-allow-credentials"] == "true"
 
 
 def test_options_preflight_rejects_unknown_origin() -> None:

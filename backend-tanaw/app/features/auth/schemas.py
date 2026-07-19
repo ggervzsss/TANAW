@@ -15,6 +15,7 @@ class LoginRequest(BaseModel):
     username: str = Field(min_length=1)
     password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH)
     loginScope: Literal["web", "enterprise"] = "web"
+    rememberMe: bool = False
 
 
 class LoginResponse(BaseModel):

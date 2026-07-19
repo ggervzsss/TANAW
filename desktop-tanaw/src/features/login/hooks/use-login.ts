@@ -31,8 +31,7 @@ export function useLogin(redirectTo?: string, options?: UseLoginOptions) {
   }, [lockoutSeconds]);
 
   const mutation = useMutation({
-    mutationFn: (values: LoginMutationValues) =>
-      login({ username: values.username, password: values.password }),
+    mutationFn: (values: LoginMutationValues) => login({ username: values.username, password: values.password }, values.rememberMe ?? false),
     onSuccess: (session, values) => {
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       setSession(session, values.rememberMe ?? false);

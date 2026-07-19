@@ -203,18 +203,20 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
 }
 
 export function AdminLogDetailFields({ log }: { log: SystemLog }) {
+  const expandableValue = (value: string, label: string) => (
+    <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" className="leading-relaxed font-semibold" />
+  );
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <DetailField label="Timestamp" value={formatLogTimestamp(log.timestamp)} />
       <DetailField label="Source ID" value={log.sourceId ?? "N/A"} />
       <DetailField label="Category" value={<CategoryBadge category={log.category} />} />
       <DetailField label="Severity" value={<SeverityBadge severity={log.severity} />} />
-      <DetailField label="Actor" value={`${log.actor} (${log.actorRole})`} />
-      <DetailField label="Action" value={log.action} />
-      <DetailField label="Target" value={log.target} />
-      <div className="md:col-span-2">
-        <DetailField label="Summary" value={log.summary} />
-      </div>
+      <DetailField label="Actor" value={expandableValue(`${log.actor} (${log.actorRole})`, "actor")} />
+      <DetailField label="Action" value={expandableValue(log.action, "action")} />
+      <DetailField label="Target" value={expandableValue(log.target, "target")} />
+      <DetailField label="Summary" value={expandableValue(log.summary, "summary")} />
     </div>
   );
 }

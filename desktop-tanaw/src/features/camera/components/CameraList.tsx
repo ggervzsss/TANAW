@@ -21,7 +21,7 @@ export function CameraList({ cameras, activeCamId, onSelect }: CameraListProps) 
             <div
               key={camera.id}
               onClick={() => onSelect(camera.id)}
-              className={`cursor-pointer rounded-sm border p-2.5 transition-all ${isActive ? "border-[#065f46] bg-green-50 shadow-sm" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}
+              className={`cursor-pointer rounded-sm border p-2.5 transition-[background-color,border-color,box-shadow] ${isActive ? "border-[#065f46] bg-green-50 shadow-sm" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <span className={`truncate text-xs font-bold ${isActive ? "text-[#065f46]" : "text-[#111827]"}`}>{camera.name}</span>
