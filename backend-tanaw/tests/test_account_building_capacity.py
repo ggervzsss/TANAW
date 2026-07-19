@@ -3,7 +3,12 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+)
 from app.features.accounts.schemas import (
     BuildingCapacityUpdate,
     EnterpriseAccountCreate,
@@ -71,13 +76,16 @@ def enterprise_account(*, building_capacity: int) -> Account:
         display_name="Acme Mall",
         title="Enterprise",
         status=AccountStatus.ACTIVE,
-        enterprise_id="ent-001",
-        enterprise_name="Acme Mall",
-        category="business",
-        manager_name="Alex Santos",
-        barangay="Poblacion",
-        address="123 Main Street, San Pedro, Laguna 4023",
-        building_capacity=building_capacity,
+        enterprise_profile=EnterpriseProfile(
+            account_id="account-1",
+            enterprise_id="ent-001",
+            enterprise_name="Acme Mall",
+            category="business",
+            manager_name="Alex Santos",
+            barangay="Poblacion",
+            address="123 Main Street, San Pedro, Laguna 4023",
+            building_capacity=building_capacity,
+        ),
         activated_at=datetime(2026, 7, 3, tzinfo=UTC),
         created_at=datetime(2026, 7, 3, tzinfo=UTC),
     )

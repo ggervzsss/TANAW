@@ -121,7 +121,11 @@ async def issue_account_activation(
             "displayName": account.display_name,
             "email": account.email,
             "role": account.role.value,
-            "enterpriseId": account.enterprise_id or "",
+            "enterpriseId": (
+                account.enterprise_profile.enterprise_id
+                if account.enterprise_profile is not None
+                else ""
+            ),
             "frontendPublicUrl": settings.frontend_public_url,
             "expiresLabel": expires_label,
         },

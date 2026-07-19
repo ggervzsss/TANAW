@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+)
 from app.features.operational.models import EnterpriseTelemetrySnapshot
 from app.features.operational.schemas import (
     DesktopMetricsSummary,
@@ -143,8 +148,7 @@ def test_fleet_warning_lane_reports_sync_delay_without_threshold_breach() -> Non
 
 def test_unsynced_gateway_snapshot_is_reported_as_sync_delayed() -> None:
     snapshot = EnterpriseTelemetrySnapshot(
-        enterprise_account_id="account-1",
-        enterprise_id="ent-001",
+        enterprise_profile_id="account-1",
         enterprise_name="Enterprise One",
         captured_at=datetime.now(UTC),
         entries=10,
@@ -194,6 +198,12 @@ def enterprise_account() -> Account:
         display_name="Enterprise One",
         title="Enterprise",
         status=AccountStatus.ACTIVE,
-        enterprise_id="ent-001",
-        enterprise_name="Enterprise One",
+        enterprise_profile=EnterpriseProfile(
+            account_id="account-1",
+            enterprise_id="ent-001",
+            enterprise_name="Enterprise One",
+            category="business",
+            manager_name="Test Manager",
+            barangay="Poblacion",
+        ),
     )

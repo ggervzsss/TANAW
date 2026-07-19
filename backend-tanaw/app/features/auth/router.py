@@ -24,6 +24,7 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
+    EnterpriseProfile,
     SystemConfiguration,
 )
 from app.features.accounts.schemas import (
@@ -151,7 +152,11 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         required_action="Review account activity and contact the user if the lockout is suspicious.",
         resolution_mode="Remote Review",
         owner="IT",
-        enterprise=account.enterprise_name if account.role == AccountRole.ENTERPRISE else None,
+        enterprise=(
+            account.enterprise_profile.enterprise_name
+            if account.enterprise_profile is not None
+            else None
+        ),
         source_id=f"failed-login-threshold:{account.id}",
     )
     await operational_ws_manager.broadcast(
@@ -229,16 +234,20 @@ async def _wait_for_password_reset_response_floor(started_at: float) -> None:
         await asyncio.sleep(remaining)
 
 
-def require_enterprise_account(account: Account) -> None:
+def require_enterprise_account(account: Account) -> EnterpriseProfile:
     if account.role != AccountRole.ENTERPRISE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Enterprise account access required.",
         )
+    if account.enterprise_profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
+    return account.enterprise_profile
 
 
 def enterprise_label(account: Account) -> str:
-    return account.enterprise_name or account.display_name
+    profile = require_enterprise_account(account)
+    return profile.enterprise_name
 
 
 def set_pending_account_change(account: Account, key: str, value: dict[str, str]) -> None:
@@ -532,7 +541,7 @@ async def change_password(
         summary=f"{account.display_name} changed their account password.",
         source_id=account.id,
     )
-    enterprise = account.enterprise_name or account.display_name
+    enterprise = enterprise_label(account)
     await notify_enterprise_account_change(
         db,
         account,
@@ -694,10 +703,13 @@ async def update_profile(
             detail="Email changes require the dedicated verified email-change workflow.",
         )
 
-    previous_manager_name = account.manager_name
+    profile = account.enterprise_profile
+    previous_manager_name = profile.manager_name if profile else None
     previous_phone = account.phone
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
+        if profile is None:
+            raise RuntimeError("Enterprise account is missing its profile.")
         if payload.managerName is None or payload.enterpriseName is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -708,11 +720,11 @@ async def update_profile(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Contact number is required.",
             )
-        account.manager_name = payload.managerName
+        profile.manager_name = payload.managerName
         enterprise_name = payload.enterpriseName.strip()
-        account.enterprise_name = enterprise_name
+        profile.enterprise_name = enterprise_name
         account.display_name = enterprise_name
-        account.address = payload.address
+        profile.address = payload.address
     else:
         if payload.firstName is None or payload.lastName is None:
             raise HTTPException(
@@ -738,14 +750,15 @@ async def update_profile(
         source_id=account.id,
     )
     if account.role == AccountRole.ENTERPRISE:
+        assert profile is not None
         changed_fields: list[str] = []
-        if account.manager_name != previous_manager_name:
+        if profile.manager_name != previous_manager_name:
             changed_fields.append("lead admin")
         if account.phone != previous_phone:
             changed_fields.append("contact number")
 
         if changed_fields:
-            enterprise = account.enterprise_name or account.display_name
+            enterprise = profile.enterprise_name
             changed_field_text = join_changed_fields(changed_fields)
             await notify_enterprise_account_change(
                 db,
@@ -787,9 +800,9 @@ async def update_lead_admin_name(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    require_enterprise_account(account)
-    previous_manager_name = account.manager_name
-    account.manager_name = payload.managerName
+    profile = require_enterprise_account(account)
+    previous_manager_name = profile.manager_name
+    profile.manager_name = payload.managerName
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -803,7 +816,7 @@ async def update_lead_admin_name(
         summary=f"{account.display_name} updated the lead admin name.",
         source_id=account.id,
     )
-    if account.manager_name != previous_manager_name:
+    if profile.manager_name != previous_manager_name:
         enterprise = enterprise_label(account)
         await notify_enterprise_account_change(
             db,
@@ -822,9 +835,9 @@ async def update_building_capacity(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    require_enterprise_account(account)
-    previous_capacity = account.building_capacity
-    account.building_capacity = payload.buildingCapacity
+    profile = require_enterprise_account(account)
+    previous_capacity = profile.building_capacity
+    profile.building_capacity = payload.buildingCapacity
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -835,14 +848,14 @@ async def update_building_capacity(
         actor_role=get_actor_role_label(account),
         action="Update Building Capacity",
         target=account.email,
-        summary=f"{account.display_name} updated building capacity to {account.building_capacity}.",
+        summary=f"{account.display_name} updated building capacity to {profile.building_capacity}.",
         source_id=account.id,
         metadata={
             "previousBuildingCapacity": previous_capacity,
-            "buildingCapacity": account.building_capacity,
+            "buildingCapacity": profile.building_capacity,
         },
     )
-    if account.building_capacity != previous_capacity:
+    if profile.building_capacity != previous_capacity:
         enterprise = enterprise_label(account)
         await notify_enterprise_account_change(
             db,
@@ -850,7 +863,7 @@ async def update_building_capacity(
             title=f"{enterprise} updated building capacity.",
             message=(
                 f"{enterprise} updated building capacity from "
-                f"{previous_capacity} to {account.building_capacity}."
+                f"{previous_capacity} to {profile.building_capacity}."
             ),
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.capacity",

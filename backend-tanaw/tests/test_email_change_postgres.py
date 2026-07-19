@@ -26,6 +26,7 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
+    EnterpriseProfile,
 )
 from app.features.accounts.router import update_account_status, update_lgu_account
 from app.features.accounts.schemas import (
@@ -194,10 +195,6 @@ async def _create_account(
         phone="+639123456789",
         first_name="Test",
         last_name=label,
-        enterprise_name=f"Test {label}" if role == AccountRole.ENTERPRISE else None,
-        enterprise_id=f"test_{label}_{uuid4().hex[:8]}@tanaw.sanpedro"
-        if role == AccountRole.ENTERPRISE
-        else None,
         password_hash=hash_password("Existing-Password-For-Email-Change1!"),
         role=role,
         display_name=f"Email Change Test {label}",
@@ -207,6 +204,17 @@ async def _create_account(
         activated_at=now if activated else None,
         password_changed_at=now if activated else None,
         source_kind="real",
+        enterprise_profile=(
+            EnterpriseProfile(
+                enterprise_id=f"test_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",
+                enterprise_name=f"Test {label}",
+                category="business",
+                manager_name=f"Test {label}",
+                barangay="Poblacion",
+            )
+            if role == AccountRole.ENTERPRISE
+            else None
+        ),
     )
     async with runtime.sessions() as db:
         db.add(account)

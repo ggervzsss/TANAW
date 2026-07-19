@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
 from app.features.accounts.location_validation import is_inside_san_pedro
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.accounts.schemas import (
     AccountEmailChangeRequestResolution,
     AccountStatusUpdate,
@@ -269,18 +269,23 @@ async def create_enterprise_account(
         role=AccountRole.ENTERPRISE,
         display_name=payload.enterpriseName,
         title="Enterprise Account",
-        enterprise_name=payload.enterpriseName,
-        category=payload.category,
-        manager_name=payload.managerName,
-        barangay=payload.barangay,
-        address=payload.address,
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        location_updated_at=datetime.now(UTC),
-        enterprise_id=enterprise_id,
-        gateway_status="Not Linked",
-        building_capacity=payload.buildingCapacity,
+        enterprise_profile=EnterpriseProfile(
+            enterprise_name=payload.enterpriseName,
+            category=payload.category,
+            manager_name=payload.managerName,
+            barangay=payload.barangay,
+            address=payload.address,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            location_updated_at=datetime.now(UTC),
+            enterprise_id=enterprise_id,
+            gateway_status="Not Linked",
+            building_capacity=payload.buildingCapacity,
+        ),
     )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account was created without a profile.")
     await record_account_log(
         db,
         category="IT Activity",
@@ -288,13 +293,13 @@ async def create_enterprise_account(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Create Enterprise Account",
-        target=account.enterprise_name or account.email,
-        summary=f"{actor.display_name} registered enterprise account {account.enterprise_name}.",
+        target=profile.enterprise_name,
+        summary=f"{actor.display_name} registered enterprise account {profile.enterprise_name}.",
         source_id=account.id,
         metadata={
-            "enterpriseId": account.enterprise_id,
-            "barangay": account.barangay,
-            "buildingCapacity": account.building_capacity,
+            "enterpriseId": profile.enterprise_id,
+            "barangay": profile.barangay,
+            "buildingCapacity": profile.building_capacity,
         },
     )
     await record_account_log(
@@ -305,7 +310,7 @@ async def create_enterprise_account(
         actor_role="System",
         action="Activation Email Queued",
         target=account.email,
-        summary=f"The system queued an account activation email for enterprise {account.enterprise_name}.",
+        summary=f"The system queued an account activation email for enterprise {profile.enterprise_name}.",
         source_id=account.id,
     )
     return await to_account_summary_with_requests(db, account)
@@ -323,6 +328,9 @@ async def update_enterprise_account(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
 
     requested_email = str(payload.email)
     await ensure_unique_account_email(db, requested_email, account.id)
@@ -335,14 +343,14 @@ async def update_enterprise_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Keep the account active while verifying a new email address.",
         )
-    account.enterprise_name = payload.enterpriseName
+    profile.enterprise_name = payload.enterpriseName
     account.display_name = payload.enterpriseName
-    account.category = payload.category
-    account.manager_name = payload.managerName
+    profile.category = payload.category
+    profile.manager_name = payload.managerName
     account.phone = payload.contactNumber
-    account.barangay = payload.barangay
-    account.address = payload.address
-    account.building_capacity = payload.buildingCapacity
+    profile.barangay = payload.barangay
+    profile.address = payload.address
+    profile.building_capacity = payload.buildingCapacity
     account.status = next_status
     email_change_requested = False
     if email_changed:
@@ -386,13 +394,13 @@ async def update_enterprise_account(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Update Enterprise Account",
-        target=account.enterprise_name or account.email,
-        summary=f"{actor.display_name} updated enterprise account {account.enterprise_name}.",
+        target=profile.enterprise_name,
+        summary=f"{actor.display_name} updated enterprise account {profile.enterprise_name}.",
         source_id=account.id,
         metadata={
-            "enterpriseId": account.enterprise_id,
-            "barangay": account.barangay,
-            "buildingCapacity": account.building_capacity,
+            "enterpriseId": profile.enterprise_id,
+            "barangay": profile.barangay,
+            "buildingCapacity": profile.building_capacity,
             "status": account.status.value,
             "emailChangeRequested": email_change_requested,
             "requestedEmail": requested_email if email_change_requested else None,
@@ -417,6 +425,9 @@ async def resolve_enterprise_profile_change_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
 
     if request_type == "businessEmail":
         return await resolve_verified_email_change_request(
@@ -452,9 +463,9 @@ async def resolve_enterprise_profile_change_request(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action=f"{payload.action.title()} Enterprise Profile Change",
-        target=account.enterprise_name or account.email,
+        target=profile.enterprise_name,
         summary=(
-            f"{actor.display_name} {resolution_label} {account.enterprise_name or account.display_name}'s "
+            f"{actor.display_name} {resolution_label} {profile.enterprise_name}'s "
             f"{request_label.lower()} change request."
         ),
         source_id=account.id,

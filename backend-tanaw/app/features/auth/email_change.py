@@ -162,7 +162,11 @@ async def request_account_email_change(
         "requestId": request.id,
         "displayName": account.display_name,
         "role": account.role.value,
-        "enterpriseId": account.enterprise_id or "",
+        "enterpriseId": (
+            account.enterprise_profile.enterprise_id
+            if account.enterprise_profile is not None
+            else ""
+        ),
         "oldEmail": request.old_email,
         "newEmail": request.requested_email,
         "expiresLabel": expires_label,
@@ -352,7 +356,11 @@ async def resolve_account_email_change(
         "requestId": request.id,
         "displayName": account.display_name,
         "role": account.role.value,
-        "enterpriseId": account.enterprise_id or "",
+        "enterpriseId": (
+            account.enterprise_profile.enterprise_id
+            if account.enterprise_profile is not None
+            else ""
+        ),
         "oldEmail": request.old_email,
         "newEmail": request.requested_email,
     }

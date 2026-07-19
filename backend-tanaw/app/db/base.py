@@ -7,6 +7,7 @@ from app.features.accounts.models import (
     AccountStatus,
     DeliveryStatus,
     DevDelivery,
+    EnterpriseProfile,
     SystemConfiguration,
 )
 from app.features.activity_logs.models import ActivityLog
@@ -45,6 +46,7 @@ __all__ = [
     "DeliveryStatus",
     "DevDelivery",
     "EnterpriseReportSubmission",
+    "EnterpriseProfile",
     "EnterpriseTelemetrySnapshot",
     "EmailOutbox",
     "EmailOutboxStatus",

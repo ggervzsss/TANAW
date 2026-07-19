@@ -209,8 +209,7 @@ def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmissio
     return EnterpriseReportSubmission(
         id=f"{report_id}-id",
         report_id=report_id,
-        enterprise_account_id="enterprise-account",
-        enterprise_id="ENT-001",
+        enterprise_profile_id="enterprise-account",
         enterprise_name="Test Enterprise",
         category="Tourism",
         barangay="Nueva",

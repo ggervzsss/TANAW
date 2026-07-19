@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -12,30 +15,23 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+
+if TYPE_CHECKING:
+    from app.features.accounts.models import EnterpriseProfile
 
 
 class EnterpriseTelemetrySnapshot(Base):
     __tablename__ = "enterprise_telemetry_snapshots"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    enterprise_account_id: Mapped[str] = mapped_column(
+    enterprise_profile_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey(
-            "accounts.id",
-            name="fk_enterprise_telemetry_snapshots_enterprise_account_id",
-            ondelete="RESTRICT",
-        ),
-        index=True,
-        nullable=False,
-    )
-    enterprise_id: Mapped[str] = mapped_column(
-        String(120),
-        ForeignKey(
-            "accounts.enterprise_id",
-            name="fk_enterprise_telemetry_snapshots_enterprise_id",
+            "enterprise_profiles.account_id",
+            name="fk_enterprise_telemetry_snapshots_enterprise_profile_id",
             ondelete="RESTRICT",
         ),
         index=True,
@@ -77,31 +73,26 @@ class EnterpriseTelemetrySnapshot(Base):
         index=True,
         nullable=True,
     )
+    enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
 
 
 class EnterpriseReportSubmission(Base):
     __tablename__ = "enterprise_report_submissions"
     __table_args__ = (
-        UniqueConstraint("enterprise_id", "report_id", name="uq_enterprise_report_submission"),
+        UniqueConstraint(
+            "enterprise_profile_id",
+            "report_id",
+            name="uq_enterprise_report_submission",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     report_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
-    enterprise_account_id: Mapped[str] = mapped_column(
+    enterprise_profile_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey(
-            "accounts.id",
-            name="fk_enterprise_report_submissions_enterprise_account_id",
-            ondelete="RESTRICT",
-        ),
-        index=True,
-        nullable=False,
-    )
-    enterprise_id: Mapped[str] = mapped_column(
-        String(120),
-        ForeignKey(
-            "accounts.enterprise_id",
-            name="fk_enterprise_report_submissions_enterprise_id",
+            "enterprise_profiles.account_id",
+            name="fk_enterprise_report_submissions_enterprise_profile_id",
             ondelete="RESTRICT",
         ),
         index=True,
@@ -143,6 +134,7 @@ class EnterpriseReportSubmission(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+    enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
 
 
 class FinalReport(Base):
@@ -209,21 +201,12 @@ class FinalReportSource(Base):
         index=True,
         nullable=False,
     )
-    enterprise_id: Mapped[str] = mapped_column(
-        String(120),
-        ForeignKey(
-            "accounts.enterprise_id",
-            name="fk_final_report_sources_enterprise_id",
-            ondelete="RESTRICT",
-        ),
-        index=True,
-        nullable=False,
-    )
     enterprise: Mapped[str] = mapped_column(String(120), nullable=False)
     code: Mapped[str] = mapped_column(String(80), nullable=False)
     unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     exits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    intake_report: Mapped[EnterpriseReportSubmission] = relationship(lazy="joined")
 
 
 class MockDataRun(Base):
@@ -234,21 +217,11 @@ class MockDataRun(Base):
     seed: Mapped[str] = mapped_column(String(80), nullable=False)
     range_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     range_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    target_account_id: Mapped[str | None] = mapped_column(
+    target_enterprise_profile_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey(
-            "accounts.id",
-            name="fk_mock_data_runs_target_account_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        nullable=True,
-    )
-    target_enterprise_id: Mapped[str | None] = mapped_column(
-        String(120),
-        ForeignKey(
-            "accounts.enterprise_id",
-            name="fk_mock_data_runs_target_enterprise_id",
+            "enterprise_profiles.account_id",
+            name="fk_mock_data_runs_target_enterprise_profile_id",
             ondelete="SET NULL",
             use_alter=True,
         ),
@@ -261,6 +234,7 @@ class MockDataRun(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    target_enterprise_profile: Mapped[EnterpriseProfile | None] = relationship(lazy="joined")
 
 
 class OperationalAlert(Base):
@@ -299,16 +273,6 @@ class UserNotification(Base):
         nullable=False,
     )
     recipient_role: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
-    recipient_enterprise_id: Mapped[str | None] = mapped_column(
-        String(120),
-        ForeignKey(
-            "accounts.enterprise_id",
-            name="fk_user_notifications_recipient_enterprise_id",
-            ondelete="CASCADE",
-        ),
-        index=True,
-        nullable=True,
-    )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     notification_type: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
@@ -336,21 +300,11 @@ class SupportTicket(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     ticket_code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
-    enterprise_account_id: Mapped[str] = mapped_column(
+    enterprise_profile_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey(
-            "accounts.id",
-            name="fk_support_tickets_enterprise_account_id",
-            ondelete="RESTRICT",
-        ),
-        index=True,
-        nullable=False,
-    )
-    enterprise_id: Mapped[str] = mapped_column(
-        String(120),
-        ForeignKey(
-            "accounts.enterprise_id",
-            name="fk_support_tickets_enterprise_id",
+            "enterprise_profiles.account_id",
+            name="fk_support_tickets_enterprise_profile_id",
             ondelete="RESTRICT",
         ),
         index=True,
@@ -371,6 +325,7 @@ class SupportTicket(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+    enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
 
 
 class SupportTicketMessage(Base):

@@ -16,7 +16,12 @@ from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+)
 from app.features.accounts.service import generate_enterprise_id
 from app.features.activity_logs.models import ActivityLog
 from app.features.operational.models import (
@@ -262,8 +267,12 @@ async def list_runs(db: AsyncSession) -> list[dict]:
             "status": run.status,
             "rangeStart": run.range_start.isoformat(),
             "rangeEnd": run.range_end.isoformat(),
-            "targetAccountId": run.target_account_id,
-            "targetEnterpriseId": run.target_enterprise_id,
+            "targetAccountId": run.target_enterprise_profile_id,
+            "targetEnterpriseId": (
+                run.target_enterprise_profile.enterprise_id
+                if run.target_enterprise_profile
+                else None
+            ),
             "targetEnterpriseName": run.target_enterprise_name,
             "createdAt": run.created_at.isoformat() if run.created_at else None,
             "endedAt": run.ended_at.isoformat() if run.ended_at else None,
@@ -283,8 +292,12 @@ def run_result(run: MockDataRun, status: str) -> dict:
         "rangeStart": run.range_start.isoformat(),
         "rangeEnd": run.range_end.isoformat(),
         "target": {
-            "accountId": run.target_account_id,
-            "enterpriseId": run.target_enterprise_id,
+            "accountId": run.target_enterprise_profile_id,
+            "enterpriseId": (
+                run.target_enterprise_profile.enterprise_id
+                if run.target_enterprise_profile
+                else None
+            ),
             "enterpriseName": run.target_enterprise_name,
         },
         "counts": json.loads(run.generated_counts_json) if run.generated_counts_json else {},
@@ -294,17 +307,16 @@ def run_result(run: MockDataRun, status: str) -> dict:
 async def ensure_active_target_matches(
     db: AsyncSession, run: MockDataRun, requested_identifier: str | None
 ) -> None:
-    if not run.target_enterprise_id:
-        raise SystemExit(
-            "The active mock-data run predates target-enterprise support. Run mock-data reset with --target-enterprise."
-        )
+    if run.target_enterprise_profile is None:
+        raise SystemExit("The active mock-data run has no target enterprise profile.")
     if not requested_identifier:
         return
 
     requested_target = await resolve_target_enterprise(db, requested_identifier, [])
-    if requested_target.id != run.target_account_id:
+    if requested_target.id != run.target_enterprise_profile_id:
         raise SystemExit(
-            f"The active mock-data run targets {run.target_enterprise_name} ({run.target_enterprise_id}). "
+            f"The active mock-data run targets {run.target_enterprise_name} "
+            f"({run.target_enterprise_profile.enterprise_id}). "
             "Use mock-data reset to select a different target."
         )
 
@@ -328,9 +340,11 @@ async def generate_mock_data(
     accounts = await create_accounts(db, run.id)
     enterprises = await list_active_enterprises(db)
     target = await resolve_target_enterprise(db, target_identifier, accounts["enterprises"])
-    run.target_account_id = target.id
-    run.target_enterprise_id = target.enterprise_id or target.id
-    run.target_enterprise_name = target.enterprise_name or target.display_name
+    target_profile = target.enterprise_profile
+    if target_profile is None:
+        raise SystemExit("The selected target account has no enterprise profile.")
+    run.target_enterprise_profile_id = target_profile.account_id
+    run.target_enterprise_name = target_profile.enterprise_name
     reports = await create_operational_history(
         db, run.id, range_start, range_end, scenario, rng, enterprises, target
     )
@@ -389,17 +403,6 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
         account = Account(
             email=enterprise.email,
             phone=enterprise.phone,
-            enterprise_name=enterprise.name,
-            category=enterprise.category,
-            manager_name=enterprise.manager,
-            barangay=enterprise.barangay,
-            address=enterprise.address,
-            latitude=enterprise.latitude,
-            longitude=enterprise.longitude,
-            location_updated_at=datetime.now(UTC),
-            enterprise_id=enterprise_id,
-            gateway_id=f"GW-SP-{index:04d}",
-            gateway_status="Connected",
             password_hash=password_hash,
             role=AccountRole.ENTERPRISE,
             display_name=enterprise.name,
@@ -408,6 +411,19 @@ async def create_accounts(db: AsyncSession, run_id: str) -> dict[str, list[Accou
             activated_at=datetime.now(UTC),
             source_kind="mock",
             mock_run_id=run_id,
+            enterprise_profile=EnterpriseProfile(
+                enterprise_name=enterprise.name,
+                category=enterprise.category,
+                manager_name=enterprise.manager,
+                barangay=enterprise.barangay,
+                address=enterprise.address,
+                latitude=enterprise.latitude,
+                longitude=enterprise.longitude,
+                location_updated_at=datetime.now(UTC),
+                enterprise_id=enterprise_id,
+                gateway_id=f"GW-SP-{index:04d}",
+                gateway_status="Connected",
+            ),
         )
         db.add(account)
         enterprise_accounts.append(account)
@@ -428,12 +444,13 @@ async def list_active_enterprises(db: AsyncSession) -> list[Account]:
         (
             await db.scalars(
                 select(Account)
+                .join(Account.enterprise_profile)
                 .where(
                     Account.role == AccountRole.ENTERPRISE,
                     Account.status == AccountStatus.ACTIVE,
                     Account.activated_at.is_not(None),
                 )
-                .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+                .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
             )
         ).all()
     )
@@ -449,15 +466,17 @@ async def resolve_target_enterprise(
 
     normalized = identifier.strip().lower()
     target = await db.scalar(
-        select(Account).where(
+        select(Account)
+        .join(Account.enterprise_profile)
+        .where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
             or_(
                 func.lower(Account.id) == normalized,
                 func.lower(Account.email) == normalized,
-                func.lower(Account.enterprise_id) == normalized,
-                func.lower(Account.enterprise_name) == normalized,
+                func.lower(EnterpriseProfile.enterprise_id) == normalized,
+                func.lower(EnterpriseProfile.enterprise_name) == normalized,
             ),
         )
     )
@@ -486,6 +505,9 @@ async def create_operational_history(
         period = period_label(month_start)
         month_name = month_start.strftime("%B")
         for enterprise_index, enterprise in enumerate(enterprises):
+            profile = enterprise.enterprise_profile
+            if profile is None:
+                raise SystemExit("A mock enterprise account has no enterprise profile.")
             base_entries = 460 + month_index * 42 + enterprise_index * 67 + rng.randint(0, 80)
             if (
                 scenario == "peak-traffic"
@@ -517,11 +539,10 @@ async def create_operational_history(
             demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
 
             snapshot = EnterpriseTelemetrySnapshot(
-                enterprise_account_id=enterprise.id,
-                enterprise_id=enterprise.enterprise_id or enterprise.id,
-                enterprise_name=enterprise.enterprise_name or enterprise.display_name,
+                enterprise_profile_id=profile.account_id,
+                enterprise_name=profile.enterprise_name,
                 camera_id=f"camera-{enterprise_index + 1}",
-                camera_name=f"{enterprise.enterprise_name} Main Entrance",
+                camera_name=f"{profile.enterprise_name} Main Entrance",
                 captured_at=latest_capture_time(month_start, range_end),
                 entries=base_entries,
                 exits=exits,
@@ -561,11 +582,10 @@ async def create_operational_history(
 
             report = EnterpriseReportSubmission(
                 report_id=f"REP-{month_start:%y%m}{enterprise_index + 1:02d}",
-                enterprise_account_id=enterprise.id,
-                enterprise_id=enterprise.enterprise_id or enterprise.id,
-                enterprise_name=enterprise.enterprise_name or enterprise.display_name,
-                category=category_label(enterprise.category),
-                barangay=enterprise.barangay,
+                enterprise_profile_id=profile.account_id,
+                enterprise_name=profile.enterprise_name,
+                category=category_label(profile.category),
+                barangay=profile.barangay,
                 period=period,
                 month=month_name,
                 submitted_at=submitted_at,
@@ -666,7 +686,6 @@ async def create_staff_report_notifications(
                 UserNotification(
                     recipient_account_id=staff_account.id,
                     recipient_role=staff_account.role.value,
-                    recipient_enterprise_id=None,
                     title=notification_type,
                     message=(
                         f"{report.enterprise_name} {action_label} "
@@ -676,7 +695,7 @@ async def create_staff_report_notifications(
                     severity="Info",
                     source_type="enterprise.report",
                     source_id=report.id,
-                    created_by_account_id=report.enterprise_account_id,
+                    created_by_account_id=report.enterprise_profile_id,
                     created_by_name=report.enterprise_name,
                     created_at=report.submitted_at,
                 )
@@ -742,7 +761,7 @@ async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> 
             total_entry=sum(report.entries for report in reports),
             total_exit=sum(report.exits for report in reports),
             total_unique=sum(report.unique_count for report in reports),
-            enterprise_count=len({report.enterprise_id for report in reports}),
+            enterprise_count=len({report.enterprise_profile_id for report in reports}),
             source_kind="mock",
             mock_run_id=run_id,
         )
@@ -753,7 +772,6 @@ async def create_final_reports(db: AsyncSession, run_id: str, history: dict) -> 
                 FinalReportSource(
                     final_report_id=final_report.id,
                     intake_report_id=report.id,
-                    enterprise_id=report.enterprise_id,
                     enterprise=report.enterprise_name,
                     code=report.report_id,
                     unique_count=report.unique_count,
@@ -783,7 +801,11 @@ async def create_activity_logs(
                 summary=f"{report.enterprise_name} submitted {report.report_id} for {report.period}.",
                 source_id=report.id,
                 metadata_json=json.dumps(
-                    {"enterpriseId": report.enterprise_id, "period": report.period}, sort_keys=True
+                    {
+                        "enterpriseId": report.enterprise_profile.enterprise_id,
+                        "period": report.period,
+                    },
+                    sort_keys=True,
                 ),
                 source_kind="mock",
                 mock_run_id=run_id,
@@ -935,11 +957,11 @@ def category_label(value: str | None) -> str:
 def should_skip_target_report(
     month_start: datetime,
     current_month: datetime,
-    enterprise_account_id: str,
-    target_account_id: str,
+    enterprise_profile_id: str,
+    target_enterprise_profile_id: str,
 ) -> bool:
     previous_month = add_months(current_month, -1)
-    return enterprise_account_id == target_account_id and month_start in {
+    return enterprise_profile_id == target_enterprise_profile_id and month_start in {
         previous_month,
         current_month,
     }

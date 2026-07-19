@@ -179,7 +179,11 @@ async def request_password_reset(
                 "displayName": eligible_account.display_name,
                 "email": eligible_account.email,
                 "role": eligible_account.role.value,
-                "enterpriseId": eligible_account.enterprise_id or "",
+                "enterpriseId": (
+                    eligible_account.enterprise_profile.enterprise_id
+                    if eligible_account.enterprise_profile is not None
+                    else ""
+                ),
                 "expiresLabel": expires_label,
             },
             idempotency_key=email_idempotency_key("password-reset", challenge.id),

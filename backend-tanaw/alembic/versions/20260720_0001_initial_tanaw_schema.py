@@ -2,7 +2,7 @@
 
 Revision ID: 20260720_0001
 Revises:
-Create Date: 2026-07-19 19:38:07.301846
+Create Date: 2026-07-19 20:07:34.831618
 """
 
 from collections.abc import Sequence
@@ -26,18 +26,6 @@ def upgrade() -> None:
         sa.Column("phone", sa.String(length=40), nullable=True),
         sa.Column("first_name", sa.String(length=60), nullable=True),
         sa.Column("last_name", sa.String(length=60), nullable=True),
-        sa.Column("enterprise_name", sa.String(length=120), nullable=True),
-        sa.Column("category", sa.String(length=120), nullable=True),
-        sa.Column("manager_name", sa.String(length=120), nullable=True),
-        sa.Column("barangay", sa.String(length=120), nullable=True),
-        sa.Column("address", sa.String(length=255), nullable=True),
-        sa.Column("latitude", sa.Float(), nullable=True),
-        sa.Column("longitude", sa.Float(), nullable=True),
-        sa.Column("location_updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("enterprise_id", sa.String(length=120), nullable=True),
-        sa.Column("gateway_id", sa.String(length=120), nullable=True),
-        sa.Column("gateway_status", sa.String(length=40), nullable=True),
-        sa.Column("building_capacity", sa.Integer(), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column(
             "role",
@@ -79,7 +67,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_accounts_email"), "accounts", ["email"], unique=True)
-    op.create_index(op.f("ix_accounts_enterprise_id"), "accounts", ["enterprise_id"], unique=True)
     op.create_index(op.f("ix_accounts_mock_run_id"), "accounts", ["mock_run_id"], unique=False)
     op.create_table(
         "activity_logs",
@@ -168,8 +155,7 @@ def upgrade() -> None:
         sa.Column("seed", sa.String(length=80), nullable=False),
         sa.Column("range_start", sa.DateTime(timezone=True), nullable=False),
         sa.Column("range_end", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("target_account_id", sa.String(length=36), nullable=True),
-        sa.Column("target_enterprise_id", sa.String(length=120), nullable=True),
+        sa.Column("target_enterprise_profile_id", sa.String(length=36), nullable=True),
         sa.Column("target_enterprise_name", sa.String(length=120), nullable=True),
         sa.Column("status", sa.String(length=40), nullable=False),
         sa.Column("generated_counts_json", sa.Text(), nullable=True),
@@ -181,16 +167,9 @@ def upgrade() -> None:
         ),
         sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["target_account_id"],
-            ["accounts.id"],
-            name="fk_mock_data_runs_target_account_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        sa.ForeignKeyConstraint(
-            ["target_enterprise_id"],
-            ["accounts.enterprise_id"],
-            name="fk_mock_data_runs_target_enterprise_id",
+            ["target_enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_mock_data_runs_target_enterprise_profile_id",
             ondelete="SET NULL",
             use_alter=True,
         ),
@@ -562,35 +541,26 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
-        "enterprise_report_submissions",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("report_id", sa.String(length=80), nullable=False),
-        sa.Column("enterprise_account_id", sa.String(length=36), nullable=False),
+        "enterprise_profiles",
+        sa.Column("account_id", sa.String(length=36), nullable=False),
         sa.Column("enterprise_id", sa.String(length=120), nullable=False),
         sa.Column("enterprise_name", sa.String(length=120), nullable=False),
-        sa.Column("category", sa.String(length=120), nullable=True),
-        sa.Column("barangay", sa.String(length=120), nullable=True),
-        sa.Column("period", sa.String(length=120), nullable=False),
-        sa.Column("month", sa.String(length=40), nullable=False),
-        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("category", sa.String(length=120), nullable=False),
+        sa.Column("manager_name", sa.String(length=120), nullable=False),
+        sa.Column("barangay", sa.String(length=120), nullable=False),
+        sa.Column("address", sa.String(length=255), nullable=True),
+        sa.Column("latitude", sa.Float(), nullable=True),
+        sa.Column("longitude", sa.Float(), nullable=True),
+        sa.Column("location_updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("building_capacity", sa.Integer(), nullable=False),
+        sa.Column("gateway_id", sa.String(length=120), nullable=True),
+        sa.Column("gateway_status", sa.String(length=40), nullable=True),
         sa.Column(
-            "received_at",
+            "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column("entries", sa.Integer(), nullable=False),
-        sa.Column("exits", sa.Integer(), nullable=False),
-        sa.Column("peak_occupancy", sa.Integer(), nullable=False),
-        sa.Column("unique_count", sa.Integer(), nullable=False),
-        sa.Column("status", sa.String(length=40), nullable=False),
-        sa.Column("review_status", sa.String(length=40), nullable=False),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("remarks", sa.Text(), nullable=True),
-        sa.Column("sync_status", sa.String(length=60), nullable=True),
-        sa.Column("payload_json", sa.Text(), nullable=True),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
@@ -598,157 +568,18 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(
-            ["enterprise_account_id"],
+            ["account_id"],
             ["accounts.id"],
-            name="fk_enterprise_report_submissions_enterprise_account_id",
-            ondelete="RESTRICT",
+            name="fk_enterprise_profiles_account_id",
+            ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["enterprise_id"],
-            ["accounts.enterprise_id"],
-            name="fk_enterprise_report_submissions_enterprise_id",
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_enterprise_report_submissions_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("enterprise_id", "report_id", name="uq_enterprise_report_submission"),
+        sa.PrimaryKeyConstraint("account_id"),
     )
     op.create_index(
-        op.f("ix_enterprise_report_submissions_enterprise_account_id"),
-        "enterprise_report_submissions",
-        ["enterprise_account_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_enterprise_id"),
-        "enterprise_report_submissions",
+        op.f("ix_enterprise_profiles_enterprise_id"),
+        "enterprise_profiles",
         ["enterprise_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_mock_run_id"),
-        "enterprise_report_submissions",
-        ["mock_run_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_month"),
-        "enterprise_report_submissions",
-        ["month"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_period"),
-        "enterprise_report_submissions",
-        ["period"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_received_at"),
-        "enterprise_report_submissions",
-        ["received_at"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_report_id"),
-        "enterprise_report_submissions",
-        ["report_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_report_submissions_submitted_at"),
-        "enterprise_report_submissions",
-        ["submitted_at"],
-        unique=False,
-    )
-    op.create_table(
-        "enterprise_telemetry_snapshots",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("enterprise_account_id", sa.String(length=36), nullable=False),
-        sa.Column("enterprise_id", sa.String(length=120), nullable=False),
-        sa.Column("enterprise_name", sa.String(length=120), nullable=False),
-        sa.Column("camera_id", sa.String(length=80), nullable=True),
-        sa.Column("camera_name", sa.String(length=120), nullable=True),
-        sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column(
-            "received_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column("entries", sa.Integer(), nullable=False),
-        sa.Column("exits", sa.Integer(), nullable=False),
-        sa.Column("current_occupancy", sa.Integer(), nullable=False),
-        sa.Column("peak_occupancy", sa.Integer(), nullable=False),
-        sa.Column("unique_count", sa.Integer(), nullable=False),
-        sa.Column("confirmed_unique_count", sa.Integer(), nullable=False),
-        sa.Column("degraded_unique_count", sa.Integer(), nullable=False),
-        sa.Column("total_events", sa.Integer(), nullable=False),
-        sa.Column("unsubmitted_events", sa.Integer(), nullable=False),
-        sa.Column("unsynced_events", sa.Integer(), nullable=False),
-        sa.Column("running", sa.Boolean(), nullable=False),
-        sa.Column("status", sa.String(length=40), nullable=False),
-        sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("analytics_fps", sa.Float(), nullable=True),
-        sa.Column("payload_json", sa.Text(), nullable=True),
-        sa.Column("source_kind", sa.String(length=20), nullable=False),
-        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["enterprise_account_id"],
-            ["accounts.id"],
-            name="fk_enterprise_telemetry_snapshots_enterprise_account_id",
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["enterprise_id"],
-            ["accounts.enterprise_id"],
-            name="fk_enterprise_telemetry_snapshots_enterprise_id",
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["mock_run_id"],
-            ["mock_data_runs.id"],
-            name="fk_enterprise_telemetry_snapshots_mock_run_id",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_captured_at"),
-        "enterprise_telemetry_snapshots",
-        ["captured_at"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_enterprise_account_id"),
-        "enterprise_telemetry_snapshots",
-        ["enterprise_account_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_enterprise_id"),
-        "enterprise_telemetry_snapshots",
-        ["enterprise_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_mock_run_id"),
-        "enterprise_telemetry_snapshots",
-        ["mock_run_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_received_at"),
-        "enterprise_telemetry_snapshots",
-        ["received_at"],
-        unique=False,
+        unique=True,
     )
     op.create_table(
         "password_reset_challenges",
@@ -815,74 +646,10 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
-        "support_tickets",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("ticket_code", sa.String(length=40), nullable=False),
-        sa.Column("enterprise_account_id", sa.String(length=36), nullable=False),
-        sa.Column("enterprise_id", sa.String(length=120), nullable=False),
-        sa.Column("enterprise_name", sa.String(length=120), nullable=False),
-        sa.Column("category", sa.String(length=60), nullable=False),
-        sa.Column("priority", sa.String(length=20), nullable=False),
-        sa.Column("subject", sa.String(length=160), nullable=False),
-        sa.Column("description", sa.Text(), nullable=False),
-        sa.Column("affected_area", sa.String(length=120), nullable=True),
-        sa.Column("camera_node", sa.String(length=120), nullable=True),
-        sa.Column("attachments_json", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(length=30), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["enterprise_account_id"],
-            ["accounts.id"],
-            name="fk_support_tickets_enterprise_account_id",
-            ondelete="RESTRICT",
-        ),
-        sa.ForeignKeyConstraint(
-            ["enterprise_id"],
-            ["accounts.enterprise_id"],
-            name="fk_support_tickets_enterprise_id",
-            ondelete="RESTRICT",
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_support_tickets_category"), "support_tickets", ["category"], unique=False
-    )
-    op.create_index(
-        op.f("ix_support_tickets_created_at"), "support_tickets", ["created_at"], unique=False
-    )
-    op.create_index(
-        op.f("ix_support_tickets_enterprise_account_id"),
-        "support_tickets",
-        ["enterprise_account_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_support_tickets_enterprise_id"), "support_tickets", ["enterprise_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_support_tickets_priority"), "support_tickets", ["priority"], unique=False
-    )
-    op.create_index(op.f("ix_support_tickets_status"), "support_tickets", ["status"], unique=False)
-    op.create_index(
-        op.f("ix_support_tickets_ticket_code"), "support_tickets", ["ticket_code"], unique=True
-    )
-    op.create_table(
         "user_notifications",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("recipient_account_id", sa.String(length=36), nullable=False),
         sa.Column("recipient_role", sa.String(length=40), nullable=False),
-        sa.Column("recipient_enterprise_id", sa.String(length=120), nullable=True),
         sa.Column("title", sa.String(length=160), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column("notification_type", sa.String(length=60), nullable=False),
@@ -910,12 +677,6 @@ def upgrade() -> None:
             name="fk_user_notifications_recipient_account_id",
             ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["recipient_enterprise_id"],
-            ["accounts.enterprise_id"],
-            name="fk_user_notifications_recipient_enterprise_id",
-            ondelete="CASCADE",
-        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -931,12 +692,6 @@ def upgrade() -> None:
         op.f("ix_user_notifications_recipient_account_id"),
         "user_notifications",
         ["recipient_account_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_user_notifications_recipient_enterprise_id"),
-        "user_notifications",
-        ["recipient_enterprise_id"],
         unique=False,
     )
     op.create_index(
@@ -986,22 +741,233 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
+        "enterprise_report_submissions",
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("report_id", sa.String(length=80), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
+        sa.Column("enterprise_name", sa.String(length=120), nullable=False),
+        sa.Column("category", sa.String(length=120), nullable=True),
+        sa.Column("barangay", sa.String(length=120), nullable=True),
+        sa.Column("period", sa.String(length=120), nullable=False),
+        sa.Column("month", sa.String(length=40), nullable=False),
+        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "received_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("entries", sa.Integer(), nullable=False),
+        sa.Column("exits", sa.Integer(), nullable=False),
+        sa.Column("peak_occupancy", sa.Integer(), nullable=False),
+        sa.Column("unique_count", sa.Integer(), nullable=False),
+        sa.Column("status", sa.String(length=40), nullable=False),
+        sa.Column("review_status", sa.String(length=40), nullable=False),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("remarks", sa.Text(), nullable=True),
+        sa.Column("sync_status", sa.String(length=60), nullable=True),
+        sa.Column("payload_json", sa.Text(), nullable=True),
+        sa.Column("source_kind", sa.String(length=20), nullable=False),
+        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_enterprise_report_submissions_enterprise_profile_id",
+            ondelete="RESTRICT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["mock_run_id"],
+            ["mock_data_runs.id"],
+            name="fk_enterprise_report_submissions_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "enterprise_profile_id", "report_id", name="uq_enterprise_report_submission"
+        ),
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
+        "enterprise_report_submissions",
+        ["enterprise_profile_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_mock_run_id"),
+        "enterprise_report_submissions",
+        ["mock_run_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_month"),
+        "enterprise_report_submissions",
+        ["month"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_period"),
+        "enterprise_report_submissions",
+        ["period"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_received_at"),
+        "enterprise_report_submissions",
+        ["received_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_report_id"),
+        "enterprise_report_submissions",
+        ["report_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_report_submissions_submitted_at"),
+        "enterprise_report_submissions",
+        ["submitted_at"],
+        unique=False,
+    )
+    op.create_table(
+        "enterprise_telemetry_snapshots",
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
+        sa.Column("enterprise_name", sa.String(length=120), nullable=False),
+        sa.Column("camera_id", sa.String(length=80), nullable=True),
+        sa.Column("camera_name", sa.String(length=120), nullable=True),
+        sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "received_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("entries", sa.Integer(), nullable=False),
+        sa.Column("exits", sa.Integer(), nullable=False),
+        sa.Column("current_occupancy", sa.Integer(), nullable=False),
+        sa.Column("peak_occupancy", sa.Integer(), nullable=False),
+        sa.Column("unique_count", sa.Integer(), nullable=False),
+        sa.Column("confirmed_unique_count", sa.Integer(), nullable=False),
+        sa.Column("degraded_unique_count", sa.Integer(), nullable=False),
+        sa.Column("total_events", sa.Integer(), nullable=False),
+        sa.Column("unsubmitted_events", sa.Integer(), nullable=False),
+        sa.Column("unsynced_events", sa.Integer(), nullable=False),
+        sa.Column("running", sa.Boolean(), nullable=False),
+        sa.Column("status", sa.String(length=40), nullable=False),
+        sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("analytics_fps", sa.Float(), nullable=True),
+        sa.Column("payload_json", sa.Text(), nullable=True),
+        sa.Column("source_kind", sa.String(length=20), nullable=False),
+        sa.Column("mock_run_id", sa.String(length=36), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_enterprise_telemetry_snapshots_enterprise_profile_id",
+            ondelete="RESTRICT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["mock_run_id"],
+            ["mock_data_runs.id"],
+            name="fk_enterprise_telemetry_snapshots_mock_run_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_enterprise_telemetry_snapshots_captured_at"),
+        "enterprise_telemetry_snapshots",
+        ["captured_at"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_telemetry_snapshots_enterprise_profile_id"),
+        "enterprise_telemetry_snapshots",
+        ["enterprise_profile_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_telemetry_snapshots_mock_run_id"),
+        "enterprise_telemetry_snapshots",
+        ["mock_run_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_enterprise_telemetry_snapshots_received_at"),
+        "enterprise_telemetry_snapshots",
+        ["received_at"],
+        unique=False,
+    )
+    op.create_table(
+        "support_tickets",
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("ticket_code", sa.String(length=40), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
+        sa.Column("enterprise_name", sa.String(length=120), nullable=False),
+        sa.Column("category", sa.String(length=60), nullable=False),
+        sa.Column("priority", sa.String(length=20), nullable=False),
+        sa.Column("subject", sa.String(length=160), nullable=False),
+        sa.Column("description", sa.Text(), nullable=False),
+        sa.Column("affected_area", sa.String(length=120), nullable=True),
+        sa.Column("camera_node", sa.String(length=120), nullable=True),
+        sa.Column("attachments_json", sa.Text(), nullable=True),
+        sa.Column("status", sa.String(length=30), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_support_tickets_enterprise_profile_id",
+            ondelete="RESTRICT",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_support_tickets_category"), "support_tickets", ["category"], unique=False
+    )
+    op.create_index(
+        op.f("ix_support_tickets_created_at"), "support_tickets", ["created_at"], unique=False
+    )
+    op.create_index(
+        op.f("ix_support_tickets_enterprise_profile_id"),
+        "support_tickets",
+        ["enterprise_profile_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_support_tickets_priority"), "support_tickets", ["priority"], unique=False
+    )
+    op.create_index(op.f("ix_support_tickets_status"), "support_tickets", ["status"], unique=False)
+    op.create_index(
+        op.f("ix_support_tickets_ticket_code"), "support_tickets", ["ticket_code"], unique=True
+    )
+    op.create_table(
         "final_report_sources",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("final_report_id", sa.String(length=36), nullable=False),
         sa.Column("intake_report_id", sa.String(length=36), nullable=False),
-        sa.Column("enterprise_id", sa.String(length=120), nullable=False),
         sa.Column("enterprise", sa.String(length=120), nullable=False),
         sa.Column("code", sa.String(length=80), nullable=False),
         sa.Column("unique_count", sa.Integer(), nullable=False),
         sa.Column("entries", sa.Integer(), nullable=False),
         sa.Column("exits", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["enterprise_id"],
-            ["accounts.enterprise_id"],
-            name="fk_final_report_sources_enterprise_id",
-            ondelete="RESTRICT",
-        ),
         sa.ForeignKeyConstraint(
             ["final_report_id"],
             ["final_reports.id"],
@@ -1016,12 +982,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("final_report_id", "intake_report_id", name="uq_final_report_source"),
-    )
-    op.create_index(
-        op.f("ix_final_report_sources_enterprise_id"),
-        "final_report_sources",
-        ["enterprise_id"],
-        unique=False,
     )
     op.create_index(
         op.f("ix_final_report_sources_final_report_id"),
@@ -1106,19 +1066,11 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
     op.create_foreign_key(
-        "fk_mock_data_runs_target_account_id",
+        "fk_mock_data_runs_target_enterprise_profile_id",
         "mock_data_runs",
-        "accounts",
-        ["target_account_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_foreign_key(
-        "fk_mock_data_runs_target_enterprise_id",
-        "mock_data_runs",
-        "accounts",
-        ["target_enterprise_id"],
-        ["enterprise_id"],
+        "enterprise_profiles",
+        ["target_enterprise_profile_id"],
+        ["account_id"],
         ondelete="SET NULL",
     )
     op.create_foreign_key(
@@ -1145,6 +1097,11 @@ def downgrade() -> None:
     op.drop_constraint("fk_accounts_mock_run_id", "accounts", type_="foreignkey")
     op.drop_constraint("fk_activity_logs_mock_run_id", "activity_logs", type_="foreignkey")
     op.drop_constraint("fk_final_reports_mock_run_id", "final_reports", type_="foreignkey")
+    op.drop_constraint(
+        "fk_mock_data_runs_target_enterprise_profile_id",
+        "mock_data_runs",
+        type_="foreignkey",
+    )
     op.drop_index(
         op.f("ix_support_ticket_messages_ticket_id"), table_name="support_ticket_messages"
     )
@@ -1161,49 +1118,14 @@ def downgrade() -> None:
     op.drop_index(
         op.f("ix_final_report_sources_final_report_id"), table_name="final_report_sources"
     )
-    op.drop_index(op.f("ix_final_report_sources_enterprise_id"), table_name="final_report_sources")
     op.drop_table("final_report_sources")
-    op.drop_index(op.f("ix_email_delivery_attempts_status"), table_name="email_delivery_attempts")
-    op.drop_index(
-        op.f("ix_email_delivery_attempts_outbox_id"), table_name="email_delivery_attempts"
-    )
-    op.drop_table("email_delivery_attempts")
-    op.drop_index(op.f("ix_user_notifications_source_id"), table_name="user_notifications")
-    op.drop_index(op.f("ix_user_notifications_severity"), table_name="user_notifications")
-    op.drop_index(op.f("ix_user_notifications_recipient_role"), table_name="user_notifications")
-    op.drop_index(
-        op.f("ix_user_notifications_recipient_enterprise_id"), table_name="user_notifications"
-    )
-    op.drop_index(
-        op.f("ix_user_notifications_recipient_account_id"), table_name="user_notifications"
-    )
-    op.drop_index(op.f("ix_user_notifications_notification_type"), table_name="user_notifications")
-    op.drop_index(op.f("ix_user_notifications_created_at"), table_name="user_notifications")
-    op.drop_table("user_notifications")
     op.drop_index(op.f("ix_support_tickets_ticket_code"), table_name="support_tickets")
     op.drop_index(op.f("ix_support_tickets_status"), table_name="support_tickets")
     op.drop_index(op.f("ix_support_tickets_priority"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_enterprise_id"), table_name="support_tickets")
-    op.drop_index(op.f("ix_support_tickets_enterprise_account_id"), table_name="support_tickets")
+    op.drop_index(op.f("ix_support_tickets_enterprise_profile_id"), table_name="support_tickets")
     op.drop_index(op.f("ix_support_tickets_created_at"), table_name="support_tickets")
     op.drop_index(op.f("ix_support_tickets_category"), table_name="support_tickets")
     op.drop_table("support_tickets")
-    op.drop_index(
-        op.f("ix_password_reset_challenges_invalidated_at"), table_name="password_reset_challenges"
-    )
-    op.drop_index(
-        op.f("ix_password_reset_challenges_expires_at"), table_name="password_reset_challenges"
-    )
-    op.drop_index(
-        "ix_password_reset_challenges_email_active_created", table_name="password_reset_challenges"
-    )
-    op.drop_index(
-        op.f("ix_password_reset_challenges_email"), table_name="password_reset_challenges"
-    )
-    op.drop_index(
-        op.f("ix_password_reset_challenges_account_id"), table_name="password_reset_challenges"
-    )
-    op.drop_table("password_reset_challenges")
     op.drop_index(
         op.f("ix_enterprise_telemetry_snapshots_received_at"),
         table_name="enterprise_telemetry_snapshots",
@@ -1213,11 +1135,7 @@ def downgrade() -> None:
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_index(
-        op.f("ix_enterprise_telemetry_snapshots_enterprise_id"),
-        table_name="enterprise_telemetry_snapshots",
-    )
-    op.drop_index(
-        op.f("ix_enterprise_telemetry_snapshots_enterprise_account_id"),
+        op.f("ix_enterprise_telemetry_snapshots_enterprise_profile_id"),
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_index(
@@ -1248,14 +1166,42 @@ def downgrade() -> None:
         table_name="enterprise_report_submissions",
     )
     op.drop_index(
-        op.f("ix_enterprise_report_submissions_enterprise_id"),
-        table_name="enterprise_report_submissions",
-    )
-    op.drop_index(
-        op.f("ix_enterprise_report_submissions_enterprise_account_id"),
+        op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
         table_name="enterprise_report_submissions",
     )
     op.drop_table("enterprise_report_submissions")
+    op.drop_index(op.f("ix_email_delivery_attempts_status"), table_name="email_delivery_attempts")
+    op.drop_index(
+        op.f("ix_email_delivery_attempts_outbox_id"), table_name="email_delivery_attempts"
+    )
+    op.drop_table("email_delivery_attempts")
+    op.drop_index(op.f("ix_user_notifications_source_id"), table_name="user_notifications")
+    op.drop_index(op.f("ix_user_notifications_severity"), table_name="user_notifications")
+    op.drop_index(op.f("ix_user_notifications_recipient_role"), table_name="user_notifications")
+    op.drop_index(
+        op.f("ix_user_notifications_recipient_account_id"), table_name="user_notifications"
+    )
+    op.drop_index(op.f("ix_user_notifications_notification_type"), table_name="user_notifications")
+    op.drop_index(op.f("ix_user_notifications_created_at"), table_name="user_notifications")
+    op.drop_table("user_notifications")
+    op.drop_index(
+        op.f("ix_password_reset_challenges_invalidated_at"), table_name="password_reset_challenges"
+    )
+    op.drop_index(
+        op.f("ix_password_reset_challenges_expires_at"), table_name="password_reset_challenges"
+    )
+    op.drop_index(
+        "ix_password_reset_challenges_email_active_created", table_name="password_reset_challenges"
+    )
+    op.drop_index(
+        op.f("ix_password_reset_challenges_email"), table_name="password_reset_challenges"
+    )
+    op.drop_index(
+        op.f("ix_password_reset_challenges_account_id"), table_name="password_reset_challenges"
+    )
+    op.drop_table("password_reset_challenges")
+    op.drop_index(op.f("ix_enterprise_profiles_enterprise_id"), table_name="enterprise_profiles")
+    op.drop_table("enterprise_profiles")
     op.drop_index("ix_email_outbox_status_next_attempt", table_name="email_outbox")
     op.drop_index(op.f("ix_email_outbox_status"), table_name="email_outbox")
     op.drop_index(op.f("ix_email_outbox_source_id"), table_name="email_outbox")
@@ -1346,7 +1292,6 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_activity_logs_actor_role"), table_name="activity_logs")
     op.drop_table("activity_logs")
     op.drop_index(op.f("ix_accounts_mock_run_id"), table_name="accounts")
-    op.drop_index(op.f("ix_accounts_enterprise_id"), table_name="accounts")
     op.drop_index(op.f("ix_accounts_email"), table_name="accounts")
     op.drop_table("accounts")
     op.execute("DROP TYPE delivery_status")

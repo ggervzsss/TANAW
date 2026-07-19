@@ -30,22 +30,18 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         for constraint in table.foreign_key_constraints
     }
 
-    assert len(relationships) == 29
+    assert len(relationships) == 24
     assert {
+        ("enterprise_profiles", ("account_id",), ("accounts.id",)),
         (
             "enterprise_report_submissions",
-            ("enterprise_account_id",),
-            ("accounts.id",),
-        ),
-        (
-            "enterprise_report_submissions",
-            ("enterprise_id",),
-            ("accounts.enterprise_id",),
+            ("enterprise_profile_id",),
+            ("enterprise_profiles.account_id",),
         ),
         (
             "enterprise_telemetry_snapshots",
-            ("enterprise_account_id",),
-            ("accounts.id",),
+            ("enterprise_profile_id",),
+            ("enterprise_profiles.account_id",),
         ),
         (
             "final_report_sources",
@@ -54,11 +50,10 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         ),
         ("user_notifications", ("recipient_account_id",), ("accounts.id",)),
         (
-            "user_notifications",
-            ("recipient_enterprise_id",),
-            ("accounts.enterprise_id",),
+            "support_tickets",
+            ("enterprise_profile_id",),
+            ("enterprise_profiles.account_id",),
         ),
-        ("support_tickets", ("enterprise_account_id",), ("accounts.id",)),
         (
             "support_ticket_messages",
             ("author_account_id",),
@@ -67,6 +62,22 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         ("email_outbox", ("account_id",), ("accounts.id",)),
         ("dev_deliveries", ("account_id",), ("accounts.id",)),
     } <= relationships
+
+    account_columns = set(Base.metadata.tables["accounts"].columns.keys())
+    assert {
+        "enterprise_id",
+        "enterprise_name",
+        "category",
+        "manager_name",
+        "barangay",
+        "address",
+        "latitude",
+        "longitude",
+        "location_updated_at",
+        "building_capacity",
+        "gateway_id",
+        "gateway_status",
+    }.isdisjoint(account_columns)
 
 
 @pytest.mark.asyncio

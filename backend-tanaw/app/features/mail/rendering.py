@@ -254,7 +254,7 @@ async def _render_support_reply(
             SupportTicketMessage.ticket_id == ticket_id,
         )
     )
-    if ticket is None or message is None or ticket.enterprise_account_id != outbox.account_id:
+    if ticket is None or message is None or ticket.enterprise_profile_id != outbox.account_id:
         raise EmailRenderCancelled("The support reply is no longer available.")
     return support_ticket_reply_email(
         ticket_code=ticket.ticket_code,

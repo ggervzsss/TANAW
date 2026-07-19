@@ -20,7 +20,7 @@ from app.features.accounts.dependencies import (
     is_token_invalidated,
     require_roles,
 )
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
@@ -79,6 +79,7 @@ from app.features.operational.service import (
     create_user_notification,
     enterprise_accounts_by_identifier,
     enterprise_identifier,
+    enterprise_name,
     evaluate_telemetry_alerts,
     get_enterprise_notification_recipient,
     get_operational_summary,
@@ -93,6 +94,7 @@ from app.features.operational.service import (
     list_support_tickets,
     list_user_notifications,
     parse_ticket_attachments,
+    require_enterprise_profile,
     return_final_report_for_revision,
     set_user_notification_read,
     system_setting_enabled,
@@ -153,7 +155,7 @@ async def ingest_desktop_telemetry(
             alert_type="Maintenance Request",
             severity="Warning",
             requester=account.display_name,
-            enterprise=account.enterprise_name or account.display_name,
+            enterprise=enterprise_name(account),
             summary=(
                 f"{payload.metrics.unsyncedEvents} telemetry event"
                 f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} remain unsynced."
@@ -181,7 +183,7 @@ async def ingest_desktop_telemetry(
             alert_type="Maintenance Request",
             severity="Critical",
             requester=account.display_name,
-            enterprise=account.enterprise_name or account.display_name,
+            enterprise=enterprise_name(account),
             summary=payload.session.error,
             required_action="Review the camera or desktop app error and restore monitoring.",
             resolution_mode="Remote Review",
@@ -198,11 +200,11 @@ async def ingest_desktop_telemetry(
             db,
             category="Enterprise Activity",
             severity="Warning",
-            actor=account.enterprise_name or account.display_name,
+            actor=enterprise_name(account),
             actor_role="Enterprise Account",
             action="Desktop App Sync Error",
-            target=account.enterprise_name or account.email,
-            summary=f"{account.enterprise_name or account.display_name} reported desktop app sync status {payload.session.status}: {payload.session.error}",
+            target=enterprise_name(account),
+            summary=f"{enterprise_name(account)} reported desktop app sync status {payload.session.status}: {payload.session.error}",
             source_id=snapshot.id,
             metadata={
                 "enterpriseId": snapshot.enterpriseId,
@@ -238,7 +240,7 @@ async def ingest_desktop_report_submission(
         db,
         category="Staff Submission",
         severity="Success",
-        actor=account.enterprise_name or account.display_name,
+        actor=enterprise_name(account),
         actor_role="Enterprise Account",
         action="Submit Enterprise Report",
         target=report.enterprise,
@@ -261,7 +263,7 @@ async def get_desktop_mock_preparation(
     run = await db.scalar(
         select(MockDataRun)
         .where(
-            MockDataRun.target_account_id == account.id,
+            MockDataRun.target_enterprise_profile_id == account.id,
         )
         .order_by(MockDataRun.created_at.desc())
     )
@@ -282,8 +284,7 @@ async def get_desktop_mock_preparation(
             (
                 await db.scalars(
                     select(EnterpriseReportSubmission.period).where(
-                        EnterpriseReportSubmission.enterprise_id
-                        == (run.target_enterprise_id or enterprise_identifier(account)),
+                        EnterpriseReportSubmission.enterprise_profile_id == account.id,
                         EnterpriseReportSubmission.period.in_(candidate_periods),
                     )
                 )
@@ -300,10 +301,12 @@ async def get_desktop_mock_preparation(
     return MockPreparationSummary(
         runId=run.id,
         status=run.status,  # type: ignore[arg-type]
-        enterpriseId=run.target_enterprise_id or enterprise_identifier(account),
-        enterpriseName=run.target_enterprise_name
-        or account.enterprise_name
-        or account.display_name,
+        enterpriseId=(
+            run.target_enterprise_profile.enterprise_id
+            if run.target_enterprise_profile is not None
+            else enterprise_identifier(account)
+        ),
+        enterpriseName=run.target_enterprise_name or enterprise_name(account),
         counts=pending_counts[0] if pending_counts else None,
         pendingCounts=pending_counts,
     )
@@ -576,12 +579,13 @@ async def list_report_enterprises(
 ) -> list[dict]:
     statement = (
         select(Account)
+        .join(Account.enterprise_profile)
         .where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
         )
-        .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+        .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Account.id == account.id)
@@ -589,11 +593,12 @@ async def list_report_enterprises(
     result = await db.scalars(statement)
     return [
         {
-            "id": account.enterprise_id or account.id,
-            "name": account.enterprise_name or account.display_name,
-            "category": format_enterprise_category(account.category) or "Uncategorized",
-            "barangay": account.barangay or "Unassigned",
-            "complianceOwner": account.manager_name or account.email,
+            "id": require_enterprise_profile(account).enterprise_id,
+            "name": require_enterprise_profile(account).enterprise_name,
+            "category": format_enterprise_category(require_enterprise_profile(account).category)
+            or "Uncategorized",
+            "barangay": require_enterprise_profile(account).barangay or "Unassigned",
+            "complianceOwner": require_enterprise_profile(account).manager_name or account.email,
         }
         for account in result
     ]
@@ -666,7 +671,7 @@ async def create_enterprise_support_ticket(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketSummary:
     ticket = await create_support_ticket(db, account, payload)
-    enterprise = account.enterprise_name or account.display_name
+    enterprise = enterprise_name(account)
     severity = "Warning" if ticket.priority in {"High", "Urgent"} else "Info"
     attachment_count = len(ticket.attachments)
     attachment_suffix = (
@@ -736,7 +741,7 @@ async def create_ticket_message(
         detail = await create_support_ticket_message(db, ticket, account, payload)
         reply_record = None
     if account.role == AccountRole.IT:
-        recipient = await get_account_by_id(db, ticket.enterprise_account_id)
+        recipient = await get_account_by_id(db, ticket.enterprise_profile_id)
         if recipient is not None and reply_record is not None:
             await enqueue_email(
                 db,
@@ -916,10 +921,9 @@ async def create_enterprise_notification(
             actor=actor.display_name,
             actorRole="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
             action="Notify Enterprise",
-            target=recipient.enterprise_name or recipient.display_name,
+            target=enterprise_name(recipient),
             summary=(
-                f"{actor.display_name} notified "
-                f"{recipient.enterprise_name or recipient.display_name}: {payload.message}"
+                f"{actor.display_name} notified {enterprise_name(recipient)}: {payload.message}"
             ),
             sourceId=notification.id,
         ),
@@ -936,12 +940,13 @@ async def list_map_enterprises(
     latest = {item.enterpriseId: item for item in await list_latest_telemetry(db, account)}
     statement = (
         select(Account)
+        .join(Account.enterprise_profile)
         .where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
         )
-        .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+        .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Account.id == account.id)
@@ -949,16 +954,17 @@ async def list_map_enterprises(
     result = await db.scalars(statement)
     enterprises = []
     for enterprise in result:
+        profile = require_enterprise_profile(enterprise)
         telemetry = latest.get(enterprise_identifier(enterprise))
         enterprises.append(
             {
-                "id": enterprise.enterprise_id or enterprise.id,
-                "name": enterprise.enterprise_name or enterprise.display_name,
-                "barangay": enterprise.barangay or "Unassigned",
-                "category": format_enterprise_category(enterprise.category) or "Uncategorized",
-                "fullAddress": enterprise.address or "Address not provided",
-                "lat": enterprise.latitude,
-                "lng": enterprise.longitude,
+                "id": profile.enterprise_id,
+                "name": profile.enterprise_name,
+                "barangay": profile.barangay or "Unassigned",
+                "category": format_enterprise_category(profile.category) or "Uncategorized",
+                "fullAddress": profile.address or "Address not provided",
+                "lat": profile.latitude,
+                "lng": profile.longitude,
                 "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
                 "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
                 "status": enterprise_status_from_telemetry(telemetry),
@@ -966,7 +972,7 @@ async def list_map_enterprises(
                 "lastSync": telemetry.receivedAt.isoformat() if telemetry else None,
                 "gatewayStatus": telemetry.gatewayStatus
                 if telemetry
-                else enterprise.gateway_status or "Not Linked",
+                else profile.gateway_status or "Not Linked",
                 "sourceKind": telemetry.sourceKind if telemetry else "real",
                 "mockRunId": telemetry.mockRunId if telemetry else None,
             }

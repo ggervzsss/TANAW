@@ -81,6 +81,23 @@ databases from the old chain must be recreated before starting this version;
 the baseline intentionally contains no compatibility or reconciliation logic.
 Back up any data that must be retained before resetting PostgreSQL.
 
+### Canonical account and enterprise ownership
+
+The `accounts` table stores shared identity, authentication, role, status,
+preferences, security state, audit timestamps, and mock-data provenance.
+Enterprise-only business, location, capacity, and gateway fields live in
+`enterprise_profiles`, whose `account_id` is both its primary key and a
+one-to-one foreign key to `accounts.id`.
+
+Operational records use that enterprise-profile key as their single owner
+reference. API serializers derive the public enterprise ID through the
+relationship, so child tables do not keep account-ID and enterprise-ID copies
+that can disagree. Reports, telemetry, tickets, final-report sources, and mock
+runs retain only descriptive or metric snapshots needed to preserve what the
+record represented when it was created. Admin, IT, and Staff accounts do not
+have separate profile tables because they have no role-specific persisted
+fields.
+
 ## Email Integration
 
 TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
