@@ -23,6 +23,7 @@ describe("web report PDF generation", () => {
     expect(pdf.startsWith("%PDF-1.4")).toBe(true);
     expect(pdf).toContain("TANAW - DOT Visitor Attraction Report");
     expect(pdf).toContain("Archie's Event Place");
+    expect(pdf).toContain("Report Code");
     expect(pdf).toContain("Live Count Summary");
     expect(pdf).toContain("1 1 1 rg 0 0 842 595 re f");
     expect(pdf).not.toContain("0.043 0.071 0.125 rg");

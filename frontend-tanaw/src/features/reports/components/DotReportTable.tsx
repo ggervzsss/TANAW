@@ -128,9 +128,9 @@ function DotTableHeader() {
           Visitor Attraction / Name / Month
         </th>
         <th rowSpan={3} className="w-16">
-          Attraction Code
+          Report Code
         </th>
-        <th colSpan={9}>Place of Residence (Estimated Data)</th>
+        <th colSpan={9}>Place of Residence</th>
         <th colSpan={3} rowSpan={2}>
           Grand Total Number of Visitors
         </th>

@@ -21,7 +21,7 @@ type DotPreviewState = {
   reportId: string;
 };
 
-export function DashboardView() {
+export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
   const [trendFilter, setTrendFilter] = useState<TrendFilter>("Week");
   const [summary, setSummary] = useState<LocalMetricsSummary | null>(null);
   const [history, setHistory] = useState<LocalMetricsHistory>(EMPTY_LOCAL_METRICS_HISTORY);
@@ -85,6 +85,7 @@ export function DashboardView() {
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          enterpriseName={enterpriseName}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}

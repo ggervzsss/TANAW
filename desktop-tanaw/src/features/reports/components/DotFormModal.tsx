@@ -7,6 +7,7 @@ import { downloadDotReportPdf } from "../utils/pdf";
 
 type DotFormModalProps = {
   demo: DemoBreakdown;
+  enterpriseName: string;
   metrics: Metrics;
   notes: string;
   onClose: () => void;
@@ -15,7 +16,7 @@ type DotFormModalProps = {
   validationMessage?: string | null;
 };
 
-export function DotFormModal({ onClose, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: DotFormModalProps) {
+export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: DotFormModalProps) {
   const tpm = demographicCount(demo.thisProvMale);
   const tpf = demographicCount(demo.thisProvFemale);
   const totalThisProv = tpm + tpf;
@@ -70,7 +71,7 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
             <div className="enterprise-dot-document mx-auto max-w-5xl text-[#111827] dark:text-slate-100">
               {validationMessage && (
                 <div className="mb-5 rounded-sm border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 print:hidden">
-                  {validationMessage} Official PDF download is disabled until the demographic total matches the Unique Count Cap of {metrics.unique.toLocaleString()}.
+                  {validationMessage} Official PDF download is disabled until the demographic total matches the unique visitor count of {metrics.unique.toLocaleString()}.
                 </div>
               )}
               <div className="mb-6 border-b border-amber-600/70 pb-4 text-center">
@@ -83,7 +84,7 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
                   <p className="mt-1 font-medium">{period}</p>
                 </div>
                 <div>
-                  <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Unique Count Cap</p>
+                  <p className="font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">Unique Visitors</p>
                   <p className="mt-1 font-medium">{metrics.unique.toLocaleString()}</p>
                 </div>
               </div>
@@ -94,13 +95,13 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
                   <thead>
                     <tr>
                       <th rowSpan={4} className="w-20 border border-black p-2">
-                        Attraction Code
+                        Report Code
                       </th>
                       <th rowSpan={4} className="w-48 border border-black p-2">
                         Name/ Month
                       </th>
                       <th colSpan={9} className="border border-black bg-gray-50 p-2 font-bold print:bg-transparent">
-                        ***Place of Residence
+                        Place of Residence
                       </th>
                       <th rowSpan={4} className="w-24 border border-black p-2">
                         Grand Total Number of Visitors
@@ -137,9 +138,9 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="border border-black p-2 text-xs font-semibold uppercase">SPL-MKT-01</td>
+                      <td className="border border-black p-2 text-xs font-semibold uppercase">{reportId}</td>
                       <td className="border border-black p-2 text-left align-top leading-tight">
-                        <span className="font-bold">Enterprise Node</span>
+                        <span className="font-bold">{enterpriseName}</span>
                         <br />
                         <span className="text-[10px]">{period}</span>
                       </td>
@@ -193,7 +194,7 @@ export function DotFormModal({ onClose, period, metrics, demo, notes, reportId =
             <button
               disabled={!canDownload}
               onClick={() => {
-                if (canDownload) downloadDotReportPdf({ reportId, period, metrics, demo, notes });
+                if (canDownload) downloadDotReportPdf({ enterpriseName, reportId, period, metrics, demo, notes });
               }}
               className={`flex items-center gap-2 rounded-sm px-6 py-2 text-sm font-medium shadow-sm transition-colors ${
                 canDownload ? "bg-[#065f46] text-white hover:bg-[#044a36]" : "cursor-not-allowed bg-gray-300 text-gray-500"

@@ -23,6 +23,7 @@ import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/d
 import { notifyError } from "../../toasts/services/toast-service";
 
 type ReportsViewProps = {
+  enterpriseName: string;
   reportsHistory: ReportRecord[];
   setReportsHistory: React.Dispatch<React.SetStateAction<ReportRecord[]>>;
 };
@@ -39,7 +40,7 @@ const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographi
 const DEMOGRAPHIC_DRAFT_RETRY_DELAY_MS = 2000;
 const DEMOGRAPHIC_DRAFT_SAVE_DELAY_MS = 300;
 
-export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewProps) {
+export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory }: ReportsViewProps) {
   const currentReportingPeriod = useMemo(() => getCurrentReportingPeriod(), []);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
@@ -71,16 +72,8 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
         ? metricsFromPendingCounts(selectedPeriodCounts)
         : liveMetrics;
   const currentPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, currentReportingPeriod)) ?? null;
-  const currentLedgerMetrics =
-    isSameReportingMonth(livePeriod, currentReportingPeriod)
-      ? liveMetrics
-      : currentPeriodCounts
-        ? metricsFromPendingCounts(currentPeriodCounts)
-        : EMPTY_METRICS;
-  const currentLedgerDemo =
-    !activeReport && isSameReportingMonth(period, currentReportingPeriod)
-      ? demo
-      : emptyDemo();
+  const currentLedgerMetrics = isSameReportingMonth(livePeriod, currentReportingPeriod) ? liveMetrics : currentPeriodCounts ? metricsFromPendingCounts(currentPeriodCounts) : EMPTY_METRICS;
+  const currentLedgerDemo = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? demo : emptyDemo();
   const currentLedgerNotes = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "";
 
   const blockingMetricsError = activeReport ? null : metricsError;
@@ -139,10 +132,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
   const refreshPendingPeriods = useCallback(async () => {
     try {
       const preparation = await getDesktopMockPreparation();
-      const pendingCounts =
-        preparation?.status === "active"
-          ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : [])
-          : [];
+      const pendingCounts = preparation?.status === "active" ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : [];
       setPendingPeriodCounts(pendingCounts);
     } catch {
       setPendingPeriodCounts([]);
@@ -306,6 +296,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
     }
 
     downloadDotReportPdf({
+      enterpriseName,
       reportId: report.id,
       period: report.period ?? report.date,
       metrics: reportMetrics,
@@ -473,6 +464,7 @@ export function ReportsView({ reportsHistory, setReportsHistory }: ReportsViewPr
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          enterpriseName={enterpriseName}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}
@@ -704,7 +696,11 @@ function historyLedgerKey(reportId: string) {
 }
 
 function pendingReportId(period: string) {
-  const normalizedPeriod = period.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase();
+  const normalizedPeriod = period
+    .trim()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-|-$/g, "")
+    .toUpperCase();
   return normalizedPeriod ? `PENDING-${normalizedPeriod}` : "PENDING-REPORT";
 }
 

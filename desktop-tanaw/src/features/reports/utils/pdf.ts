@@ -2,6 +2,7 @@ import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
 import { demographicCount, getDemographicTotals } from "./demographics";
 
 export type DotReportPdf = {
+  enterpriseName: string;
   reportId: string;
   period: string;
   metrics: Metrics;
@@ -67,7 +68,7 @@ export function createDotReportPdf(report: DotReportPdf) {
   content.push(`${rgbStroke(lightExportPalette.accent)} 1 w 50 532 m 744 532 l S`);
   drawText(content, "REPORTING PERIOD", 50, 512, { bold: true, size: 7 });
   drawText(content, report.period, 50, 498, { size: 9 });
-  drawText(content, "UNIQUE COUNT CAP", 420, 512, { bold: true, size: 7 });
+  drawText(content, "UNIQUE VISITORS", 420, 512, { bold: true, size: 7 });
   drawText(content, report.metrics.unique.toLocaleString(), 420, 498, { size: 9 });
   drawText(content, "VISITOR ATTRACTION", 50, 466, { bold: true, size: 13 });
 
@@ -83,10 +84,10 @@ export function createDotReportPdf(report: DotReportPdf) {
   const grandX = demoX + table.demo * 9;
   let top = table.top;
 
-  drawCell(content, table.x, top, table.code, 112, ["Attraction", "Code"], { bold: true });
+  drawCell(content, table.x, top, table.code, 112, ["Report", "Code"], { bold: true });
   drawCell(content, table.x + table.code, top, table.name, 112, ["Name/ Month"], { bold: true });
   drawCell(content, grandX, top, table.grand, 112, ["Grand Total", "Number of", "Visitors"], { bold: true });
-  drawCell(content, demoX, top, table.demo * 9, 36, ["***Place of Residence"], { bold: true });
+  drawCell(content, demoX, top, table.demo * 9, 36, ["Place of Residence"], { bold: true });
 
   top -= 36;
   drawCell(content, demoX, top, table.demo * 6, 24, ["Philippines"], { bold: true });
@@ -103,8 +104,8 @@ export function createDotReportPdf(report: DotReportPdf) {
   });
 
   top -= 28;
-  drawCell(content, table.x, top, table.code, 40, ["SPL-MKT-01"], { bold: true, size: 8 });
-  drawCell(content, table.x + table.code, top, table.name, 40, ["Enterprise Node", report.period], { align: "left", bold: true, size: 8 });
+  drawCell(content, table.x, top, table.code, 40, [report.reportId], { bold: true, size: 8 });
+  drawCell(content, table.x + table.code, top, table.name, 40, [report.enterpriseName, report.period], { align: "left", bold: true, size: 8 });
   [tpm, tpf, tpm + tpf, opm, opf, opm + opf, fm, ff, fm + ff].forEach((value, index) => {
     drawCell(content, demoX + table.demo * index, top, table.demo, 40, [value ? String(value) : ""], { bold: value > 0, size: 8 });
   });

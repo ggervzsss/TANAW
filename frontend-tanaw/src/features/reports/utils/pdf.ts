@@ -246,8 +246,8 @@ function drawMetadata(commands: PdfCommand[], rows: [string, string][], startY =
 
 function drawDotTable(commands: PdfCommand[], topY: number, rows: TableCell[][]) {
   const columns: TableColumn[] = [
-    { label: "Visitor Attraction / Name / Month", width: 150, align: "left" },
-    { label: "Code", width: 48 },
+    { label: "Visitor Attraction / Name / Month", width: 134, align: "left" },
+    { label: "Report Code", width: 64 },
     { label: "Prov M", width: 44, align: "right" },
     { label: "Prov F", width: 44, align: "right" },
     { label: "Prov T", width: 44, align: "right" },

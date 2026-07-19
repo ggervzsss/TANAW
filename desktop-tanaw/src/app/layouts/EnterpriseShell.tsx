@@ -433,11 +433,11 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" || activeView === "simulation" ? "h-full min-h-0" : ""}`}>
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>
-              {activeView === "dashboard" && mlContextReady && <DashboardView />}
+              {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} />}
               {activeView === "cameras" && mlContextReady && (
                 <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
               )}
-              {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
+              {activeView === "reports" && mlContextReady && <ReportsView enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
               {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultBuildingCapacity={buildingCapacity} />}
               {activeView === "profile" && <ProfileView />}
               {activeView === "security" && <SecurityView />}

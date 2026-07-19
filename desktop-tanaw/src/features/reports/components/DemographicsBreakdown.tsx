@@ -113,7 +113,7 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-xs font-semibold tracking-wider text-[#111827] uppercase">Demographics Breakdown</label>
-        <span className="text-[10px] font-bold text-gray-500">Unique cap: {allocation.cap.toLocaleString()}</span>
+        <span className="text-[10px] font-bold text-gray-500">Unique visitors: {allocation.cap.toLocaleString()}</span>
       </div>
       {!isReadOnly && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
