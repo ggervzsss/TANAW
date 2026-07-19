@@ -437,6 +437,13 @@ def reporting_period_submission_error(period: str, now: datetime | None = None) 
     )
 
 
+def reporting_period_key(period: str) -> tuple[int, int] | None:
+    period_end = _reporting_period_end_date(period)
+    if period_end is None:
+        return None
+    return period_end.year, period_end.month
+
+
 def _reporting_period_end_date(period: str) -> date | None:
     normalized_period = period.strip()
     range_match = REPORTING_PERIOD_RANGE_RE.match(normalized_period)

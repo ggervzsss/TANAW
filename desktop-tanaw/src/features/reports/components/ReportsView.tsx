@@ -20,6 +20,7 @@ import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../ser
 import { DESKTOP_REPORT_SYNC_EVENT, getDesktopSamplePreparation, prepareDesktopSampleCounts, syncDesktopReportSubmission, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
+import { isSameReportingMonth, reportingMonthKey, shouldPrepareDraftPeriod } from "../utils/reporting-period";
 import { notifyError } from "../../toasts/services/toast-service";
 
 type ReportsViewProps = {
@@ -224,13 +225,17 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
   };
 
   const handleDraftPeriodSelect = async (nextPeriod: string) => {
-    const hasPreparedCounts = pendingPeriodCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod));
-    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && (isSameReportingMonth(livePeriod, nextPeriod) || !hasPreparedCounts)) return;
-
-    if (isSameReportingMonth(nextPeriod, currentReportingPeriod) && !hasPreparedCounts) {
+    if (isSameReportingMonth(nextPeriod, currentReportingPeriod)) {
+      if (pendingPeriodCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod))) {
+        setMetricsError(null);
+      }
+      if (!activeReportId && isSameReportingMonth(nextPeriod, period)) return;
       resetDraftWorkspace(currentReportingPeriod);
       return;
     }
+
+    const hasPreparedCounts = shouldPrepareDraftPeriod(nextPeriod, currentReportingPeriod, pendingPeriodCounts);
+    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && (isSameReportingMonth(livePeriod, nextPeriod) || !hasPreparedCounts)) return;
 
     if (!hasPreparedCounts) {
       setActiveReportId(null);
@@ -944,10 +949,6 @@ function reportingPeriodLabel(value: Date) {
   return `${month} 1 - ${month} ${lastDay}, ${reportingValue.year}`;
 }
 
-function isSameReportingMonth(first: string, second: string) {
-  return reportingMonthKey(first) === reportingMonthKey(second);
-}
-
 function getReportingPeriodSubmissionError(period: string, now = new Date()) {
   const periodEnd = reportingPeriodEndDate(period);
   if (!periodEnd) {
@@ -958,21 +959,6 @@ function getReportingPeriodSubmissionError(period: string, now = new Date()) {
   if (calendarDateKey(reportingDate(now)) >= calendarDateKey(opensOn)) return null;
 
   return `Submission opens on ${formatCalendarDate(opensOn)} after the ${monthName(periodEnd.monthIndex)} ${periodEnd.year} reporting period closes.`;
-}
-
-function reportingMonthKey(value: string) {
-  const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
-  if (rangeMatch) {
-    return monthKey(rangeMatch[2] || rangeMatch[1], rangeMatch[3]) ?? normalizedValue.toLowerCase();
-  }
-
-  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
-  if (monthYearMatch) {
-    return monthKey(monthYearMatch[1], monthYearMatch[2]) ?? normalizedValue.toLowerCase();
-  }
-
-  return normalizedValue.toLowerCase();
 }
 
 function reportingPeriodEndDate(value: string): CalendarDate | null {
@@ -995,13 +981,6 @@ function reportingPeriodEndDate(value: string): CalendarDate | null {
   }
 
   return null;
-}
-
-function monthKey(monthLabel: string, yearLabel: string) {
-  const monthIndex = monthIndexFromLabel(monthLabel);
-  const year = Number(yearLabel);
-  if (monthIndex === null || !Number.isInteger(year)) return null;
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 }
 
 type CalendarDate = {

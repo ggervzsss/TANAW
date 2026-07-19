@@ -11,6 +11,8 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from app.config.camera_config import reporting_period_key
+
 LOCAL_SCHEMA_VERSION = 1
 
 
@@ -814,7 +816,19 @@ class LocalDataStore:
         payload_status = (
             report_payload.get("status") if isinstance(report_payload.get("status"), str) else None
         )
-        should_consume_open_events = existing_submission is None and payload_status != "Resubmitted"
+        open_period = summary.get("period")
+        open_period_key = (
+            reporting_period_key(open_period) if isinstance(open_period, str) else None
+        )
+        submission_period_key = reporting_period_key(period)
+        open_period_matches_submission = not isinstance(open_period, str) or (
+            open_period_key is not None and open_period_key == submission_period_key
+        )
+        should_consume_open_events = (
+            existing_submission is None
+            and payload_status != "Resubmitted"
+            and open_period_matches_submission
+        )
         with self._connection() as connection:
             connection.execute(
                 """

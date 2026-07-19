@@ -592,6 +592,36 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(second["entries"], 40)
             self.assertEqual(second["period"], "Jun 1 - Jun 30, 2026")
 
+    def test_report_submission_does_not_consume_a_different_prepared_period(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
+            prepared = store.prepare_sample_counts(
+                report_id="SAMPLE-JUN",
+                entries=40,
+                exits=31,
+                unique_count=24,
+                peak_occupancy=12,
+                camera_id=7,
+                camera_name="Main Entrance",
+                period="Jun 1 - Jun 30, 2026",
+            )
+            self.assertTrue(prepared["prepared"])
+
+            submission = store.record_report_submission(
+                "REP-JUL",
+                "Jul 1 - Jul 31, 2026",
+                metrics={
+                    "entries": 55,
+                    "exits": 42,
+                    "peak_occupancy": 18,
+                    "unique_count": 36,
+                },
+            )
+
+            self.assertEqual(submission["entries"], 55)
+            self.assertEqual(store.metrics_summary()["period"], "Jun 1 - Jun 30, 2026")
+            self.assertEqual(store.metrics_summary()["unsubmitted_events"], 71)
+
     def test_sync_acknowledgements_update_local_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
