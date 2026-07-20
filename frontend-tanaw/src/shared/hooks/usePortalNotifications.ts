@@ -161,7 +161,7 @@ function getBackendNotificationTargetPath(role: UserRole, notification: BackendN
     if (notification.sourceType === "operational.alert") return routes.admin.alertsMonitor;
     if (text.includes("enterprise.profile") || text.includes("profile change request")) return routes.admin.alertsMonitor;
     if (text.includes("support") || text.includes("ticket")) return routes.admin.supportTickets;
-    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.systemLogs : routes.admin.alertsMonitor;
+    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.activityHistory : routes.admin.alertsMonitor;
   }
   if (role === "it") {
     if (notification.sourceType === "operational.alert") return routes.it.alerts;
@@ -229,7 +229,7 @@ function toneFromSeverity(severity: LogSeverity): PortalNotificationTone {
 }
 
 function getLogTargetPath(role: "admin" | "it") {
-  if (role === "admin") return routes.admin.systemLogs;
+  if (role === "admin") return routes.admin.activityHistory;
   return routes.it.systemLogs;
 }
 

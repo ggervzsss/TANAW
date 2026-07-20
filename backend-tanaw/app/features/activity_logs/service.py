@@ -21,6 +21,23 @@ SYSTEM_SETTINGS_ID = "default"
 LOG_RETENTION_DAYS = 180
 LOG_RETENTION_DAYS_SETTING_KEY = "logs.retentionDays"
 ALLOWED_LOG_RETENTION_DAYS = frozenset({90, 180, 365})
+ADMIN_ACTIVITY_CATEGORIES = frozenset({"Admin Operation", "Staff Submission", "Staff Operation"})
+ADMIN_IT_ACTIVITY_ACTIONS = frozenset(
+    {
+        "Approve Enterprise Profile Change",
+        "Approve Verified Email Change",
+        "Create Enterprise Account",
+        "Create LGU Account",
+        "Decline Enterprise Profile Change",
+        "Decline Verified Email Change",
+        "Purge Expired Activity Logs",
+        "Update Account Status",
+        "Update Enterprise Account",
+        "Update LGU Account",
+        "Update Support Ticket Status",
+        "Update System Settings",
+    }
+)
 
 
 def get_actor_role_label(account: Account) -> str:
@@ -30,9 +47,19 @@ def get_actor_role_label(account: Account) -> str:
 def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
     category = log.category
     actor_role = log.actor_role if isinstance(log, ActivityLog) else log.actorRole
+    action = log.action
+    severity = log.severity
 
     if role == AccountRole.ADMIN.value:
-        return True
+        return (
+            category in ADMIN_ACTIVITY_CATEGORIES
+            or (
+                category == "IT Activity"
+                and (action in ADMIN_IT_ACTIVITY_ACTIONS or action.startswith("Alert "))
+            )
+            or (category == "System" and severity in {"Warning", "Critical"})
+            or severity == "Critical"
+        )
     if role == AccountRole.IT.value:
         return (
             category in {"System", "IT Activity", "Enterprise Activity"}

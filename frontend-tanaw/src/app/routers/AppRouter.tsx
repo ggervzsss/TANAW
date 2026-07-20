@@ -45,7 +45,7 @@ const ITSystemSettingsPage = lazy(() =>
     default: module.ITSystemSettingsPage,
   })),
 );
-const AdminSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.AdminSystemLogsPage })));
+const AdminActivityHistoryPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.AdminActivityHistoryPage })));
 const ITSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.ITSystemLogsPage })));
 const SupportTicketsPage = lazy(() =>
   import("@/features/support-tickets").then((module) => ({
@@ -107,7 +107,7 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to={routes.admin.mapview} replace />} />
           <Route path="mapview" element={<AdminMapViewPage />} />
-          <Route path="system-logs" element={<AdminSystemLogsPage />} />
+          <Route path="activity-history" element={<AdminActivityHistoryPage />} />
           <Route path="alerts-monitor" element={<AdminAlertsMonitorPage />} />
           <Route path="support-tickets" element={<SupportTicketsPage mode="admin" />} />
           <Route path="notifications" element={<NotificationsPage role="admin" />} />

@@ -19,9 +19,9 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
       icon: MapPinned,
     },
     {
-      id: "system-logs",
-      label: "System Logs",
-      path: routes.admin.systemLogs,
+      id: "activity-history",
+      label: "Activity History",
+      path: routes.admin.activityHistory,
       icon: FileText,
     },
     {

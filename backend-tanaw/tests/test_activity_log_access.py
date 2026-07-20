@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.router import list_activity_logs
-from app.features.activity_logs.schemas import ActivityLogSummary
+from app.features.activity_logs.schemas import (
+    ActivityLogActorRole,
+    ActivityLogCategory,
+    ActivityLogSeverity,
+    ActivityLogSummary,
+)
 from app.features.activity_logs.service import can_role_view_log
 
 
@@ -26,14 +31,29 @@ def staff_account() -> Account:
 
 
 def staff_submission_log() -> ActivityLogSummary:
+    return activity_log(
+        category="Staff Submission",
+        severity="Info",
+        actor_role="LGU Staff",
+        action="Submit Report",
+    )
+
+
+def activity_log(
+    *,
+    category: ActivityLogCategory,
+    severity: ActivityLogSeverity,
+    actor_role: ActivityLogActorRole,
+    action: str,
+) -> ActivityLogSummary:
     return ActivityLogSummary(
         id="activity-log-1",
         timestamp=datetime.now(UTC),
-        category="Staff Submission",
-        severity="Info",
+        category=category,
+        severity=severity,
         actor="Activity Log Staff",
-        actorRole="LGU Staff",
-        action="Submit Report",
+        actorRole=actor_role,
+        action=action,
         target="Report REP-001",
         summary="A staff report was submitted.",
     )
@@ -54,3 +74,88 @@ async def test_staff_cannot_list_activity_logs() -> None:
 def test_staff_cannot_receive_activity_log_broadcasts() -> None:
     assert not can_role_view_log(AccountRole.STAFF.value, staff_submission_log())
     assert can_role_view_log(AccountRole.ADMIN.value, staff_submission_log())
+
+
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        (
+            activity_log(
+                category="Admin Operation",
+                severity="Success",
+                actor_role="Admin",
+                action="Update Profile",
+            ),
+            True,
+        ),
+        (
+            activity_log(
+                category="Staff Operation",
+                severity="Success",
+                actor_role="LGU Staff",
+                action="Generate Final Report",
+            ),
+            True,
+        ),
+        (
+            activity_log(
+                category="IT Activity",
+                severity="Success",
+                actor_role="IT Personnel",
+                action="Update System Settings",
+            ),
+            True,
+        ),
+        (
+            activity_log(
+                category="IT Activity",
+                severity="Success",
+                actor_role="IT Personnel",
+                action="Alert Resolved",
+            ),
+            True,
+        ),
+        (
+            activity_log(
+                category="System",
+                severity="Critical",
+                actor_role="System",
+                action="Security Incident",
+            ),
+            True,
+        ),
+        (
+            activity_log(
+                category="IT Activity",
+                severity="Success",
+                actor_role="IT Personnel",
+                action="Retry Email Delivery",
+            ),
+            False,
+        ),
+        (
+            activity_log(
+                category="Enterprise Activity",
+                severity="Info",
+                actor_role="Enterprise Account",
+                action="Login",
+            ),
+            False,
+        ),
+    ],
+)
+def test_admin_only_receives_supervisory_activity(log: ActivityLogSummary, expected: bool) -> None:
+    assert can_role_view_log(AccountRole.ADMIN.value, log) is expected
+
+
+def test_it_activity_visibility_is_unchanged() -> None:
+    assert can_role_view_log(
+        AccountRole.IT.value,
+        activity_log(
+            category="Enterprise Activity",
+            severity="Info",
+            actor_role="Enterprise Account",
+            action="Login",
+        ),
+    )
+    assert not can_role_view_log(AccountRole.IT.value, staff_submission_log())

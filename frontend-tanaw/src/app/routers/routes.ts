@@ -22,7 +22,7 @@ export const routes = {
   admin: {
     root: "/admin",
     mapview: "/admin/mapview",
-    systemLogs: "/admin/system-logs",
+    activityHistory: "/admin/activity-history",
     alertsMonitor: "/admin/alerts-monitor",
     supportTickets: "/admin/support-tickets",
     notifications: "/admin/notifications",
