@@ -5,16 +5,19 @@ import { useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import type { SystemLog, SystemLogCategory } from "@/shared/types";
 import { activityTimeRanges, isWithinActivityTimeRange } from "@/shared/utils";
 import type { ActivityTimeRange } from "@/shared/utils";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 const defaultTypeOptions = ["All Types", "IT Activity", "Enterprise Activity", "System"];
 const defaultAccountOptions = ["All Accounts", "IT Personnel", "Enterprise Account", "System"];
 
 export function ITSystemLogsPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading } = useActivityLogs();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All Types");
@@ -83,7 +86,7 @@ export function ITSystemLogsPage() {
             </colgroup>
             <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
-                {["Timestamp", "Type", "Actor", "Target", "Summary"].map((heading) => (
+                {["Date and Time", "Type", "Actor", "Target", "Summary"].map((heading) => (
                   <th key={heading} className="px-3 py-4 whitespace-nowrap lg:px-4">
                     {heading}
                   </th>
@@ -93,16 +96,25 @@ export function ITSystemLogsPage() {
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredActivities.map((activity) => (
                 <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
-                  <td className="px-3 py-4 font-mono text-xs whitespace-nowrap text-gray-500 lg:px-4">{formatLogTimestamp(activity.timestamp)}</td>
+                  <td className="px-3 py-4 font-mono text-xs whitespace-nowrap text-gray-500 lg:px-4">{formatLogTimestamp(activity.timestamp, timeFormat)}</td>
                   <td className="px-3 py-4 whitespace-nowrap lg:px-4">
                     <TypeBadge type={activity.category} />
                   </td>
-                  <td className="px-3 py-4 text-sm whitespace-nowrap lg:px-4">
-                    <span className="block truncate font-bold text-gray-900">{activity.actor}</span>
-                    <span className="text-[11px] font-semibold text-gray-500 uppercase">{activity.actorRole}</span>
+                  <td className="px-3 py-4 text-sm lg:px-4">
+                    <ExpandableTableText
+                      primary={activity.actor}
+                      secondary={activity.actorRole}
+                      ariaLabel="actor"
+                      className="font-bold text-gray-900"
+                      secondaryClassName="text-[11px] font-semibold text-gray-500 uppercase"
+                    />
                   </td>
-                  <td className="truncate px-3 py-4 text-sm whitespace-nowrap text-gray-600 lg:px-4">{activity.target}</td>
-                  <td className="px-3 py-4 text-sm leading-relaxed text-gray-600 lg:px-4">{activity.summary}</td>
+                  <td className="px-3 py-4 text-sm text-gray-600 lg:px-4">
+                    <ExpandableTableText primary={activity.target} ariaLabel="target" />
+                  </td>
+                  <td className="px-3 py-4 text-sm leading-relaxed text-gray-600 lg:px-4">
+                    <ExpandableTableText primary={activity.summary} ariaLabel="summary" threshold={72} twoLines />
+                  </td>
                 </tr>
               ))}
               {filteredActivities.length === 0 && (
@@ -125,7 +137,7 @@ export function ITSystemLogsPage() {
         </div>
       </Panel>
 
-      <AnimatePresence>{selectedActivity && <ActivityDetailsModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}</AnimatePresence>
+      <AnimatePresence>{selectedActivity && <ActivityDetailsModal activity={selectedActivity} timeFormat={timeFormat} onClose={() => setSelectedActivity(null)} />}</AnimatePresence>
     </PageMotion>
   );
 }
@@ -144,7 +156,7 @@ function getAccountOptions(logs: SystemLog[], typeFilter: string) {
   return ["All Accounts", ...Array.from(accounts).sort()];
 }
 
-function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onClose: () => void }) {
+function ActivityDetailsModal({ activity, timeFormat, onClose }: { activity: SystemLog; timeFormat: SystemTimeFormat; onClose: () => void }) {
   const navigate = useNavigate();
   const supportTicketId = getSupportTicketIdFromLog(activity);
 
@@ -156,16 +168,7 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
 
   return (
     <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
-      <div className="grid gap-4 md:grid-cols-2">
-        <DetailField label="Type" value={activity.category} />
-        <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
-        <DetailField label="Timestamp" value={formatLogTimestamp(activity.timestamp)} />
-        <DetailField label="Target" value={activity.target} />
-        <DetailField label="Action" value={activity.action} />
-        <div className="md:col-span-2">
-          <DetailField label="Summary" value={activity.summary} />
-        </div>
-      </div>
+      <ActivityDetailFields activity={activity} timeFormat={timeFormat} />
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
           <p className="text-sm font-semibold text-slate-700">This activity is tied to a support ticket. Open the full ticket record to inspect fields, photos, status, and conversation history.</p>
@@ -183,6 +186,23 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
   );
 }
 
+export function ActivityDetailFields({ activity, timeFormat = "12-hour" }: { activity: SystemLog; timeFormat?: SystemTimeFormat }) {
+  const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />;
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <DetailField label="Type" value={activity.category} />
+      <DetailField label="Actor" value={expandableValue(`${activity.actor} (${activity.actorRole})`, "actor")} />
+      <DetailField label="Date and Time" value={formatLogTimestamp(activity.timestamp, timeFormat)} />
+      <DetailField label="Target" value={expandableValue(activity.target, "target")} />
+      <DetailField label="Action" value={expandableValue(activity.action, "action")} />
+      <div className="md:col-span-2">
+        <DetailField label="Summary" value={expandableValue(activity.summary, "summary")} />
+      </div>
+    </div>
+  );
+}
+
 function TypeBadge({ type }: { type: SystemLogCategory }) {
   const classes: Record<SystemLogCategory, string> = {
     "IT Activity": "bg-violet-50 text-violet-700",
@@ -195,9 +215,8 @@ function TypeBadge({ type }: { type: SystemLogCategory }) {
   return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[type]}`}>{type}</span>;
 }
 
-function formatLogTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
+function formatLogTimestamp(timestamp: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(timestamp, timeFormat);
 }
 
 function getSupportTicketIdFromLog(log: SystemLog) {

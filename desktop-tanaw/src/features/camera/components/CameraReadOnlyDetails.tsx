@@ -14,8 +14,8 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
     <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase">Stream Details</h4>
-          <p className="mt-0.5 text-[10px] font-semibold text-gray-500">Configuration used by local processing.</p>
+          <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase">Camera Connection</h4>
+          <p className="mt-0.5 text-[10px] font-semibold text-gray-500">Connection and visitor-counting settings.</p>
         </div>
         <div
           className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${
@@ -28,12 +28,12 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
       </div>
 
       <div className="space-y-2">
-        <DetailRow label="Stream URL" value={maskStreamCredentials(activeCam.rtsp)} tooltip="RTSP or stream source used by local camera processing." mono />
+        <DetailRow label="Camera Address" value={maskStreamCredentials(activeCam.rtsp)} tooltip="The connection address TANAW uses to access this camera." mono />
         <div className="grid grid-cols-2 gap-2">
-          <DetailRow label="Camera Type" value={formatCameraType(activeCam.cameraType)} tooltip="Configured camera source type for this node." />
-          <DetailRow label="Assigned Zone" value={activeCam.zone} tooltip="Operational zone assigned to this camera." />
-          <DetailRow label="Tripwire Mode" value="Entry / Exit Lines" tooltip="Counting mode used for entry and exit detection." />
-          <DetailRow label="Processing" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="Processing mode selected for this camera node." />
+          <DetailRow label="Camera Type" value={formatCameraType(activeCam.cameraType)} tooltip="The type of camera connected to TANAW." />
+          <DetailRow label="Counting Area" value={activeCam.zone} tooltip="The area monitored by this camera." />
+          <DetailRow label="Counting Direction" value="Entry / Exit Lines" tooltip="Lines used to count entering and exiting visitors." />
+          <DetailRow label="Counting Mode" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="The visitor-counting mode selected for this camera." />
         </div>
       </div>
     </section>
@@ -60,7 +60,7 @@ type DetailRowProps = {
 
 function DetailRow({ label, mono = false, tooltip, value }: DetailRowProps) {
   return (
-    <InfoTooltip content={tooltip}>
+    <InfoTooltip content={tooltip} focusable={false}>
       <div className="min-w-0 rounded-sm border border-gray-200 bg-gray-50 px-3 py-2 transition-colors group-hover:border-[#065f46]/30 group-focus:border-[#065f46]/30">
         <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
         <p className={`mt-1 text-xs leading-snug font-semibold wrap-break-word text-gray-800 ${mono ? "font-mono" : ""}`}>{value}</p>

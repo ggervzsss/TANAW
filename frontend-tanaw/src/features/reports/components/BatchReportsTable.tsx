@@ -1,5 +1,5 @@
 import { Building2 } from "lucide-react";
-import { EmptyState } from "@/shared/components/ui";
+import { EmptyState, ExpandableTableText } from "@/shared/components/ui";
 import type { ReportEnterprise } from "@/shared/types";
 import type { EnterpriseReportRow } from "../utils";
 import { ReportStatusBadge } from "./ReportStatusBadge";
@@ -13,7 +13,14 @@ type BatchReportsTableProps = {
 export function BatchReportsTable({ rows, isLoading, onSelectEnterprise }: BatchReportsTableProps) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="w-full min-w-190 table-fixed text-left text-sm">
+        <colgroup>
+          <col className="w-[25%]" />
+          <col className="w-[16%]" />
+          <col className="w-[22%]" />
+          <col className="w-[15%]" />
+          <col className="w-[22%]" />
+        </colgroup>
         <thead className="bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
           <tr>
             <th className="px-6 py-4">Enterprise</th>
@@ -26,11 +33,19 @@ export function BatchReportsTable({ rows, isLoading, onSelectEnterprise }: Batch
         <tbody className="divide-y divide-gray-100 text-gray-800">
           {rows.map(({ enterprise, currentReport, archivedReports, status }) => (
             <tr key={enterprise.id} onClick={() => onSelectEnterprise(enterprise)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
-              <td className="px-6 py-4 font-semibold">
-                {enterprise.name}
-                <div className="mt-1 text-[10px] font-normal text-gray-500">{enterprise.category}</div>
+              <td className="px-6 py-4">
+                <ExpandableTableText
+                  primary={enterprise.name}
+                  secondary={enterprise.category}
+                  ariaLabel="enterprise name and category"
+                  className="font-semibold"
+                  secondaryClassName="text-[10px] font-normal text-gray-500"
+                  threshold={42}
+                />
               </td>
-              <td className="px-6 py-4 text-xs">{enterprise.barangay}</td>
+              <td className="px-6 py-4 text-xs">
+                <ExpandableTableText primary={enterprise.barangay} ariaLabel="barangay" threshold={24} />
+              </td>
               <td className="px-6 py-4">
                 <div className="flex flex-col gap-1">
                   <ReportStatusBadge status={status} />
@@ -38,7 +53,9 @@ export function BatchReportsTable({ rows, isLoading, onSelectEnterprise }: Batch
                 </div>
               </td>
               <td className="px-6 py-4 text-xs font-bold text-gray-600">{archivedReports.length} submissions</td>
-              <td className="px-6 py-4 text-xs">{enterprise.complianceOwner}</td>
+              <td className="px-6 py-4 text-xs">
+                <ExpandableTableText primary={enterprise.complianceOwner} ariaLabel="compliance owner" threshold={32} />
+              </td>
             </tr>
           ))}
           {rows.length === 0 && (

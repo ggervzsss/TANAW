@@ -9,7 +9,7 @@ type NotificationDropdownProps = {
   onMarkAllRead: () => void;
   onSelectNotification: (notification: EnterpriseNotification) => void;
   onViewAll: () => void;
-  triggerVariant?: "default" | "topbar";
+  triggerVariant?: "default" | "topbar" | "topbar-dark";
 };
 
 const notificationIconByType = (type: EnterpriseNotification["type"]) => {
@@ -18,21 +18,14 @@ const notificationIconByType = (type: EnterpriseNotification["type"]) => {
   return <CheckCircle size={16} className="text-[#2d5eff]" />;
 };
 
-export function NotificationDropdown({
-  isOpen,
-  notifications,
-  unreadCount,
-  onToggleOpen,
-  onMarkAllRead,
-  onSelectNotification,
-  onViewAll,
-  triggerVariant = "default",
-}: NotificationDropdownProps) {
+export function NotificationDropdown({ isOpen, notifications, unreadCount, onToggleOpen, onMarkAllRead, onSelectNotification, onViewAll, triggerVariant = "default" }: NotificationDropdownProps) {
   const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
   const triggerClassName =
-    triggerVariant === "topbar"
-      ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
-      : `relative rounded-full p-2.5 transition-colors ${isOpen ? "bg-gray-100 text-[#065f46]" : "border border-gray-100 bg-white text-gray-500 shadow-sm hover:bg-gray-50"}`;
+    triggerVariant === "topbar-dark"
+      ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/14 bg-black/18 text-white/88 shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-emerald-100/24 hover:bg-emerald-200/9 hover:shadow-[0_10px_24px_rgba(0,0,0,0.4)] active:translate-y-0"
+      : triggerVariant === "topbar"
+        ? "relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+        : `relative rounded-full p-2.5 transition-colors ${isOpen ? "bg-gray-100 text-[#065f46]" : "border border-gray-100 bg-white text-gray-500 shadow-sm hover:bg-gray-50"}`;
 
   return (
     <div className="relative">
@@ -41,7 +34,7 @@ export function NotificationDropdown({
         {unreadCount > 0 && (
           <span
             className={`bg-tanaw-red absolute flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 px-1 text-[10px] leading-none font-black text-white shadow-sm ${
-              triggerVariant === "topbar" ? "border-tanaw-green -top-1 -right-1" : "-top-1 -right-1 border-white"
+              triggerVariant === "topbar" || triggerVariant === "topbar-dark" ? "border-tanaw-green -top-1 -right-1" : "-top-1 -right-1 border-white"
             }`}
           >
             {countLabel}
@@ -90,7 +83,7 @@ export function NotificationDropdown({
                   <Inbox size={20} />
                 </div>
                 <p className="mt-4 text-sm font-black text-[#111827]">No notifications</p>
-                <p className="mt-1 max-w-68 text-xs leading-relaxed text-gray-500">Report deadline and submission workflow alerts will appear here when the ledger has matching data.</p>
+                <p className="mt-1 max-w-68 text-xs leading-relaxed text-gray-500">Report deadline and submission alerts will appear here when matching report data is available.</p>
               </div>
             )}
           </div>

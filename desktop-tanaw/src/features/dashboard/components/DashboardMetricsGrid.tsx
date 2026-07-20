@@ -15,7 +15,7 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <Card className="group relative overflow-hidden border-l-4 border-l-[#065f46] p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.12)]">
+      <Card className="group relative overflow-hidden border-l-4 border-l-[#065f46] p-5 transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_30px_rgba(15,23,42,0.1)]">
         <div className="relative z-10 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-1.5">
@@ -33,7 +33,7 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
         </div>
       </Card>
 
-      <Card className="border-l-4 border-l-[#111827] p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.12)]">
+      <Card className="border-l-4 border-l-[#111827] p-5 transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_30px_rgba(15,23,42,0.1)] dark:border-l-slate-500">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-1.5">
@@ -49,13 +49,13 @@ export function DashboardMetricsGrid({ summary }: DashboardMetricsGridProps) {
             </div>
             <p className="mt-1 text-xs font-medium text-gray-500 dark:text-slate-400">Cumulative (In / Out)</p>
           </div>
-          <div className="rounded-xl bg-slate-100 p-3 text-slate-800 ring-1 ring-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:ring-slate-600">
+          <div className="rounded-xl bg-slate-100 p-3 text-slate-800 ring-1 ring-slate-200 dark:bg-white/6 dark:text-slate-200 dark:ring-white/10">
             <Activity size={20} />
           </div>
         </div>
       </Card>
 
-      <Card className="border-l-4 border-l-[#065f46] p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.12)]">
+      <Card className="border-l-4 border-l-[#065f46] p-5 transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_30px_rgba(15,23,42,0.1)]">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-1.5">

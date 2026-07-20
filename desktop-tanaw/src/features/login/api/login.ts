@@ -11,10 +11,11 @@ function normalizeSession(response: LoginResponse): LoginResponse {
   };
 }
 
-export async function login(credentials: LoginFormValues) {
+export async function login(credentials: LoginFormValues, rememberMe = false) {
   const response = await staffApi.post<LoginResponse>("/auth/login", {
     ...credentials,
     loginScope: "enterprise",
+    rememberMe,
   });
 
   return normalizeSession(response.data);
@@ -82,4 +83,9 @@ export async function requestContactNumberChange(phone: string) {
 
 export async function logout() {
   await staffApi.post("/auth/logout");
+}
+
+export async function restoreSession(token?: string) {
+  const response = await staffApi.post<LoginResponse>("/auth/session", {}, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+  return normalizeSession(response.data);
 }

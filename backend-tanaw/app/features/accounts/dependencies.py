@@ -24,8 +24,12 @@ async def get_current_account(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
         )
 
+    return await get_account_from_access_token(credentials.credentials, db)
+
+
+async def get_account_from_access_token(token: str, db: AsyncSession) -> Account:
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token)
     except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token."

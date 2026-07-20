@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.db.session import AsyncSessionLocal
-from app.features.accounts.models import DeliveryStatus, DevDelivery
 from app.features.mail.client import ResendAPIError
+from app.features.mail.dev_log import record_dev_delivery
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
 from app.features.mail.rendering import EmailRenderCancelled, render_outbox_email
 from app.features.mail.runtime import EmailRuntimeError, get_resend_client
@@ -165,13 +165,14 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
 
         if delivery_provider == "local":
             await _record_success(
+                settings,
                 claim,
                 account_id=account_id,
                 recipient=recipient,
                 content=content,
                 provider="local",
                 provider_message_id=None,
-                delivery_status=DeliveryStatus.RECORDED,
+                delivery_status="recorded",
                 outbox_status=EmailOutboxStatus.RECORDED,
                 retained_body=content.text,
                 attempt_started_at=attempt_started_at,
@@ -200,13 +201,14 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
             tags=tags,
         )
         await _record_success(
+            settings,
             claim,
             account_id=account_id,
             recipient=recipient,
             content=content,
             provider="resend",
             provider_message_id=sent.id,
-            delivery_status=DeliveryStatus.ACCEPTED,
+            delivery_status="accepted",
             outbox_status=EmailOutboxStatus.ACCEPTED,
             retained_body=REDACTED_EMAIL_BODY,
             attempt_started_at=attempt_started_at,
@@ -259,6 +261,7 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
 
 
 async def _record_success(
+    settings: Settings,
     claim: ClaimedEmail,
     *,
     account_id: str,
@@ -266,7 +269,7 @@ async def _record_success(
     content: EmailContent,
     provider: str,
     provider_message_id: str | None,
-    delivery_status: DeliveryStatus,
+    delivery_status: str,
     outbox_status: EmailOutboxStatus,
     retained_body: str,
     attempt_started_at: datetime,
@@ -291,17 +294,15 @@ async def _record_success(
                 provider_message_id=provider_message_id,
             )
         )
-        db.add(
-            DevDelivery(
+        if not settings.is_production:
+            record_dev_delivery(
                 account_id=account_id,
                 recipient=recipient,
                 subject=content.subject,
                 body=retained_body,
-                provider=provider,
-                provider_message_id=provider_message_id,
                 status=delivery_status,
+                created_at=now,
             )
-        )
         await db.commit()
     logger.info(
         "Email outbox completed outbox_id=%s provider=%s status=%s provider_message_id=%s",
@@ -388,17 +389,15 @@ async def _record_failure(
                 outcome_uncertain=outcome_uncertain,
             )
         )
-        db.add(
-            DevDelivery(
+        if not settings.is_production:
+            record_dev_delivery(
                 account_id=outbox.account_id,
                 recipient=outbox.recipient,
                 subject="Email delivery attempt",
                 body=REDACTED_EMAIL_BODY,
-                provider=outbox.provider,
-                error_message=error_message[:1000],
-                status=DeliveryStatus.FAILED,
+                status="failed",
+                created_at=now,
             )
-        )
         await db.commit()
     logger.warning(
         "Email outbox attempt failed outbox_id=%s code=%s retryable=%s",

@@ -23,8 +23,6 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
 )
 from app.features.auth.models import (
     AccountActivationToken,
@@ -80,7 +78,6 @@ async def postgres_runtime() -> AsyncIterator[PostgresRuntime]:
         password_reset_retention_days=30,
         password_reset_rate_bucket_retention_days=2,
         account_email_change_retention_days=180,
-        development_delivery_retention_days=7,
         email_outbox_retention_days=180,
         failed_email_outbox_retention_days=365,
     )
@@ -135,7 +132,6 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                     AccountEmailChangeRequest.account_id.in_(account_ids)
                 )
             )
-            await db.execute(delete(DevDelivery).where(DevDelivery.account_id.in_(account_ids)))
             await db.execute(delete(Account).where(Account.id.in_(account_ids)))
         await db.commit()
 
@@ -205,7 +201,6 @@ async def test_retention_cleanup_batches_expired_data_and_preserves_live_records
         status=AccountStatus.ACTIVE,
         activated_at=now,
         password_changed_at=now,
-        source_kind="real",
     )
 
     old_activation_ids = [_test_id(f"activation-old-{index}") for index in range(11)]
@@ -374,26 +369,6 @@ async def test_retention_cleanup_batches_expired_data_and_preserves_live_records
                     created_at=recent,
                     updated_at=recent,
                 ),
-                DevDelivery(
-                    id=str(uuid4()),
-                    account_id=account_id,
-                    recipient=account_email,
-                    subject="Old local OTP",
-                    body="123456",
-                    provider="local",
-                    status=DeliveryStatus.RECORDED,
-                    created_at=old_security_record,
-                ),
-                DevDelivery(
-                    id=str(uuid4()),
-                    account_id=account_id,
-                    recipient=account_email,
-                    subject="Recent local OTP",
-                    body="654321",
-                    provider="local",
-                    status=DeliveryStatus.RECORDED,
-                    created_at=recent,
-                ),
                 accepted_outbox,
                 failed_within_audit_retention,
                 failed_past_audit_retention,
@@ -427,7 +402,6 @@ async def test_retention_cleanup_batches_expired_data_and_preserves_live_records
     assert first_counts.password_reset_rate_buckets == 1
     assert first_counts.expired_email_change_requests == 1
     assert first_counts.email_change_requests == 1
-    assert first_counts.development_deliveries == 1
     assert first_counts.email_outbox_records == 2
 
     async with postgres_runtime.sessions() as db:
@@ -471,12 +445,6 @@ async def test_retention_cleanup_batches_expired_data_and_preserves_live_records
         assert await db.get(PasswordResetRateLimitBucket, recent_rate_key) is not None
         assert await db.get(AccountEmailChangeRequest, deleted_request_id) is None
         assert await db.get(AccountEmailChangeRequest, recent_request_id) is not None
-
-        deliveries = list(
-            await db.scalars(select(DevDelivery).where(DevDelivery.account_id == account_id))
-        )
-        assert len(deliveries) == 1
-        assert deliveries[0].body == "654321"
 
         assert await db.get(EmailOutbox, accepted_outbox.id) is None
         assert await db.get(EmailOutbox, failed_past_audit_retention.id) is None

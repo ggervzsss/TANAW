@@ -1,4 +1,5 @@
 export { EmptyState } from "./EmptyState";
+export { ExpandableTableText } from "./ExpandableTableText";
 export { DetailField } from "./DetailField";
 export { ContactNumberField } from "./ContactNumberField";
 export { FilterSelect } from "./FilterSelect";
@@ -8,6 +9,8 @@ export { ModalFrame } from "./ModalFrame";
 export { ModalPortal } from "./ModalPortal";
 export { PageMotion } from "./PageMotion";
 export { SearchableDropdownField } from "./SearchableDropdownField";
+export { SelectDropdown } from "./SelectDropdown";
 export { StatusBadge } from "./StatusBadge";
 export type { DropdownOption } from "./SearchableDropdownField";
+export type { SelectDropdownOption } from "./SelectDropdown";
 export { fadeInDown, staffFadeIn, stagger } from "./motionVariants";

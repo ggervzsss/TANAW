@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { routes } from "@/app/routers/routes";
-import { useAuthStore, useReportStore, useSystemLogStore } from "@/app/store";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
-import { listFinalReports, listIntakeReports, listReportEnterprises } from "@/shared/services/reporting";
+import { useAuthStore, useSystemLogStore } from "@/app/store";
+import { useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
-import type { FinalReport, IntakeReport, LogSeverity, PriorityAlert, ReportEnterprise, ReportStatus, SystemLog } from "@/shared/types";
+import type { LogSeverity, PriorityAlert, SystemLog } from "@/shared/types";
 import type { UserRole } from "@/shared/types/role.types";
+import { isStaffReportSubmissionNotification } from "@/shared/utils/notificationRules";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 import { useActivityLogs } from "./useActivityLogs";
 import { useAlerts } from "./useAlerts";
 
@@ -30,8 +31,6 @@ type DraftNotification = Omit<PortalNotification, "read"> & { read?: boolean };
 
 const MAX_VISIBLE_NOTIFICATIONS = 18;
 const READ_STORAGE_LIMIT = 500;
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_BACKEND_NOTIFICATIONS: BackendNotification[] = [];
 
 const viewAllPathByRole: Record<UserRole, string | undefined> = {
@@ -42,31 +41,12 @@ const viewAllPathByRole: Record<UserRole, string | undefined> = {
 };
 
 export function usePortalNotifications(role: UserRole) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const authUser = useAuthStore((state) => state.user);
   const shouldLoadAlerts = role === "admin" || role === "it";
   const { alerts, isLoading: alertsLoading } = useAlerts(shouldLoadAlerts);
   const localLogs = useSystemLogStore((state) => state.logs);
-  const localReports = useReportStore((state) => state.reports);
-  const finalReports = useReportStore((state) => state.finalReports);
   const { logs: activityLogs } = useActivityLogs();
-  const reportsQuery = useQuery({
-    queryKey: operationalReportsQueryKey,
-    queryFn: listIntakeReports,
-    enabled: role === "staff",
-    refetchInterval: role === "staff" ? 30_000 : false,
-  });
-  const finalReportsQuery = useQuery({
-    queryKey: operationalFinalReportsQueryKey,
-    queryFn: listFinalReports,
-    enabled: role === "staff",
-    refetchInterval: role === "staff" ? 30_000 : false,
-  });
-  const reportEnterprisesQuery = useQuery({
-    queryKey: ["report-enterprises"],
-    queryFn: listReportEnterprises,
-    enabled: role === "staff",
-    refetchInterval: role === "staff" ? 30_000 : false,
-  });
   const backendNotificationsQuery = useOperationalNotifications();
 
   const storageKey = useMemo(() => `tanaw-notifications-read:${role}:${authUser?.id ?? "anonymous"}`, [authUser?.id, role]);
@@ -77,32 +57,25 @@ export function usePortalNotifications(role: UserRole) {
   const readIds = readState.storageKey === storageKey ? readState.ids : readStoredNotificationIds(storageKey);
 
   const mergedLogs = useMemo(() => mergeLogs(activityLogs, localLogs), [activityLogs, localLogs]);
-  const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
-  const reports = reportsQuery.data ?? localReports;
-  const effectiveFinalReports = finalReportsQuery.data ?? finalReports;
   const backendNotifications = backendNotificationsQuery.data ?? EMPTY_BACKEND_NOTIFICATIONS;
 
   const drafts = useMemo(() => {
-    const persistedNotifications = buildBackendNotifications(backendNotifications, role);
-    const backendReportSourceIds = getBackendReportNotificationSourceIds(backendNotifications);
+    const persistedNotifications = buildBackendNotifications(backendNotifications, role, timeFormat);
 
     if (role === "admin") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin"), ...buildLogNotifications(mergedLogs, "admin")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin", timeFormat), ...buildLogNotifications(mergedLogs, "admin", timeFormat)];
     }
 
     if (role === "it") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it"), ...buildLogNotifications(mergedLogs, "it")];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it", timeFormat), ...buildLogNotifications(mergedLogs, "it", timeFormat)];
     }
 
     if (role === "staff") {
-      return [
-        ...persistedNotifications,
-        ...buildStaffReportNotifications(reports, effectiveFinalReports, reportEnterprises, backendReportSourceIds),
-      ];
+      return persistedNotifications;
     }
 
     return persistedNotifications;
-  }, [alerts, backendNotifications, effectiveFinalReports, mergedLogs, reportEnterprises, reports, role]);
+  }, [alerts, backendNotifications, mergedLogs, role, timeFormat]);
 
   const allNotifications = useMemo(
     () =>
@@ -150,27 +123,29 @@ export function usePortalNotifications(role: UserRole) {
     notifications,
     allNotifications,
     unreadCount: allNotifications.filter((notification) => !notification.read).length,
-    isLoading: alertsLoading || backendNotificationsQuery.isLoading || reportEnterprisesQuery.isLoading || reportsQuery.isLoading || finalReportsQuery.isLoading,
+    isLoading: alertsLoading || backendNotificationsQuery.isLoading,
     viewAllPath: viewAllPathByRole[role],
     markAsRead,
     markAllAsRead,
   };
 }
 
-function buildBackendNotifications(notifications: BackendNotification[], role: UserRole): DraftNotification[] {
-  return notifications.map((notification) => ({
-    id: `backend-notification:${notification.id}`,
-    backendId: notification.id,
-    title: notification.title,
-    message: notification.message,
-    time: formatTimestamp(notification.createdAt),
-    source: notification.type,
-    statusLabel: notification.severity,
-    tone: toneFromNotificationSeverity(notification.severity),
-    targetPath: getBackendNotificationTargetPath(role, notification),
-    read: Boolean(notification.readAt),
-    sortTime: toSortTime(notification.createdAt),
-  }));
+function buildBackendNotifications(notifications: BackendNotification[], role: UserRole, timeFormat: SystemTimeFormat): DraftNotification[] {
+  return notifications
+    .filter((notification) => role !== "staff" || isStaffReportSubmissionNotification(notification))
+    .map((notification) => ({
+      id: `backend-notification:${notification.id}`,
+      backendId: notification.id,
+      title: notification.title,
+      message: notification.message,
+      time: formatTimestamp(notification.createdAt, timeFormat),
+      source: notification.type,
+      statusLabel: notification.severity,
+      tone: toneFromNotificationSeverity(notification.severity),
+      targetPath: getBackendNotificationTargetPath(role, notification),
+      read: Boolean(notification.readAt),
+      sortTime: toSortTime(notification.createdAt),
+    }));
 }
 
 function toneFromNotificationSeverity(severity: BackendNotificationSeverity): PortalNotificationTone {
@@ -202,21 +177,7 @@ function getBackendNotificationTargetPath(role: UserRole, notification: BackendN
   return undefined;
 }
 
-function getBackendReportNotificationSourceIds(notifications: BackendNotification[]) {
-  return new Set(
-    notifications.flatMap((notification) => {
-      if (!notification.sourceId || !isBackendReportNotification(notification)) return [];
-      return [notification.sourceId];
-    }),
-  );
-}
-
-function isBackendReportNotification(notification: BackendNotification) {
-  const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
-  return text.includes("enterprise report") || text.includes("enterprise.report") || text.includes("batch reports");
-}
-
-function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"): DraftNotification[] {
+function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it", timeFormat: SystemTimeFormat): DraftNotification[] {
   return alerts
     .filter((alert) => alert.status !== "Resolved")
     .filter((alert) => (role === "admin" ? alert.owner === "Admin" || alert.owner === "System" || alert.severity === "Critical" : alert.owner === "IT"))
@@ -224,7 +185,7 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"):
       id: `alert:${alert.id}:${alert.status}`,
       title: `${alert.severity} ${alert.type}`,
       message: `${alert.enterprise ?? alert.requester}: ${alert.summary}`,
-      time: alert.time,
+      time: formatTimestamp(alert.time, timeFormat),
       source: "Alerts",
       statusLabel: alert.status,
       tone: toneFromSeverity(alert.severity),
@@ -233,71 +194,20 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it"):
     }));
 }
 
-function buildLogNotifications(logs: SystemLog[], role: "admin" | "it"): DraftNotification[] {
+function buildLogNotifications(logs: SystemLog[], role: "admin" | "it", timeFormat: SystemTimeFormat): DraftNotification[] {
   return logs
     .filter((log) => isRoleRelevantLog(log, role))
     .map((log) => ({
       id: `activity-log:${log.id}:${log.severity}`,
       title: `${log.severity} ${log.action}`,
       message: log.summary,
-      time: formatTimestamp(log.timestamp),
+      time: formatTimestamp(log.timestamp, timeFormat),
       source: log.category,
       statusLabel: log.actorRole,
       tone: toneFromSeverity(log.severity),
       targetPath: getLogTargetPath(role),
       sortTime: toSortTime(log.timestamp),
     }));
-}
-
-function buildStaffReportNotifications(reports: IntakeReport[], finalReports: FinalReport[], enterprises: ReportEnterprise[], backendReportSourceIds = new Set<string>()): DraftNotification[] {
-  const currentPeriod = getCurrentSubmissionPeriod();
-  const currentReports = reports.filter((report) => report.month === currentPeriod.month && getReportYear(report) === currentPeriod.year);
-  const enterpriseMissingNotifications = enterprises
-    .filter((enterprise) => !currentReports.some((report) => report.enterpriseId === enterprise.id))
-    .map<DraftNotification>((enterprise) => ({
-      id: `report-missing:${enterprise.id}:${currentPeriod.month}:${currentPeriod.year}`,
-      title: "Missing Enterprise Submission",
-      message: `${enterprise.name} has no report for ${currentPeriod.month} ${currentPeriod.year}.`,
-      time: `${currentPeriod.month} ${currentPeriod.year}`,
-      source: "Batch Reports",
-      statusLabel: "Missing",
-      tone: "warning",
-      targetPath: routes.staff.batchReports,
-      sortTime: 0,
-    }));
-
-  const reportNotifications = reports
-    .filter((report) => shouldNotifyStaffAboutReport(report, backendReportSourceIds))
-    .map<DraftNotification>((report) => {
-      const submittedKey = report.submittedAt ?? report.submitted;
-      return {
-        id: `report:${report.id}:${report.status}:${submittedKey}`,
-        title: getReportNotificationTitle(report.status),
-        message: `${report.enterprise} submitted ${report.code} for ${report.period}. Status: ${report.status}.`,
-        time: report.submitted,
-        source: "Batch Reports",
-        statusLabel: report.status,
-        tone: toneFromReportStatus(report.status),
-        targetPath: routes.staff.batchReports,
-        sortTime: toSortTime(submittedKey),
-      };
-    });
-
-  const finalReportNotifications = finalReports
-    .filter((report) => report.status === "Draft")
-    .map<DraftNotification>((report) => ({
-      id: `final-report:${report.id}:${report.status}`,
-      title: "Final Report Ready for Audit",
-      message: `${report.title} ${report.id} is a draft for ${report.period}.`,
-      time: formatTimestamp(report.generatedOn),
-      source: "Final Reports Audit",
-      statusLabel: report.status,
-      tone: "info",
-      targetPath: routes.staff.finalReportsAudit,
-      sortTime: toSortTime(report.generatedOn),
-    }));
-
-  return [...reportNotifications, ...enterpriseMissingNotifications, ...finalReportNotifications];
 }
 
 function isRoleRelevantLog(log: SystemLog, role: "admin" | "it") {
@@ -309,25 +219,6 @@ function isRoleRelevantLog(log: SystemLog, role: "admin" | "it") {
     (log.severity === "Critical" || log.severity === "Warning") &&
     (log.category === "System" || log.category === "IT Activity" || log.category === "Enterprise Activity" || log.action.toLowerCase().includes("alert"))
   );
-}
-
-function shouldNotifyStaffAboutReport(report: IntakeReport, backendReportSourceIds: Set<string>) {
-  if (report.status === "Pending Review" && backendReportSourceIds.has(report.id)) return false;
-  return report.status === "Pending Review" || report.status === "Ready to Consolidate" || report.status === "Returned" || report.status === "Missing";
-}
-
-function getReportNotificationTitle(status: ReportStatus) {
-  if (status === "Pending Review") return "Report Awaiting Review";
-  if (status === "Ready to Consolidate") return "Report Ready to Consolidate";
-  if (status === "Returned") return "Report Returned for Revision";
-  if (status === "Missing") return "Missing Enterprise Submission";
-  return "Report Workflow Update";
-}
-
-function toneFromReportStatus(status: ReportStatus): PortalNotificationTone {
-  if (status === "Missing" || status === "Returned") return "warning";
-  if (status === "Ready to Consolidate") return "success";
-  return "info";
 }
 
 function toneFromSeverity(severity: LogSeverity): PortalNotificationTone {
@@ -348,44 +239,13 @@ function mergeLogs(primaryLogs: SystemLog[], secondaryLogs: SystemLog[]) {
   return Array.from(merged.values());
 }
 
-function getCurrentSubmissionPeriod(date = new Date()) {
-  return {
-    month: MONTHS[date.getMonth()],
-    year: String(date.getFullYear()),
-  };
-}
-
-function getReportYear(report: IntakeReport) {
-  const periodYear = report.period.match(/\d{4}/)?.[0];
-  if (periodYear) return periodYear;
-
-  const submittedAtYear = getDateYear(report.submittedAt);
-  if (submittedAtYear) return submittedAtYear;
-
-  return getDateYear(report.submitted);
-}
-
-function getDateYear(value: string | undefined) {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? String(new Date(timestamp).getFullYear()) : null;
-}
-
 function toSortTime(value: string) {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function formatTimestamp(value: string) {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+function formatTimestamp(value: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(value, timeFormat);
 }
 
 function readStoredNotificationIds(key: string) {

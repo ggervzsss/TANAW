@@ -153,6 +153,5 @@ def _add_counts(
             current.expired_email_change_requests + addition.expired_email_change_requests
         ),
         email_change_requests=current.email_change_requests + addition.email_change_requests,
-        development_deliveries=(current.development_deliveries + addition.development_deliveries),
         email_outbox_records=current.email_outbox_records + addition.email_outbox_records,
     )

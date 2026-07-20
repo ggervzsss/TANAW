@@ -14,31 +14,17 @@ export function PasswordVisibilityInput({ hasError = false, onChange, placeholde
   const Icon = isVisible ? EyeOff : Eye;
   const inputClass =
     variant === "modal"
-      ? `w-full rounded-xl border py-3 pr-10 pl-3 text-sm transition outline-none focus:border-[#065f46] ${hasError ? "border-tanaw-red" : "border-gray-300"}`
+      ? `w-full rounded-xl border bg-white py-3 pr-10 pl-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${hasError ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`
       : "w-full rounded-sm border border-gray-300 py-1.5 pr-8 pl-2 text-xs text-gray-800 transition outline-none focus:border-[#065f46]";
   const buttonClass =
     variant === "modal"
-      ? "absolute top-1/2 right-2.5 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-emerald-50 hover:text-[#065f46] focus:bg-emerald-50 focus:text-[#065f46] focus:outline-none"
+      ? "absolute top-1/2 right-2.5 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-emerald-50 hover:text-[#065f46] focus:bg-emerald-50 focus:text-[#065f46] focus:outline-none dark:text-slate-300 dark:hover:bg-emerald-400/10 dark:hover:text-emerald-200 dark:focus:bg-emerald-400/10 dark:focus:text-emerald-200"
       : "absolute top-1/2 right-1.5 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-gray-500 transition-colors hover:bg-emerald-50 hover:text-[#065f46] focus:bg-emerald-50 focus:text-[#065f46] focus:outline-none";
 
   return (
     <div className="relative">
-      <input
-        type={isVisible ? "text" : "password"}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        autoComplete="current-password"
-        className={inputClass}
-      />
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={() => setIsVisible((current) => !current)}
-        className={buttonClass}
-        aria-label={isVisible ? "Hide password" : "Show password"}
-        aria-pressed={isVisible}
-      >
+      <input type={isVisible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete="current-password" className={inputClass} />
+      <button type="button" onClick={() => setIsVisible((current) => !current)} className={buttonClass} aria-label={isVisible ? "Hide password" : "Show password"} aria-pressed={isVisible}>
         <Icon size={variant === "modal" ? 17 : 14} />
       </button>
     </div>

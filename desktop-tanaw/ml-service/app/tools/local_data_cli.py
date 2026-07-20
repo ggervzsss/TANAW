@@ -8,8 +8,13 @@ from pathlib import Path
 from typing import Any
 
 APP_DIRECTORY_NAME = "desktop-tanaw"
-DATABASE_NAME = "tanaw_metrics.sqlite3"
+DATABASE_NAME = "tanaw_desktop.sqlite3"
+RETIRED_DATABASE_NAME = "tanaw_metrics.sqlite3"
+RETIRED_SESSION_NAME = "active_session.json"
 LEDGER_TABLES = (
+    "schema_metadata",
+    "camera_profiles",
+    "active_monitoring_state",
     "count_events",
     "count_snapshots",
     "occupancy_corrections",
@@ -18,13 +23,6 @@ LEDGER_TABLES = (
     "visitor_identities",
     "visitor_model_embeddings",
     "visitor_sightings",
-)
-LEGACY_FILES = (
-    "active_session.json",
-    "events.jsonl",
-    DATABASE_NAME,
-    f"{DATABASE_NAME}-shm",
-    f"{DATABASE_NAME}-wal",
 )
 
 
@@ -131,20 +129,18 @@ def clear_local_data(
     removed_bytes = 0
     enterprise_root = ml_root / "enterprises"
     if enterprise_root.exists():
-        removed_bytes += _directory_size(enterprise_root)
-        removed_paths.append(str(enterprise_root))
-        shutil.rmtree(enterprise_root)
-    for name in LEGACY_FILES:
-        path = ml_root / name
-        if path.exists():
-            removed_bytes += path.stat().st_size
-            removed_paths.append(str(path))
-            path.unlink()
+        for database_path in sorted(enterprise_root.glob(f"*/{DATABASE_NAME}")):
+            removed_bytes += database_path.stat().st_size
+            _clear_operational_rows(database_path)
+            removed_paths.append(str(database_path))
+    retired_paths, retired_bytes = _remove_retired_artifacts(ml_root)
     return {
-        "scope": "all-ledgers",
+        "scope": "all-operational-ledgers",
         "path": str(ml_root),
         "removedPaths": removed_paths,
-        "removedBytes": removed_bytes,
+        "removedBytes": removed_bytes + retired_bytes,
+        "retiredPathsRemoved": retired_paths,
+        "cameraProfilesPreserved": True,
         "browserStorageRemoved": False,
     }
 
@@ -170,7 +166,7 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser(
-        "inspect", help="Show ledger locations, row counts, provenance, and recent records."
+        "inspect", help="Show ledger locations, row counts, and recent records."
     )
     inspect_parser.add_argument("--enterprise", help="Inspect only one enterprise ID.")
     inspect_parser.add_argument(
@@ -181,12 +177,12 @@ def _parser() -> argparse.ArgumentParser:
     clear_parser = subparsers.add_parser("clear", help="Delete locally persisted desktop data.")
     selection = clear_parser.add_mutually_exclusive_group(required=True)
     selection.add_argument(
-        "--enterprise", help="Delete one enterprise's local ledger and ML session files."
+        "--enterprise", help="Delete one enterprise's complete local SQLite database."
     )
     selection.add_argument(
         "--all-ledgers",
         action="store_true",
-        help="Delete every enterprise ledger and the legacy unscoped ledger.",
+        help="Clear operational rows from every enterprise database while preserving camera profiles.",
     )
     selection.add_argument(
         "--full-device",
@@ -206,9 +202,6 @@ def _ledger_paths(app_data_dir: Path, enterprise_id: str | None) -> list[tuple[s
         return [(enterprise_id, ml_root / "enterprises" / scope / DATABASE_NAME)]
 
     paths: list[tuple[str, Path]] = []
-    legacy_path = ml_root / DATABASE_NAME
-    if legacy_path.exists():
-        paths.append(("legacy-unscoped", legacy_path))
     enterprise_root = ml_root / "enterprises"
     if enterprise_root.exists():
         for database_path in sorted(enterprise_root.glob(f"*/{DATABASE_NAME}")):
@@ -223,11 +216,11 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
         "exists": database_path.exists(),
         "sizeBytes": database_path.stat().st_size if database_path.exists() else 0,
         "tables": {},
-        "eventProvenance": [],
         "currentDraftEvents": 0,
         "eventRange": {"first": None, "last": None},
         "recentEvents": [],
         "recentReports": [],
+        "schemaVersion": None,
     }
     if not database_path.exists():
         return result
@@ -243,22 +236,14 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
             table: _row_count(connection, table) if table in existing_tables else 0
             for table in LEDGER_TABLES
         }
+        if "schema_metadata" in existing_tables:
+            version_row = connection.execute(
+                "select schema_version from schema_metadata where singleton_id = 1"
+            ).fetchone()
+            result["schemaVersion"] = (
+                int(version_row["schema_version"]) if version_row is not None else None
+            )
         if "count_events" in existing_tables:
-            result["eventProvenance"] = [
-                {
-                    "sourceKind": row["source_kind"],
-                    "mockRunId": row["mock_run_id"],
-                    "count": row["record_count"],
-                }
-                for row in connection.execute(
-                    """
-                    select source_kind, mock_run_id, count(*) as record_count
-                    from count_events
-                    group by source_kind, mock_run_id
-                    order by source_kind, mock_run_id
-                    """
-                )
-            ]
             result["currentDraftEvents"] = connection.execute(
                 "select count(*) from count_events where submitted_report_id is null"
             ).fetchone()[0]
@@ -274,7 +259,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                 for row in connection.execute(
                     """
                     select event_id, recorded_at, camera_name, direction, occupancy_count,
-                           visitor_id, source_kind, mock_run_id, submitted_report_id, synced_at
+                           visitor_id, submitted_report_id, synced_at
                     from count_events
                     order by recorded_at desc
                     limit ?
@@ -288,7 +273,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
                 for row in connection.execute(
                     """
                     select report_id, period, submitted_at, entries, exits, peak_occupancy,
-                           unique_count, sync_status, source_kind, mock_run_id, synced_at
+                           unique_count, sync_status, synced_at
                     from report_submissions
                     order by submitted_at desc
                     limit ?
@@ -303,6 +288,59 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
 
 def _row_count(connection: sqlite3.Connection, table: str) -> int:
     return int(connection.execute(f'select count(*) from "{table}"').fetchone()[0])
+
+
+def _clear_operational_rows(database_path: Path) -> None:
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("pragma foreign_keys = on")
+        connection.execute("pragma busy_timeout = 5000")
+        connection.execute("begin immediate")
+        for table in (
+            "visitor_sightings",
+            "visitor_model_embeddings",
+            "visitor_identities",
+            "count_events",
+            "count_snapshots",
+            "occupancy_corrections",
+            "report_drafts",
+            "report_submissions",
+            "active_monitoring_state",
+        ):
+            connection.execute(f'delete from "{table}"')
+        connection.commit()
+        connection.execute("pragma wal_checkpoint(truncate)")
+    finally:
+        connection.close()
+
+
+def _remove_retired_artifacts(ml_root: Path) -> tuple[list[str], int]:
+    scope_roots = [ml_root]
+    enterprise_root = ml_root / "enterprises"
+    if enterprise_root.exists():
+        scope_roots.extend(path for path in enterprise_root.iterdir() if path.is_dir())
+
+    candidates: list[Path] = []
+    for scope_root in scope_roots:
+        retired_database = scope_root / RETIRED_DATABASE_NAME
+        candidates.extend(
+            (
+                retired_database,
+                retired_database.with_name(f"{retired_database.name}-shm"),
+                retired_database.with_name(f"{retired_database.name}-wal"),
+                scope_root / RETIRED_SESSION_NAME,
+            )
+        )
+
+    removed_paths: list[str] = []
+    removed_bytes = 0
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        removed_bytes += candidate.stat().st_size
+        candidate.unlink()
+        removed_paths.append(str(candidate))
+    return removed_paths, removed_bytes
 
 
 def _directory_size(path: Path) -> int:
@@ -339,25 +377,16 @@ def _print_inspection(result: dict[str, Any]) -> None:
             print("  Status: not found")
             continue
         print(f"  Size: {ledger['sizeBytes']} bytes")
+        print(f"  Schema version: {ledger['schemaVersion']}")
         print(f"  Current draft events: {ledger['currentDraftEvents']}")
         print(f"  Event range: {ledger['eventRange']['first']} to {ledger['eventRange']['last']}")
         print("  Tables:")
         for table, count in ledger["tables"].items():
             print(f"    {table}: {count}")
-        print("  Event provenance:")
-        if ledger["eventProvenance"]:
-            for provenance in ledger["eventProvenance"]:
-                run = provenance["mockRunId"] or "-"
-                print(f"    {provenance['sourceKind']} / run {run}: {provenance['count']}")
-        else:
-            print("    none")
         print("  Recent reports:")
         if ledger["recentReports"]:
             for report in ledger["recentReports"]:
-                print(
-                    f"    {report['report_id']} | {report['period']} | "
-                    f"{report['source_kind']} | {report['sync_status']}"
-                )
+                print(f"    {report['report_id']} | {report['period']} | {report['sync_status']}")
         else:
             print("    none")
         print("  Recent events:")
@@ -365,7 +394,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             for event in ledger["recentEvents"]:
                 print(
                     f"    {event['recorded_at']} | {event['direction']} | "
-                    f"{event['source_kind']} | report {event['submitted_report_id'] or '-'}"
+                    f"report {event['submitted_report_id'] or '-'}"
                 )
         else:
             print("    none")

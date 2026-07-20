@@ -41,6 +41,30 @@ test("pending Enterprise accounts remain on sign-in when the backend rejects aut
   await expect(page).toHaveURL(/#\/login$/);
 });
 
+test("applies the complete Enterprise night topbar and preserves the daytime variant", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
+  await page.route("**/auth/login", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "enterprise-session-token", user: enterpriseUser }) }));
+  await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(enterpriseUser) }));
+  await openLogin(page);
+  await fillLogin(page, enterpriseUser.email);
+
+  const darkTopbar = page.locator('[data-topbar-theme="dark"]');
+  await expect(darkTopbar).toBeVisible();
+  expect(await darkTopbar.evaluate((element) => getComputedStyle(element).backgroundImage)).toContain("rgb(2, 9, 13)");
+  const dayImage = page.locator('[data-topbar-image="day"]');
+  const nightImage = page.locator('[data-topbar-image="night"]');
+  await expect(dayImage).toHaveCSS("opacity", "0");
+  await expect(nightImage).toHaveCSS("opacity", "0.5");
+  await expect(nightImage).toHaveCSS("background-image", /enterprise-topbar-building-night\.png/);
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator('[data-topbar-theme="light"]')).toBeVisible();
+  await expect(dayImage).toHaveCSS("opacity", "0.55");
+  await expect(nightImage).toHaveCSS("opacity", "0");
+  await expect(dayImage).toHaveCSS("background-image", /enterprise-topbar-building\.png/);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(dayImage).toHaveCSS("transition-duration", "0s");
+});
+
 for (const identifier of [enterpriseUser.enterpriseId, enterpriseUser.email]) {
   test(`signs in with the registered ${identifier.includes("@tanaw") ? "Enterprise ID" : "email"}`, async ({ page }) => {
     let submittedIdentifier = "";

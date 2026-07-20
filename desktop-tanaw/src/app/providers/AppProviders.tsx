@@ -4,6 +4,8 @@ import { Toaster, type DefaultToastOptions } from "react-hot-toast";
 import { HashRouter, useLocation } from "react-router-dom";
 import { queryClient } from "../../lib/queryClient";
 import { routePaths } from "../router/routePaths";
+import { AuthSessionManager } from "../../features/login/components/AuthSessionManager";
+import { SystemDisplayPreferencesProvider } from "../../features/preferences/SystemDisplayPreferencesProvider";
 
 const TOAST_DURATION_MS = 3200;
 
@@ -42,8 +44,11 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
-        {children}
-        <TanawToaster />
+        <AuthSessionManager />
+        <SystemDisplayPreferencesProvider>
+          {children}
+          <TanawToaster />
+        </SystemDisplayPreferencesProvider>
       </HashRouter>
     </QueryClientProvider>
   );

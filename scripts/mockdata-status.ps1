@@ -7,7 +7,7 @@ $ExitCode = 0
 
 Push-Location $RepoRoot
 try {
-    & docker compose exec backend uv run mock-data status @ForwardedArgs
+    & docker compose exec backend uv run sample-data status @ForwardedArgs
     $ExitCode = $LASTEXITCODE
 } finally {
     Pop-Location

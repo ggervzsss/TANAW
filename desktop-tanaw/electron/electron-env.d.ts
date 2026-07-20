@@ -22,6 +22,11 @@ declare namespace NodeJS {
 }
 
 interface Window {
+  tanawAuthSession?: {
+    load: () => Promise<unknown | null>;
+    save: (session: unknown) => Promise<boolean>;
+    clear: () => Promise<void>;
+  };
   tanawMlService?: {
     getStatus: () => Promise<{
       baseUrl: string;

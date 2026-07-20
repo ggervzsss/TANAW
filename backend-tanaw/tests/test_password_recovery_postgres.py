@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Response, status
 from pydantic import SecretStr
 from sqlalchemy import delete, event, func, or_, select
 from sqlalchemy.ext.asyncio import (
@@ -232,7 +232,6 @@ async def _create_account(
         is_protected_system_account=False,
         activated_at=now if activated else None,
         password_changed_at=now if activated else None,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(account)
@@ -759,6 +758,7 @@ async def test_password_reset_serializes_before_old_password_login(
                         password=account.password,
                         loginScope="web",
                     ),
+                    Response(),
                     db,
                 )
             except HTTPException as exc:

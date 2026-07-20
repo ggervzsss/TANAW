@@ -164,7 +164,8 @@ export function LoginPage() {
         transition={{ duration: 0.45, ease: "easeOut" }}
         onSubmit={handleSubmit}
         noValidate
-        className="tanaw-auth-card relative z-10 ml-auto w-full max-w-135 rounded-[30px] border border-white/80 bg-white/96 p-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl xl:p-10"
+        autoComplete="on"
+        className="tanaw-auth-card relative z-10 ml-auto w-full max-w-145 rounded-[30px] border border-white/80 bg-white/96 p-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl xl:p-10"
         onPointerMove={(event) => event.stopPropagation()}
       >
         <div className="tanaw-auth-card-header mb-8">
@@ -185,17 +186,23 @@ export function LoginPage() {
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Username or email</span>
             <div
+              data-state={errors.username ? "invalid" : values.username ? "valid" : "empty"}
               className={cn(
-                "tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
+                "tanaw-auth-field relative flex h-14 items-center rounded-xl border transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
                 errors.username ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
               )}
             >
-              <UserRound size={19} className="absolute left-5 text-[#7b8492]" />
+              <UserRound size={19} className="tanaw-auth-field-icon pointer-events-none absolute left-5" />
               <input
-                className="h-full w-full rounded-xl bg-transparent px-14 pr-12 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
+                id="enterprise-login-identifier"
+                name="username"
+                type="text"
+                autoComplete="username"
+                className="tanaw-auth-input h-full w-full rounded-xl bg-transparent px-14 pr-12 text-[15px] font-medium outline-none"
                 placeholder="Enter username or registered email"
                 value={values.username}
                 onChange={updateField("username")}
+                disabled={loginMutation.isPending}
                 aria-invalid={Boolean(errors.username)}
               />
               {errors.username ? <AlertCircle className="absolute right-5 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} /> : null}
@@ -206,27 +213,31 @@ export function LoginPage() {
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-(--tanaw-text)">Password</span>
             <div
+              data-state={errors.password ? "invalid" : values.password ? "valid" : "empty"}
               className={cn(
-                "tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
+                "tanaw-auth-field relative flex h-14 items-center rounded-xl border transition duration-200 focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]",
                 errors.password ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]" : "border-(--tanaw-border)",
               )}
             >
-              <LockKeyhole size={19} className="absolute left-5 text-[#7b8492]" />
+              <LockKeyhole size={19} className="tanaw-auth-field-icon pointer-events-none absolute left-5" />
               <input
+                id="enterprise-login-password"
+                name="password"
                 type={showPassword ? "text" : "password"}
-                className="h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
+                autoComplete="current-password"
+                className="tanaw-auth-input h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium outline-none"
                 placeholder="Enter your password"
                 value={values.password}
                 onChange={updateField("password")}
                 maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
+                disabled={loginMutation.isPending}
                 aria-invalid={Boolean(errors.password)}
               />
               {errors.password ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} /> : null}
               <button
                 type="button"
-                tabIndex={-1}
                 onClick={() => setShowPassword((current) => !current)}
-                className="absolute right-4 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+                className="tanaw-auth-field-action absolute right-4 rounded-full p-1 transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}

@@ -20,17 +20,9 @@ def test_log_retention_uses_stable_numeric_setting() -> None:
     assert resolve_activity_log_retention_days({"logs.retentionDays": 90}) == 90
 
 
-def test_log_retention_migrates_valid_legacy_label_value() -> None:
-    assert resolve_activity_log_retention_days({"logs.Log Retention Period": "365 days"}) == 365
-
-
 def test_log_retention_ignores_invalid_values() -> None:
     assert resolve_activity_log_retention_days({"logs.retentionDays": "90"}) == LOG_RETENTION_DAYS
     assert resolve_activity_log_retention_days({"logs.retentionDays": True}) == LOG_RETENTION_DAYS
-    assert (
-        resolve_activity_log_retention_days({"logs.Log Retention Period": "30 days"})
-        == LOG_RETENTION_DAYS
-    )
 
 
 def test_log_retention_cutoff_uses_selected_days() -> None:

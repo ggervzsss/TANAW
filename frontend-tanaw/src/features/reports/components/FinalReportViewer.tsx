@@ -1,15 +1,17 @@
-import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Printer, X } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Maximize2, Minimize2, Printer, X } from "lucide-react";
 import { motion } from "motion/react";
 import toast from "react-hot-toast/headless";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
-import { CITY_SEAL } from "@/shared/constants/branding";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { DotFinalReportTable } from "./DotReportTable";
+import { getFinalReportViewerEscapeAction, getFinalReportViewerLayout } from "./finalReportViewerState";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { downloadFinalReportPdf } from "../utils/pdf";
 
@@ -22,10 +24,14 @@ type FinalReportConfirmAction = "archive" | "finalize" | "restore" | "return" | 
 
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
+  const viewerRef = useRef<HTMLElement>(null);
   const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [returnRemarks, setReturnRemarks] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const viewerLayout = getFinalReportViewerLayout(isFullscreen);
   const statusMutation = useMutation({
     mutationFn: (status: FinalReportStatus) => updateFinalReportStatus(report.id, { status }),
     onSuccess: (updatedReport) => {
@@ -64,6 +70,51 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
         selectedSources: selectedReturnSources,
       })
     : [];
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => viewerRef.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus());
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleViewerKeys = (event: KeyboardEvent) => {
+      const hasNestedDialog = Boolean(showReturnDialog || confirmAction);
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        const action = getFinalReportViewerEscapeAction(isFullscreen, hasNestedDialog);
+        if (action === "ignore") return;
+        event.preventDefault();
+        if (action === "exit-fullscreen") setIsFullscreen(false);
+        else onClose();
+        return;
+      }
+
+      if (event.key !== "Tab" || hasNestedDialog || !viewerRef.current) return;
+      const focusable = Array.from(
+        viewerRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'),
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleViewerKeys);
+    return () => document.removeEventListener("keydown", handleViewerKeys);
+  }, [confirmAction, isFullscreen, onClose, showReturnDialog]);
 
   const requestArchive = () => {
     if (statusMutation.isPending) return;
@@ -122,13 +173,17 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     <>
       <ModalPortal>
         <motion.div
-          className="fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] p-4 backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none"
+          className={`fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none ${viewerLayout.backdrop}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="print-container relative z-1301 flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+            ref={viewerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${report.id} official artifact viewer`}
+            className={`print-container relative z-1301 flex w-full flex-col overflow-hidden border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 transition-[width,height,max-width,max-height,border-radius] duration-200 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none ${viewerLayout.panel}`}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -198,6 +253,16 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setIsFullscreen((current) => !current)}
+                  aria-label={isFullscreen ? "Exit fullscreen report view" : "Open fullscreen report view"}
+                  aria-pressed={isFullscreen}
+                  title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-emerald-200"
+                >
+                  {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+                <button
+                  type="button"
                   onClick={onClose}
                   aria-label="Close final report"
                   className="hover:text-tanaw-green flex h-9 w-9 items-center justify-center rounded-full border border-emerald-100 bg-white text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-emerald-200"
@@ -209,37 +274,44 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
 
             <div className="tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
               <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
+                <h4 className="mb-3 text-sm font-bold text-gray-800">Report History</h4>
                 <ul className="space-y-2 font-mono text-xs text-gray-600">
                   <li className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <span>v1.0 Draft aggregated by System Pipeline</span>
-                    <span>{report.generatedOn} 04:15 AM</span>
+                    <span>v1.0 Draft combined by TANAW</span>
+                    <span>{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</span>
                   </li>
                   {report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized") ? (
                     <li className="flex items-center justify-between pt-1">
                       <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
-                      <span>{report.generatedOn} 09:30 AM</span>
+                      <span>{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</span>
                     </li>
                   ) : (
                     <li className="flex items-center justify-between pt-1">
                       <span>{report.status === "Returned for Revision" ? "v1.1 Returned for source report revision" : "v1.1 Awaiting final audit decision"}</span>
-                      <span>{report.generatedOn} 09:30 AM</span>
+                      <span>{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</span>
                     </li>
                   )}
                 </ul>
               </div>
 
               <div className="mb-6 border-b-2 border-black pb-4 text-center">
-                <img src={CITY_SEAL} className="mx-auto mb-3 h-16 w-16 grayscale" alt="San Pedro Seal" />
                 <h1 className="font-serif text-lg font-bold tracking-widest uppercase">City Government of San Pedro</h1>
                 <p className="mt-1 text-xs tracking-wider uppercase">Tourism & Economic Development Office</p>
                 <h2 className="mt-5 text-xl font-bold underline">{report.title}</h2>
                 <p className="mt-1 font-mono text-sm">Reporting Period: {report.period}</p>
+                <p className="mt-2 font-mono text-[10px] tracking-widest uppercase">{report.id}</p>
+              </div>
+
+              <div className="mb-6 grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
+                <DocumentDetail label="Generated On" value={formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })} />
+                <DocumentDetail label="Prepared By" value={`${report.preparedBy} (${report.preparedRole})`} />
+                <DocumentDetail label="Audit Status" value={report.status} />
+                <DocumentDetail label="Enterprise Reports" value={String(report.enterpriseCount)} />
               </div>
 
               <p className="mb-6 text-justify text-sm leading-relaxed">
                 This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. Aggregation relies on verified local camera records from{" "}
-                {report.enterpriseCount} monitored enterprise nodes.
+                {report.enterpriseCount} enterprise reports.
               </p>
 
               <DotFinalReportTable report={report} />
@@ -302,7 +374,10 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-6 py-5 max-sm:px-5">
                 <div className="grid max-h-[38vh] gap-2 overflow-y-auto pr-1">
                   {report.sources.map((source) => (
-                    <label key={source.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10">
+                    <label
+                      key={source.id}
+                      className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-red-200 hover:bg-red-50/60 dark:border-slate-700 dark:bg-[#172033] dark:hover:border-red-300/30 dark:hover:bg-red-500/10"
+                    >
                       <span className="min-w-0">
                         <span className="block truncate font-semibold text-slate-900">{source.enterprise}</span>
                         <span className="mt-0.5 block font-mono text-xs text-slate-500">
@@ -327,7 +402,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                     onChange={(event) => setReturnRemarks(event.target.value)}
                     rows={4}
                     disabled={returnMutation.isPending}
-                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="mt-2 w-full resize-none rounded-xl border border-red-200 bg-white p-3 text-sm text-slate-900 transition outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-slate-50"
                     placeholder="Describe the discrepancy and what the enterprise needs to correct."
                   />
                 </label>
@@ -459,6 +534,15 @@ function finalReportConfirmDetails({
     { label: "Current Status", value: report.status },
     { label: "Next Status", value: action === "archive" ? "Archived" : action === "finalize" ? "Finalized" : getRestoreStatus(report) },
   ];
+}
+
+function DocumentDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
+      <p className="mt-0.5 font-semibold wrap-break-word">{value}</p>
+    </div>
+  );
 }
 
 function Signature({ label, sub }: { label: string; sub: string }) {

@@ -14,7 +14,7 @@ type MetricCardProps = {
 export function MetricCard({ label, value, foot, color, footClassName = "text-gray-500", icon: Icon }: MetricCardProps) {
   return (
     <motion.div
-      className="rounded-2xl border border-gray-200 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.07)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] dark:border-slate-700 dark:bg-[#121c31] dark:shadow-[0_18px_42px_rgba(0,0,0,0.32)] dark:hover:shadow-[0_22px_54px_rgba(0,0,0,0.42)]"
+      className="tanaw-metric-card rounded-2xl border border-gray-200 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.07)] transition-[background-color,border-color,box-shadow] hover:shadow-[0_12px_30px_rgba(15,23,42,0.1)] dark:border-slate-700 dark:bg-(--tanaw-surface)"
       style={{ borderLeft: `5px solid ${color}` }}
       variants={fadeInDown}
     >
@@ -25,7 +25,7 @@ export function MetricCard({ label, value, foot, color, footClassName = "text-gr
           <p className={`mt-2 text-sm font-medium ${footClassName}`}>{foot}</p>
         </div>
         {Icon && (
-          <div className="rounded-xl bg-gray-50 p-3 text-gray-500 dark:bg-slate-800 dark:text-slate-300">
+          <div className="tanaw-metric-card__icon rounded-xl bg-gray-50 p-3 text-gray-500 dark:bg-slate-800 dark:text-slate-300">
             <Icon className="h-6 w-6" />
           </div>
         )}

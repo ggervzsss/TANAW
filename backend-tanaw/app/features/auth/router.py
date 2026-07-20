@@ -6,18 +6,25 @@ from datetime import UTC, datetime
 from time import monotonic
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_access_token
 from app.db.session import get_db
-from app.features.accounts.dependencies import get_current_account
+from app.features.accounts.dependencies import (
+    bearer_scheme,
+    get_account_from_access_token,
+    get_current_account,
+)
 from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
+    EnterpriseProfile,
     SystemConfiguration,
 )
 from app.features.accounts.schemas import (
@@ -105,6 +112,7 @@ from app.features.operational.websocket import operational_ws_manager
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 SYSTEM_SETTINGS_ID = "default"
+AUTH_SESSION_COOKIE = "tanaw_session"
 ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
     AccountRole.ADMIN,
     AccountRole.IT,
@@ -144,7 +152,11 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         required_action="Review account activity and contact the user if the lockout is suspicious.",
         resolution_mode="Remote Review",
         owner="IT",
-        enterprise=account.enterprise_name if account.role == AccountRole.ENTERPRISE else None,
+        enterprise=(
+            account.enterprise_profile.enterprise_name
+            if account.enterprise_profile is not None
+            else None
+        ),
         source_id=f"failed-login-threshold:{account.id}",
     )
     await operational_ws_manager.broadcast(
@@ -222,22 +234,61 @@ async def _wait_for_password_reset_response_floor(started_at: float) -> None:
         await asyncio.sleep(remaining)
 
 
-def require_enterprise_account(account: Account) -> None:
+def require_enterprise_account(account: Account) -> EnterpriseProfile:
     if account.role != AccountRole.ENTERPRISE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Enterprise account access required.",
         )
+    if account.enterprise_profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
+    return account.enterprise_profile
 
 
 def enterprise_label(account: Account) -> str:
-    return account.enterprise_name or account.display_name
+    profile = require_enterprise_account(account)
+    return profile.enterprise_name
 
 
 def set_pending_account_change(account: Account, key: str, value: dict[str, str]) -> None:
     preferences = get_account_preferences(account)
     preferences[key] = value
     set_account_preferences(account, preferences)
+
+
+def set_auth_session_cookie(response: Response, token: str, *, remember: bool) -> None:
+    settings = get_settings()
+    max_age_minutes = (
+        settings.access_token_expire_minutes
+        if remember
+        else min(settings.session_cookie_expire_minutes, settings.access_token_expire_minutes)
+    )
+    response.set_cookie(
+        key=AUTH_SESSION_COOKIE,
+        value=token,
+        max_age=max_age_minutes * 60,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="none" if settings.is_production else "lax",
+        path="/auth",
+    )
+
+
+def clear_auth_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=AUTH_SESSION_COOKIE,
+        httponly=True,
+        secure=get_settings().is_production,
+        samesite="none" if get_settings().is_production else "lax",
+        path="/auth",
+    )
+
+
+def token_remember_preference(token: str) -> bool:
+    try:
+        return decode_access_token(token).get("remember") is True
+    except jwt.PyJWTError:
+        return False
 
 
 @router.post(
@@ -323,7 +374,9 @@ async def verify_email_change_link(
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
-    payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    payload: LoginRequest,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoginResponse:
     candidate = await get_account_by_login_identifier(db, payload.username, for_update=True)
     lockout_candidate = (
@@ -377,7 +430,10 @@ async def login(
 
     clear_login_failures(account)
     account.last_login_at = datetime.now(UTC)
-    token = create_access_token(account.id, {"role": account.role.value})
+    token = create_access_token(
+        account.id,
+        {"role": account.role.value, "remember": payload.rememberMe},
+    )
     await record_auth_log(
         db,
         category=get_auth_log_category(account),
@@ -389,7 +445,43 @@ async def login(
         summary=f"{account.display_name} signed in to TANAW.",
         source_id=account.id,
     )
+    set_auth_session_cookie(response, token, remember=payload.rememberMe)
     return LoginResponse(token=token, user=to_auth_user(account))
+
+
+@router.post("/session", response_model=LoginResponse)
+async def restore_session(
+    request: Request,
+    response: Response,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> LoginResponse:
+    token = (
+        credentials.credentials
+        if credentials is not None
+        else request.cookies.get(AUTH_SESSION_COOKIE)
+    )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+
+    try:
+        account = await get_account_from_access_token(token, db)
+    except HTTPException:
+        clear_auth_session_cookie(response)
+        raise
+    remember = token_remember_preference(token)
+    refreshed_token = create_access_token(
+        account.id,
+        {"role": account.role.value, "remember": remember},
+    )
+    set_auth_session_cookie(response, refreshed_token, remember=remember)
+    return LoginResponse(token=refreshed_token, user=to_auth_user(account))
 
 
 @router.get("/me", response_model=AuthUser)
@@ -399,6 +491,7 @@ async def me(account: Annotated[Account, Depends(get_current_account)]) -> AuthU
 
 @router.post("/logout")
 async def logout(
+    response: Response,
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
@@ -414,12 +507,18 @@ async def logout(
         source_id=account.id,
     )
     await invalidate_account_tokens(db, account)
+    clear_auth_session_cookie(response)
     return {"status": "ok"}
 
 
 @router.post("/change-password", response_model=LoginResponse)
 async def change_password(
     payload: PasswordChangeRequest,
+    response: Response,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoginResponse:
@@ -442,7 +541,7 @@ async def change_password(
         summary=f"{account.display_name} changed their account password.",
         source_id=account.id,
     )
-    enterprise = account.enterprise_name or account.display_name
+    enterprise = enterprise_label(account)
     await notify_enterprise_account_change(
         db,
         account,
@@ -451,7 +550,14 @@ async def change_password(
         notification_type="Enterprise Security Updated",
         source_type="enterprise.password",
     )
-    token = create_access_token(account.id, {"role": account.role.value})
+    remember = (
+        token_remember_preference(credentials.credentials) if credentials is not None else False
+    )
+    token = create_access_token(
+        account.id,
+        {"role": account.role.value, "remember": remember},
+    )
+    set_auth_session_cookie(response, token, remember=remember)
     return LoginResponse(token=token, user=to_auth_user(account))
 
 
@@ -597,10 +703,13 @@ async def update_profile(
             detail="Email changes require the dedicated verified email-change workflow.",
         )
 
-    previous_manager_name = account.manager_name
+    profile = account.enterprise_profile
+    previous_manager_name = profile.manager_name if profile else None
     previous_phone = account.phone
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
+        if profile is None:
+            raise RuntimeError("Enterprise account is missing its profile.")
         if payload.managerName is None or payload.enterpriseName is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -611,11 +720,11 @@ async def update_profile(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Contact number is required.",
             )
-        account.manager_name = payload.managerName
+        profile.manager_name = payload.managerName
         enterprise_name = payload.enterpriseName.strip()
-        account.enterprise_name = enterprise_name
+        profile.enterprise_name = enterprise_name
         account.display_name = enterprise_name
-        account.address = payload.address
+        profile.address = payload.address
     else:
         if payload.firstName is None or payload.lastName is None:
             raise HTTPException(
@@ -641,14 +750,15 @@ async def update_profile(
         source_id=account.id,
     )
     if account.role == AccountRole.ENTERPRISE:
+        assert profile is not None
         changed_fields: list[str] = []
-        if account.manager_name != previous_manager_name:
+        if profile.manager_name != previous_manager_name:
             changed_fields.append("lead admin")
         if account.phone != previous_phone:
             changed_fields.append("contact number")
 
         if changed_fields:
-            enterprise = account.enterprise_name or account.display_name
+            enterprise = profile.enterprise_name
             changed_field_text = join_changed_fields(changed_fields)
             await notify_enterprise_account_change(
                 db,
@@ -690,9 +800,9 @@ async def update_lead_admin_name(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    require_enterprise_account(account)
-    previous_manager_name = account.manager_name
-    account.manager_name = payload.managerName
+    profile = require_enterprise_account(account)
+    previous_manager_name = profile.manager_name
+    profile.manager_name = payload.managerName
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -706,7 +816,7 @@ async def update_lead_admin_name(
         summary=f"{account.display_name} updated the lead admin name.",
         source_id=account.id,
     )
-    if account.manager_name != previous_manager_name:
+    if profile.manager_name != previous_manager_name:
         enterprise = enterprise_label(account)
         await notify_enterprise_account_change(
             db,
@@ -725,9 +835,9 @@ async def update_building_capacity(
     account: Annotated[Account, Depends(get_current_account)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
-    require_enterprise_account(account)
-    previous_capacity = account.building_capacity
-    account.building_capacity = payload.buildingCapacity
+    profile = require_enterprise_account(account)
+    previous_capacity = profile.building_capacity
+    profile.building_capacity = payload.buildingCapacity
     await db.commit()
     await db.refresh(account)
     await record_auth_log(
@@ -738,14 +848,14 @@ async def update_building_capacity(
         actor_role=get_actor_role_label(account),
         action="Update Building Capacity",
         target=account.email,
-        summary=f"{account.display_name} updated building capacity to {account.building_capacity}.",
+        summary=f"{account.display_name} updated building capacity to {profile.building_capacity}.",
         source_id=account.id,
         metadata={
             "previousBuildingCapacity": previous_capacity,
-            "buildingCapacity": account.building_capacity,
+            "buildingCapacity": profile.building_capacity,
         },
     )
-    if account.building_capacity != previous_capacity:
+    if profile.building_capacity != previous_capacity:
         enterprise = enterprise_label(account)
         await notify_enterprise_account_change(
             db,
@@ -753,7 +863,7 @@ async def update_building_capacity(
             title=f"{enterprise} updated building capacity.",
             message=(
                 f"{enterprise} updated building capacity from "
-                f"{previous_capacity} to {account.building_capacity}."
+                f"{previous_capacity} to {profile.building_capacity}."
             ),
             notification_type="Enterprise Profile Updated",
             source_type="enterprise.capacity",

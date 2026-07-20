@@ -20,8 +20,6 @@ export type MapEnterprise = {
   trend?: "Up" | "Stable" | "Down";
   lastSync?: string;
   gatewayStatus?: GatewayStatus;
-  sourceKind?: "real" | "mock" | "hybrid";
-  mockRunId?: string | null;
 };
 
 export type Enterprise = {
@@ -116,8 +114,6 @@ export type TelemetrySnapshot = {
   error?: string | null;
   analyticsFps?: number | null;
   gatewayStatus: GatewayStatus;
-  sourceKind: "real" | "mock" | "hybrid";
-  mockRunId?: string | null;
 };
 
 export type OperationalSummary = {

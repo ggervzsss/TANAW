@@ -72,12 +72,12 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
     }
   };
 
-  const identifierShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
+  const identifierShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border transition duration-200 ${
     identifierError
       ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
       : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
   }`;
-  const passwordShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border bg-white transition duration-200 ${
+  const passwordShellClass = `tanaw-auth-field relative flex h-14 items-center rounded-xl border transition duration-200 ${
     passwordError
       ? "border-(--tanaw-error) shadow-[0_0_0_4px_rgba(220,38,38,0.08)]"
       : "border-(--tanaw-border) shadow-[0_1px_0_rgba(15,23,42,0.02)] focus-within:border-(--tanaw-green) focus-within:shadow-[0_0_0_4px_rgba(6,78,47,0.13)]"
@@ -90,8 +90,8 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
           <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
             Email
           </label>
-          <div className={identifierShellClass}>
-            <User className="pointer-events-none absolute left-5 h-5 w-5 text-[#7b8492]" strokeWidth={1.9} />
+          <div className={identifierShellClass} data-state={identifierError ? "invalid" : identifier ? "valid" : "empty"}>
+            <User className="tanaw-auth-field-icon pointer-events-none absolute left-5 h-5 w-5" strokeWidth={1.9} />
             <input
               id="login-identifier"
               name="clientId"
@@ -103,9 +103,10 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
               }}
               placeholder="Enter your email"
               autoComplete="email"
+              disabled={isSubmitting}
               aria-invalid={Boolean(identifierError)}
               aria-describedby={identifierError ? "login-identifier-error" : undefined}
-              className="h-full w-full rounded-xl bg-transparent px-14 pr-12 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
+              className="tanaw-auth-input h-full w-full rounded-xl bg-transparent px-14 pr-12 text-[15px] font-medium outline-none"
             />
             {identifierError ? <AlertCircle className="absolute right-5 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} aria-hidden="true" /> : null}
           </div>
@@ -118,8 +119,8 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
           <label htmlFor="login-password" className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
             Password
           </label>
-          <div className={passwordShellClass}>
-            <Lock className="pointer-events-none absolute left-5 h-5 w-5 text-[#7b8492]" strokeWidth={1.9} />
+          <div className={passwordShellClass} data-state={passwordError ? "invalid" : password ? "valid" : "empty"}>
+            <Lock className="tanaw-auth-field-icon pointer-events-none absolute left-5 h-5 w-5" strokeWidth={1.9} />
             <input
               id="login-password"
               name="encryptionKey"
@@ -132,16 +133,16 @@ export function LoginForm({ authMessage, onSubmit, onAuthMessageClear, lockoutSe
               placeholder="Enter your password"
               autoComplete="current-password"
               maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
+              disabled={isSubmitting}
               aria-invalid={Boolean(passwordError)}
               aria-describedby={passwordError ? "login-password-error" : undefined}
-              className="h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
+              className="tanaw-auth-input h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium outline-none"
             />
             {passwordError ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" strokeWidth={2.2} aria-hidden="true" /> : null}
             <button
               type="button"
-              tabIndex={-1}
               onClick={() => setShowPassword((current) => !current)}
-              className="absolute right-4 rounded-full p-1 text-[#7b8492] transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
+              className="tanaw-auth-field-action absolute right-4 rounded-full p-1 transition hover:text-(--tanaw-green) focus-visible:ring-2 focus-visible:ring-(--tanaw-green) focus-visible:ring-offset-2 focus-visible:outline-none"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeOff className="h-5 w-5" strokeWidth={1.9} /> : <Eye className="h-5 w-5" strokeWidth={1.9} />}

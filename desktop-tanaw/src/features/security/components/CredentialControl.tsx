@@ -116,7 +116,7 @@ function PasswordInput({ ariaLabel, className, isVisible, maxLength, minLength, 
         type={isVisible ? "text" : "password"}
         minLength={minLength}
         maxLength={maxLength}
-        placeholder="Use a long passphrase"
+        placeholder="Use a long password"
         className={className}
         value={value}
         onChange={(event) => onChange?.(event.target.value)}
@@ -124,7 +124,6 @@ function PasswordInput({ ariaLabel, className, isVisible, maxLength, minLength, 
       />
       <button
         type="button"
-        tabIndex={-1}
         aria-label={ariaLabel}
         onClick={onToggle}
         className="absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-emerald-50 hover:text-[#065f46] focus-visible:ring-2 focus-visible:ring-[#065f46]/30 focus-visible:outline-none"

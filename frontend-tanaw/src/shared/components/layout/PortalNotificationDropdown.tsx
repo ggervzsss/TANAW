@@ -12,6 +12,7 @@ type PortalNotificationDropdownProps = {
   onSelectNotification: (notification: PortalNotification) => void;
   onToggle: () => void;
   onViewAll: () => void;
+  triggerClassName?: string;
 };
 
 const toneClasses: Record<PortalNotificationTone, { icon: string; badge: string; dot: string; accent: string }> = {
@@ -41,7 +42,18 @@ const toneClasses: Record<PortalNotificationTone, { icon: string; badge: string;
   },
 };
 
-export function PortalNotificationDropdown({ isOpen, isLoading, notifications, unreadCount, viewAllPath, onMarkAllRead, onSelectNotification, onToggle, onViewAll }: PortalNotificationDropdownProps) {
+export function PortalNotificationDropdown({
+  isOpen,
+  isLoading,
+  notifications,
+  unreadCount,
+  viewAllPath,
+  onMarkAllRead,
+  onSelectNotification,
+  onToggle,
+  onViewAll,
+  triggerClassName = "border-emerald-100/28 bg-white/8 text-white hover:bg-white/15",
+}: PortalNotificationDropdownProps) {
   const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
 
   return (
@@ -51,7 +63,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
         aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="relative flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/15 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+        className={`relative flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${triggerClassName}`}
       >
         <Bell size={18} />
         {unreadCount > 0 && (
@@ -103,7 +115,9 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className={`truncate text-sm leading-snug group-hover:text-emerald-800 dark:group-hover:text-emerald-200 ${notification.read ? "font-semibold text-slate-700 dark:text-slate-200" : "font-black text-slate-950 dark:text-white"}`}>
+                      <span
+                        className={`truncate text-sm leading-snug group-hover:text-emerald-800 dark:group-hover:text-emerald-200 ${notification.read ? "font-semibold text-slate-700 dark:text-slate-200" : "font-black text-slate-950 dark:text-white"}`}
+                      >
                         {notification.title}
                       </span>
                       {!notification.read && <span className={`h-2 w-2 shrink-0 rounded-full ${toneClasses[notification.tone].dot}`} />}
@@ -126,7 +140,7 @@ export function PortalNotificationDropdown({ isOpen, isLoading, notifications, u
                   </div>
                   <p className="mt-4 text-sm font-black text-slate-900">{isLoading ? "Loading notifications" : "No notifications"}</p>
                   <p className="mt-1 max-w-68 text-xs leading-relaxed text-slate-500">
-                    {isLoading ? "Checking TANAW activity sources." : "Role-specific alerts, logs, support requests, and report workflow items will appear here."}
+                    {isLoading ? "Checking TANAW activity sources." : "New activity relevant to your account will appear here."}
                   </p>
                 </div>
               )}

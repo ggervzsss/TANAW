@@ -102,7 +102,7 @@ for each development or production environment.
 Keep `DATABASE_URL` pointed at the Docker hostname `db`:
 
 ```dotenv
-DATABASE_URL=postgresql+asyncpg://postgres:your-password@db:5432/tanaw_local
+DATABASE_URL=postgresql+asyncpg://postgres:your-password@db:5432/TanawDB
 ```
 
 ## 4. Start PostgreSQL, the backend, and the web portal
@@ -161,7 +161,7 @@ Sign in at <http://localhost:5173>. These startup-seeded passwords bypass
 first-login password-change onboarding.
 
 Create the persistent target account under **Enterprise Accounts** before
-loading mock data:
+loading sample data:
 
 ```text
 Enterprise:    Archie's Event Place
@@ -178,7 +178,7 @@ Complete its temporary-password onboarding and remember the password selected
 for desktop login. Confirm the generated Enterprise ID; use the actual value if
 it is not `archies_001@tanaw.sanpedro`.
 
-## 6. Load the report simulation
+## 6. Load the sample report workflow
 
 This command creates LGU accounts, enterprise accounts, six months of
 telemetry, historical submissions, closed-period final reports, activity logs,
@@ -191,10 +191,10 @@ Event Place:
 
 PowerShell: `.\scripts\mockdata-on.ps1`
 
-All generated accounts use:
+All sample accounts use:
 
 ```text
-Password: TanawTest123!
+Password: Visitor sample access phrase 2026
 ```
 
 Useful generated accounts:
@@ -212,7 +212,7 @@ Desktop username: archies@email.com
 Desktop password: the password selected during Archie's onboarding
 ```
 
-Check the simulation:
+Check the sample dataset:
 
 ```shell
 ./scripts/mockdata-status
@@ -220,7 +220,7 @@ Check the simulation:
 
 PowerShell: `.\scripts\mockdata-status.ps1`
 
-If a simulation already exists or needs fresh dates, replace it:
+If a sample dataset already exists or needs fresh dates, replace it:
 
 ```shell
 ./scripts/mockdata-reset
@@ -277,33 +277,34 @@ In the enterprise desktop:
 
 In the web portal:
 
-1. Sign in as `reports.staff@tanaw.test` with `TanawTest123!`.
+1. Sign in as `reports.staff@tanaw.test` with
+   `Visitor sample access phrase 2026`.
 2. Open **Batch Reports** for the relevant reporting periods.
 3. Review the target reports.
 4. Mark them **Ready to Consolidate**.
 5. Generate the final report.
 6. Open **Final Reports Audit** and inspect its source rows.
 
-## 9. Inspect the local ML simulation
+## 9. Inspect local desktop metrics
 
 Linux:
 
 ```shell
-curl http://127.0.0.1:8765/mock/status
+curl http://127.0.0.1:8765/metrics/summary
 ```
 
 Windows PowerShell:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8765/mock/status
+Invoke-RestMethod http://127.0.0.1:8765/metrics/summary
 ```
 
 ## 10. Desktop local-data commands
 
 Close the desktop before clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows, mock
-runs, and demographic report drafts, while preserving camera definitions, Electron preferences, authentication
+Remove all local desktop operational data, including real CCTV-derived rows and
+demographic report drafts, while preserving camera definitions, Electron preferences, authentication
 storage, and caches:
 
 ```shell
@@ -330,13 +331,13 @@ npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
 The Enterprise ID is shown in the desktop Profile and by the unfiltered
 `inspect` command. It is not the login email.
 
-Clear only one enterprise's local ledger:
+Completely remove one enterprise's local database, including camera profiles:
 
 ```shell
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
-Clear every enterprise ledger but preserve camera definitions and Electron
+Clear every enterprise's operational rows but preserve SQLite camera profiles and Electron
 preferences:
 
 ```shell
@@ -357,8 +358,8 @@ accounts or reports.
 
 ### Recommended clean ending
 
-Keep the target desktop signed in and the containers running, then remove all
-run-tagged simulation data from another terminal opened at the repository root:
+Keep the containers running, then remove the deterministic central sample
+dataset from another terminal opened at the repository root:
 
 ```shell
 ./scripts/mockdata-off
@@ -366,7 +367,7 @@ run-tagged simulation data from another terminal opened at the repository root:
 
 PowerShell: `.\scripts\mockdata-off.ps1`
 
-Confirm that the run is marked as removed:
+Confirm that the sample accounts are absent:
 
 ```shell
 ./scripts/mockdata-status
@@ -382,7 +383,7 @@ PostgreSQL volume:
 docker compose down
 ```
 
-### Stop now and preserve the simulation
+### Stop now and preserve the sample dataset
 
 Quit the desktop, then run:
 
@@ -390,7 +391,7 @@ Quit the desktop, then run:
 docker compose down
 ```
 
-The database and simulation remain available after the next
+The database and sample dataset remain available after the next
 `docker compose up -d`.
 
 ### Delete the entire Docker database
@@ -402,7 +403,7 @@ and the default/temporary accounts:
 docker compose down -v
 ```
 
-Use `mock-data off` for normal simulation cleanup. Use `down -v` only when a
+Use `sample-data off` for sample cleanup. Use `down -v` only when a
 completely empty local database is intended.
 
 ## Everyday command cheat sheet
@@ -417,10 +418,10 @@ completely empty local database is intended.
 | Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
-| Generate mock data           | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                                                                                                         |
-| Show mock status             | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                                                                                                 |
-| Refresh mock data            | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                                                                                                   |
-| Remove mock data             | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                                                                                                       |
+| Generate sample data         | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                                                                                                         |
+| Show sample-data status      | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                                                                                                 |
+| Refresh sample data          | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                                                                                                   |
+| Remove sample data           | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                                                                                                       |
 | Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                                           |
 | Clear desktop local ledgers   | `./scripts/local-mockdata-off` or `.\scripts\local-mockdata-off.ps1`                                                                                          |
 | Stop containers              | `docker compose down`                                                                                                                                           |

@@ -30,7 +30,7 @@ export function useLogin() {
     setLoginMessage("");
 
     try {
-      const session = await loginService({ clientId, encryptionKey });
+      const session = await loginService({ clientId, encryptionKey, rememberMe });
       queryClient.removeQueries({ queryKey: ["current-user"] });
       setSession(session, rememberMe);
       toast.success("Login successful");

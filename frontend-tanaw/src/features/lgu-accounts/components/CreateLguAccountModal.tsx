@@ -1,10 +1,21 @@
 import { type FormEvent, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField } from "@/shared/components/ui";
 import { type CreateLguAccountPayload, createLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { normalizeEmail, normalizePersonName, normalizePhilippineContactNumber, validateEmail, validatePersonName, validatePhilippineContactNumber } from "@/shared/utils/accountValidation";
+import {
+  PERSON_NAME_MAX_LENGTH,
+  composeApiPersonName,
+  normalizeEmail,
+  normalizeMiddleInitial,
+  normalizePhilippineContactNumber,
+  validateEmail,
+  validateMiddleInitial,
+  validatePersonName,
+  validatePhilippineContactNumber,
+} from "@/shared/utils/accountValidation";
 
 type CreateLguAccountModalProps = {
   onClose: () => void;
@@ -12,6 +23,7 @@ type CreateLguAccountModalProps = {
 
 type LguFormState = {
   firstName: string;
+  middleInitial: string;
   lastName: string;
   email: string;
   phoneLocal: string;
@@ -26,6 +38,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<LguFormState>({
     firstName: "",
+    middleInitial: "",
     lastName: "",
     email: "",
     phoneLocal: "",
@@ -35,7 +48,11 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   const createMutation = useMutation({
     mutationFn: createLguAccount,
     onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
       toast.success("LGU account created; activation email queued");
       onClose();
     },
@@ -49,9 +66,10 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
     if (Object.keys(nextErrors).length > 0) return;
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
+    const apiName = composeApiPersonName(form);
     const payload: CreateLguAccountPayload = {
-      firstName: normalizePersonName(form.firstName),
-      lastName: normalizePersonName(form.lastName),
+      firstName: apiName.firstName,
+      lastName: apiName.lastName,
       email: normalizeEmail(form.email),
       phone: normalizedPhone || undefined,
       role: form.role,
@@ -62,14 +80,44 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   return (
     <ModalFrame title="Create LGU Account" onClose={onClose}>
       <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <FormField name="firstName" label="First Name" value={form.firstName} onChange={(value) => updateField("firstName", value)} error={errors.firstName} required autoComplete="given-name" />
-        <FormField name="lastName" label="Last Name" value={form.lastName} onChange={(value) => updateField("lastName", value)} error={errors.lastName} required autoComplete="family-name" />
+        <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
+          <FormField
+            name="firstName"
+            label="First Name"
+            value={form.firstName}
+            onChange={(value) => updateField("firstName", value)}
+            error={errors.firstName}
+            required
+            autoComplete="given-name"
+            maxLength={PERSON_NAME_MAX_LENGTH}
+          />
+          <FormField
+            name="middleInitial"
+            label="Middle Initial"
+            value={form.middleInitial}
+            onChange={(value) => updateField("middleInitial", normalizeMiddleInitial(value))}
+            error={errors.middleInitial}
+            autoComplete="additional-name"
+            maxLength={1}
+            helperText="Optional"
+          />
+          <FormField
+            name="lastName"
+            label="Last Name"
+            value={form.lastName}
+            onChange={(value) => updateField("lastName", value)}
+            error={errors.lastName}
+            required
+            autoComplete="family-name"
+            maxLength={PERSON_NAME_MAX_LENGTH}
+          />
+        </div>
         <FormField name="email" label="Email Address" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
         <ContactNumberField name="phone" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
         <div className="md:col-span-2">
           <SearchableDropdownField
             name="role"
-            label="Role"
+            label="Account Type"
             options={[
               ["staff", "LGU Staff"],
               ["it", "IT Personnel"],
@@ -81,9 +129,11 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
             required
           />
         </div>
-        <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2">
-          <span className="bg-tanaw-green mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white shadow-sm">i</span>
-          <p className="text-sm leading-relaxed text-emerald-800">
+        <div className="tanaw-account-info-banner flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/80 p-4 ring-1 ring-white md:col-span-2 dark:border-emerald-400/25 dark:bg-[#0d2428] dark:ring-emerald-200/5">
+          <span className="bg-tanaw-green mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white shadow-sm dark:bg-emerald-400/15 dark:text-emerald-200 dark:ring-1 dark:ring-emerald-300/20">
+            <Info size={15} aria-hidden="true" />
+          </span>
+          <p className="text-sm leading-relaxed text-emerald-800 dark:text-emerald-100/85">
             Once this account is saved, TANAW will queue a secure activation link for the registered email. The user will choose a private password on the activation page before signing in.
           </p>
         </div>
@@ -106,15 +156,17 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
 function validateLguForm(form: LguFormState) {
   const errors: LguFormErrors = {};
   const firstNameError = validatePersonName(form.firstName, "First name");
+  const middleInitialError = validateMiddleInitial(form.middleInitial);
   const lastNameError = validatePersonName(form.lastName, "Last name");
   const emailError = validateEmail(form.email);
   const phoneError = validatePhilippineContactNumber(form.phoneLocal ? `+63${form.phoneLocal}` : "", false);
 
   if (firstNameError) errors.firstName = firstNameError;
+  if (middleInitialError) errors.middleInitial = middleInitialError;
   if (lastNameError) errors.lastName = lastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;
-  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid role.";
+  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid account type.";
 
   return errors;
 }

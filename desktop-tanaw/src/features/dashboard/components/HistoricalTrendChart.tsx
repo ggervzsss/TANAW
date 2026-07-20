@@ -31,7 +31,7 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
   const utilizationRate = peakReference > 0 ? Math.round((currentOccupancy / peakReference) * 100) : 0;
 
   return (
-    <Card className="flex flex-col border border-gray-200 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(15,23,42,0.1)] dark:border-slate-700 dark:hover:shadow-[0_18px_44px_rgba(0,0,0,0.35)]">
+    <Card className="tanaw-enterprise-chart-panel flex flex-col border border-gray-200 p-5 shadow-sm transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] dark:border-(--enterprise-border-soft)">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-1.5">
@@ -45,7 +45,7 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
             <span className="tanaw-trend-chip tanaw-trend-chip--peak rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-900 dark:border-amber-300/24 dark:bg-amber-300/12 dark:text-amber-200">
               Peak reference {peakReference.toLocaleString()}
             </span>
-            <InfoTooltip content="Shows how current occupancy compares with the highest observed occupancy.">
+            <InfoTooltip content="Shows how current occupancy compares with the highest observed occupancy." focusable={false}>
               <span className="tanaw-trend-chip tanaw-trend-chip--utilization rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/12 dark:text-emerald-200">
                 Utilization {utilizationRate}%
               </span>
@@ -53,13 +53,17 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
           </div>
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
-          <div className="flex rounded-sm border border-gray-200 bg-gray-100 p-1 dark:border-slate-600 dark:bg-slate-800">
+          <div className="flex rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-(--enterprise-border-soft) dark:bg-(--enterprise-panel-bg)">
             {trendOptions.map((trend) => (
               <button
                 key={trend}
+                type="button"
                 onClick={() => onTrendFilterChange(trend)}
-                className={`rounded-sm px-3 py-1 text-xs font-bold transition-colors ${
-                  trendFilter === trend ? "bg-white text-[#111827] shadow-sm dark:bg-slate-700 dark:text-slate-100" : "text-gray-500 hover:text-[#111827] dark:text-slate-400 dark:hover:text-slate-100"
+                aria-pressed={trendFilter === trend}
+                className={`rounded-md px-3 py-1 text-xs font-bold transition-colors focus-visible:outline-offset-2 ${
+                  trendFilter === trend
+                    ? "bg-white text-[#111827] shadow-sm dark:bg-(--enterprise-card-elevated-bg) dark:text-(--enterprise-text)"
+                    : "text-gray-500 hover:text-[#111827] dark:text-(--enterprise-muted-soft) dark:hover:text-(--enterprise-text)"
                 }`}
               >
                 {trend}

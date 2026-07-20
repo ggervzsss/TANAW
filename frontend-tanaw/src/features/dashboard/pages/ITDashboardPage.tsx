@@ -7,14 +7,17 @@ import { routes } from "@/app/routers/routes";
 import { AlertDetailsModal, PriorityAlertListItem } from "@/features/alerts-monitor/components";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { DetailField, EmptyState, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
 import { listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
 import type { PriorityAlert, SystemLog } from "@/shared/types";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 export function ITDashboardPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading: logsLoading } = useActivityLogs();
   const operationalSummaryQuery = useOperationalSummary();
   const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
@@ -39,7 +42,7 @@ export function ITDashboardPage() {
       <PageHeader title="Dashboard" description="Operational overview for accounts, desktop app connectivity, camera health, and recent system activity." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5" variants={stagger}>
-        <MetricCard label="LGU Accounts" value={lguAccountsQuery.isLoading ? "..." : activeLguAccounts} foot="Active account registry" color="#065f46" icon={Users} />
+        <MetricCard label="LGU Accounts" value={lguAccountsQuery.isLoading ? "..." : activeLguAccounts} foot="Active LGU accounts" color="#065f46" icon={Users} />
         <MetricCard label="Active Enterprises" value={enterpriseAccountsQuery.isLoading ? "..." : activeEnterprises} foot="Can access TANAW" color="#2563eb" icon={Building2} />
         <MetricCard
           label="Desktop Apps Online"
@@ -55,11 +58,11 @@ export function ITDashboardPage() {
       )}
 
       <div className="mt-7 grid grid-cols-[minmax(0,2fr)_minmax(360px,1fr)] gap-6 max-xl:grid-cols-1">
-        <section className="shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <section className="tanaw-dashboard-panel shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-7 py-6 max-sm:flex-col max-sm:items-start max-sm:px-5">
             <div>
               <h3 className="text-charcoal-800 m-0 text-lg font-bold">Recent System Activity</h3>
-              <p className="mt-1.5 mb-0 text-sm text-gray-500">Latest IT-visible user, enterprise, configuration, and SYSTEM actions.</p>
+              <p className="mt-1.5 mb-0 text-sm text-gray-500">Latest account, enterprise, configuration, and automated actions.</p>
             </div>
           </div>
           <div className="divide-y divide-gray-100">
@@ -72,7 +75,7 @@ export function ITDashboardPage() {
                 </colgroup>
                 <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
                   <tr>
-                    <th className="py-3.5 pr-2 pl-4 whitespace-nowrap lg:pr-3 lg:pl-5">Timestamp</th>
+                    <th className="py-3.5 pr-2 pl-4 whitespace-nowrap lg:pr-3 lg:pl-5">Date and Time</th>
                     {["Summary", "Name"].map((heading) => (
                       <th key={heading} className="px-4 py-3.5 whitespace-nowrap lg:px-5">
                         {heading}
@@ -84,12 +87,12 @@ export function ITDashboardPage() {
                   {recentActivities.map((activity) => {
                     return (
                       <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
-                        <td className="py-4 pr-2 pl-4 font-mono text-xs leading-snug text-gray-500 lg:pr-3 lg:pl-5">{formatCompactTimestamp(activity.timestamp)}</td>
+                        <td className="py-4 pr-2 pl-4 font-mono text-xs leading-snug text-gray-500 lg:pr-3 lg:pl-5">{formatCompactTimestamp(activity.timestamp, timeFormat)}</td>
                         <td className="text-charcoal-800 px-4 py-4 text-sm leading-snug font-semibold lg:px-5">
-                          <span className="line-clamp-3">{activity.summary}</span>
+                          <ExpandableTableText primary={activity.summary} ariaLabel="activity summary" threshold={80} twoLines />
                         </td>
-                        <td className="px-4 py-4 text-xs leading-snug font-semibold wrap-break-word text-gray-600 lg:px-5">
-                          <span className="line-clamp-3">{activity.actor}</span>
+                        <td className="px-4 py-4 text-xs leading-snug font-semibold text-gray-600 lg:px-5">
+                          <ExpandableTableText primary={activity.actor} ariaLabel="activity actor" />
                         </td>
                       </tr>
                     );
@@ -108,7 +111,7 @@ export function ITDashboardPage() {
         </section>
 
         <aside className="grid gap-6">
-          <section className="shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <section className="tanaw-dashboard-panel shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 px-7 py-6 max-sm:px-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -131,19 +134,18 @@ export function ITDashboardPage() {
       </div>
 
       <AnimatePresence>
-        {selectedActivity && <ActivityDetailsModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}
+        {selectedActivity && <ActivityDetailsModal activity={selectedActivity} timeFormat={timeFormat} onClose={() => setSelectedActivity(null)} />}
         {selectedAlert && <AlertDetailsModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />}
       </AnimatePresence>
     </PageMotion>
   );
 }
 
-function formatCompactTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp.replace("2026-", "") : date.toLocaleString();
+function formatCompactTimestamp(timestamp: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(timestamp, timeFormat);
 }
 
-function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onClose: () => void }) {
+function ActivityDetailsModal({ activity, timeFormat, onClose }: { activity: SystemLog; timeFormat: SystemTimeFormat; onClose: () => void }) {
   const navigate = useNavigate();
   const supportTicketId = getSupportTicketIdFromLog(activity);
 
@@ -157,17 +159,22 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
     <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-2">
         <DetailField label="Type" value={activity.category} />
-        <DetailField label="Actor" value={`${activity.actor} (${activity.actorRole})`} />
-        <DetailField label="Timestamp" value={formatCompactTimestamp(activity.timestamp)} />
-        <DetailField label="Target" value={activity.target} />
-        <DetailField label="Action" value={activity.action} />
+        <DetailField
+          label="Actor"
+          value={<ExpandableTableText primary={`${activity.actor} (${activity.actorRole})`} ariaLabel="actor" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />}
+        />
+        <DetailField label="Date and Time" value={formatCompactTimestamp(activity.timestamp, timeFormat)} />
+        <DetailField label="Target" value={<ExpandableTableText primary={activity.target} ariaLabel="target" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
+        <DetailField label="Action" value={<ExpandableTableText primary={activity.action} ariaLabel="action" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
         <div className="md:col-span-2">
-          <DetailField label="Summary" value={activity.summary} />
+          <DetailField label="Summary" value={<ExpandableTableText primary={activity.summary} ariaLabel="summary" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
         </div>
       </div>
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-700">This activity is tied to a support ticket. Open the ticket queue to inspect the full enterprise request, photos, status, and reply thread.</p>
+          <p className="text-sm font-semibold text-slate-700">
+            This activity is tied to a support ticket. Open the ticket queue to inspect the full enterprise request, photos, status, and reply thread.
+          </p>
           <button
             type="button"
             onClick={openTicket}

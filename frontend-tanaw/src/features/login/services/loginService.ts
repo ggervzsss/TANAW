@@ -4,6 +4,7 @@ import { apiClient } from "@/shared/lib/apiClient";
 export type LoginCredentials = {
   clientId: string;
   encryptionKey: string;
+  rememberMe?: boolean;
 };
 
 export type LoginServiceResponse = {
@@ -22,6 +23,7 @@ export async function loginService(_credentials: LoginCredentials): Promise<Logi
     username: _credentials.clientId,
     password: _credentials.encryptionKey,
     loginScope: "web",
+    rememberMe: _credentials.rememberMe ?? false,
   });
 
   return response.data;
@@ -29,6 +31,11 @@ export async function loginService(_credentials: LoginCredentials): Promise<Logi
 
 export async function logoutService(): Promise<void> {
   await apiClient.post("/auth/logout");
+}
+
+export async function restoreSessionService(): Promise<LoginServiceResponse> {
+  const response = await apiClient.post<LoginServiceResponse>("/auth/session");
+  return response.data;
 }
 
 export async function validateAccountActivation(token: string): Promise<AccountActivationDetails> {

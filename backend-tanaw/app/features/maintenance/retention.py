@@ -9,7 +9,6 @@ from app.db.session import AsyncSessionLocal
 from app.features.accounts.models import (
     AccountEmailChangeRequest,
     AccountEmailChangeStatus,
-    DevDelivery,
 )
 from app.features.auth.email_change import ACTIVE_EMAIL_CHANGE_STATUSES
 from app.features.auth.models import (
@@ -41,7 +40,6 @@ class RetentionCleanupCounts:
     password_reset_rate_buckets: int = 0
     expired_email_change_requests: int = 0
     email_change_requests: int = 0
-    development_deliveries: int = 0
     email_outbox_records: int = 0
 
     @property
@@ -51,7 +49,6 @@ class RetentionCleanupCounts:
             + self.password_reset_challenges
             + self.password_reset_rate_buckets
             + self.email_change_requests
-            + self.development_deliveries
             + self.email_outbox_records
         )
 
@@ -90,11 +87,6 @@ async def run_retention_cleanup(
         email_change_requests=await _delete_email_change_requests(
             session_factory,
             cutoff=current - timedelta(days=settings.account_email_change_retention_days),
-            batch_size=batch_size,
-        ),
-        development_deliveries=await _delete_development_deliveries(
-            session_factory,
-            cutoff=current - timedelta(days=settings.development_delivery_retention_days),
             batch_size=batch_size,
         ),
         email_outbox_records=await _delete_email_outbox_records(
@@ -282,28 +274,6 @@ async def _delete_email_change_requests(
             await db.execute(
                 delete(AccountEmailChangeRequest).where(AccountEmailChangeRequest.id.in_(ids))
             )
-        await db.commit()
-        return len(ids)
-
-
-async def _delete_development_deliveries(
-    session_factory: SessionFactory,
-    *,
-    cutoff: datetime,
-    batch_size: int,
-) -> int:
-    async with session_factory() as db:
-        ids = list(
-            await db.scalars(
-                select(DevDelivery.id)
-                .where(DevDelivery.created_at < cutoff)
-                .order_by(DevDelivery.created_at.asc(), DevDelivery.id.asc())
-                .with_for_update(skip_locked=True)
-                .limit(batch_size)
-            )
-        )
-        if ids:
-            await db.execute(delete(DevDelivery).where(DevDelivery.id.in_(ids)))
         await db.commit()
         return len(ids)
 

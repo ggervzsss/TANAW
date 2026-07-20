@@ -7,7 +7,9 @@ import {
   resolveAccountEmailChangeRequest,
   resolveEnterpriseProfileChangeRequest,
 } from "@/shared/services/accountManagement";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type EnterpriseProfileRequestsPanelProps = {
   accounts: AccountSummary[];
@@ -26,6 +28,7 @@ type ResolutionPayload = RequestRow & {
 
 export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccountUpdated }: EnterpriseProfileRequestsPanelProps) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const requests = accounts.flatMap((enterprise) => enterprise.profileChangeRequests.map((request) => ({ enterprise, request })));
 
   const resolutionMutation = useMutation({
@@ -79,7 +82,7 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
                   <ValueBlock label="Current" value={getCurrentValue(enterprise, request)} />
                   <ValueBlock label="Requested" value={request.requestedValue} highlight />
                 </div>
-                {request.requestedAt && <p className="mt-2 text-[11px] font-semibold text-slate-500">Requested {new Date(request.requestedAt).toLocaleString()}</p>}
+                {request.requestedAt && <p className="mt-2 text-[11px] font-semibold text-slate-500">Requested {formatPhilippineDateTime(request.requestedAt, timeFormat)}</p>}
               </div>
             </div>
 

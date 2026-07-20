@@ -54,7 +54,7 @@ export function ReportDraftPanel({
 
       <div className={`space-y-5 ${isReadOnly ? "opacity-80" : ""}`}>
         <ReportingPeriodField
-          description={isCurrentReport ? "Use the Submission Ledger to switch between current and pending reporting periods." : "This is the period saved with the selected ledger report."}
+          description={isCurrentReport ? "Use Report Submissions to switch between current and pending reporting periods." : "This is the period saved with the selected report."}
           isLoading={isPeriodChanging}
           label={isCurrentReport ? "Current Reporting Period" : "Report Period"}
           period={period}

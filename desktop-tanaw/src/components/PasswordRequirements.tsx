@@ -20,7 +20,10 @@ export function PasswordRequirements({ password }: { password: string }) {
   const metCount = requirements.filter((requirement) => requirement.state === "met").length;
 
   return (
-    <section aria-label="Password requirements" className="mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 dark:border-emerald-500/20 dark:bg-emerald-950/20">
+    <section
+      aria-label="Password requirements"
+      className="tanaw-password-requirements mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 shadow-inner shadow-emerald-950/3 dark:border-emerald-400/20 dark:bg-(--tanaw-surface-inset) dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+    >
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-bold tracking-wide text-emerald-900 uppercase dark:text-emerald-200">Password requirements</p>
         <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
@@ -34,7 +37,7 @@ export function PasswordRequirements({ password }: { password: string }) {
       </ul>
       <p className="mt-2 flex items-start gap-2 text-xs leading-5 font-medium text-gray-500 dark:text-slate-300">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" />
-        <span>Passphrases, spaces, Unicode, and password managers are supported. No special-character mix is required.</span>
+        <span>Passwords, spaces, Unicode, and password managers are supported. No special-character mix is required.</span>
       </p>
       <span className="sr-only" aria-live="polite">
         {status.hasValue ? `${metCount} of ${requirements.length} password requirements met.` : "Enter a new password to check its requirements."}

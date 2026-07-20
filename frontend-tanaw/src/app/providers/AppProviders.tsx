@@ -2,16 +2,13 @@ import type { CSSProperties, ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { CircleAlert, CircleCheckBig, LoaderCircle } from "lucide-react";
 import { BrowserRouter, useLocation } from "react-router-dom";
-import {
-  resolveValue,
-  useToaster,
-  type DefaultToastOptions,
-  type Toast,
-} from "react-hot-toast/headless";
+import { resolveValue, useToaster, type DefaultToastOptions, type Toast } from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { TOAST_DURATION_MS } from "@/shared/config/app.config";
 import { OperationalSyncBridge } from "@/shared/hooks/useOperationalSync";
+import { AuthSessionManager } from "@/shared/components/auth/AuthSessionManager";
 import { queryClient } from "@/shared/lib/queryClient";
+import { SystemDisplayPreferencesProvider } from "@/shared/providers/SystemDisplayPreferencesProvider";
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -55,8 +52,11 @@ export function AppProviders({ children }: AppProvidersProps) {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <OperationalSyncBridge />
-        {children}
-        <TanawToaster />
+        <AuthSessionManager />
+        <SystemDisplayPreferencesProvider>
+          {children}
+          <TanawToaster />
+        </SystemDisplayPreferencesProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );
@@ -84,9 +84,7 @@ function TanawToaster() {
 }
 
 function TanawToast({ toast }: { toast: Toast }) {
-  const className = [toast.className ?? "tanaw-toast", toast.visible ? "" : "tanaw-toast--leaving"]
-    .filter(Boolean)
-    .join(" ");
+  const className = [toast.className ?? "tanaw-toast", toast.visible ? "" : "tanaw-toast--leaving"].filter(Boolean).join(" ");
 
   return (
     <div className={className} style={toast.style} {...toast.ariaProps}>

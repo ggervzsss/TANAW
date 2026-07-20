@@ -2,11 +2,12 @@ import { Download, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { IntakeReport } from "@/shared/types";
 import { DotSingleReportTable } from "./DotReportTable";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { ReportStatusBadge } from "./ReportStatusBadge";
-import { downloadIntakeReportPdf } from "../utils/pdf";
+import { downloadIntakeReportPdf, formatReportSubmittedDate } from "../utils/pdf";
 
 type ReportReviewModalProps = {
   report: IntakeReport;
@@ -19,6 +20,7 @@ type ReportReviewModalProps = {
 type ReviewConfirmAction = "accept" | "return" | null;
 
 export function ReportReviewModal({ report, isUpdating = false, onClose, onAccept, onReturn }: ReportReviewModalProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const [confirmAction, setConfirmAction] = useState<ReviewConfirmAction>(null);
   const [remarksDraft, setRemarksDraft] = useState(() => ({
     reportId: report.id,
@@ -45,7 +47,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
           exit={{ opacity: 0 }}
         >
           <motion.section
-            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 print:max-h-none print:border-none print:shadow-none dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+            className="relative z-1301 flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none"
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -64,7 +66,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               <div className="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => downloadIntakeReportPdf(report)}
+                  onClick={() => downloadIntakeReportPdf(report, timeFormat)}
                   className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
                 >
                   <Download size={15} /> Download PDF
@@ -80,9 +82,30 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
               </div>
             </div>
 
-            <div className="grow overflow-y-auto bg-gray-100 p-6 print:bg-white print:p-0 dark:bg-[#0f172a]">
+            <div className="grow overflow-y-auto bg-gray-100 p-6 dark:bg-[#0f172a] print:bg-white print:p-0">
               <section className="tanaw-document-preview bg-white p-6 text-black shadow-sm print:shadow-none">
+                <div className="mb-6 border-b-2 border-current pb-4">
+                  <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase dark:text-emerald-300">{report.code}</p>
+                  <h1 className="mt-1 text-xl font-bold">TANAW - DOT Visitor Attraction Report</h1>
+                  <div className="mt-4 grid gap-x-8 gap-y-2 text-xs sm:grid-cols-2">
+                    <DocumentDetail label="Enterprise" value={report.enterprise} />
+                    <DocumentDetail label="Category" value={report.category} />
+                    <DocumentDetail label="Barangay" value={report.barangay} />
+                    <DocumentDetail label="Municipality" value="City of San Pedro, Laguna" />
+                    <DocumentDetail label="Reporting Period" value={report.period} />
+                    <DocumentDetail label="Submitted" value={formatReportSubmittedDate(report.submittedAt ?? report.submitted, timeFormat)} />
+                    <DocumentDetail label="Review Status" value={report.status} />
+                    <DocumentDetail label="Report Code" value={report.code} />
+                  </div>
+                </div>
                 <DotSingleReportTable report={report} />
+                <div className="mt-6 border-t border-current/30 pt-4 text-xs leading-6">
+                  <h2 className="text-sm font-bold">Live Count Summary</h2>
+                  <p>
+                    Entries: {report.metrics.entry.toLocaleString()} | Exits: {report.metrics.exit.toLocaleString()} | Peak Occupancy: {report.metrics.peak}
+                  </p>
+                  <p>Remarks: {report.remarks || report.notes || "None recorded."}</p>
+                </div>
               </section>
 
               <div className="print-hide mt-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
@@ -91,7 +114,7 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-gray-200 text-gray-500">
                       <tr>
-                        <th className="pb-2 font-semibold">Source Node / Camera</th>
+                        <th className="pb-2 font-semibold">Camera Source</th>
                         <th className="pb-2 font-semibold">Last Update Time</th>
                         <th className="pb-2 text-right font-semibold">Unique Pax Contributed</th>
                       </tr>
@@ -99,12 +122,12 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                     <tbody className="divide-y divide-gray-100">
                       <tr>
                         <td className="py-2 font-medium text-gray-800">Zone A - Main Entrance</td>
-                        <td className="py-2 font-mono text-gray-500">{report.month} 31, 23:55:01</td>
+                        <td className="py-2 font-mono text-gray-500">{report.month} 31, {timeFormat === "12-hour" ? "11:55 PM" : "23:55"} Philippine Time</td>
                         <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{Math.floor(report.metrics.unique * 0.7).toLocaleString()}</td>
                       </tr>
                       <tr>
                         <td className="py-2 font-medium text-gray-800">Zone B - Rear Exit</td>
-                        <td className="py-2 font-mono text-gray-500">{report.month} 31, 23:58:12</td>
+                        <td className="py-2 font-mono text-gray-500">{report.month} 31, {timeFormat === "12-hour" ? "11:58 PM" : "23:58"} Philippine Time</td>
                         <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{(report.metrics.unique - Math.floor(report.metrics.unique * 0.7)).toLocaleString()}</td>
                       </tr>
                     </tbody>
@@ -176,6 +199,15 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
         />
       )}
     </>
+  );
+}
+
+function DocumentDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</p>
+      <p className="mt-0.5 font-semibold wrap-break-word">{value}</p>
+    </div>
   );
 }
 

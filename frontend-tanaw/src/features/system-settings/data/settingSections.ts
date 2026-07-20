@@ -1,4 +1,4 @@
-import { Bell, FileText, ShieldCheck } from "lucide-react";
+import { Bell, Clock3, FileText, ShieldCheck } from "lucide-react";
 import type { SettingSection } from "../types";
 
 export const settingSections: SettingSection[] = [
@@ -17,6 +17,21 @@ export const settingSections: SettingSection[] = [
     icon: FileText,
     fields: [
       { key: "retentionDays", label: "Log Retention Period", type: "select", value: 180, options: [90, 180, 365] },
+    ],
+  },
+  {
+    id: "display",
+    title: "Date & Time",
+    icon: Clock3,
+    fields: [
+      {
+        key: "timeFormat",
+        label: "Time Display",
+        description: "Choose how time appears throughout TANAW. All dates and times use Philippine Time.",
+        type: "select",
+        value: "12-hour",
+        options: ["12-hour", "24-hour"],
+      },
     ],
   },
   {

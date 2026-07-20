@@ -65,6 +65,12 @@ Electron starts the ML service automatically from `ml-service/main.py`. If
 another service is already listening on the ML port, the desktop attempts to
 connect to it and reports conflicts in the camera panel.
 
+In development, Electron launches the service through `uv run --frozen` so an
+existing `.venv` is synchronized with `ml-service/uv.lock` before Python
+starts. Packaged builds still prefer a prepared runtime under the packaged ML
+service directory when one is present, with the locked `uv` environment as the
+existing fallback.
+
 Override the ML port only when needed:
 
 Linux:
@@ -184,7 +190,36 @@ Unique visitor fields are estimates:
 
 ## Local Data And Ledgers
 
-TANAW Enterprise Desktop stores count events, occupancy corrections, report drafts, submitted local reports, visitor identity metadata, camera settings, and application preferences on the device.
+TANAW Enterprise Desktop stores structured enterprise data in one
+enterprise-scoped `tanaw_desktop.sqlite3` database. This includes camera
+profiles, active monitoring state, count events and snapshots, occupancy
+corrections, report drafts and submissions, and visitor identity metadata.
+
+Authentication tokens and camera credentials are intentionally excluded from
+SQLite. Electron protects those values with the operating system's secure
+storage. Theme, notification-read state, and other non-authoritative UI
+preferences remain in Chromium storage. Live camera frames remain in memory and
+are never stored as database rows.
+
+The canonical local relationships are:
+
+```mermaid
+erDiagram
+    CAMERA_PROFILES
+    ACTIVE_MONITORING_STATE
+    REPORT_SUBMISSIONS ||--o{ COUNT_EVENTS : groups
+    REPORT_DRAFTS
+    OCCUPANCY_CORRECTIONS
+    COUNT_SNAPSHOTS
+    VISITOR_IDENTITIES ||--o{ VISITOR_MODEL_EMBEDDINGS : has
+    VISITOR_IDENTITIES ||--o{ VISITOR_SIGHTINGS : records
+```
+
+Camera IDs and names on events, snapshots, corrections, identities, and active
+state are intentional historical snapshots. They remain usable after a camera
+profile is deleted and therefore are not foreign keys to `camera_profiles`.
+`report_drafts.report_id` can identify either a local or already-synchronized
+cloud report, so it is also intentionally unconstrained.
 
 Commands below run from `desktop-tanaw`. Close the desktop application before running any clear command.
 
@@ -219,8 +254,9 @@ PowerShell uses the same commands.
 Inspection output includes:
 
 - Electron app-data and SQLite ledger paths;
-- row counts for events, snapshots, report drafts, submitted reports, visitor identity tables, and occupancy corrections;
-- real, generated, and hybrid provenance totals;
+- schema version and row counts for camera profiles, active state, events,
+  snapshots, report drafts, submitted reports, visitor identity tables, and
+  occupancy corrections;
 - current unsubmitted draft event count;
 - first and last event timestamps;
 - recent events and reports;
@@ -234,9 +270,13 @@ Sensitive embedding blobs and full event payloads are not printed.
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
 ```
 
-This deletes only that enterprise's local count events, snapshots, occupancy correction audit records, demographic report drafts, report submissions, current count draft, visitor identity metadata, active ML camera session, and raw event log.
+This deletes that enterprise's complete SQLite database, including camera
+profiles, local count events, snapshots, occupancy correction audit records,
+demographic report drafts, report submissions, visitor identity metadata,
+active monitoring state, and raw event log.
 
-It preserves other enterprise ledgers, saved camera definitions, device IDs, theme settings, authentication storage, and backend records.
+It preserves other enterprise databases, OS-protected credentials and
+authentication storage, device IDs, theme settings, and backend records.
 
 ### Clear Every Local Ledger
 
@@ -244,7 +284,19 @@ It preserves other enterprise ledgers, saved camera definitions, device IDs, the
 npm run local-data -- clear --all-ledgers --yes
 ```
 
-This deletes all enterprise-scoped ledgers, including demographic report drafts, and the older legacy unscoped ledger. Chromium local storage and camera definitions remain. Obsolete demographic draft keys from versions that used Chromium storage are removed automatically when the updated Reports page opens.
+This clears operational rows from every canonical enterprise database,
+including demographic drafts, events, reports, monitoring state, and visitor
+metadata. SQLite camera profiles, OS-protected camera credentials,
+authentication storage, and Chromium preferences remain. Retired
+`tanaw_metrics.sqlite3` databases, WAL files, and `active_session.json`
+sidecars are removed.
+
+Databases created before the canonical versioned schema are not silently
+migrated or deleted. Recreate one explicitly with:
+
+```bash
+npm run local-data -- clear --enterprise "<enterprise-id>" --yes
+```
 
 ### Full Device Reset
 
@@ -274,76 +326,35 @@ Default Linux development path:
 ~/.config/desktop-tanaw
 ```
 
-## Using Mock Or Generated Local Data
+## Using Backend-Prepared Sample Counts
 
-There are two supported ways to use generated data in the desktop.
+The development sample-data command exposes finite count packages for a target
+enterprise. After that enterprise signs in, the desktop retrieves the oldest
+unfinished package through the authenticated backend and inserts ordinary count
+events into the same enterprise-scoped SQLite ledger used by camera detections.
+No simulation mode, run identifier, or mock provenance column exists.
 
-### Hidden Simulation Lab
-
-Type `simulation` anywhere in the desktop application to reveal the temporary **Simulation Lab** navigation item. Open it to generate live entry and exit events without connecting a CCTV camera.
-
-The simulator writes to the same enterprise-scoped SQLite ledger used by camera detections, so the dashboard, report draft, cloud telemetry, Admin map, and alert workflow exercise the normal desktop data path.
-
-Available controls include scenario presets, venue capacity, starting occupancy, event rate, duration, alert threshold, pause/resume, manual entry/exit events, and per-run cleanup. Simulated rows remain internally tagged with their run identifier and can be removed without deleting real camera events.
-
-To remove simulation data and any other local ledger rows:
-
-1. Use the Simulation Lab reset/cleanup controls when the run is active.
-2. Or clear every local ledger while preserving camera definitions and settings:
-
-   ```bash
-   npm run local-data -- clear --all-ledgers --yes
-   ```
-
-PowerShell uses the same command.
-
-### Backend Prepared Counts
-
-The backend mock-data tool can prepare counts for a target enterprise. When that enterprise logs into the desktop, the desktop retrieves pending prepared packages through the authenticated backend connection and writes the selected period into the local ledger. For Archie's Event Place, the default scenario loads the overdue previous-period package first, exposes unfinished periods in the **Reporting Month** selector, then loads the current-period package after the overdue report syncs.
-
-Prepare from the project root:
+For Archie's Event Place, prepare the default dataset from the project root:
 
 ```bash
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend \
-  uv run mock-data reset \
-  --range 6m \
-  --target-enterprise "archies_001@tanaw.sanpedro"
+./scripts/mockdata-on
 ```
 
-PowerShell:
+The report workspace exposes unfinished periods in the **Reporting Month**
+selector. Once the overdue report syncs, the current-period package becomes
+available. A deterministic report ID keeps retries idempotent.
 
-```powershell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend `
-  uv run mock-data reset `
-  --range 6m `
-  --target-enterprise "archies_001@tanaw.sanpedro"
-```
-
-Verify the desktop state:
+Inspect the current local metrics:
 
 ```bash
-curl http://127.0.0.1:8765/mock/status
+curl http://127.0.0.1:8765/metrics/summary
 ```
 
-PowerShell:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8765/mock/status
-```
-
-Remove generated backend and prepared desktop data:
-
-```bash
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off
-```
-
-PowerShell:
-
-```powershell
-docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend uv run mock-data off
-```
-
-Run backend cleanup before clearing local ledgers when a generated backend run is still active. Otherwise, signing the target enterprise back in can prepare that active run again in a newly created local ledger.
+Removing the central sample dataset does not delete local desktop rows. Close
+the desktop and use `./scripts/local-mockdata-off` from the project root when
+the local ledger must also be cleared. This removes every local enterprise
+ledger, including real camera-derived rows, while preserving camera settings,
+authentication storage, preferences, and Electron caches.
 
 ## Occupancy Corrections
 
@@ -353,7 +364,8 @@ Manual corrections are stored separately from count events. Current occupancy is
 entries - exits + sum(correction_delta)
 ```
 
-Corrections include old/new occupancy, delta, reason, optional actor metadata, source kind, mock run ID, and timestamp. Generated and hybrid corrections are removable with the mock reset tools.
+Corrections include old/new occupancy, delta, reason, optional actor metadata,
+and timestamp.
 
 ## Tracking Evaluation
 
@@ -474,4 +486,8 @@ ml-service/scripts/       # Model setup, replay, and evaluation helpers
 
 Local data commands affect only the desktop computer. They do not delete backend accounts, backend reports, final LGU audit reports, or other cloud records.
 
-Camera configuration, authentication state, desktop local ledgers, and backend records are intentionally separate. Use backend mock cleanup for generated backend runs and desktop local-data cleanup for local device state.
+Camera profiles and operational desktop records share the enterprise SQLite
+database. Authentication state and camera credentials remain in OS-protected
+Electron storage, while backend records remain in PostgreSQL. Use central
+sample-data cleanup for backend rows and desktop local-data cleanup for local
+device state.

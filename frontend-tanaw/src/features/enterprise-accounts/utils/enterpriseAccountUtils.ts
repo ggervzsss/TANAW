@@ -11,6 +11,5 @@ export function filterEnterpriseAccounts(accounts: AccountSummary[], query: stri
 }
 
 export function getLocationSummary(location: LocationDraft) {
-  const confidence = typeof location.confidence === "number" ? `, ${Math.round(location.confidence * 100)}% confidence` : "";
-  return `${location.source} marker at ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}${confidence}`;
+  return `Marker at ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
 }

@@ -23,6 +23,20 @@
   --tanaw-muted: #6b7280;
   --tanaw-border: #d8ded8;
   --tanaw-error: #dc2626;
+  --tanaw-page-bg: #eef5f0;
+  --tanaw-page-bg-gradient: linear-gradient(145deg, #eef5f0, #f6f8f6);
+  --tanaw-surface: #ffffff;
+  --tanaw-surface-raised: #ffffff;
+  --tanaw-surface-inset: #f0f5f1;
+  --tanaw-control-bg: #ffffff;
+  --tanaw-control-hover: #edf4ef;
+  --tanaw-secondary-text: #64748b;
+  --tanaw-muted-text: #7b8794;
+  --tanaw-border-subtle: rgb(71 85 105 / 0.18);
+  --tanaw-border-strong: rgb(71 85 105 / 0.3);
+  --tanaw-focus-ring: #0f766e;
+  --tanaw-shadow-soft: 0 12px 30px rgb(15 23 42 / 0.08);
+  --tanaw-shadow-raised: 0 18px 42px rgb(15 23 42 / 0.12);
   --tanaw-topbar-height: 5.5rem;
   color-scheme: light;
 }
@@ -32,12 +46,26 @@ html.dark {
   --tanaw-green-dark: #10b981;
   --tanaw-green-soft: #6ee7b7;
   --tanaw-gold: #fcd34d;
-  --tanaw-bg: #0b1120;
-  --tanaw-card: #121c31;
-  --tanaw-text: #f8fafc;
-  --tanaw-muted: #94a3b8;
-  --tanaw-border: #334155;
+  --tanaw-bg: #0b141d;
+  --tanaw-card: #151f2b;
+  --tanaw-text: #f1f5f4;
+  --tanaw-muted: #aab5bf;
+  --tanaw-border: rgb(174 188 201 / 0.22);
   --tanaw-error: #f87171;
+  --tanaw-page-bg: #0b141d;
+  --tanaw-page-bg-gradient: radial-gradient(circle at 12% 0%, rgb(31 71 60 / 0.1), transparent 35rem), linear-gradient(145deg, #0b141d 0%, #0e1721 54%, #101923 100%);
+  --tanaw-surface: #151f2b;
+  --tanaw-surface-raised: #192531;
+  --tanaw-surface-inset: #101923;
+  --tanaw-control-bg: #192633;
+  --tanaw-control-hover: #202e3c;
+  --tanaw-secondary-text: #b8c2cb;
+  --tanaw-muted-text: #8f9daa;
+  --tanaw-border-subtle: rgb(174 188 201 / 0.16);
+  --tanaw-border-strong: rgb(174 188 201 / 0.28);
+  --tanaw-focus-ring: #5eead4;
+  --tanaw-shadow-soft: 0 14px 34px rgb(0 0 0 / 0.2);
+  --tanaw-shadow-raised: 0 20px 48px rgb(0 0 0 / 0.25);
   color-scheme: dark;
 }
 
@@ -60,6 +88,11 @@ body {
   overflow: hidden;
   background: #eef5f0;
   user-select: none;
+}
+
+:where(a[href], button, input, select, textarea, summary, [role="button"]):focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 3px;
 }
 
 input,
@@ -259,12 +292,12 @@ html.dark .tanaw-login-edge-blur {
 
 .tanaw-auth-desktop-stage {
   align-items: safe center;
-  grid-template-columns: minmax(0, 1.04fr) minmax(380px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) minmax(26.25rem, min(36.25rem, 46vw));
   height: 100svh;
 }
 
 .tanaw-auth-shell {
-  gap: clamp(1.5rem, 3svh, 2.5rem);
+  gap: clamp(1.5rem, 3vw, 4rem);
   padding-block: clamp(1rem, 2.4svh, 2rem);
   padding-inline: clamp(1.25rem, 2.4vw, 2.5rem);
 }
@@ -287,7 +320,21 @@ html.dark .tanaw-login-edge-blur {
 }
 
 .tanaw-auth-card {
-  padding: clamp(1.5rem, 4svh, 2.5rem);
+  --tanaw-auth-input-bg: #ffffff;
+  --tanaw-auth-input-bg-hover: #fbfdfc;
+  --tanaw-auth-input-bg-disabled: #f1f5f9;
+  --tanaw-auth-input-text: #10241b;
+  --tanaw-auth-input-placeholder: #7b8492;
+  --tanaw-auth-input-icon: #6b7280;
+  --tanaw-auth-input-border: #cbd5d1;
+  --tanaw-auth-input-border-hover: #9caea4;
+  width: 100%;
+  max-width: 36.25rem;
+  max-height: calc(100svh - clamp(1.5rem, 4svh, 3rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(1.5rem, 2.7svh, 2.5rem) clamp(1.5rem, 2.25vw, 2.5rem);
+  scrollbar-gutter: stable;
   transition:
     background-color 220ms ease,
     border-color 220ms ease,
@@ -296,8 +343,16 @@ html.dark .tanaw-login-edge-blur {
 }
 
 html.dark .tanaw-auth-card {
+  --tanaw-auth-input-bg: #0c1728;
+  --tanaw-auth-input-bg-hover: #101e32;
+  --tanaw-auth-input-bg-disabled: #0d1625;
+  --tanaw-auth-input-text: #f4f7fb;
+  --tanaw-auth-input-placeholder: #8290a6;
+  --tanaw-auth-input-icon: #9eadc3;
+  --tanaw-auth-input-border: #32445f;
+  --tanaw-auth-input-border-hover: #46617f;
   border-color: rgb(148 163 184 / 0.34) !important;
-  background: rgb(18 28 49 / 0.94) !important;
+  background: rgb(16 28 48 / 0.96) !important;
   box-shadow:
     0 30px 90px rgb(0 0 0 / 0.48),
     inset 0 1px 0 rgb(255 255 255 / 0.06) !important;
@@ -333,6 +388,8 @@ html.dark .tanaw-auth-card {
 
 .tanaw-auth-field {
   height: clamp(3rem, 6.2svh, 3.5rem);
+  border-color: var(--tanaw-auth-input-border);
+  background: var(--tanaw-auth-input-bg);
   transition:
     background-color 200ms ease,
     border-color 200ms ease,
@@ -340,22 +397,95 @@ html.dark .tanaw-auth-card {
     color 200ms ease;
 }
 
-html.dark .tanaw-auth-field {
-  border-color: var(--tanaw-border) !important;
-  background-color: rgb(15 23 42 / 0.86) !important;
+.tanaw-auth-field:hover:not(:has(.tanaw-auth-input:disabled)) {
+  border-color: var(--tanaw-auth-input-border-hover);
+  background: var(--tanaw-auth-input-bg-hover);
 }
 
-html.dark .tanaw-auth-field:focus-within {
-  border-color: rgb(52 211 153 / 0.72) !important;
-  box-shadow: 0 0 0 4px rgb(52 211 153 / 0.14) !important;
+.tanaw-auth-field:active:not(:has(.tanaw-auth-input:disabled)):not(:focus-within) {
+  border-color: color-mix(in srgb, var(--tanaw-green) 46%, var(--tanaw-auth-input-border));
 }
 
-html.dark .tanaw-auth-field :where(svg, button) {
-  color: #94a3b8;
+.tanaw-auth-field:focus-within {
+  border-color: color-mix(in srgb, var(--tanaw-green) 76%, transparent);
+  background: var(--tanaw-auth-input-bg-hover);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-green) 15%, transparent);
 }
 
-html.dark .tanaw-auth-field button:hover {
+.tanaw-auth-field[data-state="valid"]:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--tanaw-green) 38%, var(--tanaw-auth-input-border));
+}
+
+.tanaw-auth-field[data-state="invalid"] {
+  border-color: var(--tanaw-error);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tanaw-error) 11%, transparent);
+}
+
+.tanaw-auth-field:has(.tanaw-auth-input:disabled) {
+  border-color: color-mix(in srgb, var(--tanaw-auth-input-border) 72%, transparent);
+  background: var(--tanaw-auth-input-bg-disabled);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.tanaw-auth-input {
+  color: var(--tanaw-auth-input-text);
+  caret-color: var(--tanaw-green);
+}
+
+.tanaw-auth-input::placeholder {
+  color: var(--tanaw-auth-input-placeholder);
+  opacity: 1;
+}
+
+.tanaw-auth-input::selection {
+  background: color-mix(in srgb, var(--tanaw-green) 34%, transparent);
+  color: var(--tanaw-auth-input-text);
+}
+
+.tanaw-auth-field :where(.tanaw-auth-field-icon, .tanaw-auth-field-action) {
+  color: var(--tanaw-auth-input-icon);
+  transition: color 180ms ease;
+}
+
+.tanaw-auth-field:focus-within .tanaw-auth-field-icon,
+.tanaw-auth-field .tanaw-auth-field-action:hover {
   color: var(--tanaw-green);
+}
+
+.tanaw-auth-field .tanaw-auth-field-action:focus-visible {
+  --tw-ring-offset-color: var(--tanaw-auth-input-bg);
+  color: var(--tanaw-green);
+}
+
+/* Electron uses Chromium's autofill paint. Scope the override to Enterprise
+   authentication inputs so saved credentials inherit TANAW's controlled
+   light and dark surfaces without affecting operational forms. */
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:hover,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:focus,
+.tanaw-auth-card .tanaw-auth-input:-webkit-autofill:active,
+.tanaw-auth-card .tanaw-auth-input[data-com-onepassword-filled],
+.tanaw-auth-card .tanaw-auth-input[data-dashlane-rid] {
+  -webkit-box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  -webkit-text-fill-color: var(--tanaw-auth-input-text) !important;
+  caret-color: var(--tanaw-green) !important;
+  border-radius: 0.75rem;
+  background-clip: content-box !important;
+  transition:
+    background-color 9999s ease-out,
+    color 120ms ease-out;
+}
+
+.tanaw-auth-card .tanaw-auth-input:autofill,
+.tanaw-auth-card .tanaw-auth-input:autofill:hover,
+.tanaw-auth-card .tanaw-auth-input:autofill:focus,
+.tanaw-auth-card .tanaw-auth-input:autofill:active {
+  box-shadow: 0 0 0 1000px var(--tanaw-auth-input-bg) inset !important;
+  color: var(--tanaw-auth-input-text) !important;
+  caret-color: var(--tanaw-green) !important;
+  background-color: var(--tanaw-auth-input-bg) !important;
 }
 
 html.dark .tanaw-auth-card :where(input, textarea, select),
@@ -490,23 +620,27 @@ html.dark .tanaw-auth-dialog .text-emerald-950 {
 }
 
 .tanaw-auth-theme-toggle:hover {
-  color: var(--tanaw-green);
-  background: rgb(255 255 255 / 0.9);
+  border-color: rgb(91 113 168 / 0.56);
+  color: #334e8c;
+  background: rgb(241 245 255 / 0.94);
   box-shadow:
-    0 18px 42px rgb(3 20 12 / 0.22),
+    0 0 0 4px rgb(74 96 154 / 0.09),
+    0 18px 40px rgb(31 49 91 / 0.2),
     inset 0 1px 0 rgb(255 255 255 / 0.76);
   transform: translateY(-1px);
 }
 
 .tanaw-auth-theme-toggle:active {
   transform: translateY(0);
+  box-shadow: 0 8px 20px rgb(31 49 91 / 0.18);
 }
 
 .tanaw-auth-theme-toggle:focus-visible {
-  outline: none;
+  outline: 2px solid #334e8c;
+  outline-offset: 3px;
   box-shadow:
-    0 0 0 4px rgb(6 78 47 / 0.16),
-    0 18px 42px rgb(3 20 12 / 0.22);
+    0 0 0 5px rgb(74 96 154 / 0.12),
+    0 16px 36px rgb(31 49 91 / 0.18);
 }
 
 .tanaw-auth-theme-toggle__icon {
@@ -518,17 +652,29 @@ html.dark .tanaw-auth-dialog .text-emerald-950 {
 }
 
 html.dark .tanaw-auth-theme-toggle {
-  border-color: rgb(148 163 184 / 0.36);
-  background: rgb(15 23 42 / 0.72);
-  color: #f8fafc;
+  border-color: var(--tanaw-border-strong);
+  background: rgb(19 29 39 / 0.82);
+  color: var(--tanaw-text);
   box-shadow:
-    0 16px 40px rgb(0 0 0 / 0.36),
+    0 16px 38px rgb(0 0 0 / 0.28),
     inset 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
 html.dark .tanaw-auth-theme-toggle:hover {
-  background: rgb(18 28 49 / 0.84);
+  border-color: rgb(252 211 77 / 0.44);
+  background: rgb(40 38 29 / 0.86);
   color: var(--tanaw-gold);
+  box-shadow:
+    0 0 0 4px rgb(252 211 77 / 0.07),
+    0 18px 42px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.07);
+}
+
+html.dark .tanaw-auth-theme-toggle:focus-visible {
+  outline-color: var(--tanaw-gold);
+  box-shadow:
+    0 0 0 5px rgb(252 211 77 / 0.1),
+    0 16px 38px rgb(0 0 0 / 0.28);
 }
 
 @media (max-height: 760px) {
@@ -551,7 +697,7 @@ html.dark .tanaw-auth-theme-toggle:hover {
 
 @media (max-width: 1120px) {
   .tanaw-auth-desktop-stage {
-    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 0.82fr);
+    grid-template-columns: minmax(0, 1fr) minmax(26.25rem, 47vw);
   }
 }
 
@@ -615,8 +761,7 @@ html.dark .tanaw-auth-theme-toggle:hover {
   contain: paint;
   isolation: isolate;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
+  background: radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
   opacity: 0.94;
   mix-blend-mode: screen;
   transition: opacity 180ms ease;
@@ -938,20 +1083,18 @@ html.dark .tanaw-auth-theme-toggle:hover {
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-.enterprise-topbar::before {
-  content: "";
+.dark .enterprise-topbar {
+  background-image: linear-gradient(90deg, #02090d 0%, #061714 48%, #0b2520 100%);
+  border-bottom-color: rgb(167 243 208 / 0.1);
+  box-shadow: 0 16px 44px rgb(0 0 0 / 0.58);
+}
+
+.enterprise-topbar__building {
   position: absolute;
   top: 0;
   bottom: 0;
   right: 0;
   width: 45%;
-  background-image: url("/6397Poblacion_City_Hall_San_Pedro_Laguna_04.jpg");
-  background-size: cover;
-  background-position: right center;
-  background-repeat: no-repeat;
-  opacity: 0.55;
-  mix-blend-mode: screen;
-  filter: saturate(0.88) contrast(0.95) brightness(0.92);
   mask-image: linear-gradient(90deg, transparent 0%, black 38%, black 100%);
   mask-size: 100% 100%;
   mask-repeat: no-repeat;
@@ -959,8 +1102,37 @@ html.dark .tanaw-auth-theme-toggle:hover {
   z-index: 0;
 }
 
-.enterprise-topbar::after {
-  content: "";
+.enterprise-topbar__image {
+  position: absolute;
+  inset: 0;
+  background-position: right center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  mix-blend-mode: screen;
+  transition: opacity 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.enterprise-topbar__image--day {
+  background-image: url("/images/enterprise-topbar-building.png");
+  filter: saturate(0.88) contrast(0.95) brightness(0.92);
+  opacity: 0.55;
+}
+
+.enterprise-topbar__image--night {
+  background-image: url("/images/enterprise-topbar-building-night.png");
+  filter: saturate(0.75) contrast(1.05) brightness(0.75);
+  opacity: 0;
+}
+
+.dark .enterprise-topbar__image--day {
+  opacity: 0;
+}
+
+.dark .enterprise-topbar__image--night {
+  opacity: 0.5;
+}
+
+.enterprise-topbar__overlay {
   position: absolute;
   inset: 0;
   background:
@@ -968,6 +1140,18 @@ html.dark .tanaw-auth-theme-toggle:hover {
     radial-gradient(circle_at_top_right, rgba(69, 165, 73, 0.2), transparent 42%);
   pointer-events: none;
   z-index: 1;
+}
+
+.dark .enterprise-topbar__overlay {
+  background:
+    linear-gradient(90deg, rgb(1 8 11 / 0.98) 0%, rgb(4 24 20 / 0.9) 50%, rgb(8 38 30 / 0.54) 100%), radial-gradient(circle at top left, rgb(110 231 183 / 0.055), transparent 34%),
+    radial-gradient(circle at top right, rgb(52 211 153 / 0.08), transparent 44%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enterprise-topbar__image {
+    transition: none;
+  }
 }
 
 .enterprise-shell aside.bg-\[\#065f46\] {
@@ -1227,20 +1411,20 @@ html.dark .tanaw-auth-theme-toggle:hover {
 }
 
 html.dark .enterprise-shell {
-  --enterprise-app-bg: #0d1424;
-  --enterprise-card-bg: #162033;
-  --enterprise-card-elevated-bg: #1b283d;
-  --enterprise-panel-bg: #101a2d;
-  --enterprise-input-bg: #0f1728;
-  --enterprise-border: rgb(148 163 184 / 0.28);
-  --enterprise-border-soft: rgb(148 163 184 / 0.18);
-  --enterprise-text: #f8fafc;
-  --enterprise-muted: #cbd5e1;
-  --enterprise-muted-soft: #94a3b8;
+  --enterprise-app-bg: #0d161e;
+  --enterprise-card-bg: #17222d;
+  --enterprise-card-elevated-bg: #1b2833;
+  --enterprise-panel-bg: #111b24;
+  --enterprise-input-bg: #131e28;
+  --enterprise-border: rgb(174 188 201 / 0.22);
+  --enterprise-border-soft: rgb(174 188 201 / 0.14);
+  --enterprise-text: #f1f5f4;
+  --enterprise-muted: #bcc5cc;
+  --enterprise-muted-soft: #92a0ad;
   --enterprise-green-accent: #6ee7b7;
   --enterprise-gold-accent: #f3c96b;
-  color: #f8fafc;
-  background: #0b1120;
+  color: var(--enterprise-text);
+  background: radial-gradient(circle at 10% 0%, rgb(29 78 61 / 0.1), transparent 34rem), linear-gradient(145deg, #0d161e, #101923);
 }
 
 html.dark .enterprise-shell aside.bg-\[\#065f46\] {
@@ -1250,29 +1434,29 @@ html.dark .enterprise-shell aside.bg-\[\#065f46\] {
 
 html.dark .enterprise-shell header.bg-white\/80,
 html.dark .enterprise-shell header.dark\:bg-\[\#111827\]\/90 {
-  background: rgb(17 24 39 / 0.94) !important;
-  border-color: #334155 !important;
-  box-shadow: 0 12px 30px rgb(0 0 0 / 0.25);
+  background: color-mix(in srgb, var(--enterprise-card-bg) 94%, transparent) !important;
+  border-color: var(--enterprise-border-soft) !important;
+  box-shadow: var(--tanaw-shadow-soft);
 }
 
 html.dark .enterprise-shell .bg-white {
-  background-color: #172033 !important;
+  background-color: var(--enterprise-card-bg) !important;
 }
 
 html.dark .enterprise-shell .bg-white\/50,
 html.dark .enterprise-shell .bg-white\/80 {
-  background-color: rgb(15 23 42 / 0.92) !important;
+  background-color: color-mix(in srgb, var(--enterprise-card-bg) 90%, transparent) !important;
 }
 
 html.dark .enterprise-shell .bg-gray-50,
 html.dark .enterprise-shell .bg-gray-50\/80,
 html.dark .enterprise-shell .bg-\[\#f4f8f5\],
 html.dark .enterprise-shell .bg-\[\#f8f9fa\] {
-  background-color: #0f172a !important;
+  background-color: var(--enterprise-panel-bg) !important;
 }
 
 html.dark .enterprise-shell .bg-gray-100 {
-  background-color: #273449 !important;
+  background-color: var(--enterprise-card-elevated-bg) !important;
 }
 
 html.dark .enterprise-shell .bg-gray-300 {
@@ -1318,22 +1502,22 @@ html.dark .enterprise-shell .text-\[\#2a3063\],
 html.dark .enterprise-shell .text-tanaw-navy,
 html.dark .enterprise-shell .text-slate-700,
 html.dark .enterprise-shell .text-gray-800 {
-  color: #f8fafc !important;
+  color: var(--enterprise-text) !important;
 }
 
 html.dark .enterprise-shell .text-slate-600,
 html.dark .enterprise-shell .text-gray-700 {
-  color: #e2e8f0 !important;
+  color: #d8dfe3 !important;
 }
 
 html.dark .enterprise-shell .text-slate-500,
 html.dark .enterprise-shell .text-gray-600 {
-  color: #cbd5e1 !important;
+  color: var(--enterprise-muted) !important;
 }
 
 html.dark .enterprise-shell .text-gray-500,
 html.dark .enterprise-shell .text-gray-400 {
-  color: #94a3b8 !important;
+  color: var(--enterprise-muted-soft) !important;
 }
 
 html.dark .enterprise-shell .text-gray-300 {
@@ -1373,7 +1557,7 @@ html.dark .enterprise-shell .border-gray-100,
 html.dark .enterprise-shell .border-gray-200,
 html.dark .enterprise-shell .border-gray-300,
 html.dark .enterprise-shell .border-gray-200\/70 {
-  border-color: #334155 !important;
+  border-color: var(--enterprise-border-soft) !important;
 }
 
 html.dark .enterprise-shell .border-emerald-100,
@@ -1383,20 +1567,20 @@ html.dark .enterprise-shell .border-green-200,
 html.dark .enterprise-shell .border-blue-200,
 html.dark .enterprise-shell .border-amber-200,
 html.dark .enterprise-shell .border-red-200 {
-  border-color: rgb(148 163 184 / 0.28) !important;
+  border-color: var(--enterprise-border) !important;
 }
 
 html.dark .enterprise-shell input,
 html.dark .enterprise-shell select,
 html.dark .enterprise-shell textarea {
-  background-color: #111827 !important;
-  border-color: #475569 !important;
-  color: #f8fafc !important;
+  background-color: var(--enterprise-input-bg) !important;
+  border-color: var(--enterprise-border) !important;
+  color: var(--enterprise-text) !important;
 }
 
 html.dark .enterprise-shell input::placeholder,
 html.dark .enterprise-shell textarea::placeholder {
-  color: #94a3b8;
+  color: var(--enterprise-muted-soft);
 }
 
 html.dark .enterprise-shell input:disabled,
@@ -1430,15 +1614,15 @@ html.dark .enterprise-shell .tanaw-switch-thumb {
 }
 
 html.dark .enterprise-shell .enterprise-profile-menu {
-  background: #172033 !important;
-  border-color: rgb(148 163 184 / 0.36) !important;
-  color: #e2e8f0 !important;
-  box-shadow: 0 24px 64px rgb(0 0 0 / 0.52) !important;
+  background: var(--enterprise-card-elevated-bg) !important;
+  border-color: var(--enterprise-border) !important;
+  color: var(--enterprise-text) !important;
+  box-shadow: var(--tanaw-shadow-raised) !important;
 }
 
 html.dark .enterprise-shell .enterprise-profile-menu__header {
   background: linear-gradient(135deg, rgb(6 78 59 / 0.34), rgb(15 23 42 / 0.98), rgb(120 53 15 / 0.2)) !important;
-  border-color: #334155 !important;
+  border-color: var(--enterprise-border-soft) !important;
 }
 
 html.dark .enterprise-shell .enterprise-ticket-panel-header {
@@ -1483,9 +1667,7 @@ html.dark .enterprise-shell .tanaw-trend-chip--utilization {
 
 html.dark .enterprise-shell .tanaw-report-remarks {
   border-color: rgb(251 191 36 / 0.42) !important;
-  background:
-    linear-gradient(135deg, rgb(245 158 11 / 0.14), rgb(120 53 15 / 0.2)),
-    rgb(15 23 42 / 0.66) !important;
+  background: linear-gradient(135deg, rgb(245 158 11 / 0.14), rgb(120 53 15 / 0.2)), rgb(15 23 42 / 0.66) !important;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 
@@ -1516,32 +1698,32 @@ html.dark .enterprise-shell .enterprise-profile-menu button.text-tanaw-red:hover
 }
 
 html.dark .enterprise-shell table thead {
-  background-color: #111827 !important;
-  color: #e2e8f0 !important;
+  background-color: var(--enterprise-panel-bg) !important;
+  color: var(--enterprise-muted) !important;
 }
 
 html.dark .enterprise-shell table tbody {
-  color: #e5e7eb;
+  color: #d8dfe3;
 }
 
 html.dark .enterprise-shell table tbody tr:hover {
-  background-color: rgb(51 65 85 / 0.55);
+  background-color: var(--tanaw-control-hover);
 }
 
 html.dark .enterprise-shell .divide-gray-100 > :not(:last-child),
 html.dark .enterprise-shell .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #334155 !important;
+  border-color: var(--enterprise-border-soft) !important;
 }
 
 html.dark .enterprise-shell table tbody.divide-gray-100 > :not(:last-child),
 html.dark .enterprise-shell table tbody.divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
-  border-color: rgb(148 163 184 / 0.24) !important;
+  border-color: var(--enterprise-border-soft) !important;
 }
 
 html.dark .enterprise-shell .hover\:bg-gray-50:hover,
 html.dark .enterprise-shell .hover\:bg-gray-100:hover,
 html.dark .enterprise-shell .hover\:bg-gray-200:hover {
-  background-color: #334155 !important;
+  background-color: var(--tanaw-control-hover) !important;
 }
 
 html.dark .enterprise-shell .hover\:bg-red-50:hover {
@@ -1549,21 +1731,22 @@ html.dark .enterprise-shell .hover\:bg-red-50:hover {
 }
 
 html.dark .enterprise-shell .recharts-cartesian-axis-tick-value {
-  fill: #cbd5e1 !important;
+  fill: var(--enterprise-muted) !important;
 }
 
 html.dark .enterprise-shell .recharts-cartesian-grid line {
-  stroke: #334155 !important;
+  stroke: var(--enterprise-border-soft) !important;
 }
 
 html.dark .enterprise-shell .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: #111827 !important;
-  border-color: #475569 !important;
-  color: #f8fafc !important;
+  background: var(--enterprise-card-elevated-bg) !important;
+  border-color: var(--enterprise-border) !important;
+  color: var(--enterprise-text) !important;
+  box-shadow: var(--tanaw-shadow-raised) !important;
 }
 
 html.dark .enterprise-shell .recharts-legend-item-text {
-  color: #cbd5e1 !important;
+  color: var(--enterprise-muted) !important;
 }
 
 html.dark body {
@@ -1573,6 +1756,14 @@ html.dark body {
 html.dark .enterprise-shell .bg-\[\#0f172a\],
 html.dark .enterprise-shell .dark\:bg-\[\#0f172a\] {
   background-color: var(--enterprise-app-bg) !important;
+}
+
+html.dark .enterprise-shell .dark\:bg-\[\#121c31\] {
+  background-color: var(--enterprise-card-bg) !important;
+}
+
+html.dark .enterprise-shell .dark\:bg-\[\#172033\] {
+  background-color: var(--enterprise-card-elevated-bg) !important;
 }
 
 html.dark .enterprise-shell .bg-white,
@@ -1709,4 +1900,61 @@ html.dark .enterprise-shell table thead,
 html.dark .enterprise-shell .sticky.top-0.bg-gray-50 {
   background-color: var(--enterprise-input-bg) !important;
   color: var(--enterprise-muted) !important;
+}
+
+.enterprise-shell .tanaw-enterprise-card {
+  box-shadow: var(--tanaw-shadow-soft);
+}
+
+html.dark .enterprise-shell .tanaw-enterprise-card {
+  border-color: var(--enterprise-border-soft) !important;
+  background: var(--enterprise-card-bg) !important;
+  box-shadow: var(--tanaw-shadow-soft) !important;
+}
+
+html.dark .enterprise-shell .tanaw-enterprise-chart-panel {
+  background: linear-gradient(145deg, var(--enterprise-card-bg), var(--enterprise-card-elevated-bg)) !important;
+}
+
+.enterprise-shell * {
+  scrollbar-color: rgb(100 116 139 / 0.52) transparent;
+  scrollbar-width: thin;
+}
+
+.enterprise-shell ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.enterprise-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.enterprise-shell ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(100 116 139 / 0.42);
+}
+
+html.dark .enterprise-shell ::-webkit-scrollbar-thumb {
+  background: rgb(174 188 201 / 0.26);
+}
+
+html.dark .enterprise-shell ::-webkit-scrollbar-thumb:hover {
+  background: rgb(174 188 201 / 0.4);
+}
+
+html.dark .enterprise-dot-document table,
+html.dark .enterprise-dot-document th,
+html.dark .enterprise-dot-document td,
+html.dark .enterprise-dot-document .border-black {
+  border-color: #64748b !important;
+}
+
+html.dark .enterprise-dot-document th,
+html.dark .enterprise-dot-document .bg-gray-50 {
+  background-color: #111c2f !important;
+}
+
+html.dark .enterprise-dot-document .bg-gray-100 {
+  background-color: #1e293b !important;
 }

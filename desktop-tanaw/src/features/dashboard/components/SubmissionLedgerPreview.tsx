@@ -24,7 +24,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
   const end = Math.min(reports.length, currentPage * reportsPerPage + reportsPerPage);
 
   return (
-    <Card className="border border-gray-200 p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(15,23,42,0.1)] dark:border-slate-700 dark:hover:shadow-[0_18px_44px_rgba(0,0,0,0.35)]">
+    <Card className="border border-gray-200 p-5 shadow-sm transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] dark:border-(--enterprise-border-soft)">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -33,7 +33,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
               <Info size={14} className="text-gray-400 transition-colors hover:text-[#065f46] dark:text-slate-500 dark:hover:text-emerald-300" />
             </InfoTooltip>
           </div>
-          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Submission Ledger records from local desktop reports.</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Recently submitted reports saved by this desktop app.</p>
         </div>
         <FileText size={18} className="text-[#065f46] dark:text-emerald-300" />
       </div>
@@ -75,7 +75,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
                 <p className="font-mono text-xs font-bold text-slate-400 dark:text-slate-600">EMPTY SLOT</p>
                 <h4 className="mt-2 text-base font-bold text-slate-500 dark:text-slate-300">No report yet</h4>
               </div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Submitted ledger records will appear here when available.</p>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Submitted reports will appear here when available.</p>
             </div>
           ),
         )}
@@ -87,7 +87,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
           disabled={currentPage === 0}
           onClick={() => setPage((value) => Math.max(0, value - 1))}
           className="rounded-sm border border-gray-200 p-1 text-gray-500 transition hover:text-[#065f46] disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-300"
-          aria-label="Previous submission ledger preview page"
+          aria-label="Previous submitted reports page"
         >
           <ChevronLeft size={16} />
         </button>
@@ -99,7 +99,7 @@ export function SubmissionLedgerPreview({ reports, onPreviewReport }: Submission
           disabled={currentPage >= maxPage}
           onClick={() => setPage((value) => Math.min(maxPage, value + 1))}
           className="rounded-sm border border-gray-200 p-1 text-gray-500 transition hover:text-[#065f46] disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-400 dark:hover:text-emerald-300"
-          aria-label="Next submission ledger preview page"
+          aria-label="Next submitted reports page"
         >
           <ChevronRight size={16} />
         </button>

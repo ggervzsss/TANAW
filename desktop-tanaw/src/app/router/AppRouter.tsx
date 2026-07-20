@@ -18,6 +18,9 @@ function RequireAuth({ children }: RequireAuthProps) {
   const location = useLocation();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
+  const status = useAuthStore((state) => state.status);
+
+  if (status === "checking") return <RouteLoadingFallback />;
 
   if (!isAuthenticated) {
     return <Navigate to={routePaths.login} replace state={{ from: location }} />;
@@ -31,6 +34,9 @@ function RequireAuth({ children }: RequireAuthProps) {
 }
 
 export function AppRouter() {
+  const status = useAuthStore((state) => state.status);
+  if (status === "checking") return <RouteLoadingFallback />;
+
   return (
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
@@ -65,14 +71,6 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <EnterpriseShell initialView="reports" />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path={routePaths.enterpriseSimulation}
-          element={
-            <RequireAuth>
-              <EnterpriseShell initialView="simulation" />
             </RequireAuth>
           }
         />

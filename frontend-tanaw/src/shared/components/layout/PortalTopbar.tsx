@@ -11,17 +11,34 @@ import { CITY_SEAL } from "../../constants/branding";
 import { usePortalNotifications } from "../../hooks/usePortalNotifications";
 import { getAccountPreferences, updateAccountPreferences } from "../../services/accountManagement";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "../../utils/routeUtils";
-import { applyThemePreference, getStoredThemePreference, persistThemePreference, resolveThemePreference } from "../../utils/theme";
+import { applyThemePreference, chooseAuthenticatedThemePreference, getStoredThemePreference, getStoredThemePreferenceOrNull, persistThemePreference, resolveThemePreference } from "../../utils/theme";
 import type { ResolvedTheme, ThemePreference } from "../../utils/theme";
 import type { UserRole } from "../../types/role.types";
 import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
 import type { NavigationItem } from "./navigation";
 import { roleAccessLabel, roleNavigation, rolePortalLabel } from "./navigation";
+import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
+import { publishSessionEvent } from "../../utils/sessionSync";
 
 type PortalTopbarProps = {
   role: UserRole;
   showDevLog?: boolean;
 };
+
+export function PortalBrand({ role }: { role: UserRole }) {
+  return (
+    <div className="flex shrink-0 items-center gap-4">
+      <Link to={getRoleDashboardPath(role)} aria-label="Open TANAW dashboard" className="flex items-center gap-4">
+        <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
+        <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
+      </Link>
+      <span className="h-9 w-px bg-white/18 max-sm:h-7" aria-hidden="true" />
+      <span data-portal-role-label className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">
+        {rolePortalLabel[role]}
+      </span>
+    </div>
+  );
+}
 
 export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const authUser = useAuthStore((state) => state.user);
@@ -40,6 +57,9 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
   const skipNextThemeSaveRef = useRef(true);
+  const storedThemeAtMountRef = useRef<ThemePreference | null>(getStoredThemePreferenceOrNull());
+  const themeRef = useRef(theme);
+  const userSelectedThemeRef = useRef(false);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
 
   const profile = {
@@ -70,6 +90,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     } finally {
       queryClient.removeQueries({ queryKey: ["current-user"] });
       logout();
+      publishSessionEvent({ type: "logout", occurredAt: Date.now() });
       toast.success("Logout complete");
       navigate(routes.login, { replace: true });
     }
@@ -112,6 +133,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   };
 
   const toggleTheme = () => {
+    userSelectedThemeRef.current = true;
     setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
   };
 
@@ -120,8 +142,17 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     void getAccountPreferences()
       .then((preferences) => {
         if (disposed) return;
-        setTheme(preferences.theme);
-        persistThemePreference(preferences.theme);
+
+        const localPreference = userSelectedThemeRef.current ? themeRef.current : storedThemeAtMountRef.current;
+        const nextTheme = chooseAuthenticatedThemePreference(localPreference, preferences.theme);
+        if (nextTheme !== themeRef.current) {
+          themeRef.current = nextTheme;
+          setTheme(nextTheme);
+        }
+        persistThemePreference(nextTheme);
+        if (preferences.theme !== nextTheme) {
+          void updateAccountPreferences(nextTheme).catch(() => undefined);
+        }
         setPreferencesLoaded(true);
       })
       .catch(() => {
@@ -136,6 +167,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   }, []);
 
   useEffect(() => {
+    themeRef.current = theme;
     const applyTheme = () => {
       setResolvedTheme(applyThemePreference(theme));
     };
@@ -271,9 +303,21 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     return items;
   }, [navigation, role]);
 
-  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 max-2xl:px-3.5";
-  const navPillActive = "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
-  const navPillInactive = "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
+  const isDarkTopbar = resolvedTheme === "dark";
+  const topbarThemeClasses = getPortalTopbarThemeClasses(resolvedTheme);
+  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-[color,background-color,box-shadow,transform] duration-200 max-2xl:px-3.5";
+  const navPillActive = isDarkTopbar
+    ? "bg-emerald-300/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.46)] ring-1 ring-emerald-100/14"
+    : "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
+  const navPillInactive = isDarkTopbar
+    ? "text-white/72 hover:-translate-y-0.5 hover:bg-white/7 hover:text-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.38)]"
+    : "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
+  const topbarIconButton = isDarkTopbar
+    ? "border-emerald-100/14 bg-black/18 text-white/88 hover:border-emerald-100/24 hover:bg-emerald-200/9"
+    : "border-emerald-100/28 bg-white/8 text-white hover:bg-white/[0.14]";
+  const accountButtonTheme = isDarkTopbar
+    ? "border-emerald-100/14 bg-black/18 hover:border-emerald-100/24 hover:bg-emerald-200/9"
+    : "border-emerald-100/28 bg-white/8 hover:border-emerald-100/40 hover:bg-white/[0.14]";
   const profilePath = getRoleProfilePath(role);
   const securityPath = getRoleSecurityPath(role);
   const supportTicketsPath = getRoleSupportTicketsPath(role);
@@ -281,25 +325,27 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 
   return (
     <div className="sticky top-0 z-1000 w-full text-white">
-      <div className="relative overflow-visible bg-linear-to-r from-[#043817] via-[#075526] to-[#0c6a32] shadow-[0_16px_40px_rgba(2,20,8,0.34)] ring-1 ring-white/10">
+      <div data-topbar-theme={resolvedTheme} className={`relative overflow-visible ${topbarThemeClasses.frame}`}>
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] max-lg:w-[76%]">
+          <div
+            data-topbar-image="day"
+            className={`absolute inset-0 bg-cover bg-center mix-blend-screen transition-opacity duration-350 motion-reduce:transition-none ${topbarThemeClasses.imageTreatment} ${topbarThemeClasses.dayImage}`}
+            style={{ backgroundImage: "url('/images/it-topbar-building.png')" }}
+          />
+          <div
+            data-topbar-image="night"
+            className={`absolute inset-0 bg-cover bg-center mix-blend-screen transition-opacity duration-350 motion-reduce:transition-none ${topbarThemeClasses.imageTreatment} ${topbarThemeClasses.nightImage}`}
+            style={{ backgroundImage: "url('/images/it-topbar-building-night.png')" }}
+          />
+        </div>
+        <div className={`pointer-events-none absolute inset-0 ${topbarThemeClasses.overlay}`} />
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 w-[58%] mask-[linear-gradient(90deg,transparent,black_22%,black)] bg-cover bg-center opacity-[0.38] mix-blend-screen max-lg:w-[76%]"
-          style={{ backgroundImage: "url('/images/it-topbar-building.png')" }}
+          className={`pointer-events-none absolute inset-0 ${isDarkTopbar ? "bg-[radial-gradient(circle_at_top_left,rgba(110,231,183,0.055),transparent_34%),radial-gradient(circle_at_top_right,rgba(52,211,153,0.08),transparent_44%)]" : "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]"}`}
         />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(4,45,17,0.98)_0%,rgba(5,81,37,0.88)_44%,rgba(6,93,42,0.48)_100%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(69,165,73,0.2),transparent_42%)]" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-white/18" />
+        <div className={`pointer-events-none absolute inset-x-0 bottom-0 h-px ${isDarkTopbar ? "bg-emerald-100/10" : "bg-white/18"}`} />
 
         <div className="relative z-10 flex h-22 items-center gap-5 px-8 max-2xl:gap-4 max-xl:px-6 max-sm:h-18 max-sm:px-4">
-          <Link to={getRoleDashboardPath(role)} className="flex shrink-0 items-center gap-4">
-            <img src={CITY_SEAL} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
-            <div className="flex items-center gap-4 max-sm:gap-3">
-              <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
-              <span className="h-9 w-px bg-white/18 max-sm:h-7" />
-              <span className="text-[11px] font-semibold tracking-[0.28em] text-emerald-100/90 uppercase max-sm:hidden">{rolePortalLabel[role]}</span>
-            </div>
-          </Link>
+          <PortalBrand role={role} />
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
@@ -379,7 +425,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
               type="button"
               aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
               onClick={() => setShowMobileNav((current) => !current)}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/25 bg-white/8 text-white shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/[0.14] hover:shadow-lg xl:hidden"
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition hover:-translate-y-0.5 hover:shadow-lg xl:hidden ${topbarIconButton}`}
             >
               {showMobileNav ? <X size={18} /> : <Menu size={18} />}
             </button>
@@ -394,7 +440,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                 setOpenMenuId(null);
                 toggleTheme();
               }}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-100/28 bg-white/8 text-white shadow-sm backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/[0.14] hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0"
+              className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)] active:translate-y-0 ${topbarIconButton}`}
             >
               {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -414,6 +460,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                   setOpenMenuId(null);
                 }}
                 onViewAll={handleViewAllNotifications}
+                triggerClassName={topbarIconButton}
               />
             </div>
 
@@ -425,7 +472,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                   setShowProfileMenu((current) => !current);
                   setShowNotifications(false);
                 }}
-                className="flex min-w-60.5 items-center gap-3 rounded-full border border-emerald-100/28 bg-white/8 py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-100/40 hover:bg-white/[0.14] hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:min-w-56 max-sm:min-w-0 max-sm:pr-2.5"
+                className={`flex w-60.5 max-w-[28vw] items-center gap-3 rounded-full border py-2 pr-4 pl-2 text-white shadow-[0_10px_24px_rgba(2,20,8,0.22)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(2,20,8,0.3)] active:translate-y-0 max-2xl:w-56 max-sm:w-auto max-sm:max-w-none max-sm:pr-2.5 ${accountButtonTheme}`}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/45 bg-[#087333] text-sm font-bold text-white shadow-inner ring-1 ring-emerald-100/30 max-sm:h-9 max-sm:w-9">
                   {profile.displayImageDataUrl ? <img src={profile.displayImageDataUrl} alt="" className="h-full w-full object-cover" /> : initials}
@@ -447,8 +494,12 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                     className="absolute right-0 z-1001 mt-3 w-72 overflow-hidden rounded-2xl border border-white/80 bg-white py-2 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/4"
                   >
                     <div className="mb-1 border-b border-slate-100 px-4 py-3.5">
-                      <p className="text-tanaw-navy text-sm font-bold">{profile.name}</p>
-                      <p className="text-xs text-gray-500">{profile.email}</p>
+                      <p title={profile.name} className="text-tanaw-navy truncate text-sm font-bold">
+                        {profile.name}
+                      </p>
+                      <p title={profile.email} className="truncate text-xs text-gray-500">
+                        {profile.email}
+                      </p>
                     </div>
                     <button type="button" onClick={() => openAccountPage("profile")} className={accountMenuButtonClass(profilePath)}>
                       <User size={14} /> Profile Settings
@@ -484,7 +535,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="bg-tanaw-green/95 border-t border-white/10 px-6 pb-4 max-sm:px-4"
+            className={`border-t px-6 pb-4 max-sm:px-4 ${isDarkTopbar ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
           >
             <nav className="grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
               {topbarItems.map((entry) => {
@@ -497,7 +548,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                       onClick={() => setShowMobileNav(false)}
                       className={({ isActive }) =>
                         [
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all",
+                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow]",
                           isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white",
                         ].join(" ")
                       }
@@ -525,7 +576,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                             onClick={() => setShowMobileNav(false)}
                             className={({ isActive }) =>
                               [
-                                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all",
+                                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow]",
                                 isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white",
                               ].join(" ")
                             }

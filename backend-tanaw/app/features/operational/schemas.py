@@ -6,8 +6,6 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-SourceKind = Literal["real", "mock", "hybrid"]
-FleetSimulationLane = Literal["normal", "warning", "one-minute-breach"]
 REPORTING_TIME_ZONE = ZoneInfo("Asia/Manila")
 REPORTING_PERIOD_RANGE_RE = re.compile(
     r"^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$"
@@ -85,8 +83,6 @@ class DesktopTelemetryIngest(BaseModel):
     metrics: DesktopMetricsSummary
     session: DesktopSessionSummary = Field(default_factory=DesktopSessionSummary)
     health: DesktopHealthSummary = Field(default_factory=DesktopHealthSummary)
-    sourceKind: SourceKind = "real"
-    mockRunId: str | None = Field(default=None, max_length=36)
     payload: dict | None = None
 
 
@@ -115,8 +111,6 @@ class TelemetrySnapshotSummary(BaseModel):
     error: str | None = None
     analyticsFps: float | None = None
     gatewayStatus: str
-    sourceKind: SourceKind = "real"
-    mockRunId: str | None = None
 
 
 class OperationalSummary(BaseModel):
@@ -234,8 +228,6 @@ class DesktopReportSubmissionIngest(BaseModel):
     uniqueCount: int = Field(default=0, ge=0)
     notes: str | None = Field(default=None, max_length=5000)
     syncStatus: str | None = Field(default=None, max_length=60)
-    sourceKind: SourceKind = "real"
-    mockRunId: str | None = Field(default=None, max_length=36)
     payload: dict | None = None
 
     @model_validator(mode="after")
@@ -276,49 +268,20 @@ class DesktopReportSubmissionIngest(BaseModel):
         return self
 
 
-class MockPreparationCounts(BaseModel):
+class SamplePreparationCounts(BaseModel):
     entries: int = Field(ge=0)
     exits: int = Field(ge=0)
     uniqueCount: int = Field(ge=0)
     peakOccupancy: int = Field(ge=0)
     period: str
+    reportId: str = Field(min_length=3, max_length=80)
 
 
-class MockPreparationSummary(BaseModel):
-    runId: str
-    status: Literal["active", "removed"]
+class SamplePreparationSummary(BaseModel):
     enterpriseId: str
     enterpriseName: str
-    counts: MockPreparationCounts | None = None
-    pendingCounts: list[MockPreparationCounts] = Field(default_factory=list)
-
-
-class FleetSimulationEnterpriseSummary(BaseModel):
-    enterpriseId: str
-    enterpriseName: str
-    category: str | None = None
-    barangay: str | None = None
-    isCurrent: bool = False
-
-
-class FleetSimulationTarget(BaseModel):
-    enterpriseId: str = Field(min_length=1, max_length=120)
-    lane: FleetSimulationLane
-    capacity: int = Field(default=100, ge=1, le=100_000)
-    thresholdPercent: int = Field(default=90, ge=1, le=100)
-
-
-class FleetSimulationTickIngest(BaseModel):
-    runId: str = Field(min_length=3, max_length=36)
-    startedAt: datetime
-    elapsedSeconds: int = Field(ge=0, le=86_400)
-    targets: list[FleetSimulationTarget] = Field(min_length=1, max_length=50)
-
-
-class FleetSimulationTickSummary(BaseModel):
-    runId: str
-    snapshots: list[TelemetrySnapshotSummary]
-    alerts: list[OperationalAlertSummary]
+    counts: SamplePreparationCounts | None = None
+    pendingCounts: list[SamplePreparationCounts] = Field(default_factory=list)
 
 
 ReportReviewStatus = Literal["Pending Review", "Ready to Consolidate", "Returned", "Consolidated"]

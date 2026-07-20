@@ -236,8 +236,6 @@ function updateMapEnterpriseTelemetry(current: MapEnterprise[] | undefined, snap
       estimatedUniqueCount: snapshot.uniqueCount,
       lastSync: snapshot.receivedAt,
       gatewayStatus: snapshot.gatewayStatus,
-      sourceKind: snapshot.sourceKind,
-      mockRunId: snapshot.mockRunId,
       status: getMapStatus(snapshot),
     };
   });

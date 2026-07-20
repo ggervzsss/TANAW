@@ -28,7 +28,7 @@ def test_database_url_uses_asyncpg_for_plain_postgresql_url() -> None:
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
 
 
-def test_database_url_uses_asyncpg_for_legacy_postgres_url() -> None:
+def test_database_url_uses_asyncpg_for_postgres_provider_url() -> None:
     settings = Settings(database_url="postgres://user:pass@example.com:5432/tanaw")
 
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
@@ -38,14 +38,6 @@ def test_database_url_preserves_explicit_driver() -> None:
     settings = Settings(database_url="postgresql+asyncpg://user:pass@example.com:5432/tanaw")
 
     assert settings.database_url == "postgresql+asyncpg://user:pass@example.com:5432/tanaw"
-
-
-def test_mock_data_flag_uses_tanaw_prefixed_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TANAW_ALLOW_MOCK_DATA", "true")
-
-    settings = Settings()
-
-    assert settings.allow_mock_data is True
 
 
 def test_default_access_token_lifetime_supports_continuous_operation() -> None:
@@ -225,7 +217,6 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
     assert settings.password_reset_retention_days == 30
     assert settings.password_reset_rate_bucket_retention_days == 2
     assert settings.account_email_change_retention_days == 180
-    assert settings.development_delivery_retention_days == 7
     assert settings.email_outbox_retention_days == 180
     assert settings.failed_email_outbox_retention_days == 365
 
@@ -241,7 +232,6 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
         ("password_reset_retention_days", 0),
         ("password_reset_rate_bucket_retention_days", 0),
         ("account_email_change_retention_days", 29),
-        ("development_delivery_retention_days", 0),
         ("email_outbox_retention_days", 29),
         ("failed_email_outbox_retention_days", 29),
     ],
@@ -266,24 +256,3 @@ def test_sender_and_test_recipient_must_be_valid_email_addresses() -> None:
 def test_development_seed_accounts_require_complete_credentials() -> None:
     with pytest.raises(ValueError, match=r"All DEVELOPMENT_\*"):
         Settings(seed_development_accounts=True)
-
-
-def test_legacy_startup_environment_names_remain_supported(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("DEFAULT_IT_USERNAME", "legacy-bootstrap@tanaw.local")
-    monkeypatch.setenv("DEFAULT_IT_PASSWORD", "legacy-bootstrap-password")
-    monkeypatch.setenv("TEMPORARY_ADMIN_USERNAME", "legacy-admin@tanaw.local")
-    monkeypatch.setenv("TEMPORARY_ADMIN_PASSWORD", "legacy-admin-password")
-    monkeypatch.setenv("TEMPORARY_STAFF_USERNAME", "legacy-staff@tanaw.local")
-    monkeypatch.setenv("TEMPORARY_STAFF_PASSWORD", "legacy-staff-password")
-    monkeypatch.setenv("TEMPORARY_IT_USERNAME", "legacy-it@tanaw.local")
-    monkeypatch.setenv("TEMPORARY_IT_PASSWORD", "legacy-it-password")
-    monkeypatch.setenv("TANAW_SEED_DEVELOPMENT_ACCOUNTS", "true")
-
-    settings = Settings()
-
-    assert settings.bootstrap_it_username == "legacy-bootstrap@tanaw.local"
-    assert settings.development_admin_username == "legacy-admin@tanaw.local"
-    assert settings.development_staff_username == "legacy-staff@tanaw.local"
-    assert settings.development_it_username == "legacy-it@tanaw.local"

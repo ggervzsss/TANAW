@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { EmptyState, PageMotion, stagger } from "@/shared/components/ui";
+import { EmptyState, FilterSelect, PageMotion, stagger } from "@/shared/components/ui";
 import { useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
@@ -122,6 +122,7 @@ export function StaffAnalyticsPage() {
   const enterpriseRows = useMemo(() => getEnterpriseReportRows(reportEnterprises, activeReports), [activeReports, reportEnterprises]);
   const submittedRows = enterpriseRows.filter((row) => row.submitted);
   const totalReports = reportEnterprises.length;
+  const totalPendingReports = Math.max(0, totalReports - submittedRows.length);
   const submissionRate = totalReports === 0 ? 0 : Math.round((submittedRows.length / totalReports) * 100);
   const comparisonPeriod = periods[activePeriodIndex + 1];
   const chartData = enterpriseRows.map(({ enterprise, reports, submitted }) => ({
@@ -133,7 +134,7 @@ export function StaffAnalyticsPage() {
   const complianceRows = useMemo(() => getBarangayComplianceRows(enterpriseRows), [enterpriseRows]);
 
   return (
-    <PageMotion>
+    <PageMotion className="tanaw-staff-dashboard pb-12">
       <PageHeader title="Dashboard" description="Compare enterprise performance to identify discrepancies before consolidation." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
@@ -154,35 +155,31 @@ export function StaffAnalyticsPage() {
           footClassName="text-yellow-600"
           icon={ClipboardCheck}
         />
-        <div className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="tanaw-dashboard-panel flex flex-col justify-between rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div>
             <span className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Reporting Period</span>
             <p className="mt-1 text-[11px] leading-snug text-gray-500">Filter comparative data and live update history by calendar month.</p>
           </div>
           <div className="mt-4">
-            <select
+            <FilterSelect
               value={activePeriod?.key ?? ""}
-              onChange={(event) => setSelectedPeriodKey(event.target.value)}
-              className="focus:ring-tgreen-dark focus:border-tgreen-dark w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition outline-none hover:border-gray-400 focus:ring-1"
-            >
-              {periods.map((period) => (
-                <option key={period.key} value={period.key}>
-                  {period.label}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedPeriodKey}
+              options={periods.map((period) => [period.key, period.label] as const)}
+              ariaLabel="Reporting period"
+              className="w-full"
+            />
           </div>
         </div>
       </motion.section>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="col-span-2 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="tanaw-dashboard-panel col-span-2 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h3 className="mb-6 text-sm font-semibold text-gray-900">Enterprise Traffic Comparison</h3>
           <div className="h-72">
             {reportEnterprisesQuery.isLoading ? (
               <EmptyState icon={Activity} title="Loading enterprises" description="Fetching registered enterprise accounts for analytics." minHeightClassName="min-h-72" />
             ) : reportsQuery.isLoading ? (
-              <EmptyState icon={Activity} title="Loading report intake" description="Fetching synchronized enterprise report submissions." minHeightClassName="min-h-72" />
+              <EmptyState icon={Activity} title="Loading report intake" description="Fetching the latest enterprise report submissions." minHeightClassName="min-h-72" />
             ) : chartData.length === 0 ? (
               <EmptyState
                 icon={Activity}
@@ -193,17 +190,18 @@ export function StaffAnalyticsPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.15} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} dy={10} />
-                  <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} dx={-10} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--tanaw-chart-grid)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--tanaw-chart-axis)" }} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--tanaw-chart-axis)" }} axisLine={false} tickLine={false} dx={-10} />
                   <Tooltip
                     cursor={{ fill: "rgba(0,0,0,0.04)" }}
                     contentStyle={{
-                      backgroundColor: "#1f2937",
-                      color: "#fff",
-                      border: "none",
+                      backgroundColor: "var(--tanaw-chart-tooltip-bg)",
+                      color: "var(--tanaw-chart-tooltip-text)",
+                      border: "1px solid var(--tanaw-border-subtle)",
                       borderRadius: "8px",
                       fontSize: "12px",
+                      boxShadow: "var(--tanaw-shadow-raised)",
                     }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
@@ -215,13 +213,23 @@ export function StaffAnalyticsPage() {
           </div>
         </section>
 
-        <section className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Compliance Status</h3>
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-            </span>
+        <section className="tanaw-dashboard-panel flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="text-sm font-semibold text-gray-900">Compliance Status</h3>
+              <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2" aria-label={`${submittedRows.length} complete reports and ${totalPendingReports} pending reports`}>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black tracking-wide text-emerald-800 uppercase dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-200">
+                Complete <strong className="font-mono text-xs">{submittedRows.length}</strong>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black tracking-wide text-amber-800 uppercase dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200">
+                Pending <strong className="font-mono text-xs">{totalPendingReports}</strong>
+              </span>
+            </div>
           </div>
           <div className="max-h-75 space-y-4 overflow-y-auto pr-1">
             {complianceRows.map((row) => (
@@ -229,7 +237,7 @@ export function StaffAnalyticsPage() {
             ))}
             {reportEnterprisesQuery.isLoading && <EmptyState icon={ClipboardCheck} title="Loading registry" description="Fetching registered enterprise accounts." minHeightClassName="min-h-45" />}
             {!reportEnterprisesQuery.isLoading && reportsQuery.isLoading && (
-              <EmptyState icon={ClipboardCheck} title="Loading submissions" description="Fetching synchronized report intake records." minHeightClassName="min-h-45" />
+              <EmptyState icon={ClipboardCheck} title="Loading submissions" description="Fetching the latest report intake records." minHeightClassName="min-h-45" />
             )}
             {!reportEnterprisesQuery.isLoading && complianceRows.length === 0 && (
               <EmptyState icon={ClipboardCheck} title="No registered enterprises" description="Compliance status will appear once enterprise accounts are registered." minHeightClassName="min-h-45" />
@@ -277,17 +285,21 @@ function BarangayComplianceItem({ row }: { row: BarangayComplianceRow }) {
   const complete = row.pending === 0;
 
   return (
-    <div className={`rounded-lg border p-3.5 transition hover:shadow-sm ${complete ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
+    <div
+      className={`rounded-xl border p-3.5 transition-colors ${
+        complete ? "border-emerald-100 bg-emerald-50 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-amber-100 bg-amber-50 dark:border-amber-300/20 dark:bg-amber-400/10"
+      }`}
+    >
       <div className="flex items-center justify-between">
         <span className={`text-xs font-bold tracking-wide uppercase ${complete ? "text-emerald-800" : "text-amber-800"}`}>{row.barangay}</span>
         <span className="shrink-0 font-mono text-[10px] text-gray-500">{row.total} total</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-md border border-emerald-100 bg-white/60 px-2 py-1.5">
+        <div className="tanaw-dashboard-inset rounded-lg border border-emerald-100 bg-white/60 px-2 py-1.5 dark:border-emerald-300/20">
           <p className="text-[10px] font-bold tracking-wide text-emerald-700 uppercase">Complete</p>
           <p className="font-mono text-lg font-black text-emerald-800">{row.complete}</p>
         </div>
-        <div className="rounded-md border border-amber-100 bg-white/60 px-2 py-1.5">
+        <div className="tanaw-dashboard-inset rounded-lg border border-amber-100 bg-white/60 px-2 py-1.5 dark:border-amber-300/20">
           <p className="text-[10px] font-bold tracking-wide text-amber-700 uppercase">Pending</p>
           <p className="font-mono text-lg font-black text-amber-800">{row.pending}</p>
         </div>

@@ -14,7 +14,6 @@ export function AuthThemeToggle() {
       setResolvedTheme(applyThemePreference(theme));
     };
 
-    persistThemePreference(theme);
     applyTheme();
 
     if (theme !== "system") return undefined;
@@ -24,14 +23,16 @@ export function AuthThemeToggle() {
     return () => mediaQuery.removeEventListener("change", applyTheme);
   }, [theme]);
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => {
+      const nextTheme = resolveThemePreference(currentTheme) === "dark" ? "light" : "dark";
+      persistThemePreference(nextTheme);
+      return nextTheme;
+    });
+  };
+
   return (
-    <button
-      type="button"
-      className="tanaw-auth-theme-toggle"
-      aria-label={label}
-      title={label}
-      onClick={() => setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"))}
-    >
+    <button type="button" className="tanaw-auth-theme-toggle" aria-label={label} title={label} onClick={toggleTheme}>
       <span className="tanaw-auth-theme-toggle__icon" aria-hidden="true">
         {isDark ? <Sun size={18} strokeWidth={2.2} /> : <Moon size={18} strokeWidth={2.2} />}
       </span>

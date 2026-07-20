@@ -20,3 +20,15 @@ contextBridge.exposeInMainWorld("tanawCameraCredentials", {
     return ipcRenderer.invoke("camera-credentials:save", scope, records);
   },
 });
+
+contextBridge.exposeInMainWorld("tanawAuthSession", {
+  load() {
+    return ipcRenderer.invoke("auth-session:load");
+  },
+  save(session: unknown) {
+    return ipcRenderer.invoke("auth-session:save", session);
+  },
+  clear() {
+    return ipcRenderer.invoke("auth-session:clear");
+  },
+});

@@ -14,7 +14,7 @@ from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.auth import account_activation, password_recovery
 from app.features.auth import service as auth_service
 from app.features.auth.models import AccountActivationToken
-from app.features.mail.templates import account_activation_email
+from app.features.mail.templates import EmailRecipient, account_activation_email
 
 
 def test_activation_schema_replaces_temporary_password_state() -> None:
@@ -72,7 +72,15 @@ def test_activation_email_contains_a_link_without_an_emailed_password() -> None:
     )
     activation_url = "https://tanaw.example/activate-account?token=secret-token"
 
-    content = account_activation_email(account, activation_url, "2026-07-12 12:00 UTC")
+    content = account_activation_email(
+        EmailRecipient(
+            display_name=account.display_name,
+            email=account.email,
+            role=account.role,
+        ),
+        activation_url,
+        "2026-07-12 12:00 UTC",
+    )
 
     assert content.subject == "Activate your TANAW account"
     assert activation_url in content.text

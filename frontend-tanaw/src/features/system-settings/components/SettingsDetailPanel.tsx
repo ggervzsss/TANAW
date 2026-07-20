@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { Panel } from "@/shared/components/panel";
+import { FilterSelect } from "@/shared/components/ui";
 import type { SettingField, SettingSection, SettingValue } from "../types";
 
 type SettingsDetailPanelProps = {
@@ -106,17 +107,13 @@ function SettingControl({ field, value, onChange }: { field: SettingField; value
   }
 
   return (
-    <select
+    <FilterSelect
       value={String(value)}
-      onChange={(event) => onChange(typeof field.value === "number" ? Number(event.target.value) : event.target.value)}
-      className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 outline-none focus:ring-1"
-    >
-      {field.options.map((option) => (
-        <option key={String(option)} value={String(option)}>
-          {formatSelectOption(field, option)}
-        </option>
-      ))}
-    </select>
+      onChange={(nextValue) => onChange(typeof field.value === "number" ? Number(nextValue) : nextValue)}
+      options={field.options.map((option) => [String(option), formatSelectOption(field, option)] as const)}
+      ariaLabel={field.label}
+      className="w-full"
+    />
   );
 }
 
@@ -125,6 +122,7 @@ function formatSelectOption(field: SettingField, option: string | number) {
   if (field.key === "loginAttemptLimit") return `${option} attempts`;
   if (field.key === "loginLockMinutes") return `${option} minutes`;
   if (field.key === "retentionDays") return `${option} days`;
+  if (field.key === "timeFormat") return option === "24-hour" ? "24-hour" : "12-hour (AM/PM)";
   return String(option);
 }
 

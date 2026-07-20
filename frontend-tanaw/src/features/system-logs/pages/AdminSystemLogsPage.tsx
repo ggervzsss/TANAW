@@ -6,11 +6,13 @@ import { routes } from "@/app/routers/routes";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, FilterSelect, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import type { LogSeverity, SystemLog, SystemLogActorRole, SystemLogCategory } from "@/shared/types";
 import { activityTimeRanges, isWithinActivityTimeRange } from "@/shared/utils";
 import type { ActivityTimeRange } from "@/shared/utils";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type CategoryFilter = "All Categories" | SystemLogCategory;
 type ActorFilter = "All Actors" | SystemLogActorRole;
@@ -21,6 +23,7 @@ const actorFilters: ActorFilter[] = ["All Actors", "Admin", "IT Personnel", "LGU
 const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info", "Success"];
 
 export function AdminSystemLogsPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading } = useActivityLogs();
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All Categories");
@@ -49,25 +52,25 @@ export function AdminSystemLogsPage() {
   const riskCount = logs.filter((log) => log.severity === "Critical" || log.severity === "Warning").length;
 
   return (
-    <PageMotion>
-      <PageHeader title="System Logs" description="Centralized operational feed for IT activity, staff submissions, admin actions, and system-wide events." />
+    <PageMotion className="tanaw-data-page pb-12">
+      <PageHeader title="System Logs" description="Recorded IT activity, staff submissions, admin actions, and system events." />
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
-        <MetricCard label="Total Logs" value={logs.length} foot="Centralized audit records" color="#2563eb" icon={Activity} />
+        <MetricCard label="Total Logs" value={logs.length} foot="Recorded system activity" color="#2563eb" icon={Activity} />
         <MetricCard label="Admin Operations" value={adminCount} foot="Recorded Admin actions" color="#065f46" icon={ShieldCheck} />
         <MetricCard label="Staff Activity" value={staffCount} foot="Submissions and report actions" color="#10b981" icon={Users} />
-        <MetricCard label="Risk Signals" value={riskCount} foot="Warning and critical logs" color="#dc2626" footClassName="text-red-600" icon={AlertTriangle} />
+        <MetricCard label="Warnings" value={riskCount} foot="Warning and critical logs" color="#dc2626" footClassName="text-red-600" icon={AlertTriangle} />
       </motion.section>
 
-      <Panel className="mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
+      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
+        <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
           <div className="relative min-w-65 flex-1">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search actor, action, target, source, or summary"
-              className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+              placeholder="Search name, action, target, or summary"
+              className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
           <FilterSelect value={categoryFilter} onChange={(value) => setCategoryFilter(value as CategoryFilter)} options={categoryFilters} />
@@ -76,7 +79,7 @@ export function AdminSystemLogsPage() {
           <FilterSelect value={timeRange} onChange={(value) => setTimeRange(value as ActivityTimeRange)} options={activityTimeRanges} />
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="tanaw-data-table overflow-x-auto">
           <table className="w-full min-w-230 table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[15%]" />
@@ -86,19 +89,19 @@ export function AdminSystemLogsPage() {
               <col className="w-[18%]" />
               <col className="w-[28%]" />
             </colgroup>
-            <thead className="bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+            <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
-                {["Timestamp", "Category", "Severity", "Actor", "Action / Target", "Summary"].map((heading) => (
+                {["Date and Time", "Category", "Severity", "Actor", "Action / Target", "Summary"].map((heading) => (
                   <th key={heading} className="px-4 py-4 whitespace-nowrap">
                     {heading}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-800">
+            <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
               {filteredLogs.map((log) => (
-                <tr key={log.id} onClick={() => setSelectedLog(log)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
-                  <td className="px-4 py-4 font-mono text-xs text-gray-500">{log.timestamp}</td>
+                <tr key={log.id} onClick={() => setSelectedLog(log)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                  <td className="px-4 py-4 font-mono text-xs text-gray-500">{formatPhilippineDateTime(log.timestamp, timeFormat)}</td>
                   <td className="px-4 py-4">
                     <CategoryBadge category={log.category} />
                   </td>
@@ -106,14 +109,20 @@ export function AdminSystemLogsPage() {
                     <SeverityBadge severity={log.severity} />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="font-semibold text-gray-900">{log.actor}</div>
-                    <div className="mt-1 text-[10px] font-bold tracking-wide text-gray-500 uppercase">{log.actorRole}</div>
+                    <ExpandableTableText
+                      primary={log.actor}
+                      secondary={log.actorRole}
+                      ariaLabel="actor"
+                      className="font-semibold text-gray-900"
+                      secondaryClassName="text-[10px] font-bold tracking-wide text-gray-500 uppercase"
+                    />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="font-semibold text-gray-900">{log.action}</div>
-                    <div className="mt-1 truncate text-xs text-gray-500">{log.target}</div>
+                    <ExpandableTableText primary={log.action} secondary={log.target} ariaLabel="action and target" className="font-semibold text-gray-900" secondaryClassName="text-xs text-gray-500" />
                   </td>
-                  <td className="px-4 py-4 text-xs leading-relaxed text-gray-600">{log.summary}</td>
+                  <td className="px-4 py-4 text-xs leading-relaxed text-gray-600">
+                    <ExpandableTableText primary={log.summary} ariaLabel="summary" threshold={72} twoLines />
+                  </td>
                 </tr>
               ))}
               {filteredLogs.length === 0 && (
@@ -131,7 +140,7 @@ export function AdminSystemLogsPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
+        <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
           <span>Showing {filteredLogs.length} records</span>
           <span>{timeRange}</span>
         </div>
@@ -176,27 +185,12 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
 
   return (
     <ModalFrame title="Log Details" eyebrow={log.id} onClose={onClose} maxWidthClassName="max-w-4xl">
-      <div className="grid gap-4 md:grid-cols-2">
-        <DetailField label="Timestamp" value={formatLogTimestamp(log.timestamp)} />
-        <DetailField label="Source ID" value={log.sourceId ?? "N/A"} />
-        <DetailField label="Category" value={<CategoryBadge category={log.category} />} />
-        <DetailField label="Severity" value={<SeverityBadge severity={log.severity} />} />
-        <DetailField label="Actor" value={`${log.actor} (${log.actorRole})`} />
-        <DetailField label="Action" value={log.action} />
-        <DetailField label="Target" value={log.target} />
-        <div className="md:col-span-2">
-          <DetailField label="Summary" value={log.summary} />
-        </div>
-        {log.metadata && (
-          <section className="rounded-2xl border border-emerald-100 bg-slate-950 p-4 shadow-inner md:col-span-2">
-            <p className="mb-3 text-[10px] font-bold tracking-[0.18em] text-emerald-200 uppercase">Metadata</p>
-            <pre className="max-h-60 overflow-auto text-xs leading-relaxed whitespace-pre-wrap text-slate-100">{JSON.stringify(log.metadata, null, 2)}</pre>
-          </section>
-        )}
-      </div>
+      <AdminLogDetailFields log={log} />
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-700">This activity is tied to an enterprise support ticket. Open the supervision view to inspect the full ticket, photos, status, and IT conversation.</p>
+          <p className="text-sm font-semibold text-slate-700">
+            This activity is tied to an enterprise support ticket. Open the supervision view to inspect the full ticket, photos, status, and IT conversation.
+          </p>
           <button
             type="button"
             onClick={openTicket}
@@ -211,14 +205,29 @@ function LogDetailsModal({ log, onClose }: { log: SystemLog; onClose: () => void
   );
 }
 
+export function AdminLogDetailFields({ log }: { log: SystemLog }) {
+  const { timeFormat } = useSystemDisplayPreferences();
+  const expandableValue = (value: string, label: string) => (
+    <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" className="leading-relaxed font-semibold" />
+  );
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <DetailField label="Date and Time" value={formatPhilippineDateTime(log.timestamp, timeFormat)} />
+      <DetailField label="Source ID" value={log.sourceId ?? "N/A"} />
+      <DetailField label="Category" value={<CategoryBadge category={log.category} />} />
+      <DetailField label="Severity" value={<SeverityBadge severity={log.severity} />} />
+      <DetailField label="Actor" value={expandableValue(`${log.actor} (${log.actorRole})`, "actor")} />
+      <DetailField label="Action" value={expandableValue(log.action, "action")} />
+      <DetailField label="Target" value={expandableValue(log.target, "target")} />
+      <DetailField label="Summary" value={expandableValue(log.summary, "summary")} />
+    </div>
+  );
+}
+
 function getTimestampValue(timestamp: string) {
   const value = Date.parse(timestamp);
   return Number.isNaN(value) ? 0 : value;
-}
-
-function formatLogTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
 
 function getSupportTicketIdFromLog(log: SystemLog) {

@@ -6,13 +6,19 @@ import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import {
   normalizeEmail,
-  normalizePersonName,
+  PERSON_NAME_MAX_LENGTH,
+  formatPersonName,
   normalizePhilippineContactNumber,
+  normalizeMiddleInitial,
+  parsePersonName,
   toPhilippineLocalDigits,
   validateEmail,
+  validateMiddleInitial,
   validatePersonName,
   validatePhilippineContactNumber,
 } from "@/shared/utils/accountValidation";
@@ -26,7 +32,9 @@ type EnterpriseDetailsModalProps = {
 type EnterpriseEditState = {
   enterpriseName: string;
   category: string;
-  managerName: string;
+  managerFirstName: string;
+  managerMiddleInitial: string;
+  managerLastName: string;
   email: string;
   phoneLocal: string;
   barangay: string;
@@ -49,6 +57,7 @@ const allowedStatusValues = ["active", "inactive"] satisfies UpdateEnterpriseAcc
 
 export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EnterpriseEditState>(() => getInitialForm(enterprise));
   const [errors, setErrors] = useState<EnterpriseEditErrors>({});
@@ -63,7 +72,9 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       const emailVerificationQueued = enterprise.isActivated && payload.email !== enterprise.email && updatedEnterprise.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        ...(activationEmailQueued || emailVerificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        ...(activationEmailQueued || emailVerificationQueued
+          ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]
+          : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setForm(getInitialForm(updatedEnterprise));
@@ -84,7 +95,11 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const activationMutation = useMutation({
     mutationFn: () => resendAccountActivation(enterprise.id),
     onSuccess: async (updatedEnterprise) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }), queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
+      ]);
       onEnterpriseUpdated(updatedEnterprise);
       setConfirmMode(null);
       toast.success("Activation email queued");
@@ -120,10 +135,10 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       ["Registered Address", enterprise.address ?? "Not provided"],
       ["Map Location", enterprise.latitude !== null && enterprise.longitude !== null ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}` : "Not pinned"],
       ["Status", enterprise.status],
-      ["Created", new Date(enterprise.createdAt).toLocaleString()],
+      ["Created", formatPhilippineDateTime(enterprise.createdAt, timeFormat)],
       ["Activation", enterprise.isActivated ? "Complete" : "Pending"],
     ],
-    [enterprise],
+    [enterprise, timeFormat],
   );
 
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -138,7 +153,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
     const payload: UpdateEnterpriseAccountPayload = {
       enterpriseName: form.enterpriseName.trim(),
       category: form.category,
-      managerName: normalizePersonName(form.managerName),
+      managerName: formatPersonName({ firstName: form.managerFirstName, middleInitial: form.managerMiddleInitial, lastName: form.managerLastName }),
       email: normalizeEmail(form.email),
       contactNumber: normalizedPhone || undefined,
       barangay: form.barangay,
@@ -224,7 +239,14 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
           ) : (
             <form onSubmit={handleEditSubmit} noValidate className="space-y-5">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <FormField name="enterpriseName" label="Enterprise Name" value={form.enterpriseName} onChange={(value) => updateField("enterpriseName", value)} error={errors.enterpriseName} required />
+                <FormField
+                  name="enterpriseName"
+                  label="Enterprise Name"
+                  value={form.enterpriseName}
+                  onChange={(value) => updateField("enterpriseName", value)}
+                  error={errors.enterpriseName}
+                  required
+                />
                 <SearchableDropdownField
                   name="category"
                   label="Enterprise Type / Category"
@@ -234,10 +256,49 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                   error={errors.category}
                   required
                 />
-                <FormField name="managerName" label="Contact Person / Manager" value={form.managerName} onChange={(value) => updateField("managerName", value)} error={errors.managerName} required />
-                <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required />
+                <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
+                  <FormField
+                    name="managerFirstName"
+                    label="Contact First Name"
+                    value={form.managerFirstName}
+                    onChange={(value) => updateField("managerFirstName", value)}
+                    error={errors.managerFirstName}
+                    required
+                    autoComplete="given-name"
+                    maxLength={PERSON_NAME_MAX_LENGTH}
+                  />
+                  <FormField
+                    name="managerMiddleInitial"
+                    label="Middle Initial"
+                    value={form.managerMiddleInitial}
+                    onChange={(value) => updateField("managerMiddleInitial", normalizeMiddleInitial(value))}
+                    error={errors.managerMiddleInitial}
+                    autoComplete="additional-name"
+                    maxLength={1}
+                    helperText="Optional"
+                  />
+                  <FormField
+                    name="managerLastName"
+                    label="Contact Last Name"
+                    value={form.managerLastName}
+                    onChange={(value) => updateField("managerLastName", value)}
+                    error={errors.managerLastName}
+                    required
+                    autoComplete="family-name"
+                    maxLength={PERSON_NAME_MAX_LENGTH}
+                  />
+                </div>
+                <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
                 <ContactNumberField name="contactNumber" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
-                <FormField name="buildingCapacity" label="Building Capacity" type="number" value={form.buildingCapacity} onChange={(value) => updateField("buildingCapacity", value)} error={errors.buildingCapacity} required />
+                <FormField
+                  name="buildingCapacity"
+                  label="Building Capacity"
+                  type="number"
+                  value={form.buildingCapacity}
+                  onChange={(value) => updateField("buildingCapacity", value)}
+                  error={errors.buildingCapacity}
+                  required
+                />
                 <SearchableDropdownField
                   name="barangay"
                   label="Barangay"
@@ -499,10 +560,13 @@ function ConfirmationPanel({
 }
 
 function getInitialForm(enterprise: AccountSummary): EnterpriseEditState {
+  const managerName = parsePersonName(enterprise.managerName ?? "");
   return {
     enterpriseName: enterprise.enterpriseName ?? enterprise.displayName,
     category: enterprise.category ?? "",
-    managerName: enterprise.managerName ?? "",
+    managerFirstName: managerName.firstName,
+    managerMiddleInitial: managerName.middleInitial,
+    managerLastName: managerName.lastName,
     email: enterprise.email,
     phoneLocal: enterprise.phone ? toPhilippineLocalDigits(enterprise.phone) : "",
     barangay: enterprise.barangay ?? "",
@@ -515,14 +579,18 @@ function getInitialForm(enterprise: AccountSummary): EnterpriseEditState {
 function validateEnterpriseEditForm(form: EnterpriseEditState) {
   const errors: EnterpriseEditErrors = {};
   const enterpriseName = form.enterpriseName.trim();
-  const managerNameError = validatePersonName(form.managerName, "Contact person");
+  const managerFirstNameError = validatePersonName(form.managerFirstName, "First name");
+  const managerMiddleInitialError = validateMiddleInitial(form.managerMiddleInitial);
+  const managerLastNameError = validatePersonName(form.managerLastName, "Last name");
   const emailError = validateEmail(form.email);
   const phoneError = validatePhilippineContactNumber(form.phoneLocal ? `+63${form.phoneLocal}` : "", false);
 
   if (!enterpriseName) errors.enterpriseName = "Enterprise name is required.";
   if (enterpriseName && enterpriseName.length < 2) errors.enterpriseName = "Enterprise name must be at least 2 characters.";
   if (!enterpriseCategoryValues.has(form.category)) errors.category = "Choose a valid enterprise type.";
-  if (managerNameError) errors.managerName = managerNameError;
+  if (managerFirstNameError) errors.managerFirstName = managerFirstNameError;
+  if (managerMiddleInitialError) errors.managerMiddleInitial = managerMiddleInitialError;
+  if (managerLastNameError) errors.managerLastName = managerLastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;
   if (!sanPedroBarangayValues.has(form.barangay)) errors.barangay = "Choose a valid barangay.";

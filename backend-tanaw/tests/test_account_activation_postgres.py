@@ -19,7 +19,12 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 from app.core.security import hash_password, verify_password
-from app.features.accounts.models import Account, AccountRole, AccountStatus, DevDelivery
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+)
 from app.features.accounts.router import update_account_status, update_lgu_account
 from app.features.accounts.schemas import AccountStatusUpdate, LguAccountUpdate
 from app.features.accounts.service import create_account_with_activation
@@ -126,7 +131,6 @@ async def _clean_rows(runtime: PostgresRuntime) -> None:
                     AccountActivationToken.account_id.in_(account_ids)
                 )
             )
-            await db.execute(delete(DevDelivery).where(DevDelivery.account_id.in_(account_ids)))
             await db.execute(delete(ActivityLog).where(ActivityLog.source_id.in_(account_ids)))
             await db.execute(
                 delete(UserNotification).where(
@@ -154,12 +158,17 @@ async def _create_pending_account(
             title="Enterprise Account" if role == AccountRole.ENTERPRISE else "LGU Staff",
             first_name=None if role == AccountRole.ENTERPRISE else "Activation",
             last_name=None if role == AccountRole.ENTERPRISE else "Test",
-            enterprise_name=f"Activation Test {label} Enterprise"
-            if role == AccountRole.ENTERPRISE
-            else None,
-            enterprise_id=f"activation_{label}_{uuid4().hex[:8]}@tanaw.sanpedro"
-            if role == AccountRole.ENTERPRISE
-            else None,
+            enterprise_profile=(
+                EnterpriseProfile(
+                    enterprise_id=f"activation_{label}_{uuid4().hex[:8]}@tanaw.sanpedro",
+                    enterprise_name=f"Activation Test {label} Enterprise",
+                    category="business",
+                    manager_name="Activation Test",
+                    barangay="Poblacion",
+                )
+                if role == AccountRole.ENTERPRISE
+                else None
+            ),
         )
 
 
@@ -179,7 +188,6 @@ async def _create_active_it_actor(runtime: PostgresRuntime, *, label: str) -> Ac
         is_protected_system_account=False,
         activated_at=now,
         password_changed_at=now,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(actor)
@@ -235,10 +243,12 @@ async def test_account_creation_activation_and_login_use_only_single_use_links(
                 )
                 is None
             )
-            if stored.enterprise_id:
+            if stored.enterprise_profile:
                 assert (
                     await auth_service.authenticate_account(
-                        db, stored.enterprise_id, "Unknown pending password phrase"
+                        db,
+                        stored.enterprise_profile.enterprise_id,
+                        "Unknown pending password phrase",
                     )
                     is None
                 )
@@ -453,8 +463,9 @@ async def test_two_concurrent_activation_completions_have_exactly_one_winner(
         assert verify_password(winning_password, stored.password_hash)
         assert not verify_password(losing_password, stored.password_hash)
         by_email = await auth_service.authenticate_account(db, stored.email, winning_password)
+        assert stored.enterprise_profile is not None
         by_enterprise_id = await auth_service.authenticate_account(
-            db, stored.enterprise_id or "", winning_password
+            db, stored.enterprise_profile.enterprise_id, winning_password
         )
         assert by_email is not None
         assert by_enterprise_id is not None
