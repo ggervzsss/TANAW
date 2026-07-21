@@ -71,10 +71,10 @@ export function ITDevLogPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Dev Log" description="Temporary development log for account activation and recovery email messages." />
+      <PageHeader title="Development Email" description="Development-only view of account activation and recovery messages sent by TANAW." />
 
       <Panel className="overflow-hidden">
-        <PanelHeader title="Email Delivery Logs" icon={Inbox} />
+        <PanelHeader title="Development Messages" icon={Inbox} />
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 p-4">
           <div className="relative min-w-0 flex-1 sm:min-w-80">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
@@ -112,7 +112,7 @@ export function ITDevLogPage() {
             <EmptyState
               icon={Inbox}
               title="No development messages"
-              description={deliveriesQuery.isLoading ? "Loading development logs..." : "Account activation and recovery emails will be recorded here."}
+              description={deliveriesQuery.isLoading ? "Loading development messages..." : "Account activation and recovery emails will appear here while running in development."}
             />
           )}
         </div>

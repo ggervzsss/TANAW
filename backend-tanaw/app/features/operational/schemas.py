@@ -127,6 +127,44 @@ class OperationalSummary(BaseModel):
     lastSyncAt: datetime | None = None
 
 
+VisitorInsightRange = Literal["today", "7d", "30d"]
+VisitorInsightScope = Literal["city", "barangay", "enterprise"]
+VisitorActivityLevel = Literal["Usual", "Busier Than Usual", "No Recent Baseline"]
+
+
+class VisitorInsightPoint(BaseModel):
+    startAt: datetime
+    label: str
+    averageVisitors: int = Field(ge=0)
+    peakVisitors: int = Field(ge=0)
+
+
+class VisitorInsightEnterprise(BaseModel):
+    enterpriseId: str
+    enterpriseName: str
+    barangay: str
+    currentVisitors: int = Field(ge=0)
+    typicalVisitors: int | None = Field(default=None, ge=0)
+    differencePercent: int | None = None
+    activityLevel: VisitorActivityLevel
+
+
+class VisitorInsightsSummary(BaseModel):
+    range: VisitorInsightRange
+    scopeType: VisitorInsightScope
+    scopeId: str | None = None
+    scopeName: str
+    currentVisitors: int = Field(ge=0)
+    typicalVisitors: int | None = Field(default=None, ge=0)
+    differencePercent: int | None = None
+    comparisonMessage: str
+    busiestEnterprise: VisitorInsightEnterprise | None = None
+    busiestPeriodLabel: str | None = None
+    series: list[VisitorInsightPoint] = Field(default_factory=list)
+    unusuallyBusy: list[VisitorInsightEnterprise] = Field(default_factory=list)
+    lastUpdatedAt: datetime | None = None
+
+
 def _report_metrics_from_payload(
     payload: dict | None,
 ) -> tuple[int, int, int, int] | None:
@@ -356,7 +394,6 @@ class OperationalAlertSummary(BaseModel):
         "Maintenance Request",
         "Password Reset Request",
         "Submission Delay",
-        "Threshold Breach",
         "Foot Traffic Alert",
         "Occupancy Spike",
         "Failed Login Threshold",

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SystemLog } from "@/shared/types";
-import { AdminLogDetailFields } from "./AdminSystemLogsPage";
+import { AdminActivityDetailFields } from "./AdminActivityHistoryPage";
 import { ActivityDetailFields } from "./ITSystemLogsPage";
 
 const logWithMetadata: SystemLog = {
@@ -18,15 +18,17 @@ const logWithMetadata: SystemLog = {
   metadata: { internalOnlyToken: "must-not-render" },
 };
 
-describe("system log detail presentation", () => {
+describe("activity detail presentation", () => {
   it.each([
-    ["Log Details", <AdminLogDetailFields log={logWithMetadata} />],
+    ["Activity History Details", <AdminActivityDetailFields activity={logWithMetadata} />],
     ["Activity Details", <ActivityDetailFields activity={logWithMetadata} />],
   ])("keeps API metadata out of %s while retaining legitimate fields", (_name, content) => {
     const markup = renderToStaticMarkup(content);
     expect(markup).toContain("Very Long Actor Name");
     expect(markup).toContain("The profile was updated.");
     expect(markup).not.toContain("Metadata");
+    expect(markup).not.toContain("Source ID");
+    expect(markup).not.toContain("source-1");
     expect(markup).not.toContain("internalOnlyToken");
     expect(markup).not.toContain("must-not-render");
   });

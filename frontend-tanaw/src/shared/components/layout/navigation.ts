@@ -1,4 +1,4 @@
-import { BarChart3, Bell, Building2, FileCheck2, FileText, Inbox, Layers, LayoutDashboard, MapPinned, Settings, Users } from "lucide-react";
+import { BarChart3, Bell, Building2, FileCheck2, FileText, Layers, LayoutDashboard, MapPinned, Settings, Users, Wrench } from "lucide-react";
 import type { ComponentType } from "react";
 import { routes } from "@/app/routers/routes";
 import type { UserRole } from "../../types/role.types";
@@ -19,15 +19,15 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
       icon: MapPinned,
     },
     {
-      id: "system-logs",
-      label: "System Logs",
-      path: routes.admin.systemLogs,
+      id: "activity-history",
+      label: "Activity History",
+      path: routes.admin.activityHistory,
       icon: FileText,
     },
     {
-      id: "alerts-monitor",
-      label: "Alerts & Monitor",
-      path: routes.admin.alertsMonitor,
+      id: "operations",
+      label: "Operations Center",
+      path: routes.admin.operations,
       icon: Bell,
     },
   ],
@@ -54,45 +54,33 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
   it: [
     {
       id: "dashboard",
-      label: "Dashboard",
+      label: "Overview",
       path: routes.it.dashboard,
       icon: LayoutDashboard,
     },
     {
+      id: "work-center",
+      label: "Work Center",
+      path: routes.it.workCenter,
+      icon: Wrench,
+    },
+    {
       id: "lgu-accounts",
-      label: "LGU Accounts",
+      label: "LGU Personnel",
       path: routes.it.lguAccounts,
       icon: Users,
     },
     {
       id: "enterprise-accounts",
-      label: "Enterprise Accounts",
+      label: "Enterprises",
       path: routes.it.enterpriseAccounts,
       icon: Building2,
-    },
-    {
-      id: "alerts",
-      label: "Alerts",
-      path: routes.it.alerts,
-      icon: Bell,
     },
     {
       id: "system-logs",
       label: "System Activity",
       path: routes.it.systemLogs,
       icon: FileText,
-    },
-    {
-      id: "email-deliveries",
-      label: "Email Delivery",
-      path: routes.it.emailDeliveries,
-      icon: Inbox,
-    },
-    {
-      id: "dev-log",
-      label: "Dev Log",
-      path: routes.it.devLog,
-      icon: Inbox,
     },
     {
       id: "system-settings",

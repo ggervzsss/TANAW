@@ -22,6 +22,42 @@ export type MapEnterprise = {
   gatewayStatus?: GatewayStatus;
 };
 
+export type VisitorInsightRange = "today" | "7d" | "30d";
+export type VisitorActivityLevel = "Usual" | "Busier Than Usual" | "No Recent Baseline";
+
+export type VisitorInsightPoint = {
+  startAt: string;
+  label: string;
+  averageVisitors: number;
+  peakVisitors: number;
+};
+
+export type VisitorInsightEnterprise = {
+  enterpriseId: string;
+  enterpriseName: string;
+  barangay: string;
+  currentVisitors: number;
+  typicalVisitors: number | null;
+  differencePercent: number | null;
+  activityLevel: VisitorActivityLevel;
+};
+
+export type VisitorInsights = {
+  range: VisitorInsightRange;
+  scopeType: "city" | "barangay" | "enterprise";
+  scopeId: string | null;
+  scopeName: string;
+  currentVisitors: number;
+  typicalVisitors: number | null;
+  differencePercent: number | null;
+  comparisonMessage: string;
+  busiestEnterprise: VisitorInsightEnterprise | null;
+  busiestPeriodLabel: string | null;
+  series: VisitorInsightPoint[];
+  unusuallyBusy: VisitorInsightEnterprise[];
+  lastUpdatedAt: string | null;
+};
+
 export type Enterprise = {
   id: string;
   enterpriseName: string;
@@ -53,7 +89,7 @@ export type SystemActivity = {
   requiresEnterpriseAttention?: boolean;
 };
 
-export type PriorityAlertType = "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Threshold Breach" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold";
+export type PriorityAlertType = "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold";
 export type PriorityAlertResolutionMode = "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring";
 export type PriorityAlertStatus = "New" | "In Review" | "Resolved";
 export type PriorityAlertOwner = "IT" | "Admin" | "System";

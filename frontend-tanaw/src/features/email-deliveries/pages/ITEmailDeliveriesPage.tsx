@@ -9,6 +9,7 @@ import { listEmailDeliveries, retryEmailDelivery, type EmailDelivery } from "@/s
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { isEmailProblem } from "../utils/emailDelivery";
 
 const EMPTY_DELIVERIES: EmailDelivery[] = [];
 
@@ -24,7 +25,7 @@ const STATUS_LABELS: Record<EmailDelivery["status"], string> = {
   reconciliation_required: "Provider check required",
 };
 
-export function ITEmailDeliveriesPage() {
+export function ITEmailDeliveriesPage({ embedded = false, problemsOnly = false }: { embedded?: boolean; problemsOnly?: boolean }) {
   const { timeFormat } = useSystemDisplayPreferences();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
@@ -43,17 +44,21 @@ export function ITEmailDeliveriesPage() {
   });
 
   const deliveries = deliveriesQuery.data ?? EMPTY_DELIVERIES;
+  const visibleDeliveries = useMemo(
+    () => (problemsOnly ? deliveries.filter(isEmailProblem) : deliveries),
+    [deliveries, problemsOnly],
+  );
   const filteredDeliveries = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return deliveries;
-    return deliveries.filter((delivery) => `${delivery.recipient} ${delivery.purpose} ${STATUS_LABELS[delivery.status]}`.toLowerCase().includes(normalizedQuery));
-  }, [deliveries, query]);
+    if (!normalizedQuery) return visibleDeliveries;
+    return visibleDeliveries.filter((delivery) => `${delivery.recipient} ${delivery.purpose} ${STATUS_LABELS[delivery.status]}`.toLowerCase().includes(normalizedQuery));
+  }, [query, visibleDeliveries]);
 
   return (
     <PageMotion>
-      <PageHeader title="Email Delivery" description="Review emails sent by TANAW and retry failed deliveries when available." />
+      {!embedded && <PageHeader title="Email Delivery" description="Review emails sent by TANAW and retry failed deliveries when available." />}
       <Panel className="overflow-hidden">
-        <PanelHeader title="Outbound Email" icon={Inbox} />
+        <PanelHeader title={problemsOnly ? "Email Problems" : "Sent Email History"} icon={Inbox} />
         <div className="border-b border-slate-200 bg-slate-50 p-4">
           <label className="relative block max-w-xl">
             <Search size={15} className="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
@@ -84,7 +89,13 @@ export function ITEmailDeliveriesPage() {
               ) : null}
             </article>
           ))}
-          {filteredDeliveries.length === 0 ? <EmptyState icon={Inbox} title="No email delivery records" description={deliveriesQuery.isLoading ? "Loading outbound email..." : "No records match the current search."} /> : null}
+          {filteredDeliveries.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title={problemsOnly ? "No email problems" : "No email delivery records"}
+              description={deliveriesQuery.isLoading ? "Checking email delivery..." : problemsOnly ? "There are no failed or uncertain emails that need IT attention." : "No records match the current search."}
+            />
+          ) : null}
         </div>
       </Panel>
     </PageMotion>

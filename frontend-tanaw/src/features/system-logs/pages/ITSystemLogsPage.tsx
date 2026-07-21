@@ -23,6 +23,7 @@ export function ITSystemLogsPage() {
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [accountFilter, setAccountFilter] = useState("All Accounts");
   const [timeRange, setTimeRange] = useState<ActivityTimeRange>("All Time");
+  const [showRoutineActivity, setShowRoutineActivity] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<SystemLog | null>(null);
 
   const dynamicTypeOptions = useMemo(() => getTypeOptions(logs, accountFilter), [accountFilter, logs]);
@@ -49,13 +50,14 @@ export function ITSystemLogsPage() {
       const matchesType = typeFilter === "All Types" || activity.category === typeFilter;
       const matchesAccount = accountFilter === "All Accounts" || activity.actorRole === accountFilter;
       const matchesTimeRange = isWithinActivityTimeRange(activity.timestamp, timeRange);
-      return matchesQuery && matchesType && matchesAccount && matchesTimeRange;
+      const matchesImportance = showRoutineActivity || !isRoutineActivity(activity);
+      return matchesQuery && matchesType && matchesAccount && matchesTimeRange && matchesImportance;
     });
-  }, [accountFilter, logs, query, timeRange, typeFilter]);
+  }, [accountFilter, logs, query, showRoutineActivity, timeRange, typeFilter]);
 
   return (
     <PageMotion>
-      <PageHeader title="System Activity" description="IT-visible activity stream for account events, enterprise connectivity, configuration changes, and automated system actions." />
+      <PageHeader title="System Activity" description="A searchable history of important account changes, technical issues, and IT actions." />
 
       <Panel className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4">
@@ -72,6 +74,13 @@ export function ITSystemLogsPage() {
             <FilterSelect value={typeFilter} onChange={handleTypeFilterChange} options={dynamicTypeOptions} />
             <FilterSelect value={accountFilter} onChange={handleAccountFilterChange} options={dynamicAccountOptions} />
             <FilterSelect value={timeRange} onChange={(value) => setTimeRange(value as ActivityTimeRange)} options={activityTimeRanges} />
+            <button
+              type="button"
+              onClick={() => setShowRoutineActivity((current) => !current)}
+              className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${showRoutineActivity ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-gray-300 bg-white text-gray-600 hover:border-emerald-300"}`}
+            >
+              {showRoutineActivity ? "Hide routine activity" : "Show routine activity"}
+            </button>
           </div>
         </div>
 
@@ -86,7 +95,7 @@ export function ITSystemLogsPage() {
             </colgroup>
             <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
-                {["Date and Time", "Type", "Actor", "Target", "Summary"].map((heading) => (
+                {["Date and Time", "Type", "Name", "Affected Item", "What Happened"].map((heading) => (
                   <th key={heading} className="px-3 py-4 whitespace-nowrap lg:px-4">
                     {heading}
                   </th>
@@ -142,6 +151,10 @@ export function ITSystemLogsPage() {
   );
 }
 
+function isRoutineActivity(activity: SystemLog) {
+  return ["Login", "Logout", "Submit Enterprise Report", "Generate Final Report"].includes(activity.action);
+}
+
 function getTypeOptions(logs: SystemLog[], accountFilter: string) {
   if (accountFilter === "All Accounts") return defaultTypeOptions;
   const relevantActivities = logs.filter((activity) => activity.actorRole === accountFilter);
@@ -163,7 +176,7 @@ function ActivityDetailsModal({ activity, timeFormat, onClose }: { activity: Sys
   const openTicket = () => {
     if (!supportTicketId) return;
     onClose();
-    navigate(`${routes.it.supportTickets}?ticket=${encodeURIComponent(supportTicketId)}`);
+    navigate(`${routes.it.workCenter}?view=support&ticket=${encodeURIComponent(supportTicketId)}`);
   };
 
   return (

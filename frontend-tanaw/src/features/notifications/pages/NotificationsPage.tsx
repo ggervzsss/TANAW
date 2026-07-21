@@ -12,7 +12,7 @@ type NotificationsPageProps = {
 
 const roleCopy: Record<NotificationsPageProps["role"], { description: string }> = {
   admin: {
-    description: "Review priority alerts, system activity, support requests, and account workflow updates for supervisory visibility.",
+    description: "Review important situations and escalated requests that may need an Admin decision.",
   },
   it: {
     description: "Review system activity, enterprise support requests, priority alerts, and technical delivery updates.",

@@ -38,4 +38,9 @@ export type {
   SystemActivityType,
   TelemetrySnapshot,
   OperationalSummary,
+  VisitorActivityLevel,
+  VisitorInsightEnterprise,
+  VisitorInsightPoint,
+  VisitorInsightRange,
+  VisitorInsights,
 } from "./domain.types";

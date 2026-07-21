@@ -59,7 +59,10 @@ from app.features.mail.dev_log import (
     list_dev_deliveries as list_ephemeral_dev_deliveries,
 )
 from app.features.operational.schemas import OperationalWebSocketEnvelope
-from app.features.operational.service import create_user_notification
+from app.features.operational.service import (
+    create_user_notification,
+    mark_source_notifications_read,
+)
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -489,6 +492,9 @@ async def resolve_enterprise_profile_change_request(
         requested_value=requested_value,
         approved=payload.action == "approve",
     )
+    await mark_it_account_request_complete(
+        db, source_type="enterprise.profile.contact", account_id=account.id
+    )
     return await to_account_summary_with_requests(db, account)
 
 
@@ -794,7 +800,28 @@ async def resolve_verified_email_change_request(
             notification_request_id,
         )
         await db.refresh(account)
+    await mark_it_account_request_complete(
+        db, source_type="enterprise.profile.email", account_id=account.id
+    )
     return await to_account_summary_with_requests(db, account)
+
+
+async def mark_it_account_request_complete(
+    db: AsyncSession, *, source_type: str, account_id: str
+) -> None:
+    notifications = await mark_source_notifications_read(
+        db,
+        source_type=source_type,
+        source_id=account_id,
+        recipient_role=AccountRole.IT,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.updated",
+                data=notification.model_dump(mode="json"),
+            )
+        )
 
 
 async def notify_enterprise_profile_change_resolution(

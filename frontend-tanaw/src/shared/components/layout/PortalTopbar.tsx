@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, LogOut, Menu, Moon, Settings, Shield, Sun, TicketCheck, User, Users, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, Settings, Shield, Sun, TicketCheck, User, Users, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -62,6 +62,13 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const userSelectedThemeRef = useRef(false);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
 
+  useEffect(() => {
+    document.title = unreadCount > 0 ? `(${unreadCount > 99 ? "99+" : unreadCount}) TANAW Portal` : "TANAW Portal";
+    return () => {
+      document.title = "TANAW Portal";
+    };
+  }, [unreadCount]);
+
   const profile = {
     name: authUser?.displayName ?? "TANAW User",
     email: authUser?.email ?? "",
@@ -99,11 +106,6 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const openAccountPage = (page: "profile" | "security") => {
     setShowProfileMenu(false);
     navigate(page === "profile" ? getRoleProfilePath(role) : getRoleSecurityPath(role));
-  };
-
-  const openSystemSettings = () => {
-    setShowProfileMenu(false);
-    navigate(routes.it.systemSettings);
   };
 
   const openSupportTickets = () => {
@@ -261,11 +263,11 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 
     const getItem = (id: string) => navigation.find((entry) => entry.id === id);
     const dashboard = getItem("dashboard");
+    const workCenter = getItem("work-center");
     const lguAccounts = getItem("lgu-accounts");
     const enterpriseAccounts = getItem("enterprise-accounts");
-    const alerts = getItem("alerts");
     const systemLogs = getItem("system-logs");
-    const emailDeliveries = getItem("email-deliveries");
+    const systemSettings = getItem("system-settings");
     const devLog = getItem("dev-log");
 
     const items: TopbarEntry[] = [];
@@ -274,30 +276,30 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       items.push({ type: "link", item: dashboard });
     }
 
-    const accountsChildren = [lguAccounts, enterpriseAccounts].filter(Boolean) as NavigationItem[];
-    if (accountsChildren.length) {
+    if (workCenter) {
+      items.push({ type: "link", item: workCenter });
+    }
+
+    const accountChildren = [lguAccounts, enterpriseAccounts].filter(Boolean) as NavigationItem[];
+    if (accountChildren.length) {
       items.push({
         type: "menu",
-        id: "accounts-management",
-        label: "Accounts Management",
+        id: "accounts",
+        label: "Accounts",
         icon: Users,
-        children: accountsChildren,
+        children: accountChildren,
       });
     }
 
-    const monitoringChildren = [alerts, systemLogs, emailDeliveries].filter(Boolean) as NavigationItem[];
-    if (monitoringChildren.length) {
+    const systemChildren = [systemLogs, systemSettings, devLog].filter(Boolean) as NavigationItem[];
+    if (systemChildren.length) {
       items.push({
         type: "menu",
-        id: "monitoring",
-        label: "Monitoring",
-        icon: Activity,
-        children: monitoringChildren,
+        id: "system",
+        label: "System",
+        icon: Settings,
+        children: systemChildren,
       });
-    }
-
-    if (devLog) {
-      items.push({ type: "link", item: devLog });
     }
 
     return items;
@@ -512,11 +514,6 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                         <TicketCheck size={14} /> Support Tickets
                       </button>
                     )}
-                    {role === "it" && (
-                      <button type="button" onClick={openSystemSettings} className={accountMenuButtonClass(routes.it.systemSettings)}>
-                        <Settings size={14} /> System Settings
-                      </button>
-                    )}
                     <button type="button" onClick={handleLogout} className="text-tanaw-red flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-semibold transition-colors hover:bg-red-50">
                       <LogOut size={14} /> Logout
                     </button>
@@ -599,7 +596,6 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 }
 
 function getRoleSupportTicketsPath(role: UserRole) {
-  if (role === "admin") return routes.admin.supportTickets;
-  if (role === "it") return routes.it.supportTickets;
+  if (role === "admin") return `${routes.admin.operations}?view=support`;
   return null;
 }

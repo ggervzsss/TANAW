@@ -4,6 +4,7 @@ import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import {
   createWebSocketAuthMessage,
+  getVisitorInsights,
   getOperationalSummary,
   getOperationalWebSocketUrl,
   listFinalReports,
@@ -13,6 +14,7 @@ import {
   listUserNotifications,
   type BackendNotification,
   type OperationalWebSocketEnvelope,
+  type VisitorInsightParams,
 } from "../services/operationalSync";
 import type { FinalReport, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, TelemetrySnapshot } from "../types";
 
@@ -22,6 +24,7 @@ export const operationalReportsQueryKey = ["operational", "reports", "intake"];
 export const operationalFinalReportsQueryKey = ["operational", "reports", "final"];
 export const operationalMapEnterprisesQueryKey = ["operational", "map-enterprises"];
 export const operationalNotificationsQueryKey = ["operational", "notifications"];
+export const visitorInsightsQueryKey = ["operational", "visitor-insights"];
 const operationalAlertsQueryKey = ["operational-alerts"];
 
 export function useOperationalSummary() {
@@ -47,6 +50,15 @@ export function useOperationalFinalReports() {
 export function useOperationalMapEnterprises() {
   const token = useAuthStore((state) => state.token);
   return useQuery({ queryKey: operationalMapEnterprisesQueryKey, queryFn: listOperationalMapEnterprises, enabled: Boolean(token) });
+}
+
+export function useVisitorInsights(params: VisitorInsightParams, enabled = true) {
+  const token = useAuthStore((state) => state.token);
+  return useQuery({
+    queryKey: [...visitorInsightsQueryKey, params],
+    queryFn: () => getVisitorInsights(params),
+    enabled: Boolean(token) && enabled,
+  });
 }
 
 export function useOperationalNotifications() {
@@ -165,6 +177,7 @@ function handleOperationalEnvelope(queryClient: ReturnType<typeof useQueryClient
     const snapshot = envelope.data;
     queryClient.setQueryData<TelemetrySnapshot[]>(operationalTelemetryQueryKey, (current = []) => upsertById(current, snapshot));
     queryClient.setQueryData<MapEnterprise[]>(operationalMapEnterprisesQueryKey, (current) => updateMapEnterpriseTelemetry(current, snapshot));
+    void queryClient.invalidateQueries({ queryKey: visitorInsightsQueryKey });
     return;
   }
 
