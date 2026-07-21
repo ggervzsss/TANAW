@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.storage.local_data_store import LocalDataStore
+from app.storage.local_data_store import LOCAL_SCHEMA_VERSION, LocalDataStore
 from app.tools.local_data_cli import clear_local_data, inspect_local_data
 
 
@@ -27,7 +27,7 @@ class LocalDataCliTest(unittest.TestCase):
             self.assertEqual(ledger["tables"]["count_events"], 2)
             self.assertEqual(ledger["tables"]["report_drafts"], 1)
             self.assertEqual(ledger["tables"]["camera_profiles"], 1)
-            self.assertEqual(ledger["schemaVersion"], 1)
+            self.assertEqual(ledger["schemaVersion"], LOCAL_SCHEMA_VERSION)
             self.assertEqual(ledger["currentDraftEvents"], 2)
 
     def test_clear_enterprise_does_not_remove_other_ledger_or_browser_storage(self) -> None:
@@ -114,6 +114,8 @@ def _camera_profile() -> dict:
         "resolution": "Adaptive",
         "type": "Entry/Exit",
         "rtsp": "rtsp://192.168.1.20/stream1",
+        "cameraHost": "192.168.1.20",
+        "rtspStream": "stream1",
         "cameraType": "RTSP_CCTV",
         "processingProfile": "auto",
         "confidence": 0.35,

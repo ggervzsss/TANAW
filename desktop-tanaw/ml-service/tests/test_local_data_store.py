@@ -1,6 +1,8 @@
 import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,7 +20,7 @@ class LocalDataStoreTest(unittest.TestCase):
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
 
-            with sqlite3.connect(store._database_path) as connection:
+            with closing(sqlite3.connect(store._database_path)) as connection:
                 tables = {
                     str(row[0])
                     for row in connection.execute(
@@ -34,6 +36,7 @@ class LocalDataStoreTest(unittest.TestCase):
 
             self.assertIn("camera_profiles", tables)
             self.assertIn("active_monitoring_state", tables)
+            self.assertIn("enterprise_occupancy_state", tables)
             self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
             self.assertTrue(
                 any(
@@ -48,8 +51,9 @@ class LocalDataStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store._database_path.parent.mkdir(parents=True)
-            with sqlite3.connect(store._database_path) as connection:
+            with closing(sqlite3.connect(store._database_path)) as connection:
                 connection.execute("create table legacy_table (id integer primary key)")
+                connection.commit()
 
             with self.assertRaisesRegex(
                 LocalDatabaseResetRequiredError, "retired pre-versioned schema"
@@ -60,8 +64,9 @@ class LocalDataStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store._retired_database_path.parent.mkdir(parents=True)
-            with sqlite3.connect(store._retired_database_path) as connection:
+            with closing(sqlite3.connect(store._retired_database_path)) as connection:
                 connection.execute("create table count_events (id integer primary key)")
+                connection.commit()
 
             with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "tanaw_metrics.sqlite3"):
                 store.metrics_summary()
@@ -114,7 +119,7 @@ class LocalDataStoreTest(unittest.TestCase):
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
 
-            with sqlite3.connect(store._database_path) as connection:
+            with closing(sqlite3.connect(store._database_path)) as connection:
                 for table in (
                     "count_events",
                     "count_snapshots",
@@ -637,6 +642,188 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertIsNotNone(report["synced_at"])
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 0)
 
+    def test_monitoring_states_are_isolated_by_camera(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            for camera_id, entry_count in ((101, 4), (202, 9)):
+                store.save_monitoring_state(
+                    {
+                        "running": True,
+                        "status": "running",
+                        "error": None,
+                        "camera_id": camera_id,
+                        "camera_name": f"Camera {camera_id}",
+                        "camera_config": {"camera_id": camera_id},
+                        "counts": {"entry": entry_count, "exit": 1, "occupancy": entry_count - 1},
+                    }
+                )
+
+            first = store.load_monitoring_state(101)
+            second = store.load_monitoring_state(202)
+            assert first is not None
+            assert second is not None
+            self.assertEqual(first["counts"]["entry"], 4)
+            self.assertEqual(second["counts"]["entry"], 9)
+            self.assertEqual(len(store.list_monitoring_states()), 2)
+
+    def test_enterprise_metrics_aggregate_cameras_without_duplicate_events(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            first = {**_event("entry", 1, 0, 1, True), "event_id": "cam-1-entry-1"}
+            second = {
+                **_event("entry", 1, 0, 1, True),
+                "event_id": "cam-2-entry-1",
+                "camera_id": 2,
+                "camera_name": "Second Camera",
+            }
+            store.append_count_event(first)
+            store.append_count_event(first)
+            store.append_count_event(second)
+
+            summary = store.metrics_summary()
+            self.assertEqual(summary["entries"], 2)
+            self.assertEqual(summary["current_occupancy"], 2)
+            self.assertEqual(summary["peak_occupancy"], 2)
+            self.assertEqual(summary["total_events"], 2)
+            self.assertEqual(store.metrics_summary(camera_id=1)["entries"], 1)
+            self.assertEqual(store.metrics_summary(camera_id=2)["entries"], 1)
+
+    def test_enterprise_occupancy_is_idempotent_nonnegative_and_survives_reporting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            first = {**_event("entry", 1, 0, 1, True), "event_id": "camera-1-entry"}
+            second = {
+                **_event("entry", 1, 0, 1, True),
+                "event_id": "camera-2-entry",
+                "camera_id": 2,
+            }
+            store.append_count_event(first)
+            store.append_count_event(first)
+            store.append_count_event(second)
+            store.append_count_event({**_event("exit", 1, 1, 0), "event_id": "exit-1"})
+            store.append_count_event({**_event("exit", 1, 2, 0), "event_id": "exit-2"})
+            store.append_count_event({**_event("exit", 1, 3, 0), "event_id": "unmatched-exit"})
+
+            self.assertEqual(store.enterprise_occupancy(), 0)
+            submission = store.record_report_submission("REP-OCCUPANCY", "Current Period")
+            store.purge_report_raw_events(submission["report_id"])
+            correction = store.record_occupancy_correction(
+                enterprise_id="enterprise@example.test",
+                camera_id=2,
+                old_occupancy=99,
+                new_occupancy=5,
+                reason="Manual recount",
+            )
+
+            self.assertEqual(correction["old_occupancy"], 0)
+            self.assertEqual(store.metrics_summary()["current_occupancy"], 5)
+            reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            self.assertEqual(reopened.enterprise_occupancy(), 5)
+
+    def test_simultaneous_camera_events_do_not_lose_enterprise_occupancy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            first = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            second = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            first.enterprise_occupancy()
+            second.enterprise_occupancy()
+            events = [
+                ({**_event("entry", 1, 0, 1, True), "event_id": f"camera-1-{index}"}, first)
+                if index % 2 == 0
+                else (
+                    {
+                        **_event("entry", 1, 0, 1, True),
+                        "event_id": f"camera-2-{index}",
+                        "camera_id": 2,
+                    },
+                    second,
+                )
+                for index in range(20)
+            ]
+
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                list(executor.map(lambda item: item[1].append_count_event(item[0]), events))
+
+            self.assertEqual(first.enterprise_occupancy(), 20)
+
+    def test_schema_two_migrates_enterprise_occupancy_without_data_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            original.save_monitoring_state(
+                {
+                    "running": False,
+                    "status": "stopped",
+                    "error": None,
+                    "camera_id": 7,
+                    "camera_name": "Legacy Camera",
+                    "camera_config": {"camera_id": 7},
+                    "counts": {"entry": 4, "exit": 1, "occupancy": 3},
+                }
+            )
+            with closing(sqlite3.connect(original._database_path)) as connection:
+                connection.execute("delete from enterprise_occupancy_state")
+                connection.execute("update schema_metadata set schema_version = 2")
+                connection.commit()
+
+            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            self.assertEqual(migrated.enterprise_occupancy(), 3)
+            with migrated._connection() as connection:
+                version = connection.execute(
+                    "select schema_version from schema_metadata where singleton_id = 1"
+                ).fetchone()[0]
+            self.assertEqual(version, LOCAL_SCHEMA_VERSION)
+
+    def test_report_camera_breakdown_survives_raw_event_purge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store.append_count_event({**_event("entry", 1, 0, 1, True), "event_id": "one"})
+            store.append_count_event(
+                {
+                    **_event("entry", 1, 0, 1, True),
+                    "event_id": "two",
+                    "camera_id": 2,
+                    "camera_name": "Second Camera",
+                }
+            )
+            submission = store.record_report_submission("REP-MULTI", "Current Period")
+            store.purge_report_raw_events("REP-MULTI")
+            persisted = store.list_report_submissions()[0]
+
+            self.assertEqual(len(submission["camera_breakdown"]), 2)
+            self.assertEqual(persisted["camera_breakdown"], submission["camera_breakdown"])
+            self.assertEqual(sum(camera["entries"] for camera in persisted["camera_breakdown"]), 2)
+
+    def test_schema_one_state_migrates_to_camera_keyed_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            original.metrics_summary()
+            connection = sqlite3.connect(original._database_path)
+            try:
+                connection.execute("update schema_metadata set schema_version = 1")
+                connection.execute(
+                    """
+                    insert into active_monitoring_state (
+                        singleton_id, camera_id, camera_name_snapshot, running, status,
+                        error, started_at, entry_count, exit_count, occupancy_count,
+                        camera_config_json, updated_at
+                    ) values (1, 42, 'Legacy Camera', 1, 'running', null, null, 3, 1, 2, '{}', ?)
+                    """,
+                    (datetime.now(UTC).isoformat(),),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            state = migrated.load_monitoring_state(42)
+            assert state is not None
+            self.assertEqual(state["camera_name"], "Legacy Camera")
+            self.assertEqual(state["counts"]["entry"], 3)
+            with migrated._connection() as migrated_connection:
+                version = migrated_connection.execute(
+                    "select schema_version from schema_metadata where singleton_id = 1"
+                ).fetchone()[0]
+            self.assertEqual(version, LOCAL_SCHEMA_VERSION)
+
 
 def _event(
     direction: str, entry: int, exit: int, occupancy: int, is_unique_entry: bool | None = None
@@ -669,6 +856,8 @@ def _camera_profile() -> dict:
         "resolution": "Adaptive",
         "type": "Entry/Exit",
         "rtsp": "rtsp://192.168.1.20/stream1",
+        "cameraHost": "192.168.1.20",
+        "rtspStream": "stream1",
         "cameraType": "RTSP_CCTV",
         "processingProfile": "auto",
         "confidence": 0.35,

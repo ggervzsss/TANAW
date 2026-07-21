@@ -21,6 +21,7 @@ import { useSystemDisplayPreferences } from "../../features/preferences/system-d
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
+import { createReconnectingWebSocket } from "../../utils/reconnecting-websocket";
 import { routePaths } from "../router/routePaths";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
@@ -158,10 +159,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     if (!token) return undefined;
 
     let disposed = false;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: number | undefined;
     let heartbeatTimer: number | undefined;
-    let reconnectAttempt = 0;
 
     const clearHeartbeat = () => {
       if (heartbeatTimer !== undefined) {
@@ -179,56 +177,34 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       }
     };
 
-    const scheduleReconnect = () => {
-      if (disposed) return;
-      const delay = Math.min(1000 * 2 ** reconnectAttempt, 10000);
-      reconnectAttempt += 1;
-      reconnectTimer = window.setTimeout(connect, delay);
-    };
-
-    const connect = () => {
-      clearHeartbeat();
-      if (socket) {
-        socket.onclose = null;
-        socket.onerror = null;
-        socket.close();
-      }
-
-      socket = new WebSocket(getOperationalWebSocketUrl());
-
-      socket.onopen = () => {
-        reconnectAttempt = 0;
+    const connection = createReconnectingWebSocket({
+      url: getOperationalWebSocketUrl(),
+      onOpen: (socket) => {
         const authMessage = createWebSocketAuthMessage();
-        if (authMessage) socket?.send(authMessage);
+        if (authMessage) socket.send(authMessage);
         heartbeatTimer = window.setInterval(() => {
-          if (socket?.readyState === WebSocket.OPEN) socket.send("ping");
+          if (socket.readyState === WebSocket.OPEN) socket.send("ping");
         }, 25000);
-      };
-
-      socket.onmessage = (event) => {
+      },
+      onMessage: (event) => {
         if (event.data === "pong") return;
         const envelope = parseNotificationEnvelope(event.data);
         if (!envelope) return;
         setBackendNotifications((current) => upsertBackendNotification(current, envelope.data));
-      };
-
-      socket.onerror = () => socket?.close();
-      socket.onclose = () => {
+      },
+      onClose: () => {
         clearHeartbeat();
-        scheduleReconnect();
-      };
-    };
+      },
+    });
 
     void refreshNotifications();
-    connect();
     const refreshIntervalId = window.setInterval(() => void refreshNotifications(), 30000);
 
     return () => {
       disposed = true;
       window.clearInterval(refreshIntervalId);
       clearHeartbeat();
-      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
-      socket?.close();
+      connection.dispose();
     };
   }, [token]);
 

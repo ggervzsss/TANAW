@@ -6,6 +6,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { getMlServiceCommand } from "./ml-service-command";
+import {
+  hasCompatibleCameraRuntime,
+  hasCompatibleMlHealth,
+} from "./ml-service-contract";
+import { buildWindowsListenerPidScript } from "./ml-service-process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +40,7 @@ const CAMERA_CREDENTIAL_STORE_FILE = "camera-credentials.json";
 const AUTH_SESSION_STORE_FILE = "auth-session.json";
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const SPLASH_MIN_DISPLAY_MS = 1400;
+const ML_SERVICE_STARTUP_TIMEOUT_MS = 20_000;
 const execFileAsync = promisify(execFile);
 
 type CameraCredentialRecord = {
@@ -94,17 +100,33 @@ async function startMlService() {
     return;
   }
 
-  if (await isMlServiceReachable()) {
+  const serviceDir = getMlServiceDir();
+  if (!existsSync(serviceDir)) {
+    mlServiceError = `ML service directory was not found at ${serviceDir}.`;
+    return;
+  }
+
+  const existingService = await probeMlServiceCompatibility();
+  if (existingService.compatible) {
     mlServiceConnectedExternally = true;
     mlServiceError = null;
     updateTrayMenu();
     return;
   }
-
-  const serviceDir = getMlServiceDir();
-  if (!existsSync(serviceDir)) {
-    mlServiceError = `ML service directory was not found at ${serviceDir}.`;
-    return;
+  if (existingService.reachable) {
+    const listenerPid = await findMlServiceListenerPid();
+    if (!listenerPid || !(await isLocalMlServiceProcess(listenerPid))) {
+      mlServiceError = `Port ${mlServicePort} is serving an incompatible service that was not started from this TANAW workspace.`;
+      updateTrayMenu();
+      return;
+    }
+    console.info(`[tanaw-ml] Replacing incompatible local ML service process ${listenerPid}.`);
+    await terminateProcessId(listenerPid, 3000);
+    if (await isMlServiceReachable(300)) {
+      mlServiceError = `The incompatible local ML service on port ${mlServicePort} could not be stopped.`;
+      updateTrayMenu();
+      return;
+    }
   }
 
   const { command, args } = getMlServiceCommand({ isPackaged: app.isPackaged, serviceDir });
@@ -157,6 +179,11 @@ async function startMlService() {
     mlServiceConnectedExternally = false;
     updateTrayMenu();
   });
+
+  if (!(await waitForCompatibleMlService(ML_SERVICE_STARTUP_TIMEOUT_MS))) {
+    mlServiceError = "The local ML service started but did not expose the required camera runtime API.";
+    updateTrayMenu();
+  }
 }
 
 async function stopMlService(waitMs = 0) {
@@ -208,12 +235,56 @@ async function isMlServiceReachable(timeoutMs = 750) {
   }
 }
 
+async function probeMlServiceCompatibility(timeoutMs = 1200) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const healthResponse = await fetch(`${mlServiceUrl}/health`, {
+      cache: "no-store",
+      method: "GET",
+      signal: controller.signal,
+    });
+    if (!healthResponse.ok) return { compatible: false, reachable: true };
+    const health = (await healthResponse.json()) as unknown;
+    if (!hasCompatibleMlHealth(health)) {
+      return { compatible: false, reachable: true };
+    }
+
+    const runtimeResponse = await fetch(`${mlServiceUrl}/cameras/runtime`, {
+      cache: "no-store",
+      method: "GET",
+      signal: controller.signal,
+    });
+    if (!runtimeResponse.ok) return { compatible: false, reachable: true };
+    const runtime = (await runtimeResponse.json()) as unknown;
+    const compatible = hasCompatibleCameraRuntime(runtime);
+    return { compatible, reachable: true };
+  } catch {
+    return { compatible: false, reachable: false };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function waitForCompatibleMlService(timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await probeMlServiceCompatibility()).compatible) {
+      mlServiceError = null;
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return false;
+}
+
 async function stopCameraProcessingFromTray() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2500);
 
   try {
-    await fetch(`${mlServiceUrl}/camera/stop`, { method: "POST", signal: controller.signal });
+    await fetch(`${mlServiceUrl}/cameras/stop`, { method: "POST", signal: controller.signal });
     mlServiceError = null;
   } catch (error) {
     mlServiceError = error instanceof Error ? error.message : "Unable to stop camera processing.";
@@ -418,12 +489,7 @@ async function stopExternalMlService(waitMs = 0) {
 async function findMlServiceListenerPid() {
   try {
     if (process.platform === "win32") {
-      const script = [
-        `$conn = Get-NetTCPConnection -LocalPort ${mlServicePort} -State Listen -ErrorAction SilentlyContinue`,
-        "| Where-Object { $_.LocalAddress -eq '127.0.0.1' -or $_.LocalAddress -eq '0.0.0.0' -or $_.LocalAddress -eq '::1' }",
-        "| Select-Object -First 1",
-        "if ($conn) { $conn.OwningProcess }",
-      ].join(" ");
+      const script = buildWindowsListenerPidScript(mlServicePort);
       const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { timeout: 3000, windowsHide: true });
       return parseProcessId(stdout);
     }

@@ -1,5 +1,7 @@
 import asyncio
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Any
 
@@ -8,10 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.camera.auth import redact_stream_credentials
-from app.camera.camera_manager import CameraProcessingManager
+from app.camera.camera_manager import CameraStreamUnavailableError
+from app.camera.pipeline_manager import CameraCapacityError, CameraPipelineRegistry
 from app.config.camera_config import (
     CameraProfilesRequest,
     CameraStartRequest,
+    CameraStatesResponse,
     CameraTestRequest,
     CameraTestResponse,
     CountResponse,
@@ -39,12 +43,29 @@ from app.storage.local_data_store import LocalDatabaseResetRequiredError
 
 CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
-CAMERA_WS_HEALTH_INTERVAL_SECONDS = 2.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
+SERVICE_VERSION = "0.2.0"
+API_CONTRACT_VERSION = 2
 
-manager = CameraProcessingManager()
 
-app = FastAPI(title="TANAW Local ML Camera Service", version="0.1.0")
+class CameraApiError(RuntimeError):
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+manager = CameraPipelineRegistry()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    yield
+    await asyncio.to_thread(manager.stop_all)
+
+
+app = FastAPI(title="TANAW Local ML Camera Service", version=SERVICE_VERSION, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -66,7 +87,18 @@ app.add_middleware(
 async def local_database_reset_required(
     _request: Request, exc: LocalDatabaseResetRequiredError
 ) -> JSONResponse:
-    return JSONResponse(status_code=409, content={"detail": str(exc)})
+    return JSONResponse(
+        status_code=409,
+        content={"code": "local_database_migration_required", "message": str(exc)},
+    )
+
+
+@app.exception_handler(CameraApiError)
+async def camera_api_error(_request: Request, exc: CameraApiError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.code, "message": exc.message},
+    )
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -88,28 +120,52 @@ def set_enterprise_context(payload: EnterpriseContextRequest) -> EnterpriseConte
 
 @app.post("/camera/test", response_model=CameraTestResponse)
 def test_camera(payload: CameraTestRequest) -> CameraTestResponse:
-    ok, message = manager.test_connection(
-        payload.stream_url, payload.camera_type, payload.username, payload.password
-    )
+    ok, message = manager.test_connection(payload)
     return CameraTestResponse(ok=ok, message=message)
 
 
 @app.post("/camera/start")
-def start_camera(payload: CameraStartRequest) -> dict[str, str]:
+def start_camera(payload: CameraStartRequest) -> dict[str, Any]:
     try:
-        manager.start(payload)
+        started = manager.start(payload)
+    except CameraCapacityError as exc:
+        raise CameraApiError(429, "capacity_limit", str(exc)) from exc
+    except CameraStreamUnavailableError as exc:
+        raise CameraApiError(
+            422, "stream_unavailable", redact_stream_credentials(str(exc))
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=redact_stream_credentials(str(exc))) from exc
+        raise CameraApiError(
+            400,
+            "invalid_camera_configuration",
+            redact_stream_credentials(str(exc)),
+        ) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=redact_stream_credentials(str(exc))) from exc
+        raise CameraApiError(
+            500, "pipeline_start_failed", redact_stream_credentials(str(exc))
+        ) from exc
 
-    return {"message": "Camera processing started."}
+    return {
+        "message": "Camera processing started." if started else "Camera is already running.",
+        "camera_id": payload.camera_id,
+        "started": started,
+    }
 
 
-@app.post("/camera/stop")
-def stop_camera() -> dict[str, str]:
-    manager.stop()
-    return {"message": "Camera processing stopped."}
+@app.post("/camera/{camera_id}/stop")
+def stop_camera(camera_id: int) -> dict[str, Any]:
+    stopped = manager.stop(camera_id)
+    return {
+        "message": "Camera processing stopped." if stopped else "Camera was not running.",
+        "camera_id": camera_id,
+        "stopped": stopped,
+    }
+
+
+@app.post("/cameras/stop")
+def stop_all_cameras() -> dict[str, Any]:
+    stopped = manager.stop_all()
+    return {"message": "All camera processing stopped.", "stopped_count": stopped}
 
 
 @app.get("/cameras", response_model=list[dict[str, Any]])
@@ -127,12 +183,57 @@ def replace_cameras(payload: CameraProfilesRequest) -> list[dict[str, Any]]:
 
 @app.get("/counts", response_model=CountResponse)
 def counts() -> CountResponse:
-    return CountResponse.model_validate(manager.counts())
+    return CountResponse.model_validate(manager.aggregate_session()["counts"])
 
 
 @app.get("/session", response_model=SessionResponse)
 def session() -> SessionResponse:
-    return SessionResponse(**manager.session())
+    return SessionResponse(**manager.aggregate_session())
+
+
+@app.get("/cameras/runtime", response_model=CameraStatesResponse)
+def camera_states() -> CameraStatesResponse:
+    return CameraStatesResponse.model_validate(manager.camera_states())
+
+
+@app.get("/camera/{camera_id}/state")
+def camera_state(camera_id: int) -> dict[str, Any]:
+    try:
+        return manager.camera_state(camera_id)
+    except KeyError as exc:
+        raise CameraApiError(
+            404, "camera_not_found", "Camera pipeline has not been started."
+        ) from exc
+
+
+@app.get("/camera/{camera_id}/counts", response_model=CountResponse)
+def camera_counts(camera_id: int) -> CountResponse:
+    try:
+        return CountResponse.model_validate(manager.require_pipeline(camera_id).counts())
+    except KeyError as exc:
+        raise CameraApiError(
+            404, "camera_not_found", "Camera pipeline has not been started."
+        ) from exc
+
+
+@app.get("/camera/{camera_id}/session", response_model=SessionResponse)
+def camera_session(camera_id: int) -> SessionResponse:
+    try:
+        return SessionResponse(**manager.require_pipeline(camera_id).session())
+    except KeyError as exc:
+        raise CameraApiError(
+            404, "camera_not_found", "Camera pipeline has not been started."
+        ) from exc
+
+
+@app.get("/camera/{camera_id}/detections", response_model=DetectionResponse)
+def camera_detections(camera_id: int) -> DetectionResponse:
+    try:
+        return DetectionResponse.model_validate(manager.require_pipeline(camera_id).detections())
+    except KeyError as exc:
+        raise CameraApiError(
+            404, "camera_not_found", "Camera pipeline has not been started."
+        ) from exc
 
 
 @app.get("/metrics/summary", response_model=MetricsSummaryResponse)
@@ -251,13 +352,15 @@ def prepare_sample_counts(payload: SamplePrepareRequest) -> SamplePrepareRespons
 
 @app.post("/session/restore", response_model=SessionResponse)
 def restore_session() -> SessionResponse:
-    manager.restore_last_session()
-    return SessionResponse(**manager.session())
+    return SessionResponse(**manager.aggregate_session())
 
 
 @app.get("/detections", response_model=DetectionResponse)
 def detections() -> DetectionResponse:
-    return DetectionResponse.model_validate(manager.detections())
+    states = manager.camera_states()["cameras"]
+    if len(states) == 1:
+        return DetectionResponse.model_validate(states[0]["detections"])
+    return DetectionResponse(running=False, status="aggregate", tracks=[])
 
 
 @app.websocket("/camera/ws")
@@ -265,17 +368,11 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
     await websocket.accept()
     last_payload: str | None = None
     last_send_at = monotonic()
-    last_health_at = 0.0
-    health_payload: dict[str, Any] | None = None
 
     try:
         while True:
             now = monotonic()
-            if health_payload is None or now - last_health_at >= CAMERA_WS_HEALTH_INTERVAL_SECONDS:
-                health_payload = await asyncio.to_thread(build_health_payload)
-                last_health_at = now
-
-            envelope = await asyncio.to_thread(build_camera_state_envelope, health_payload)
+            envelope = await asyncio.to_thread(build_camera_state_envelope)
             payload = json.dumps(envelope, separators=(",", ":"), sort_keys=True)
 
             if payload != last_payload:
@@ -286,10 +383,10 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
                 await websocket.send_text('{"type":"heartbeat"}')
                 last_send_at = now
 
-            counts_payload = envelope["data"]["counts"]
+            active_camera_count = envelope["data"]["active_camera_count"]
             interval = (
                 CAMERA_WS_FRAME_INTERVAL_SECONDS
-                if bool(counts_payload.get("running"))
+                if int(active_camera_count) > 0
                 else CAMERA_WS_IDLE_INTERVAL_SECONDS
             )
             if not await wait_for_camera_websocket_client(websocket, interval):
@@ -300,13 +397,20 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
         return
 
 
-@app.get("/stream")
-async def stream(overlay: bool = True) -> StreamingResponse:
+@app.get("/camera/{camera_id}/stream")
+async def stream(camera_id: int, overlay: bool = True) -> StreamingResponse:
+    try:
+        pipeline = manager.require_pipeline(camera_id)
+    except KeyError as exc:
+        raise CameraApiError(
+            404, "camera_not_found", "Camera pipeline has not been started."
+        ) from exc
+
     async def frames():
         last_frame_id = 0
         while True:
             frame, last_frame_id = await asyncio.to_thread(
-                manager.wait_for_stream_frame, last_frame_id, 1.0, overlay
+                pipeline.wait_for_stream_frame, last_frame_id, 1.0, overlay
             )
             yield (
                 b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache\r\n\r\n"
@@ -331,23 +435,19 @@ async def wait_for_camera_websocket_client(websocket: WebSocket, timeout_seconds
 
 
 def build_health_payload() -> dict[str, Any]:
-    counts = manager.counts()
-    return HealthResponse(
-        running=bool(counts["running"]),
-        error=counts["error"] if isinstance(counts["error"], str) else None,
-        **manager.model_status(),
+    return HealthResponse.model_validate(
+        {
+            **manager.service_health(),
+            "service_version": SERVICE_VERSION,
+            "api_contract_version": API_CONTRACT_VERSION,
+        }
     ).model_dump(mode="json")
 
 
-def build_camera_state_envelope(health_payload: dict[str, Any]) -> dict[str, Any]:
+def build_camera_state_envelope() -> dict[str, Any]:
     return {
-        "type": "camera.state",
-        "data": {
-            "counts": CountResponse.model_validate(manager.counts()).model_dump(mode="json"),
-            "detections": DetectionResponse.model_validate(manager.detections()).model_dump(
-                mode="json"
-            ),
-            "health": health_payload,
-            "session": SessionResponse(**manager.session()).model_dump(mode="json"),
-        },
+        "type": "camera.states",
+        "data": CameraStatesResponse.model_validate(manager.camera_states()).model_dump(
+            mode="json"
+        ),
     }

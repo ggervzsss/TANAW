@@ -27,6 +27,7 @@ PROCESSING_PROFILE_VALUES = {
 RUNTIME_BACKEND_VALUES = {"auto", "cuda", "openvino", "cpu"}
 TRACKER_PROFILE_VALUES = {"auto", "bytetrack", "botsort"}
 PERSON_CLASS_IDS = (0,)
+_GLOBAL_INFERENCE_LOCK = Lock()
 
 
 @dataclass(frozen=True)
@@ -352,32 +353,16 @@ class YoloPersonTracker:
 
     def _track_with_config(self, model: Any, frame: np.ndarray, confidence: float) -> Any:
         started_at = monotonic()
-        results = model.track(
-            frame,
-            persist=True,
-            tracker=self.tracker_config_path,
-            classes=list(PERSON_CLASS_IDS),
-            conf=confidence,
-            device=self._device,
-            half=self._use_half,
-            imgsz=self.image_size,
-            iou=self.nms_iou,
-            max_det=self.max_detections,
-            agnostic_nms=False,
-            verbose=False,
-        )
-        completed_at = monotonic()
-        self._record_inference_time(started_at, completed_at)
-        return results
-
-    def _benchmark_predict(self, model: Any) -> None:
-        blank_frame = np.zeros((self.image_size, self.image_size, 3), dtype=np.uint8)
-        for _ in range(3):
-            started_at = monotonic()
-            model.predict(
-                blank_frame,
+        # Each camera owns an independent YOLO/tracker instance so that BoT-SORT
+        # state can never leak across streams. GPU execution is serialized here
+        # because the runtime and driver stack are shared process-wide.
+        with _GLOBAL_INFERENCE_LOCK:
+            results = model.track(
+                frame,
+                persist=True,
+                tracker=self.tracker_config_path,
                 classes=list(PERSON_CLASS_IDS),
-                conf=0.25,
+                conf=confidence,
                 device=self._device,
                 half=self._use_half,
                 imgsz=self.image_size,
@@ -386,6 +371,27 @@ class YoloPersonTracker:
                 agnostic_nms=False,
                 verbose=False,
             )
+        completed_at = monotonic()
+        self._record_inference_time(started_at, completed_at)
+        return results
+
+    def _benchmark_predict(self, model: Any) -> None:
+        blank_frame = np.zeros((self.image_size, self.image_size, 3), dtype=np.uint8)
+        for _ in range(3):
+            started_at = monotonic()
+            with _GLOBAL_INFERENCE_LOCK:
+                model.predict(
+                    blank_frame,
+                    classes=list(PERSON_CLASS_IDS),
+                    conf=0.25,
+                    device=self._device,
+                    half=self._use_half,
+                    imgsz=self.image_size,
+                    iou=self.nms_iou,
+                    max_det=self.max_detections,
+                    agnostic_nms=False,
+                    verbose=False,
+                )
             self._record_inference_time(started_at, monotonic())
 
     def _fallback_after_runtime_failure(self, exc: Exception) -> bool:

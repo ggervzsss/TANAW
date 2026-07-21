@@ -1,8 +1,9 @@
-import { Check, RefreshCw, Shield, Video, X } from "lucide-react";
+import { Check, RefreshCw, Video, X } from "lucide-react";
 import type { FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { CameraFormValues } from "../types/camera";
+import { buildTapoRtspUrl, isValidIpv4, type TapoStreamId } from "../utils/rtsp";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
 
@@ -16,8 +17,16 @@ type CameraAddModalProps = {
 };
 
 export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit, onChange }: CameraAddModalProps) {
-  const streamPlaceholder = newCam.cameraType === "IP_WEBCAM" ? "http://192.168.1.25:8080/video" : "rtsp://192.168.1.9:554/stream2";
   const isRtspCamera = newCam.cameraType === "RTSP_CCTV" || newCam.cameraType === "ONVIF_CCTV";
+  const hostError = errors.cameraHost ?? (newCam.cameraHost && !isValidIpv4(newCam.cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined);
+  const updateRtspSource = (cameraHost: string, rtspStream: TapoStreamId) => {
+    onChange({
+      ...newCam,
+      cameraHost,
+      rtsp: buildTapoRtspUrl(cameraHost, rtspStream),
+      rtspStream,
+    });
+  };
 
   return (
     <ModalPortal>
@@ -36,6 +45,7 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
                 <Video size={20} className="text-[#065f46] dark:text-emerald-300" /> Add Camera
               </h3>
               <button
+                type="button"
                 onClick={onClose}
                 className="rounded-full border border-gray-200 bg-white p-2 text-gray-400 shadow-sm transition-colors hover:bg-emerald-50 hover:text-[#065f46] dark:border-slate-600 dark:bg-[#172033] dark:text-slate-300 dark:hover:bg-[#1d2940] dark:hover:text-emerald-200"
                 aria-label="Close dialog"
@@ -46,115 +56,75 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
 
             <form onSubmit={onSubmit} noValidate className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Camera Name</label>
-                  <input
-                    required
-                    type="text"
-                    value={newCam.name}
-                    onChange={(event) => onChange({ ...newCam, name: event.target.value })}
-                    placeholder="e.g., Main Entrance Camera"
-                    className={`w-full rounded-xl border bg-white p-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${errors.name ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`}
-                  />
-                  {errors.name && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.name}</p>}
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Assigned Zone</label>
-                  <input
-                    required
-                    type="text"
-                    value={newCam.zone}
-                    onChange={(event) => onChange({ ...newCam, zone: event.target.value })}
-                    placeholder="e.g., Lobby"
-                    className={`w-full rounded-xl border bg-white p-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${errors.zone ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`}
-                  />
-                  {errors.zone && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.zone}</p>}
-                </div>
+                <ModalField label="Camera Name" error={errors.name}>
+                  <input required type="text" value={newCam.name} onChange={(event) => onChange({ ...newCam, name: event.target.value })} className={inputClass(Boolean(errors.name))} />
+                </ModalField>
+                <ModalField label="Assigned Zone" error={errors.zone}>
+                  <input required type="text" value={newCam.zone} onChange={(event) => onChange({ ...newCam, zone: event.target.value })} className={inputClass(Boolean(errors.zone))} />
+                </ModalField>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-[1fr_180px]">
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Stream URL</label>
-                  <input
-                    required
-                    type="text"
-                    value={newCam.rtsp}
-                    onChange={(event) => onChange({ ...newCam, rtsp: event.target.value })}
-                    placeholder={streamPlaceholder}
-                    className={`w-full rounded-xl border bg-white p-3 font-mono text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500 ${errors.rtsp ? "border-tanaw-red" : "border-gray-300 dark:border-slate-600"}`}
-                  />
-                  {errors.rtsp && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.rtsp}</p>}
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Camera Type</label>
+              <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">
+                <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">Camera Source Configuration</h4>
+                <ModalField label="Camera Type">
                   <SelectDropdown
                     value={newCam.cameraType}
-                    onChange={(cameraType) => onChange({ ...newCam, cameraType: cameraType as CameraFormValues["cameraType"] })}
+                    onChange={(cameraType) => {
+                      const nextCameraType = cameraType as CameraFormValues["cameraType"];
+                      const nextRtsp = nextCameraType === "RTSP_CCTV" || nextCameraType === "ONVIF_CCTV" ? buildTapoRtspUrl(newCam.cameraHost, newCam.rtspStream) : "";
+                      onChange({ ...newCam, cameraType: nextCameraType, rtsp: nextRtsp });
+                    }}
                     options={[
-                      ["IP_WEBCAM", "IP Webcam"],
                       ["RTSP_CCTV", "RTSP CCTV"],
-                      ["USB_WEBCAM", "USB Webcam"],
                       ["ONVIF_CCTV", "ONVIF CCTV"],
+                      ["IP_WEBCAM", "IP Webcam"],
+                      ["USB_WEBCAM", "USB Webcam"],
                     ]}
                     ariaLabel="Camera type"
                   />
-                </div>
-              </div>
+                </ModalField>
 
-              {isRtspCamera && <TapoRtspBuilder streamUrl={newCam.rtsp} onStreamUrlChange={(rtsp) => onChange({ ...newCam, rtsp })} />}
+                {isRtspCamera ? (
+                  <TapoRtspBuilder
+                    host={newCam.cameraHost}
+                    streamId={newCam.rtspStream}
+                    error={hostError}
+                    showHeading={false}
+                    onHostChange={(cameraHost) => updateRtspSource(cameraHost, newCam.rtspStream)}
+                    onStreamChange={(rtspStream) => updateRtspSource(newCam.cameraHost, rtspStream)}
+                  />
+                ) : (
+                  <div className="mt-3">
+                    <ModalField label={newCam.cameraType === "USB_WEBCAM" ? "Camera Device Index" : "Camera Stream Address"} error={errors.rtsp}>
+                      <input required type="text" value={newCam.rtsp} onChange={(event) => onChange({ ...newCam, rtsp: event.target.value })} className={`${inputClass(Boolean(errors.rtsp))} font-mono`} />
+                    </ModalField>
+                  </div>
+                )}
+              </section>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Username</label>
-                  <input
-                    type="text"
-                    value={newCam.username}
-                    onChange={(event) => onChange({ ...newCam, username: event.target.value })}
-                    placeholder="Optional"
-                    className="w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-[#111827] transition-colors outline-none placeholder:text-gray-400 focus:border-[#065f46] dark:border-slate-600 dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500"
-                  />
-                  {errors.username && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.username}</p>}
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Password</label>
-                  <PasswordVisibilityInput
-                    value={newCam.password}
-                    onChange={(password) => onChange({ ...newCam, password })}
-                    placeholder="Optional"
-                    variant="modal"
-                    hasError={Boolean(errors.password)}
-                  />
-                  {errors.password && <p className="text-tanaw-red mt-1.5 text-xs font-semibold">{errors.password}</p>}
-                </div>
+                <ModalField label="Username" error={errors.username}>
+                  <input type="text" autoComplete="username" value={newCam.username} onChange={(event) => onChange({ ...newCam, username: event.target.value })} className={inputClass(Boolean(errors.username))} />
+                </ModalField>
+                <ModalField label="Password" error={errors.password}>
+                  <PasswordVisibilityInput value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} variant="modal" hasError={Boolean(errors.password)} />
+                </ModalField>
               </div>
 
-              <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 text-xs text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100">
-                <Shield size={16} className="mt-0.5 shrink-0" />
-                <p>Credentials and video processing stay on this enterprise device. RTSP credentials are passed to the local ML service without embedding them in the visible stream URL.</p>
-              </div>
+              <ModalField label="Stream URL" error={errors.rtsp}>
+                <input readOnly aria-readonly="true" value={newCam.rtsp} className="w-full cursor-default rounded-xl border border-gray-200 bg-gray-100 p-3 font-mono text-sm text-gray-600 outline-none dark:border-slate-700 dark:bg-[#0b1220] dark:text-slate-300" />
+              </ModalField>
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-[#1d2940]"
-                >
+                <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-[#1d2940]">
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isValidating}
-                  className="flex items-center gap-2 rounded-xl bg-[#065f46] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:bg-gray-400"
+                  disabled={isValidating || (isRtspCamera && !isValidIpv4(newCam.cameraHost))}
+                  className="flex items-center gap-2 rounded-xl bg-[#065f46] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
-                  {isValidating ? (
-                    <>
-                      <RefreshCw size={16} className="animate-spin" /> Validating Stream...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} /> Save Configuration
-                    </>
-                  )}
+                  {isValidating ? <><RefreshCw size={16} className="animate-spin" /> Validating Stream...</> : <><Check size={16} /> Save Configuration</>}
                 </button>
               </div>
             </form>
@@ -163,4 +133,18 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
       </div>
     </ModalPortal>
   );
+}
+
+function ModalField({ children, error, label }: { children: React.ReactNode; error?: string; label: string }) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">{label}</label>
+      {children}
+      {error && <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
+    </div>
+  );
+}
+
+function inputClass(hasError: boolean) {
+  return `w-full rounded-xl border bg-white p-3 text-sm text-[#111827] transition-colors outline-none focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white ${hasError ? "border-red-500" : "border-gray-300 dark:border-slate-600"}`;
 }

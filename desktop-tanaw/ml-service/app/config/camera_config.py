@@ -3,13 +3,16 @@ from __future__ import annotations
 import re
 from calendar import month_abbr, month_name, monthrange
 from datetime import date, datetime, timedelta
+from ipaddress import IPv4Address
 from math import hypot
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 CameraType = Literal["IP_WEBCAM", "RTSP_CCTV", "USB_WEBCAM", "ONVIF_CCTV"]
+RtspStreamProfile = Literal["stream1", "stream2"]
 ProcessingProfile = Literal[
     "auto",
     "compatibility",
@@ -90,9 +93,12 @@ class CameraStartRequest(BaseModel):
     tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
     counting_confidence: float = Field(default=0.35, ge=0.05, le=0.95)
     confidence: float = Field(default=0.35, ge=0.05, le=0.95)
-    camera_id: int | None = None
+    camera_id: int | None = Field(default=None, ge=1)
     camera_name: str | None = Field(default=None, max_length=120)
+    camera_zone: str | None = Field(default=None, max_length=120)
     camera_type: CameraType = "IP_WEBCAM"
+    camera_host: str | None = Field(default=None, max_length=15)
+    rtsp_stream: RtspStreamProfile | None = None
     username: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, max_length=240)
     tripwire_position: float = Field(default=0.5, ge=0.1, le=0.9)
@@ -126,6 +132,7 @@ class CameraStartRequest(BaseModel):
             normalized["counting_confidence"] = normalized["confidence"]
         elif has_counting_confidence and not has_confidence:
             normalized["confidence"] = normalized["counting_confidence"]
+        _normalize_rtsp_source(normalized)
         return normalized
 
     @field_validator("stream_url")
@@ -173,10 +180,23 @@ class CameraStartRequest(BaseModel):
 
 
 class CameraTestRequest(BaseModel):
+    camera_id: int = Field(ge=1)
+    camera_name: str | None = Field(default=None, max_length=120)
     stream_url: str = Field(..., min_length=3)
     camera_type: CameraType = "IP_WEBCAM"
+    camera_host: str | None = Field(default=None, max_length=15)
+    rtsp_stream: RtspStreamProfile | None = None
     username: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, max_length=240)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_rtsp_source(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        normalized = {**data}
+        _normalize_rtsp_source(normalized)
+        return normalized
 
     @field_validator("stream_url")
     @classmethod
@@ -191,6 +211,8 @@ class CameraTestResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
+    service_version: str = "0.2.0"
+    api_contract_version: int = 2
     running: bool
     error: str | None = None
     model_loaded: bool = False
@@ -278,6 +300,8 @@ class HealthResponse(BaseModel):
     reid_worker_alive: bool = False
     quality_reid_tasks_cleared: int = 0
     quality_reid_worker_alive: bool = False
+    active_camera_count: int = 0
+    max_concurrent_cameras: int = 0
 
 
 class CountResponse(BaseModel):
@@ -329,6 +353,23 @@ class SessionResponse(BaseModel):
     camera_config: dict | None = None
     counts: CountResponse
     updated_at: str | None = None
+
+
+class CameraLiveStateResponse(BaseModel):
+    enterprise_id: str
+    camera_id: int
+    counts: CountResponse
+    detections: DetectionResponse
+    health: HealthResponse
+    session: SessionResponse
+
+
+class CameraStatesResponse(BaseModel):
+    enterprise_id: str
+    enterprise_occupancy: int = Field(default=0, ge=0)
+    active_camera_count: int
+    max_concurrent_cameras: int
+    cameras: list[CameraLiveStateResponse]
 
 
 class EnterpriseContextRequest(BaseModel):
@@ -520,10 +561,21 @@ class ReportSubmissionRequest(BaseModel):
         return self
 
 
+class ReportCameraTotalResponse(BaseModel):
+    camera_id: int | None = None
+    camera_name: str | None = None
+    entries: int
+    exits: int
+    peak_occupancy: int
+    unique_count: int
+    total_events: int
+
+
 class ReportSubmissionResponse(MetricsSummaryResponse):
     report_id: str
     submitted_at: str
     sync_status: str
+    camera_breakdown: list[ReportCameraTotalResponse] = Field(default_factory=list)
 
 
 class ReportDraftRequest(BaseModel):
@@ -568,6 +620,7 @@ class ReportSubmissionRecordResponse(BaseModel):
     sync_status: str
     synced_at: str | None = None
     raw_purged_at: str | None = None
+    camera_breakdown: list[ReportCameraTotalResponse] = Field(default_factory=list)
 
 
 class ReportRawDataPurgeResponse(BaseModel):
@@ -578,6 +631,38 @@ class ReportRawDataPurgeResponse(BaseModel):
 
 class SyncMarkResponse(BaseModel):
     updated: int
+
+
+def _normalize_rtsp_source(data: dict[str, Any]) -> None:
+    camera_type = data.get("camera_type", "IP_WEBCAM")
+    if camera_type not in {"RTSP_CCTV", "ONVIF_CCTV"}:
+        return
+
+    raw_stream_url = str(data.get("stream_url") or "").strip()
+    raw_host = str(data.get("camera_host") or "").strip()
+    raw_profile = data.get("rtsp_stream")
+    parsed = urlsplit(raw_stream_url) if raw_stream_url else None
+
+    if not raw_host and parsed is not None and parsed.scheme.lower() == "rtsp":
+        raw_host = parsed.hostname or ""
+    try:
+        camera_host = str(IPv4Address(raw_host))
+    except ValueError as exc:
+        raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
+
+    if raw_profile is None and parsed is not None:
+        path = parsed.path.strip("/").split("/", maxsplit=1)[0]
+        raw_profile = path if path in {"stream1", "stream2"} else "stream2"
+    if raw_profile not in {"stream1", "stream2"}:
+        raise ValueError("RTSP Stream must be stream1 or stream2.")
+
+    canonical_url = f"rtsp://{camera_host}/{raw_profile}"
+    if raw_stream_url and raw_stream_url != canonical_url:
+        raise ValueError("Stream URL conflicts with Camera IP / Host and the selected RTSP Stream.")
+
+    data["camera_host"] = camera_host
+    data["rtsp_stream"] = raw_profile
+    data["stream_url"] = canonical_url
 
 
 def _path_points(line: TripwireLine) -> list[TripwirePoint]:

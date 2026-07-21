@@ -3,6 +3,7 @@ import { useAuthStore } from "../../login/stores/auth-store";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   getLocalMetricsSummary,
+  getMlCameraStates,
   getMlHealth,
   getMlServiceStatus,
   getMlSession,
@@ -132,10 +133,11 @@ function selectSamplePreparationCounts(preparation: BackendSamplePreparation, pe
 export async function syncDesktopTelemetry() {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const [metrics, session, health] = await Promise.all([
+  const [metrics, session, health, cameraStates] = await Promise.all([
     getLocalMetricsSummary(baseUrl, { includeSubmitted: true }),
     resolveOptional(() => getMlSession(baseUrl)),
     resolveOptional(() => getMlHealth(baseUrl)),
+    resolveOptional(() => getMlCameraStates(baseUrl)),
   ]);
 
   const payload: DesktopTelemetryPayload = {
@@ -158,7 +160,17 @@ export async function syncDesktopTelemetry() {
     session: sessionSummary(session, serviceStatus),
     health: healthSummary(health),
     payload: {
-      service: serviceStatus,
+      service: {
+        ...serviceStatus,
+        activeCameraCount: cameraStates?.active_camera_count ?? 0,
+        maxConcurrentCameras: cameraStates?.max_concurrent_cameras ?? 0,
+        cameras: cameraStates?.cameras.map((state) => ({
+          cameraId: state.camera_id,
+          running: state.counts.running,
+          status: state.counts.status,
+          error: state.counts.error,
+        })) ?? [],
+      },
       syncedAt: new Date().toISOString(),
     },
   };
@@ -209,6 +221,7 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
     payload: {
       ...submission.payload,
       localLedger: {
+        cameraBreakdown: submission.camera_breakdown,
         syncStatus: submission.sync_status,
         syncedAt: submission.synced_at,
       },
