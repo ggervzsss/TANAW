@@ -15,6 +15,7 @@ type EnterpriseProfileRequestsPanelProps = {
   accounts: AccountSummary[];
   canResolve: boolean;
   onAccountUpdated: (account: AccountSummary) => void;
+  highlightedAccountId?: string | null;
 };
 
 type RequestRow = {
@@ -26,10 +27,12 @@ type ResolutionPayload = RequestRow & {
   action: "approve" | "decline";
 };
 
-export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccountUpdated }: EnterpriseProfileRequestsPanelProps) {
+export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccountUpdated, highlightedAccountId = null }: EnterpriseProfileRequestsPanelProps) {
   const queryClient = useQueryClient();
   const { timeFormat } = useSystemDisplayPreferences();
-  const requests = accounts.flatMap((enterprise) => enterprise.profileChangeRequests.map((request) => ({ enterprise, request })));
+  const requests = accounts
+    .flatMap((enterprise) => enterprise.profileChangeRequests.map((request) => ({ enterprise, request })))
+    .sort((left, right) => Number(right.enterprise.id === highlightedAccountId) - Number(left.enterprise.id === highlightedAccountId));
 
   const resolutionMutation = useMutation({
     mutationFn: ({ enterprise, request, action }: ResolutionPayload) =>
@@ -56,7 +59,7 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="flex items-center gap-2 text-sm font-black text-amber-950">
-            <Clock size={16} className="text-amber-700" /> Enterprise Profile Change Requests
+            <Clock size={16} className="text-amber-700" /> Enterprise Account Requests
           </p>
           <p className="mt-1 text-sm font-medium text-amber-800">
             {canResolve ? "Review requests. Email changes can be approved only after ownership verification." : "Visible for admin review. IT personnel apply or decline these requests."}
@@ -67,7 +70,10 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
 
       <div className="grid gap-3 xl:grid-cols-2">
         {requests.map(({ enterprise, request }) => (
-          <article key={`${enterprise.id}-${request.requestId ?? request.type}`} className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+          <article
+            key={`${enterprise.id}-${request.requestId ?? request.type}`}
+            className={`rounded-xl border bg-white p-4 shadow-sm ${enterprise.id === highlightedAccountId ? "border-emerald-500 ring-4 ring-emerald-100" : "border-amber-200"}`}
+          >
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
                 {request.type === "businessEmail" ? <Mail size={17} /> : <Phone size={17} />}

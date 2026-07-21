@@ -31,18 +31,18 @@ export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; on
   );
 
   return (
-    <ModalFrame title="Priority Alert Details" eyebrow={alert.id} onClose={onClose}>
+    <ModalFrame title="Technical Issue Details" eyebrow={alert.id} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-2">
-        <DetailField label="Type" value={alert.type} />
-        <DetailField label="Severity" value={<SeverityBadge severity={alert.severity} />} />
-        <DetailField label="Timestamp" value={alert.time} />
+        <DetailField label="Problem" value={alert.type} />
+        <DetailField label="Urgency" value={<SeverityBadge severity={alert.severity} label={alert.severity === "Critical" ? "Urgent" : alert.severity === "Warning" ? "Important" : "For Awareness"} />} />
+        <DetailField label="Date and Time" value={alert.time} />
         <DetailField label="Status" value={<AlertStatusBadge status={alert.status} />} />
-        <DetailField label="Requester" value={alert.requester} />
-        <DetailField label="Resolution Mode" value={<ResolutionBadge mode={alert.resolutionMode} />} />
-        <DetailField label="Enterprise" value={expandableValue(alert.enterprise ?? "Not specified", "enterprise")} />
-        <DetailField label="Summary" value={expandableValue(alert.summary, "summary")} />
+        <DetailField label="Reported By" value={alert.requester} />
+        <DetailField label="How It Can Be Fixed" value={<ResolutionBadge mode={alert.resolutionMode} />} />
+        <DetailField label="Affected Enterprise" value={expandableValue(alert.enterprise ?? "Not specified", "enterprise")} />
+        <DetailField label="What Happened" value={expandableValue(alert.summary, "summary")} />
         <div className="md:col-span-2">
-          <DetailField label="Required Action" value={expandableValue(alert.requiredAction, "required action")} />
+          <DetailField label="What to Do" value={expandableValue(alert.requiredAction, "required action")} />
         </div>
       </div>
     </ModalFrame>
@@ -84,16 +84,24 @@ export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode })
     "Remote Review": "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
     "Admin Monitoring": "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200",
   };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[mode]}`}>{mode}</span>;
+  const labels: Record<PriorityAlertResolutionMode, string> = {
+    "On-site Visit Required": "Visit Enterprise",
+    "In-system Action": "Fix in TANAW",
+    "Staff Follow-up": "Staff Follow-up",
+    "Remote Review": "Check Remotely",
+    "Admin Monitoring": "Admin Monitoring",
+  };
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[mode]}`}>{labels[mode]}</span>;
 }
 
-export function AlertStatusBadge({ status, label = status }: { status: PriorityAlert["status"]; label?: string }) {
+export function AlertStatusBadge({ status, label }: { status: PriorityAlert["status"]; label?: string }) {
   const classes: Record<PriorityAlert["status"], string> = {
     New: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
     "In Review": "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
     Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   };
-  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{label}</span>;
+  const resolvedLabel = label ?? (status === "New" ? "Needs Attention" : status === "In Review" ? "Working on It" : "Resolved");
+  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{resolvedLabel}</span>;
 }
 
 function AlertEmptyState() {

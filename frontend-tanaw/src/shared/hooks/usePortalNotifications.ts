@@ -1,15 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { routes } from "@/app/routers/routes";
-import { useAuthStore, useSystemLogStore } from "@/app/store";
+import { useAuthStore } from "@/app/store";
 import { useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
-import type { LogSeverity, PriorityAlert, SystemLog } from "@/shared/types";
 import type { UserRole } from "@/shared/types/role.types";
 import { isStaffReportSubmissionNotification } from "@/shared/utils/notificationRules";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
-import { useActivityLogs } from "./useActivityLogs";
-import { useAlerts } from "./useAlerts";
 
 export type PortalNotificationTone = "critical" | "warning" | "success" | "info";
 
@@ -43,10 +40,6 @@ const viewAllPathByRole: Record<UserRole, string | undefined> = {
 export function usePortalNotifications(role: UserRole) {
   const { timeFormat } = useSystemDisplayPreferences();
   const authUser = useAuthStore((state) => state.user);
-  const shouldLoadAlerts = role === "it";
-  const { alerts, isLoading: alertsLoading } = useAlerts(shouldLoadAlerts);
-  const localLogs = useSystemLogStore((state) => state.logs);
-  const { logs: activityLogs } = useActivityLogs(role === "it");
   const backendNotificationsQuery = useOperationalNotifications();
 
   const storageKey = useMemo(() => `tanaw-notifications-read:${role}:${authUser?.id ?? "anonymous"}`, [authUser?.id, role]);
@@ -56,26 +49,9 @@ export function usePortalNotifications(role: UserRole) {
   }));
   const readIds = readState.storageKey === storageKey ? readState.ids : readStoredNotificationIds(storageKey);
 
-  const mergedLogs = useMemo(() => mergeLogs(activityLogs, localLogs), [activityLogs, localLogs]);
   const backendNotifications = backendNotificationsQuery.data ?? EMPTY_BACKEND_NOTIFICATIONS;
 
-  const drafts = useMemo(() => {
-    const persistedNotifications = buildBackendNotifications(backendNotifications, role, timeFormat);
-
-    if (role === "admin") {
-      return persistedNotifications;
-    }
-
-    if (role === "it") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, timeFormat), ...buildLogNotifications(mergedLogs, timeFormat)];
-    }
-
-    if (role === "staff") {
-      return persistedNotifications;
-    }
-
-    return persistedNotifications;
-  }, [alerts, backendNotifications, mergedLogs, role, timeFormat]);
+  const drafts = useMemo(() => buildBackendNotifications(backendNotifications, role, timeFormat), [backendNotifications, role, timeFormat]);
 
   const allNotifications = useMemo(
     () =>
@@ -123,7 +99,7 @@ export function usePortalNotifications(role: UserRole) {
     notifications,
     allNotifications,
     unreadCount: allNotifications.filter((notification) => !notification.read).length,
-    isLoading: alertsLoading || backendNotificationsQuery.isLoading,
+    isLoading: backendNotificationsQuery.isLoading,
     viewAllPath: viewAllPathByRole[role],
     markAsRead,
     markAllAsRead,
@@ -156,6 +132,13 @@ function toneFromNotificationSeverity(severity: BackendNotificationSeverity): Po
 }
 
 function notificationSourceLabel(notification: BackendNotification, role: UserRole) {
+  if (role === "it") {
+    if (notification.sourceType === "operational.alert") return "Technical Issue";
+    if (notification.sourceType === "support.ticket") return "Support Request";
+    if (notification.sourceType === "email.delivery") return "Email Problem";
+    if (notification.sourceType?.startsWith("enterprise.profile")) return "Account Request";
+    return notification.type;
+  }
   if (role !== "admin") return notification.type;
   if (notification.sourceType === "operational.alert") return "Current Situation";
   if (notification.sourceType === "support.ticket") return "Escalated Support";
@@ -164,11 +147,13 @@ function notificationSourceLabel(notification: BackendNotification, role: UserRo
 }
 
 function notificationStatusLabel(severity: BackendNotificationSeverity, role: UserRole) {
-  if (role !== "admin") return severity;
-  if (severity === "Critical") return "Urgent";
-  if (severity === "Warning") return "Important";
-  if (severity === "Success") return "Completed";
-  return undefined;
+  if (role === "it" || role === "admin") {
+    if (severity === "Critical") return "Urgent";
+    if (severity === "Warning") return "Important";
+    if (severity === "Success") return "Completed";
+    return undefined;
+  }
+  return severity;
 }
 
 export function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
@@ -188,10 +173,13 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
       : routes.admin.operations;
   }
   if (role === "it") {
-    if (notification.sourceType === "operational.alert") return routes.it.alerts;
-    if (text.includes("enterprise.profile") || text.includes("profile change request")) return routes.it.enterpriseAccounts;
-    if (text.includes("support") || text.includes("ticket")) return routes.it.supportTickets;
-    return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : routes.it.alerts;
+    if (notification.sourceType === "operational.alert") return itWorkCenterPath("issues", "alert", notification.sourceId);
+    if (notification.sourceType === "email.delivery") return itWorkCenterPath("email");
+    if (text.includes("enterprise.profile") || text.includes("profile change request")) {
+      return itWorkCenterPath("accounts", "account", notification.sourceId);
+    }
+    if (text.includes("support") || text.includes("ticket")) return itWorkCenterPath("support", "ticket", notification.sourceId);
+    return text.includes("security") || text.includes("password") || text.includes("startup") ? routes.it.systemLogs : itWorkCenterPath("issues");
   }
   if (role === "staff") {
     if (text.includes("report") || text.includes("batch")) return routes.staff.batchReports;
@@ -201,63 +189,16 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
   return undefined;
 }
 
-function buildAlertNotifications(alerts: PriorityAlert[], timeFormat: SystemTimeFormat): DraftNotification[] {
-  return alerts
-    .filter((alert) => alert.status !== "Resolved")
-    .filter((alert) => alert.owner === "IT")
-    .map((alert) => ({
-      id: `alert:${alert.id}:${alert.status}`,
-      title: `${alert.severity} ${alert.type}`,
-      message: `${alert.enterprise ?? alert.requester}: ${alert.summary}`,
-      time: formatTimestamp(alert.time, timeFormat),
-      source: "Alerts",
-      statusLabel: alert.status,
-      tone: toneFromSeverity(alert.severity),
-      targetPath: routes.it.alerts,
-      sortTime: toSortTime(alert.time),
-    }));
-}
-
-function buildLogNotifications(logs: SystemLog[], timeFormat: SystemTimeFormat): DraftNotification[] {
-  return logs
-    .filter(isItRelevantLog)
-    .map((log) => ({
-      id: `activity-log:${log.id}:${log.severity}`,
-      title: `${log.severity} ${log.action}`,
-      message: log.summary,
-      time: formatTimestamp(log.timestamp, timeFormat),
-      source: log.category,
-      statusLabel: log.actorRole,
-      tone: toneFromSeverity(log.severity),
-      targetPath: routes.it.systemLogs,
-      sortTime: toSortTime(log.timestamp),
-    }));
-}
-
-function isItRelevantLog(log: SystemLog) {
-  return (
-    (log.severity === "Critical" || log.severity === "Warning") &&
-    (log.category === "System" || log.category === "IT Activity" || log.category === "Enterprise Activity" || log.action.toLowerCase().includes("alert"))
-  );
-}
-
-function toneFromSeverity(severity: LogSeverity): PortalNotificationTone {
-  if (severity === "Critical") return "critical";
-  if (severity === "Warning") return "warning";
-  if (severity === "Success") return "success";
-  return "info";
-}
-
 function adminOperationsPath(view: "situations" | "support" | "accounts", itemKey?: "alert" | "ticket", itemId?: string | null) {
   const params = new URLSearchParams({ view });
   if (itemKey && itemId) params.set(itemKey, itemId);
   return `${routes.admin.operations}?${params.toString()}`;
 }
 
-function mergeLogs(primaryLogs: SystemLog[], secondaryLogs: SystemLog[]) {
-  const merged = new Map<string, SystemLog>();
-  [...primaryLogs, ...secondaryLogs].forEach((log) => merged.set(log.id, log));
-  return Array.from(merged.values());
+function itWorkCenterPath(view: "issues" | "support" | "accounts" | "email", itemKey?: "alert" | "ticket" | "account", itemId?: string | null) {
+  const params = new URLSearchParams({ view });
+  if (itemKey && itemId) params.set(itemKey, itemId);
+  return `${routes.it.workCenter}?${params.toString()}`;
 }
 
 function toSortTime(value: string) {

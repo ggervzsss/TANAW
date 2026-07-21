@@ -11,6 +11,7 @@ from app.features.accounts.models import (
     AccountStatus,
     EnterpriseProfile,
 )
+from app.features.mail.models import EmailOutbox
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     OperationalAlert,
@@ -29,7 +30,7 @@ from app.features.sample_data.cli import (
     TEST_ACCOUNT_PASSWORD,
     AdminVisitorScenario,
     build_demographic_breakdown,
-    create_admin_operations_data,
+    create_portal_workflow_data,
     create_staff_report_notifications,
     prepare_staff_notification_reports,
     seeded_review_status,
@@ -218,7 +219,7 @@ async def test_mock_staff_notifications_match_production_notification_shape() ->
 
 
 @pytest.mark.asyncio
-async def test_sample_operations_match_admin_escalation_rules() -> None:
+async def test_sample_operations_cover_admin_and_it_workflows() -> None:
     lgu_accounts = [
         _account("admin-account", AccountRole.ADMIN),
         _account("it-account", AccountRole.IT),
@@ -229,7 +230,7 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
     db = MagicMock()
     db.flush = AsyncMock()
 
-    counts = await create_admin_operations_data(
+    counts = await create_portal_workflow_data(
         db,
         lgu_accounts,
         enterprises,
@@ -243,7 +244,11 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
         ),
     )
 
-    alert = db.add.call_args.args[0]
+    added_records = [call.args[0] for call in db.add.call_args_list]
+    alerts = [record for record in added_records if isinstance(record, OperationalAlert)]
+    alert = next(record for record in alerts if record.owner == "Admin")
+    technical_alert = next(record for record in alerts if record.owner == "IT")
+    failed_email = next(record for record in added_records if isinstance(record, EmailOutbox))
     tickets = db.add_all.call_args_list[0].args[0]
     notifications = db.add_all.call_args_list[1].args[0]
     assert isinstance(alert, OperationalAlert)
@@ -252,6 +257,9 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
     assert alert.source_id == "visitor-activity:enterprise-1"
     assert "84 visitors" in alert.summary
     assert "usual 40" in alert.summary
+    assert technical_alert.alert_code == "ALT-SAMPLE-002"
+    assert technical_alert.severity == "Critical"
+    assert failed_email.status == "terminal_failed"
     assert [ticket.priority for ticket in tickets if isinstance(ticket, SupportTicket)] == [
         "High",
         "Normal",
@@ -266,12 +274,25 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
         "operational.alert",
         "support.ticket",
     ]
+    it_notifications = [
+        notification
+        for notification in notifications
+        if isinstance(notification, UserNotification)
+        and notification.recipient_role == AccountRole.IT.value
+    ]
+    assert {notification.source_type for notification in it_notifications} == {
+        "operational.alert",
+        "support.ticket",
+        "email.delivery",
+        "enterprise.profile.contact",
+    }
     assert counts == {
         "adminNotifications": 2,
-        "itNotifications": 2,
-        "operationalAlerts": 1,
+        "itNotifications": 5,
+        "operationalAlerts": 2,
         "supportTickets": 2,
-        "activityLogs": 3,
+        "emailProblems": 1,
+        "activityLogs": 4,
     }
     db.flush.assert_awaited_once()
 

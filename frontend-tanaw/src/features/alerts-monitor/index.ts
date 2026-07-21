@@ -1,1 +1,1 @@
-export { AdminOperationsCenterPage, ITAlertsPage } from "./pages";
+export { AdminOperationsCenterPage, ITAlertsPage, ITWorkCenterPage } from "./pages";

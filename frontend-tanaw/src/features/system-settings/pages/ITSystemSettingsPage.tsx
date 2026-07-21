@@ -31,11 +31,11 @@ export function ITSystemSettingsPage() {
     mutationFn: purgeExpiredActivityLogs,
     onSuccess: ({ deletedCount }) => {
       setIsPurgeConfirmOpen(false);
-      toast.success(`Purged ${deletedCount} expired ${deletedCount === 1 ? "log" : "logs"}.`);
+      toast.success(`Deleted ${deletedCount} old activity ${deletedCount === 1 ? "entry" : "entries"}.`);
       void queryClient.invalidateQueries({ queryKey: ["system-settings"] });
       return queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
     },
-    onError: () => toast.error("Unable to purge expired logs."),
+    onError: () => toast.error("Unable to delete old activity."),
   });
   const systemSettings = settingsQuery.data;
   const storedValues = useMemo(() => filterVisibleSettings(systemSettings?.values ?? {}), [systemSettings?.values]);
@@ -43,7 +43,7 @@ export function ITSystemSettingsPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="System Settings" description="Configure account security, activity records, date and time, and service alerts." />
+      <PageHeader title="System Settings" description="Manage account safety, activity history, Philippine time display, and technical issue notifications." />
 
       <div>
         <SettingsDetailPanel
@@ -64,13 +64,13 @@ export function ITSystemSettingsPage() {
         />
       </div>
       {isPurgeConfirmOpen && (
-        <ModalFrame title="Purge Logs" eyebrow="Permanent action" onClose={() => setIsPurgeConfirmOpen(false)} maxWidthClassName="max-w-xl">
+        <ModalFrame title="Delete Old Activity" eyebrow="Permanent action" onClose={() => setIsPurgeConfirmOpen(false)} maxWidthClassName="max-w-xl">
           <div className="space-y-5">
             <p className="text-sm leading-6 text-slate-600">
-              This permanently deletes activity logs older than the currently saved retention period. Retention already hides those logs from System Logs; purging removes them from storage.
+              This permanently deletes activity history older than the currently saved retention period. Older entries are already hidden; this action removes them from storage.
             </p>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
-              This cannot be undone. TANAW will record this purge action as a new IT Activity log.
+              This cannot be undone. TANAW will record this action in System Activity.
             </div>
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
               <button
@@ -87,7 +87,7 @@ export function ITSystemSettingsPage() {
                 onClick={() => purgeMutation.mutate()}
                 className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-70"
               >
-                {purgeMutation.isPending ? "Purging..." : "Purge Logs"}
+                {purgeMutation.isPending ? "Deleting..." : "Delete Old Activity"}
               </button>
             </div>
           </div>
@@ -113,11 +113,11 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
   return (
     <div className="rounded-xl border border-red-200 bg-red-50 p-5 dark:border-red-300/25 dark:bg-red-500/10">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[10px] font-bold tracking-wide text-red-700 uppercase dark:text-red-200">Purge Logs</span>
+        <span className="text-[10px] font-bold tracking-wide text-red-700 uppercase dark:text-red-200">Delete Old Activity</span>
         <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-red-700 uppercase dark:bg-red-950/45 dark:text-red-200 dark:ring-1 dark:ring-red-300/20">Destructive</span>
       </div>
       <p className="mb-4 text-sm leading-6 text-red-900 dark:text-red-100">
-        Permanently deletes activity logs older than the saved retention period. This is only needed when hidden expired logs should be removed from storage.
+        Permanently deletes activity history older than the saved retention period. Use this only when older hidden records should be removed from storage.
       </p>
       <button
         type="button"
@@ -125,7 +125,7 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
         onClick={onOpenConfirm}
         className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-950/10 transition hover:bg-red-700 disabled:opacity-70 dark:bg-red-500 dark:text-white dark:shadow-red-950/30 dark:hover:bg-red-400"
       >
-        <Trash2 size={15} /> Purge Logs
+        <Trash2 size={15} /> Delete Old Activity
       </button>
     </div>
   );

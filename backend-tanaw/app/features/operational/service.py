@@ -238,6 +238,7 @@ async def create_role_notifications(
     actor: Account | None = None,
     source_type: str | None = None,
     source_id: str | None = None,
+    replace_existing_for_source: bool = False,
 ) -> list[UserNotificationSummary]:
     recipients = (
         await db.scalars(
@@ -253,19 +254,38 @@ async def create_role_notifications(
     notifications: list[UserNotification] = []
 
     for recipient in recipients:
-        notification = UserNotification(
-            recipient_account_id=recipient.id,
-            recipient_role=recipient.role.value,
-            title=title,
-            message=message,
-            notification_type=notification_type,
-            severity=severity,
-            source_type=source_type,
-            source_id=source_id,
-            created_by_account_id=actor.id if actor else None,
-            created_by_name=actor.display_name if actor else None,
-        )
-        db.add(notification)
+        notification = None
+        if replace_existing_for_source and source_type and source_id:
+            notification = await db.scalar(
+                select(UserNotification).where(
+                    UserNotification.recipient_account_id == recipient.id,
+                    UserNotification.source_type == source_type,
+                    UserNotification.source_id == source_id,
+                )
+            )
+        if notification is None:
+            notification = UserNotification(
+                recipient_account_id=recipient.id,
+                recipient_role=recipient.role.value,
+                title=title,
+                message=message,
+                notification_type=notification_type,
+                severity=severity,
+                source_type=source_type,
+                source_id=source_id,
+                created_by_account_id=actor.id if actor else None,
+                created_by_name=actor.display_name if actor else None,
+            )
+            db.add(notification)
+        else:
+            notification.title = title
+            notification.message = message
+            notification.notification_type = notification_type
+            notification.severity = severity
+            notification.created_by_account_id = actor.id if actor else None
+            notification.created_by_name = actor.display_name if actor else None
+            notification.read_at = None
+            notification.created_at = datetime.now(UTC)
         notifications.append(notification)
 
     if not notifications:
@@ -278,6 +298,32 @@ async def create_role_notifications(
         to_user_notification_summary(notification, recipient)
         for notification, recipient in zip(notifications, recipients, strict=True)
     ]
+
+
+async def mark_source_notifications_read(
+    db: AsyncSession,
+    *,
+    source_type: str,
+    source_id: str,
+    recipient_role: AccountRole | None = None,
+) -> list[UserNotificationSummary]:
+    statement = select(UserNotification).where(
+        UserNotification.source_type == source_type,
+        UserNotification.source_id == source_id,
+        UserNotification.read_at.is_(None),
+    )
+    if recipient_role is not None:
+        statement = statement.where(UserNotification.recipient_role == recipient_role.value)
+    notifications = list((await db.scalars(statement)).all())
+    if not notifications:
+        return []
+    resolved_at = datetime.now(UTC)
+    for notification in notifications:
+        notification.read_at = resolved_at
+    await db.commit()
+    for notification in notifications:
+        await db.refresh(notification)
+    return [to_user_notification_summary(notification) for notification in notifications]
 
 
 async def get_user_notification(
@@ -578,6 +624,39 @@ async def create_operational_alert(
         source_id=source_id,
     )
     db.add(alert)
+    await db.commit()
+    await db.refresh(alert)
+    return alert
+
+
+async def get_active_operational_alert(
+    db: AsyncSession, *, alert_type: str, source_id: str
+) -> OperationalAlert | None:
+    return cast(
+        OperationalAlert | None,
+        await db.scalar(
+            select(OperationalAlert).where(
+                OperationalAlert.source_id == source_id,
+                OperationalAlert.alert_type == alert_type,
+                OperationalAlert.status != "Resolved",
+            )
+        ),
+    )
+
+
+async def resolve_operational_alert(
+    db: AsyncSession,
+    *,
+    alert_type: str,
+    source_id: str,
+    recovery_message: str,
+) -> OperationalAlert | None:
+    alert = await get_active_operational_alert(db, alert_type=alert_type, source_id=source_id)
+    if alert is None:
+        return None
+    alert.status = "Resolved"
+    if recovery_message not in alert.summary:
+        alert.summary = f"{alert.summary} {recovery_message}"
     await db.commit()
     await db.refresh(alert)
     return alert

@@ -104,6 +104,7 @@ from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     create_operational_alert,
     create_role_notifications,
+    mark_source_notifications_read,
     system_setting_enabled,
     to_operational_alert_summary,
 )
@@ -156,12 +157,32 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         ),
         source_id=f"failed-login-threshold:{account.id}",
     )
+    alert_summary = to_operational_alert_summary(alert)
     await operational_ws_manager.broadcast(
         OperationalWebSocketEnvelope(
             type="alert.created",
-            data=to_operational_alert_summary(alert).model_dump(mode="json"),
+            data=alert_summary.model_dump(mode="json"),
         )
     )
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.IT],
+        title=f"{account.display_name}'s account is temporarily locked.",
+        message=f"{alert_summary.summary} {alert_summary.requiredAction}",
+        notification_type="Locked Account",
+        severity="Warning",
+        actor=account,
+        source_type="operational.alert",
+        source_id=alert_summary.id,
+        replace_existing_for_source=True,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
 
 
 async def notify_enterprise_account_change(
@@ -186,6 +207,7 @@ async def notify_enterprise_account_change(
         actor=account,
         source_type=source_type,
         source_id=account.id,
+        replace_existing_for_source=True,
     )
     for notification in notifications:
         await operational_ws_manager.broadcast(
@@ -217,12 +239,6 @@ def load_system_settings_values(record: SystemConfiguration | None) -> dict[str,
         for key, value in values.items()
         if isinstance(key, str) and isinstance(value, str | bool | int)
     }
-
-
-def join_changed_fields(fields: list[str]) -> str:
-    if len(fields) <= 1:
-        return fields[0] if fields else "profile details"
-    return f"{', '.join(fields[:-1])}, and {fields[-1]}"
 
 
 async def _wait_for_password_reset_response_floor(started_at: float) -> None:
@@ -538,15 +554,6 @@ async def change_password(
         summary=f"{account.display_name} changed their account password.",
         source_id=account.id,
     )
-    enterprise = enterprise_label(account)
-    await notify_enterprise_account_change(
-        db,
-        account,
-        title=f"{enterprise} changed account password.",
-        message=f"{enterprise} changed account password.",
-        notification_type="Enterprise Security Updated",
-        source_type="enterprise.password",
-    )
     remember = (
         token_remember_preference(credentials.credentials) if credentials is not None else False
     )
@@ -677,6 +684,7 @@ async def create_support_request(
         actor=None,
         source_type="operational.alert",
         source_id=alert.id,
+        replace_existing_for_source=True,
     )
     for notification in notifications:
         await operational_ws_manager.broadcast(
@@ -701,8 +709,6 @@ async def update_profile(
         )
 
     profile = account.enterprise_profile
-    previous_manager_name = profile.manager_name if profile else None
-    previous_phone = account.phone
     account.phone = payload.phone
     if account.role == AccountRole.ENTERPRISE:
         if profile is None:
@@ -746,25 +752,6 @@ async def update_profile(
         summary=f"{account.display_name} updated their profile information.",
         source_id=account.id,
     )
-    if account.role == AccountRole.ENTERPRISE:
-        assert profile is not None
-        changed_fields: list[str] = []
-        if profile.manager_name != previous_manager_name:
-            changed_fields.append("lead admin")
-        if account.phone != previous_phone:
-            changed_fields.append("contact number")
-
-        if changed_fields:
-            enterprise = profile.enterprise_name
-            changed_field_text = join_changed_fields(changed_fields)
-            await notify_enterprise_account_change(
-                db,
-                account,
-                title=f"{enterprise} updated enterprise profile details.",
-                message=f"{enterprise} updated enterprise profile details: {changed_field_text}.",
-                notification_type="Enterprise Profile Updated",
-                source_type="enterprise.profile",
-            )
     return to_auth_user(account)
 
 
@@ -798,7 +785,6 @@ async def update_lead_admin_name(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthUser:
     profile = require_enterprise_account(account)
-    previous_manager_name = profile.manager_name
     profile.manager_name = payload.managerName
     await db.commit()
     await db.refresh(account)
@@ -813,16 +799,6 @@ async def update_lead_admin_name(
         summary=f"{account.display_name} updated the lead admin name.",
         source_id=account.id,
     )
-    if profile.manager_name != previous_manager_name:
-        enterprise = enterprise_label(account)
-        await notify_enterprise_account_change(
-            db,
-            account,
-            title=f"{enterprise} updated lead admin name.",
-            message=f"{enterprise} updated lead admin name.",
-            notification_type="Enterprise Profile Updated",
-            source_type="enterprise.profile",
-        )
     return to_auth_user(account)
 
 
@@ -852,19 +828,6 @@ async def update_building_capacity(
             "buildingCapacity": profile.building_capacity,
         },
     )
-    if profile.building_capacity != previous_capacity:
-        enterprise = enterprise_label(account)
-        await notify_enterprise_account_change(
-            db,
-            account,
-            title=f"{enterprise} updated building capacity.",
-            message=(
-                f"{enterprise} updated building capacity from "
-                f"{previous_capacity} to {profile.building_capacity}."
-            ),
-            notification_type="Enterprise Profile Updated",
-            source_type="enterprise.capacity",
-        )
     return to_auth_user(account)
 
 
@@ -988,24 +951,18 @@ async def cancel_business_email_change(
         source_id=account.id,
         metadata={"requestId": request.id, "requestedEmail": request.requested_email},
     )
-    enterprise = enterprise_label(account)
-    notification_account_id = account.id
-    notification_request_id = request.id
-    try:
-        await notify_enterprise_account_change(
-            db,
-            account,
-            title=f"{enterprise} cancelled a business email change request.",
-            message=f"{enterprise} cancelled its pending business email change request.",
-            notification_type="Enterprise Profile Change Request",
-            source_type="enterprise.profile.email",
-        )
-    except Exception:
-        await db.rollback()
-        logger.exception(
-            "Failed to publish email-change cancellation notifications account_id=%s request_id=%s",
-            notification_account_id,
-            notification_request_id,
+    notifications = await mark_source_notifications_read(
+        db,
+        source_type="enterprise.profile.email",
+        source_id=account.id,
+        recipient_role=AccountRole.IT,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.updated",
+                data=notification.model_dump(mode="json"),
+            )
         )
     return AccountChangeRequestResponse(
         status="cancelled",

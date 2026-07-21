@@ -63,10 +63,10 @@ async def purge_expired_logs(
             severity="Warning" if deleted_count else "Info",
             actor=account.display_name,
             actorRole=get_actor_role_label(account),  # type: ignore[arg-type]
-            action="Purge Expired Activity Logs",
-            target="System Logs",
+            action="Delete Old Activity",
+            target="System Activity",
             summary=(
-                f"{account.display_name} purged {deleted_count} activity logs older than "
+                f"{account.display_name} deleted {deleted_count} activity records older than "
                 f"{retention_days} days."
             ),
             sourceId="activity-log-purge",

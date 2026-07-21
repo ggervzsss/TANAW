@@ -3,8 +3,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.features.accounts.models import Account, AccountRole
-from app.features.operational.models import EnterpriseTelemetrySnapshot, OperationalAlert
+from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.operational.models import (
+    EnterpriseTelemetrySnapshot,
+    OperationalAlert,
+    UserNotification,
+)
 from app.features.operational.schemas import TelemetrySnapshotSummary, VisitorInsightPoint
 from app.features.operational.service import (
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
@@ -12,6 +16,7 @@ from app.features.operational.service import (
     HourlyVisitorObservation,
     can_manage_operational_alert,
     can_view_operational_event,
+    create_role_notifications,
     gateway_status_for_snapshot,
     list_operational_alerts,
     resolve_system_setting_enabled,
@@ -199,3 +204,55 @@ def test_notification_setting_ignores_invalid_values() -> None:
         )
         is True
     )
+
+
+@pytest.mark.asyncio
+async def test_action_notification_reuses_existing_source_record() -> None:
+    recipient = Account(
+        id="it-1",
+        email="it@example.com",
+        password_hash="hash",
+        role=AccountRole.IT,
+        display_name="IT Personnel",
+        title="IT Personnel",
+        status=AccountStatus.ACTIVE,
+        activated_at=datetime.now(UTC),
+    )
+    existing = UserNotification(
+        id="notification-1",
+        recipient_account_id=recipient.id,
+        recipient_role=recipient.role.value,
+        title="Old title",
+        message="Old message",
+        notification_type="Technical Issue",
+        severity="Warning",
+        source_type="operational.alert",
+        source_id="ALT-1",
+        created_at=datetime.now(UTC) - timedelta(hours=1),
+        read_at=datetime.now(UTC),
+    )
+    recipient_result = MagicMock()
+    recipient_result.all.return_value = [recipient]
+    db = MagicMock()
+    db.scalars = AsyncMock(return_value=recipient_result)
+    db.scalar = AsyncMock(return_value=existing)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.IT],
+        title="Updated technical issue",
+        message="The latest problem details.",
+        notification_type="Technical Issue",
+        severity="Critical",
+        source_type="operational.alert",
+        source_id="ALT-1",
+        replace_existing_for_source=True,
+    )
+
+    assert len(notifications) == 1
+    assert existing.title == "Updated technical issue"
+    assert existing.severity == "Critical"
+    assert existing.read_at is None
+    db.add.assert_not_called()

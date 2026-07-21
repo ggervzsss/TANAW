@@ -30,7 +30,7 @@ ADMIN_IT_ACTIVITY_ACTIONS = frozenset(
         "Create LGU Account",
         "Decline Enterprise Profile Change",
         "Decline Verified Email Change",
-        "Purge Expired Activity Logs",
+        "Delete Old Activity",
         "Update Account Status",
         "Update Enterprise Account",
         "Update LGU Account",

@@ -46,3 +46,35 @@ describe("Admin notification destinations", () => {
     ).toBe("/admin/operations?view=accounts");
   });
 });
+
+describe("IT notification destinations", () => {
+  it("opens the exact technical issue and support request in the Work Center", () => {
+    expect(
+      getBackendNotificationTargetPath(
+        "it",
+        notification({ sourceType: "operational.alert", sourceId: "ALT-000002", recipientRole: "it" }),
+      ),
+    ).toBe("/it/work-center?view=issues&alert=ALT-000002");
+    expect(
+      getBackendNotificationTargetPath(
+        "it",
+        notification({ sourceType: "support.ticket", sourceId: "ticket-2", recipientRole: "it" }),
+      ),
+    ).toBe("/it/work-center?view=support&ticket=ticket-2");
+  });
+
+  it("opens account requests and email problems in their Work Center views", () => {
+    expect(
+      getBackendNotificationTargetPath(
+        "it",
+        notification({ sourceType: "enterprise.profile.contact", sourceId: "enterprise-1", recipientRole: "it" }),
+      ),
+    ).toBe("/it/work-center?view=accounts&account=enterprise-1");
+    expect(
+      getBackendNotificationTargetPath(
+        "it",
+        notification({ sourceType: "email.delivery", sourceId: "email-1", recipientRole: "it" }),
+      ),
+    ).toBe("/it/work-center?view=email");
+  });
+});

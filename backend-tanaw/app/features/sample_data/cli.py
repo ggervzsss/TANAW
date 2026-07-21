@@ -26,6 +26,7 @@ from app.features.accounts.models import (
 )
 from app.features.accounts.service import generate_enterprise_id
 from app.features.activity_logs.models import ActivityLog
+from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
 from app.features.operational.models import (
     EnterpriseReportSubmission,
     EnterpriseTelemetrySnapshot,
@@ -296,7 +297,7 @@ async def generate_sample_data(
     visitor_scenario = await create_admin_visitor_history(
         db, range_end, scenario, rng, enterprises, target
     )
-    operations = await create_admin_operations_data(
+    operations = await create_portal_workflow_data(
         db,
         accounts["lgu"],
         accounts["enterprises"],
@@ -321,6 +322,7 @@ async def generate_sample_data(
         "itNotifications": operations["itNotifications"],
         "operationalAlerts": operations["operationalAlerts"],
         "supportTickets": operations["supportTickets"],
+        "emailProblems": operations["emailProblems"],
         "activityLogs": logs + operations["activityLogs"],
         "targetPreparedReportCounts": prepared_counts(target_profile.enterprise_id),
     }
@@ -465,9 +467,7 @@ async def create_admin_visitor_history(
                 entries = 180 + day_offset * 24 + enterprise_index * 31 + hour * 3
                 exits = max(0, entries - occupancy)
                 unique_count = max(occupancy, round(entries * 0.72))
-                is_camera_error = (
-                    scenario == "camera-health" and enterprise_index == 2 and is_current
-                )
+                is_camera_error = enterprise_index == 2 and is_current
                 snapshot = EnterpriseTelemetrySnapshot(
                     id=sample_uuid(
                         "visitor-insight-telemetry",
@@ -523,7 +523,7 @@ def sample_normal_visitor_level(enterprise_index: int, captured_at: datetime) ->
     return base + hour_effect + weekend_effect
 
 
-async def create_admin_operations_data(
+async def create_portal_workflow_data(
     db: AsyncSession,
     lgu_accounts: list[Account],
     enterprises: list[Account],
@@ -573,6 +573,29 @@ async def create_admin_operations_data(
         updated_at=alert_created_at,
     )
     db.add(alert)
+
+    technical_enterprise = enterprises[2]
+    technical_profile = technical_enterprise.enterprise_profile
+    if technical_profile is None:
+        raise SystemExit("Sample IT work data requires an enterprise profile.")
+    technical_alert_created_at = range_end - timedelta(minutes=12)
+    technical_alert = OperationalAlert(
+        id=sample_uuid("operations-alert", technical_enterprise.id, "desktop"),
+        alert_code="ALT-SAMPLE-002",
+        alert_type="Maintenance Request",
+        severity="Critical",
+        enterprise=technical_profile.enterprise_name,
+        requester=technical_profile.enterprise_name,
+        summary="The entrance camera stopped sending visitor counts from the desktop application.",
+        required_action="Check the camera connection and restart monitoring from the enterprise desktop application.",
+        resolution_mode="Remote Review",
+        status="New",
+        owner="IT",
+        source_id=f"telemetry:{technical_enterprise.id}:{SAMPLE_CAMERA_PREFIX}visitor-3",
+        created_at=technical_alert_created_at,
+        updated_at=technical_alert_created_at,
+    )
+    db.add(technical_alert)
 
     high_ticket_created_at = range_end - timedelta(hours=2)
     high_ticket = SupportTicket(
@@ -655,6 +678,84 @@ async def create_admin_operations_data(
         )
         for ticket in (high_ticket, routine_ticket)
     ]
+    it_notifications.append(
+        UserNotification(
+            id=sample_uuid("operations-notification", it_account.id, technical_alert.id),
+            recipient_account_id=it_account.id,
+            recipient_role=it_account.role.value,
+            title=f"{technical_profile.enterprise_name} has a technical issue.",
+            message=f"{technical_alert.summary} {technical_alert.required_action}",
+            notification_type="Technical Issue",
+            severity="Critical",
+            source_type="operational.alert",
+            source_id=technical_alert.alert_code,
+            created_by_account_id=technical_enterprise.id,
+            created_by_name=technical_profile.enterprise_name,
+            created_at=technical_alert_created_at,
+        )
+    )
+
+    failed_email_created_at = range_end - timedelta(hours=3)
+    failed_email = EmailOutbox(
+        id=sample_uuid("operations-email", support_enterprise.id, "activation-failure"),
+        account_id=support_enterprise.id,
+        purpose="account_activation",
+        source_id=f"{SAMPLE_SOURCE_PREFIX}email:activation:{support_enterprise.id}",
+        recipient=support_enterprise.email,
+        sender="TANAW <no-reply@tanaw.local>",
+        template_name=EmailTemplateName.ACCOUNT_ACTIVATION.value,
+        template_version="v1",
+        secret_version="v1",
+        template_payload_json=json.dumps({"recipientName": support_enterprise.display_name}),
+        tags_json=json.dumps({"sample": True}),
+        idempotency_key=f"{SAMPLE_SOURCE_PREFIX}email:activation:{support_enterprise.id}",
+        provider="resend",
+        status=EmailOutboxStatus.TERMINAL_FAILED.value,
+        attempt_count=3,
+        max_attempts=3,
+        next_attempt_at=failed_email_created_at,
+        valid_until=range_end + timedelta(days=1),
+        first_provider_attempt_at=failed_email_created_at - timedelta(minutes=10),
+        last_provider_attempt_at=failed_email_created_at,
+        last_error_code="sample_delivery_failed",
+        last_error_message="The provider rejected the sample recipient address.",
+        created_at=failed_email_created_at,
+        updated_at=failed_email_created_at,
+    )
+    db.add(failed_email)
+    it_notifications.append(
+        UserNotification(
+            id=sample_uuid("operations-notification", it_account.id, failed_email.id),
+            recipient_account_id=it_account.id,
+            recipient_role=it_account.role.value,
+            title=f"Email to {support_enterprise.email} needs attention.",
+            message="The account activation email could not be delivered after three attempts.",
+            notification_type="Email Problem",
+            severity="Warning",
+            source_type="email.delivery",
+            source_id=failed_email.id,
+            created_by_name="TANAW",
+            created_at=failed_email_created_at,
+        )
+    )
+    it_notifications.append(
+        UserNotification(
+            id=sample_uuid(
+                "operations-notification", it_account.id, technical_enterprise.id, "contact"
+            ),
+            recipient_account_id=it_account.id,
+            recipient_role=it_account.role.value,
+            title=f"{technical_profile.enterprise_name} requested a contact number change.",
+            message="A new enterprise contact number is waiting for IT review.",
+            notification_type="Enterprise Profile Change Request",
+            severity="Info",
+            source_type="enterprise.profile.contact",
+            source_id=technical_enterprise.id,
+            created_by_account_id=technical_enterprise.id,
+            created_by_name=technical_profile.enterprise_name,
+            created_at=range_end - timedelta(hours=4),
+        )
+    )
     db.add_all([*admin_notifications, *it_notifications])
     profile_request_enterprise = enterprises[2]
     profile_request_name = (
@@ -709,15 +810,32 @@ async def create_admin_operations_data(
                     f"{profile_request_enterprise.id}"
                 ),
             ),
+            ActivityLog(
+                id=sample_uuid("activity-technical-issue", technical_alert.id),
+                timestamp=technical_alert_created_at,
+                category="Enterprise Activity",
+                severity="Critical",
+                actor=technical_profile.enterprise_name,
+                actor_role="Enterprise Account",
+                action="Desktop Application Problem",
+                target=technical_profile.enterprise_name,
+                summary=technical_alert.summary,
+                source_id=f"{SAMPLE_SOURCE_PREFIX}activity:technical:{technical_alert.id}",
+                metadata_json=json.dumps(
+                    {"alertType": technical_alert.alert_type, "status": technical_alert.status},
+                    sort_keys=True,
+                ),
+            ),
         ]
     )
     await db.flush()
     return {
         "adminNotifications": len(admin_notifications),
         "itNotifications": len(it_notifications),
-        "operationalAlerts": 1,
+        "operationalAlerts": 2,
         "supportTickets": 2,
-        "activityLogs": 3,
+        "emailProblems": 1,
+        "activityLogs": 4,
     }
 
 
