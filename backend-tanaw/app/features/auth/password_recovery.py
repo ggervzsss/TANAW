@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.date_time import format_philippine_datetime
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
 from app.features.accounts.models import Account, AccountStatus
@@ -167,7 +168,7 @@ async def request_password_reset(
     db.add(challenge)
 
     if eligible_account is not None:
-        expires_label = expires_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        expires_label = format_philippine_datetime(expires_at)
         await enqueue_email(
             db,
             account_id=eligible_account.id,
@@ -179,7 +180,11 @@ async def request_password_reset(
                 "displayName": eligible_account.display_name,
                 "email": eligible_account.email,
                 "role": eligible_account.role.value,
-                "enterpriseId": eligible_account.enterprise_id or "",
+                "enterpriseId": (
+                    eligible_account.enterprise_profile.enterprise_id
+                    if eligible_account.enterprise_profile is not None
+                    else ""
+                ),
                 "expiresLabel": expires_label,
             },
             idempotency_key=email_idempotency_key("password-reset", challenge.id),

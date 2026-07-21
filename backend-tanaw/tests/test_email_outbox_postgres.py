@@ -23,14 +23,13 @@ from app.features.accounts.models import (
     Account,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
 )
 from app.features.auth import account_activation, password_recovery, secret_values
 from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
 from app.features.mail import service as mail_service
 from app.features.mail import worker as mail_worker
 from app.features.mail.client import ResendAPIError, SentEmail
+from app.features.mail.dev_log import clear_dev_deliveries, list_dev_deliveries
 from app.features.mail.models import (
     EmailDeliveryAttempt,
     EmailOutbox,
@@ -201,6 +200,7 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
     )
 
     await _clean_postgres_rows(sessions)
+    clear_dev_deliveries()
     monkeypatch.setattr(mail_worker, "AsyncSessionLocal", sessions)
     monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
     monkeypatch.setattr(account_activation, "get_settings", lambda: settings)
@@ -212,6 +212,7 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
         yield runtime
     finally:
         await _clean_postgres_rows(sessions)
+        clear_dev_deliveries()
         await engine.dispose()
 
 
@@ -256,19 +257,6 @@ async def _clean_postgres_rows(sessions: async_sessionmaker[AsyncSession]) -> No
                 )
             )
         if account_ids:
-            await db.execute(
-                delete(DevDelivery).where(
-                    or_(
-                        DevDelivery.recipient.like(TEST_EMAIL_PATTERN),
-                        DevDelivery.account_id.in_(account_ids),
-                    )
-                )
-            )
-        else:
-            await db.execute(
-                delete(DevDelivery).where(DevDelivery.recipient.like(TEST_EMAIL_PATTERN))
-            )
-        if account_ids:
             await db.execute(delete(Account).where(Account.id.in_(account_ids)))
         await db.commit()
 
@@ -294,7 +282,6 @@ async def _create_account(
         is_protected_system_account=False,
         activated_at=now if activated else None,
         password_changed_at=now if activated else None,
-        source_kind="real",
     )
     async with runtime.sessions() as db:
         db.add(account)
@@ -706,13 +693,11 @@ async def test_raw_activation_token_and_password_reset_code_are_never_persisted(
                 select(EmailOutbox).where(EmailOutbox.source_id.in_((activation_id, challenge_id)))
             )
         )
-        deliveries = list(
-            await db.scalars(
-                select(DevDelivery).where(
-                    DevDelivery.account_id.in_((pending_account.id, active_account.id))
-                )
-            )
-        )
+    deliveries = [
+        delivery
+        for delivery in list_dev_deliveries()
+        if delivery.account_id in (pending_account.id, active_account.id)
+    ]
 
     assert stored_activation is not None
     assert stored_challenge is not None
@@ -727,5 +712,5 @@ async def test_raw_activation_token_and_password_reset_code_are_never_persisted(
         assert all(raw_reset_code not in value for value in payload.values())
         assert outbox.status == EmailOutboxStatus.ACCEPTED.value
     assert len(deliveries) == 2
-    assert all(delivery.status == DeliveryStatus.ACCEPTED for delivery in deliveries)
+    assert all(delivery.status == "accepted" for delivery in deliveries)
     assert all(delivery.body == REDACTED_EMAIL_BODY for delivery in deliveries)

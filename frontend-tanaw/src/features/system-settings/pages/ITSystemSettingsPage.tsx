@@ -10,43 +10,40 @@ import type { SettingField, SettingValue } from "../types";
 import { getSystemSettings, updateSystemSettings } from "@/shared/services/accountManagement";
 import { purgeExpiredActivityLogs } from "@/shared/services/activityLogs";
 import { activityLogsQueryKey } from "@/shared/hooks/useActivityLogs";
+import { systemSettingsQueryKey, useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, PHILIPPINE_TIME_LABEL } from "@/shared/utils/dateTime";
 
 const visibleSettingKeys = new Set(settingSections.flatMap((section) => section.fields.map((field) => settingKey(section.id, field))));
-const legacyNotificationSettingKeys: Record<string, string> = {
-  "notifications.cameraSessionErrorAlerts": "notifications.Notify Camera Offline",
-  "notifications.gatewayServiceErrorAlerts": "notifications.Notify Gateway Offline",
-  "notifications.syncDelayAlerts": "notifications.Notify Sync Failed",
-  "notifications.failedLoginLockoutAlerts": "notifications.Notify Failed Login Threshold",
-};
 
 export function ITSystemSettingsPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
-  const settingsQuery = useQuery({ queryKey: ["system-settings"], queryFn: getSystemSettings });
+  const settingsQuery = useQuery({ queryKey: systemSettingsQueryKey, queryFn: getSystemSettings });
   const saveMutation = useMutation({
     mutationFn: updateSystemSettings,
     onSuccess: () => {
       toast.success("System settings saved.");
-      return queryClient.invalidateQueries({ queryKey: ["system-settings"] });
+      return queryClient.invalidateQueries({ queryKey: systemSettingsQueryKey });
     },
   });
   const purgeMutation = useMutation({
     mutationFn: purgeExpiredActivityLogs,
     onSuccess: ({ deletedCount }) => {
       setIsPurgeConfirmOpen(false);
-      toast.success(`Purged ${deletedCount} expired ${deletedCount === 1 ? "log" : "logs"}.`);
+      toast.success(`Deleted ${deletedCount} old activity ${deletedCount === 1 ? "entry" : "entries"}.`);
       void queryClient.invalidateQueries({ queryKey: ["system-settings"] });
       return queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
     },
-    onError: () => toast.error("Unable to purge expired logs."),
+    onError: () => toast.error("Unable to delete old activity."),
   });
   const systemSettings = settingsQuery.data;
   const storedValues = useMemo(() => filterVisibleSettings(systemSettings?.values ?? {}), [systemSettings?.values]);
-  const metadataLabel = formatSettingsMetadata(systemSettings?.updatedBy ?? null, systemSettings?.updatedAt ?? null);
+  const metadataLabel = formatSettingsMetadata(systemSettings?.updatedBy ?? null, systemSettings?.updatedAt ?? null, timeFormat);
 
   return (
     <PageMotion>
-      <PageHeader title="System Settings" description="Configure account security, logs, and technical notifications." />
+      <PageHeader title="System Settings" description="Manage account safety, activity history, Philippine time display, and technical issue notifications." />
 
       <div>
         <SettingsDetailPanel
@@ -67,13 +64,13 @@ export function ITSystemSettingsPage() {
         />
       </div>
       {isPurgeConfirmOpen && (
-        <ModalFrame title="Purge Logs" eyebrow="Permanent action" onClose={() => setIsPurgeConfirmOpen(false)} maxWidthClassName="max-w-xl">
+        <ModalFrame title="Delete Old Activity" eyebrow="Permanent action" onClose={() => setIsPurgeConfirmOpen(false)} maxWidthClassName="max-w-xl">
           <div className="space-y-5">
             <p className="text-sm leading-6 text-slate-600">
-              This permanently deletes activity logs older than the currently saved retention period. Retention already hides those logs from System Logs; purging removes them from storage.
+              This permanently deletes activity history older than the currently saved retention period. Older entries are already hidden; this action removes them from storage.
             </p>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
-              This cannot be undone. TANAW will record this purge action as a new IT Activity log.
+              This cannot be undone. TANAW will record this action in System Activity.
             </div>
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
               <button
@@ -90,7 +87,7 @@ export function ITSystemSettingsPage() {
                 onClick={() => purgeMutation.mutate()}
                 className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-70"
               >
-                {purgeMutation.isPending ? "Purging..." : "Purge Logs"}
+                {purgeMutation.isPending ? "Deleting..." : "Delete Old Activity"}
               </button>
             </div>
           </div>
@@ -101,22 +98,12 @@ export function ITSystemSettingsPage() {
 }
 
 function filterVisibleSettings(values: Record<string, SettingValue>) {
-  const visibleSettings = Object.fromEntries(Object.entries(values).filter(([key]) => visibleSettingKeys.has(key)));
-  const retentionDays = resolveExistingRetentionDays(values);
-  if (retentionDays !== null) {
-    visibleSettings["logs.retentionDays"] = retentionDays;
-  }
-  for (const [stableKey, legacyKey] of Object.entries(legacyNotificationSettingKeys)) {
-    if (typeof visibleSettings[stableKey] !== "boolean" && typeof values[legacyKey] === "boolean") {
-      visibleSettings[stableKey] = values[legacyKey];
-    }
-  }
-  return visibleSettings;
+  return Object.fromEntries(Object.entries(values).filter(([key]) => visibleSettingKeys.has(key)));
 }
 
-function formatSettingsMetadata(updatedBy: string | null, updatedAt: string | null) {
+function formatSettingsMetadata(updatedBy: string | null, updatedAt: string | null, timeFormat: "12-hour" | "24-hour") {
   if (!updatedBy && !updatedAt) return "Defaults active";
-  const timestamp = updatedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(updatedAt)) : null;
+  const timestamp = updatedAt ? `${formatPhilippineDateTime(updatedAt, timeFormat)} ${PHILIPPINE_TIME_LABEL}` : null;
   if (updatedBy && timestamp) return `Last modified ${timestamp} by ${updatedBy}`;
   if (timestamp) return `Last modified ${timestamp}`;
   return `Last modified by ${updatedBy}`;
@@ -126,11 +113,11 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
   return (
     <div className="rounded-xl border border-red-200 bg-red-50 p-5 dark:border-red-300/25 dark:bg-red-500/10">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[10px] font-bold tracking-wide text-red-700 uppercase dark:text-red-200">Purge Logs</span>
+        <span className="text-[10px] font-bold tracking-wide text-red-700 uppercase dark:text-red-200">Delete Old Activity</span>
         <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-red-700 uppercase dark:bg-red-950/45 dark:text-red-200 dark:ring-1 dark:ring-red-300/20">Destructive</span>
       </div>
       <p className="mb-4 text-sm leading-6 text-red-900 dark:text-red-100">
-        Permanently deletes activity logs older than the saved retention period. This is only needed when hidden expired logs should be removed from storage.
+        Permanently deletes activity history older than the saved retention period. Use this only when older hidden records should be removed from storage.
       </p>
       <button
         type="button"
@@ -138,7 +125,7 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
         onClick={onOpenConfirm}
         className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-red-950/10 transition hover:bg-red-700 disabled:opacity-70 dark:bg-red-500 dark:text-white dark:shadow-red-950/30 dark:hover:bg-red-400"
       >
-        <Trash2 size={15} /> Purge Logs
+        <Trash2 size={15} /> Delete Old Activity
       </button>
     </div>
   );
@@ -146,16 +133,4 @@ function PurgeLogsSettingCard({ isPending, onOpenConfirm }: { isPending: boolean
 
 function settingKey(sectionId: string, field: SettingField) {
   return `${sectionId}.${field.key ?? field.label}`;
-}
-
-function resolveExistingRetentionDays(values: Record<string, SettingValue>) {
-  const stableValue = values["logs.retentionDays"];
-  if (typeof stableValue === "number" && [90, 180, 365].includes(stableValue)) {
-    return stableValue;
-  }
-
-  const legacyValue = values["logs.Log Retention Period"];
-  if (typeof legacyValue !== "string") return null;
-  const days = Number(legacyValue.replace(" days", ""));
-  return [90, 180, 365].includes(days) ? days : null;
 }

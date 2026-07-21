@@ -4,7 +4,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import {
   normalizeEmail,
   PERSON_NAME_MAX_LENGTH,
@@ -51,6 +53,7 @@ const allowedStatusValues = ["active", "inactive"] satisfies UpdateLguAccountPay
 
 export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResendActivation, onRequestStatusChange }: LguAccountDetailsModalProps) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<LguEditState>(() => getInitialForm(account));
   const [errors, setErrors] = useState<LguEditErrors>({});
@@ -97,14 +100,14 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
     () => [
       ["Name", account.displayName],
       ["Email", account.email],
-      ["Role", lguRoleLabel[account.role] ?? account.role],
+      ["Account Type", lguRoleLabel[account.role] ?? account.role],
       ["Phone", account.phone ?? "Not provided"],
       ["Status", account.status],
-      ["Last Login", account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"],
-      ["Created", new Date(account.createdAt).toLocaleString()],
+      ["Last Login", account.lastLoginAt ? formatPhilippineDateTime(account.lastLoginAt, timeFormat) : "Never"],
+      ["Created", formatPhilippineDateTime(account.createdAt, timeFormat)],
       ["Activation", account.isActivated ? "Complete" : "Pending"],
     ],
-    [account],
+    [account, timeFormat],
   );
 
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -279,21 +282,11 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                   maxLength={PERSON_NAME_MAX_LENGTH}
                 />
               </div>
-              <FormField
-                name="email"
-                label="Email Address"
-                type="email"
-                value={form.email}
-                onChange={(value) => updateField("email", value)}
-                error={errors.email}
-                required
-                autoComplete="email"
-                helperText="Use an @gmail.com or @email.com address."
-              />
+              <FormField name="email" label="Email Address" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
               <ContactNumberField name="phone" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
               <SearchableDropdownField
                 name="role"
-                label="Role"
+                label="Account Type"
                 options={
                   [
                     ["staff", "LGU Staff"],
@@ -430,7 +423,7 @@ function validateLguEditForm(form: LguEditState) {
   if (lastNameError) errors.lastName = lastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;
-  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid role.";
+  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid account type.";
   if (!allowedStatusValues.includes(form.status)) errors.status = "Choose a valid status.";
 
   return errors;
@@ -442,7 +435,7 @@ function getLguChanges(account: AccountSummary, payload: UpdateLguAccountPayload
   if ((account.lastName ?? "") !== payload.lastName) changes.push(`Last name: ${account.lastName ?? "Not provided"} -> ${payload.lastName}`);
   if (account.email !== payload.email) changes.push(`Email: ${account.email} -> ${payload.email}`);
   if ((account.phone ?? "") !== (payload.phone ?? "")) changes.push(`Contact number: ${account.phone ?? "Not provided"} -> ${payload.phone ?? "Not provided"}`);
-  if (account.role !== payload.role) changes.push(`Role: ${lguRoleLabel[account.role] ?? account.role} -> ${lguRoleLabel[payload.role]}`);
+  if (account.role !== payload.role) changes.push(`Account type: ${lguRoleLabel[account.role] ?? account.role} -> ${lguRoleLabel[payload.role]}`);
   if (account.status !== payload.status) changes.push(`Status: ${account.status} -> ${payload.status}`);
   return changes;
 }

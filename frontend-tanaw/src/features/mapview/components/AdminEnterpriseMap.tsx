@@ -1,5 +1,5 @@
 import L, { type GeoJSONOptions, type Layer } from "leaflet";
-import { Activity, ArrowLeft, Building2, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
+import { Activity, ArrowLeft, BarChart3, Building2, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -7,7 +7,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
 import { SelectDropdown } from "@/shared/components/ui";
 import { listEnterpriseAccounts, type AccountSummary } from "@/shared/services/accountManagement";
-import type { MapEnterprise } from "@/shared/types";
+import type { MapEnterprise, VisitorInsightRange } from "@/shared/types";
 import {
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
@@ -36,6 +36,7 @@ import {
   type LeafletMapTheme,
 } from "../utils";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
+import { VisitorInsightsDrawer } from "./VisitorInsightsDrawer";
 
 const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 const EMPTY_MAP_ENTERPRISES: MapEnterprise[] = [];
@@ -56,6 +57,9 @@ export function AdminEnterpriseMap() {
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [selectedBarangayName, setSelectedBarangayName] = useState<string | null>(null);
   const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
+  const [insightEnterpriseId, setInsightEnterpriseId] = useState<string | null>(null);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+  const [insightRange, setInsightRange] = useState<VisitorInsightRange>("7d");
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
   const token = useAuthStore((state) => state.token);
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
@@ -159,6 +163,7 @@ export function AdminEnterpriseMap() {
       selectedBarangayNameRef.current = barangayName;
       setSelectedBarangayName(barangayName);
       setSelectedEnterpriseId(null);
+      setInsightEnterpriseId(null);
       applyBoundarySelection(barangayName);
 
       const map = mapRef.current;
@@ -188,6 +193,7 @@ export function AdminEnterpriseMap() {
     selectedBarangayNameRef.current = null;
     setSelectedBarangayName(null);
     setSelectedEnterpriseId(null);
+    setInsightEnterpriseId(null);
     applyBoundarySelection(null);
 
     if (mapRef.current) {
@@ -437,6 +443,32 @@ export function AdminEnterpriseMap() {
         )}
       </AnimatePresence>
 
+      {!isInsightsOpen && (
+        <motion.button
+          type="button"
+          initial={{ opacity: 0, x: 12 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={() => setIsInsightsOpen(true)}
+          className={`absolute right-4 z-420 inline-flex items-center gap-2 rounded-xl border border-slate-400/35 bg-[#0b1527]/92 px-4 py-3 text-xs font-black tracking-wide text-white uppercase shadow-[0_18px_46px_rgba(0,0,0,0.44)] backdrop-blur-xl transition-all hover:border-emerald-300/45 hover:bg-[#132139] ${isBoundaryLoading || isBoundaryError ? "top-20" : "top-4"}`}
+        >
+          <BarChart3 size={16} className="text-emerald-300" />
+          Visitor Insights
+        </motion.button>
+      )}
+
+      <AnimatePresence>
+        {isInsightsOpen && (
+          <VisitorInsightsDrawer
+            range={insightRange}
+            enterpriseId={insightEnterpriseId ?? undefined}
+            barangay={insightEnterpriseId ? undefined : (selectedBarangayName ?? undefined)}
+            onRangeChange={setInsightRange}
+            onShowArea={() => setInsightEnterpriseId(null)}
+            onClose={() => setIsInsightsOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence initial={false}>
         {!isDirectoryCollapsed && (
           <motion.aside
@@ -668,7 +700,19 @@ export function AdminEnterpriseMap() {
         </motion.button>
       )}
 
-      <AnimatePresence>{selectedEnterprise && <EnterpriseDetailsModal enterprise={selectedEnterprise} onClose={closeEnterpriseDetails} />}</AnimatePresence>
+      <AnimatePresence>
+        {selectedEnterprise && (
+          <EnterpriseDetailsModal
+            enterprise={selectedEnterprise}
+            onClose={closeEnterpriseDetails}
+            onOpenInsights={() => {
+              setInsightEnterpriseId(selectedEnterprise.id);
+              setIsInsightsOpen(true);
+              closeEnterpriseDetails();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -716,7 +760,7 @@ function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) 
           <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
           <div className="mt-1 flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-white/70 uppercase">
             <MapPin size={10} className="shrink-0" />
-            <span className="truncate">{enterprise.address ?? enterprise.geocodedAddress ?? "Address not provided"}</span>
+            <span className="truncate">{enterprise.address ?? "Address not provided"}</span>
           </div>
         </div>
         <span className="flex shrink-0 items-center rounded border border-amber-400/30 bg-amber-900/35 px-1.5 py-0.5 text-[9px] font-black tracking-widest text-amber-100 uppercase">

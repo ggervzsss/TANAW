@@ -9,14 +9,13 @@ export function DotSingleReportTable({ report }: { report: IntakeReport }) {
       <table className="dot-table mb-4 w-full border-collapse border border-black text-[10px] leading-tight">
         <DotTableHeader />
         <tbody>
-          <tr className="border-t border-black bg-gray-50 font-bold">
-            <td className="py-2 text-left font-bold">{report.enterprise}</td>
+          <tr className="border-t border-black bg-gray-50 text-center">
+            <td className="py-2 text-left font-bold">
+              {report.enterprise}
+              <br />
+              <span className="text-[9px] font-normal text-gray-600">{report.month}</span>
+            </td>
             <td>{report.code}</td>
-            <td colSpan={12} />
-          </tr>
-          <tr>
-            <td className="py-2 pl-6 text-left">{report.month}</td>
-            <td />
             <td>{d.provMale}</td>
             <td>{d.provFemale}</td>
             <td className="bg-gray-50 font-semibold">{d.provTotal}</td>
@@ -124,21 +123,27 @@ function DotTableHeader() {
   return (
     <thead className="bg-gray-100 font-bold">
       <tr>
+        <th colSpan={2}>Visitor Attraction</th>
+        <th colSpan={9}>Place of Residence</th>
+        <th colSpan={3} rowSpan={3}>
+          Grand Total Number of Visitors
+        </th>
+      </tr>
+      <tr>
         <th rowSpan={3} className="w-48 text-left">
-          Visitor Attraction / Name / Month
+          Name / Month
         </th>
         <th rowSpan={3} className="w-16">
-          Attraction Code
+          Report Code
         </th>
-        <th colSpan={9}>Place of Residence (Estimated Data)</th>
+        <th colSpan={6}>Philippines</th>
         <th colSpan={3} rowSpan={2}>
-          Grand Total Number of Visitors
+          Foreign Country Residence
         </th>
       </tr>
       <tr>
         <th colSpan={3}>This Province</th>
         <th colSpan={3}>Other Province</th>
-        <th colSpan={3}>Foreign Country</th>
       </tr>
       <tr>
         <th>Male</th>

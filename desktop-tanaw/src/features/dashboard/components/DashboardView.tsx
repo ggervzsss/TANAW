@@ -21,7 +21,7 @@ type DotPreviewState = {
   reportId: string;
 };
 
-export function DashboardView() {
+export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
   const [trendFilter, setTrendFilter] = useState<TrendFilter>("Week");
   const [summary, setSummary] = useState<LocalMetricsSummary | null>(null);
   const [history, setHistory] = useState<LocalMetricsHistory>(EMPTY_LOCAL_METRICS_HISTORY);
@@ -52,7 +52,7 @@ export function DashboardView() {
       setLedgerReports(sortReportsBySubmittedAt(submissions.map(reportFromLocalSubmission)));
       setLedgerError(null);
     } catch (error) {
-      setLedgerError(error instanceof Error ? error.message : "Unable to load submission ledger previews.");
+      setLedgerError(error instanceof Error ? error.message : "Unable to load submitted report previews.");
     }
   }, []);
 
@@ -85,6 +85,7 @@ export function DashboardView() {
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
+          enterpriseName={enterpriseName}
           metrics={previewReport.metrics}
           notes={previewReport.notes}
           period={previewReport.period}
@@ -95,7 +96,7 @@ export function DashboardView() {
       )}
 
       <DashboardHeader error={metricsError} summary={summary} />
-      {ledgerError && <p className="-mt-4 text-xs font-semibold text-amber-700 dark:text-amber-300">Submission ledger previews unavailable: {ledgerError}</p>}
+      {ledgerError && <p className="-mt-4 text-xs font-semibold text-amber-700 dark:text-amber-300">Submitted report previews unavailable: {ledgerError}</p>}
       <DashboardMetricsGrid summary={summary} />
       <HistoricalTrendChart data={history.historical[trendFilter]} summary={summary} trendFilter={trendFilter} onTrendFilterChange={setTrendFilter} />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

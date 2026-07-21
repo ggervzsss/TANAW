@@ -1,15 +1,23 @@
 import json
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from hashlib import sha256
-from math import ceil, sin
+from datetime import UTC, datetime, timedelta
+from math import ceil
+from statistics import fmean
 from typing import cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus, SystemConfiguration
+from app.core.date_time import PHILIPPINE_TIME_ZONE
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+    SystemConfiguration,
+)
 from app.features.accounts.options import format_enterprise_category
 from app.features.operational.models import (
     EnterpriseReportSubmission,
@@ -22,10 +30,7 @@ from app.features.operational.models import (
     UserNotification,
 )
 from app.features.operational.schemas import (
-    DesktopHealthSummary,
-    DesktopMetricsSummary,
     DesktopReportSubmissionIngest,
-    DesktopSessionSummary,
     DesktopTelemetryIngest,
     FinalReportArchivedFromStatus,
     FinalReportCreate,
@@ -33,8 +38,6 @@ from app.features.operational.schemas import (
     FinalReportSourceSummary,
     FinalReportStatusUpdate,
     FinalReportSummary,
-    FleetSimulationEnterpriseSummary,
-    FleetSimulationTarget,
     IntakeReportSummary,
     OperationalAlertSummary,
     OperationalSummary,
@@ -49,22 +52,30 @@ from app.features.operational.schemas import (
     SupportTicketSummary,
     TelemetrySnapshotSummary,
     UserNotificationSummary,
+    VisitorInsightEnterprise,
+    VisitorInsightPoint,
+    VisitorInsightRange,
+    VisitorInsightsSummary,
 )
 
 STALE_GATEWAY_SECONDS = 120
 OFFLINE_GATEWAY_SECONDS = 900
-OCCUPANCY_ALERT_THRESHOLD_PERCENT = 90
+VISITOR_ACTIVITY_BASELINE_DAYS = 35
+VISITOR_ACTIVITY_MIN_BASELINE_DAYS = 3
+VISITOR_ACTIVITY_TRIGGER_MULTIPLIER = 1.5
+VISITOR_ACTIVITY_RECOVERY_MULTIPLIER = 1.2
+VISITOR_ACTIVITY_MIN_INCREASE = 10
 SYSTEM_SETTINGS_ID = "default"
 NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
 NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
 NOTIFY_SYNC_DELAY_KEY = "notifications.syncDelayAlerts"
 NOTIFY_FAILED_LOGIN_LOCKOUT_KEY = "notifications.failedLoginLockoutAlerts"
-NOTIFICATION_SETTING_LEGACY_KEYS = {
-    NOTIFY_CAMERA_SESSION_ERROR_KEY: ("notifications.Notify Camera Offline",),
-    NOTIFY_GATEWAY_SERVICE_ERROR_KEY: ("notifications.Notify Gateway Offline",),
-    NOTIFY_SYNC_DELAY_KEY: ("notifications.Notify Sync Failed",),
-    NOTIFY_FAILED_LOGIN_LOCKOUT_KEY: ("notifications.Notify Failed Login Threshold",),
-}
+STAFF_REPORT_SUBMITTED_NOTIFICATION = "Enterprise Report Submitted"
+STAFF_REPORT_RESUBMITTED_NOTIFICATION = "Enterprise Report Resubmitted"
+STAFF_REPORT_NOTIFICATION_TYPES = (
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+)
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
 FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
 FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
@@ -87,9 +98,9 @@ class InvalidReportWorkflowError(Exception):
 
 
 @dataclass(frozen=True)
-class OccupancyAlertCondition:
-    capacity: int
-    threshold_percent: int
+class VisitorActivityCondition:
+    typical_occupancy: int
+    baseline_days: int
     threshold_count: int
     recovery_count: int
     current_occupancy: int
@@ -101,6 +112,14 @@ class OccupancyAlertCondition:
     @property
     def recovered(self) -> bool:
         return self.current_occupancy <= self.recovery_count
+
+    @property
+    def difference_percent(self) -> int:
+        if self.typical_occupancy <= 0:
+            return 100 if self.current_occupancy > 0 else 0
+        return round(
+            (self.current_occupancy - self.typical_occupancy) / self.typical_occupancy * 100
+        )
 
 
 def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSummary:
@@ -119,7 +138,10 @@ def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSum
     )
 
 
-def to_user_notification_summary(notification: UserNotification) -> UserNotificationSummary:
+def to_user_notification_summary(
+    notification: UserNotification, recipient: Account | None = None
+) -> UserNotificationSummary:
+    profile = recipient.enterprise_profile if recipient else None
     return UserNotificationSummary(
         id=notification.id,
         recipientAccountId=notification.recipient_account_id,
@@ -131,7 +153,7 @@ def to_user_notification_summary(notification: UserNotification) -> UserNotifica
         sourceId=notification.source_id,
         createdBy=notification.created_by_name,
         recipientRole=notification.recipient_role,
-        recipientEnterpriseId=notification.recipient_enterprise_id,
+        recipientEnterpriseId=profile.enterprise_id if profile else None,
         createdAt=notification.created_at.isoformat(),
         readAt=notification.read_at.isoformat() if notification.read_at else None,
     )
@@ -159,23 +181,20 @@ def resolve_system_setting_enabled(
     value = values.get(key)
     if isinstance(value, bool):
         return value
-    for legacy_key in NOTIFICATION_SETTING_LEGACY_KEYS.get(key, ()):
-        legacy_value = values.get(legacy_key)
-        if isinstance(legacy_value, bool):
-            return legacy_value
     return default
 
 
 async def list_user_notifications(
     db: AsyncSession, account: Account
 ) -> list[UserNotificationSummary]:
-    result = await db.scalars(
-        select(UserNotification)
-        .where(UserNotification.recipient_account_id == account.id)
-        .order_by(UserNotification.created_at.desc())
-        .limit(100)
-    )
-    return [to_user_notification_summary(notification) for notification in result]
+    statement = select(UserNotification).where(UserNotification.recipient_account_id == account.id)
+    if account.role == AccountRole.STAFF:
+        statement = statement.where(
+            UserNotification.source_type == "enterprise.report",
+            UserNotification.notification_type.in_(STAFF_REPORT_NOTIFICATION_TYPES),
+        )
+    result = await db.scalars(statement.order_by(UserNotification.created_at.desc()).limit(100))
+    return [to_user_notification_summary(notification, account) for notification in result]
 
 
 async def create_user_notification(
@@ -193,9 +212,6 @@ async def create_user_notification(
     notification = UserNotification(
         recipient_account_id=recipient.id,
         recipient_role=recipient.role.value,
-        recipient_enterprise_id=enterprise_identifier(recipient)
-        if recipient.role == AccountRole.ENTERPRISE
-        else None,
         title=title,
         message=message,
         notification_type=notification_type,
@@ -208,7 +224,7 @@ async def create_user_notification(
     db.add(notification)
     await db.commit()
     await db.refresh(notification)
-    return to_user_notification_summary(notification)
+    return to_user_notification_summary(notification, recipient)
 
 
 async def create_role_notifications(
@@ -222,6 +238,7 @@ async def create_role_notifications(
     actor: Account | None = None,
     source_type: str | None = None,
     source_id: str | None = None,
+    replace_existing_for_source: bool = False,
 ) -> list[UserNotificationSummary]:
     recipients = (
         await db.scalars(
@@ -237,25 +254,72 @@ async def create_role_notifications(
     notifications: list[UserNotification] = []
 
     for recipient in recipients:
-        notification = UserNotification(
-            recipient_account_id=recipient.id,
-            recipient_role=recipient.role.value,
-            recipient_enterprise_id=None,
-            title=title,
-            message=message,
-            notification_type=notification_type,
-            severity=severity,
-            source_type=source_type,
-            source_id=source_id,
-            created_by_account_id=actor.id if actor else None,
-            created_by_name=actor.display_name if actor else None,
-        )
-        db.add(notification)
+        notification = None
+        if replace_existing_for_source and source_type and source_id:
+            notification = await db.scalar(
+                select(UserNotification).where(
+                    UserNotification.recipient_account_id == recipient.id,
+                    UserNotification.source_type == source_type,
+                    UserNotification.source_id == source_id,
+                )
+            )
+        if notification is None:
+            notification = UserNotification(
+                recipient_account_id=recipient.id,
+                recipient_role=recipient.role.value,
+                title=title,
+                message=message,
+                notification_type=notification_type,
+                severity=severity,
+                source_type=source_type,
+                source_id=source_id,
+                created_by_account_id=actor.id if actor else None,
+                created_by_name=actor.display_name if actor else None,
+            )
+            db.add(notification)
+        else:
+            notification.title = title
+            notification.message = message
+            notification.notification_type = notification_type
+            notification.severity = severity
+            notification.created_by_account_id = actor.id if actor else None
+            notification.created_by_name = actor.display_name if actor else None
+            notification.read_at = None
+            notification.created_at = datetime.now(UTC)
         notifications.append(notification)
 
     if not notifications:
         return []
 
+    await db.commit()
+    for notification in notifications:
+        await db.refresh(notification)
+    return [
+        to_user_notification_summary(notification, recipient)
+        for notification, recipient in zip(notifications, recipients, strict=True)
+    ]
+
+
+async def mark_source_notifications_read(
+    db: AsyncSession,
+    *,
+    source_type: str,
+    source_id: str,
+    recipient_role: AccountRole | None = None,
+) -> list[UserNotificationSummary]:
+    statement = select(UserNotification).where(
+        UserNotification.source_type == source_type,
+        UserNotification.source_id == source_id,
+        UserNotification.read_at.is_(None),
+    )
+    if recipient_role is not None:
+        statement = statement.where(UserNotification.recipient_role == recipient_role.value)
+    notifications = list((await db.scalars(statement)).all())
+    if not notifications:
+        return []
+    resolved_at = datetime.now(UTC)
+    for notification in notifications:
+        notification.read_at = resolved_at
     await db.commit()
     for notification in notifications:
         await db.refresh(notification)
@@ -285,14 +349,14 @@ async def set_user_notification_read(
     notification.read_at = datetime.now(UTC) if read else None
     await db.commit()
     await db.refresh(notification)
-    return to_user_notification_summary(notification)
+    return to_user_notification_summary(notification, account)
 
 
 def to_support_ticket_summary(ticket: SupportTicket) -> SupportTicketSummary:
     return SupportTicketSummary(
         id=ticket.id,
         code=ticket.ticket_code,
-        enterpriseId=ticket.enterprise_id,
+        enterpriseId=ticket.enterprise_profile.enterprise_id,
         enterpriseName=ticket.enterprise_name,
         submittedBy=ticket.enterprise_name,
         category=ticket.category,
@@ -356,7 +420,9 @@ async def list_support_tickets(
 ) -> list[SupportTicketSummary]:
     statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
     if account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(SupportTicket.enterprise_id == enterprise_identifier(account))
+        statement = statement.where(SupportTicket.enterprise_profile_id == account.id)
+    elif account.role == AccountRole.ADMIN:
+        statement = statement.where(SupportTicket.priority.in_({"High", "Urgent"}))
     tickets = (await db.scalars(statement)).all()
     return [to_support_ticket_summary(ticket) for ticket in tickets]
 
@@ -370,9 +436,9 @@ async def get_support_ticket_for_account(
     )
     if ticket is None:
         return None
-    if account.role == AccountRole.ENTERPRISE and ticket.enterprise_id != enterprise_identifier(
-        account
-    ):
+    if account.role == AccountRole.ENTERPRISE and ticket.enterprise_profile_id != account.id:
+        return None
+    if account.role == AccountRole.ADMIN and ticket.priority not in {"High", "Urgent"}:
         return None
     return ticket
 
@@ -407,8 +473,7 @@ async def create_support_ticket(
     ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
     ticket = SupportTicket(
         ticket_code=f"TCK-{int(ticket_count or 0) + 1:06d}",
-        enterprise_account_id=account.id,
-        enterprise_id=enterprise_identifier(account),
+        enterprise_profile_id=account.id,
         enterprise_name=enterprise_name(account),
         category=payload.category,
         priority=payload.priority,
@@ -505,7 +570,12 @@ async def get_enterprise_notification_recipient(
         await db.scalar(
             select(Account).where(
                 Account.role == AccountRole.ENTERPRISE,
-                or_(Account.id == enterprise_id, Account.enterprise_id == enterprise_id),
+                or_(
+                    Account.id == enterprise_id,
+                    Account.enterprise_profile.has(
+                        EnterpriseProfile.enterprise_id == enterprise_id
+                    ),
+                ),
             )
         ),
     )
@@ -559,9 +629,57 @@ async def create_operational_alert(
     return alert
 
 
-async def list_operational_alerts(db: AsyncSession) -> list[OperationalAlertSummary]:
-    result = await db.scalars(select(OperationalAlert).order_by(OperationalAlert.created_at.desc()))
+async def get_active_operational_alert(
+    db: AsyncSession, *, alert_type: str, source_id: str
+) -> OperationalAlert | None:
+    return cast(
+        OperationalAlert | None,
+        await db.scalar(
+            select(OperationalAlert).where(
+                OperationalAlert.source_id == source_id,
+                OperationalAlert.alert_type == alert_type,
+                OperationalAlert.status != "Resolved",
+            )
+        ),
+    )
+
+
+async def resolve_operational_alert(
+    db: AsyncSession,
+    *,
+    alert_type: str,
+    source_id: str,
+    recovery_message: str,
+) -> OperationalAlert | None:
+    alert = await get_active_operational_alert(db, alert_type=alert_type, source_id=source_id)
+    if alert is None:
+        return None
+    alert.status = "Resolved"
+    if recovery_message not in alert.summary:
+        alert.summary = f"{alert.summary} {recovery_message}"
+    await db.commit()
+    await db.refresh(alert)
+    return alert
+
+
+async def list_operational_alerts(
+    db: AsyncSession, account: Account
+) -> list[OperationalAlertSummary]:
+    statement = select(OperationalAlert)
+    if account.role == AccountRole.ADMIN:
+        statement = statement.where(OperationalAlert.owner.in_({"Admin", "System"}))
+    elif account.role == AccountRole.IT:
+        statement = statement.where(OperationalAlert.owner.in_({"IT", "System"}))
+    result = await db.scalars(statement.order_by(OperationalAlert.created_at.desc()))
     return [to_operational_alert_summary(alert) for alert in result]
+
+
+def can_manage_operational_alert(account: Account, alert: OperationalAlert) -> bool:
+    if account.role == AccountRole.ADMIN:
+        return alert.owner == "Admin"
+    if account.role == AccountRole.IT:
+        return alert.owner == "IT"
+    return False
 
 
 def can_view_operational_event(role: str, event_type: str) -> bool:
@@ -597,96 +715,104 @@ def can_view_operational_event(role: str, event_type: str) -> bool:
     return False
 
 
-def occupancy_alert_condition(
-    payload: DesktopTelemetryIngest,
-    building_capacity: int | None = None,
-) -> OccupancyAlertCondition | None:
-    simulation = (payload.payload or {}).get("simulation")
-    if not isinstance(simulation, dict):
-        if payload.sourceKind != "real" or not is_valid_building_capacity(building_capacity):
-            return None
-        if building_capacity is None:
-            return None
-        capacity = building_capacity
-        threshold_percent = OCCUPANCY_ALERT_THRESHOLD_PERCENT
-    else:
-        raw_capacity = simulation.get("capacity")
-        raw_threshold_percent = simulation.get("thresholdPercent")
-        if not is_valid_occupancy_threshold(raw_capacity, raw_threshold_percent):
-            return None
-        assert isinstance(raw_capacity, int) and not isinstance(raw_capacity, bool)
-        assert isinstance(raw_threshold_percent, int) and not isinstance(
-            raw_threshold_percent, bool
-        )
-        capacity = raw_capacity
-        threshold_percent = raw_threshold_percent
-
-    threshold_count = max(1, ceil(capacity * threshold_percent / 100))
-    recovery_percent = max(0, threshold_percent - 10)
-    recovery_count = max(0, int(capacity * recovery_percent / 100))
-    return OccupancyAlertCondition(
-        capacity=capacity,
-        threshold_percent=threshold_percent,
+def visitor_activity_condition(
+    current_occupancy: int,
+    baseline_occupancies: Sequence[int | float],
+) -> VisitorActivityCondition | None:
+    if len(baseline_occupancies) < VISITOR_ACTIVITY_MIN_BASELINE_DAYS:
+        return None
+    typical_occupancy = max(0, round(fmean(baseline_occupancies)))
+    threshold_count = max(
+        typical_occupancy + VISITOR_ACTIVITY_MIN_INCREASE,
+        ceil(typical_occupancy * VISITOR_ACTIVITY_TRIGGER_MULTIPLIER),
+    )
+    recovery_count = max(
+        typical_occupancy,
+        ceil(typical_occupancy * VISITOR_ACTIVITY_RECOVERY_MULTIPLIER),
+    )
+    return VisitorActivityCondition(
+        typical_occupancy=typical_occupancy,
+        baseline_days=len(baseline_occupancies),
         threshold_count=threshold_count,
         recovery_count=recovery_count,
-        current_occupancy=payload.metrics.currentOccupancy,
+        current_occupancy=max(0, current_occupancy),
     )
 
 
-def is_valid_building_capacity(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
-
-
-def is_valid_occupancy_threshold(capacity: object, threshold_percent: object) -> bool:
-    if (
-        not isinstance(capacity, int)
-        or isinstance(capacity, bool)
-        or capacity <= 0
-        or not isinstance(threshold_percent, int)
-        or isinstance(threshold_percent, bool)
-        or threshold_percent <= 0
-        or threshold_percent > 100
-    ):
-        return False
-    return True
+async def load_matching_visitor_baseline(
+    db: AsyncSession,
+    enterprise_profile_id: str,
+    reference_time: datetime,
+) -> list[float]:
+    reference = _aware(reference_time)
+    local_reference = reference.astimezone(PHILIPPINE_TIME_ZONE)
+    local_timestamp = func.timezone(
+        str(PHILIPPINE_TIME_ZONE), EnterpriseTelemetrySnapshot.captured_at
+    )
+    local_day = func.date_trunc("day", local_timestamp)
+    weekday = (local_reference.weekday() + 1) % 7
+    statement = (
+        select(func.avg(EnterpriseTelemetrySnapshot.current_occupancy))
+        .where(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id == enterprise_profile_id,
+            EnterpriseTelemetrySnapshot.captured_at
+            >= reference - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS),
+            EnterpriseTelemetrySnapshot.captured_at < reference - timedelta(days=1),
+            func.extract("dow", local_timestamp) == weekday,
+            func.extract("hour", local_timestamp) == local_reference.hour,
+        )
+        .group_by(local_day)
+        .order_by(local_day.desc())
+    )
+    return [float(value) for value in (await db.scalars(statement)).all()]
 
 
 async def evaluate_telemetry_alerts(
     db: AsyncSession,
     account: Account,
     payload: DesktopTelemetryIngest,
+    *,
+    baseline_occupancies: Sequence[int | float] | None = None,
 ) -> list[tuple[str, OperationalAlertSummary]]:
-    source_id = f"occupancy-threshold:{account.id}"
+    source_id = f"visitor-activity:{account.id}"
     existing = await db.scalar(
         select(OperationalAlert).where(
             OperationalAlert.source_id == source_id,
-            OperationalAlert.alert_type == "Threshold Breach",
+            OperationalAlert.alert_type == "Foot Traffic Alert",
             OperationalAlert.status != "Resolved",
         )
     )
-    condition = occupancy_alert_condition(payload, account.building_capacity)
+    reference_time = payload.capturedAt or payload.metrics.lastEventAt or datetime.now(UTC)
+    baseline = (
+        list(baseline_occupancies)
+        if baseline_occupancies is not None
+        else await load_matching_visitor_baseline(db, account.id, reference_time)
+    )
+    condition = visitor_activity_condition(payload.metrics.currentOccupancy, baseline)
 
     if condition is not None and condition.breached:
         if existing is not None:
             return []
 
         enterprise = enterprise_name(account)
+        local_reference = _aware(reference_time).astimezone(PHILIPPINE_TIME_ZONE)
+        period_label = format_visitor_period(local_reference)
         alert = await create_operational_alert(
             db,
-            alert_type="Threshold Breach",
-            severity="Critical",
+            alert_type="Foot Traffic Alert",
+            severity="Critical" if condition.difference_percent >= 100 else "Warning",
             requester=enterprise,
             enterprise=enterprise,
             summary=(
-                f"Live occupancy reached {condition.current_occupancy} of "
-                f"{condition.capacity} people, exceeding the "
-                f"{condition.threshold_percent}% building-capacity alert trigger."
+                f"{enterprise} currently has {condition.current_occupancy} visitors, compared "
+                f"with its usual {condition.typical_occupancy} around {period_label}."
             ),
             required_action=(
-                "Review live occupancy and apply the venue's crowd-management procedure."
+                "Review the live map and coordinate with the establishment, traffic team, or "
+                "public-safety personnel if support is needed."
             ),
             resolution_mode="Admin Monitoring",
-            owner="IT",
+            owner="Admin",
             source_id=source_id,
         )
         return [("alert.created", to_operational_alert_summary(alert))]
@@ -695,14 +821,17 @@ async def evaluate_telemetry_alerts(
     if should_resolve and existing is not None:
         existing.status = "Resolved"
         existing.summary = (
-            f"{existing.summary} The latest telemetry indicates that the threshold condition "
-            "has cleared."
+            f"{existing.summary} The latest visitor level has returned to its usual range."
         )
         await db.commit()
         await db.refresh(existing)
         return [("alert.resolved", to_operational_alert_summary(existing))]
 
     return []
+
+
+def format_visitor_period(value: datetime) -> str:
+    return value.strftime("%A at %I %p").replace(" at 0", " at ")
 
 
 async def ingest_telemetry(
@@ -716,11 +845,10 @@ async def ingest_telemetry(
     if captured_at.tzinfo is None:
         captured_at = captured_at.replace(tzinfo=UTC)
 
-    enterprise_id = enterprise_identifier(account)
+    profile = require_enterprise_profile(account)
     snapshot = EnterpriseTelemetrySnapshot(
-        enterprise_account_id=account.id,
-        enterprise_id=enterprise_id,
-        enterprise_name=enterprise_name(account),
+        enterprise_profile_id=profile.account_id,
+        enterprise_name=profile.enterprise_name,
         camera_id=str(payload.session.cameraId) if payload.session.cameraId is not None else None,
         camera_name=payload.session.cameraName,
         captured_at=captured_at,
@@ -739,177 +867,33 @@ async def ingest_telemetry(
         error=payload.session.error,
         analytics_fps=payload.health.analyticsFps,
         payload_json=json.dumps(payload.model_dump(mode="json"), sort_keys=True),
-        source_kind=payload.sourceKind,
-        mock_run_id=payload.mockRunId,
     )
     db.add(snapshot)
     if update_account_gateway:
-        account.gateway_status = (
+        profile.gateway_status = (
             "Offline" if snapshot.error or snapshot.status == "error" else "Connected"
         )
         if payload.deviceId:
-            account.gateway_id = payload.deviceId
+            profile.gateway_id = payload.deviceId
     await db.commit()
     await db.refresh(snapshot)
     return to_telemetry_summary(snapshot, account)
 
 
-async def list_fleet_simulation_enterprises(
-    db: AsyncSession, actor: Account
-) -> list[FleetSimulationEnterpriseSummary]:
-    enterprises = (
-        await db.scalars(
-            select(Account)
-            .where(
-                Account.role == AccountRole.ENTERPRISE,
-                Account.status == AccountStatus.ACTIVE,
-                Account.activated_at.is_not(None),
-            )
-            .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
-        )
-    ).all()
-    current_enterprise_id = (
-        enterprise_identifier(actor) if actor.role == AccountRole.ENTERPRISE else None
-    )
-    return [
-        FleetSimulationEnterpriseSummary(
-            enterpriseId=enterprise_identifier(enterprise),
-            enterpriseName=enterprise_name(enterprise),
-            category=format_enterprise_category(enterprise.category),
-            barangay=enterprise.barangay,
-            isCurrent=enterprise_identifier(enterprise) == current_enterprise_id,
-        )
-        for enterprise in enterprises
-    ]
-
-
-async def enterprise_accounts_by_identifier(
-    db: AsyncSession, enterprise_ids: set[str]
-) -> dict[str, Account]:
-    if not enterprise_ids:
-        return {}
-    accounts = (
-        await db.scalars(
-            select(Account).where(
-                Account.role == AccountRole.ENTERPRISE,
-                Account.status == AccountStatus.ACTIVE,
-                Account.activated_at.is_not(None),
-                (Account.enterprise_id.in_(enterprise_ids)) | (Account.id.in_(enterprise_ids)),
-            )
-        )
-    ).all()
-    return {enterprise_identifier(account): account for account in accounts}
-
-
-def build_fleet_simulation_telemetry_payload(
-    *,
-    target: FleetSimulationTarget,
-    enterprise: Account,
-    run_id: str,
-    started_at: datetime,
-    elapsed_seconds: int,
-) -> DesktopTelemetryIngest:
-    now = datetime.now(UTC)
-    seed = stable_simulation_seed(run_id, target.enterpriseId)
-    capacity = target.capacity
-    threshold_count = max(1, ceil(capacity * target.thresholdPercent / 100))
-    current_occupancy = fleet_occupancy_for_lane(target, elapsed_seconds, seed)
-    if target.lane == "one-minute-breach" and 20 <= elapsed_seconds % 180 < 80:
-        current_occupancy = max(current_occupancy, threshold_count)
-
-    peak_occupancy = max(
-        current_occupancy,
-        fleet_peak_for_lane(target, elapsed_seconds),
-    )
-    event_rate = fleet_events_per_minute(target.lane)
-    tick_index = max(0, elapsed_seconds // 5)
-    entries = max(
-        current_occupancy, tick_index * max(1, event_rate // 6) + current_occupancy + seed % 19
-    )
-    exits = max(0, entries - current_occupancy)
-    total_events = entries + exits
-    unique_count = max(current_occupancy, int(entries * 0.82))
-    confirmed_unique_count = int(unique_count * 0.9)
-    degraded_unique_count = max(0, unique_count - confirmed_unique_count)
-    unsynced_events = 3 + seed % 4 if target.lane == "warning" else 0
-    session_status = "sync_delayed" if target.lane == "warning" else "running"
-
-    return DesktopTelemetryIngest(
-        deviceId=None,
-        capturedAt=now,
-        metrics=DesktopMetricsSummary(
-            entries=entries,
-            exits=exits,
-            peakOccupancy=peak_occupancy,
-            currentOccupancy=current_occupancy,
-            uniqueCount=unique_count,
-            confirmedUniqueCount=confirmed_unique_count,
-            degradedUniqueCount=degraded_unique_count,
-            totalEvents=total_events,
-            unsubmittedEvents=0,
-            unsyncedEvents=unsynced_events,
-            firstEventAt=started_at,
-            lastEventAt=now,
-        ),
-        session=DesktopSessionSummary(
-            running=True,
-            status=session_status,
-            error=None,
-            cameraId="fleet-sim",
-            cameraName="Fleet Simulation Lab",
-            updatedAt=now,
-        ),
-        health=DesktopHealthSummary(
-            analyticsFps=24.0,
-            processingProfile="simulation",
-            detectorP50Ms=0.0,
-            detectorP95Ms=0.0,
-            processingFrameAgeMs=0.0,
-            processingFramesSkipped=0,
-            modelReady=True,
-            reidReady=True,
-            qualityReidReady=True,
-            reidQueueDepth=0,
-            qualityReidQueueDepth=0,
-        ),
-        sourceKind="mock",
-        mockRunId=run_id,
-        payload={
-            "simulation": {
-                "runId": run_id,
-                "mode": "fleet",
-                "scenario": target.lane,
-                "state": "running",
-                "capacity": target.capacity,
-                "thresholdPercent": target.thresholdPercent,
-                "eventsPerMinute": event_rate,
-                "durationMinutes": None,
-                "startedAt": started_at.isoformat(),
-                "fleet": True,
-                "lane": target.lane,
-                "elapsedSeconds": elapsed_seconds,
-                "enterpriseId": enterprise_identifier(enterprise),
-                "enterpriseName": enterprise_name(enterprise),
-            },
-            "syncedAt": now.isoformat(),
-        },
-    )
-
-
 async def ingest_report_submission(
     db: AsyncSession, account: Account, payload: DesktopReportSubmissionIngest
 ) -> IntakeReportSummary:
-    enterprise_id = enterprise_identifier(account)
+    profile = require_enterprise_profile(account)
     result = await db.scalars(
         select(EnterpriseReportSubmission).where(
-            EnterpriseReportSubmission.enterprise_id == enterprise_id,
+            EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
             EnterpriseReportSubmission.report_id == payload.reportId,
         )
     )
     existing = result.first()
     duplicate_period = await db.scalar(
         select(EnterpriseReportSubmission).where(
-            EnterpriseReportSubmission.enterprise_id == enterprise_id,
+            EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
             EnterpriseReportSubmission.period == payload.period,
             EnterpriseReportSubmission.report_id != payload.reportId,
         )
@@ -924,11 +908,10 @@ async def ingest_report_submission(
     if existing is None:
         report = EnterpriseReportSubmission(
             report_id=payload.reportId,
-            enterprise_account_id=account.id,
-            enterprise_id=enterprise_id,
-            enterprise_name=enterprise_name(account),
-            category=format_enterprise_category(account.category) or "Uncategorized",
-            barangay=account.barangay or "Unassigned",
+            enterprise_profile_id=profile.account_id,
+            enterprise_name=profile.enterprise_name,
+            category=format_enterprise_category(profile.category) or "Uncategorized",
+            barangay=profile.barangay or "Unassigned",
             period=payload.period,
             month=month,
             submitted_at=_aware(payload.submittedAt),
@@ -941,16 +924,14 @@ async def ingest_report_submission(
             notes=payload.notes,
             sync_status=payload.syncStatus,
             payload_json=json.dumps(payload.payload or {}, sort_keys=True),
-            source_kind=payload.sourceKind,
-            mock_run_id=payload.mockRunId,
         )
         db.add(report)
     else:
         report = existing
-        report.enterprise_account_id = account.id
-        report.enterprise_name = enterprise_name(account)
-        report.category = format_enterprise_category(account.category) or "Uncategorized"
-        report.barangay = account.barangay or "Unassigned"
+        report.enterprise_profile_id = profile.account_id
+        report.enterprise_name = profile.enterprise_name
+        report.category = format_enterprise_category(profile.category) or "Uncategorized"
+        report.barangay = profile.barangay or "Unassigned"
         report.period = payload.period
         report.month = month
         report.submitted_at = _aware(payload.submittedAt)
@@ -962,12 +943,10 @@ async def ingest_report_submission(
         report.notes = payload.notes
         report.sync_status = payload.syncStatus
         report.payload_json = json.dumps(payload.payload or {}, sort_keys=True)
-        report.source_kind = payload.sourceKind
-        report.mock_run_id = payload.mockRunId
         if report.review_status == "Returned" and report_status in {"Submitted", "Resubmitted"}:
             report.review_status = "Pending Review"
 
-    account.gateway_status = "Connected"
+    profile.gateway_status = "Connected"
     await db.commit()
     await db.refresh(report)
     return to_intake_report_summary(report)
@@ -980,7 +959,7 @@ async def list_latest_telemetry(
         EnterpriseTelemetrySnapshot.id.label("snapshot_id"),
         func.row_number()
         .over(
-            partition_by=EnterpriseTelemetrySnapshot.enterprise_id,
+            partition_by=EnterpriseTelemetrySnapshot.enterprise_profile_id,
             order_by=EnterpriseTelemetrySnapshot.received_at.desc(),
         )
         .label("snapshot_rank"),
@@ -996,17 +975,271 @@ async def list_latest_telemetry(
         .limit(limit)
     )
     if account is not None and account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(
-            EnterpriseTelemetrySnapshot.enterprise_id == enterprise_identifier(account)
-        )
+        statement = statement.where(EnterpriseTelemetrySnapshot.enterprise_profile_id == account.id)
 
     snapshots = (await db.scalars(statement)).all()
     accounts = await enterprise_accounts_by_id(db)
 
     return [
-        to_telemetry_summary(snapshot, accounts.get(snapshot.enterprise_id))
+        to_telemetry_summary(snapshot, accounts.get(snapshot.enterprise_profile_id))
         for snapshot in snapshots
     ]
+
+
+@dataclass(frozen=True)
+class HourlyVisitorObservation:
+    enterprise_profile_id: str
+    enterprise_id: str
+    enterprise_name: str
+    barangay: str
+    start_at: datetime
+    average_visitors: float
+    peak_visitors: int
+
+
+async def get_visitor_insights(
+    db: AsyncSession,
+    range_value: VisitorInsightRange,
+    *,
+    enterprise_id: str | None = None,
+    barangay: str | None = None,
+    now: datetime | None = None,
+) -> VisitorInsightsSummary:
+    current_time = _aware(now or datetime.now(UTC))
+    local_now = current_time.astimezone(PHILIPPINE_TIME_ZONE)
+    observations = await load_hourly_visitor_observations(db, current_time)
+    latest = await list_latest_telemetry(db, None)
+
+    if enterprise_id:
+        observations = [item for item in observations if item.enterprise_id == enterprise_id]
+        latest = [item for item in latest if item.enterpriseId == enterprise_id]
+        scope_type = "enterprise"
+        scope_id = enterprise_id
+        scope_name = next(
+            (item.enterprise_name for item in observations),
+            next((item.enterpriseName for item in latest), "Selected establishment"),
+        )
+    elif barangay:
+        normalized_barangay = barangay.strip().casefold()
+        observations = [
+            item for item in observations if item.barangay.casefold() == normalized_barangay
+        ]
+        latest = [
+            item
+            for item in latest
+            if (item.barangay or "Unassigned").casefold() == normalized_barangay
+        ]
+        scope_type = "barangay"
+        scope_id = barangay
+        scope_name = f"Barangay {barangay}"
+    else:
+        scope_type = "city"
+        scope_id = None
+        scope_name = "San Pedro"
+
+    baselines = visitor_baselines_by_enterprise(observations, local_now)
+    enterprise_insights = [
+        visitor_enterprise_insight(item, baselines.get(item.enterpriseId, [])) for item in latest
+    ]
+    enterprise_insights.sort(key=lambda item: item.currentVisitors, reverse=True)
+    current_visitors = sum(item.currentVisitors for item in enterprise_insights)
+    has_complete_baseline = bool(enterprise_insights) and all(
+        item.typicalVisitors is not None for item in enterprise_insights
+    )
+    typical_visitors = (
+        sum(item.typicalVisitors or 0 for item in enterprise_insights)
+        if has_complete_baseline
+        else None
+    )
+    difference_percent = visitor_difference_percent(current_visitors, typical_visitors)
+    series = visitor_insight_series(observations, range_value, local_now)
+    unusually_busy = [
+        item for item in enterprise_insights if item.activityLevel == "Busier Than Usual"
+    ]
+    busiest_period = max(series, key=lambda item: item.averageVisitors, default=None)
+
+    return VisitorInsightsSummary(
+        range=range_value,
+        scopeType=scope_type,  # type: ignore[arg-type]
+        scopeId=scope_id,
+        scopeName=scope_name,
+        currentVisitors=current_visitors,
+        typicalVisitors=typical_visitors,
+        differencePercent=difference_percent,
+        comparisonMessage=visitor_comparison_message(difference_percent),
+        busiestEnterprise=enterprise_insights[0] if enterprise_insights else None,
+        busiestPeriodLabel=busiest_period.label if busiest_period else None,
+        series=series,
+        unusuallyBusy=unusually_busy,
+        lastUpdatedAt=max((item.receivedAt for item in latest), default=None),
+    )
+
+
+async def load_hourly_visitor_observations(
+    db: AsyncSession,
+    current_time: datetime,
+) -> list[HourlyVisitorObservation]:
+    local_timestamp = func.timezone(
+        str(PHILIPPINE_TIME_ZONE), EnterpriseTelemetrySnapshot.captured_at
+    )
+    hour_bucket = func.date_trunc("hour", local_timestamp).label("hour_bucket")
+    statement = (
+        select(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id,
+            EnterpriseProfile.enterprise_id,
+            EnterpriseProfile.enterprise_name,
+            EnterpriseProfile.barangay,
+            hour_bucket,
+            func.avg(EnterpriseTelemetrySnapshot.current_occupancy),
+            func.max(EnterpriseTelemetrySnapshot.current_occupancy),
+        )
+        .join(
+            EnterpriseProfile,
+            EnterpriseProfile.account_id == EnterpriseTelemetrySnapshot.enterprise_profile_id,
+        )
+        .where(
+            EnterpriseTelemetrySnapshot.captured_at
+            >= current_time - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS)
+        )
+        .group_by(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id,
+            EnterpriseProfile.enterprise_id,
+            EnterpriseProfile.enterprise_name,
+            EnterpriseProfile.barangay,
+            hour_bucket,
+        )
+        .order_by(hour_bucket.asc())
+    )
+    rows = (await db.execute(statement)).all()
+    return [
+        HourlyVisitorObservation(
+            enterprise_profile_id=row[0],
+            enterprise_id=row[1],
+            enterprise_name=row[2],
+            barangay=row[3] or "Unassigned",
+            start_at=_philippine_hour(row[4]),
+            average_visitors=max(0.0, float(row[5] or 0)),
+            peak_visitors=max(0, int(row[6] or 0)),
+        )
+        for row in rows
+    ]
+
+
+def visitor_baselines_by_enterprise(
+    observations: Sequence[HourlyVisitorObservation],
+    local_now: datetime,
+) -> dict[str, list[float]]:
+    values: dict[str, list[float]] = defaultdict(list)
+    cutoff = local_now - timedelta(days=1)
+    for observation in observations:
+        if observation.start_at >= cutoff:
+            continue
+        if observation.start_at.weekday() != local_now.weekday():
+            continue
+        if observation.start_at.hour != local_now.hour:
+            continue
+        values[observation.enterprise_id].append(observation.average_visitors)
+    return values
+
+
+def visitor_enterprise_insight(
+    telemetry: TelemetrySnapshotSummary,
+    baseline: Sequence[int | float],
+) -> VisitorInsightEnterprise:
+    condition = visitor_activity_condition(telemetry.currentOccupancy, baseline)
+    typical_visitors = condition.typical_occupancy if condition else None
+    difference_percent = visitor_difference_percent(telemetry.currentOccupancy, typical_visitors)
+    return VisitorInsightEnterprise(
+        enterpriseId=telemetry.enterpriseId,
+        enterpriseName=telemetry.enterpriseName,
+        barangay=telemetry.barangay or "Unassigned",
+        currentVisitors=telemetry.currentOccupancy,
+        typicalVisitors=typical_visitors,
+        differencePercent=difference_percent,
+        activityLevel=(
+            "Busier Than Usual"
+            if condition is not None and condition.breached
+            else "Usual"
+            if condition is not None
+            else "No Recent Baseline"
+        ),
+    )
+
+
+def visitor_insight_series(
+    observations: Sequence[HourlyVisitorObservation],
+    range_value: VisitorInsightRange,
+    local_now: datetime,
+) -> list[VisitorInsightPoint]:
+    if range_value == "today":
+        start_at = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        grouped: dict[datetime, list[HourlyVisitorObservation]] = defaultdict(list)
+        for observation in observations:
+            if observation.start_at >= start_at:
+                grouped[observation.start_at].append(observation)
+        return [
+            VisitorInsightPoint(
+                startAt=bucket,
+                label=bucket.strftime("%I %p").lstrip("0"),
+                averageVisitors=round(sum(item.average_visitors for item in items)),
+                peakVisitors=sum(item.peak_visitors for item in items),
+            )
+            for bucket, items in sorted(grouped.items())
+        ]
+
+    days = 7 if range_value == "7d" else 30
+    start_at = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+        days=days - 1
+    )
+    daily_enterprise: dict[tuple[datetime, str], list[HourlyVisitorObservation]] = defaultdict(list)
+    for observation in observations:
+        day = observation.start_at.replace(hour=0, minute=0, second=0, microsecond=0)
+        if day >= start_at:
+            daily_enterprise[(day, observation.enterprise_id)].append(observation)
+
+    daily_totals: dict[datetime, tuple[float, int]] = defaultdict(lambda: (0.0, 0))
+    for (day, _enterprise_id), items in daily_enterprise.items():
+        total_average, total_peak = daily_totals[day]
+        daily_totals[day] = (
+            total_average + fmean(item.average_visitors for item in items),
+            total_peak + max(item.peak_visitors for item in items),
+        )
+
+    return [
+        VisitorInsightPoint(
+            startAt=day,
+            label=day.strftime("%a, %b %d").replace(" 0", " "),
+            averageVisitors=round(values[0]),
+            peakVisitors=values[1],
+        )
+        for day, values in sorted(daily_totals.items())
+    ]
+
+
+def visitor_difference_percent(current: int, typical: int | None) -> int | None:
+    if typical is None:
+        return None
+    if typical <= 0:
+        return 100 if current > 0 else 0
+    return round((current - typical) / typical * 100)
+
+
+def visitor_comparison_message(difference_percent: int | None) -> str:
+    if difference_percent is None:
+        return "More matching days are needed before TANAW can make a reliable comparison."
+    if difference_percent >= 50:
+        return "Visitor activity is much higher than usual for this day and time."
+    if difference_percent >= 20:
+        return "Visitor activity is higher than usual for this day and time."
+    if difference_percent <= -20:
+        return "Visitor activity is quieter than usual for this day and time."
+    return "Visitor activity is within its usual range for this day and time."
+
+
+def _philippine_hour(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=PHILIPPINE_TIME_ZONE)
+    return value.astimezone(PHILIPPINE_TIME_ZONE)
 
 
 async def get_operational_summary(db: AsyncSession, account: Account | None) -> OperationalSummary:
@@ -1037,9 +1270,7 @@ async def list_intake_reports(
         .limit(limit)
     )
     if account is not None and account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(
-            EnterpriseReportSubmission.enterprise_id == enterprise_identifier(account)
-        )
+        statement = statement.where(EnterpriseReportSubmission.enterprise_profile_id == account.id)
 
     reports = (await db.scalars(statement)).all()
     return [to_intake_report_summary(report) for report in reports]
@@ -1078,14 +1309,13 @@ async def list_final_reports(
     statement = select(FinalReport).order_by(FinalReport.generated_on.desc()).limit(limit)
     reports = list((await db.scalars(statement)).all())
     if account.role == AccountRole.ENTERPRISE:
-        enterprise_id = enterprise_identifier(account)
         visible_ids = {
             item.final_report_id
             for item in (
                 await db.scalars(
-                    select(FinalReportSource).where(
-                        FinalReportSource.enterprise_id == enterprise_id
-                    )
+                    select(FinalReportSource)
+                    .join(FinalReportSource.intake_report)
+                    .where(EnterpriseReportSubmission.enterprise_profile_id == account.id)
                 )
             ).all()
         }
@@ -1120,9 +1350,7 @@ async def create_final_report(
         total_entry=sum(item.entries for item in source_reports),
         total_exit=sum(item.exits for item in source_reports),
         total_unique=sum(item.unique_count for item in source_reports),
-        enterprise_count=len({item.enterprise_id for item in source_reports}),
-        source_kind=source_kind_for_reports(source_reports),
-        mock_run_id=mock_run_id_for_reports(source_reports),
+        enterprise_count=len({item.enterprise_profile_id for item in source_reports}),
     )
     db.add(report)
     await db.flush()
@@ -1134,7 +1362,6 @@ async def create_final_report(
             FinalReportSource(
                 final_report_id=report.id,
                 intake_report_id=source.id,
-                enterprise_id=source.enterprise_id,
                 enterprise=source.enterprise_name,
                 code=source.report_id,
                 unique_count=source.unique_count,
@@ -1234,20 +1461,19 @@ async def enterprise_accounts_by_id(db: AsyncSession) -> dict[str, Account]:
     accounts = (
         await db.scalars(select(Account).where(Account.role == AccountRole.ENTERPRISE))
     ).all()
-    return {enterprise_identifier(account): account for account in accounts}
+    return {account.id: account for account in accounts}
 
 
 def to_telemetry_summary(
     snapshot: EnterpriseTelemetrySnapshot, account: Account | None = None
 ) -> TelemetrySnapshotSummary:
+    profile = require_enterprise_profile(account) if account else snapshot.enterprise_profile
     return TelemetrySnapshotSummary(
         id=snapshot.id,
-        enterpriseId=snapshot.enterprise_id,
-        enterpriseName=account.enterprise_name
-        if account and account.enterprise_name
-        else snapshot.enterprise_name,
-        category=format_enterprise_category(account.category) if account else None,
-        barangay=account.barangay if account else None,
+        enterpriseId=profile.enterprise_id,
+        enterpriseName=profile.enterprise_name if account else snapshot.enterprise_name,
+        category=format_enterprise_category(profile.category),
+        barangay=profile.barangay,
         cameraId=snapshot.camera_id,
         cameraName=snapshot.camera_name,
         capturedAt=snapshot.captured_at,
@@ -1267,8 +1493,6 @@ def to_telemetry_summary(
         error=snapshot.error,
         analyticsFps=snapshot.analytics_fps,
         gatewayStatus=gateway_status_for_snapshot(snapshot),
-        sourceKind=snapshot.source_kind,  # type: ignore[arg-type]
-        mockRunId=snapshot.mock_run_id,
     )
 
 
@@ -1276,7 +1500,7 @@ def to_intake_report_summary(report: EnterpriseReportSubmission) -> IntakeReport
     payload = parse_report_payload(report.payload_json)
     return IntakeReportSummary(
         id=report.id,
-        enterpriseId=report.enterprise_id,
+        enterpriseId=report.enterprise_profile.enterprise_id,
         enterprise=report.enterprise_name,
         category=report.category or "Uncategorized",
         barangay=report.barangay or "Unassigned",
@@ -1431,12 +1655,19 @@ def to_final_report_archived_from_status(
     return None
 
 
+def require_enterprise_profile(account: Account) -> EnterpriseProfile:
+    profile = account.enterprise_profile
+    if account.role != AccountRole.ENTERPRISE or profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
+    return profile
+
+
 def enterprise_identifier(account: Account) -> str:
-    return account.enterprise_id or account.id
+    return require_enterprise_profile(account).enterprise_id
 
 
 def enterprise_name(account: Account) -> str:
-    return account.enterprise_name or account.display_name
+    return require_enterprise_profile(account).enterprise_name
 
 
 async def generate_final_report_code(db: AsyncSession, period: str) -> str:
@@ -1512,87 +1743,6 @@ def validate_final_report_revision_return(
         raise InvalidReportWorkflowError(
             f"Selected source reports do not belong to this final report: {joined_ids}."
         )
-
-
-def source_kind_for_reports(reports: Sequence[EnterpriseReportSubmission]) -> str:
-    source_kinds = {report.source_kind for report in reports}
-    if "hybrid" in source_kinds:
-        return "hybrid"
-    if source_kinds == {"mock"}:
-        return "mock"
-    return "real"
-
-
-def mock_run_id_for_reports(reports: Sequence[EnterpriseReportSubmission]) -> str | None:
-    run_ids = {report.mock_run_id for report in reports if report.mock_run_id}
-    return run_ids.pop() if len(run_ids) == 1 else None
-
-
-def fleet_occupancy_for_lane(target: FleetSimulationTarget, elapsed_seconds: int, seed: int) -> int:
-    if target.lane == "warning":
-        threshold_count = max(1, ceil(target.capacity * target.thresholdPercent / 100))
-        warning_count = max(0, threshold_count - max(1, ceil(target.capacity * 0.08)))
-        wave = int(sin((elapsed_seconds + seed % 37) / 18) * max(1, target.capacity * 0.02))
-        return clamp_int(warning_count + wave, 0, max(0, threshold_count - 1))
-
-    if target.lane == "one-minute-breach":
-        phase = elapsed_seconds % 180
-        if phase < 20:
-            percent = interpolate(
-                max(5.0, target.thresholdPercent - 35), target.thresholdPercent + 4, phase / 20
-            )
-        elif phase < 80:
-            percent = target.thresholdPercent + 5 + sin((phase + seed % 23) / 12) * 2
-        elif phase < 120:
-            percent = interpolate(
-                target.thresholdPercent + 4,
-                max(0.0, target.thresholdPercent - 15),
-                (phase - 80) / 40,
-            )
-        else:
-            percent = normal_occupancy_percent(target.thresholdPercent, elapsed_seconds, seed)
-        return occupancy_from_percent(target.capacity, percent)
-
-    return occupancy_from_percent(
-        target.capacity, normal_occupancy_percent(target.thresholdPercent, elapsed_seconds, seed)
-    )
-
-
-def fleet_peak_for_lane(target: FleetSimulationTarget, elapsed_seconds: int) -> int:
-    if target.lane == "one-minute-breach" and elapsed_seconds % 180 >= 20:
-        return occupancy_from_percent(target.capacity, min(100.0, target.thresholdPercent + 8))
-    return 0
-
-
-def normal_occupancy_percent(threshold_percent: int, elapsed_seconds: int, seed: int) -> float:
-    upper_bound = max(5.0, threshold_percent - 22)
-    center = min(55.0, max(8.0, upper_bound - 8))
-    return min(upper_bound, max(0.0, center + sin((elapsed_seconds + seed % 53) / 24) * 7))
-
-
-def occupancy_from_percent(capacity: int, percent: float) -> int:
-    return clamp_int(round(capacity * percent / 100), 0, capacity)
-
-
-def fleet_events_per_minute(lane: str) -> int:
-    if lane == "warning":
-        return 34
-    if lane == "one-minute-breach":
-        return 52
-    return 22
-
-
-def stable_simulation_seed(*parts: str) -> int:
-    digest = sha256(":".join(parts).encode()).hexdigest()
-    return int(digest[:8], 16)
-
-
-def interpolate(start: float, end: float, ratio: float) -> float:
-    return start + (end - start) * max(0.0, min(1.0, ratio))
-
-
-def clamp_int(value: int, lower: int, upper: int) -> int:
-    return min(upper, max(lower, value))
 
 
 def gateway_status_for_snapshot(snapshot: EnterpriseTelemetrySnapshot) -> str:

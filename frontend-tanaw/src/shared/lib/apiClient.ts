@@ -25,8 +25,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      useAuthStore.getState().logout();
-      publishSessionEvent({ type: "logout", occurredAt: Date.now() });
+      const authState = useAuthStore.getState();
+      const wasAuthenticated = authState.status === "authenticated";
+      authState.logout();
+      if (wasAuthenticated) {
+        publishSessionEvent({ type: "logout", occurredAt: Date.now() });
+      }
     }
 
     return Promise.reject(error);

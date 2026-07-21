@@ -20,8 +20,24 @@ ROLE_LABELS = {
 SYSTEM_SETTINGS_ID = "default"
 LOG_RETENTION_DAYS = 180
 LOG_RETENTION_DAYS_SETTING_KEY = "logs.retentionDays"
-LEGACY_LOG_RETENTION_DAYS_SETTING_KEY = "logs.Log Retention Period"
 ALLOWED_LOG_RETENTION_DAYS = frozenset({90, 180, 365})
+ADMIN_ACTIVITY_CATEGORIES = frozenset({"Admin Operation", "Staff Submission", "Staff Operation"})
+ADMIN_IT_ACTIVITY_ACTIONS = frozenset(
+    {
+        "Approve Enterprise Profile Change",
+        "Approve Verified Email Change",
+        "Create Enterprise Account",
+        "Create LGU Account",
+        "Decline Enterprise Profile Change",
+        "Decline Verified Email Change",
+        "Delete Old Activity",
+        "Update Account Status",
+        "Update Enterprise Account",
+        "Update LGU Account",
+        "Update Support Ticket Status",
+        "Update System Settings",
+    }
+)
 
 
 def get_actor_role_label(account: Account) -> str:
@@ -31,9 +47,22 @@ def get_actor_role_label(account: Account) -> str:
 def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
     category = log.category
     actor_role = log.actor_role if isinstance(log, ActivityLog) else log.actorRole
+    action = log.action
+    severity = log.severity
 
     if role == AccountRole.ADMIN.value:
-        return True
+        return (
+            category in ADMIN_ACTIVITY_CATEGORIES
+            or (
+                category == "IT Activity"
+                and (action in ADMIN_IT_ACTIVITY_ACTIONS or action.startswith("Alert "))
+            )
+            or (
+                category == "System"
+                and (severity in {"Warning", "Critical"} or action.startswith("Alert "))
+            )
+            or severity == "Critical"
+        )
     if role == AccountRole.IT.value:
         return (
             category in {"System", "IT Activity", "Enterprise Activity"}
@@ -69,8 +98,6 @@ async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> A
         summary=payload.summary,
         source_id=payload.sourceId,
         metadata_json=json.dumps(payload.metadata) if payload.metadata else None,
-        source_kind=payload.sourceKind,
-        mock_run_id=payload.mockRunId,
     )
     db.add(log)
     await db.commit()
@@ -102,14 +129,6 @@ def resolve_activity_log_retention_days(values: Mapping[str, object] | None) -> 
     stable_value = values.get(LOG_RETENTION_DAYS_SETTING_KEY)
     if isinstance(stable_value, int) and not isinstance(stable_value, bool):
         return stable_value if stable_value in ALLOWED_LOG_RETENTION_DAYS else LOG_RETENTION_DAYS
-
-    legacy_value = values.get(LEGACY_LOG_RETENTION_DAYS_SETTING_KEY)
-    if isinstance(legacy_value, str):
-        try:
-            days = int(legacy_value.removesuffix(" days"))
-        except ValueError:
-            return LOG_RETENTION_DAYS
-        return days if days in ALLOWED_LOG_RETENTION_DAYS else LOG_RETENTION_DAYS
 
     return LOG_RETENTION_DAYS
 

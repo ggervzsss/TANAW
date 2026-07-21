@@ -37,7 +37,7 @@ and workflow events after they have been produced locally.
   final report generation, source-row audit data, and reporting activity logs.
 - **Activity logging**: account, operational, reporting, and system events used
   by LGU monitoring and audit screens.
-- **Test-data tooling**: explicit mock-data generation and cleanup for local
+- **Test-data tooling**: explicit sample-data generation and cleanup for local
   demonstrations, QA, analytics, and end-to-end reporting tests.
 
 ## Project Structure
@@ -52,7 +52,7 @@ app/
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
     mail/              # Outbound Resend delivery and email templates
-    mock_data/         # Explicit CLI-driven test-data tooling
+    sample_data/       # Development-only sample-data tooling
     operational/       # Telemetry, sync, intake reports, and final reports
 alembic/               # Database migration files
 tests/                 # Backend unit and integration tests
@@ -66,7 +66,7 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 ## Database Migrations
 
 Alembic is the only schema authority. Apply migrations before starting any API
-or mock-data process:
+or sample-data process:
 
 ```shell
 uv run alembic upgrade head
@@ -75,26 +75,28 @@ uv run uvicorn main:app
 
 Application startup validates the `alembic_version` revision and fails with an
 actionable error when the database is missing or outdated. It never creates,
-alters, or drops schema objects. Production deployments must back up PostgreSQL,
-run migrations as a separate pre-deploy/release step, and start the new API only
-after migration succeeds. Revision `20260711_0016` reconciles tables formerly
-created at runtime and is intentionally irreversible because dropping those
-tables would destroy operational and support records; recovery uses a verified
-pre-migration backup or a forward fix.
+alters, or drops schema objects. Revision `20260720_0001` is the canonical TANAW
+baseline and replaces the pre-release migration history. Existing development
+databases from the old chain must be recreated before starting this version;
+the baseline intentionally contains no compatibility or reconciliation logic.
+Back up any data that must be retained before resetting PostgreSQL.
 
-The account-activation migration (`20260711_0014`) is also intentionally
-irreversible. TANAW discarded temporary passwords when activation links became
-authoritative, so a structural downgrade could not restore credentials for
-pending users. Activated and pending users remain usable on the migrated schema;
-if a release must be reverted, keep the database at the current revision and
-roll forward the application, or restore the application and database together
-from a verified pre-activation backup. Never deploy pre-activation backend code
-against the migrated database.
+### Canonical account and enterprise ownership
 
-The verified-email-change migration (`20260712_0019`) is intentionally
-irreversible as well. Its request history is security audit evidence and can
-contain an outstanding ownership proof. Roll forward or restore the application
-and database together from a verified backup instead of dropping that state.
+The `accounts` table stores shared identity, authentication, role, status,
+preferences, security state, and audit timestamps.
+Enterprise-only business, location, capacity, and gateway fields live in
+`enterprise_profiles`, whose `account_id` is both its primary key and a
+one-to-one foreign key to `accounts.id`.
+
+Operational records use that enterprise-profile key as their single owner
+reference. API serializers derive the public enterprise ID through the
+relationship, so child tables do not keep account-ID and enterprise-ID copies
+that can disagree. Reports, telemetry, tickets, and final-report sources retain
+only descriptive or metric snapshots needed to preserve what the
+record represented when it was created. Admin, IT, and Staff accounts do not
+have separate profile tables because they have no role-specific persisted
+fields.
 
 ## Email Integration
 
@@ -125,7 +127,7 @@ Production configuration requires this value to be a public HTTPS URL.
 ## Startup Account Safety
 
 `BOOTSTRAP_IT_USERNAME` and `BOOTSTRAP_IT_PASSWORD` are used only when TANAW
-initializes a database that has no existing or legacy IT account. TANAW records
+initializes a database that has no existing IT account. TANAW records
 that initialization, persists the bootstrap account's protected identity in the
 database, and never synchronizes the account from environment values again.
 Removing the bootstrap variables after initialization does not remove that
@@ -135,11 +137,9 @@ reassign, deactivate, or delete the protected bootstrap identity.
 
 Optional Admin, Staff, and secondary IT development accounts are created only
 when `TANAW_SEED_DEVELOPMENT_ACCOUNTS=true`. Production rejects that switch,
-placeholder bootstrap credentials, and short or default JWT secrets. Existing
-deployments may continue using the legacy `DEFAULT_IT_*` and `TEMPORARY_*`
-environment names temporarily; the backend maps them to the new settings for
-backward compatibility, but new configuration should use `BOOTSTRAP_IT_*` and
-`DEVELOPMENT_*`.
+placeholder bootstrap credentials, and short or default JWT secrets. Only
+`BOOTSTRAP_IT_*` and `DEVELOPMENT_*` startup account environment names are
+supported.
 
 Normal IT account recovery should use the emailed password-reset OTP. If an IT
 account is inactive, another active IT account must review and reactivate it
@@ -229,13 +229,13 @@ age-deleted.
 
 The default policy retains consumed, invalidated, or expired activation tokens
 and password-reset challenges for 30 days; password-reset rate buckets for 2
-days; local development delivery bodies for 7 days; completed email-change
-requests and normal terminal outbox records for 180 days; and terminal failures
-or reconciliation records for 365 days. Active expired email-change requests
-are first invalidated and their unsent verification messages are cancelled.
-Production outbox rows never contain raw OTPs or activation/email-change links;
-local `DevDelivery` bodies are the only debugging records that can contain a raw
-secret, which is why they have the shortest retention period.
+days; completed email-change requests and normal terminal outbox records for
+180 days; and terminal failures or reconciliation records for 365 days. Active
+expired email-change requests are first invalidated and their unsent
+verification messages are cancelled. Production outbox rows never contain raw
+OTPs or activation/email-change links. Development delivery previews live only
+in a bounded in-memory feed and disappear when the backend process restarts;
+the feed endpoint returns 404 in production.
 
 `GET /maintenance/retention` exposes safe per-process counts and the most recent
 run to IT Personnel. `POST /maintenance/retention/run` starts the same serialized
@@ -274,18 +274,19 @@ draft metrics, occupancy corrections, visitor identity metadata, camera
 settings, and local ML state are stored on the desktop device and synchronized
 only through the operational APIs when appropriate.
 
-## Mock Data Tooling
+## Sample Data Tooling
 
-The backend includes guarded mock-data tooling for development and demos. It is
-designed around a simple rule:
+The backend includes development-only sample-data tooling for demos and QA. It
+is designed around a simple rule:
 
 ```text
-mock producer, real pipeline
+sample producer, real pipeline
 ```
 
-Generated records use the same tables and workflow shapes as real operational
-records, but they are tagged with run provenance so they can be audited and
-removed safely. Mock execution is explicit and disabled by default.
+Sample records use the same tables and workflow shapes as real operational
+records. No mock-data table or provenance columns exist. Cleanup uses reserved
+deterministic identifiers and relationships, so those identifiers must not be
+reused for production records. The commands refuse to run in production.
 
 The root [TL;DR test guide](../TLDR.md) contains the supported commands for
 creating, refreshing, inspecting, and removing generated data.

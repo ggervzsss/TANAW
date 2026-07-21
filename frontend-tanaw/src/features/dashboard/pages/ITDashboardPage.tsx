@@ -1,195 +1,132 @@
-import { Activity, Bell, Building2, TicketCheck, Users, Wifi } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, ChevronRight, Inbox, TicketCheck, UserRoundCog, Users, WifiOff } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { motion } from "motion/react";
+import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
-import { AlertDetailsModal, PriorityAlertListItem } from "@/features/alerts-monitor/components";
+import { isEmailProblem } from "@/features/email-deliveries";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { DetailField, EmptyState, ExpandableTableText, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
-import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
+import { Panel } from "@/shared/components/panel";
+import { PageMotion, stagger } from "@/shared/components/ui";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
-import { listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
-import type { PriorityAlert, SystemLog } from "@/shared/types";
+import { listEmailDeliveries, listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
+import { listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
 
 export function ITDashboardPage() {
-  const { logs, isLoading: logsLoading } = useActivityLogs();
+  const { alerts, isLoading: alertsLoading } = useAlerts();
   const operationalSummaryQuery = useOperationalSummary();
   const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
-  const [selectedActivity, setSelectedActivity] = useState<SystemLog | null>(null);
-  const [selectedAlert, setSelectedAlert] = useState<PriorityAlert | null>(null);
-  const { alerts } = useAlerts();
-  const priorityAlerts = alerts.filter((alert) => alert.owner === "IT");
-  const activeAlertsCount = priorityAlerts.filter((alert) => alert.status !== "Resolved").length;
-  const lguAccounts = lguAccountsQuery.data ?? [];
-  const enterpriseAccounts = enterpriseAccountsQuery.data ?? [];
-  const operationalSummary = operationalSummaryQuery.data;
-  const activeLguAccounts = lguAccounts.filter((account) => account.status === "active").length;
-  const activeEnterprises = enterpriseAccounts.filter((enterprise) => enterprise.status === "active").length;
-  const desktopAppsOnline = operationalSummary?.onlineGateways ?? enterpriseAccounts.filter((enterprise) => enterprise.gatewayStatus?.toLowerCase() === "connected").length;
-  const recentActivities = logs.slice(0, 7);
+  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets, refetchInterval: 30_000 });
+  const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries, refetchInterval: 30_000 });
 
-  const actionableAlerts = priorityAlerts.filter((alert) => alert.status !== "Resolved").slice(0, 4);
+  const itIssues = alerts.filter((alert) => alert.owner === "IT" && alert.status !== "Resolved");
+  const urgentIssues = itIssues.filter((alert) => alert.severity === "Critical");
+  const openSupportRequests = (supportTicketsQuery.data ?? []).filter((ticket) => ticket.status !== "Resolved");
+  const pendingAccountRequests = (enterpriseAccountsQuery.data ?? []).reduce((total, account) => total + account.profileChangeRequests.length, 0);
+  const emailProblems = (emailDeliveriesQuery.data ?? []).filter(isEmailProblem);
+  const summary = operationalSummaryQuery.data;
+  const unavailableDesktopApps = summary ? summary.delayedGateways + summary.offlineGateways : 0;
+  const isLoading = alertsLoading || operationalSummaryQuery.isLoading || supportTicketsQuery.isLoading || enterpriseAccountsQuery.isLoading || emailDeliveriesQuery.isLoading;
+  const currentWorkCount = itIssues.length + openSupportRequests.length + pendingAccountRequests + emailProblems.length;
 
   return (
-    <PageMotion>
-      <PageHeader title="Dashboard" description="Operational overview for accounts, desktop app connectivity, camera health, and recent system activity." />
+    <PageMotion className="pb-12">
+      <PageHeader title="Overview" description="A simple view of the technical work that needs attention now." />
 
-      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5" variants={stagger}>
-        <MetricCard label="LGU Accounts" value={lguAccountsQuery.isLoading ? "..." : activeLguAccounts} foot="Active account registry" color="#065f46" icon={Users} />
-        <MetricCard label="Active Enterprises" value={enterpriseAccountsQuery.isLoading ? "..." : activeEnterprises} foot="Can access TANAW" color="#2563eb" icon={Building2} />
-        <MetricCard
-          label="Desktop Apps Online"
-          value={operationalSummaryQuery.isLoading && !operationalSummary ? "..." : desktopAppsOnline}
-          foot={operationalSummary ? `${operationalSummary.delayedGateways} delayed / ${operationalSummary.offlineGateways} offline` : "Connected desktop apps"}
-          color="#10b981"
-          icon={Wifi}
-        />
-        <MetricCard label="Priority Alerts" value={activeAlertsCount} foot="Requires IT action" color="#dc2626" footClassName="text-red-600" icon={Bell} />
+      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4" variants={stagger}>
+        <MetricCard label="Urgent Issues" value={isLoading ? "..." : urgentIssues.length} foot="Needs immediate action" color="#b91c1c" footClassName="text-red-600" icon={AlertTriangle} />
+        <MetricCard label="Desktop Apps" value={operationalSummaryQuery.isLoading && !summary ? "..." : unavailableDesktopApps} foot="Offline or delayed" color="#b45309" footClassName="text-amber-700" icon={WifiOff} />
+        <MetricCard label="Support Requests" value={supportTicketsQuery.isLoading ? "..." : openSupportRequests.length} foot="Open enterprise requests" color="#2563eb" footClassName="text-blue-700" icon={TicketCheck} />
+        <MetricCard label="Account Requests" value={enterpriseAccountsQuery.isLoading ? "..." : pendingAccountRequests} foot="Waiting for IT review" color="#0f766e" icon={UserRoundCog} />
+        <MetricCard label="Email Problems" value={emailDeliveriesQuery.isLoading ? "..." : emailProblems.length} foot="Failed or uncertain" color="#7c3aed" icon={Inbox} />
       </motion.section>
-      {(lguAccountsQuery.isError || enterpriseAccountsQuery.isError || operationalSummaryQuery.isError) && (
-        <p className="mt-4 text-sm font-semibold text-red-600">Some dashboard metrics could not be loaded from the database. Refresh or check the API connection.</p>
-      )}
 
-      <div className="mt-7 grid grid-cols-[minmax(0,2fr)_minmax(360px,1fr)] gap-6 max-xl:grid-cols-1">
-        <section className="tanaw-dashboard-panel shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-7 py-6 max-sm:flex-col max-sm:items-start max-sm:px-5">
-            <div>
-              <h3 className="text-charcoal-800 m-0 text-lg font-bold">Recent System Activity</h3>
-              <p className="mt-1.5 mb-0 text-sm text-gray-500">Latest IT-visible user, enterprise, configuration, and SYSTEM actions.</p>
+      <div className="mt-7 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.7fr)]">
+        <Panel className="overflow-hidden">
+          <div className="border-b border-slate-200 px-6 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black text-slate-950">Current Work</h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">Open a group to see what happened and what to do next.</p>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">{currentWorkCount} open</span>
             </div>
           </div>
-          <div className="divide-y divide-gray-100">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-160 table-fixed text-left">
-                <colgroup>
-                  <col className="w-[18%]" />
-                  <col className="w-[52%]" />
-                  <col className="w-[30%]" />
-                </colgroup>
-                <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
-                  <tr>
-                    <th className="py-3.5 pr-2 pl-4 whitespace-nowrap lg:pr-3 lg:pl-5">Timestamp</th>
-                    {["Summary", "Name"].map((heading) => (
-                      <th key={heading} className="px-4 py-3.5 whitespace-nowrap lg:px-5">
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recentActivities.map((activity) => {
-                    return (
-                      <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
-                        <td className="py-4 pr-2 pl-4 font-mono text-xs leading-snug text-gray-500 lg:pr-3 lg:pl-5">{formatCompactTimestamp(activity.timestamp)}</td>
-                        <td className="text-charcoal-800 px-4 py-4 text-sm leading-snug font-semibold lg:px-5">
-                          <ExpandableTableText primary={activity.summary} ariaLabel="activity summary" threshold={80} twoLines />
-                        </td>
-                        <td className="px-4 py-4 text-xs leading-snug font-semibold text-gray-600 lg:px-5">
-                          <ExpandableTableText primary={activity.actor} ariaLabel="activity actor" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {recentActivities.length === 0 && (
-              <EmptyState
-                icon={Activity}
-                title={logsLoading ? "Loading recent activity" : "No recent activity"}
-                description={logsLoading ? "Fetching live activity records." : "System activity records will appear here once the logging source is connected."}
-              />
-            )}
+          <div className="divide-y divide-slate-100">
+            <WorkItem
+              icon={AlertTriangle}
+              label="Technical Issues"
+              count={itIssues.length}
+              description={urgentIssues.length > 0 ? `${urgentIssues.length} urgent ${urgentIssues.length === 1 ? "issue needs" : "issues need"} immediate attention.` : "Camera, desktop application, and data update problems."}
+              href={`${routes.it.workCenter}?view=issues`}
+              urgent={urgentIssues.length > 0}
+            />
+            <WorkItem icon={TicketCheck} label="Support Requests" count={openSupportRequests.length} description="Questions and problems sent by enterprises." href={`${routes.it.workCenter}?view=support`} />
+            <WorkItem icon={UserRoundCog} label="Account Requests" count={pendingAccountRequests} description="Enterprise details waiting for review." href={`${routes.it.workCenter}?view=accounts`} />
+            <WorkItem icon={Inbox} label="Email Problems" count={emailProblems.length} description="Emails that failed or need a provider check." href={`${routes.it.workCenter}?view=email`} />
           </div>
-        </section>
+        </Panel>
 
-        <aside className="grid gap-6">
-          <section className="tanaw-dashboard-panel shadow-panel overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="border-b border-gray-100 px-7 py-6 max-sm:px-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-charcoal-800 m-0 text-lg font-bold">Priority Alerts</h3>
-                  <p className="mt-1.5 mb-0 text-sm text-gray-500">Actionable tasks requiring IT intervention or approval.</p>
-                </div>
-                <Link to={routes.it.alerts} className="shrink-0 text-sm font-semibold text-emerald-600 transition hover:text-emerald-700">
-                  View All Alerts
-                </Link>
+        <div className="grid content-start gap-6">
+          <Panel className="p-6">
+            <div className="flex items-start gap-3">
+              <span className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${unavailableDesktopApps > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                {unavailableDesktopApps > 0 ? <WifiOff size={21} /> : <CheckCircle2 size={21} />}
+              </span>
+              <div>
+                <h2 className="font-black text-slate-950">Desktop Application Status</h2>
+                <p className="mt-1 text-sm leading-6 font-medium text-slate-600">
+                  {summary
+                    ? `${summary.onlineGateways} online, ${summary.delayedGateways} delayed, and ${summary.offlineGateways} offline.`
+                    : "Desktop application status will appear when enterprise updates are available."}
+                </p>
               </div>
             </div>
-            <div className="divide-y divide-gray-100">
-              {actionableAlerts.map((alert) => (
-                <PriorityAlertListItem key={alert.id} alert={alert} onOpen={setSelectedAlert} />
-              ))}
-              {actionableAlerts.length === 0 && <EmptyState icon={Bell} title="No priority alerts" description="There are no unresolved IT alerts." />}
-            </div>
-          </section>
-        </aside>
-      </div>
+          </Panel>
 
-      <AnimatePresence>
-        {selectedActivity && <ActivityDetailsModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}
-        {selectedAlert && <AlertDetailsModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />}
-      </AnimatePresence>
+          <Panel className="p-6">
+            <h2 className="font-black text-slate-950">Account Directory</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">Account totals are kept here as reference, not as urgent work.</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <DirectoryCount icon={Users} label="LGU Personnel" value={lguAccountsQuery.data?.length ?? 0} />
+              <DirectoryCount icon={Building2} label="Enterprises" value={enterpriseAccountsQuery.data?.length ?? 0} />
+            </div>
+            <Link to={routes.it.lguAccounts} className="mt-4 inline-flex items-center gap-1 text-sm font-black text-emerald-700 hover:text-emerald-800">
+              Open Accounts <ChevronRight size={16} />
+            </Link>
+          </Panel>
+        </div>
+      </div>
     </PageMotion>
   );
 }
 
-function formatCompactTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp.replace("2026-", "") : date.toLocaleString();
-}
-
-function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onClose: () => void }) {
-  const navigate = useNavigate();
-  const supportTicketId = getSupportTicketIdFromLog(activity);
-
-  const openTicket = () => {
-    if (!supportTicketId) return;
-    onClose();
-    navigate(`${routes.it.supportTickets}?ticket=${encodeURIComponent(supportTicketId)}`);
-  };
-
+function WorkItem({ icon: Icon, label, count, description, href, urgent = false }: { icon: typeof AlertTriangle; label: string; count: number; description: string; href: string; urgent?: boolean }) {
   return (
-    <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
-      <div className="grid gap-4 md:grid-cols-2">
-        <DetailField label="Type" value={activity.category} />
-        <DetailField
-          label="Actor"
-          value={<ExpandableTableText primary={`${activity.actor} (${activity.actorRole})`} ariaLabel="actor" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />}
-        />
-        <DetailField label="Timestamp" value={formatCompactTimestamp(activity.timestamp)} />
-        <DetailField label="Target" value={<ExpandableTableText primary={activity.target} ariaLabel="target" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
-        <DetailField label="Action" value={<ExpandableTableText primary={activity.action} ariaLabel="action" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
-        <div className="md:col-span-2">
-          <DetailField label="Summary" value={<ExpandableTableText primary={activity.summary} ariaLabel="summary" threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />} />
-        </div>
-      </div>
-      {supportTicketId && (
-        <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-700">
-            This activity is tied to a support ticket. Open the ticket queue to inspect the full enterprise request, photos, status, and reply thread.
-          </p>
-          <button
-            type="button"
-            onClick={openTicket}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
-          >
-            <TicketCheck size={14} />
-            Open Ticket
-          </button>
-        </div>
-      )}
-    </ModalFrame>
+    <Link to={href} className="group flex items-center gap-4 px-6 py-5 transition hover:bg-emerald-50/60">
+      <span className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${urgent ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600 group-hover:bg-emerald-100 group-hover:text-emerald-700"}`}>
+        <Icon size={20} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="font-black text-slate-950">{label}</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${urgent ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>{count}</span>
+        </span>
+        <span className="mt-1 block text-sm font-medium text-slate-500">{description}</span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-emerald-700" />
+    </Link>
   );
 }
 
-function getSupportTicketIdFromLog(log: SystemLog) {
-  if (!log.sourceId) return null;
-
-  const text = [log.action, log.target, log.summary, log.sourceId].join(" ").toLowerCase();
-  return text.includes("ticket") || text.includes("tck-") ? log.sourceId : null;
+function DirectoryCount({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <Icon size={16} className="text-emerald-700" />
+      <p className="mt-2 text-xl font-black text-slate-950">{value}</p>
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+    </div>
+  );
 }

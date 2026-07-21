@@ -5,9 +5,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import { ModalPortal } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportArchivedFromStatus, FinalReportStatus } from "@/shared/types";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { DotFinalReportTable } from "./DotReportTable";
 import { getFinalReportViewerEscapeAction, getFinalReportViewerLayout } from "./finalReportViewerState";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
@@ -22,6 +24,7 @@ type FinalReportConfirmAction = "archive" | "finalize" | "restore" | "return" | 
 
 export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const viewerRef = useRef<HTMLElement>(null);
   const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
@@ -271,21 +274,21 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
 
             <div className="tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
               <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h4 className="mb-3 text-sm font-bold text-gray-800">Version History & Audit Trail</h4>
+                <h4 className="mb-3 text-sm font-bold text-gray-800">Report History</h4>
                 <ul className="space-y-2 font-mono text-xs text-gray-600">
                   <li className="flex items-center justify-between border-b border-gray-200 pb-2">
-                    <span>v1.0 Draft aggregated by System Pipeline</span>
-                    <span>{report.generatedOn} 04:15 AM</span>
+                    <span>v1.0 Draft combined by TANAW</span>
+                    <span>{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</span>
                   </li>
                   {report.status === "Finalized" || (report.status === "Archived" && report.archivedFromStatus === "Finalized") ? (
                     <li className="flex items-center justify-between pt-1">
                       <span>v1.1 Finalized and authorized by {report.preparedBy}</span>
-                      <span>{report.generatedOn} 09:30 AM</span>
+                      <span>{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</span>
                     </li>
                   ) : (
                     <li className="flex items-center justify-between pt-1">
                       <span>{report.status === "Returned for Revision" ? "v1.1 Returned for source report revision" : "v1.1 Awaiting final audit decision"}</span>
-                      <span>{report.generatedOn} 09:30 AM</span>
+                      <span>{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</span>
                     </li>
                   )}
                 </ul>
@@ -300,15 +303,15 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               </div>
 
               <div className="mb-6 grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2">
-                <DocumentDetail label="Generated On" value={report.generatedOn} />
+                <DocumentDetail label="Generated On" value={formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })} />
                 <DocumentDetail label="Prepared By" value={`${report.preparedBy} (${report.preparedRole})`} />
                 <DocumentDetail label="Audit Status" value={report.status} />
-                <DocumentDetail label="Registered Sources" value={String(report.enterpriseCount)} />
+                <DocumentDetail label="Enterprise Reports" value={String(report.enterpriseCount)} />
               </div>
 
               <p className="mb-6 text-justify text-sm leading-relaxed">
                 This document certifies the consolidated visitor analytics derived from TANAW live-count records for the stated period. Aggregation relies on verified local camera records from{" "}
-                {report.enterpriseCount} monitored enterprise nodes.
+                {report.enterpriseCount} enterprise reports.
               </p>
 
               <DotFinalReportTable report={report} />

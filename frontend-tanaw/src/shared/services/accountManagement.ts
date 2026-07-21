@@ -28,9 +28,6 @@ export type AccountSummary = {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
-  locationSource: string | null;
-  locationConfidence: number | null;
-  geocodedAddress: string | null;
   locationUpdatedAt: string | null;
   enterpriseId: string | null;
   gatewayStatus: string | null;
@@ -96,11 +93,8 @@ export type CreateEnterpriseAccountPayload = {
   barangay: string;
   address: string;
   enterpriseId?: string;
-  latitude?: number;
-  longitude?: number;
-  locationSource?: string;
-  locationConfidence?: number;
-  geocodedAddress?: string;
+  latitude: number;
+  longitude: number;
   buildingCapacity: number;
 };
 
@@ -122,31 +116,6 @@ export type UpdateEnterpriseAccountPayload = {
   address: string;
   buildingCapacity: number;
   status: "active" | "inactive";
-};
-
-export type EnterpriseGeocodePayload = {
-  enterpriseName?: string;
-  barangay: string;
-  address: string;
-};
-
-export type EnterpriseGeocodeResult = {
-  latitude: number;
-  longitude: number;
-  displayAddress: string;
-  confidence: number | null;
-  provider: string;
-  source: string;
-};
-
-export type EnterpriseReverseGeocodePayload = {
-  latitude: number;
-  longitude: number;
-};
-
-export type EnterpriseReverseGeocodeResult = EnterpriseGeocodeResult & {
-  address: string | null;
-  barangay: string | null;
 };
 
 export async function listLguAccounts() {
@@ -186,16 +155,6 @@ export async function resolveEnterpriseProfileChangeRequest(accountId: string, r
 
 export async function resolveAccountEmailChangeRequest(accountId: string, action: "approve" | "decline") {
   const response = await apiClient.patch<AccountSummary>(`/accounts/${accountId}/email-change-request`, { action });
-  return response.data;
-}
-
-export async function geocodeEnterpriseAddress(payload: EnterpriseGeocodePayload) {
-  const response = await apiClient.post<EnterpriseGeocodeResult>("/accounts/enterprises/geocode", payload);
-  return response.data;
-}
-
-export async function reverseGeocodeEnterpriseLocation(payload: EnterpriseReverseGeocodePayload) {
-  const response = await apiClient.post<EnterpriseReverseGeocodeResult>("/accounts/enterprises/reverse-geocode", payload);
   return response.data;
 }
 

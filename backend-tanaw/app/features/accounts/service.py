@@ -15,8 +15,7 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
+    EnterpriseProfile,
 )
 from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.schemas import (
@@ -31,6 +30,7 @@ from app.features.auth.challenge_service import invalidate_password_reset_challe
 from app.features.auth.email_change import (
     ACTIVE_EMAIL_CHANGE_STATUSES,
 )
+from app.features.mail.dev_log import DevDeliveryEvent
 
 DISPLAY_IMAGE_DATA_URL_KEY = "displayImageDataUrl"
 PENDING_BUSINESS_EMAIL_CHANGE_KEY = "pendingBusinessEmailChange"
@@ -101,6 +101,7 @@ def set_display_image_data_url(account: Account, data_url: str | None) -> None:
 
 def to_auth_user(account: Account) -> AuthUser:
     display_image_data_url = get_account_preferences(account).get(DISPLAY_IMAGE_DATA_URL_KEY)
+    profile = account.enterprise_profile
     return AuthUser(
         id=account.id,
         email=account.email,
@@ -110,13 +111,13 @@ def to_auth_user(account: Account) -> AuthUser:
         phone=account.phone,
         firstName=account.first_name,
         lastName=account.last_name,
-        enterpriseId=account.enterprise_id,
-        enterpriseName=account.enterprise_name,
-        category=format_enterprise_category(account.category),
-        managerName=account.manager_name,
-        barangay=account.barangay,
-        address=account.address,
-        buildingCapacity=account.building_capacity,
+        enterpriseId=profile.enterprise_id if profile else None,
+        enterpriseName=profile.enterprise_name if profile else None,
+        category=format_enterprise_category(profile.category) if profile else None,
+        managerName=profile.manager_name if profile else None,
+        barangay=profile.barangay if profile else None,
+        address=profile.address if profile else None,
+        buildingCapacity=profile.building_capacity if profile else 100,
         displayImageDataUrl=display_image_data_url
         if isinstance(display_image_data_url, str)
         else None,
@@ -128,26 +129,24 @@ def to_account_summary(
     *,
     email_change_request: AccountEmailChangeRequest | None = None,
 ) -> AccountSummary:
+    profile = account.enterprise_profile
     return AccountSummary(
         id=account.id,
         email=account.email,
         phone=account.phone,
         firstName=account.first_name,
         lastName=account.last_name,
-        enterpriseName=account.enterprise_name,
-        category=format_enterprise_category(account.category),
-        managerName=account.manager_name,
-        barangay=account.barangay,
-        address=account.address,
-        latitude=account.latitude,
-        longitude=account.longitude,
-        locationSource=account.location_source,
-        locationConfidence=account.location_confidence,
-        geocodedAddress=account.geocoded_address,
-        locationUpdatedAt=account.location_updated_at,
-        enterpriseId=account.enterprise_id,
-        gatewayStatus=account.gateway_status,
-        buildingCapacity=account.building_capacity,
+        enterpriseName=profile.enterprise_name if profile else None,
+        category=format_enterprise_category(profile.category) if profile else None,
+        managerName=profile.manager_name if profile else None,
+        barangay=profile.barangay if profile else None,
+        address=profile.address if profile else None,
+        latitude=profile.latitude if profile else None,
+        longitude=profile.longitude if profile else None,
+        locationUpdatedAt=profile.location_updated_at if profile else None,
+        enterpriseId=profile.enterprise_id if profile else None,
+        gatewayStatus=profile.gateway_status if profile else None,
+        buildingCapacity=profile.building_capacity if profile else 100,
         displayName=account.display_name,
         role=account.role.value,
         title=account.title,
@@ -258,19 +257,14 @@ async def to_account_summary_with_requests(
     return (await to_account_summaries_with_requests(db, [account]))[0]
 
 
-def to_delivery_summary(delivery: DevDelivery) -> DeliverySummary:
-    status = (
-        DeliveryStatus.ACCEPTED.value
-        if delivery.status == DeliveryStatus.SENT
-        else delivery.status.value
-    )
+def to_delivery_summary(delivery: DevDeliveryEvent) -> DeliverySummary:
     return DeliverySummary(
         id=delivery.id,
         accountId=delivery.account_id,
         recipient=delivery.recipient,
         subject=delivery.subject,
         body=delivery.body,
-        status=status,
+        status=delivery.status,
         createdAt=delivery.created_at,
     )
 
@@ -292,7 +286,8 @@ async def get_account_by_login_identifier(
 ) -> Account | None:
     normalized = identifier.strip().lower()
     statement = select(Account).where(
-        (Account.email == normalized) | (Account.enterprise_id == normalized)
+        (Account.email == normalized)
+        | Account.enterprise_profile.has(EnterpriseProfile.enterprise_id == normalized)
     )
     if for_update:
         statement = statement.with_for_update().execution_options(populate_existing=True)
@@ -336,8 +331,8 @@ async def generate_enterprise_id(db: AsyncSession, seed: str) -> str:
     base = normalize_enterprise_id_seed(seed)
     suffix = "@tanaw.sanpedro"
     result = await db.scalars(
-        select(Account.enterprise_id).where(
-            Account.enterprise_id.like(f"{base}\\_%{suffix}", escape="\\")
+        select(EnterpriseProfile.enterprise_id).where(
+            EnterpriseProfile.enterprise_id.like(f"{base}\\_%{suffix}", escape="\\")
         )
     )
     existing = {enterprise_id for enterprise_id in result if enterprise_id}
@@ -366,48 +361,25 @@ async def create_account_with_activation(
     title: str,
     first_name: str | None = None,
     last_name: str | None = None,
-    enterprise_name: str | None = None,
-    category: str | None = None,
-    manager_name: str | None = None,
-    barangay: str | None = None,
-    address: str | None = None,
-    latitude: float | None = None,
-    longitude: float | None = None,
-    location_source: str | None = None,
-    location_confidence: float | None = None,
-    geocoded_address: str | None = None,
-    location_updated_at: datetime | None = None,
-    enterprise_id: str | None = None,
-    gateway_id: str | None = None,
-    gateway_status: str | None = None,
-    building_capacity: int = 100,
+    enterprise_profile: EnterpriseProfile | None = None,
 ) -> Account:
+    if role == AccountRole.ENTERPRISE and enterprise_profile is None:
+        raise ValueError("Enterprise accounts require an enterprise profile.")
+    if role != AccountRole.ENTERPRISE and enterprise_profile is not None:
+        raise ValueError("Only enterprise accounts may have an enterprise profile.")
+
     account = Account(
         email=email.lower(),
         phone=phone,
         first_name=first_name,
         last_name=last_name,
-        enterprise_name=enterprise_name,
-        category=category,
-        manager_name=manager_name,
-        barangay=barangay,
-        address=address,
-        latitude=latitude,
-        longitude=longitude,
-        location_source=location_source,
-        location_confidence=location_confidence,
-        geocoded_address=geocoded_address,
-        location_updated_at=location_updated_at,
-        enterprise_id=enterprise_id,
-        gateway_id=gateway_id,
-        gateway_status=gateway_status,
-        building_capacity=building_capacity,
         password_hash=hash_password(secrets.token_urlsafe(48)),
         role=role,
         display_name=display_name,
         title=title,
         status=AccountStatus.ACTIVE,
         activated_at=None,
+        enterprise_profile=enterprise_profile,
     )
     db.add(account)
     await db.flush()
@@ -432,13 +404,3 @@ async def change_account_password(
     await db.commit()
     await db.refresh(account)
     return True
-
-
-async def list_dev_deliveries(db: AsyncSession) -> list[DevDelivery]:
-    result = await db.scalars(select(DevDelivery).order_by(DevDelivery.created_at.desc()))
-    return list(result)
-
-
-async def get_dev_delivery_by_id(db: AsyncSession, delivery_id: str) -> DevDelivery | None:
-    result = await db.scalars(select(DevDelivery).where(DevDelivery.id == delivery_id))
-    return result.first()

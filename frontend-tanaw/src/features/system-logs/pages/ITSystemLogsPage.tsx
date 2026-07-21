@@ -10,16 +10,20 @@ import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import type { SystemLog, SystemLogCategory } from "@/shared/types";
 import { activityTimeRanges, isWithinActivityTimeRange } from "@/shared/utils";
 import type { ActivityTimeRange } from "@/shared/utils";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 const defaultTypeOptions = ["All Types", "IT Activity", "Enterprise Activity", "System"];
 const defaultAccountOptions = ["All Accounts", "IT Personnel", "Enterprise Account", "System"];
 
 export function ITSystemLogsPage() {
+  const { timeFormat } = useSystemDisplayPreferences();
   const { logs, isLoading } = useActivityLogs();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All Types");
   const [accountFilter, setAccountFilter] = useState("All Accounts");
   const [timeRange, setTimeRange] = useState<ActivityTimeRange>("All Time");
+  const [showRoutineActivity, setShowRoutineActivity] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<SystemLog | null>(null);
 
   const dynamicTypeOptions = useMemo(() => getTypeOptions(logs, accountFilter), [accountFilter, logs]);
@@ -46,13 +50,14 @@ export function ITSystemLogsPage() {
       const matchesType = typeFilter === "All Types" || activity.category === typeFilter;
       const matchesAccount = accountFilter === "All Accounts" || activity.actorRole === accountFilter;
       const matchesTimeRange = isWithinActivityTimeRange(activity.timestamp, timeRange);
-      return matchesQuery && matchesType && matchesAccount && matchesTimeRange;
+      const matchesImportance = showRoutineActivity || !isRoutineActivity(activity);
+      return matchesQuery && matchesType && matchesAccount && matchesTimeRange && matchesImportance;
     });
-  }, [accountFilter, logs, query, timeRange, typeFilter]);
+  }, [accountFilter, logs, query, showRoutineActivity, timeRange, typeFilter]);
 
   return (
     <PageMotion>
-      <PageHeader title="System Activity" description="IT-visible activity stream for account events, enterprise connectivity, configuration changes, and automated system actions." />
+      <PageHeader title="System Activity" description="A searchable history of important account changes, technical issues, and IT actions." />
 
       <Panel className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4">
@@ -69,6 +74,13 @@ export function ITSystemLogsPage() {
             <FilterSelect value={typeFilter} onChange={handleTypeFilterChange} options={dynamicTypeOptions} />
             <FilterSelect value={accountFilter} onChange={handleAccountFilterChange} options={dynamicAccountOptions} />
             <FilterSelect value={timeRange} onChange={(value) => setTimeRange(value as ActivityTimeRange)} options={activityTimeRanges} />
+            <button
+              type="button"
+              onClick={() => setShowRoutineActivity((current) => !current)}
+              className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${showRoutineActivity ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-gray-300 bg-white text-gray-600 hover:border-emerald-300"}`}
+            >
+              {showRoutineActivity ? "Hide routine activity" : "Show routine activity"}
+            </button>
           </div>
         </div>
 
@@ -83,7 +95,7 @@ export function ITSystemLogsPage() {
             </colgroup>
             <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
               <tr>
-                {["Timestamp", "Type", "Actor", "Target", "Summary"].map((heading) => (
+                {["Date and Time", "Type", "Name", "Affected Item", "What Happened"].map((heading) => (
                   <th key={heading} className="px-3 py-4 whitespace-nowrap lg:px-4">
                     {heading}
                   </th>
@@ -93,7 +105,7 @@ export function ITSystemLogsPage() {
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredActivities.map((activity) => (
                 <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
-                  <td className="px-3 py-4 font-mono text-xs whitespace-nowrap text-gray-500 lg:px-4">{formatLogTimestamp(activity.timestamp)}</td>
+                  <td className="px-3 py-4 font-mono text-xs whitespace-nowrap text-gray-500 lg:px-4">{formatLogTimestamp(activity.timestamp, timeFormat)}</td>
                   <td className="px-3 py-4 whitespace-nowrap lg:px-4">
                     <TypeBadge type={activity.category} />
                   </td>
@@ -134,9 +146,13 @@ export function ITSystemLogsPage() {
         </div>
       </Panel>
 
-      <AnimatePresence>{selectedActivity && <ActivityDetailsModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}</AnimatePresence>
+      <AnimatePresence>{selectedActivity && <ActivityDetailsModal activity={selectedActivity} timeFormat={timeFormat} onClose={() => setSelectedActivity(null)} />}</AnimatePresence>
     </PageMotion>
   );
+}
+
+function isRoutineActivity(activity: SystemLog) {
+  return ["Login", "Logout", "Submit Enterprise Report", "Generate Final Report"].includes(activity.action);
 }
 
 function getTypeOptions(logs: SystemLog[], accountFilter: string) {
@@ -153,19 +169,19 @@ function getAccountOptions(logs: SystemLog[], typeFilter: string) {
   return ["All Accounts", ...Array.from(accounts).sort()];
 }
 
-function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onClose: () => void }) {
+function ActivityDetailsModal({ activity, timeFormat, onClose }: { activity: SystemLog; timeFormat: SystemTimeFormat; onClose: () => void }) {
   const navigate = useNavigate();
   const supportTicketId = getSupportTicketIdFromLog(activity);
 
   const openTicket = () => {
     if (!supportTicketId) return;
     onClose();
-    navigate(`${routes.it.supportTickets}?ticket=${encodeURIComponent(supportTicketId)}`);
+    navigate(`${routes.it.workCenter}?view=support&ticket=${encodeURIComponent(supportTicketId)}`);
   };
 
   return (
     <ModalFrame title="Activity Details" eyebrow={activity.id} onClose={onClose}>
-      <ActivityDetailFields activity={activity} />
+      <ActivityDetailFields activity={activity} timeFormat={timeFormat} />
       {supportTicketId && (
         <div className="mt-5 rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50 via-white to-amber-50 p-4">
           <p className="text-sm font-semibold text-slate-700">This activity is tied to a support ticket. Open the full ticket record to inspect fields, photos, status, and conversation history.</p>
@@ -183,14 +199,14 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
   );
 }
 
-export function ActivityDetailFields({ activity }: { activity: SystemLog }) {
+export function ActivityDetailFields({ activity, timeFormat = "12-hour" }: { activity: SystemLog; timeFormat?: SystemTimeFormat }) {
   const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />;
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <DetailField label="Type" value={activity.category} />
       <DetailField label="Actor" value={expandableValue(`${activity.actor} (${activity.actorRole})`, "actor")} />
-      <DetailField label="Timestamp" value={formatLogTimestamp(activity.timestamp)} />
+      <DetailField label="Date and Time" value={formatLogTimestamp(activity.timestamp, timeFormat)} />
       <DetailField label="Target" value={expandableValue(activity.target, "target")} />
       <DetailField label="Action" value={expandableValue(activity.action, "action")} />
       <div className="md:col-span-2">
@@ -212,9 +228,8 @@ function TypeBadge({ type }: { type: SystemLogCategory }) {
   return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[type]}`}>{type}</span>;
 }
 
-function formatLogTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
+function formatLogTimestamp(timestamp: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(timestamp, timeFormat);
 }
 
 function getSupportTicketIdFromLog(log: SystemLog) {

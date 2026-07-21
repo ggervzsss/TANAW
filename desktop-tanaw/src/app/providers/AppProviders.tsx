@@ -5,6 +5,7 @@ import { HashRouter, useLocation } from "react-router-dom";
 import { queryClient } from "../../lib/queryClient";
 import { routePaths } from "../router/routePaths";
 import { AuthSessionManager } from "../../features/login/components/AuthSessionManager";
+import { SystemDisplayPreferencesProvider } from "../../features/preferences/SystemDisplayPreferencesProvider";
 
 const TOAST_DURATION_MS = 3200;
 
@@ -44,8 +45,10 @@ export function AppProviders({ children }: PropsWithChildren) {
     <QueryClientProvider client={queryClient}>
       <HashRouter>
         <AuthSessionManager />
-        {children}
-        <TanawToaster />
+        <SystemDisplayPreferencesProvider>
+          {children}
+          <TanawToaster />
+        </SystemDisplayPreferencesProvider>
       </HashRouter>
     </QueryClientProvider>
   );

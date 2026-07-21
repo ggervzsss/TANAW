@@ -8,6 +8,7 @@ import { TOAST_DURATION_MS } from "@/shared/config/app.config";
 import { OperationalSyncBridge } from "@/shared/hooks/useOperationalSync";
 import { AuthSessionManager } from "@/shared/components/auth/AuthSessionManager";
 import { queryClient } from "@/shared/lib/queryClient";
+import { SystemDisplayPreferencesProvider } from "@/shared/providers/SystemDisplayPreferencesProvider";
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -52,8 +53,10 @@ export function AppProviders({ children }: AppProvidersProps) {
       <BrowserRouter>
         <OperationalSyncBridge />
         <AuthSessionManager />
-        {children}
-        <TanawToaster />
+        <SystemDisplayPreferencesProvider>
+          {children}
+          <TanawToaster />
+        </SystemDisplayPreferencesProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

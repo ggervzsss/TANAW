@@ -12,8 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.db.session import AsyncSessionLocal
-from app.features.accounts.models import DeliveryStatus, DevDelivery
+from app.features.accounts.models import AccountRole
 from app.features.mail.client import ResendAPIError
+from app.features.mail.dev_log import record_dev_delivery
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
 from app.features.mail.rendering import EmailRenderCancelled, render_outbox_email
 from app.features.mail.runtime import EmailRuntimeError, get_resend_client
@@ -23,6 +24,12 @@ from app.features.mail.service import (
     RESEND_IDEMPOTENCY_WINDOW,
 )
 from app.features.mail.templates import EmailContent
+from app.features.operational.schemas import OperationalWebSocketEnvelope
+from app.features.operational.service import (
+    create_role_notifications,
+    mark_source_notifications_read,
+)
+from app.features.operational.websocket import operational_ws_manager
 
 logger = logging.getLogger("uvicorn.error")
 _worker_task: asyncio.Task[None] | None = None
@@ -165,13 +172,14 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
 
         if delivery_provider == "local":
             await _record_success(
+                settings,
                 claim,
                 account_id=account_id,
                 recipient=recipient,
                 content=content,
                 provider="local",
                 provider_message_id=None,
-                delivery_status=DeliveryStatus.RECORDED,
+                delivery_status="recorded",
                 outbox_status=EmailOutboxStatus.RECORDED,
                 retained_body=content.text,
                 attempt_started_at=attempt_started_at,
@@ -200,13 +208,14 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
             tags=tags,
         )
         await _record_success(
+            settings,
             claim,
             account_id=account_id,
             recipient=recipient,
             content=content,
             provider="resend",
             provider_message_id=sent.id,
-            delivery_status=DeliveryStatus.ACCEPTED,
+            delivery_status="accepted",
             outbox_status=EmailOutboxStatus.ACCEPTED,
             retained_body=REDACTED_EMAIL_BODY,
             attempt_started_at=attempt_started_at,
@@ -259,6 +268,7 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
 
 
 async def _record_success(
+    settings: Settings,
     claim: ClaimedEmail,
     *,
     account_id: str,
@@ -266,7 +276,7 @@ async def _record_success(
     content: EmailContent,
     provider: str,
     provider_message_id: str | None,
-    delivery_status: DeliveryStatus,
+    delivery_status: str,
     outbox_status: EmailOutboxStatus,
     retained_body: str,
     attempt_started_at: datetime,
@@ -291,18 +301,17 @@ async def _record_success(
                 provider_message_id=provider_message_id,
             )
         )
-        db.add(
-            DevDelivery(
+        if not settings.is_production:
+            record_dev_delivery(
                 account_id=account_id,
                 recipient=recipient,
                 subject=content.subject,
                 body=retained_body,
-                provider=provider,
-                provider_message_id=provider_message_id,
                 status=delivery_status,
+                created_at=now,
             )
-        )
         await db.commit()
+        await _mark_email_problem_resolved(db, outbox.id)
     logger.info(
         "Email outbox completed outbox_id=%s provider=%s status=%s provider_message_id=%s",
         claim.id,
@@ -388,24 +397,77 @@ async def _record_failure(
                 outcome_uncertain=outcome_uncertain,
             )
         )
-        db.add(
-            DevDelivery(
+        if not settings.is_production:
+            record_dev_delivery(
                 account_id=outbox.account_id,
                 recipient=outbox.recipient,
                 subject="Email delivery attempt",
                 body=REDACTED_EMAIL_BODY,
-                provider=outbox.provider,
-                error_message=error_message[:1000],
-                status=DeliveryStatus.FAILED,
+                status="failed",
+                created_at=now,
             )
-        )
         await db.commit()
+        if outbox.status in {
+            EmailOutboxStatus.TERMINAL_FAILED.value,
+            EmailOutboxStatus.RECONCILIATION_REQUIRED.value,
+        }:
+            await _notify_it_email_problem(db, outbox)
     logger.warning(
         "Email outbox attempt failed outbox_id=%s code=%s retryable=%s",
         claim.id,
         error_code,
         should_retry,
     )
+
+
+async def _notify_it_email_problem(db: AsyncSession, outbox: EmailOutbox) -> None:
+    try:
+        purpose = outbox.purpose.replace("_", " ")
+        notifications = await create_role_notifications(
+            db,
+            recipient_roles=[AccountRole.IT],
+            title=f"Email to {outbox.recipient} needs attention.",
+            message=(
+                f"The {purpose} email could not be delivered. "
+                f"{outbox.last_error_message or 'Open Email Problems to review the delivery.'}"
+            ),
+            notification_type="Email Problem",
+            severity=(
+                "Critical"
+                if outbox.status == EmailOutboxStatus.RECONCILIATION_REQUIRED.value
+                else "Warning"
+            ),
+            source_type="email.delivery",
+            source_id=outbox.id,
+            replace_existing_for_source=True,
+        )
+        for notification in notifications:
+            await operational_ws_manager.broadcast(
+                OperationalWebSocketEnvelope(
+                    type="notification.created",
+                    data=notification.model_dump(mode="json"),
+                )
+            )
+    except Exception:
+        await db.rollback()
+        logger.exception("Failed to notify IT about email delivery outbox_id=%s", outbox.id)
+
+
+async def _mark_email_problem_resolved(db: AsyncSession, outbox_id: str) -> None:
+    try:
+        notifications = await mark_source_notifications_read(
+            db, source_type="email.delivery", source_id=outbox_id
+        )
+        for notification in notifications:
+            await operational_ws_manager.broadcast(
+                OperationalWebSocketEnvelope(
+                    type="notification.updated",
+                    data=notification.model_dump(mode="json"),
+                )
+            )
+    except Exception:
+        await db.rollback()
+        logger.exception("Failed to close IT email notification outbox_id=%s", outbox_id)
 
 
 async def _get_claimed_email(

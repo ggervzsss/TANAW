@@ -1,6 +1,8 @@
 import { Users } from "lucide-react";
 import { EmptyState, ExpandableTableText, StatusBadge } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { AccountSummary } from "@/shared/services/accountManagement";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { lguRoleLabel } from "../utils";
 
 type LguAccountsTableProps = {
@@ -11,6 +13,8 @@ type LguAccountsTableProps = {
 };
 
 export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSelectAccount }: LguAccountsTableProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-170 table-fixed text-left text-sm">
@@ -23,7 +27,7 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
         </colgroup>
         <thead className="bg-gray-50 text-[11px] font-bold tracking-wider text-gray-500 uppercase">
           <tr>
-            {["Name", "Email", "Role", "Status", "Last Login"].map((heading) => (
+            {["Name", "Email", "Account Type", "Status", "Last Login"].map((heading) => (
               <th key={heading} className="px-4 py-4 whitespace-nowrap">
                 {heading}
               </th>
@@ -57,7 +61,7 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
               <td className="px-4 py-4 whitespace-nowrap">
                 <StatusBadge tone={account.status === "inactive" ? "slate" : account.isActivated ? "green" : "amber"}>{account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}</StatusBadge>
               </td>
-              <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-500">{account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"}</td>
+              <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-500">{account.lastLoginAt ? formatPhilippineDateTime(account.lastLoginAt, timeFormat) : "Never"}</td>
             </tr>
           ))}
           {filteredAccounts.length === 0 && (

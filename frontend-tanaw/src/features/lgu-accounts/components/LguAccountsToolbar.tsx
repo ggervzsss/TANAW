@@ -29,7 +29,7 @@ export function LguAccountsToolbar({ query, role, status, onQueryChange, onRoleC
         onChange={(value) => onRoleChange(value as LguRoleFilter)}
         options={
           [
-            ["all", "All Roles"],
+            ["all", "All Account Types"],
             ["admin", "Admin"],
             ["it", "IT Personnel"],
             ["staff", "LGU Staff"],

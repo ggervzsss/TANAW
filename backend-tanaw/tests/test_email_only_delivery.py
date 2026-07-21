@@ -1,13 +1,46 @@
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 
+from app.features.accounts import router as account_router
 from app.features.accounts import service
-from app.features.accounts.models import AccountRole, DevDelivery
+from app.features.accounts.models import AccountRole
+from app.features.mail.dev_log import (
+    clear_dev_deliveries,
+    get_dev_delivery,
+    list_dev_deliveries,
+    record_dev_delivery,
+)
 
 
-def test_delivery_records_do_not_have_a_channel_discriminator() -> None:
-    assert "channel" not in DevDelivery.__table__.columns
+def test_dev_log_is_ephemeral_and_not_available_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_dev_deliveries()
+    delivery = record_dev_delivery(
+        account_id="account-1",
+        recipient="developer@example.com",
+        subject="Development message",
+        body="Rendered email body",
+        status="recorded",
+        created_at=datetime.now(UTC),
+    )
+
+    assert list_dev_deliveries() == [delivery]
+    assert get_dev_delivery(delivery.id) == delivery
+
+    monkeypatch.setattr(
+        account_router,
+        "get_settings",
+        lambda: SimpleNamespace(is_production=True),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        account_router.ensure_dev_log_available()
+    assert exc_info.value.status_code == 404
+    clear_dev_deliveries()
 
 
 @pytest.mark.asyncio

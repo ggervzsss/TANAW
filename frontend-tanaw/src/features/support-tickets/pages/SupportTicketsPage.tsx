@@ -14,28 +14,32 @@ import {
   listSupportTickets,
   replyToSupportTicket,
   updateSupportTicketStatus,
+  supportTicketsQueryKey,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
   type SupportTicketPriority,
   type SupportTicketStatus,
 } from "@/shared/services/supportTickets";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 
 type SupportTicketsPageProps = {
   mode: "admin" | "it";
+  embedded?: boolean;
 };
 
-type StatusFilter = "All Statuses" | SupportTicketStatus;
+type StatusFilter = "All Statuses" | "Open" | "Working on It" | "Resolved";
 type PriorityFilter = "All Priorities" | SupportTicketPriority;
 type CategoryFilter = "All Categories" | SupportTicketCategory;
 
-const ticketQueryKey = ["operational", "support-tickets"];
-const statuses: StatusFilter[] = ["All Statuses", "Open", "In Review", "Resolved"];
+const statuses: StatusFilter[] = ["All Statuses", "Open", "Working on It", "Resolved"];
 const priorities: PriorityFilter[] = ["All Priorities", "Urgent", "High", "Normal", "Low"];
 const categories: CategoryFilter[] = ["All Categories", "Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const EMPTY_SUPPORT_TICKETS: SupportTicket[] = [];
 
-export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
+export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPageProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Statuses");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("All Priorities");
@@ -44,7 +48,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isItResponder = mode === "it";
   const ticketsQuery = useQuery({
-    queryKey: ticketQueryKey,
+    queryKey: supportTicketsQueryKey,
     queryFn: listSupportTickets,
     refetchInterval: 30_000,
   });
@@ -68,7 +72,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
         .join(" ")
         .toLowerCase();
       const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
-      const matchesStatus = statusFilter === "All Statuses" || ticket.status === statusFilter;
+      const matchesStatus = statusFilter === "All Statuses" || ticketStatusLabel(ticket.status) === statusFilter;
       const matchesPriority = priorityFilter === "All Priorities" || ticket.priority === priorityFilter;
       const matchesCategory = categoryFilter === "All Categories" || ticket.category === categoryFilter;
       return matchesQuery && matchesStatus && matchesPriority && matchesCategory;
@@ -102,12 +106,14 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
 
   return (
     <PageMotion className="tanaw-data-page pb-12">
-      <PageHeader
-        title="Support Tickets"
-        description={
-          isItResponder ? "Technical inbox for TANAW support requests, attachments, and IT responses." : "Read-only supervision for TANAW support requests, IT responses, and ticket status."
-        }
-      />
+      {!embedded && (
+        <PageHeader
+          title="Support Requests"
+          description={
+            isItResponder ? "Help enterprises with questions and technical problems." : "Read-only supervision for enterprise requests, IT responses, and request status."
+          }
+        />
+      )}
 
       {!isItResponder && (
         <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
@@ -116,9 +122,9 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
       )}
 
       <section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <MetricCard label="Active Tickets" value={activeTickets.length} foot="Open or in review" color="#065f46" icon={TicketCheck} />
+        <MetricCard label="Open Requests" value={activeTickets.length} foot="New or being handled" color="#065f46" icon={TicketCheck} />
         <MetricCard label="High Priority" value={urgentTickets.length} foot="High or urgent queue" color="#b45309" footClassName="text-amber-700" icon={AlertCircle} />
-        <MetricCard label="In Review" value={inReviewTickets.length} foot="Currently handled by IT" color="#2563eb" footClassName="text-blue-700" icon={Clock3} />
+        <MetricCard label="Working on It" value={inReviewTickets.length} foot="Currently handled by IT" color="#2563eb" footClassName="text-blue-700" icon={Clock3} />
         <MetricCard label="With Photos" value={ticketsWithAttachments.length} foot="Attachment-backed tickets" color="#0f766e" icon={ImageIcon} />
       </section>
 
@@ -207,7 +213,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
                     <TicketStatusBadge status={ticket.status} />
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <p className="text-[11px] font-bold text-gray-500 uppercase">{formatTicketTime(ticket.createdAt)}</p>
+                    <p className="text-[11px] font-bold text-gray-500 uppercase">{formatTicketTime(ticket.createdAt, timeFormat)}</p>
                     <button type="button" className="mt-2 inline-flex items-center gap-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">
                       <Eye size={12} />
                       Inspect
@@ -236,27 +242,27 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
         </div>
       </Panel>
 
-      <AnimatePresence>{activeTicketId && <TicketDetailsModal mode={mode} ticketId={activeTicketId} onClose={closeTicketDetails} />}</AnimatePresence>
+      <AnimatePresence>{activeTicketId && <TicketDetailsModal mode={mode} ticketId={activeTicketId} timeFormat={timeFormat} onClose={closeTicketDetails} />}</AnimatePresence>
     </PageMotion>
   );
 }
 
-function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it"; ticketId: string; onClose: () => void }) {
+export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mode: "admin" | "it"; ticketId: string; timeFormat: SystemTimeFormat; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<SupportTicketAttachment | null>(null);
   const isItResponder = mode === "it";
   const detailQuery = useQuery({
-    queryKey: [...ticketQueryKey, ticketId],
+    queryKey: [...supportTicketsQueryKey, ticketId],
     queryFn: () => getSupportTicket(ticketId),
   });
   const ticket = detailQuery.data;
   const replyMutation = useMutation({
     mutationFn: (message: string) => replyToSupportTicket(ticketId, message),
     onSuccess: (detail) => {
-      queryClient.setQueryData([...ticketQueryKey, ticketId], detail);
-      void queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.setQueryData([...supportTicketsQueryKey, ticketId], detail);
+      void queryClient.invalidateQueries({ queryKey: supportTicketsQueryKey });
       setReply("");
       setReplyError("");
     },
@@ -265,8 +271,8 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
   const statusMutation = useMutation({
     mutationFn: (status: SupportTicketStatus) => updateSupportTicketStatus(ticketId, status),
     onSuccess: (detail) => {
-      queryClient.setQueryData([...ticketQueryKey, ticketId], detail);
-      void queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.setQueryData([...supportTicketsQueryKey, ticketId], detail);
+      void queryClient.invalidateQueries({ queryKey: supportTicketsQueryKey });
     },
   });
 
@@ -281,12 +287,12 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
 
   return (
     <>
-      <ModalFrame title={ticket?.subject ?? "Support Ticket Details"} eyebrow={ticket?.code ?? "Support Tickets"} onClose={onClose} maxWidthClassName="max-w-6xl">
+      <ModalFrame title={ticket?.subject ?? "Support Request Details"} eyebrow={ticket?.code ?? "Support Requests"} onClose={onClose} maxWidthClassName="max-w-6xl">
         {!ticket && (
           <EmptyState
             icon={detailQuery.isLoading ? RefreshCw : AlertCircle}
-            title={detailQuery.isLoading ? "Loading ticket details" : "Ticket unavailable"}
-            description={detailQuery.isLoading ? "Fetching support ticket data." : "This ticket could not be loaded."}
+            title={detailQuery.isLoading ? "Loading request details" : "Request unavailable"}
+            description={detailQuery.isLoading ? "Fetching support request data." : "This request could not be loaded."}
           />
         )}
 
@@ -311,9 +317,9 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                 <DetailField label="Requester" value={ticket.enterpriseName} />
                 <DetailField label="Account ID" value={ticket.enterpriseId} />
                 <DetailField label="Category" value={<CategoryBadge category={ticket.category} />} />
-                <DetailField label="Submitted" value={formatTicketTime(ticket.createdAt)} />
+                <DetailField label="Submitted" value={formatTicketTime(ticket.createdAt, timeFormat)} />
                 <DetailField label="Affected Area" value={ticket.affectedArea || "Not specified"} />
-                <DetailField label="Camera Node" value={ticket.cameraNode || "Not specified"} />
+                <DetailField label="Camera" value={ticket.cameraNode || "Not specified"} />
               </div>
 
               <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
@@ -342,7 +348,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500">No photos were attached to this ticket.</p>
+                  <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500">No photos were attached to this request.</p>
                 )}
               </section>
             </div>
@@ -352,7 +358,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
                     <ShieldCheck size={16} className="text-emerald-700" />
-                    Workflow
+                    Request Status
                   </h4>
                   {!isItResponder && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700 uppercase">Read-only</span>}
                 </div>
@@ -366,7 +372,7 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                         onClick={() => statusMutation.mutate(statusOption)}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 uppercase transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-200 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                       >
-                        {statusOption}
+                        {ticketStatusLabel(statusOption)}
                       </button>
                     ))}
                   </div>
@@ -383,9 +389,9 @@ function TicketDetailsModal({ mode, ticketId, onClose }: { mode: "admin" | "it";
                   Conversation
                 </h4>
                 <div className="mt-4 space-y-3">
-                  <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} />
+                  <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                   {ticket.messages.map((message) => (
-                    <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} />
+                    <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
                   ))}
                 </div>
 
@@ -521,7 +527,19 @@ function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
   return [attachment.id ?? "", attachment.url ?? "", attachment.fileName, attachment.mediaType, attachment.sizeBytes, attachment.dataUrl?.length ?? 0].join(":");
 }
 
-function ConversationItem({ authorName, authorRole, createdAt, message }: { authorName: string; authorRole: string; createdAt: string; message: string }) {
+function ConversationItem({
+  authorName,
+  authorRole,
+  createdAt,
+  message,
+  timeFormat,
+}: {
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+  message: string;
+  timeFormat: SystemTimeFormat;
+}) {
   const isRequester = authorRole === "enterprise" || authorRole === "requester";
   return (
     <article
@@ -530,7 +548,7 @@ function ConversationItem({ authorName, authorRole, createdAt, message }: { auth
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-black text-slate-950">{authorName}</p>
         <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
-          {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt)}
+          {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt, timeFormat)}
         </p>
       </div>
       <p className="mt-2 text-sm leading-relaxed text-slate-700">{message}</p>
@@ -538,16 +556,20 @@ function ConversationItem({ authorName, authorRole, createdAt, message }: { auth
   );
 }
 
-function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
+export function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
   const classes: Record<SupportTicketStatus, string> = {
     Open: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-300/30 dark:bg-blue-500/15 dark:text-blue-200",
     "In Review": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
     Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   };
-  return <span className={`rounded-full border px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{status}</span>;
+  return <span className={`rounded-full border px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{ticketStatusLabel(status)}</span>;
 }
 
-function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
+function ticketStatusLabel(status: SupportTicketStatus) {
+  return status === "In Review" ? "Working on It" : status;
+}
+
+export function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
   const classes: Record<SupportTicketPriority, string> = {
     Urgent: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
     High: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
@@ -574,16 +596,8 @@ function authorRoleLabel(role: string) {
   return role;
 }
 
-function formatTicketTime(value: string) {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
+function formatTicketTime(value: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(value, timeFormat);
 }
 
 function formatFileSize(bytes: number) {

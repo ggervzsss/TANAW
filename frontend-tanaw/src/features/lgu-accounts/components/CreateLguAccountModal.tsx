@@ -112,22 +112,12 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
             maxLength={PERSON_NAME_MAX_LENGTH}
           />
         </div>
-        <FormField
-          name="email"
-          label="Email Address"
-          type="email"
-          value={form.email}
-          onChange={(value) => updateField("email", value)}
-          error={errors.email}
-          required
-          autoComplete="email"
-          helperText="Use an @gmail.com or @email.com address."
-        />
+        <FormField name="email" label="Email Address" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
         <ContactNumberField name="phone" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
         <div className="md:col-span-2">
           <SearchableDropdownField
             name="role"
-            label="Role"
+            label="Account Type"
             options={[
               ["staff", "LGU Staff"],
               ["it", "IT Personnel"],
@@ -176,7 +166,7 @@ function validateLguForm(form: LguFormState) {
   if (lastNameError) errors.lastName = lastNameError;
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;
-  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid role.";
+  if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid account type.";
 
   return errors;
 }

@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import binascii
-import json
 from contextlib import suppress
 from typing import Annotated
 
@@ -20,7 +19,7 @@ from app.features.accounts.dependencies import (
     is_token_invalidated,
     require_roles,
 )
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
@@ -30,7 +29,6 @@ from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
     EnterpriseReportSubmission,
-    MockDataRun,
     OperationalAlert,
 )
 from app.features.operational.schemas import (
@@ -41,18 +39,15 @@ from app.features.operational.schemas import (
     FinalReportRevisionReturn,
     FinalReportStatusUpdate,
     FinalReportSummary,
-    FleetSimulationEnterpriseSummary,
-    FleetSimulationTickIngest,
-    FleetSimulationTickSummary,
     IntakeReportSummary,
-    MockPreparationCounts,
-    MockPreparationSummary,
     NotificationReadUpdate,
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
     OperationalSummary,
     OperationalWebSocketEnvelope,
     ReportStatusUpdate,
+    SamplePreparationCounts,
+    SamplePreparationSummary,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
@@ -60,14 +55,18 @@ from app.features.operational.schemas import (
     SupportTicketSummary,
     TelemetrySnapshotSummary,
     UserNotificationSummary,
+    VisitorInsightRange,
+    VisitorInsightsSummary,
 )
 from app.features.operational.service import (
     NOTIFY_CAMERA_SESSION_ERROR_KEY,
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
+    STAFF_REPORT_RESUBMITTED_NOTIFICATION,
+    STAFF_REPORT_SUBMITTED_NOTIFICATION,
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
-    build_fleet_simulation_telemetry_payload,
+    can_manage_operational_alert,
     create_final_report,
     create_operational_alert,
     create_role_notifications,
@@ -75,22 +74,26 @@ from app.features.operational.service import (
     create_support_ticket_message,
     create_support_ticket_message_with_record,
     create_user_notification,
-    enterprise_accounts_by_identifier,
     enterprise_identifier,
+    enterprise_name,
     evaluate_telemetry_alerts,
+    get_active_operational_alert,
     get_enterprise_notification_recipient,
     get_operational_summary,
     get_support_ticket_detail,
     get_support_ticket_for_account,
+    get_visitor_insights,
     ingest_report_submission,
     ingest_telemetry,
-    list_fleet_simulation_enterprises,
     list_intake_reports,
     list_latest_telemetry,
     list_operational_alerts,
     list_support_tickets,
     list_user_notifications,
+    mark_source_notifications_read,
     parse_ticket_attachments,
+    require_enterprise_profile,
+    resolve_operational_alert,
     return_final_report_for_revision,
     set_user_notification_read,
     system_setting_enabled,
@@ -103,6 +106,7 @@ from app.features.operational.service import (
     list_final_reports as list_final_report_records,
 )
 from app.features.operational.websocket import operational_ws_manager
+from app.features.sample_data.dataset import prepared_counts, sample_dataset_marker_email
 
 router = APIRouter(prefix="/operational", tags=["operational"])
 WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
@@ -116,6 +120,8 @@ EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 AlertReadAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
+AlertManageAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
+AdminAccount = Annotated[Account, Depends(require_roles({"admin"}))]
 
 
 @router.post(
@@ -142,7 +148,46 @@ async def ingest_desktop_telemetry(
                 data=alert_summary.model_dump(mode="json"),
             )
         )
+        if event_type == "alert.created" and alert_summary.owner == "Admin":
+            notifications = await create_role_notifications(
+                db,
+                recipient_roles=[AccountRole.ADMIN],
+                title=f"{alert_summary.enterprise or alert_summary.requester} needs attention.",
+                message=alert_summary.summary,
+                notification_type="High Visitor Activity",
+                severity=alert_summary.severity,
+                actor=account,
+                source_type="operational.alert",
+                source_id=alert_summary.id,
+            )
+            for notification in notifications:
+                await operational_ws_manager.broadcast(
+                    OperationalWebSocketEnvelope(
+                        type="notification.created",
+                        data=notification.model_dump(mode="json"),
+                    )
+                )
+        if alert_summary.owner == "Admin":
+            await record_operational_log(
+                db,
+                category="Admin Operation",
+                severity="Success" if event_type == "alert.resolved" else alert_summary.severity,
+                actor="TANAW",
+                actor_role="System",
+                action="Alert Resolved" if event_type == "alert.resolved" else "Alert Created",
+                target=alert_summary.enterprise or alert_summary.requester,
+                summary=alert_summary.summary,
+                source_id=alert_summary.id,
+                metadata={
+                    "alertType": alert_summary.type,
+                    "status": alert_summary.status,
+                },
+            )
 
+    sync_source_id = f"sync-failed:{account.id}"
+    existing_sync_alert = await get_active_operational_alert(
+        db, alert_type="Maintenance Request", source_id=sync_source_id
+    )
     if payload.metrics.unsyncedEvents > 0 and await system_setting_enabled(
         db, NOTIFY_SYNC_DELAY_KEY
     ):
@@ -151,21 +196,31 @@ async def ingest_desktop_telemetry(
             alert_type="Maintenance Request",
             severity="Warning",
             requester=account.display_name,
-            enterprise=account.enterprise_name or account.display_name,
+            enterprise=enterprise_name(account),
             summary=(
-                f"{payload.metrics.unsyncedEvents} telemetry event"
-                f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} remain unsynced."
+                f"{payload.metrics.unsyncedEvents} desktop record"
+                f"{'' if payload.metrics.unsyncedEvents == 1 else 's'} waiting to upload."
             ),
-            required_action="Review cloud synchronization and retry failed telemetry sync.",
+            required_action="Review the desktop app connection and retry the upload.",
             resolution_mode="Remote Review",
             owner="IT",
-            source_id=f"sync-failed:{account.id}",
+            source_id=sync_source_id,
         )
+        sync_alert_summary = to_operational_alert_summary(sync_alert)
         await operational_ws_manager.broadcast(
             OperationalWebSocketEnvelope(
-                type="alert.updated",
-                data=to_operational_alert_summary(sync_alert).model_dump(mode="json"),
+                type="alert.updated" if existing_sync_alert else "alert.created",
+                data=sync_alert_summary.model_dump(mode="json"),
             )
+        )
+        if existing_sync_alert is None:
+            await notify_it_technical_issue(db, account, sync_alert_summary)
+    elif payload.metrics.unsyncedEvents == 0:
+        await resolve_and_publish_it_alert(
+            db,
+            alert_type="Maintenance Request",
+            source_id=sync_source_id,
+            recovery_message="Visitor data is uploading normally again.",
         )
 
     session_error_setting_key = (
@@ -173,43 +228,125 @@ async def ingest_desktop_telemetry(
         if payload.session.cameraId is not None or payload.session.cameraName
         else NOTIFY_GATEWAY_SERVICE_ERROR_KEY
     )
+    session_source_id = f"telemetry:{account.id}:{payload.session.cameraId or 'gateway'}"
+    existing_session_alert = await get_active_operational_alert(
+        db, alert_type="Maintenance Request", source_id=session_source_id
+    )
     if payload.session.error and await system_setting_enabled(db, session_error_setting_key):
         maintenance_alert = await create_operational_alert(
             db,
             alert_type="Maintenance Request",
             severity="Critical",
             requester=account.display_name,
-            enterprise=account.enterprise_name or account.display_name,
+            enterprise=enterprise_name(account),
             summary=payload.session.error,
             required_action="Review the camera or desktop app error and restore monitoring.",
             resolution_mode="Remote Review",
             owner="IT",
-            source_id=f"telemetry:{account.id}:{payload.session.cameraId or 'gateway'}",
+            source_id=session_source_id,
         )
+        maintenance_alert_summary = to_operational_alert_summary(maintenance_alert)
         await operational_ws_manager.broadcast(
             OperationalWebSocketEnvelope(
-                type="alert.updated",
-                data=to_operational_alert_summary(maintenance_alert).model_dump(mode="json"),
+                type="alert.updated" if existing_session_alert else "alert.created",
+                data=maintenance_alert_summary.model_dump(mode="json"),
             )
         )
-        await record_operational_log(
+        if existing_session_alert is None:
+            await notify_it_technical_issue(db, account, maintenance_alert_summary)
+            await record_operational_log(
+                db,
+                category="Enterprise Activity",
+                severity="Warning",
+                actor=enterprise_name(account),
+                actor_role="Enterprise Account",
+                action="Desktop Application Problem",
+                target=enterprise_name(account),
+                summary=f"{enterprise_name(account)} reported a desktop application problem: {payload.session.error}",
+                source_id=maintenance_alert.id,
+                metadata={
+                    "enterpriseId": snapshot.enterpriseId,
+                    "cameraName": snapshot.cameraName,
+                    "status": snapshot.status,
+                },
+            )
+    elif not payload.session.error:
+        await resolve_and_publish_it_alert(
             db,
-            category="Enterprise Activity",
-            severity="Warning",
-            actor=account.enterprise_name or account.display_name,
-            actor_role="Enterprise Account",
-            action="Desktop App Sync Error",
-            target=account.enterprise_name or account.email,
-            summary=f"{account.enterprise_name or account.display_name} reported desktop app sync status {payload.session.status}: {payload.session.error}",
-            source_id=snapshot.id,
-            metadata={
-                "enterpriseId": snapshot.enterpriseId,
-                "cameraName": snapshot.cameraName,
-                "status": snapshot.status,
-            },
+            alert_type="Maintenance Request",
+            source_id=session_source_id,
+            recovery_message="The camera or desktop application is working normally again.",
         )
 
     return snapshot
+
+
+async def notify_it_technical_issue(
+    db: AsyncSession, actor: Account, alert: OperationalAlertSummary
+) -> None:
+    affected_name = alert.enterprise or alert.requester
+    notifications = await create_role_notifications(
+        db,
+        recipient_roles=[AccountRole.IT],
+        title=f"{affected_name} has a technical issue.",
+        message=f"{alert.summary} {alert.requiredAction}",
+        notification_type="Technical Issue",
+        severity=alert.severity,
+        actor=actor,
+        source_type="operational.alert",
+        source_id=alert.id,
+        replace_existing_for_source=True,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.created",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+
+
+async def resolve_and_publish_it_alert(
+    db: AsyncSession,
+    *,
+    alert_type: str,
+    source_id: str,
+    recovery_message: str,
+) -> None:
+    resolved = await resolve_operational_alert(
+        db,
+        alert_type=alert_type,
+        source_id=source_id,
+        recovery_message=recovery_message,
+    )
+    if resolved is None:
+        return
+    summary = to_operational_alert_summary(resolved)
+    await operational_ws_manager.broadcast(
+        OperationalWebSocketEnvelope(type="alert.resolved", data=summary.model_dump(mode="json"))
+    )
+    notifications = await mark_source_notifications_read(
+        db, source_type="operational.alert", source_id=summary.id
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.updated",
+                data=notification.model_dump(mode="json"),
+            )
+        )
+    await record_operational_log(
+        db,
+        category="System",
+        severity="Success",
+        actor="TANAW",
+        actor_role="System",
+        action="Technical Issue Resolved",
+        target=resolved.enterprise or resolved.requester,
+        summary=recovery_message,
+        source_id=resolved.id,
+        metadata={"alertType": resolved.alert_type, "status": resolved.status},
+    )
 
 
 @router.post(
@@ -236,7 +373,7 @@ async def ingest_desktop_report_submission(
         db,
         category="Staff Submission",
         severity="Success",
-        actor=account.enterprise_name or account.display_name,
+        actor=enterprise_name(account),
         actor_role="Enterprise Account",
         action="Submit Enterprise Report",
         target=report.enterprise,
@@ -251,137 +388,41 @@ async def ingest_desktop_report_submission(
     return report
 
 
-@router.get("/desktop/mock-preparation", response_model=MockPreparationSummary | None)
-async def get_desktop_mock_preparation(
+@router.get("/desktop/sample-preparation", response_model=SamplePreparationSummary | None)
+async def get_desktop_sample_preparation(
     account: EnterpriseAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> MockPreparationSummary | None:
-    run = await db.scalar(
-        select(MockDataRun)
-        .where(
-            MockDataRun.target_account_id == account.id,
-        )
-        .order_by(MockDataRun.created_at.desc())
-    )
-    if run is None:
+) -> SamplePreparationSummary | None:
+    if get_settings().is_production:
         return None
-
-    pending_counts: list[MockPreparationCounts] = []
-    if run.status == "active" and run.generated_counts_json:
-        generated_counts = json.loads(run.generated_counts_json)
-        raw_candidates = generated_counts.get("targetPreparedReportCounts")
-        candidates = raw_candidates if isinstance(raw_candidates, list) else []
-        if not candidates:
-            fallback_candidate = generated_counts.get("targetPreparedCounts")
-            candidates = [fallback_candidate] if isinstance(fallback_candidate, dict) else []
-        candidate_periods = [
-            candidate["period"]
-            for candidate in candidates
-            if isinstance(candidate, dict) and isinstance(candidate.get("period"), str)
-        ]
-        submitted_periods = set(
-            (
-                await db.scalars(
-                    select(EnterpriseReportSubmission.period).where(
-                        EnterpriseReportSubmission.enterprise_id
-                        == (run.target_enterprise_id or enterprise_identifier(account)),
-                        EnterpriseReportSubmission.period.in_(candidate_periods),
-                    )
+    marker = await db.scalar(
+        select(Account.id).where(Account.email == sample_dataset_marker_email())
+    )
+    if marker is None:
+        return None
+    enterprise_id = enterprise_identifier(account)
+    candidates = prepared_counts(enterprise_id)
+    candidate_periods = [str(candidate["period"]) for candidate in candidates]
+    submitted_periods = set(
+        (
+            await db.scalars(
+                select(EnterpriseReportSubmission.period).where(
+                    EnterpriseReportSubmission.enterprise_profile_id == account.id,
+                    EnterpriseReportSubmission.period.in_(candidate_periods),
                 )
-            ).all()
-            if candidate_periods
-            else []
-        )
-        pending_counts = [
-            MockPreparationCounts.model_validate(candidate)
-            for candidate in candidates
-            if isinstance(candidate, dict) and candidate.get("period") not in submitted_periods
-        ]
-
-    return MockPreparationSummary(
-        runId=run.id,
-        status=run.status,  # type: ignore[arg-type]
-        enterpriseId=run.target_enterprise_id or enterprise_identifier(account),
-        enterpriseName=run.target_enterprise_name
-        or account.enterprise_name
-        or account.display_name,
+            )
+        ).all()
+    )
+    pending_counts = [
+        SamplePreparationCounts.model_validate(candidate)
+        for candidate in candidates
+        if candidate["period"] not in submitted_periods
+    ]
+    return SamplePreparationSummary(
+        enterpriseId=enterprise_id,
+        enterpriseName=enterprise_name(account),
         counts=pending_counts[0] if pending_counts else None,
         pendingCounts=pending_counts,
-    )
-
-
-@router.get(
-    "/simulation/fleet/enterprises",
-    response_model=list[FleetSimulationEnterpriseSummary],
-)
-async def list_fleet_simulation_targets(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[FleetSimulationEnterpriseSummary]:
-    ensure_simulation_api_allowed()
-    return await list_fleet_simulation_enterprises(db, account)
-
-
-@router.post(
-    "/simulation/fleet/tick",
-    response_model=FleetSimulationTickSummary,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def ingest_fleet_simulation_tick(
-    payload: FleetSimulationTickIngest,
-    _: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> FleetSimulationTickSummary:
-    ensure_simulation_api_allowed()
-    accounts = await enterprise_accounts_by_identifier(
-        db, {target.enterpriseId for target in payload.targets}
-    )
-    snapshots: list[TelemetrySnapshotSummary] = []
-    alerts: list[OperationalAlertSummary] = []
-
-    for target in payload.targets:
-        enterprise = accounts.get(target.enterpriseId)
-        if enterprise is None:
-            continue
-
-        telemetry_payload = build_fleet_simulation_telemetry_payload(
-            target=target,
-            enterprise=enterprise,
-            run_id=payload.runId,
-            started_at=payload.startedAt,
-            elapsed_seconds=payload.elapsedSeconds,
-        )
-        snapshot = await ingest_telemetry(
-            db,
-            enterprise,
-            telemetry_payload,
-            update_account_gateway=False,
-        )
-        snapshots.append(snapshot)
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="telemetry.snapshot", data=snapshot.model_dump(mode="json")
-            )
-        )
-
-        for event_type, alert_summary in await evaluate_telemetry_alerts(
-            db, enterprise, telemetry_payload
-        ):
-            alerts.append(alert_summary)
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type=event_type,  # type: ignore[arg-type]
-                    data=alert_summary.model_dump(mode="json"),
-                )
-            )
-
-    if snapshots:
-        await broadcast_summary(db)
-
-    return FleetSimulationTickSummary(
-        runId=payload.runId,
-        snapshots=snapshots,
-        alerts=alerts,
     )
 
 
@@ -399,6 +440,27 @@ async def get_summary(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OperationalSummary:
     return await get_operational_summary(db, account)
+
+
+@router.get("/visitor-insights", response_model=VisitorInsightsSummary)
+async def get_admin_visitor_insights(
+    _: AdminAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    range_value: Annotated[VisitorInsightRange, Query(alias="range")] = "7d",
+    enterprise_id: Annotated[str | None, Query(alias="enterpriseId")] = None,
+    barangay: str | None = None,
+) -> VisitorInsightsSummary:
+    if enterprise_id and barangay:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Choose either an establishment or a barangay insight scope.",
+        )
+    return await get_visitor_insights(
+        db,
+        range_value,
+        enterprise_id=enterprise_id,
+        barangay=barangay,
+    )
 
 
 @router.get("/reports/intake", response_model=list[IntakeReportSummary])
@@ -577,12 +639,13 @@ async def list_report_enterprises(
 ) -> list[dict]:
     statement = (
         select(Account)
+        .join(Account.enterprise_profile)
         .where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
         )
-        .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+        .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Account.id == account.id)
@@ -590,11 +653,12 @@ async def list_report_enterprises(
     result = await db.scalars(statement)
     return [
         {
-            "id": account.enterprise_id or account.id,
-            "name": account.enterprise_name or account.display_name,
-            "category": format_enterprise_category(account.category) or "Uncategorized",
-            "barangay": account.barangay or "Unassigned",
-            "complianceOwner": account.manager_name or account.email,
+            "id": require_enterprise_profile(account).enterprise_id,
+            "name": require_enterprise_profile(account).enterprise_name,
+            "category": format_enterprise_category(require_enterprise_profile(account).category)
+            or "Uncategorized",
+            "barangay": require_enterprise_profile(account).barangay or "Unassigned",
+            "complianceOwner": require_enterprise_profile(account).manager_name or account.email,
         }
         for account in result
     ]
@@ -667,7 +731,7 @@ async def create_enterprise_support_ticket(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketSummary:
     ticket = await create_support_ticket(db, account, payload)
-    enterprise = account.enterprise_name or account.display_name
+    enterprise = enterprise_name(account)
     severity = "Warning" if ticket.priority in {"High", "Urgent"} else "Info"
     attachment_count = len(ticket.attachments)
     attachment_suffix = (
@@ -677,7 +741,7 @@ async def create_enterprise_support_ticket(
     )
     notifications = await create_role_notifications(
         db,
-        recipient_roles=support_ticket_notification_roles(ticket.category),
+        recipient_roles=support_ticket_notification_roles(ticket.priority),
         title=f"{enterprise} submitted support ticket {ticket.code}.",
         message=f"{enterprise} submitted a {ticket.category.lower()} ticket: {ticket.subject}.{attachment_suffix}",
         notification_type="Enterprise Support Ticket",
@@ -685,6 +749,7 @@ async def create_enterprise_support_ticket(
         actor=account,
         source_type="support.ticket",
         source_id=ticket.id,
+        replace_existing_for_source=True,
     )
     for notification in notifications:
         await operational_ws_manager.broadcast(
@@ -737,7 +802,7 @@ async def create_ticket_message(
         detail = await create_support_ticket_message(db, ticket, account, payload)
         reply_record = None
     if account.role == AccountRole.IT:
-        recipient = await get_account_by_id(db, ticket.enterprise_account_id)
+        recipient = await get_account_by_id(db, ticket.enterprise_profile_id)
         if recipient is not None and reply_record is not None:
             await enqueue_email(
                 db,
@@ -766,7 +831,7 @@ async def create_ticket_message(
     else:
         notifications = await create_role_notifications(
             db,
-            recipient_roles=support_ticket_notification_roles(detail.category),
+            recipient_roles=[AccountRole.IT],
             title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
             message=f"New enterprise response on {detail.code}: {detail.subject}.",
             notification_type="Enterprise Support Reply",
@@ -774,6 +839,7 @@ async def create_ticket_message(
             actor=account,
             source_type="support.ticket",
             source_id=detail.id,
+            replace_existing_for_source=True,
         )
         for notification in notifications:
             await operational_ws_manager.broadcast(
@@ -823,6 +889,20 @@ async def update_ticket_status(
             notification_type="Support Ticket Status",
             severity="Success" if detail.status == "Resolved" else "Info",
         )
+        if detail.status == "Resolved":
+            notifications = await mark_source_notifications_read(
+                db,
+                source_type="support.ticket",
+                source_id=detail.id,
+                recipient_role=AccountRole.IT,
+            )
+            for notification in notifications:
+                await operational_ws_manager.broadcast(
+                    OperationalWebSocketEnvelope(
+                        type="notification.updated",
+                        data=notification.model_dump(mode="json"),
+                    )
+                )
         await record_operational_log(
             db,
             category="IT Activity",
@@ -917,10 +997,9 @@ async def create_enterprise_notification(
             actor=actor.display_name,
             actorRole="LGU Staff" if actor.role == AccountRole.STAFF else "Admin",
             action="Notify Enterprise",
-            target=recipient.enterprise_name or recipient.display_name,
+            target=enterprise_name(recipient),
             summary=(
-                f"{actor.display_name} notified "
-                f"{recipient.enterprise_name or recipient.display_name}: {payload.message}"
+                f"{actor.display_name} notified {enterprise_name(recipient)}: {payload.message}"
             ),
             sourceId=notification.id,
         ),
@@ -937,12 +1016,13 @@ async def list_map_enterprises(
     latest = {item.enterpriseId: item for item in await list_latest_telemetry(db, account)}
     statement = (
         select(Account)
+        .join(Account.enterprise_profile)
         .where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
         )
-        .order_by(Account.enterprise_name.asc(), Account.display_name.asc())
+        .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
     )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(Account.id == account.id)
@@ -950,18 +1030,17 @@ async def list_map_enterprises(
     result = await db.scalars(statement)
     enterprises = []
     for enterprise in result:
+        profile = require_enterprise_profile(enterprise)
         telemetry = latest.get(enterprise_identifier(enterprise))
         enterprises.append(
             {
-                "id": enterprise.enterprise_id or enterprise.id,
-                "name": enterprise.enterprise_name or enterprise.display_name,
-                "barangay": enterprise.barangay or "Unassigned",
-                "category": format_enterprise_category(enterprise.category) or "Uncategorized",
-                "fullAddress": enterprise.address
-                or enterprise.geocoded_address
-                or "Address not provided",
-                "lat": enterprise.latitude,
-                "lng": enterprise.longitude,
+                "id": profile.enterprise_id,
+                "name": profile.enterprise_name,
+                "barangay": profile.barangay or "Unassigned",
+                "category": format_enterprise_category(profile.category) or "Uncategorized",
+                "fullAddress": profile.address or "Address not provided",
+                "lat": profile.latitude,
+                "lng": profile.longitude,
                 "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
                 "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
                 "status": enterprise_status_from_telemetry(telemetry),
@@ -969,9 +1048,7 @@ async def list_map_enterprises(
                 "lastSync": telemetry.receivedAt.isoformat() if telemetry else None,
                 "gatewayStatus": telemetry.gatewayStatus
                 if telemetry
-                else enterprise.gateway_status or "Not Linked",
-                "sourceKind": telemetry.sourceKind if telemetry else "real",
-                "mockRunId": telemetry.mockRunId if telemetry else None,
+                else profile.gateway_status or "Not Linked",
             }
         )
     return enterprises
@@ -979,17 +1056,17 @@ async def list_map_enterprises(
 
 @router.get("/alerts", response_model=list[OperationalAlertSummary])
 async def list_alerts(
-    _: AlertReadAccount,
+    account: AlertReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[OperationalAlertSummary]:
-    return await list_operational_alerts(db)
+    return await list_operational_alerts(db, account)
 
 
 @router.patch("/alerts/{alert_code}/status", response_model=OperationalAlertSummary)
 async def update_alert_status(
     alert_code: str,
     payload: OperationalAlertStatusUpdate,
-    actor: ITAccount,
+    actor: AlertManageAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OperationalAlertSummary:
     alert = await db.scalar(
@@ -997,6 +1074,11 @@ async def update_alert_status(
     )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found.")
+    if not can_manage_operational_alert(actor, alert):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This situation is assigned to a different account type.",
+        )
     previous_status = alert.status
     alert.status = payload.status
     await db.commit()
@@ -1008,12 +1090,25 @@ async def update_alert_status(
             data=alert_summary.model_dump(mode="json"),
         )
     )
+    if payload.status == "Resolved":
+        notifications = await mark_source_notifications_read(
+            db, source_type="operational.alert", source_id=alert_summary.id
+        )
+        for notification in notifications:
+            await operational_ws_manager.broadcast(
+                OperationalWebSocketEnvelope(
+                    type="notification.updated",
+                    data=notification.model_dump(mode="json"),
+                )
+            )
+    actor_role = "Admin" if actor.role == AccountRole.ADMIN else "IT Personnel"
+    activity_category = "Admin Operation" if actor.role == AccountRole.ADMIN else "IT Activity"
     await record_operational_log(
         db,
-        category="IT Activity",
+        category=activity_category,
         severity="Success" if payload.status == "Resolved" else "Info",
         actor=actor.display_name,
-        actor_role="IT Personnel",
+        actor_role=actor_role,
         action=f"Alert {payload.status}",
         target=alert.enterprise or alert.requester,
         summary=f"{actor.display_name} marked {alert.alert_code} as {payload.status}.",
@@ -1135,15 +1230,6 @@ async def broadcast_summary(db: AsyncSession) -> None:
     )
 
 
-def ensure_simulation_api_allowed() -> None:
-    settings = get_settings()
-    if settings.is_production and not settings.allow_mock_data:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Simulation Lab fleet endpoints are disabled in production.",
-        )
-
-
 async def notify_enterprise_ticket_update(
     db: AsyncSession,
     *,
@@ -1186,7 +1272,9 @@ async def notify_staff_report_submission(
     is_resubmission = staff_report_notification_is_resubmission(report)
     action_label = "resubmitted" if is_resubmission else "submitted"
     notification_type = (
-        "Enterprise Report Resubmitted" if is_resubmission else "Enterprise Report Submitted"
+        STAFF_REPORT_RESUBMITTED_NOTIFICATION
+        if is_resubmission
+        else STAFF_REPORT_SUBMITTED_NOTIFICATION
     )
     notifications = await create_role_notifications(
         db,
@@ -1213,11 +1301,10 @@ def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bo
     return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"
 
 
-def support_ticket_notification_roles(category: str) -> list[AccountRole]:
-    roles = [AccountRole.ADMIN, AccountRole.IT]
-    if category == "Report Concern":
-        roles.append(AccountRole.STAFF)
-    return roles
+def support_ticket_notification_roles(priority: str) -> list[AccountRole]:
+    if priority in {"High", "Urgent"}:
+        return [AccountRole.ADMIN, AccountRole.IT]
+    return [AccountRole.IT]
 
 
 async def record_operational_log(

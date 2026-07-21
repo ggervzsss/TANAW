@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
-import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, getSimulationStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import {
@@ -16,19 +17,16 @@ import {
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
+import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
+import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
 import { routePaths } from "../router/routePaths";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
 const CameraManagementView = lazy(() =>
   import("../../features/camera/components/CameraManagementView").then((module) => ({
     default: module.CameraManagementView,
-  })),
-);
-const SimulationLab = lazy(() =>
-  import("../../features/camera/components/SimulationLab").then((module) => ({
-    default: module.SimulationLab,
   })),
 );
 const DashboardView = lazy(() =>
@@ -70,15 +68,11 @@ const viewRouteById: Record<EnterpriseView, string> = {
   dashboard: routePaths.enterpriseDashboard,
   cameras: routePaths.enterpriseCameras,
   reports: routePaths.enterpriseReports,
-  simulation: routePaths.enterpriseSimulation,
   profile: routePaths.enterpriseProfile,
   security: routePaths.enterpriseSecurity,
   notifications: routePaths.enterpriseNotifications,
   tickets: routePaths.enterpriseTickets,
 };
-
-const SIMULATION_UNLOCK_PHRASE = "simulation";
-const SIMULATION_UNLOCK_STORAGE_KEY = "tanaw:simulation-route-unlock";
 
 export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellProps) {
   const navigate = useNavigate();
@@ -87,10 +81,9 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const updateUser = useAuthStore((state) => state.updateUser);
+  const { timeFormat } = useSystemDisplayPreferences();
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  const typedBufferRef = useRef("");
   const [activeView, setActiveView] = useState<EnterpriseView>(initialView);
-  const [isSimulationUnlocked, setIsSimulationUnlocked] = useState(() => initialView === "simulation" && window.sessionStorage.getItem(SIMULATION_UNLOCK_STORAGE_KEY) === "true");
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [reportsHistory, setReportsHistory] = useState<ReportRecord[]>(EMPTY_REPORTS);
   const [cameras, setCameras] = useState<EnterpriseCamera[]>(EMPTY_CAMERAS);
@@ -101,10 +94,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
-  const [simulationNotification, setSimulationNotification] = useState<EnterpriseNotification | null>(null);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
-  const buildingCapacity = user?.buildingCapacity ?? 100;
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
 
@@ -128,11 +119,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   }, [notificationStorageKey]);
 
   useEffect(() => {
-    if (currentUserQuery.isError) {
+    if (
+      currentUserQuery.isError &&
+      isAxiosError(currentUserQuery.error) &&
+      (currentUserQuery.error.response?.status === 401 || currentUserQuery.error.response?.status === 403)
+    ) {
       logout();
       navigate(routePaths.login, { replace: true });
     }
-  }, [currentUserQuery.isError, logout, navigate]);
+  }, [currentUserQuery.error, currentUserQuery.isError, logout, navigate]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -151,42 +146,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
 
   useEffect(() => {
     setActiveView(initialView);
-    typedBufferRef.current = "";
-
-    if (initialView === "simulation") {
-      const hasPendingUnlock = window.sessionStorage.getItem(SIMULATION_UNLOCK_STORAGE_KEY) === "true";
-      window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
-      if (!hasPendingUnlock) {
-        setIsSimulationUnlocked(false);
-        navigate(routePaths.enterpriseCameras, { replace: true });
-        return;
-      }
-      setIsSimulationUnlocked(true);
-      return;
-    }
-
-    window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
-    setIsSimulationUnlocked(false);
-  }, [initialView, navigate]);
-
-  useEffect(() => {
-    const handleSimulationShortcut = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key.length !== 1) return;
-
-      const nextBuffer = `${typedBufferRef.current}${event.key.toLowerCase()}`.slice(-SIMULATION_UNLOCK_PHRASE.length);
-      typedBufferRef.current = nextBuffer;
-
-      if (nextBuffer === SIMULATION_UNLOCK_PHRASE) {
-        setIsSimulationUnlocked(true);
-        window.sessionStorage.setItem(SIMULATION_UNLOCK_STORAGE_KEY, "true");
-        typedBufferRef.current = "";
-      }
-    };
-
-    window.addEventListener("keydown", handleSimulationShortcut);
-    return () => window.removeEventListener("keydown", handleSimulationShortcut);
-  }, []);
+  }, [initialView]);
 
   useEffect(() => {
     setCameras(EMPTY_CAMERAS);
@@ -303,52 +263,10 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     contentScrollRef.current?.scrollTo({ top: 0, left: 0 });
   }, [activeView]);
 
-  useEffect(() => {
-    if (!mlContextReady) {
-      setSimulationNotification(null);
-      return undefined;
-    }
-
-    let disposed = false;
-    const refreshSimulationAlert = async () => {
-      try {
-        const status = await getMlServiceStatus();
-        const simulation = await getSimulationStatus(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-        if (disposed) return;
-
-        const occupancyPercent = simulation.capacity > 0 ? Math.round((simulation.current_occupancy / simulation.capacity) * 100) : 0;
-        if (!simulation.mock_run_id || !simulation.scenario || occupancyPercent < simulation.threshold_percent) {
-          setSimulationNotification(null);
-          return;
-        }
-
-        const source = `simulation:${simulation.mock_run_id}:occupancy-threshold`;
-        setSimulationNotification({
-          id: stableNotificationId(source),
-          type: "critical",
-          message: `Live occupancy reached ${simulation.current_occupancy} of ${simulation.capacity} people (${occupancyPercent}%), above the ${simulation.threshold_percent}% alert threshold.`,
-          time: simulation.started_at ?? new Date().toISOString(),
-          read: false,
-          target: "cameras",
-        });
-      } catch {
-        if (!disposed) setSimulationNotification(null);
-      }
-    };
-
-    void refreshSimulationAlert();
-    const intervalId = window.setInterval(() => void refreshSimulationAlert(), 2000);
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-    };
-  }, [mlContextReady]);
-
   const handleLogout = async () => {
     try {
       await logoutRequest();
     } finally {
-      window.sessionStorage.removeItem(SIMULATION_UNLOCK_STORAGE_KEY);
       queryClient.removeQueries({ queryKey: ["enterprise-current-user"] });
       logout();
       notifySuccess("Logout complete");
@@ -372,8 +290,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   };
 
   const notifications = useMemo(
-    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, simulationNotification, backendNotifications),
-    [backendNotifications, readNotificationIds, reportsHistory, simulationNotification],
+    () => buildEnterpriseNotifications(reportsHistory, readNotificationIds, backendNotifications, timeFormat),
+    [backendNotifications, readNotificationIds, reportsHistory, timeFormat],
   );
   const unreadCount = notifications.filter((notification) => !notification.read).length;
 
@@ -411,7 +329,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         isNotificationsOpen={isNotificationsOpen}
         notifications={notifications}
         resolvedTheme={resolvedTheme}
-        showSimulation={isSimulationUnlocked}
         unreadCount={unreadCount}
         user={user}
         onLogout={handleLogout}
@@ -429,16 +346,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           ref={contentScrollRef}
-          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" || activeView === "simulation" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
+          className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
-          <div className={`mx-auto max-w-470 ${activeView === "cameras" || activeView === "simulation" ? "h-full min-h-0" : ""}`}>
+          <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>
-              {activeView === "dashboard" && mlContextReady && <DashboardView />}
+              {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} />}
               {activeView === "cameras" && mlContextReady && (
                 <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
               )}
-              {activeView === "reports" && mlContextReady && <ReportsView reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
-              {activeView === "simulation" && isSimulationUnlocked && mlContextReady && <SimulationLab baseUrl={mlBaseUrl} defaultBuildingCapacity={buildingCapacity} />}
+              {activeView === "reports" && mlContextReady && <ReportsView enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
               {activeView === "profile" && <ProfileView />}
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}
@@ -482,11 +398,11 @@ function EnterpriseViewLoadingFallback() {
 function buildEnterpriseNotifications(
   reportsHistory: ReportRecord[],
   readNotificationIds: Set<number>,
-  simulationNotification: EnterpriseNotification | null,
   backendNotifications: BackendNotification[],
+  timeFormat: SystemTimeFormat,
 ) {
-  const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds));
-  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report)), ...(simulationNotification ? [simulationNotification] : [])]
+  const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds, timeFormat));
+  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report, timeFormat))]
     .sort((left, right) => getNotificationSortValue(right) - getNotificationSortValue(left))
     .map((notification) => ({
       ...notification,
@@ -494,20 +410,25 @@ function buildEnterpriseNotifications(
     }));
 }
 
-function backendNotificationToEnterpriseNotification(notification: BackendNotification, readNotificationIds: Set<number>): EnterpriseNotification {
+function backendNotificationToEnterpriseNotification(
+  notification: BackendNotification,
+  readNotificationIds: Set<number>,
+  timeFormat: SystemTimeFormat,
+): EnterpriseNotification {
   const id = stableNotificationId(`backend-notification:${notification.id}`);
   return {
     id,
     backendId: notification.id,
     type: notificationTypeFromSeverity(notification.severity),
     message: `${notification.title}: ${notification.message}`,
-    time: formatNotificationDate(notification.createdAt),
+    time: formatNotificationDate(notification.createdAt, timeFormat),
+    sortTime: toTimestamp(notification.createdAt),
     read: Boolean(notification.readAt) || readNotificationIds.has(id),
     target: notificationTarget(notification),
   };
 }
 
-function buildReportNotifications(report: ReportRecord): EnterpriseNotification[] {
+function buildReportNotifications(report: ReportRecord, timeFormat: SystemTimeFormat): EnterpriseNotification[] {
   const notifications: EnterpriseNotification[] = [];
   const deadline = getReportDeadline(report);
   const isSubmitted = ["Submitted", "Resubmitted", "Consolidated"].includes(report.status);
@@ -517,37 +438,60 @@ function buildReportNotifications(report: ReportRecord): EnterpriseNotification[
     if (Number.isFinite(deadlineDate)) {
       const daysUntilDeadline = Math.ceil((deadlineDate - Date.now()) / 86_400_000);
       if (daysUntilDeadline < 0) {
-        notifications.push(createReportNotification(report, "critical", `${report.id} is overdue for ${formatNotificationDate(deadline)}.`, deadline));
+        notifications.push(createReportNotification(report, "critical", `${report.id} is overdue for ${formatNotificationDate(deadline, timeFormat)}.`, timeFormat, deadline));
       } else if (daysUntilDeadline <= 3) {
         notifications.push(
-          createReportNotification(report, "warning", `${report.id} is due ${daysUntilDeadline === 0 ? "today" : `in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? "" : "s"}`}.`, deadline),
+          createReportNotification(
+            report,
+            "warning",
+            `${report.id} is due ${daysUntilDeadline === 0 ? "today" : `in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? "" : "s"}`}.`,
+            timeFormat,
+            deadline,
+          ),
         );
       }
     }
   }
 
   if (report.status === "Returned for Revision") {
-    notifications.push(createReportNotification(report, "warning", `${report.id} was returned for revision. ${report.remarks ?? "Please review the ledger remarks."}`, getLatestAuditTime(report)));
+    notifications.push(
+      createReportNotification(
+        report,
+        "warning",
+        `${report.id} was returned for revision. ${report.remarks ?? "Please review the report remarks."}`,
+        timeFormat,
+        getLatestAuditTime(report),
+      ),
+    );
   }
 
   if (report.status === "Draft") {
-    notifications.push(createReportNotification(report, "warning", `${report.id} is still a draft for ${report.period ?? report.date}.`, getLatestAuditTime(report)));
+    notifications.push(createReportNotification(report, "warning", `${report.id} is still a draft for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)));
   }
 
   if (report.status === "Submitted" || report.status === "Resubmitted") {
-    notifications.push(createReportNotification(report, "success", `${report.id} was ${report.status.toLowerCase()} for ${report.period ?? report.date}.`, getLatestAuditTime(report)));
+    notifications.push(
+      createReportNotification(report, "success", `${report.id} was ${report.status.toLowerCase()} for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)),
+    );
   }
 
   return notifications;
 }
 
-function createReportNotification(report: ReportRecord, type: EnterpriseNotification["type"], message: string, timeSource?: string): EnterpriseNotification {
+function createReportNotification(
+  report: ReportRecord,
+  type: EnterpriseNotification["type"],
+  message: string,
+  timeFormat: SystemTimeFormat,
+  timeSource?: string,
+): EnterpriseNotification {
   const source = `report:${report.id}:${report.status}:${timeSource ?? report.date}`;
   return {
     id: stableNotificationId(source),
     type,
     message,
-    time: formatNotificationDate(timeSource ?? report.date),
+    time: formatNotificationDate(timeSource ?? report.date, timeFormat),
+    sortTime: toTimestamp(timeSource ?? report.date),
     read: false,
     target: "reports",
   };
@@ -587,20 +531,16 @@ function getLatestAuditTime(report: ReportRecord) {
 }
 
 function getNotificationSortValue(notification: EnterpriseNotification) {
-  const parsed = Date.parse(notification.time);
-  return Number.isFinite(parsed) ? parsed : notification.id;
+  return notification.sortTime ?? notification.id;
 }
 
-function formatNotificationDate(value: string) {
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(parsed));
+function formatNotificationDate(value: string, timeFormat: SystemTimeFormat) {
+  return formatPhilippineDateTime(value, timeFormat);
+}
+
+function toTimestamp(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function stableNotificationId(value: string) {

@@ -14,8 +14,8 @@ $ExitCode = 0
 
 Push-Location $RepoRoot
 try {
-    & docker compose exec -e TANAW_ALLOW_MOCK_DATA=true backend `
-        uv run mock-data on `
+    & docker compose exec backend `
+        uv run sample-data on `
         --range $Range `
         --scenario $Scenario `
         --target-enterprise $TargetEnterprise `

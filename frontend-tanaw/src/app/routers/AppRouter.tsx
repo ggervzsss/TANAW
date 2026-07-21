@@ -8,20 +8,15 @@ import { routes } from "./routes";
 
 const AccountProfilePage = lazy(() => import("@/features/account").then((module) => ({ default: module.AccountProfilePage })));
 const AccountSecurityPage = lazy(() => import("@/features/account").then((module) => ({ default: module.AccountSecurityPage })));
-const AdminAlertsMonitorPage = lazy(() =>
+const AdminOperationsCenterPage = lazy(() =>
   import("@/features/alerts-monitor").then((module) => ({
-    default: module.AdminAlertsMonitorPage,
+    default: module.AdminOperationsCenterPage,
   })),
 );
-const ITAlertsPage = lazy(() => import("@/features/alerts-monitor").then((module) => ({ default: module.ITAlertsPage })));
+const ITWorkCenterPage = lazy(() => import("@/features/alerts-monitor").then((module) => ({ default: module.ITWorkCenterPage })));
 const StaffAnalyticsPage = lazy(() => import("@/features/analytics").then((module) => ({ default: module.StaffAnalyticsPage })));
 const ITDashboardPage = lazy(() => import("@/features/dashboard").then((module) => ({ default: module.ITDashboardPage })));
-const ITDevLogPage = lazy(() => import("@/features/dev-log").then((module) => ({ default: module.ITDevLogPage })));
-const ITEmailDeliveriesPage = lazy(() =>
-  import("@/features/email-deliveries").then((module) => ({
-    default: module.ITEmailDeliveriesPage,
-  })),
-);
+const ITDevLogPage = import.meta.env.DEV ? lazy(() => import("@/features/dev-log").then((module) => ({ default: module.ITDevLogPage }))) : null;
 const ITEnterpriseAccountsPage = lazy(() =>
   import("@/features/enterprise-accounts").then((module) => ({
     default: module.ITEnterpriseAccountsPage,
@@ -45,13 +40,8 @@ const ITSystemSettingsPage = lazy(() =>
     default: module.ITSystemSettingsPage,
   })),
 );
-const AdminSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.AdminSystemLogsPage })));
+const AdminActivityHistoryPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.AdminActivityHistoryPage })));
 const ITSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.ITSystemLogsPage })));
-const SupportTicketsPage = lazy(() =>
-  import("@/features/support-tickets").then((module) => ({
-    default: module.SupportTicketsPage,
-  })),
-);
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);
@@ -84,14 +74,12 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to={routes.it.dashboard} replace />} />
           <Route path="dashboard" element={<ITDashboardPage />} />
+          <Route path="work-center" element={<ITWorkCenterPage />} />
           <Route path="lgu-accounts" element={<ITLguAccountsPage />} />
           <Route path="enterprise-accounts" element={<ITEnterpriseAccountsPage />} />
-          <Route path="alerts" element={<ITAlertsPage />} />
-          <Route path="support-tickets" element={<SupportTicketsPage mode="it" />} />
           <Route path="notifications" element={<NotificationsPage role="it" />} />
           <Route path="system-logs" element={<ITSystemLogsPage />} />
-          <Route path="email-deliveries" element={<ITEmailDeliveriesPage />} />
-          <Route path="dev-log" element={<ITDevLogPage />} />
+          {import.meta.env.DEV && ITDevLogPage ? <Route path="dev-log" element={<ITDevLogPage />} /> : null}
           <Route path="system-settings" element={<ITSystemSettingsPage />} />
           <Route path="profile" element={<AccountProfilePage role="it" />} />
           <Route path="security" element={<AccountSecurityPage />} />
@@ -107,9 +95,8 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to={routes.admin.mapview} replace />} />
           <Route path="mapview" element={<AdminMapViewPage />} />
-          <Route path="system-logs" element={<AdminSystemLogsPage />} />
-          <Route path="alerts-monitor" element={<AdminAlertsMonitorPage />} />
-          <Route path="support-tickets" element={<SupportTicketsPage mode="admin" />} />
+          <Route path="activity-history" element={<AdminActivityHistoryPage />} />
+          <Route path="operations" element={<AdminOperationsCenterPage />} />
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
           <Route path="profile" element={<AccountProfilePage role="admin" />} />
           <Route path="security" element={<AccountSecurityPage />} />

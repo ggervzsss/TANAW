@@ -5,7 +5,9 @@ import toast from "react-hot-toast/headless";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { listDevDeliveries, type DevDelivery } from "@/shared/services/accountManagement";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { splitDevLogMessage } from "../utils/devLogMessage";
 
 const EMPTY_DELIVERIES: DevDelivery[] = [];
@@ -50,6 +52,7 @@ function DevLogMessage({ body }: { body: string }) {
 
 export function ITDevLogPage() {
   const [query, setQuery] = useState("");
+  const { timeFormat } = useSystemDisplayPreferences();
   const deliveriesQuery = useQuery({
     queryKey: ["dev-deliveries"],
     queryFn: listDevDeliveries,
@@ -68,10 +71,10 @@ export function ITDevLogPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Dev Log" description="Temporary development log for account activation and recovery email messages." />
+      <PageHeader title="Development Email" description="Development-only view of account activation and recovery messages sent by TANAW." />
 
       <Panel className="overflow-hidden">
-        <PanelHeader title="Email Delivery Logs" icon={Inbox} />
+        <PanelHeader title="Development Messages" icon={Inbox} />
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 p-4">
           <div className="relative min-w-0 flex-1 sm:min-w-80">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
@@ -94,7 +97,7 @@ export function ITDevLogPage() {
                   </span>
                   <div>
                     <p className="text-sm font-black text-slate-950">{delivery.recipient}</p>
-                    <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{new Date(delivery.createdAt).toLocaleString()}</p>
+                    <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">{formatPhilippineDateTime(delivery.createdAt, timeFormat)}</p>
                   </div>
                   <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-600 uppercase">{delivery.status}</span>
                 </aside>
@@ -109,7 +112,7 @@ export function ITDevLogPage() {
             <EmptyState
               icon={Inbox}
               title="No development messages"
-              description={deliveriesQuery.isLoading ? "Loading development logs..." : "Account activation and recovery emails will be recorded here."}
+              description={deliveriesQuery.isLoading ? "Loading development messages..." : "Account activation and recovery emails will appear here while running in development."}
             />
           )}
         </div>

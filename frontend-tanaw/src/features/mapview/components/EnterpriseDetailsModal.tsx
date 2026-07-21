@@ -1,15 +1,20 @@
-import { Activity, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
+import { Activity, BarChart3, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { EnterpriseStatus, GatewayStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
   onClose: () => void;
+  onOpenInsights: () => void;
 };
 
-export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetailsModalProps) {
+export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: EnterpriseDetailsModalProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
+
   return (
     <ModalFrame title={enterprise.name} eyebrow="Enterprise Details" onClose={onClose} maxWidthClassName="max-w-5xl">
       <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
@@ -20,10 +25,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Map Registry</p>
-                {enterprise.sourceKind && enterprise.sourceKind !== "real" && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-black tracking-[0.14em] text-amber-800 uppercase">Simulated Live Data</span>
-                )}
+                <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">Enterprise Overview</p>
               </div>
               <p className="mt-1 text-sm leading-relaxed font-semibold text-slate-700">
                 {enterprise.category} - Barangay {enterprise.barangay}
@@ -33,16 +35,24 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy.toLocaleString()} />
-            <EnterpriseMetricCard icon={<Users size={16} />} label="Est. Unique Count" value={enterprise.estimatedUniqueCount.toLocaleString()} />
+            <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount.toLocaleString()} />
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Status" value={<StatusBadge status={enterprise.status} />} />
             <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={enterprise.trend ?? "Stable"} />
           </div>
+          <button
+            type="button"
+            onClick={onOpenInsights}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+          >
+            <BarChart3 size={15} />
+            View Visitor Insights
+          </button>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2">
           <EnterpriseDetailRow icon={<Building2 size={15} />} label="Category" value={enterprise.category} />
           <EnterpriseDetailRow icon={<Radio size={15} />} label="Desktop App Status" value={<DesktopAppStatusBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
-          <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ?? "No update recorded"} />
+          <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ? formatPhilippineDateTime(enterprise.lastSync, timeFormat) : "No update recorded"} />
           <EnterpriseDetailRow icon={<Phone size={15} />} label="Contact" value={enterprise.contact ?? "No contact listed"} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<MapPin size={15} />} label="Full Address" value={enterprise.fullAddress} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<Clock size={15} />} label="Operating Hours" value={enterprise.operatingHours ?? "Not specified"} />
@@ -66,7 +76,9 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
 
 function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}>
+    <div
+      className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
+    >
       <span className="text-tanaw-green mt-0.5">{icon}</span>
       <div className="min-w-0">
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>

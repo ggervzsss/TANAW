@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.date_time import format_philippine_datetime
 from app.features.accounts.models import (
     Account,
     AccountEmailChangeRequest,
@@ -157,12 +158,16 @@ async def request_account_email_change(
             "This account or email already has a pending ownership request."
         ) from exc
 
-    expires_label = expires_at.strftime("%Y-%m-%d %H:%M UTC")
+    expires_label = format_philippine_datetime(expires_at)
     common_payload = {
         "requestId": request.id,
         "displayName": account.display_name,
         "role": account.role.value,
-        "enterpriseId": account.enterprise_id or "",
+        "enterpriseId": (
+            account.enterprise_profile.enterprise_id
+            if account.enterprise_profile is not None
+            else ""
+        ),
         "oldEmail": request.old_email,
         "newEmail": request.requested_email,
         "expiresLabel": expires_label,
@@ -352,7 +357,11 @@ async def resolve_account_email_change(
         "requestId": request.id,
         "displayName": account.display_name,
         "role": account.role.value,
-        "enterpriseId": account.enterprise_id or "",
+        "enterpriseId": (
+            account.enterprise_profile.enterprise_id
+            if account.enterprise_profile is not None
+            else ""
+        ),
         "oldEmail": request.old_email,
         "newEmail": request.requested_email,
     }

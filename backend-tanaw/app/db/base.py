@@ -5,8 +5,7 @@ from app.features.accounts.models import (
     AccountEmailChangeStatus,
     AccountRole,
     AccountStatus,
-    DeliveryStatus,
-    DevDelivery,
+    EnterpriseProfile,
     SystemConfiguration,
 )
 from app.features.activity_logs.models import ActivityLog
@@ -26,9 +25,9 @@ from app.features.operational.models import (
     EnterpriseTelemetrySnapshot,
     FinalReport,
     FinalReportSource,
-    MockDataRun,
     OperationalAlert,
     SupportTicket,
+    SupportTicketMessage,
     UserNotification,
 )
 
@@ -41,9 +40,8 @@ __all__ = [
     "AccountStatus",
     "ActivityLog",
     "Base",
-    "DeliveryStatus",
-    "DevDelivery",
     "EnterpriseReportSubmission",
+    "EnterpriseProfile",
     "EnterpriseTelemetrySnapshot",
     "EmailOutbox",
     "EmailOutboxStatus",
@@ -51,11 +49,11 @@ __all__ = [
     "EmailDeliveryAttempt",
     "FinalReport",
     "FinalReportSource",
-    "MockDataRun",
     "OperationalAlert",
     "PasswordResetChallenge",
     "PasswordResetRateLimitBucket",
     "SupportTicket",
+    "SupportTicketMessage",
     "SystemConfiguration",
     "UserNotification",
 ]

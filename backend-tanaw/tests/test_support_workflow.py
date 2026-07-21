@@ -3,16 +3,26 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+)
 from app.features.auth.router import create_support_request
 from app.features.auth.schemas import SupportRequest
 from app.features.operational.models import OperationalAlert, SupportTicket
+from app.features.operational.router import support_ticket_notification_roles
 from app.features.operational.schemas import SupportTicketDetail, SupportTicketMessageCreate
-from app.features.operational.service import create_support_ticket_message
+from app.features.operational.service import (
+    create_support_ticket_message,
+    list_support_tickets,
+    list_user_notifications,
+)
 
 
 def _account(*, role: AccountRole) -> Account:
-    return Account(
+    account = Account(
         id=f"{role.value}-account",
         email=f"{role.value}@example.com",
         password_hash="hash",
@@ -20,9 +30,54 @@ def _account(*, role: AccountRole) -> Account:
         display_name=f"{role.value.title()} User",
         title=role.value.title(),
         status=AccountStatus.ACTIVE,
-        enterprise_id="ENT-001" if role == AccountRole.ENTERPRISE else None,
-        enterprise_name="Test Enterprise" if role == AccountRole.ENTERPRISE else None,
     )
+    if role == AccountRole.ENTERPRISE:
+        account.enterprise_profile = EnterpriseProfile(
+            account_id=account.id,
+            enterprise_id="ENT-001",
+            enterprise_name="Test Enterprise",
+            category="business",
+            manager_name="Test Manager",
+            barangay="Poblacion",
+        )
+    return account
+
+
+def test_support_ticket_escalation_depends_on_priority() -> None:
+    assert support_ticket_notification_roles("Urgent") == [
+        AccountRole.ADMIN,
+        AccountRole.IT,
+    ]
+    assert support_ticket_notification_roles("Normal") == [AccountRole.IT]
+
+
+@pytest.mark.asyncio
+async def test_staff_notification_query_keeps_only_report_submissions() -> None:
+    db = MagicMock()
+    db.scalars = AsyncMock(return_value=[])
+
+    assert await list_user_notifications(db, _account(role=AccountRole.STAFF)) == []
+
+    statement = db.scalars.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "user_notifications.source_type = 'enterprise.report'" in sql
+    assert "Enterprise Report Submitted" in sql
+    assert "Enterprise Report Resubmitted" in sql
+
+
+@pytest.mark.asyncio
+async def test_admin_support_view_keeps_only_high_and_urgent_requests() -> None:
+    db = MagicMock()
+    scalar_result = MagicMock()
+    scalar_result.all.return_value = []
+    db.scalars = AsyncMock(return_value=scalar_result)
+
+    assert await list_support_tickets(db, _account(role=AccountRole.ADMIN)) == []
+
+    statement = db.scalars.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "'High'" in sql
+    assert "'Urgent'" in sql
 
 
 @pytest.mark.asyncio
@@ -88,8 +143,7 @@ async def test_ticket_messages_apply_role_appropriate_status(
     ticket = SupportTicket(
         id="ticket-id",
         ticket_code="TCK-000001",
-        enterprise_account_id="enterprise-account",
-        enterprise_id="ENT-001",
+        enterprise_profile_id="enterprise-account",
         enterprise_name="Test Enterprise",
         category="Other",
         priority="Normal",

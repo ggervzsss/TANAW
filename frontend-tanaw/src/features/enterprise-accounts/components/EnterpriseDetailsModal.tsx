@@ -6,7 +6,9 @@ import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import {
   normalizeEmail,
   PERSON_NAME_MAX_LENGTH,
@@ -55,6 +57,7 @@ const allowedStatusValues = ["active", "inactive"] satisfies UpdateEnterpriseAcc
 
 export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EnterpriseEditState>(() => getInitialForm(enterprise));
   const [errors, setErrors] = useState<EnterpriseEditErrors>({});
@@ -132,10 +135,10 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       ["Registered Address", enterprise.address ?? "Not provided"],
       ["Map Location", enterprise.latitude !== null && enterprise.longitude !== null ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}` : "Not pinned"],
       ["Status", enterprise.status],
-      ["Created", new Date(enterprise.createdAt).toLocaleString()],
+      ["Created", formatPhilippineDateTime(enterprise.createdAt, timeFormat)],
       ["Activation", enterprise.isActivated ? "Complete" : "Pending"],
     ],
-    [enterprise],
+    [enterprise, timeFormat],
   );
 
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -285,17 +288,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                     maxLength={PERSON_NAME_MAX_LENGTH}
                   />
                 </div>
-                <FormField
-                  name="email"
-                  label="Contact Email"
-                  type="email"
-                  value={form.email}
-                  onChange={(value) => updateField("email", value)}
-                  error={errors.email}
-                  required
-                  autoComplete="email"
-                  helperText="Use an @gmail.com or @email.com address."
-                />
+                <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
                 <ContactNumberField name="contactNumber" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
                 <FormField
                   name="buildingCapacity"

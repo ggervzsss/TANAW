@@ -46,6 +46,8 @@ export type SupportTicketDetail = SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
+export const supportTicketsQueryKey = ["operational", "support-tickets"];
+
 const safeSupportTicketImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function listSupportTickets() {

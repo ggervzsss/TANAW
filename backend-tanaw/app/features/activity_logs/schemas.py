@@ -39,8 +39,6 @@ class ActivityLogCreate(BaseModel):
     summary: str = Field(min_length=1, max_length=1000)
     sourceId: str | None = Field(default=None, max_length=120)
     metadata: dict[str, str | int | float | bool | None] | None = None
-    sourceKind: Literal["real", "mock", "hybrid"] = "real"
-    mockRunId: str | None = Field(default=None, max_length=36)
 
 
 class ActivityLogPurgeResponse(BaseModel):

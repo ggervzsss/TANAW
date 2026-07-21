@@ -12,7 +12,6 @@ class RetentionCleanupCountsResponse(BaseModel):
     passwordResetRateBuckets: int
     expiredEmailChangeRequests: int
     emailChangeRequests: int
-    developmentDeliveries: int
     emailOutboxRecords: int
     deletedRecords: int
 
@@ -39,7 +38,6 @@ def to_counts_response(counts: RetentionCleanupCounts) -> RetentionCleanupCounts
         passwordResetRateBuckets=counts.password_reset_rate_buckets,
         expiredEmailChangeRequests=counts.expired_email_change_requests,
         emailChangeRequests=counts.email_change_requests,
-        developmentDeliveries=counts.development_deliveries,
         emailOutboxRecords=counts.email_outbox_records,
         deletedRecords=counts.deleted_records,
     )

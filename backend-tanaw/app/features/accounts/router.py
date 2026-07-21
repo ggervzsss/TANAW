@@ -6,16 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
-from app.features.accounts.geocoding import (
-    GeocodingNoResult,
-    GeocodingUnavailable,
-    geocode_enterprise_address,
-    is_inside_san_pedro,
-    reverse_geocode_enterprise_location,
-)
-from app.features.accounts.models import Account, AccountRole, AccountStatus
+from app.features.accounts.location_validation import is_inside_san_pedro
+from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.accounts.schemas import (
     AccountEmailChangeRequestResolution,
     AccountStatusUpdate,
@@ -23,11 +18,7 @@ from app.features.accounts.schemas import (
     DeliverySummary,
     EnterpriseAccountCreate,
     EnterpriseAccountUpdate,
-    EnterpriseGeocodeRequest,
-    EnterpriseGeocodeResult,
     EnterpriseProfileChangeRequestResolution,
-    EnterpriseReverseGeocodeRequest,
-    EnterpriseReverseGeocodeResult,
     LguAccountCreate,
     LguAccountUpdate,
     ProfileChangeRequestType,
@@ -39,11 +30,9 @@ from app.features.accounts.service import (
     generate_enterprise_id,
     get_account_by_email,
     get_account_by_id,
-    get_dev_delivery_by_id,
     get_pending_profile_change_request,
     is_protected_startup_account,
     list_accounts_by_roles,
-    list_dev_deliveries,
     to_account_summaries_with_requests,
     to_account_summary_with_requests,
     to_delivery_summary,
@@ -63,8 +52,17 @@ from app.features.auth.email_change import (
     request_account_email_change,
     resolve_account_email_change,
 )
+from app.features.mail.dev_log import (
+    get_dev_delivery as find_dev_delivery,
+)
+from app.features.mail.dev_log import (
+    list_dev_deliveries as list_ephemeral_dev_deliveries,
+)
 from app.features.operational.schemas import OperationalWebSocketEnvelope
-from app.features.operational.service import create_user_notification
+from app.features.operational.service import (
+    create_user_notification,
+    mark_source_notifications_read,
+)
 from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -252,58 +250,6 @@ async def list_enterprise_accounts(
     return await to_account_summaries_with_requests(db, accounts)
 
 
-@router.post("/enterprises/geocode", response_model=EnterpriseGeocodeResult)
-async def geocode_enterprise_location(
-    payload: EnterpriseGeocodeRequest,
-    _: ITAccount,
-) -> EnterpriseGeocodeResult:
-    try:
-        candidate = await geocode_enterprise_address(
-            payload.address, payload.barangay, payload.enterpriseName
-        )
-    except GeocodingNoResult as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except GeocodingUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
-
-    return EnterpriseGeocodeResult(
-        latitude=candidate.latitude,
-        longitude=candidate.longitude,
-        displayAddress=candidate.display_address,
-        confidence=candidate.confidence,
-        provider=candidate.provider,
-        source=candidate.source,
-    )
-
-
-@router.post("/enterprises/reverse-geocode", response_model=EnterpriseReverseGeocodeResult)
-async def reverse_geocode_enterprise_location_endpoint(
-    payload: EnterpriseReverseGeocodeRequest,
-    _: ITAccount,
-) -> EnterpriseReverseGeocodeResult:
-    try:
-        candidate = await reverse_geocode_enterprise_location(payload.latitude, payload.longitude)
-    except GeocodingNoResult as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except GeocodingUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
-
-    return EnterpriseReverseGeocodeResult(
-        latitude=candidate.latitude,
-        longitude=candidate.longitude,
-        displayAddress=candidate.display_address,
-        confidence=candidate.confidence,
-        provider=candidate.provider,
-        source=candidate.source,
-        address=candidate.address,
-        barangay=candidate.barangay,
-    )
-
-
 @router.post("/enterprises", response_model=AccountSummary, status_code=status.HTTP_201_CREATED)
 async def create_enterprise_account(
     payload: EnterpriseAccountCreate,
@@ -317,42 +263,11 @@ async def create_enterprise_account(
             detail="An account with this email already exists.",
         )
 
-    latitude = payload.latitude
-    longitude = payload.longitude
-    location_source = payload.locationSource
-    location_confidence = payload.locationConfidence
-    geocoded_address = payload.geocodedAddress
-    location_updated_at = None
-
-    if (latitude is None) != (longitude is None):
+    if not is_inside_san_pedro(payload.latitude, payload.longitude):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Latitude and longitude must be provided together.",
+            detail="Enterprise location must be inside San Pedro, Laguna.",
         )
-
-    if latitude is not None and longitude is not None:
-        if not is_inside_san_pedro(latitude, longitude):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Enterprise location must be inside San Pedro, Laguna.",
-            )
-        location_source = location_source or "manual"
-        location_updated_at = datetime.now(UTC)
-    else:
-        try:
-            candidate = await geocode_enterprise_address(
-                payload.address, payload.barangay, payload.enterpriseName
-            )
-        except GeocodingNoResult, GeocodingUnavailable:
-            candidate = None
-
-        if candidate is not None:
-            latitude = candidate.latitude
-            longitude = candidate.longitude
-            location_source = candidate.source
-            location_confidence = candidate.confidence
-            geocoded_address = candidate.display_address
-            location_updated_at = datetime.now(UTC)
 
     enterprise_id = await generate_enterprise_id(db, payload.enterpriseId or payload.enterpriseName)
     account = await create_account_with_activation(
@@ -362,21 +277,23 @@ async def create_enterprise_account(
         role=AccountRole.ENTERPRISE,
         display_name=payload.enterpriseName,
         title="Enterprise Account",
-        enterprise_name=payload.enterpriseName,
-        category=payload.category,
-        manager_name=payload.managerName,
-        barangay=payload.barangay,
-        address=payload.address,
-        latitude=latitude,
-        longitude=longitude,
-        location_source=location_source,
-        location_confidence=location_confidence,
-        geocoded_address=geocoded_address,
-        location_updated_at=location_updated_at,
-        enterprise_id=enterprise_id,
-        gateway_status="Not Linked",
-        building_capacity=payload.buildingCapacity,
+        enterprise_profile=EnterpriseProfile(
+            enterprise_name=payload.enterpriseName,
+            category=payload.category,
+            manager_name=payload.managerName,
+            barangay=payload.barangay,
+            address=payload.address,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            location_updated_at=datetime.now(UTC),
+            enterprise_id=enterprise_id,
+            gateway_status="Not Linked",
+            building_capacity=payload.buildingCapacity,
+        ),
     )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account was created without a profile.")
     await record_account_log(
         db,
         category="IT Activity",
@@ -384,13 +301,13 @@ async def create_enterprise_account(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Create Enterprise Account",
-        target=account.enterprise_name or account.email,
-        summary=f"{actor.display_name} registered enterprise account {account.enterprise_name}.",
+        target=profile.enterprise_name,
+        summary=f"{actor.display_name} registered enterprise account {profile.enterprise_name}.",
         source_id=account.id,
         metadata={
-            "enterpriseId": account.enterprise_id,
-            "barangay": account.barangay,
-            "buildingCapacity": account.building_capacity,
+            "enterpriseId": profile.enterprise_id,
+            "barangay": profile.barangay,
+            "buildingCapacity": profile.building_capacity,
         },
     )
     await record_account_log(
@@ -401,7 +318,7 @@ async def create_enterprise_account(
         actor_role="System",
         action="Activation Email Queued",
         target=account.email,
-        summary=f"The system queued an account activation email for enterprise {account.enterprise_name}.",
+        summary=f"The system queued an account activation email for enterprise {profile.enterprise_name}.",
         source_id=account.id,
     )
     return await to_account_summary_with_requests(db, account)
@@ -419,6 +336,9 @@ async def update_enterprise_account(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
 
     requested_email = str(payload.email)
     await ensure_unique_account_email(db, requested_email, account.id)
@@ -431,14 +351,14 @@ async def update_enterprise_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Keep the account active while verifying a new email address.",
         )
-    account.enterprise_name = payload.enterpriseName
+    profile.enterprise_name = payload.enterpriseName
     account.display_name = payload.enterpriseName
-    account.category = payload.category
-    account.manager_name = payload.managerName
+    profile.category = payload.category
+    profile.manager_name = payload.managerName
     account.phone = payload.contactNumber
-    account.barangay = payload.barangay
-    account.address = payload.address
-    account.building_capacity = payload.buildingCapacity
+    profile.barangay = payload.barangay
+    profile.address = payload.address
+    profile.building_capacity = payload.buildingCapacity
     account.status = next_status
     email_change_requested = False
     if email_changed:
@@ -482,13 +402,13 @@ async def update_enterprise_account(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action="Update Enterprise Account",
-        target=account.enterprise_name or account.email,
-        summary=f"{actor.display_name} updated enterprise account {account.enterprise_name}.",
+        target=profile.enterprise_name,
+        summary=f"{actor.display_name} updated enterprise account {profile.enterprise_name}.",
         source_id=account.id,
         metadata={
-            "enterpriseId": account.enterprise_id,
-            "barangay": account.barangay,
-            "buildingCapacity": account.building_capacity,
+            "enterpriseId": profile.enterprise_id,
+            "barangay": profile.barangay,
+            "buildingCapacity": profile.building_capacity,
             "status": account.status.value,
             "emailChangeRequested": email_change_requested,
             "requestedEmail": requested_email if email_change_requested else None,
@@ -513,6 +433,9 @@ async def resolve_enterprise_profile_change_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise account not found."
         )
+    profile = account.enterprise_profile
+    if profile is None:
+        raise RuntimeError("Enterprise account is missing its profile.")
 
     if request_type == "businessEmail":
         return await resolve_verified_email_change_request(
@@ -548,9 +471,9 @@ async def resolve_enterprise_profile_change_request(
         actor=actor.display_name,
         actor_role="IT Personnel",
         action=f"{payload.action.title()} Enterprise Profile Change",
-        target=account.enterprise_name or account.email,
+        target=profile.enterprise_name,
         summary=(
-            f"{actor.display_name} {resolution_label} {account.enterprise_name or account.display_name}'s "
+            f"{actor.display_name} {resolution_label} {profile.enterprise_name}'s "
             f"{request_label.lower()} change request."
         ),
         source_id=account.id,
@@ -568,6 +491,9 @@ async def resolve_enterprise_profile_change_request(
         request_type=request_type,
         requested_value=requested_value,
         approved=payload.action == "approve",
+    )
+    await mark_it_account_request_complete(
+        db, source_type="enterprise.profile.contact", account_id=account.id
     )
     return await to_account_summary_with_requests(db, account)
 
@@ -874,7 +800,28 @@ async def resolve_verified_email_change_request(
             notification_request_id,
         )
         await db.refresh(account)
+    await mark_it_account_request_complete(
+        db, source_type="enterprise.profile.email", account_id=account.id
+    )
     return await to_account_summary_with_requests(db, account)
+
+
+async def mark_it_account_request_complete(
+    db: AsyncSession, *, source_type: str, account_id: str
+) -> None:
+    notifications = await mark_source_notifications_read(
+        db,
+        source_type=source_type,
+        source_id=account_id,
+        recipient_role=AccountRole.IT,
+    )
+    for notification in notifications:
+        await operational_ws_manager.broadcast(
+            OperationalWebSocketEnvelope(
+                type="notification.updated",
+                data=notification.model_dump(mode="json"),
+            )
+        )
 
 
 async def notify_enterprise_profile_change_resolution(
@@ -946,9 +893,9 @@ async def record_account_log(
 @dev_router.get("/deliveries", response_model=list[DeliverySummary])
 async def get_dev_deliveries(
     _: ITAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[DeliverySummary]:
-    deliveries = await list_dev_deliveries(db)
+    ensure_dev_log_available()
+    deliveries = list_ephemeral_dev_deliveries()
     return [to_delivery_summary(delivery) for delivery in deliveries]
 
 
@@ -956,9 +903,14 @@ async def get_dev_deliveries(
 async def get_dev_delivery(
     delivery_id: str,
     _: ITAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeliverySummary:
-    delivery = await get_dev_delivery_by_id(db, delivery_id)
+    ensure_dev_log_available()
+    delivery = find_dev_delivery(delivery_id)
     if delivery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delivery not found.")
     return to_delivery_summary(delivery)
+
+
+def ensure_dev_log_available() -> None:
+    if get_settings().is_production:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")

@@ -33,7 +33,7 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
           <div className="max-h-[calc(92vh-0.375rem)] overflow-auto p-6">
             <div className="mb-6 flex items-center justify-between">
               <h3 id="register-camera-node-title" className="flex items-center gap-2 text-lg font-bold text-[#111827] dark:text-white">
-                <Video size={20} className="text-[#065f46] dark:text-emerald-300" /> Register Camera Node
+                <Video size={20} className="text-[#065f46] dark:text-emerald-300" /> Add Camera
               </h3>
               <button
                 onClick={onClose}

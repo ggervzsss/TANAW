@@ -20,7 +20,7 @@ class EmailRecipient:
 
 
 def account_activation_email(
-    account: Account | EmailRecipient, activation_url: str, expires_label: str
+    account: EmailRecipient, activation_url: str, expires_label: str
 ) -> EmailContent:
     if account.role == AccountRole.ENTERPRISE and account.enterprise_id:
         login_lines = (

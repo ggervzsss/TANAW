@@ -42,7 +42,7 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
           <Video size={14} className="text-[#065f46]" /> Camera Stream
         </h4>
         <div className="space-y-2">
-          <CompactField label="Node Name">
+          <CompactField label="Camera Name">
             <input
               type="text"
               value={editForm.name}

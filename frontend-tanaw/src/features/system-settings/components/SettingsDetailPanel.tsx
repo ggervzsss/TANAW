@@ -122,6 +122,7 @@ function formatSelectOption(field: SettingField, option: string | number) {
   if (field.key === "loginAttemptLimit") return `${option} attempts`;
   if (field.key === "loginLockMinutes") return `${option} minutes`;
   if (field.key === "retentionDays") return `${option} days`;
+  if (field.key === "timeFormat") return option === "24-hour" ? "24-hour" : "12-hour (AM/PM)";
   return String(option);
 }
 

@@ -130,11 +130,8 @@ class EnterpriseAccountCreate(BaseModel):
     barangay: str = Field(min_length=1, max_length=120)
     address: str = Field(min_length=1, max_length=255)
     enterpriseId: str | None = Field(default=None, max_length=120)
-    latitude: float | None = Field(default=None, ge=-90, le=90)
-    longitude: float | None = Field(default=None, ge=-180, le=180)
-    locationSource: str | None = Field(default=None, max_length=40)
-    locationConfidence: float | None = Field(default=None, ge=0, le=1)
-    geocodedAddress: str | None = Field(default=None, max_length=500)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
     buildingCapacity: int = Field(default=100, ge=1, le=100_000)
 
     @field_validator("enterpriseName")
@@ -210,9 +207,6 @@ class AccountSummary(BaseModel):
     address: str | None
     latitude: float | None
     longitude: float | None
-    locationSource: str | None
-    locationConfidence: float | None
-    geocodedAddress: str | None
     locationUpdatedAt: datetime | None
     enterpriseId: str | None
     gatewayStatus: str | None
@@ -445,47 +439,3 @@ class ContactNumberChangeRequest(BaseModel):
 class AccountChangeRequestResponse(BaseModel):
     status: str
     message: str
-
-
-class EnterpriseGeocodeRequest(BaseModel):
-    address: str = Field(min_length=1, max_length=255)
-    barangay: str = Field(min_length=1, max_length=120)
-    enterpriseName: str | None = Field(default=None, max_length=120)
-
-    @field_validator("barangay")
-    @classmethod
-    def validate_barangay(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        for barangay in SAN_PEDRO_BARANGAYS:
-            if barangay.lower() == normalized:
-                return barangay
-        raise ValueError("Barangay is not supported.")
-
-    @field_validator("address")
-    @classmethod
-    def normalize_address(cls, value: str) -> str:
-        address = value.strip().rstrip(",")
-        if not address:
-            raise ValueError("Address is required.")
-        if address.lower().endswith(SAN_PEDRO_ADDRESS_SUFFIX.lower()):
-            return address
-        return f"{address}, {SAN_PEDRO_ADDRESS_SUFFIX}"
-
-
-class EnterpriseGeocodeResult(BaseModel):
-    latitude: float
-    longitude: float
-    displayAddress: str
-    confidence: float | None = None
-    provider: str
-    source: str
-
-
-class EnterpriseReverseGeocodeRequest(BaseModel):
-    latitude: float = Field(ge=-90, le=90)
-    longitude: float = Field(ge=-180, le=180)
-
-
-class EnterpriseReverseGeocodeResult(EnterpriseGeocodeResult):
-    address: str | None = None
-    barangay: str | None = None

@@ -44,10 +44,8 @@ async def test_fresh_database_creates_bootstrap_and_opt_in_development_accounts_
     db = mock_session()
     monkeypatch.setattr(seed, "get_settings", startup_account_settings)
     monkeypatch.setattr(seed, "get_seed_state", AsyncMock(return_value=None))
-    monkeypatch.setattr(seed, "find_legacy_bootstrap_account", AsyncMock(return_value=None))
     monkeypatch.setattr(seed, "find_existing_it_account", AsyncMock(return_value=None))
     monkeypatch.setattr(seed, "get_account_by_email", AsyncMock(return_value=None))
-    monkeypatch.setattr(seed, "find_legacy_development_account", AsyncMock(return_value=None))
 
     await seed.seed_default_accounts(db)
 
@@ -88,7 +86,7 @@ async def test_fresh_database_creates_bootstrap_and_opt_in_development_accounts_
 
 
 @pytest.mark.asyncio
-async def test_existing_bootstrap_account_is_adopted_without_resetting_security_state(
+async def test_existing_it_account_is_adopted_without_resetting_security_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     changed_at = datetime.now(UTC) - timedelta(days=2)
@@ -96,7 +94,7 @@ async def test_existing_bootstrap_account_is_adopted_without_resetting_security_
         id="existing-bootstrap",
         email="renamed-it@tanaw.local",
         password_hash=hash_password("OwnerChanged2!Password"),
-        role=AccountRole.STAFF,
+        role=AccountRole.IT,
         display_name=BOOTSTRAP_IT_DISPLAY_NAME,
         title="Custom title",
         status=AccountStatus.INACTIVE,
@@ -125,7 +123,7 @@ async def test_existing_bootstrap_account_is_adopted_without_resetting_security_
     monkeypatch.setattr(seed, "get_seed_state", AsyncMock(return_value=None))
     monkeypatch.setattr(
         seed,
-        "find_legacy_bootstrap_account",
+        "find_existing_it_account",
         AsyncMock(return_value=account),
     )
 
@@ -160,14 +158,11 @@ async def test_initialized_bootstrap_is_never_synchronized_again(
         lambda: startup_account_settings(seed_development_accounts=False),
     )
     monkeypatch.setattr(seed, "get_seed_state", AsyncMock(return_value=state))
-    legacy_lookup = AsyncMock()
     it_lookup = AsyncMock()
-    monkeypatch.setattr(seed, "find_legacy_bootstrap_account", legacy_lookup)
     monkeypatch.setattr(seed, "find_existing_it_account", it_lookup)
 
     await seed.seed_default_accounts(db)
 
-    legacy_lookup.assert_not_awaited()
     it_lookup.assert_not_awaited()
     db.add.assert_not_called()
     db.flush.assert_not_awaited()
@@ -260,7 +255,6 @@ async def test_bootstrap_credentials_are_required_only_for_a_fresh_database(
     db = mock_session()
     monkeypatch.setattr(seed, "get_settings", lambda: settings)
     monkeypatch.setattr(seed, "get_seed_state", AsyncMock(return_value=None))
-    monkeypatch.setattr(seed, "find_legacy_bootstrap_account", AsyncMock(return_value=None))
     monkeypatch.setattr(seed, "find_existing_it_account", AsyncMock(return_value=None))
 
     with pytest.raises(RuntimeError, match="one-time bootstrap"):

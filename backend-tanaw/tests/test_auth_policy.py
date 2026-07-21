@@ -212,10 +212,9 @@ def test_login_lockout_policy_resolves_valid_numeric_settings() -> None:
     assert policy == LoginLockoutPolicy(attempt_limit=10, lock_minutes=30)
 
 
-def test_login_lockout_policy_ignores_invalid_and_legacy_settings() -> None:
+def test_login_lockout_policy_ignores_invalid_settings() -> None:
     policy = resolve_login_lockout_policy(
         {
-            "security.Failed Login Threshold": "10 attempts",
             "security.loginAttemptLimit": "10",
             "security.loginLockMinutes": True,
         }

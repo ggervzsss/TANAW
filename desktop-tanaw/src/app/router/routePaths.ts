@@ -5,7 +5,6 @@ export const routePaths = {
   enterpriseDashboard: "/enterprise/dashboard",
   enterpriseCameras: "/enterprise/cameras",
   enterpriseReports: "/enterprise/reports",
-  enterpriseSimulation: "/enterprise/simulation",
   enterpriseProfile: "/enterprise/profile",
   enterpriseSecurity: "/enterprise/security",
   enterpriseNotifications: "/enterprise/notifications",

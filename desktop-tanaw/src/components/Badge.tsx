@@ -16,5 +16,5 @@ export function Badge({ children, variant = "default" }: BadgeProps) {
     info: "tanaw-status-badge--info border border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-300/24 dark:bg-blue-500/15 dark:text-blue-200",
   };
 
-  return <span className={`tanaw-status-badge rounded-full px-2.5 py-1 text-xs font-semibold ${variants[variant]}`}>{children}</span>;
+  return <span className={`tanaw-status-badge inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${variants[variant]}`}>{children}</span>;
 }

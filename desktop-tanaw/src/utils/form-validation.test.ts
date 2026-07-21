@@ -16,10 +16,11 @@ describe("desktop form validation", () => {
     expect(validateMiddleInitial("7")).toBe("Middle initial must be one letter.");
   });
 
-  it("restricts email domains and Philippine local-number prefixes", () => {
+  it("accepts valid email providers and restricts Philippine local-number prefixes", () => {
     expect(validateEmail("enterprise@gmail.com")).toBe("");
-    expect(validateEmail("enterprise@email.com")).toBe("");
-    expect(validateEmail("enterprise@company.ph")).toContain("@gmail.com or @email.com");
+    expect(validateEmail("enterprise@outlook.com")).toBe("");
+    expect(validateEmail("enterprise@company.ph")).toBe("");
+    expect(validateEmail("enterprise@localhost")).toBe("Enter a valid email address.");
     expect(normalizePhilippineContactNumber("639181234567")).toBe("+639181234567");
     expect(validatePhilippineContactNumber("+638181234567", true)).toContain("starting with 9");
   });

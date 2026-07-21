@@ -217,7 +217,7 @@ export function ProfileView() {
                 <Shield size={14} className="text-[#065f46]" /> Enterprise Identity (Read-Only)
               </h4>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <ReadOnlyIdentityField label="Current Node" value={enterpriseName} />
+                <ReadOnlyIdentityField label="Current Enterprise" value={enterpriseName} />
                 <ReadOnlyIdentityField label="LGU Affiliation" value={[user?.category ?? "Registered Enterprise", user?.barangay ? `Barangay ${user.barangay}` : "San Pedro City"].join(" - ")} />
                 <ReadOnlyIdentityField label="Enterprise ID" value={user?.enterpriseId ?? "Not assigned"} />
               </div>
@@ -444,7 +444,7 @@ function ProfileEditModal({ currentValue, error, field, isSaving, nameErrors, na
         ? "TANAW sends a single-use verification link to the proposed address and a warning to your current address. IT can approve the change only after ownership is verified."
         : field === "phone"
           ? "This sends a contact number change request to IT and Admin for review."
-          : "This updates the occupancy capacity used by TANAW alerts and simulation defaults.";
+          : "This updates the occupancy capacity used by TANAW alerts.";
 
   return (
     <ModalPortal>
@@ -553,9 +553,11 @@ function ProfileEditModal({ currentValue, error, field, isSaving, nameErrors, na
                     className={`w-full rounded-xl border bg-white p-3.5 text-sm text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:bg-[#0f172a] dark:text-slate-100 ${error ? "border-tanaw-red" : "border-gray-200 dark:border-slate-700"}`}
                   />
                 )}
-                <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
-                  {error || (isPhone ? "Use 10 digits beginning with 9." : field === "email" ? "Use an @gmail.com or @email.com address." : "Use a whole number from 1 to 100,000.")}
-                </p>
+                {(error || !isPhone) && (
+                  <p className={`mt-1.5 text-xs font-semibold ${error ? "text-tanaw-red" : "text-gray-500 dark:text-slate-400"}`}>
+                    {error || (field === "email" ? "Enter a valid email address." : "Use a whole number from 1 to 100,000.")}
+                  </p>
+                )}
               </label>
             )}
 

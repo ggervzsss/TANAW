@@ -1,4 +1,4 @@
-import { Bell, FileText, ShieldCheck } from "lucide-react";
+import { Bell, Clock3, FileText, ShieldCheck } from "lucide-react";
 import type { SettingSection } from "../types";
 
 export const settingSections: SettingSection[] = [
@@ -13,42 +13,57 @@ export const settingSections: SettingSection[] = [
   },
   {
     id: "logs",
-    title: "Log Settings",
+    title: "Activity History",
     icon: FileText,
     fields: [
-      { key: "retentionDays", label: "Log Retention Period", type: "select", value: 180, options: [90, 180, 365] },
+      { key: "retentionDays", label: "Keep Activity History For", type: "select", value: 180, options: [90, 180, 365] },
+    ],
+  },
+  {
+    id: "display",
+    title: "Date & Time",
+    icon: Clock3,
+    fields: [
+      {
+        key: "timeFormat",
+        label: "Time Display",
+        description: "Choose how time appears throughout TANAW. All dates and times use Philippine Time.",
+        type: "select",
+        value: "12-hour",
+        options: ["12-hour", "24-hour"],
+      },
     ],
   },
   {
     id: "notifications",
-    title: "Notification Settings",
+    title: "Technical Issue Notifications",
     icon: Bell,
     fields: [
       {
         key: "cameraSessionErrorAlerts",
-        label: "Camera Session Error Alerts",
-        description: "Create an IT maintenance alert when the desktop app reports a camera-specific session error.",
+        label: "Camera Problems",
+        description: "Notify IT when a camera problem prevents or interrupts visitor counting.",
         type: "toggle",
         value: true,
       },
       {
         key: "gatewayServiceErrorAlerts",
-        label: "Desktop App Error Alerts",
-        description: "Create an IT maintenance alert when the desktop app or ML service reports a session error without a camera source.",
+        label: "Desktop Application Problems",
+        description: "Notify IT when an enterprise desktop application or counting service stops working.",
         type: "toggle",
         value: true,
       },
       {
         key: "syncDelayAlerts",
-        label: "Live Update Delay Alerts",
-        description: "Create an IT maintenance alert when desktop records are waiting to be sent to the cloud.",
+        label: "Visitor Data Delays",
+        description: "Notify IT when visitor records remain waiting to be sent to TANAW.",
         type: "toggle",
         value: true,
       },
       {
         key: "failedLoginLockoutAlerts",
-        label: "Failed Login Lockout Alerts",
-        description: "Create an IT security alert when an account reaches the failed-login threshold and is temporarily locked.",
+        label: "Locked Accounts",
+        description: "Notify IT when repeated failed sign-in attempts temporarily lock an account.",
         type: "toggle",
         value: true,
       },

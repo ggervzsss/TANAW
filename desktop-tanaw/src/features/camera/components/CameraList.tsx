@@ -12,7 +12,7 @@ export function CameraList({ cameras, activeCamId, onSelect }: CameraListProps) 
   return (
     <Card className="flex h-full min-h-0 flex-col rounded-sm border-t-4 border-t-[#111827] bg-white p-3 shadow-md">
       <h3 className="mb-3 flex shrink-0 items-center gap-2 text-xs font-bold tracking-wider text-[#111827] uppercase">
-        <Video size={16} className="text-[#065f46]" /> Configured Nodes
+        <Video size={16} className="text-[#065f46]" /> Configured Cameras
       </h3>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {cameras.map((camera) => {

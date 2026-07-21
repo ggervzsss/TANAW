@@ -27,8 +27,7 @@ Want only the commands needed to test the system? Use the
 - [Terminal compatibility](#terminal-compatibility)
 - [Quick start](#quick-start)
 - [Default and temporary accounts](#default-and-temporary-accounts)
-- [Seed and simulate reports](#seed-and-simulate-reports)
-- [Remove simulated data](#remove-simulated-data)
+- [Load sample report data](#load-sample-report-data)
 - [Optional host-run development](#optional-host-run-development)
 - [Production-like Docker build](#production-like-docker-build)
 - [Environment configuration](#environment-configuration)
@@ -49,16 +48,16 @@ enterprise operators. It provides:
   counting;
 - privacy-conscious unique visitor estimation using local person ReID rather
   than facial recognition;
-- local SQLite persistence for events, metrics, visitor identity metadata, and
-  report drafts;
+- one enterprise-scoped SQLite database for camera definitions, monitoring
+  state, events, metrics, visitor identity metadata, and reports;
 - offline-first report submission with retryable synchronization to the central
   API;
 - current and historical metrics, occupancy, reports, notifications, profile,
   and security settings.
 
 The Electron process starts and supervises the local Python ML service on
-`127.0.0.1:8765`. A real camera is optional for the simulated reporting
-workflow.
+`127.0.0.1:8765`. A real camera is optional when using backend-prepared sample
+counts.
 
 ### LGU web portal
 
@@ -83,7 +82,7 @@ report consolidation, WebSocket updates, and guarded test-data tooling.
 ```mermaid
 flowchart LR
     Camera["CCTV / IP camera"] --> ML["Local ML service<br/>FastAPI + YOLO + ByteTrack + ReID"]
-    ML <--> SQLite[("Enterprise-scoped<br/>SQLite ledger")]
+    ML <--> SQLite[("Enterprise-scoped<br/>SQLite operational database")]
     ML <--> Desktop["Electron enterprise desktop"]
     Desktop -->|"Authenticated telemetry and report sync"| API["Central FastAPI API"]
     Portal["LGU React web portal"] <-->|"REST + WebSockets"| API
@@ -104,7 +103,8 @@ The main data flow is:
    monitoring and reporting workflows.
 
 Raw camera video is not uploaded to PostgreSQL. ReID processing and temporary
-appearance metadata stay on the enterprise device.
+appearance metadata stay on the enterprise device. Live frames remain in
+memory and are not stored as SQLite rows.
 
 ## Technology stack
 
@@ -131,7 +131,7 @@ TANAW/
 │   │       ├── accounts/       # LGU/enterprise accounts and bootstrap seed
 │   │       ├── activity_logs/  # Audit and operational activity
 │   │       ├── auth/           # Login, logout, password, and recovery flows
-│   │       ├── mock_data/      # Explicit simulation CLI
+│   │       ├── sample_data/    # Development sample-data CLI
 │   │       └── operational/    # Telemetry, reports, sync, and final reports
 │   ├── alembic/                # Database migrations
 │   └── tests/
@@ -289,10 +289,11 @@ secret. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and inside
 and the optional Resend settings developers commonly change:
 
 ```dotenv
-POSTGRES_DB=tanaw_local
+POSTGRES_DB=TanawDB
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-this-local-password
-DATABASE_URL=postgresql+asyncpg://postgres:change-this-local-password@db:5432/tanaw_local
+POSTGRES_HOST_PORT=5433
+DATABASE_URL=postgresql+asyncpg://postgres:change-this-local-password@db:5432/TanawDB
 JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 
 BOOTSTRAP_IT_USERNAME=default@email.com
@@ -317,6 +318,13 @@ and JWT secret outside disposable local development. The root `.gitignore`
 excludes `.env`; commit `.env.example`, never the populated `.env`.
 Local URLs, ports, token lifetimes, polling, cooldowns, and retention policies
 use the defaults maintained in the codebase and do not need entries here.
+
+To inspect the local database with DBeaver, create a PostgreSQL connection using
+host `localhost`, port `5432`, and the database, username, and password from
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The database is bound
+only to localhost.
+Keep `DATABASE_URL` on `db:5432` because the backend connects from inside the
+Compose network.
 
 ### 3. Start the database, API, and web portal
 
@@ -435,213 +443,90 @@ the database, so removing those variables never makes the account editable or
 deactivatable. If an IT account already exists in a migrated database, no
 bootstrap credentials are required.
 
-## Seed and simulate reports
+## Load sample report data
 
-TANAW includes an explicit simulation CLI for development, demonstrations, QA,
-analytics, and end-to-end reporting tests. It is disabled by default and never
-runs during normal backend startup.
+TANAW includes a development-only sample-data CLI for demonstrations, QA, and
+end-to-end reporting tests. It inserts ordinary application rows into the
+canonical tables; the production schema has no mock-data table, provenance
+column, or compatibility model.
 
-The generated records use the same backend tables and workflow shapes as real
-operational data. Every generated record is tagged with a simulation run ID so
-it can be audited and removed safely.
-
-### Create the default six-month workflow
-
-Before generating the scenario, create and activate the persistent target
-account through **IT Portal > Enterprise Accounts**:
+Before loading the dataset, create and activate the persistent target account
+through **IT Portal > Enterprise Accounts**. The wrappers default to:
 
 ```text
 Enterprise:    Archie's Event Place
-Category:      Events Venue
-Manager:       Gervy Masbate
-Barangay:      San Antonio
-Address:       Narra Road, San Pedro, Laguna 4023
 Email:         archies@email.com
-Contact:       +639123456789
 Enterprise ID: archies_001@tanaw.sanpedro
 ```
 
-The system normally generates `archies_001@tanaw.sanpedro` from the enterprise
-name in a clean database. Confirm the actual Enterprise ID in the account
-details or desktop Profile before running the command.
-
-With the account active and Docker services running, execute this from the
-repository root:
+Confirm the actual Enterprise ID in the account details or desktop Profile.
+Then, from the repository root:
 
 ```shell
 ./scripts/mockdata-on
 ```
 
-PowerShell users can run the matching wrapper:
+PowerShell:
 
 ```powershell
 .\scripts\mockdata-on.ps1
 ```
 
-The script defaults to the six-month `full-workflow` scenario for
-`archies_001@tanaw.sanpedro`. To target a different enterprise, run it with
-`TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id"` or, in PowerShell,
-`$env:TANAW_MOCK_TARGET_ENTERPRISE = "actual_enterprise_id"`.
-
-This creates:
-
-- three LGU test accounts;
-- five enterprise test accounts;
-- enterprise telemetry snapshots;
-- historical enterprise submissions and finalized city reports for closed
-  periods;
-- previous-period and current-period submissions ready for consolidation from
-  supporting enterprises;
-- activity/audit logs;
-- prepared previous-period and current-period counts for Archie's Event Place;
-- no previous-period or current-period submission for Archie's, leaving both
-  steps for real desktop submissions.
-
-Archie's remains a normal, persistent account and is not deleted by
-`mock-data off`. The five generated enterprises act as supporting participants
-in the reporting scenario.
-
-A camera does not need to be running. The authenticated target desktop polls
-the backend and loads the oldest finite prepared count package into its
-enterprise ledger. After the overdue report is submitted and synced, the
-desktop loads the current-period package. If a real camera is also running,
-later camera events continue to accumulate in the same draft.
-
-When multiple unfinished periods are available, the desktop report workspace
-shows them in the **Reporting Month** selector.
-
-### Simulation accounts
+The command creates three sample LGU accounts, five supporting enterprise
+accounts, telemetry, historical submissions, final reports, notifications, and
+activity logs. It also exposes deterministic previous-period and current-period
+count packages for the persistent target enterprise. Archie's account and
+enterprise profile are never generated or deleted by these commands.
 
 All generated accounts use:
 
 ```text
-Password: Visitor simulation access phrase 2026
+Password: Visitor sample access phrase 2026
 ```
 
-LGU accounts:
+Useful accounts include `reports.staff@tanaw.test`,
+`system.admin@tanaw.test`, and `it.operations@tanaw.test`.
 
-| Role         | Username                   |
-| ------------ | -------------------------- |
-| IT Personnel | `it.operations@tanaw.test` |
-| Admin        | `system.admin@tanaw.test`  |
-| LGU Staff    | `reports.staff@tanaw.test` |
-
-Enterprise accounts:
-
-| Enterprise                       | Username                       |
-| -------------------------------- | ------------------------------ |
-| Balon ni Lolo Uweng              | `balon.lolo.uweng@tanaw.test`  |
-| San Pedro Apostol Parish         | `sanpedro.apostol@tanaw.test`  |
-| Lolo Uweng Pilgrim Church        | `lolo.uweng.church@tanaw.test` |
-| Tricia's Bar & Lounge            | `tricias.bar@tanaw.test`       |
-| Hallow Ridge Filipinas Golf Inc. | `hallowridge.golf@tanaw.test`  |
-
-Archie's Event Place is not a generated account. Sign in with
-`archies@email.com` and the password selected during its account onboarding,
-not `Visitor simulation access phrase 2026`.
-
-### Complete the end-to-end report simulation
-
-1. Start the desktop application and sign in to Archie's Event Place using
-   `archies@email.com` and its configured password.
-2. Wait for the overdue prepared counts to appear on the desktop Dashboard.
-3. Open **Reports & Submissions**, select the overdue **Reporting Month** if it
-   is not already selected, review the locked system metrics, complete the
-   demographic fields, and submit the overdue report.
-4. Wait for the current-period prepared counts to load, then complete and
-   submit the current report.
-5. Sign in to the web portal as `reports.staff@tanaw.test` with
-   `Visitor simulation access phrase 2026`.
-6. Open **Batch Reports** for the relevant reporting periods.
-7. Review the target submissions and accept them as **Ready to Consolidate**.
-8. Generate the final report once all participating enterprises are ready.
-9. Open **Final Reports Audit** and inspect the consolidated totals and source
-   rows.
-
-Desktop submissions are written to SQLite first, synchronized to PostgreSQL,
-and then marked as synced locally.
-
-### Inspect or refresh the simulation
-
-Show recent simulation runs:
+Show whether the deterministic sample accounts are present:
 
 ```shell
 ./scripts/mockdata-status
 ```
 
-PowerShell: `.\scripts\mockdata-status.ps1`
-
-Replace the active run with a fresh deterministic dataset:
+Refresh the dataset by removing its reserved deterministic identifiers and
+inserting it again:
 
 ```shell
 ./scripts/mockdata-reset
 ```
 
-PowerShell: `.\scripts\mockdata-reset.ps1`
-
-Supported ranges:
-
-- `30d`
-- `6m` — default rolling reporting window
-- `12m`
-
-Supported scenarios:
-
-- `full-workflow` — normal historical and current reporting workflow;
-- `peak-traffic` — increases traffic for the leading enterprise;
-- `camera-health` — adds delayed synchronization and camera-health conditions.
-
-The date range is calculated when the command runs. An active run is a snapshot
-and does not automatically roll forward, so use `reset` when a new reporting
-month begins or before a demonstration.
-
-## Remove simulated data
-
-### Safe simulation cleanup
-
-Keep the target enterprise signed in to the desktop when practical, then run:
+Remove the central sample dataset:
 
 ```shell
 ./scripts/mockdata-off
 ```
 
-PowerShell: `.\scripts\mockdata-off.ps1`
+The cleanup command identifies sample records by the dataset's reserved account
+emails, IDs, report-code prefixes, camera prefix, and ordinary relationships.
+It does not depend on database columns or a tracking table. Because there is no
+row-level provenance, do not reuse these reserved identifiers for real records.
 
-This removes records belonging to active simulation run IDs, including:
+Desktop counts are stored in the enterprise-scoped local SQLite ledger and are
+intentionally independent of PostgreSQL cleanup. To clear those local rows,
+close the desktop and run `./scripts/local-mockdata-off`. That command removes
+all local operational rows—including real camera-derived rows—while preserving
+SQLite camera profiles, authentication storage, preferences, and Electron caches.
+It also removes retired `tanaw_metrics.sqlite3` and `active_session.json`
+artifacts so they cannot block the canonical database.
 
-- generated LGU and enterprise accounts;
-- generated telemetry and activity logs;
-- generated and manually submitted test reports associated with the run;
-- generated final reports and source rows;
-- prepared target-enterprise desktop events and local test reports.
-
-Real records are not selected by names, dates, or email patterns. Cleanup uses
-the stored run provenance. If a test report mixed prepared counts with real
-camera events, the test report is removed while the real events are returned to
-the enterprise's unsubmitted local draft.
-
-If the target desktop is closed or offline, backend cleanup still succeeds and
-the desktop removes its run-scoped local data after that enterprise next signs
-in and reconnects.
-
-Confirm the result:
+To use a different target or range:
 
 ```shell
-./scripts/mockdata-status
+TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id" TANAW_MOCK_RANGE=12m ./scripts/mockdata-on
 ```
 
-### Destructive full database reset
-
-To delete the complete PostgreSQL Docker volume—including real accounts,
-reports, and the bootstrap accounts—run:
-
-```shell
-docker compose down -v
-docker compose up --build -d
-```
-
-Use this only when a fully clean local database is intended. Normal simulation
-cleanup should use `mock-data off`.
+Supported ranges are `30d`, `6m`, and `12m`. Supported datasets are
+`full-workflow`, `peak-traffic`, and `camera-health`.
 
 ## Optional host-run development
 
@@ -740,10 +625,9 @@ installed from a packaged desktop build.
 
 For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
 pre-deploy or release command before replacing the backend process. TANAW refuses
-to start against an uninitialized or outdated database. Back up PostgreSQL before
-every production migration; revision `20260711_0016` is intentionally
-irreversible because rolling it back would require dropping operational and
-support data.
+to start against an uninitialized or outdated database. The canonical baseline
+starts a new migration history, so existing pre-release databases must be backed
+up and recreated before deployment.
 
 ## Environment configuration
 
@@ -781,16 +665,15 @@ and retention policies use validated defaults maintained in
 They are intentionally omitted from the templates so routine deployments expose
 only values operators genuinely need to supply.
 
-Do not permanently enable `TANAW_ALLOW_MOCK_DATA` in production. The examples
-in this README inject it only for the individual CLI process.
+Sample-data commands reject production environments.
 
 ## Local desktop data
 
 Desktop records are separate from PostgreSQL and are scoped by enterprise.
 Close the desktop app before manually clearing local data.
 
-Remove all local desktop ledger data, including real CCTV-derived rows, mock
-runs, hybrid runs, demographic report drafts, submitted reports, snapshots, and occupancy corrections, while
+Remove all local desktop operational data, including real CCTV-derived rows,
+demographic report drafts, submitted reports, snapshots, and occupancy corrections, while
 preserving saved camera settings, authentication storage, preferences, and
 Electron caches:
 
@@ -800,9 +683,8 @@ Electron caches:
 
 PowerShell: `.\scripts\local-mockdata-off.ps1`
 
-The script does not remove backend data. If a backend simulation is active, run
-`./scripts/mockdata-off` as well; otherwise the target desktop can download the
-active prepared package again after sign-in.
+The script does not remove backend data. Run `./scripts/mockdata-off` separately
+when the central sample dataset should also be removed.
 
 Inspect all local ledgers:
 
@@ -817,7 +699,7 @@ Inspect one enterprise:
 npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
 ```
 
-Clear one enterprise ledger:
+Completely recreate one enterprise database, including its camera profiles:
 
 ```shell
 npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
@@ -827,8 +709,8 @@ The local-data CLI expects the Enterprise ID shown in the desktop Profile, not
 the account email. Run the unfiltered `inspect` command first if the generated
 ID uses a different sequence number.
 
-Clear every enterprise ledger while preserving Electron preferences and saved
-camera definitions:
+Clear every enterprise's operational rows while preserving Electron preferences
+and SQLite camera profiles:
 
 ```shell
 npm run local-data -- clear --all-ledgers --yes
@@ -943,20 +825,20 @@ another actively synchronized folder.
 - Check local state on Linux/macOS with:
 
   ```shell
-  curl http://127.0.0.1:8765/mock/status
+  curl http://127.0.0.1:8765/metrics/summary
   ```
 
 - On Windows PowerShell, use:
 
   ```powershell
-  Invoke-RestMethod http://127.0.0.1:8765/mock/status
+  Invoke-RestMethod http://127.0.0.1:8765/metrics/summary
   ```
 
-### A simulation account already exists
+### A sample account already exists
 
-The seed command refuses to overwrite an existing account with the same email.
-Run `mock-data off` to remove the active generated run, or resolve the conflicting
-account intentionally before seeding again.
+The sample command refuses to overwrite an existing account with a reserved
+sample email. Run `sample-data off` to remove the deterministic sample dataset,
+or resolve the conflicting account intentionally before loading it again.
 
 ### Source changes are not reflected in Docker
 
