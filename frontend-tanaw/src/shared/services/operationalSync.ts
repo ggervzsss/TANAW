@@ -1,6 +1,6 @@
 import { apiClient } from "../lib/apiClient";
 import { getWebSocketUrl } from "../config/api.config";
-import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, ReportStatus, TelemetrySnapshot } from "../types";
+import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, ReportStatus, TelemetrySnapshot, VisitorInsightRange, VisitorInsights } from "../types";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -108,6 +108,17 @@ export async function listOperationalMapEnterprises() {
     lastSync: enterprise.lastSync ?? undefined,
     gatewayStatus: enterprise.gatewayStatus ?? "Not Linked",
   }));
+}
+
+export type VisitorInsightParams = {
+  range: VisitorInsightRange;
+  enterpriseId?: string;
+  barangay?: string;
+};
+
+export async function getVisitorInsights(params: VisitorInsightParams) {
+  const response = await apiClient.get<VisitorInsights>("/operational/visitor-insights", { params });
+  return response.data;
 }
 
 export async function listUserNotifications() {

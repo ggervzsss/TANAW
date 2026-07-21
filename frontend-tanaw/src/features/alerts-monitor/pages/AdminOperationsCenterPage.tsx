@@ -111,7 +111,10 @@ export function AdminOperationsCenterPage() {
         title="Operations Center"
         description="Review situations that need an Admin decision, important support requests, and pending account changes."
         action={
-          <Link to={routes.admin.mapview} className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800">
+          <Link
+            to={routes.admin.mapview}
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+          >
             <MapPinned size={15} />
             Open Live Map
           </Link>
@@ -120,7 +123,7 @@ export function AdminOperationsCenterPage() {
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
         <MetricCard label="Needs Attention" value={activeSituations.length} foot="Current Admin situations" color="#dc2626" footClassName="text-red-600" icon={Bell} />
-        <MetricCard label="Busy Establishments" value={busyEstablishments.length} foot="Capacity or crowd concerns" color="#b45309" footClassName="text-amber-700" icon={Building2} />
+        <MetricCard label="Busy Establishments" value={busyEstablishments.length} foot="Higher activity than usual" color="#b45309" footClassName="text-amber-700" icon={Building2} />
         <MetricCard label="Escalated Support" value={activeSupportRequests.length} foot="High or urgent requests" color="#2563eb" footClassName="text-blue-700" icon={TicketCheck} />
         <MetricCard label="Account Requests" value={pendingAccountRequests} foot="Waiting for IT review" color="#0f766e" icon={UserRoundCog} />
       </motion.section>
@@ -164,7 +167,9 @@ export function AdminOperationsCenterPage() {
         )}
 
         {view === "situations" && <SituationTable alerts={filteredAlerts} isLoading={alertsLoading} onOpen={openAlert} />}
-        {view === "support" && <SupportRequestTable tickets={filteredSupportTickets} isLoading={supportTicketsQuery.isLoading} onOpen={(ticketId) => setSearchParams({ view: "support", ticket: ticketId })} />}
+        {view === "support" && (
+          <SupportRequestTable tickets={filteredSupportTickets} isLoading={supportTicketsQuery.isLoading} onOpen={(ticketId) => setSearchParams({ view: "support", ticket: ticketId })} />
+        )}
         {view === "accounts" && (
           <div className="p-5">
             {pendingAccountRequests > 0 ? (
@@ -241,9 +246,7 @@ function SituationTable({ alerts, isLoading, onOpen }: { alerts: PriorityAlert[]
           </tbody>
         </table>
       </div>
-      <div className="tanaw-data-footer border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
-        Showing {alerts.length} Admin situations
-      </div>
+      <div className="tanaw-data-footer border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Showing {alerts.length} Admin situations</div>
     </>
   );
 }
@@ -312,9 +315,7 @@ function AdminSituationDetailsModal({ alert, onClose }: { alert: PriorityAlert; 
   const statusMutation = useMutation({
     mutationFn: (status: PriorityAlertStatus) => updateAlertStatus(alert.id, status),
     onSuccess: async (updatedAlert) => {
-      queryClient.setQueryData<PriorityAlert[]>(alertsQueryKey, (current = []) =>
-        current.map((item) => (item.id === updatedAlert.id ? updatedAlert : item)),
-      );
+      queryClient.setQueryData<PriorityAlert[]>(alertsQueryKey, (current = []) => current.map((item) => (item.id === updatedAlert.id ? updatedAlert : item)));
       await queryClient.invalidateQueries({ queryKey: alertsQueryKey });
       toast.success(`Situation marked as ${adminAlertStatusLabel(updatedAlert.status).toLowerCase()}.`);
     },
@@ -339,12 +340,8 @@ function AdminSituationDetailsModal({ alert, onClose }: { alert: PriorityAlert; 
           {alert.status !== "In Review" && alert.status !== "Resolved" && (
             <StatusButton label="Start Review" icon={Clock3} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("In Review")} />
           )}
-          {alert.status !== "Resolved" && (
-            <StatusButton label="Mark Resolved" icon={CheckCircle2} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("Resolved")} />
-          )}
-          {alert.status === "Resolved" && (
-            <StatusButton label="Reopen" icon={AlertTriangle} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("New")} />
-          )}
+          {alert.status !== "Resolved" && <StatusButton label="Mark Resolved" icon={CheckCircle2} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("Resolved")} />}
+          {alert.status === "Resolved" && <StatusButton label="Reopen" icon={AlertTriangle} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("New")} />}
         </div>
       </div>
     </ModalFrame>
@@ -386,7 +383,6 @@ function adminAlertStatusLabel(status: PriorityAlertStatus) {
 
 function adminAlertLabel(alert: PriorityAlert) {
   const labels: Partial<Record<PriorityAlert["type"], string>> = {
-    "Threshold Breach": "Capacity Reached",
     "Foot Traffic Alert": "Busy Establishment",
     "Occupancy Spike": "Sudden Crowd Increase",
     "Submission Delay": "Late Enterprise Report",
@@ -395,7 +391,7 @@ function adminAlertLabel(alert: PriorityAlert) {
 }
 
 function isCrowdSituation(alert: PriorityAlert) {
-  return ["Threshold Breach", "Foot Traffic Alert", "Occupancy Spike"].includes(alert.type);
+  return ["Foot Traffic Alert", "Occupancy Spike"].includes(alert.type);
 }
 
 function parseOperationsView(value: string | null): OperationsView {

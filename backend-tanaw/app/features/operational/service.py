@@ -1,13 +1,16 @@
 import json
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from math import ceil
+from statistics import fmean
 from typing import cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.date_time import PHILIPPINE_TIME_ZONE
 from app.features.accounts.models import (
     Account,
     AccountRole,
@@ -49,11 +52,19 @@ from app.features.operational.schemas import (
     SupportTicketSummary,
     TelemetrySnapshotSummary,
     UserNotificationSummary,
+    VisitorInsightEnterprise,
+    VisitorInsightPoint,
+    VisitorInsightRange,
+    VisitorInsightsSummary,
 )
 
 STALE_GATEWAY_SECONDS = 120
 OFFLINE_GATEWAY_SECONDS = 900
-OCCUPANCY_ALERT_THRESHOLD_PERCENT = 90
+VISITOR_ACTIVITY_BASELINE_DAYS = 35
+VISITOR_ACTIVITY_MIN_BASELINE_DAYS = 3
+VISITOR_ACTIVITY_TRIGGER_MULTIPLIER = 1.5
+VISITOR_ACTIVITY_RECOVERY_MULTIPLIER = 1.2
+VISITOR_ACTIVITY_MIN_INCREASE = 10
 SYSTEM_SETTINGS_ID = "default"
 NOTIFY_CAMERA_SESSION_ERROR_KEY = "notifications.cameraSessionErrorAlerts"
 NOTIFY_GATEWAY_SERVICE_ERROR_KEY = "notifications.gatewayServiceErrorAlerts"
@@ -87,9 +98,9 @@ class InvalidReportWorkflowError(Exception):
 
 
 @dataclass(frozen=True)
-class OccupancyAlertCondition:
-    capacity: int
-    threshold_percent: int
+class VisitorActivityCondition:
+    typical_occupancy: int
+    baseline_days: int
     threshold_count: int
     recovery_count: int
     current_occupancy: int
@@ -101,6 +112,14 @@ class OccupancyAlertCondition:
     @property
     def recovered(self) -> bool:
         return self.current_occupancy <= self.recovery_count
+
+    @property
+    def difference_percent(self) -> int:
+        if self.typical_occupancy <= 0:
+            return 100 if self.current_occupancy > 0 else 0
+        return round(
+            (self.current_occupancy - self.typical_occupancy) / self.typical_occupancy * 100
+        )
 
 
 def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSummary:
@@ -617,66 +636,101 @@ def can_view_operational_event(role: str, event_type: str) -> bool:
     return False
 
 
-def occupancy_alert_condition(
-    payload: DesktopTelemetryIngest,
-    building_capacity: int | None = None,
-) -> OccupancyAlertCondition | None:
-    if not is_valid_building_capacity(building_capacity):
+def visitor_activity_condition(
+    current_occupancy: int,
+    baseline_occupancies: Sequence[int | float],
+) -> VisitorActivityCondition | None:
+    if len(baseline_occupancies) < VISITOR_ACTIVITY_MIN_BASELINE_DAYS:
         return None
-    assert building_capacity is not None
-    capacity = building_capacity
-    threshold_percent = OCCUPANCY_ALERT_THRESHOLD_PERCENT
-
-    threshold_count = max(1, ceil(capacity * threshold_percent / 100))
-    recovery_percent = max(0, threshold_percent - 10)
-    recovery_count = max(0, int(capacity * recovery_percent / 100))
-    return OccupancyAlertCondition(
-        capacity=capacity,
-        threshold_percent=threshold_percent,
+    typical_occupancy = max(0, round(fmean(baseline_occupancies)))
+    threshold_count = max(
+        typical_occupancy + VISITOR_ACTIVITY_MIN_INCREASE,
+        ceil(typical_occupancy * VISITOR_ACTIVITY_TRIGGER_MULTIPLIER),
+    )
+    recovery_count = max(
+        typical_occupancy,
+        ceil(typical_occupancy * VISITOR_ACTIVITY_RECOVERY_MULTIPLIER),
+    )
+    return VisitorActivityCondition(
+        typical_occupancy=typical_occupancy,
+        baseline_days=len(baseline_occupancies),
         threshold_count=threshold_count,
         recovery_count=recovery_count,
-        current_occupancy=payload.metrics.currentOccupancy,
+        current_occupancy=max(0, current_occupancy),
     )
 
 
-def is_valid_building_capacity(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+async def load_matching_visitor_baseline(
+    db: AsyncSession,
+    enterprise_profile_id: str,
+    reference_time: datetime,
+) -> list[float]:
+    reference = _aware(reference_time)
+    local_reference = reference.astimezone(PHILIPPINE_TIME_ZONE)
+    local_timestamp = func.timezone(
+        str(PHILIPPINE_TIME_ZONE), EnterpriseTelemetrySnapshot.captured_at
+    )
+    local_day = func.date_trunc("day", local_timestamp)
+    weekday = (local_reference.weekday() + 1) % 7
+    statement = (
+        select(func.avg(EnterpriseTelemetrySnapshot.current_occupancy))
+        .where(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id == enterprise_profile_id,
+            EnterpriseTelemetrySnapshot.captured_at
+            >= reference - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS),
+            EnterpriseTelemetrySnapshot.captured_at < reference - timedelta(days=1),
+            func.extract("dow", local_timestamp) == weekday,
+            func.extract("hour", local_timestamp) == local_reference.hour,
+        )
+        .group_by(local_day)
+        .order_by(local_day.desc())
+    )
+    return [float(value) for value in (await db.scalars(statement)).all()]
 
 
 async def evaluate_telemetry_alerts(
     db: AsyncSession,
     account: Account,
     payload: DesktopTelemetryIngest,
+    *,
+    baseline_occupancies: Sequence[int | float] | None = None,
 ) -> list[tuple[str, OperationalAlertSummary]]:
-    source_id = f"occupancy-threshold:{account.id}"
+    source_id = f"visitor-activity:{account.id}"
     existing = await db.scalar(
         select(OperationalAlert).where(
             OperationalAlert.source_id == source_id,
-            OperationalAlert.alert_type == "Threshold Breach",
+            OperationalAlert.alert_type == "Foot Traffic Alert",
             OperationalAlert.status != "Resolved",
         )
     )
-    profile = account.enterprise_profile
-    condition = occupancy_alert_condition(payload, profile.building_capacity if profile else None)
+    reference_time = payload.capturedAt or payload.metrics.lastEventAt or datetime.now(UTC)
+    baseline = (
+        list(baseline_occupancies)
+        if baseline_occupancies is not None
+        else await load_matching_visitor_baseline(db, account.id, reference_time)
+    )
+    condition = visitor_activity_condition(payload.metrics.currentOccupancy, baseline)
 
     if condition is not None and condition.breached:
         if existing is not None:
             return []
 
         enterprise = enterprise_name(account)
+        local_reference = _aware(reference_time).astimezone(PHILIPPINE_TIME_ZONE)
+        period_label = format_visitor_period(local_reference)
         alert = await create_operational_alert(
             db,
-            alert_type="Threshold Breach",
-            severity="Critical",
+            alert_type="Foot Traffic Alert",
+            severity="Critical" if condition.difference_percent >= 100 else "Warning",
             requester=enterprise,
             enterprise=enterprise,
             summary=(
-                f"Live occupancy reached {condition.current_occupancy} of "
-                f"{condition.capacity} people, exceeding the "
-                f"{condition.threshold_percent}% building-capacity alert trigger."
+                f"{enterprise} currently has {condition.current_occupancy} visitors, compared "
+                f"with its usual {condition.typical_occupancy} around {period_label}."
             ),
             required_action=(
-                "Review live occupancy and apply the venue's crowd-management procedure."
+                "Review the live map and coordinate with the establishment, traffic team, or "
+                "public-safety personnel if support is needed."
             ),
             resolution_mode="Admin Monitoring",
             owner="Admin",
@@ -688,14 +742,17 @@ async def evaluate_telemetry_alerts(
     if should_resolve and existing is not None:
         existing.status = "Resolved"
         existing.summary = (
-            f"{existing.summary} The latest live data indicates that the threshold condition "
-            "has cleared."
+            f"{existing.summary} The latest visitor level has returned to its usual range."
         )
         await db.commit()
         await db.refresh(existing)
         return [("alert.resolved", to_operational_alert_summary(existing))]
 
     return []
+
+
+def format_visitor_period(value: datetime) -> str:
+    return value.strftime("%A at %I %p").replace(" at 0", " at ")
 
 
 async def ingest_telemetry(
@@ -848,6 +905,262 @@ async def list_latest_telemetry(
         to_telemetry_summary(snapshot, accounts.get(snapshot.enterprise_profile_id))
         for snapshot in snapshots
     ]
+
+
+@dataclass(frozen=True)
+class HourlyVisitorObservation:
+    enterprise_profile_id: str
+    enterprise_id: str
+    enterprise_name: str
+    barangay: str
+    start_at: datetime
+    average_visitors: float
+    peak_visitors: int
+
+
+async def get_visitor_insights(
+    db: AsyncSession,
+    range_value: VisitorInsightRange,
+    *,
+    enterprise_id: str | None = None,
+    barangay: str | None = None,
+    now: datetime | None = None,
+) -> VisitorInsightsSummary:
+    current_time = _aware(now or datetime.now(UTC))
+    local_now = current_time.astimezone(PHILIPPINE_TIME_ZONE)
+    observations = await load_hourly_visitor_observations(db, current_time)
+    latest = await list_latest_telemetry(db, None)
+
+    if enterprise_id:
+        observations = [item for item in observations if item.enterprise_id == enterprise_id]
+        latest = [item for item in latest if item.enterpriseId == enterprise_id]
+        scope_type = "enterprise"
+        scope_id = enterprise_id
+        scope_name = next(
+            (item.enterprise_name for item in observations),
+            next((item.enterpriseName for item in latest), "Selected establishment"),
+        )
+    elif barangay:
+        normalized_barangay = barangay.strip().casefold()
+        observations = [
+            item for item in observations if item.barangay.casefold() == normalized_barangay
+        ]
+        latest = [
+            item
+            for item in latest
+            if (item.barangay or "Unassigned").casefold() == normalized_barangay
+        ]
+        scope_type = "barangay"
+        scope_id = barangay
+        scope_name = f"Barangay {barangay}"
+    else:
+        scope_type = "city"
+        scope_id = None
+        scope_name = "San Pedro"
+
+    baselines = visitor_baselines_by_enterprise(observations, local_now)
+    enterprise_insights = [
+        visitor_enterprise_insight(item, baselines.get(item.enterpriseId, [])) for item in latest
+    ]
+    enterprise_insights.sort(key=lambda item: item.currentVisitors, reverse=True)
+    current_visitors = sum(item.currentVisitors for item in enterprise_insights)
+    has_complete_baseline = bool(enterprise_insights) and all(
+        item.typicalVisitors is not None for item in enterprise_insights
+    )
+    typical_visitors = (
+        sum(item.typicalVisitors or 0 for item in enterprise_insights)
+        if has_complete_baseline
+        else None
+    )
+    difference_percent = visitor_difference_percent(current_visitors, typical_visitors)
+    series = visitor_insight_series(observations, range_value, local_now)
+    unusually_busy = [
+        item for item in enterprise_insights if item.activityLevel == "Busier Than Usual"
+    ]
+    busiest_period = max(series, key=lambda item: item.averageVisitors, default=None)
+
+    return VisitorInsightsSummary(
+        range=range_value,
+        scopeType=scope_type,  # type: ignore[arg-type]
+        scopeId=scope_id,
+        scopeName=scope_name,
+        currentVisitors=current_visitors,
+        typicalVisitors=typical_visitors,
+        differencePercent=difference_percent,
+        comparisonMessage=visitor_comparison_message(difference_percent),
+        busiestEnterprise=enterprise_insights[0] if enterprise_insights else None,
+        busiestPeriodLabel=busiest_period.label if busiest_period else None,
+        series=series,
+        unusuallyBusy=unusually_busy,
+        lastUpdatedAt=max((item.receivedAt for item in latest), default=None),
+    )
+
+
+async def load_hourly_visitor_observations(
+    db: AsyncSession,
+    current_time: datetime,
+) -> list[HourlyVisitorObservation]:
+    local_timestamp = func.timezone(
+        str(PHILIPPINE_TIME_ZONE), EnterpriseTelemetrySnapshot.captured_at
+    )
+    hour_bucket = func.date_trunc("hour", local_timestamp).label("hour_bucket")
+    statement = (
+        select(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id,
+            EnterpriseProfile.enterprise_id,
+            EnterpriseProfile.enterprise_name,
+            EnterpriseProfile.barangay,
+            hour_bucket,
+            func.avg(EnterpriseTelemetrySnapshot.current_occupancy),
+            func.max(EnterpriseTelemetrySnapshot.current_occupancy),
+        )
+        .join(
+            EnterpriseProfile,
+            EnterpriseProfile.account_id == EnterpriseTelemetrySnapshot.enterprise_profile_id,
+        )
+        .where(
+            EnterpriseTelemetrySnapshot.captured_at
+            >= current_time - timedelta(days=VISITOR_ACTIVITY_BASELINE_DAYS)
+        )
+        .group_by(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id,
+            EnterpriseProfile.enterprise_id,
+            EnterpriseProfile.enterprise_name,
+            EnterpriseProfile.barangay,
+            hour_bucket,
+        )
+        .order_by(hour_bucket.asc())
+    )
+    rows = (await db.execute(statement)).all()
+    return [
+        HourlyVisitorObservation(
+            enterprise_profile_id=row[0],
+            enterprise_id=row[1],
+            enterprise_name=row[2],
+            barangay=row[3] or "Unassigned",
+            start_at=_philippine_hour(row[4]),
+            average_visitors=max(0.0, float(row[5] or 0)),
+            peak_visitors=max(0, int(row[6] or 0)),
+        )
+        for row in rows
+    ]
+
+
+def visitor_baselines_by_enterprise(
+    observations: Sequence[HourlyVisitorObservation],
+    local_now: datetime,
+) -> dict[str, list[float]]:
+    values: dict[str, list[float]] = defaultdict(list)
+    cutoff = local_now - timedelta(days=1)
+    for observation in observations:
+        if observation.start_at >= cutoff:
+            continue
+        if observation.start_at.weekday() != local_now.weekday():
+            continue
+        if observation.start_at.hour != local_now.hour:
+            continue
+        values[observation.enterprise_id].append(observation.average_visitors)
+    return values
+
+
+def visitor_enterprise_insight(
+    telemetry: TelemetrySnapshotSummary,
+    baseline: Sequence[int | float],
+) -> VisitorInsightEnterprise:
+    condition = visitor_activity_condition(telemetry.currentOccupancy, baseline)
+    typical_visitors = condition.typical_occupancy if condition else None
+    difference_percent = visitor_difference_percent(telemetry.currentOccupancy, typical_visitors)
+    return VisitorInsightEnterprise(
+        enterpriseId=telemetry.enterpriseId,
+        enterpriseName=telemetry.enterpriseName,
+        barangay=telemetry.barangay or "Unassigned",
+        currentVisitors=telemetry.currentOccupancy,
+        typicalVisitors=typical_visitors,
+        differencePercent=difference_percent,
+        activityLevel=(
+            "Busier Than Usual"
+            if condition is not None and condition.breached
+            else "Usual"
+            if condition is not None
+            else "No Recent Baseline"
+        ),
+    )
+
+
+def visitor_insight_series(
+    observations: Sequence[HourlyVisitorObservation],
+    range_value: VisitorInsightRange,
+    local_now: datetime,
+) -> list[VisitorInsightPoint]:
+    if range_value == "today":
+        start_at = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        grouped: dict[datetime, list[HourlyVisitorObservation]] = defaultdict(list)
+        for observation in observations:
+            if observation.start_at >= start_at:
+                grouped[observation.start_at].append(observation)
+        return [
+            VisitorInsightPoint(
+                startAt=bucket,
+                label=bucket.strftime("%I %p").lstrip("0"),
+                averageVisitors=round(sum(item.average_visitors for item in items)),
+                peakVisitors=sum(item.peak_visitors for item in items),
+            )
+            for bucket, items in sorted(grouped.items())
+        ]
+
+    days = 7 if range_value == "7d" else 30
+    start_at = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+        days=days - 1
+    )
+    daily_enterprise: dict[tuple[datetime, str], list[HourlyVisitorObservation]] = defaultdict(list)
+    for observation in observations:
+        day = observation.start_at.replace(hour=0, minute=0, second=0, microsecond=0)
+        if day >= start_at:
+            daily_enterprise[(day, observation.enterprise_id)].append(observation)
+
+    daily_totals: dict[datetime, tuple[float, int]] = defaultdict(lambda: (0.0, 0))
+    for (day, _enterprise_id), items in daily_enterprise.items():
+        total_average, total_peak = daily_totals[day]
+        daily_totals[day] = (
+            total_average + fmean(item.average_visitors for item in items),
+            total_peak + max(item.peak_visitors for item in items),
+        )
+
+    return [
+        VisitorInsightPoint(
+            startAt=day,
+            label=day.strftime("%a, %b %d").replace(" 0", " "),
+            averageVisitors=round(values[0]),
+            peakVisitors=values[1],
+        )
+        for day, values in sorted(daily_totals.items())
+    ]
+
+
+def visitor_difference_percent(current: int, typical: int | None) -> int | None:
+    if typical is None:
+        return None
+    if typical <= 0:
+        return 100 if current > 0 else 0
+    return round((current - typical) / typical * 100)
+
+
+def visitor_comparison_message(difference_percent: int | None) -> str:
+    if difference_percent is None:
+        return "More matching days are needed before TANAW can make a reliable comparison."
+    if difference_percent >= 50:
+        return "Visitor activity is much higher than usual for this day and time."
+    if difference_percent >= 20:
+        return "Visitor activity is higher than usual for this day and time."
+    if difference_percent <= -20:
+        return "Visitor activity is quieter than usual for this day and time."
+    return "Visitor activity is within its usual range for this day and time."
+
+
+def _philippine_hour(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=PHILIPPINE_TIME_ZONE)
+    return value.astimezone(PHILIPPINE_TIME_ZONE)
 
 
 async def get_operational_summary(db: AsyncSession, account: Account | None) -> OperationalSummary:

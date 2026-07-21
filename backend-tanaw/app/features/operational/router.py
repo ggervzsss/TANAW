@@ -55,6 +55,8 @@ from app.features.operational.schemas import (
     SupportTicketSummary,
     TelemetrySnapshotSummary,
     UserNotificationSummary,
+    VisitorInsightRange,
+    VisitorInsightsSummary,
 )
 from app.features.operational.service import (
     NOTIFY_CAMERA_SESSION_ERROR_KEY,
@@ -79,6 +81,7 @@ from app.features.operational.service import (
     get_operational_summary,
     get_support_ticket_detail,
     get_support_ticket_for_account,
+    get_visitor_insights,
     ingest_report_submission,
     ingest_telemetry,
     list_intake_reports,
@@ -115,6 +118,7 @@ StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 AlertReadAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
 AlertManageAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
+AdminAccount = Annotated[Account, Depends(require_roles({"admin"}))]
 
 
 @router.post(
@@ -147,7 +151,7 @@ async def ingest_desktop_telemetry(
                 recipient_roles=[AccountRole.ADMIN],
                 title=f"{alert_summary.enterprise or alert_summary.requester} needs attention.",
                 message=alert_summary.summary,
-                notification_type="Crowd Level Alert",
+                notification_type="High Visitor Activity",
                 severity=alert_summary.severity,
                 actor=account,
                 source_type="operational.alert",
@@ -163,7 +167,7 @@ async def ingest_desktop_telemetry(
         if alert_summary.owner == "Admin":
             await record_operational_log(
                 db,
-                category="System",
+                category="Admin Operation",
                 severity="Success" if event_type == "alert.resolved" else alert_summary.severity,
                 actor="TANAW",
                 actor_role="System",
@@ -337,6 +341,27 @@ async def get_summary(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OperationalSummary:
     return await get_operational_summary(db, account)
+
+
+@router.get("/visitor-insights", response_model=VisitorInsightsSummary)
+async def get_admin_visitor_insights(
+    _: AdminAccount,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    range_value: Annotated[VisitorInsightRange, Query(alias="range")] = "7d",
+    enterprise_id: Annotated[str | None, Query(alias="enterpriseId")] = None,
+    barangay: str | None = None,
+) -> VisitorInsightsSummary:
+    if enterprise_id and barangay:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Choose either an establishment or a barangay insight scope.",
+        )
+    return await get_visitor_insights(
+        db,
+        range_value,
+        enterprise_id=enterprise_id,
+        barangay=barangay,
+    )
 
 
 @router.get("/reports/intake", response_model=list[IntakeReportSummary])

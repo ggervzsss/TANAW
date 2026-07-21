@@ -1,4 +1,4 @@
-import { Activity, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
+import { Activity, BarChart3, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
@@ -9,9 +9,10 @@ import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 type EnterpriseDetailsModalProps = {
   enterprise: MapEnterprise;
   onClose: () => void;
+  onOpenInsights: () => void;
 };
 
-export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetailsModalProps) {
+export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: EnterpriseDetailsModalProps) {
   const { timeFormat } = useSystemDisplayPreferences();
 
   return (
@@ -38,6 +39,14 @@ export function EnterpriseDetailsModal({ enterprise, onClose }: EnterpriseDetail
             <EnterpriseMetricCard icon={<Radio size={16} />} label="Status" value={<StatusBadge status={enterprise.status} />} />
             <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={enterprise.trend ?? "Stable"} />
           </div>
+          <button
+            type="button"
+            onClick={onOpenInsights}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-black tracking-wide text-white uppercase shadow-sm transition hover:bg-emerald-800"
+          >
+            <BarChart3 size={15} />
+            View Visitor Insights
+          </button>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2">
@@ -67,7 +76,9 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
 
 function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}>
+    <div
+      className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
+    >
       <span className="text-tanaw-green mt-0.5">{icon}</span>
       <div className="min-w-0">
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>

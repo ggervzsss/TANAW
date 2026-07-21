@@ -1,46 +1,121 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.features.accounts.models import Account, AccountRole
 from app.features.operational.models import EnterpriseTelemetrySnapshot, OperationalAlert
-from app.features.operational.schemas import (
-    DesktopMetricsSummary,
-    DesktopTelemetryIngest,
-)
+from app.features.operational.schemas import TelemetrySnapshotSummary, VisitorInsightPoint
 from app.features.operational.service import (
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
+    HourlyVisitorObservation,
     can_manage_operational_alert,
     can_view_operational_event,
     gateway_status_for_snapshot,
     list_operational_alerts,
-    occupancy_alert_condition,
     resolve_system_setting_enabled,
+    visitor_activity_condition,
+    visitor_baselines_by_enterprise,
+    visitor_enterprise_insight,
+    visitor_insight_series,
 )
 
 
-def test_telemetry_without_building_capacity_has_no_occupancy_rule() -> None:
-    payload = DesktopTelemetryIngest(
-        metrics=DesktopMetricsSummary(currentOccupancy=500),
-    )
-
-    assert occupancy_alert_condition(payload) is None
+def test_visitor_activity_requires_three_matching_baseline_days() -> None:
+    assert visitor_activity_condition(50, [20, 22]) is None
 
 
-def test_real_telemetry_uses_building_capacity_for_alert_condition() -> None:
-    payload = DesktopTelemetryIngest(
-        metrics=DesktopMetricsSummary(currentOccupancy=180),
-    )
-
-    condition = occupancy_alert_condition(payload, building_capacity=200)
+def test_visitor_activity_compares_current_level_with_matching_history() -> None:
+    condition = visitor_activity_condition(48, [19, 20, 21, 20])
 
     assert condition is not None
-    assert condition.capacity == 200
-    assert condition.threshold_percent == 90
-    assert condition.threshold_count == 180
+    assert condition.typical_occupancy == 20
+    assert condition.baseline_days == 4
+    assert condition.threshold_count == 30
+    assert condition.recovery_count == 24
     assert condition.breached is True
+    assert condition.difference_percent == 140
+
+
+def test_visitor_baseline_uses_matching_weekday_and_hour() -> None:
+    local_now = datetime(2026, 7, 21, 16, tzinfo=UTC)
+    observations = [
+        _hourly_observation("enterprise-1", local_now - timedelta(days=7), 20),
+        _hourly_observation("enterprise-1", local_now - timedelta(days=14), 22),
+        _hourly_observation("enterprise-1", local_now - timedelta(days=21), 18),
+        _hourly_observation("enterprise-1", local_now - timedelta(days=1), 99),
+    ]
+
+    assert visitor_baselines_by_enterprise(observations, local_now) == {
+        "enterprise-1": [20, 22, 18]
+    }
+
+
+def test_visitor_insight_series_combines_establishments_by_day() -> None:
+    local_now = datetime(2026, 7, 21, 16, tzinfo=UTC)
+    observations = [
+        _hourly_observation("enterprise-1", local_now - timedelta(days=1), 20),
+        _hourly_observation("enterprise-1", local_now - timedelta(days=1, hours=2), 30),
+        _hourly_observation("enterprise-2", local_now - timedelta(days=1), 10),
+        _hourly_observation("enterprise-2", local_now - timedelta(days=1, hours=2), 20),
+    ]
+
+    points = visitor_insight_series(observations, "7d", local_now)
+
+    point_day = (local_now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    assert points == [
+        VisitorInsightPoint(
+            startAt=point_day,
+            label=point_day.strftime("%a, %b %d").replace(" 0", " "),
+            averageVisitors=40,
+            peakVisitors=50,
+        )
+    ]
+
+
+def test_enterprise_insight_marks_unusual_activity() -> None:
+    telemetry = TelemetrySnapshotSummary(
+        id="snapshot-1",
+        enterpriseId="enterprise-1",
+        enterpriseName="Enterprise One",
+        barangay="Nueva",
+        capturedAt=datetime.now(UTC),
+        receivedAt=datetime.now(UTC),
+        entries=100,
+        exits=55,
+        currentOccupancy=45,
+        peakOccupancy=45,
+        uniqueCount=70,
+        confirmedUniqueCount=60,
+        degradedUniqueCount=10,
+        totalEvents=155,
+        unsubmittedEvents=0,
+        unsyncedEvents=0,
+        running=True,
+        status="running",
+        gatewayStatus="Connected",
+    )
+
+    insight = visitor_enterprise_insight(telemetry, [20, 21, 19, 20])
+
+    assert insight.activityLevel == "Busier Than Usual"
+    assert insight.typicalVisitors == 20
+    assert insight.differencePercent == 125
+
+
+def _hourly_observation(
+    enterprise_id: str, start_at: datetime, average_visitors: int
+) -> HourlyVisitorObservation:
+    return HourlyVisitorObservation(
+        enterprise_profile_id=f"profile-{enterprise_id}",
+        enterprise_id=enterprise_id,
+        enterprise_name=enterprise_id,
+        barangay="Nueva",
+        start_at=start_at,
+        average_visitors=average_visitors,
+        peak_visitors=average_visitors,
+    )
 
 
 def test_it_receives_live_alert_websocket_events() -> None:

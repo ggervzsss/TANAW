@@ -200,7 +200,7 @@ function ActivityGroupBadge({ group }: { group: Exclude<ActivityGroup, "All Acti
 function activityGroupFor(log: SystemLog): Exclude<ActivityGroup, "All Activity"> {
   if (log.category === "Staff Submission" || log.category === "Staff Operation") return "Reports";
   if (log.category === "Admin Operation") return "Admin Activity";
-  if (log.action.startsWith("Alert ") || log.action === "Update Support Ticket Status") return "Issues & Resolutions";
+  if (log.action.startsWith("Alert ") || log.action.includes("Support Request") || log.action === "Update Support Ticket Status") return "Issues & Resolutions";
   if (log.category === "System" || log.severity === "Critical") return "Security";
   return "Accounts & Settings";
 }

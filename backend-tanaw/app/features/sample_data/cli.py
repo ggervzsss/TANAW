@@ -4,6 +4,8 @@ import json
 import random
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from math import ceil
+from statistics import fmean
 from typing import Any
 from uuid import UUID, uuid5
 
@@ -11,6 +13,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.date_time import PHILIPPINE_TIME_ZONE
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
 from app.db.migrations import validate_database_migration_head
@@ -49,7 +52,7 @@ from app.features.sample_data.dataset import (
 
 TEST_ACCOUNT_PASSWORD = "Visitor sample access phrase 2026"
 DEFAULT_SCENARIO = "full-workflow"
-DEFAULT_SEED = "tanaw-sample-v1"
+DEFAULT_SEED = "tanaw-sample-v2"
 REPORTING_STAFF_NAME = "Carla Mendoza"
 SAMPLE_UUID_NAMESPACE = UUID("b8df7e73-013f-4d10-8554-e8d54f90086f")
 DEMOGRAPHIC_FIELDS = (
@@ -73,6 +76,15 @@ class SampleEnterprise:
     longitude: float
     email: str
     phone: str
+
+
+@dataclass(frozen=True)
+class AdminVisitorScenario:
+    enterprise: Account
+    current_visitors: int
+    typical_visitors: int
+    captured_at: datetime
+    telemetry: list[EnterpriseTelemetrySnapshot]
 
 
 ENTERPRISES = (
@@ -275,15 +287,21 @@ async def generate_sample_data(
     target_profile = target.enterprise_profile
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
-    enterprises = [target, *accounts["enterprises"]]
+    enterprises = list(
+        {enterprise.id: enterprise for enterprise in [target, *accounts["enterprises"]]}.values()
+    )
     reports = await create_operational_history(
         db, range_start, range_end, scenario, rng, enterprises, target
+    )
+    visitor_scenario = await create_admin_visitor_history(
+        db, range_end, scenario, rng, enterprises, target
     )
     operations = await create_admin_operations_data(
         db,
         accounts["lgu"],
         accounts["enterprises"],
         range_end,
+        visitor_scenario,
     )
     notifications = await create_staff_report_notifications(
         db, accounts["lgu"], reports["staffNotificationReports"]
@@ -295,7 +313,7 @@ async def generate_sample_data(
         "lguAccounts": len(accounts["lgu"]),
         "generatedEnterpriseAccounts": len(accounts["enterprises"]),
         "participatingEnterprises": len(enterprises),
-        "telemetrySnapshots": len(reports["telemetry"]),
+        "telemetrySnapshots": len(reports["telemetry"]) + len(visitor_scenario.telemetry),
         "intakeReports": len(reports["reports"]),
         "finalReports": len(final_reports),
         "staffNotifications": notifications,
@@ -303,7 +321,7 @@ async def generate_sample_data(
         "itNotifications": operations["itNotifications"],
         "operationalAlerts": operations["operationalAlerts"],
         "supportTickets": operations["supportTickets"],
-        "activityLogs": logs,
+        "activityLogs": logs + operations["activityLogs"],
         "targetPreparedReportCounts": prepared_counts(target_profile.enterprise_id),
     }
     await db.commit()
@@ -392,18 +410,133 @@ async def create_accounts(db: AsyncSession) -> dict[str, list[Account]]:
     return {"lgu": lgu_accounts, "enterprises": enterprise_accounts}
 
 
+async def create_admin_visitor_history(
+    db: AsyncSession,
+    range_end: datetime,
+    scenario: str,
+    rng: random.Random,
+    enterprises: list[Account],
+    target: Account,
+) -> AdminVisitorScenario:
+    local_now = range_end.astimezone(PHILIPPINE_TIME_ZONE)
+    first_day = (local_now - timedelta(days=34)).replace(hour=0, minute=0, second=0, microsecond=0)
+    hours = sorted({8, 10, 12, 14, 16, 18, 20, local_now.hour})
+    telemetry: list[EnterpriseTelemetrySnapshot] = []
+    target_matching_values: list[int] = []
+    current_visitors = 0
+
+    for day_offset in range(35):
+        day = first_day + timedelta(days=day_offset)
+        for hour in hours:
+            local_captured_at = day.replace(hour=hour)
+            if local_captured_at.date() == local_now.date() and hour == local_now.hour:
+                local_captured_at = local_now
+            if local_captured_at > local_now:
+                continue
+
+            for enterprise_index, enterprise in enumerate(enterprises):
+                profile = enterprise.enterprise_profile
+                if profile is None:
+                    raise SystemExit("Sample visitor insights require enterprise profiles.")
+                normal_level = sample_normal_visitor_level(enterprise_index, local_captured_at)
+                occupancy = max(0, normal_level + rng.randint(-2, 2))
+                is_matching_target_history = (
+                    enterprise.id == target.id
+                    and local_captured_at.weekday() == local_now.weekday()
+                    and local_captured_at.hour == local_now.hour
+                    and local_captured_at < local_now - timedelta(days=1)
+                )
+                if is_matching_target_history:
+                    target_matching_values.append(occupancy)
+
+                is_current = local_captured_at == local_now
+                if is_current and enterprise.id == target.id:
+                    typical = round(fmean(target_matching_values))
+                    multiplier = 2.15 if scenario == "peak-traffic" else 1.75
+                    minimum_busy_level = 84 if scenario == "peak-traffic" else 68
+                    occupancy = max(
+                        minimum_busy_level,
+                        typical + 12,
+                        ceil(typical * multiplier),
+                    )
+                    current_visitors = occupancy
+
+                captured_at = local_captured_at.astimezone(UTC)
+                entries = 180 + day_offset * 24 + enterprise_index * 31 + hour * 3
+                exits = max(0, entries - occupancy)
+                unique_count = max(occupancy, round(entries * 0.72))
+                is_camera_error = (
+                    scenario == "camera-health" and enterprise_index == 2 and is_current
+                )
+                snapshot = EnterpriseTelemetrySnapshot(
+                    id=sample_uuid(
+                        "visitor-insight-telemetry",
+                        profile.account_id,
+                        captured_at.isoformat(),
+                    ),
+                    enterprise_profile_id=profile.account_id,
+                    enterprise_name=profile.enterprise_name,
+                    camera_id=f"{SAMPLE_CAMERA_PREFIX}visitor-{enterprise_index + 1}",
+                    camera_name=f"{profile.enterprise_name} Main Entrance",
+                    captured_at=captured_at,
+                    received_at=captured_at,
+                    entries=entries,
+                    exits=exits,
+                    current_occupancy=occupancy,
+                    peak_occupancy=max(occupancy, normal_level + 8),
+                    unique_count=unique_count,
+                    confirmed_unique_count=round(unique_count * 0.86),
+                    degraded_unique_count=unique_count - round(unique_count * 0.86),
+                    total_events=entries + exits,
+                    unsubmitted_events=0,
+                    unsynced_events=8 if is_camera_error else 0,
+                    running=is_current,
+                    status="error" if is_camera_error else "running",
+                    error="Desktop app updates delayed. Retrying automatically."
+                    if is_camera_error
+                    else None,
+                    analytics_fps=10.0 + rng.random() * 2.0,
+                    payload_json=json.dumps(
+                        {"source": "desktop-camera", "purpose": "visitor-insights"},
+                        sort_keys=True,
+                    ),
+                )
+                db.add(snapshot)
+                telemetry.append(snapshot)
+
+    if len(target_matching_values) < 3 or current_visitors <= 0:
+        raise SystemExit("The sample dataset could not build a visitor-activity baseline.")
+    await db.flush()
+    return AdminVisitorScenario(
+        enterprise=target,
+        current_visitors=current_visitors,
+        typical_visitors=round(fmean(target_matching_values)),
+        captured_at=range_end,
+        telemetry=telemetry,
+    )
+
+
+def sample_normal_visitor_level(enterprise_index: int, captured_at: datetime) -> int:
+    base = 14 + enterprise_index * 4
+    hour_effect = max(0, 18 - abs(captured_at.hour - 14) * 3)
+    weekend_effect = 9 if captured_at.weekday() >= 5 else 0
+    return base + hour_effect + weekend_effect
+
+
 async def create_admin_operations_data(
     db: AsyncSession,
     lgu_accounts: list[Account],
     enterprises: list[Account],
     range_end: datetime,
+    visitor_scenario: AdminVisitorScenario,
 ) -> dict[str, int]:
     admin = next(account for account in lgu_accounts if account.role == AccountRole.ADMIN)
     it_account = next(account for account in lgu_accounts if account.role == AccountRole.IT)
     if len(enterprises) < 3:
         raise SystemExit("At least three generated enterprises are required for operations data.")
 
-    busy_enterprise, support_enterprise, routine_support_enterprise = enterprises[:3]
+    busy_enterprise = visitor_scenario.enterprise
+    support_enterprise, routine_support_enterprise = enterprises[:2]
     busy_profile = busy_enterprise.enterprise_profile
     support_profile = support_enterprise.enterprise_profile
     routine_support_profile = routine_support_enterprise.enterprise_profile
@@ -411,22 +544,31 @@ async def create_admin_operations_data(
         raise SystemExit("Sample operations data requires enterprise profiles.")
 
     alert_created_at = range_end - timedelta(minutes=18)
+    difference_percent = round(
+        (visitor_scenario.current_visitors - visitor_scenario.typical_visitors)
+        / visitor_scenario.typical_visitors
+        * 100
+    )
     alert = OperationalAlert(
         id=sample_uuid("operations-alert", busy_enterprise.id),
         alert_code="ALT-SAMPLE-001",
-        alert_type="Threshold Breach",
-        severity="Critical",
+        alert_type="Foot Traffic Alert",
+        severity="Critical" if difference_percent >= 100 else "Warning",
         enterprise=busy_profile.enterprise_name,
         requester=busy_profile.enterprise_name,
         summary=(
-            f"Live occupancy reached {busy_profile.building_capacity - 5} of "
-            f"{busy_profile.building_capacity} people and is close to the establishment capacity."
+            f"{busy_profile.enterprise_name} currently has {visitor_scenario.current_visitors} "
+            f"visitors, compared with its usual {visitor_scenario.typical_visitors} around this "
+            "day and time."
         ),
-        required_action="Review the live map and apply the establishment's crowd-management procedure.",
+        required_action=(
+            "Review the live map and coordinate with the establishment, traffic team, or "
+            "public-safety personnel if support is needed."
+        ),
         resolution_mode="Admin Monitoring",
         status="New",
         owner="Admin",
-        source_id=f"{SAMPLE_SOURCE_PREFIX}operations:occupancy:{busy_enterprise.id}",
+        source_id=f"visitor-activity:{busy_enterprise.id}",
         created_at=alert_created_at,
         updated_at=alert_created_at,
     )
@@ -473,7 +615,7 @@ async def create_admin_operations_data(
             recipient_role=admin.role.value,
             title=f"{busy_profile.enterprise_name} needs attention.",
             message=alert.summary,
-            notification_type="Crowd Level Alert",
+            notification_type="High Visitor Activity",
             severity="Critical",
             source_type="operational.alert",
             source_id=alert.alert_code,
@@ -514,12 +656,68 @@ async def create_admin_operations_data(
         for ticket in (high_ticket, routine_ticket)
     ]
     db.add_all([*admin_notifications, *it_notifications])
+    profile_request_enterprise = enterprises[2]
+    profile_request_name = (
+        profile_request_enterprise.enterprise_profile.enterprise_name
+        if profile_request_enterprise.enterprise_profile
+        else profile_request_enterprise.display_name
+    )
+    db.add_all(
+        [
+            ActivityLog(
+                id=sample_uuid("activity-admin-alert", alert.id),
+                timestamp=alert_created_at,
+                category="Admin Operation",
+                severity=alert.severity,
+                actor="TANAW",
+                actor_role="System",
+                action="Alert Created",
+                target=busy_profile.enterprise_name,
+                summary=alert.summary,
+                source_id=f"{SAMPLE_SOURCE_PREFIX}activity:alert:{alert.id}",
+                metadata_json=json.dumps(
+                    {"alertType": alert.alert_type, "status": alert.status}, sort_keys=True
+                ),
+            ),
+            ActivityLog(
+                id=sample_uuid("activity-support-escalation", high_ticket.id),
+                timestamp=high_ticket_created_at,
+                category="Enterprise Activity",
+                severity="Warning",
+                actor=support_profile.enterprise_name,
+                actor_role="Enterprise Account",
+                action="Submit Important Support Request",
+                target=high_ticket.ticket_code,
+                summary=(
+                    f"{support_profile.enterprise_name} submitted an important support request "
+                    "for IT review."
+                ),
+                source_id=f"{SAMPLE_SOURCE_PREFIX}activity:ticket:{high_ticket.id}",
+            ),
+            ActivityLog(
+                id=sample_uuid("activity-account-request", profile_request_enterprise.id),
+                timestamp=range_end - timedelta(hours=4),
+                category="Enterprise Activity",
+                severity="Info",
+                actor=profile_request_name,
+                actor_role="Enterprise Account",
+                action="Request Account Update",
+                target=profile_request_name,
+                summary=f"{profile_request_name} requested a contact-number update for IT review.",
+                source_id=(
+                    f"{SAMPLE_SOURCE_PREFIX}activity:account-request:"
+                    f"{profile_request_enterprise.id}"
+                ),
+            ),
+        ]
+    )
     await db.flush()
     return {
         "adminNotifications": len(admin_notifications),
         "itNotifications": len(it_notifications),
         "operationalAlerts": 1,
         "supportTickets": 2,
+        "activityLogs": 3,
     }
 
 
@@ -627,6 +825,9 @@ async def create_operational_history(
                 )
 
             demographics = build_demographic_breakdown(unique_count, enterprise_index, month_index)
+            snapshot_captured_at = latest_capture_time(month_start, range_end)
+            if month_start == current_month:
+                snapshot_captured_at = range_end - timedelta(minutes=5)
 
             snapshot = EnterpriseTelemetrySnapshot(
                 id=sample_uuid(
@@ -638,7 +839,8 @@ async def create_operational_history(
                 enterprise_name=profile.enterprise_name,
                 camera_id=f"{SAMPLE_CAMERA_PREFIX}{enterprise_index + 1}",
                 camera_name=f"{profile.enterprise_name} Main Entrance",
-                captured_at=latest_capture_time(month_start, range_end),
+                captured_at=snapshot_captured_at,
+                received_at=snapshot_captured_at,
                 entries=base_entries,
                 exits=exits,
                 current_occupancy=current_occupancy,
@@ -995,9 +1197,7 @@ async def remove_sample_data(db: AsyncSession) -> dict:
     alerts_result = await db.execute(
         delete(OperationalAlert).where(
             OperationalAlert.source_id.startswith(SAMPLE_SOURCE_PREFIX)
-            | OperationalAlert.source_id.in_(
-                [f"occupancy-threshold:{account_id}" for account_id in account_ids]
-            )
+            | OperationalAlert.alert_code.startswith("ALT-SAMPLE-")
         )
     )
     tickets_result = await db.execute(

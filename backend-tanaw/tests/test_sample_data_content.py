@@ -27,6 +27,7 @@ from app.features.sample_data.cli import (
     LGU_ACCOUNTS,
     REPORTING_STAFF_NAME,
     TEST_ACCOUNT_PASSWORD,
+    AdminVisitorScenario,
     build_demographic_breakdown,
     create_admin_operations_data,
     create_staff_report_notifications,
@@ -233,6 +234,13 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
         lgu_accounts,
         enterprises,
         datetime(2026, 7, 21, 12, tzinfo=UTC),
+        AdminVisitorScenario(
+            enterprise=enterprises[0],
+            current_visitors=84,
+            typical_visitors=40,
+            captured_at=datetime(2026, 7, 21, 12, tzinfo=UTC),
+            telemetry=[],
+        ),
     )
 
     alert = db.add.call_args.args[0]
@@ -240,7 +248,10 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
     notifications = db.add_all.call_args_list[1].args[0]
     assert isinstance(alert, OperationalAlert)
     assert alert.owner == "Admin"
-    assert alert.alert_type == "Threshold Breach"
+    assert alert.alert_type == "Foot Traffic Alert"
+    assert alert.source_id == "visitor-activity:enterprise-1"
+    assert "84 visitors" in alert.summary
+    assert "usual 40" in alert.summary
     assert [ticket.priority for ticket in tickets if isinstance(ticket, SupportTicket)] == [
         "High",
         "Normal",
@@ -260,6 +271,7 @@ async def test_sample_operations_match_admin_escalation_rules() -> None:
         "itNotifications": 2,
         "operationalAlerts": 1,
         "supportTickets": 2,
+        "activityLogs": 3,
     }
     db.flush.assert_awaited_once()
 
