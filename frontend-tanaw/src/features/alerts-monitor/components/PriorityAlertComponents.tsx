@@ -67,13 +67,13 @@ export function AllAlertsModal({ alerts, onClose, onSelectAlert }: { alerts: Pri
   );
 }
 
-export function SeverityBadge({ severity }: { severity: AlertSeverity }) {
+export function SeverityBadge({ severity, label = severity }: { severity: AlertSeverity; label?: string }) {
   const classes: Record<AlertSeverity, string> = {
     Info: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
     Warning: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
     Critical: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
   };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[severity]}`}>{severity}</span>;
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[severity]}`}>{label}</span>;
 }
 
 export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode }) {
@@ -87,13 +87,13 @@ export function ResolutionBadge({ mode }: { mode: PriorityAlertResolutionMode })
   return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[mode]}`}>{mode}</span>;
 }
 
-export function AlertStatusBadge({ status }: { status: PriorityAlert["status"] }) {
+export function AlertStatusBadge({ status, label = status }: { status: PriorityAlert["status"]; label?: string }) {
   const classes: Record<PriorityAlert["status"], string> = {
     New: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
     "In Review": "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
     Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
   };
-  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{status}</span>;
+  return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{label}</span>;
 }
 
 function AlertEmptyState() {

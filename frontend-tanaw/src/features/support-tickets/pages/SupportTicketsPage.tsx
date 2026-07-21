@@ -14,6 +14,7 @@ import {
   listSupportTickets,
   replyToSupportTicket,
   updateSupportTicketStatus,
+  supportTicketsQueryKey,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
@@ -31,7 +32,6 @@ type StatusFilter = "All Statuses" | SupportTicketStatus;
 type PriorityFilter = "All Priorities" | SupportTicketPriority;
 type CategoryFilter = "All Categories" | SupportTicketCategory;
 
-const ticketQueryKey = ["operational", "support-tickets"];
 const statuses: StatusFilter[] = ["All Statuses", "Open", "In Review", "Resolved"];
 const priorities: PriorityFilter[] = ["All Priorities", "Urgent", "High", "Normal", "Low"];
 const categories: CategoryFilter[] = ["All Categories", "Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
@@ -47,7 +47,7 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isItResponder = mode === "it";
   const ticketsQuery = useQuery({
-    queryKey: ticketQueryKey,
+    queryKey: supportTicketsQueryKey,
     queryFn: listSupportTickets,
     refetchInterval: 30_000,
   });
@@ -244,22 +244,22 @@ export function SupportTicketsPage({ mode }: SupportTicketsPageProps) {
   );
 }
 
-function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mode: "admin" | "it"; ticketId: string; timeFormat: SystemTimeFormat; onClose: () => void }) {
+export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mode: "admin" | "it"; ticketId: string; timeFormat: SystemTimeFormat; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<SupportTicketAttachment | null>(null);
   const isItResponder = mode === "it";
   const detailQuery = useQuery({
-    queryKey: [...ticketQueryKey, ticketId],
+    queryKey: [...supportTicketsQueryKey, ticketId],
     queryFn: () => getSupportTicket(ticketId),
   });
   const ticket = detailQuery.data;
   const replyMutation = useMutation({
     mutationFn: (message: string) => replyToSupportTicket(ticketId, message),
     onSuccess: (detail) => {
-      queryClient.setQueryData([...ticketQueryKey, ticketId], detail);
-      void queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.setQueryData([...supportTicketsQueryKey, ticketId], detail);
+      void queryClient.invalidateQueries({ queryKey: supportTicketsQueryKey });
       setReply("");
       setReplyError("");
     },
@@ -268,8 +268,8 @@ function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mode: "ad
   const statusMutation = useMutation({
     mutationFn: (status: SupportTicketStatus) => updateSupportTicketStatus(ticketId, status),
     onSuccess: (detail) => {
-      queryClient.setQueryData([...ticketQueryKey, ticketId], detail);
-      void queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.setQueryData([...supportTicketsQueryKey, ticketId], detail);
+      void queryClient.invalidateQueries({ queryKey: supportTicketsQueryKey });
     },
   });
 
@@ -553,7 +553,7 @@ function ConversationItem({
   );
 }
 
-function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
+export function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
   const classes: Record<SupportTicketStatus, string> = {
     Open: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-300/30 dark:bg-blue-500/15 dark:text-blue-200",
     "In Review": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
@@ -562,7 +562,7 @@ function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
   return <span className={`rounded-full border px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{status}</span>;
 }
 
-function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
+export function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
   const classes: Record<SupportTicketPriority, string> = {
     Urgent: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
     High: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",

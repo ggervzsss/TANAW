@@ -15,7 +15,7 @@ SAMPLE_REPORT_PREFIX = "SAMPLE-REP-"
 SAMPLE_FINAL_REPORT_PREFIX = "SAMPLE-FINAL-"
 SAMPLE_CAMERA_PREFIX = "sample-camera-"
 SAMPLE_SOURCE_PREFIX = "sample:"
-SAMPLE_DATASET_VERSION = "tanaw-sample-v1"
+SAMPLE_DATASET_VERSION = "tanaw-sample-v2"
 
 
 def sample_dataset_marker_email() -> str:

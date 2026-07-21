@@ -8,9 +8,9 @@ import { routes } from "./routes";
 
 const AccountProfilePage = lazy(() => import("@/features/account").then((module) => ({ default: module.AccountProfilePage })));
 const AccountSecurityPage = lazy(() => import("@/features/account").then((module) => ({ default: module.AccountSecurityPage })));
-const AdminAlertsMonitorPage = lazy(() =>
+const AdminOperationsCenterPage = lazy(() =>
   import("@/features/alerts-monitor").then((module) => ({
-    default: module.AdminAlertsMonitorPage,
+    default: module.AdminOperationsCenterPage,
   })),
 );
 const ITAlertsPage = lazy(() => import("@/features/alerts-monitor").then((module) => ({ default: module.ITAlertsPage })));
@@ -108,8 +108,7 @@ export function AppRouter() {
           <Route index element={<Navigate to={routes.admin.mapview} replace />} />
           <Route path="mapview" element={<AdminMapViewPage />} />
           <Route path="activity-history" element={<AdminActivityHistoryPage />} />
-          <Route path="alerts-monitor" element={<AdminAlertsMonitorPage />} />
-          <Route path="support-tickets" element={<SupportTicketsPage mode="admin" />} />
+          <Route path="operations" element={<AdminOperationsCenterPage />} />
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
           <Route path="profile" element={<AccountProfilePage role="admin" />} />
           <Route path="security" element={<AccountSecurityPage />} />

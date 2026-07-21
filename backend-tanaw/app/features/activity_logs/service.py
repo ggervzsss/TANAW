@@ -57,7 +57,10 @@ def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
                 category == "IT Activity"
                 and (action in ADMIN_IT_ACTIVITY_ACTIONS or action.startswith("Alert "))
             )
-            or (category == "System" and severity in {"Warning", "Critical"})
+            or (
+                category == "System"
+                and (severity in {"Warning", "Critical"} or action.startswith("Alert "))
+            )
             or severity == "Critical"
         )
     if role == AccountRole.IT.value:

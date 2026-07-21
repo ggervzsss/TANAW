@@ -64,6 +64,7 @@ from app.features.operational.service import (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
+    can_manage_operational_alert,
     create_final_report,
     create_operational_alert,
     create_role_notifications,
@@ -113,6 +114,7 @@ EnterpriseAccount = Annotated[Account, Depends(require_roles({"enterprise"}))]
 StaffWorkflowAccount = Annotated[Account, Depends(require_roles({"admin", "staff"}))]
 ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 AlertReadAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
+AlertManageAccount = Annotated[Account, Depends(require_roles({"admin", "it"}))]
 
 
 @router.post(
@@ -139,6 +141,41 @@ async def ingest_desktop_telemetry(
                 data=alert_summary.model_dump(mode="json"),
             )
         )
+        if event_type == "alert.created" and alert_summary.owner == "Admin":
+            notifications = await create_role_notifications(
+                db,
+                recipient_roles=[AccountRole.ADMIN],
+                title=f"{alert_summary.enterprise or alert_summary.requester} needs attention.",
+                message=alert_summary.summary,
+                notification_type="Crowd Level Alert",
+                severity=alert_summary.severity,
+                actor=account,
+                source_type="operational.alert",
+                source_id=alert_summary.id,
+            )
+            for notification in notifications:
+                await operational_ws_manager.broadcast(
+                    OperationalWebSocketEnvelope(
+                        type="notification.created",
+                        data=notification.model_dump(mode="json"),
+                    )
+                )
+        if alert_summary.owner == "Admin":
+            await record_operational_log(
+                db,
+                category="System",
+                severity="Success" if event_type == "alert.resolved" else alert_summary.severity,
+                actor="TANAW",
+                actor_role="System",
+                action="Alert Resolved" if event_type == "alert.resolved" else "Alert Created",
+                target=alert_summary.enterprise or alert_summary.requester,
+                summary=alert_summary.summary,
+                source_id=alert_summary.id,
+                metadata={
+                    "alertType": alert_summary.type,
+                    "status": alert_summary.status,
+                },
+            )
 
     if payload.metrics.unsyncedEvents > 0 and await system_setting_enabled(
         db, NOTIFY_SYNC_DELAY_KEY
@@ -580,7 +617,7 @@ async def create_enterprise_support_ticket(
     )
     notifications = await create_role_notifications(
         db,
-        recipient_roles=support_ticket_notification_roles(),
+        recipient_roles=support_ticket_notification_roles(ticket.priority),
         title=f"{enterprise} submitted support ticket {ticket.code}.",
         message=f"{enterprise} submitted a {ticket.category.lower()} ticket: {ticket.subject}.{attachment_suffix}",
         notification_type="Enterprise Support Ticket",
@@ -669,7 +706,7 @@ async def create_ticket_message(
     else:
         notifications = await create_role_notifications(
             db,
-            recipient_roles=support_ticket_notification_roles(),
+            recipient_roles=[AccountRole.IT],
             title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
             message=f"New enterprise response on {detail.code}: {detail.subject}.",
             notification_type="Enterprise Support Reply",
@@ -879,17 +916,17 @@ async def list_map_enterprises(
 
 @router.get("/alerts", response_model=list[OperationalAlertSummary])
 async def list_alerts(
-    _: AlertReadAccount,
+    account: AlertReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[OperationalAlertSummary]:
-    return await list_operational_alerts(db)
+    return await list_operational_alerts(db, account)
 
 
 @router.patch("/alerts/{alert_code}/status", response_model=OperationalAlertSummary)
 async def update_alert_status(
     alert_code: str,
     payload: OperationalAlertStatusUpdate,
-    actor: ITAccount,
+    actor: AlertManageAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OperationalAlertSummary:
     alert = await db.scalar(
@@ -897,6 +934,11 @@ async def update_alert_status(
     )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found.")
+    if not can_manage_operational_alert(actor, alert):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This situation is assigned to a different account type.",
+        )
     previous_status = alert.status
     alert.status = payload.status
     await db.commit()
@@ -908,12 +950,14 @@ async def update_alert_status(
             data=alert_summary.model_dump(mode="json"),
         )
     )
+    actor_role = "Admin" if actor.role == AccountRole.ADMIN else "IT Personnel"
+    activity_category = "Admin Operation" if actor.role == AccountRole.ADMIN else "IT Activity"
     await record_operational_log(
         db,
-        category="IT Activity",
+        category=activity_category,
         severity="Success" if payload.status == "Resolved" else "Info",
         actor=actor.display_name,
-        actor_role="IT Personnel",
+        actor_role=actor_role,
         action=f"Alert {payload.status}",
         target=alert.enterprise or alert.requester,
         summary=f"{actor.display_name} marked {alert.alert_code} as {payload.status}.",
@@ -1106,8 +1150,10 @@ def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bo
     return isinstance(payload_status, str) and payload_status.strip().lower() == "resubmitted"
 
 
-def support_ticket_notification_roles() -> list[AccountRole]:
-    return [AccountRole.ADMIN, AccountRole.IT]
+def support_ticket_notification_roles(priority: str) -> list[AccountRole]:
+    if priority in {"High", "Urgent"}:
+        return [AccountRole.ADMIN, AccountRole.IT]
+    return [AccountRole.IT]
 
 
 async def record_operational_log(

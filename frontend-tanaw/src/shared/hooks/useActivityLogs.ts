@@ -6,10 +6,10 @@ import type { SystemLog } from "../types";
 
 export const activityLogsQueryKey = ["activity-logs"];
 
-export function useActivityLogs() {
+export function useActivityLogs(enabled = true) {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.user?.role);
-  const canViewActivityLogs = role === "admin" || role === "it";
+  const canViewActivityLogs = enabled && (role === "admin" || role === "it");
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: activityLogsQueryKey, queryFn: listActivityLogs, enabled: Boolean(token) && canViewActivityLogs });
 

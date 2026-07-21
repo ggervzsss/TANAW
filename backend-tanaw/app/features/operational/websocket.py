@@ -41,6 +41,9 @@ class OperationalConnectionManager:
                 if envelope.type in {"notification.created", "notification.updated"}:
                     if not self._is_notification_recipient(socket, envelope):
                         continue
+                elif envelope.type in {"alert.created", "alert.updated", "alert.resolved"}:
+                    if not self._is_alert_recipient(role, envelope):
+                        continue
                 elif role == "enterprise" and not self._is_enterprise_event_recipient(
                     socket, envelope
                 ):
@@ -76,6 +79,14 @@ class OperationalConnectionManager:
 
         enterprise_id = self._enterprise_ids.get(socket)
         return bool(enterprise_id and envelope.data.get("recipientEnterpriseId") == enterprise_id)
+
+    def _is_alert_recipient(self, role: str, envelope: OperationalWebSocketEnvelope) -> bool:
+        owner = envelope.data.get("owner")
+        if role == "admin":
+            return owner in {"Admin", "System"}
+        if role == "it":
+            return owner in {"IT", "System"}
+        return False
 
 
 operational_ws_manager = OperationalConnectionManager()

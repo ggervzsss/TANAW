@@ -356,6 +356,8 @@ async def list_support_tickets(
     statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(SupportTicket.enterprise_profile_id == account.id)
+    elif account.role == AccountRole.ADMIN:
+        statement = statement.where(SupportTicket.priority.in_({"High", "Urgent"}))
     tickets = (await db.scalars(statement)).all()
     return [to_support_ticket_summary(ticket) for ticket in tickets]
 
@@ -370,6 +372,8 @@ async def get_support_ticket_for_account(
     if ticket is None:
         return None
     if account.role == AccountRole.ENTERPRISE and ticket.enterprise_profile_id != account.id:
+        return None
+    if account.role == AccountRole.ADMIN and ticket.priority not in {"High", "Urgent"}:
         return None
     return ticket
 
@@ -560,9 +564,24 @@ async def create_operational_alert(
     return alert
 
 
-async def list_operational_alerts(db: AsyncSession) -> list[OperationalAlertSummary]:
-    result = await db.scalars(select(OperationalAlert).order_by(OperationalAlert.created_at.desc()))
+async def list_operational_alerts(
+    db: AsyncSession, account: Account
+) -> list[OperationalAlertSummary]:
+    statement = select(OperationalAlert)
+    if account.role == AccountRole.ADMIN:
+        statement = statement.where(OperationalAlert.owner.in_({"Admin", "System"}))
+    elif account.role == AccountRole.IT:
+        statement = statement.where(OperationalAlert.owner.in_({"IT", "System"}))
+    result = await db.scalars(statement.order_by(OperationalAlert.created_at.desc()))
     return [to_operational_alert_summary(alert) for alert in result]
+
+
+def can_manage_operational_alert(account: Account, alert: OperationalAlert) -> bool:
+    if account.role == AccountRole.ADMIN:
+        return alert.owner == "Admin"
+    if account.role == AccountRole.IT:
+        return alert.owner == "IT"
+    return False
 
 
 def can_view_operational_event(role: str, event_type: str) -> bool:
@@ -660,7 +679,7 @@ async def evaluate_telemetry_alerts(
                 "Review live occupancy and apply the venue's crowd-management procedure."
             ),
             resolution_mode="Admin Monitoring",
-            owner="IT",
+            owner="Admin",
             source_id=source_id,
         )
         return [("alert.created", to_operational_alert_summary(alert))]

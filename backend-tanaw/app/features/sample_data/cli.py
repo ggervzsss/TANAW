@@ -279,6 +279,12 @@ async def generate_sample_data(
     reports = await create_operational_history(
         db, range_start, range_end, scenario, rng, enterprises, target
     )
+    operations = await create_admin_operations_data(
+        db,
+        accounts["lgu"],
+        accounts["enterprises"],
+        range_end,
+    )
     notifications = await create_staff_report_notifications(
         db, accounts["lgu"], reports["staffNotificationReports"]
     )
@@ -293,6 +299,10 @@ async def generate_sample_data(
         "intakeReports": len(reports["reports"]),
         "finalReports": len(final_reports),
         "staffNotifications": notifications,
+        "adminNotifications": operations["adminNotifications"],
+        "itNotifications": operations["itNotifications"],
+        "operationalAlerts": operations["operationalAlerts"],
+        "supportTickets": operations["supportTickets"],
         "activityLogs": logs,
         "targetPreparedReportCounts": prepared_counts(target_profile.enterprise_id),
     }
@@ -360,15 +370,157 @@ async def create_accounts(db: AsyncSession) -> dict[str, list[Account]]:
                 longitude=enterprise.longitude,
                 location_updated_at=datetime.now(UTC),
                 enterprise_id=enterprise_id,
+                building_capacity=180 + index * 40,
                 gateway_id=f"GW-SP-{index:04d}",
                 gateway_status="Connected",
             ),
         )
+        if index == 3:
+            account.preferences_json = json.dumps(
+                {
+                    "pendingContactNumberChange": {
+                        "phone": "+639171119999",
+                        "requestedAt": datetime.now(UTC).isoformat(),
+                    }
+                },
+                sort_keys=True,
+            )
         db.add(account)
         enterprise_accounts.append(account)
 
     await db.flush()
     return {"lgu": lgu_accounts, "enterprises": enterprise_accounts}
+
+
+async def create_admin_operations_data(
+    db: AsyncSession,
+    lgu_accounts: list[Account],
+    enterprises: list[Account],
+    range_end: datetime,
+) -> dict[str, int]:
+    admin = next(account for account in lgu_accounts if account.role == AccountRole.ADMIN)
+    it_account = next(account for account in lgu_accounts if account.role == AccountRole.IT)
+    if len(enterprises) < 3:
+        raise SystemExit("At least three generated enterprises are required for operations data.")
+
+    busy_enterprise, support_enterprise, routine_support_enterprise = enterprises[:3]
+    busy_profile = busy_enterprise.enterprise_profile
+    support_profile = support_enterprise.enterprise_profile
+    routine_support_profile = routine_support_enterprise.enterprise_profile
+    if busy_profile is None or support_profile is None or routine_support_profile is None:
+        raise SystemExit("Sample operations data requires enterprise profiles.")
+
+    alert_created_at = range_end - timedelta(minutes=18)
+    alert = OperationalAlert(
+        id=sample_uuid("operations-alert", busy_enterprise.id),
+        alert_code="ALT-SAMPLE-001",
+        alert_type="Threshold Breach",
+        severity="Critical",
+        enterprise=busy_profile.enterprise_name,
+        requester=busy_profile.enterprise_name,
+        summary=(
+            f"Live occupancy reached {busy_profile.building_capacity - 5} of "
+            f"{busy_profile.building_capacity} people and is close to the establishment capacity."
+        ),
+        required_action="Review the live map and apply the establishment's crowd-management procedure.",
+        resolution_mode="Admin Monitoring",
+        status="New",
+        owner="Admin",
+        source_id=f"{SAMPLE_SOURCE_PREFIX}operations:occupancy:{busy_enterprise.id}",
+        created_at=alert_created_at,
+        updated_at=alert_created_at,
+    )
+    db.add(alert)
+
+    high_ticket_created_at = range_end - timedelta(hours=2)
+    high_ticket = SupportTicket(
+        id=sample_uuid("operations-ticket", support_enterprise.id, "high"),
+        ticket_code="TCK-SAMPLE-001",
+        enterprise_profile_id=support_enterprise.id,
+        enterprise_name=support_profile.enterprise_name,
+        category="Camera Issue",
+        priority="High",
+        subject="Entrance camera has an intermittent view",
+        description=(
+            "The entrance camera view becomes unavailable several times during operating hours."
+        ),
+        affected_area="Main entrance",
+        camera_node="Entrance Camera",
+        status="In Review",
+        created_at=high_ticket_created_at,
+        updated_at=range_end - timedelta(hours=1),
+    )
+    routine_ticket = SupportTicket(
+        id=sample_uuid("operations-ticket", routine_support_enterprise.id, "normal"),
+        ticket_code="TCK-SAMPLE-002",
+        enterprise_profile_id=routine_support_enterprise.id,
+        enterprise_name=routine_support_profile.enterprise_name,
+        category="Report Concern",
+        priority="Normal",
+        subject="Question about the monthly report notes",
+        description="The enterprise requested guidance on the notes included in its report.",
+        affected_area="Reports",
+        status="Open",
+        created_at=range_end - timedelta(hours=5),
+        updated_at=range_end - timedelta(hours=5),
+    )
+    db.add_all([high_ticket, routine_ticket])
+
+    admin_notifications = [
+        UserNotification(
+            id=sample_uuid("operations-notification", admin.id, alert.id),
+            recipient_account_id=admin.id,
+            recipient_role=admin.role.value,
+            title=f"{busy_profile.enterprise_name} needs attention.",
+            message=alert.summary,
+            notification_type="Crowd Level Alert",
+            severity="Critical",
+            source_type="operational.alert",
+            source_id=alert.alert_code,
+            created_by_account_id=busy_enterprise.id,
+            created_by_name=busy_profile.enterprise_name,
+            created_at=alert_created_at,
+        ),
+        UserNotification(
+            id=sample_uuid("operations-notification", admin.id, high_ticket.id),
+            recipient_account_id=admin.id,
+            recipient_role=admin.role.value,
+            title=f"{support_profile.enterprise_name} submitted an important support request.",
+            message=f"{high_ticket.subject}. IT is reviewing the request.",
+            notification_type="Enterprise Support Ticket",
+            severity="Warning",
+            source_type="support.ticket",
+            source_id=high_ticket.id,
+            created_by_account_id=support_enterprise.id,
+            created_by_name=support_profile.enterprise_name,
+            created_at=high_ticket_created_at,
+        ),
+    ]
+    it_notifications = [
+        UserNotification(
+            id=sample_uuid("operations-notification", it_account.id, ticket.id),
+            recipient_account_id=it_account.id,
+            recipient_role=it_account.role.value,
+            title=f"{ticket.enterprise_name} submitted support ticket {ticket.ticket_code}.",
+            message=ticket.subject,
+            notification_type="Enterprise Support Ticket",
+            severity="Warning" if ticket.priority == "High" else "Info",
+            source_type="support.ticket",
+            source_id=ticket.id,
+            created_by_account_id=ticket.enterprise_profile_id,
+            created_by_name=ticket.enterprise_name,
+            created_at=ticket.created_at,
+        )
+        for ticket in (high_ticket, routine_ticket)
+    ]
+    db.add_all([*admin_notifications, *it_notifications])
+    await db.flush()
+    return {
+        "adminNotifications": len(admin_notifications),
+        "itNotifications": len(it_notifications),
+        "operationalAlerts": 1,
+        "supportTickets": 2,
+    }
 
 
 def ensure_email_available(existing: Account | None, email: str) -> None:
@@ -855,7 +1007,7 @@ async def remove_sample_data(db: AsyncSession) -> dict:
     counts = {
         "finalReportSources": len(final_report_ids),
         "finalReports": affected_row_count(final_reports_result),
-        "staffNotifications": affected_row_count(notifications_result),
+        "userNotifications": affected_row_count(notifications_result),
         "intakeReports": affected_row_count(intake_reports_result),
         "telemetrySnapshots": affected_row_count(telemetry_snapshots_result),
         "activityLogs": affected_row_count(activity_logs_result),

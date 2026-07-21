@@ -126,6 +126,15 @@ def test_staff_cannot_receive_activity_log_broadcasts() -> None:
         ),
         (
             activity_log(
+                category="System",
+                severity="Success",
+                actor_role="System",
+                action="Alert Resolved",
+            ),
+            True,
+        ),
+        (
+            activity_log(
                 category="IT Activity",
                 severity="Success",
                 actor_role="IT Personnel",

@@ -145,7 +145,7 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
   const openTicket = () => {
     if (!supportTicketId) return;
     onClose();
-    navigate(`${routes.admin.supportTickets}?ticket=${encodeURIComponent(supportTicketId)}`);
+    navigate(`${routes.admin.operations}?view=support&ticket=${encodeURIComponent(supportTicketId)}`);
   };
 
   return (

@@ -113,10 +113,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 SYSTEM_SETTINGS_ID = "default"
 AUTH_SESSION_COOKIE = "tanaw_session"
-ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (
-    AccountRole.ADMIN,
-    AccountRole.IT,
-)
+ENTERPRISE_CHANGE_NOTIFICATION_ROLES = (AccountRole.IT,)
 
 
 def is_login_scope_allowed(account: Account, login_scope: str) -> bool:
@@ -672,7 +669,7 @@ async def create_support_request(
     )
     notifications = await create_role_notifications(
         db,
-        recipient_roles=[AccountRole.ADMIN],
+        recipient_roles=[AccountRole.IT],
         title=f"Login support requested by {requester_name}.",
         message=f"{requester_email}: {payload.message.strip()}",
         notification_type="Login Support Request",
@@ -1057,7 +1054,7 @@ async def request_contact_number_change(
     )
     return AccountChangeRequestResponse(
         status="pending",
-        message="Contact number change request sent to IT and Admin for review.",
+        message="Contact number change request sent to IT for review.",
     )
 
 

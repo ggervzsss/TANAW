@@ -25,9 +25,9 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
       icon: FileText,
     },
     {
-      id: "alerts-monitor",
-      label: "Alerts & Monitor",
-      path: routes.admin.alertsMonitor,
+      id: "operations",
+      label: "Operations Center",
+      path: routes.admin.operations,
       icon: Bell,
     },
   ],

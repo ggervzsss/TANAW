@@ -1,2 +1,2 @@
-export { AdminAlertsMonitorPage } from "./AdminAlertsMonitorPage";
+export { AdminOperationsCenterPage } from "./AdminOperationsCenterPage";
 export { ITAlertsPage } from "./ITAlertsPage";

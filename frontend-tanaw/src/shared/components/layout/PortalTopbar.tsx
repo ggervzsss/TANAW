@@ -62,6 +62,13 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const userSelectedThemeRef = useRef(false);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
 
+  useEffect(() => {
+    document.title = unreadCount > 0 ? `(${unreadCount > 99 ? "99+" : unreadCount}) TANAW Portal` : "TANAW Portal";
+    return () => {
+      document.title = "TANAW Portal";
+    };
+  }, [unreadCount]);
+
   const profile = {
     name: authUser?.displayName ?? "TANAW User",
     email: authUser?.email ?? "",
@@ -599,7 +606,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 }
 
 function getRoleSupportTicketsPath(role: UserRole) {
-  if (role === "admin") return routes.admin.supportTickets;
+  if (role === "admin") return `${routes.admin.operations}?view=support`;
   if (role === "it") return routes.it.supportTickets;
   return null;
 }

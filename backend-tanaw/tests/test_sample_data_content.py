@@ -5,8 +5,18 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.core.password_policy import validate_password_policy
-from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.operational.models import EnterpriseReportSubmission, UserNotification
+from app.features.accounts.models import (
+    Account,
+    AccountRole,
+    AccountStatus,
+    EnterpriseProfile,
+)
+from app.features.operational.models import (
+    EnterpriseReportSubmission,
+    OperationalAlert,
+    SupportTicket,
+    UserNotification,
+)
 from app.features.operational.service import (
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
@@ -18,6 +28,7 @@ from app.features.sample_data.cli import (
     REPORTING_STAFF_NAME,
     TEST_ACCOUNT_PASSWORD,
     build_demographic_breakdown,
+    create_admin_operations_data,
     create_staff_report_notifications,
     prepare_staff_notification_reports,
     seeded_review_status,
@@ -203,6 +214,80 @@ async def test_mock_staff_notifications_match_production_notification_shape() ->
     assert notification.source_type == "enterprise.report"
     assert notification.source_id == report.id
     db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sample_operations_match_admin_escalation_rules() -> None:
+    lgu_accounts = [
+        _account("admin-account", AccountRole.ADMIN),
+        _account("it-account", AccountRole.IT),
+    ]
+    enterprises = [
+        _enterprise_account(f"enterprise-{index}", f"Enterprise {index}") for index in range(1, 4)
+    ]
+    db = MagicMock()
+    db.flush = AsyncMock()
+
+    counts = await create_admin_operations_data(
+        db,
+        lgu_accounts,
+        enterprises,
+        datetime(2026, 7, 21, 12, tzinfo=UTC),
+    )
+
+    alert = db.add.call_args.args[0]
+    tickets = db.add_all.call_args_list[0].args[0]
+    notifications = db.add_all.call_args_list[1].args[0]
+    assert isinstance(alert, OperationalAlert)
+    assert alert.owner == "Admin"
+    assert alert.alert_type == "Threshold Breach"
+    assert [ticket.priority for ticket in tickets if isinstance(ticket, SupportTicket)] == [
+        "High",
+        "Normal",
+    ]
+    admin_notifications = [
+        notification
+        for notification in notifications
+        if isinstance(notification, UserNotification)
+        and notification.recipient_role == AccountRole.ADMIN.value
+    ]
+    assert [notification.source_type for notification in admin_notifications] == [
+        "operational.alert",
+        "support.ticket",
+    ]
+    assert counts == {
+        "adminNotifications": 2,
+        "itNotifications": 2,
+        "operationalAlerts": 1,
+        "supportTickets": 2,
+    }
+    db.flush.assert_awaited_once()
+
+
+def _account(account_id: str, role: AccountRole) -> Account:
+    return Account(
+        id=account_id,
+        email=f"{account_id}@example.com",
+        password_hash="hash",
+        role=role,
+        display_name=account_id,
+        title=role.value,
+        status=AccountStatus.ACTIVE,
+    )
+
+
+def _enterprise_account(account_id: str, name: str) -> Account:
+    account = _account(account_id, AccountRole.ENTERPRISE)
+    account.enterprise_profile = EnterpriseProfile(
+        account_id=account_id,
+        enterprise_id=f"ENT-{account_id}",
+        enterprise_name=name,
+        category="business",
+        manager_name="Test Manager",
+        barangay="Nueva",
+        building_capacity=250,
+    )
+    return account
 
 
 def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmission:

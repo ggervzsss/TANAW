@@ -43,10 +43,10 @@ const viewAllPathByRole: Record<UserRole, string | undefined> = {
 export function usePortalNotifications(role: UserRole) {
   const { timeFormat } = useSystemDisplayPreferences();
   const authUser = useAuthStore((state) => state.user);
-  const shouldLoadAlerts = role === "admin" || role === "it";
+  const shouldLoadAlerts = role === "it";
   const { alerts, isLoading: alertsLoading } = useAlerts(shouldLoadAlerts);
   const localLogs = useSystemLogStore((state) => state.logs);
-  const { logs: activityLogs } = useActivityLogs();
+  const { logs: activityLogs } = useActivityLogs(role === "it");
   const backendNotificationsQuery = useOperationalNotifications();
 
   const storageKey = useMemo(() => `tanaw-notifications-read:${role}:${authUser?.id ?? "anonymous"}`, [authUser?.id, role]);
@@ -63,11 +63,11 @@ export function usePortalNotifications(role: UserRole) {
     const persistedNotifications = buildBackendNotifications(backendNotifications, role, timeFormat);
 
     if (role === "admin") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "admin", timeFormat), ...buildLogNotifications(mergedLogs, "admin", timeFormat)];
+      return persistedNotifications;
     }
 
     if (role === "it") {
-      return [...persistedNotifications, ...buildAlertNotifications(alerts, "it", timeFormat), ...buildLogNotifications(mergedLogs, "it", timeFormat)];
+      return [...persistedNotifications, ...buildAlertNotifications(alerts, timeFormat), ...buildLogNotifications(mergedLogs, timeFormat)];
     }
 
     if (role === "staff") {
@@ -139,8 +139,8 @@ function buildBackendNotifications(notifications: BackendNotification[], role: U
       title: notification.title,
       message: notification.message,
       time: formatTimestamp(notification.createdAt, timeFormat),
-      source: notification.type,
-      statusLabel: notification.severity,
+      source: notificationSourceLabel(notification, role),
+      statusLabel: notificationStatusLabel(notification.severity, role),
       tone: toneFromNotificationSeverity(notification.severity),
       targetPath: getBackendNotificationTargetPath(role, notification),
       read: Boolean(notification.readAt),
@@ -155,13 +155,37 @@ function toneFromNotificationSeverity(severity: BackendNotificationSeverity): Po
   return "info";
 }
 
-function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
+function notificationSourceLabel(notification: BackendNotification, role: UserRole) {
+  if (role !== "admin") return notification.type;
+  if (notification.sourceType === "operational.alert") return "Current Situation";
+  if (notification.sourceType === "support.ticket") return "Escalated Support";
+  if (notification.sourceType?.startsWith("enterprise.profile")) return "Account Request";
+  return notification.type;
+}
+
+function notificationStatusLabel(severity: BackendNotificationSeverity, role: UserRole) {
+  if (role !== "admin") return severity;
+  if (severity === "Critical") return "Urgent";
+  if (severity === "Warning") return "Important";
+  if (severity === "Success") return "Completed";
+  return undefined;
+}
+
+export function getBackendNotificationTargetPath(role: UserRole, notification: BackendNotification) {
   const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
   if (role === "admin") {
-    if (notification.sourceType === "operational.alert") return routes.admin.alertsMonitor;
-    if (text.includes("enterprise.profile") || text.includes("profile change request")) return routes.admin.alertsMonitor;
-    if (text.includes("support") || text.includes("ticket")) return routes.admin.supportTickets;
-    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.activityHistory : routes.admin.alertsMonitor;
+    if (notification.sourceType === "operational.alert") {
+      return adminOperationsPath("situations", "alert", notification.sourceId);
+    }
+    if (text.includes("enterprise.profile") || text.includes("profile change request")) {
+      return adminOperationsPath("accounts");
+    }
+    if (text.includes("support") || text.includes("ticket")) {
+      return adminOperationsPath("support", "ticket", notification.sourceId);
+    }
+    return text.includes("security") || text.includes("profile") || text.includes("password")
+      ? routes.admin.activityHistory
+      : routes.admin.operations;
   }
   if (role === "it") {
     if (notification.sourceType === "operational.alert") return routes.it.alerts;
@@ -177,10 +201,10 @@ function getBackendNotificationTargetPath(role: UserRole, notification: BackendN
   return undefined;
 }
 
-function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it", timeFormat: SystemTimeFormat): DraftNotification[] {
+function buildAlertNotifications(alerts: PriorityAlert[], timeFormat: SystemTimeFormat): DraftNotification[] {
   return alerts
     .filter((alert) => alert.status !== "Resolved")
-    .filter((alert) => (role === "admin" ? alert.owner === "Admin" || alert.owner === "System" || alert.severity === "Critical" : alert.owner === "IT"))
+    .filter((alert) => alert.owner === "IT")
     .map((alert) => ({
       id: `alert:${alert.id}:${alert.status}`,
       title: `${alert.severity} ${alert.type}`,
@@ -189,14 +213,14 @@ function buildAlertNotifications(alerts: PriorityAlert[], role: "admin" | "it", 
       source: "Alerts",
       statusLabel: alert.status,
       tone: toneFromSeverity(alert.severity),
-      targetPath: role === "admin" ? routes.admin.alertsMonitor : routes.it.alerts,
+      targetPath: routes.it.alerts,
       sortTime: toSortTime(alert.time),
     }));
 }
 
-function buildLogNotifications(logs: SystemLog[], role: "admin" | "it", timeFormat: SystemTimeFormat): DraftNotification[] {
+function buildLogNotifications(logs: SystemLog[], timeFormat: SystemTimeFormat): DraftNotification[] {
   return logs
-    .filter((log) => isRoleRelevantLog(log, role))
+    .filter(isItRelevantLog)
     .map((log) => ({
       id: `activity-log:${log.id}:${log.severity}`,
       title: `${log.severity} ${log.action}`,
@@ -205,16 +229,12 @@ function buildLogNotifications(logs: SystemLog[], role: "admin" | "it", timeForm
       source: log.category,
       statusLabel: log.actorRole,
       tone: toneFromSeverity(log.severity),
-      targetPath: getLogTargetPath(role),
+      targetPath: routes.it.systemLogs,
       sortTime: toSortTime(log.timestamp),
     }));
 }
 
-function isRoleRelevantLog(log: SystemLog, role: "admin" | "it") {
-  if (role === "admin") {
-    return log.severity === "Critical" || (log.severity === "Warning" && (log.category === "System" || log.action.toLowerCase().includes("alert")));
-  }
-
+function isItRelevantLog(log: SystemLog) {
   return (
     (log.severity === "Critical" || log.severity === "Warning") &&
     (log.category === "System" || log.category === "IT Activity" || log.category === "Enterprise Activity" || log.action.toLowerCase().includes("alert"))
@@ -228,9 +248,10 @@ function toneFromSeverity(severity: LogSeverity): PortalNotificationTone {
   return "info";
 }
 
-function getLogTargetPath(role: "admin" | "it") {
-  if (role === "admin") return routes.admin.activityHistory;
-  return routes.it.systemLogs;
+function adminOperationsPath(view: "situations" | "support" | "accounts", itemKey?: "alert" | "ticket", itemId?: string | null) {
+  const params = new URLSearchParams({ view });
+  if (itemKey && itemId) params.set(itemKey, itemId);
+  return `${routes.admin.operations}?${params.toString()}`;
 }
 
 function mergeLogs(primaryLogs: SystemLog[], secondaryLogs: SystemLog[]) {
