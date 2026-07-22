@@ -1,6 +1,6 @@
 import { Check, Eye, EyeOff, Key, Monitor, MonitorSmartphone, Pencil, RefreshCw, Save, Upload } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type FormEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useId, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
@@ -23,6 +23,7 @@ import {
 import { readProfileImageFile } from "@/shared/utils/imageUpload";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 
 type AccountPageProps = {
   role: UserRole;
@@ -225,26 +226,26 @@ export function AccountProfilePage({ role }: AccountPageProps) {
 export function AccountSecurityPage() {
   const queryClient = useQueryClient();
   const setSession = useAuthStore((state) => state.setSession);
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [passwordErrors, setPasswordErrors] = useState<Partial<Record<"currentPassword" | "newPassword" | "confirmPassword", string>>>({});
 
   const handlePasswordUpdate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const formData = new FormData(form);
-    const currentPassword = String(formData.get("currentPassword") ?? "");
-    const newPassword = String(formData.get("newPassword") ?? "");
-    const confirmPassword = String(formData.get("confirmPassword") ?? "");
-
-    if (normalizePassword(newPassword) !== normalizePassword(confirmPassword)) {
-      toast.error("New passwords do not match.");
-      return;
-    }
+    const nextErrors: typeof passwordErrors = {};
+    if (!currentPassword) nextErrors.currentPassword = "Enter your current password.";
     const policyError = validatePasswordPolicy(newPassword);
-    if (policyError) {
-      toast.error(policyError);
+    if (policyError) nextErrors.newPassword = policyError;
+    if (!passwordConfirmation) nextErrors.confirmPassword = "Please confirm your new password.";
+    else if (normalizePassword(newPassword) !== normalizePassword(passwordConfirmation)) nextErrors.confirmPassword = "New passwords do not match.";
+    setPasswordErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(form, ["currentPassword", "newPassword", "confirmPassword"].filter((fieldName) => nextErrors[fieldName as keyof typeof nextErrors]));
       return;
     }
 
@@ -257,8 +258,10 @@ export function AccountSecurityPage() {
       toast.success("Password updated.");
       window.setTimeout(() => setIsPasswordSuccess(false), 2600);
       form.reset();
+      setCurrentPassword("");
       setNewPassword("");
       setPasswordConfirmation("");
+      setPasswordErrors({});
     } catch {
       toast.error("Unable to update password. Check your current password and try again.");
     } finally {
@@ -273,19 +276,39 @@ export function AccountSecurityPage() {
       <div className="mx-auto max-w-5xl space-y-6">
         <Panel className="overflow-hidden">
           <PanelHeader title="Change Password" icon={Key} />
-          <form onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
-            <Field label="Current Password" name="currentPassword" defaultValue="" placeholder="Current password" type="password" maxLength={PASSWORD_INPUT_MAX_CODE_UNITS} />
+          <form autoComplete="off" noValidate onSubmit={handlePasswordUpdate} className="space-y-4 p-6">
+            <Field
+              label="Current Password"
+              name="currentPassword"
+              defaultValue=""
+              value={currentPassword}
+              placeholder="Current password"
+              type="password"
+              autoComplete="off"
+              error={passwordErrors.currentPassword}
+              maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
+              onValueChange={(value) => {
+                setCurrentPassword(value);
+                setPasswordErrors((current) => ({ ...current, currentPassword: undefined }));
+              }}
+            />
             <div className="grid items-start gap-4 md:grid-cols-2">
               <div>
                 <Field
                   label="New Password"
                   name="newPassword"
                   defaultValue=""
+                  value={newPassword}
                   placeholder="Use a long password"
                   type="password"
+                  autoComplete="new-password"
+                  error={passwordErrors.newPassword}
                   minLength={PASSWORD_MIN_LENGTH}
                   maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
-                  onValueChange={setNewPassword}
+                  onValueChange={(value) => {
+                    setNewPassword(value);
+                    setPasswordErrors((current) => ({ ...current, newPassword: undefined }));
+                  }}
                 />
                 <PasswordRequirements password={newPassword} />
               </div>
@@ -294,11 +317,17 @@ export function AccountSecurityPage() {
                   label="Confirm New Password"
                   name="confirmPassword"
                   defaultValue=""
+                  value={passwordConfirmation}
                   placeholder="Repeat the password"
                   type="password"
+                  autoComplete="new-password"
+                  error={passwordErrors.confirmPassword}
                   minLength={PASSWORD_MIN_LENGTH}
                   maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
-                  onValueChange={setPasswordConfirmation}
+                  onValueChange={(value) => {
+                    setPasswordConfirmation(value);
+                    setPasswordErrors((current) => ({ ...current, confirmPassword: undefined }));
+                  }}
                 />
                 <PasswordMatchIndicator password={newPassword} confirmation={passwordConfirmation} />
               </div>
@@ -356,6 +385,9 @@ function Field({
   minLength,
   maxLength,
   onValueChange,
+  value,
+  autoComplete,
+  error,
 }: {
   label: string;
   defaultValue: string;
@@ -366,10 +398,14 @@ function Field({
   minLength?: number;
   maxLength?: number;
   onValueChange?: (value: string) => void;
+  value?: string;
+  autoComplete?: string;
+  error?: string;
 }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const isPassword = type === "password";
   const inputType = isPassword && isPasswordVisible ? "text" : type;
   const canEdit = Boolean(name && editable && !isPassword);
@@ -378,27 +414,34 @@ function Field({
   const input = (
     <input
       ref={inputRef}
-      key={`${label}-${defaultValue}`}
+      id={inputId}
       name={name}
       type={inputType}
-      defaultValue={defaultValue}
+      defaultValue={value === undefined ? defaultValue : undefined}
+      value={value}
       placeholder={placeholder}
+      autoComplete={autoComplete}
       minLength={minLength}
       maxLength={maxLength}
       onChange={(event) => onValueChange?.(event.target.value)}
       required={isPassword}
+      aria-invalid={Boolean(error)}
+      aria-describedby={error && name ? `${name}-error` : undefined}
+      data-form-error-focus={isPassword ? true : undefined}
       readOnly={isReadOnly}
       aria-readonly={isReadOnly}
       tabIndex={isReadOnly ? -1 : undefined}
-      className={`focus:ring-tanaw-green/20 w-full rounded-lg border p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 ${
-        isReadOnly ? "cursor-default border-slate-200 bg-slate-50" : "border-tanaw-green bg-white shadow-sm"
-      } ${isPassword || canEdit ? "pr-12" : ""}`}
+      className={`focus:ring-tanaw-green/20 w-full rounded-lg border p-3 text-sm font-semibold text-slate-900 transition outline-none focus:ring-2 dark:text-slate-100 ${
+        isReadOnly ? "cursor-default border-slate-200 bg-slate-50" : "border-tanaw-green bg-white shadow-sm dark:bg-(--tanaw-control-bg)"
+      } ${isPassword || canEdit ? "pr-12" : ""} ${isPassword ? "tanaw-sensitive-input" : ""} ${error ? "border-red-400" : ""}`}
     />
   );
 
   return (
-    <label className="block">
-      <span className="mb-2 block text-xs font-bold tracking-wide text-slate-500 uppercase">{label}</span>
+    <div data-field-name={name} className="block">
+      <label htmlFor={inputId} className="mb-2 block text-xs font-bold tracking-wide text-slate-500 uppercase">
+        {label}
+      </label>
       {isPassword ? (
         <span className="relative block">
           {input}
@@ -440,6 +483,11 @@ function Field({
           )}
         </span>
       )}
-    </label>
+      {error && name ? (
+        <span id={`${name}-error`} role="alert" className="mt-1.5 block text-xs font-semibold text-(--tanaw-error)">
+          {error}
+        </span>
+      ) : null}
+    </div>
   );
 }

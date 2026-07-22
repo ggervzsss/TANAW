@@ -15,6 +15,13 @@ export function CameraList({ cameras, activeCamId, onAdd, onSelect }: CameraList
       <h3 className="mb-3 flex shrink-0 items-center gap-2 text-xs font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">
         <Video size={16} className="text-[#065f46]" /> Configured Cameras
       </h3>
+      <button
+        type="button"
+        onClick={onAdd}
+        className="mb-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-sm border border-emerald-700/25 bg-emerald-50/70 px-3 py-2 text-xs font-bold text-[#065f46] transition-colors hover:border-emerald-700/40 hover:bg-emerald-100/70 focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:outline-none dark:border-emerald-300/20 dark:bg-emerald-400/8 dark:text-emerald-300 dark:hover:border-emerald-300/35 dark:hover:bg-emerald-400/14"
+      >
+        <Plus size={15} /> Add Camera
+      </button>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {cameras.map((camera) => {
           const isActive = activeCamId === camera.id;
@@ -38,13 +45,6 @@ export function CameraList({ cameras, activeCamId, onAdd, onSelect }: CameraList
         })}
         {cameras.length === 0 && <div className="rounded-sm border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-slate-600 dark:text-slate-400">No cameras registered.</div>}
       </div>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="mt-3 flex shrink-0 items-center justify-center gap-2 rounded-sm bg-[#065f46] px-3 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#044a36]"
-      >
-        <Plus size={16} /> Add Camera
-      </button>
     </Card>
   );
 }

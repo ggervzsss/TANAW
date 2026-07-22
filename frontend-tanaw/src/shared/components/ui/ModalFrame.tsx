@@ -58,7 +58,9 @@ export function ModalFrame({ title, children, onClose, maxWidthClassName = "max-
               <X size={17} />
             </button>
           </header>
-          <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto p-6 max-sm:p-5">{children}</div>
+          <div data-modal-scroll-container className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto p-6 max-sm:p-5">
+            {children}
+          </div>
         </motion.section>
       </motion.div>
     </ModalPortal>

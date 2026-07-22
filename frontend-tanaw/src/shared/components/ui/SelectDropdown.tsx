@@ -171,7 +171,7 @@ export function SelectDropdown({
     : "focus:border-tanaw-green focus:ring-tanaw-green/15 tanaw-data-filter flex min-h-10 items-center justify-between gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-200";
 
   return (
-    <div className={`relative min-w-0 ${className}`}>
+    <div data-field-name={name} className={`relative min-w-0 ${className}`}>
       {label && (
         <span className={`mb-1.5 block font-bold uppercase ${isDirectory ? "text-[9px] tracking-widest text-white/65" : "text-[11px] tracking-wide text-slate-500 dark:text-slate-300"}`}>{label}</span>
       )}
@@ -188,6 +188,8 @@ export function SelectDropdown({
         aria-invalid={Boolean(error)}
         aria-label={ariaLabel ?? label}
         aria-required={required}
+        aria-describedby={error && name ? `${name}-description` : undefined}
+        data-form-error-focus
         onClick={() => (isOpen ? closeMenu() : openMenu())}
         onKeyDown={handleKeyDown}
         className={`${buttonClasses} ${error ? "border-red-400" : ""}`}
@@ -204,7 +206,11 @@ export function SelectDropdown({
           <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${isDirectory ? "text-white/65" : "text-gray-400 dark:text-slate-400"} ${isOpen ? "rotate-180" : ""}`} />
         </span>
       </button>
-      {error && <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
+      {error && (
+        <p id={name ? `${name}-description` : undefined} role="alert" className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">
+          {error}
+        </p>
+      )}
 
       <AnimatePresence>
         {isOpen && menuPosition && (

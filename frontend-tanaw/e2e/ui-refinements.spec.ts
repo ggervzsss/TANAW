@@ -133,3 +133,53 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await page.getByRole("button", { name: "Archive Report", exact: true }).click();
   await expect(viewer).toBeHidden();
 });
+
+test("keeps Password Settings blank, theme-correct, resettable, and uses the shared dark Logout treatment", async ({ page }) => {
+  await page.route("**/auth/change-password", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      currentPassword: "Current secure passphrase 2026",
+      newPassword: "Replacement secure passphrase 2026",
+    });
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "updated-ui-test-token", user: staffUser }) });
+  });
+  await signInAsStaff(page);
+  await page.goto("/staff/security");
+
+  const currentPassword = page.getByLabel("Current Password", { exact: true });
+  const newPassword = page.getByLabel("New Password", { exact: true });
+  const confirmation = page.getByLabel("Confirm New Password", { exact: true });
+  await expect(currentPassword).toHaveValue("");
+  await expect(newPassword).toHaveValue("");
+  await expect(confirmation).toHaveValue("");
+  await expect(currentPassword).toHaveAttribute("autocomplete", "off");
+  await expect(newPassword).toHaveAttribute("autocomplete", "new-password");
+  await expect(confirmation).toHaveAttribute("autocomplete", "new-password");
+  await expect(currentPassword).not.toHaveCSS("background-color", "rgb(255, 255, 0)");
+
+  await page.getByRole("button", { name: "Update Password" }).click();
+  await expect(currentPassword).toBeFocused();
+  await expect(page.getByText("Enter your current password.")).toBeVisible();
+
+  await currentPassword.fill("Current secure passphrase 2026");
+  await newPassword.fill("Replacement secure passphrase 2026");
+  await confirmation.fill("Replacement secure passphrase 2026");
+  await page.getByRole("button", { name: "Update Password" }).click();
+  await expect(page.getByText("Password updated.")).toBeVisible();
+  await expect(currentPassword).toHaveValue("");
+  await expect(newPassword).toHaveValue("");
+  await expect(confirmation).toHaveValue("");
+  await expect(page.getByText("Workstation Browser (Current)")).toBeVisible();
+
+  await page.goto("/staff/analytics");
+  await page.goto("/staff/security");
+  await expect(page.getByLabel("Current Password", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("New Password", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Confirm New Password", { exact: true })).toHaveValue("");
+
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  const logout = page.getByRole("button", { name: "Logout" });
+  await expect(logout).toHaveClass(/profile-menu-danger/);
+  await expect(logout).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await logout.focus();
+  await expect(logout).toBeFocused();
+});

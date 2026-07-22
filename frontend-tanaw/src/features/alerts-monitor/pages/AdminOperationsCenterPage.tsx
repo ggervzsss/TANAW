@@ -333,9 +333,9 @@ function AdminSituationDetailsModal({ alert, onClose }: { alert: PriorityAlert; 
         <DetailField label="Suggested Response" value={alert.requiredAction} />
       </div>
 
-      <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-        <p className="text-sm font-black text-emerald-950">Record the Admin response</p>
-        <p className="mt-1 text-xs font-semibold text-emerald-800">This updates the situation for other Admin accounts and records the action in Activity History.</p>
+      <div className="tanaw-modal-action-panel mt-5 rounded-2xl border p-4 shadow-sm">
+        <p className="tanaw-modal-action-panel__title text-sm font-black">Record the Admin response</p>
+        <p className="tanaw-modal-action-panel__copy mt-1 text-xs font-semibold">This updates the situation for other Admin accounts and records the action in Activity History.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {alert.status !== "In Review" && alert.status !== "Resolved" && (
             <StatusButton label="Start Review" icon={Clock3} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("In Review")} />

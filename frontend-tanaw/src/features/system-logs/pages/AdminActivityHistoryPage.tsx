@@ -175,7 +175,7 @@ export function AdminActivityDetailFields({ activity }: { activity: SystemLog })
   );
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="tanaw-detail-grid grid gap-4 md:grid-cols-2">
       <DetailField label="Date and Time" value={formatPhilippineDateTime(activity.timestamp, timeFormat)} />
       <DetailField label="Activity Type" value={<ActivityGroupBadge group={activityGroupFor(activity)} />} />
       <DetailField label="Activity" value={expandableValue(activity.action, "activity")} />

@@ -55,50 +55,55 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
   }
 
   return (
-    <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-black text-amber-950">
-            <Clock size={16} className="text-amber-700" /> Enterprise Account Requests
+    <section className="tanaw-request-queue mt-4 rounded-2xl border p-3 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-black text-(--tanaw-text)">
+            <Clock size={16} className="shrink-0 text-amber-600 dark:text-amber-300" /> Enterprise Account Requests
           </p>
-          <p className="mt-1 text-sm font-medium text-amber-800">
+          <p className="mt-0.5 text-xs font-medium text-(--tanaw-secondary-text)">
             {canResolve ? "Review requests. Email changes can be approved only after ownership verification." : "Visible for admin review. IT personnel apply or decline these requests."}
           </p>
         </div>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-amber-800 shadow-sm">{requests.length} pending</span>
+        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-800 uppercase dark:border-amber-300/25 dark:bg-amber-400/10 dark:text-amber-200">
+          {requests.length} pending
+        </span>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="space-y-2">
         {requests.map(({ enterprise, request }) => (
           <article
             key={`${enterprise.id}-${request.requestId ?? request.type}`}
-            className={`rounded-xl border bg-white p-4 shadow-sm ${enterprise.id === highlightedAccountId ? "border-emerald-500 ring-4 ring-emerald-100" : "border-amber-200"}`}
+            className={`grid items-center gap-3 rounded-xl border bg-(--tanaw-surface-raised) p-3 ${canResolve && request.status !== "expired" ? "md:grid-cols-[minmax(0,1.1fr)_minmax(18rem,1fr)_auto]" : "md:grid-cols-[minmax(0,1.1fr)_minmax(18rem,1fr)]"} ${
+              enterprise.id === highlightedAccountId ? "border-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-400/15" : "border-(--tanaw-border-subtle)"
+            }`}
           >
-            <div className="flex items-start gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-400/12 dark:text-amber-200">
                 {request.type === "businessEmail" ? <Mail size={17} /> : <Phone size={17} />}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black text-slate-950">{enterprise.enterpriseName ?? enterprise.displayName}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-semibold text-slate-500">{request.label} change requested</p>
+                <p className="truncate text-sm font-black text-(--tanaw-text)">{enterprise.enterpriseName ?? enterprise.displayName}</p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold text-(--tanaw-secondary-text)">{request.label} change requested</p>
                   <RequestStatusBadge request={request} />
                 </div>
-                <div className="mt-3 grid gap-2 text-xs md:grid-cols-2">
-                  <ValueBlock label="Current" value={getCurrentValue(enterprise, request)} />
-                  <ValueBlock label="Requested" value={request.requestedValue} highlight />
-                </div>
-                {request.requestedAt && <p className="mt-2 text-[11px] font-semibold text-slate-500">Requested {formatPhilippineDateTime(request.requestedAt, timeFormat)}</p>}
+                {request.requestedAt && <p className="mt-1 text-[10px] font-semibold text-(--tanaw-muted-text)">Requested {formatPhilippineDateTime(request.requestedAt, timeFormat)}</p>}
               </div>
             </div>
 
+            <div className="grid min-w-0 gap-2 text-xs sm:grid-cols-2">
+              <ValueBlock label="Current" value={getCurrentValue(enterprise, request)} />
+              <ValueBlock label="Requested" value={request.requestedValue} highlight />
+            </div>
+
             {canResolve && request.status !== "expired" && (
-              <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2 md:flex-col">
                 <button
                   type="button"
                   disabled={resolutionMutation.isPending}
                   onClick={() => resolutionMutation.mutate({ enterprise, request, action: "decline" })}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-(--tanaw-border-subtle) bg-transparent px-3 py-1.5 text-xs font-bold text-(--tanaw-secondary-text) transition-colors hover:bg-(--tanaw-control-hover) disabled:opacity-60"
                 >
                   <X size={14} /> Decline
                 </button>
@@ -107,7 +112,7 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
                   disabled={resolutionMutation.isPending || !request.canApprove}
                   title={!request.canApprove ? "The proposed email owner must use the verification link first." : undefined}
                   onClick={() => resolutionMutation.mutate({ enterprise, request, action: "approve" })}
-                  className="bg-tanaw-green inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-white transition hover:bg-[#044a1e] disabled:opacity-60"
+                  className="bg-tanaw-green inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#044a1e] disabled:opacity-60"
                 >
                   <Check size={14} /> Approve
                 </button>
@@ -122,7 +127,7 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
 
 function ValueBlock({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 ${highlight ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+    <div className={`rounded-lg border px-3 py-2 ${highlight ? "border-emerald-200 bg-emerald-50/70 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-400/8 dark:text-emerald-200" : "border-(--tanaw-border-subtle) bg-(--tanaw-surface-inset) text-(--tanaw-secondary-text)"}`}>
       <p className="text-[10px] font-black tracking-wide uppercase">{label}</p>
       <p className="mt-1 font-mono text-xs font-bold wrap-break-word">{value || "Not provided"}</p>
     </div>

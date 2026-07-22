@@ -299,6 +299,90 @@ html.dark {
       background-color 160ms ease,
       color 160ms ease;
   }
+
+  .profile-menu-button:hover,
+  .profile-menu-button:focus-visible {
+    background: var(--tanaw-control-hover);
+  }
+
+  .profile-menu-danger {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 64%, transparent);
+    color: #b91c1c;
+  }
+
+  .profile-menu-danger:hover,
+  .profile-menu-danger:focus-visible {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 92%, var(--tanaw-surface));
+    color: #991b1b;
+  }
+
+  .profile-menu-danger:active {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, #fecaca);
+  }
+
+  .profile-menu-danger:disabled {
+    background: transparent;
+    color: var(--tanaw-interactive-disabled-text);
+  }
+}
+
+html.dark .profile-menu-danger {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 52%, transparent);
+  color: #fca5a5;
+}
+
+html.dark .profile-menu-danger:hover,
+html.dark .profile-menu-danger:focus-visible {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, var(--tanaw-surface));
+  color: #fecaca;
+}
+
+html.dark .profile-menu-danger:active {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 90%, #3f1d24);
+}
+
+.tanaw-modal-action-panel {
+  border-color: color-mix(in srgb, #059669 24%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-success-surface) 66%, var(--tanaw-surface));
+  box-shadow: var(--tanaw-shadow-soft);
+}
+
+.tanaw-modal-action-panel__title {
+  color: var(--tanaw-text);
+}
+
+.tanaw-modal-action-panel__copy {
+  color: var(--tanaw-secondary-text);
+}
+
+html.dark .tanaw-modal-action-panel {
+  border-color: color-mix(in srgb, #34d399 22%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-success-surface) 38%, var(--tanaw-surface-inset));
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.18);
+}
+
+.tanaw-request-queue {
+  border-color: color-mix(in srgb, #d97706 22%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-warning-surface) 46%, var(--tanaw-surface));
+}
+
+html.dark .tanaw-request-queue {
+  border-color: color-mix(in srgb, #fbbf24 18%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-warning-surface) 24%, var(--tanaw-surface));
+}
+
+.tanaw-detail-grid > * {
+  min-width: 0;
+}
+
+.tanaw-sensitive-input:-webkit-autofill,
+.tanaw-sensitive-input:-webkit-autofill:hover,
+.tanaw-sensitive-input:-webkit-autofill:focus,
+.tanaw-sensitive-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--tanaw-control-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tanaw-control-bg) inset !important;
+  -webkit-text-fill-color: var(--tanaw-text) !important;
+  caret-color: var(--tanaw-text);
 }
 
 @layer utilities {

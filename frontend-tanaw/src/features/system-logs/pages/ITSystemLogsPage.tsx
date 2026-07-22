@@ -203,15 +203,13 @@ export function ActivityDetailFields({ activity, timeFormat = "12-hour" }: { act
   const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} twoLines />;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="tanaw-detail-grid grid gap-4 md:grid-cols-2">
       <DetailField label="Type" value={activity.category} />
       <DetailField label="Actor" value={expandableValue(`${activity.actor} (${activity.actorRole})`, "actor")} />
       <DetailField label="Date and Time" value={formatLogTimestamp(activity.timestamp, timeFormat)} />
       <DetailField label="Target" value={expandableValue(activity.target, "target")} />
       <DetailField label="Action" value={expandableValue(activity.action, "action")} />
-      <div className="md:col-span-2">
-        <DetailField label="Summary" value={expandableValue(activity.summary, "summary")} />
-      </div>
+      <DetailField label="Summary" value={expandableValue(activity.summary, "summary")} />
     </div>
   );
 }

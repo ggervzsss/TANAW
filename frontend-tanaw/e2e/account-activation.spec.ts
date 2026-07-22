@@ -70,6 +70,30 @@ test("keeps the password fields, confirmation guidance, requirements, and action
   expect(order.every((position) => position >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((left, right) => left - right));
   await expect(page.getByLabel("Confirm Password", { exact: true })).toHaveAttribute("aria-describedby", /confirm-password-guidance/);
+
+  const spacing = await page.locator("form").evaluate((form) => {
+    const newPasswordGroup = form.querySelector<HTMLElement>('[data-field-name="newPassword"]')!;
+    const confirmPasswordGroup = form.querySelector<HTMLElement>('[data-field-name="confirmPassword"]')!;
+    const confirmInput = form.querySelector<HTMLElement>("#confirmPassword")!;
+    const guidance = form.querySelector<HTMLElement>("#confirm-password-guidance")!;
+    const requirements = form.querySelector<HTMLElement>('[aria-label="Password requirements"]')!;
+    const newPasswordRect = newPasswordGroup.getBoundingClientRect();
+    const confirmPasswordRect = confirmPasswordGroup.getBoundingClientRect();
+    const confirmInputRect = confirmInput.getBoundingClientRect();
+    const guidanceRect = guidance.getBoundingClientRect();
+    const requirementsRect = requirements.getBoundingClientRect();
+    return {
+      fieldGroupGap: confirmPasswordRect.top - newPasswordRect.bottom,
+      guidanceGap: guidanceRect.top - confirmInputRect.bottom,
+      requirementsGap: requirementsRect.top - guidanceRect.bottom,
+    };
+  });
+  expect(spacing.fieldGroupGap).toBeGreaterThanOrEqual(12);
+  expect(spacing.fieldGroupGap).toBeLessThanOrEqual(18);
+  expect(spacing.guidanceGap).toBeGreaterThanOrEqual(5);
+  expect(spacing.guidanceGap).toBeLessThanOrEqual(9);
+  expect(spacing.requirementsGap).toBeGreaterThanOrEqual(10);
+  expect(spacing.requirementsGap).toBeLessThanOrEqual(16);
 });
 
 test("shows a specific missing-token state without calling the backend", async ({ page }) => {
@@ -133,6 +157,8 @@ test("shows password-policy feedback and safe backend activation errors", async 
   await expect(commonPasswordRequirement).toHaveAttribute("data-state", "met");
   await expect(page.locator("li", { hasText: "Passwords match" })).toHaveAttribute("data-state", "met");
   await page.getByRole("button", { name: "Activate Account" }).click();
+  await expect(page.getByLabel("New Password", { exact: true })).toBeFocused();
+  await expect(page.getByText("Please complete the highlighted required field.")).toHaveCount(1);
   await expect(page.getByText("Password must contain at least 15 characters.")).toBeVisible();
   expect(completionRequests).toBe(0);
 

@@ -68,6 +68,7 @@ export function CameraMonitoringPanel({
       </section>
 
       <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
+        <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
         <div className="space-y-2">
           <StatusRow icon={Activity} label={serviceLabel} tone={serviceOnline ? "ok" : "error"} tooltip="Shows whether the local AI counting service is available." />
           <StatusRow icon={Wifi} label={cameraState.label} tone={cameraState.tone} tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable." />

@@ -15,7 +15,7 @@ type FormFieldProps = {
 export function FormField({ name, label, type = "text", required = false, placeholder, value, onChange, error, autoComplete, maxLength, helperText }: FormFieldProps) {
   const descriptionId = error || helperText ? `${name}-description` : undefined;
   return (
-    <label className="block">
+    <label data-field-name={name} className="block">
       <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-slate-500 uppercase">{label}</span>
       <input
         name={name}
@@ -28,6 +28,7 @@ export function FormField({ name, label, type = "text", required = false, placeh
         maxLength={maxLength}
         aria-invalid={Boolean(error)}
         aria-describedby={descriptionId}
+        data-form-error-focus
         className={[
           "focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border bg-white px-4 py-3 text-sm font-medium text-slate-900 transition outline-none focus:ring-4 dark:bg-[#0f172a] dark:text-slate-100 dark:placeholder:text-slate-500",
           error ? "border-red-300" : "border-slate-300",

@@ -4,9 +4,9 @@ import type { Camera } from "../../../types/enterprise";
 import { CameraList } from "./CameraList";
 
 describe("CameraList", () => {
-  it("keeps one Add Camera action below an empty camera list", () => {
+  it("keeps one Add Camera action above an empty camera list", () => {
     const markup = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} onAdd={() => undefined} onSelect={() => undefined} />);
-    expect(markup.indexOf("No cameras registered.")).toBeLessThan(markup.indexOf("Add Camera"));
+    expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("No cameras registered."));
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
   });
 
@@ -14,6 +14,7 @@ describe("CameraList", () => {
     const markup = renderToStaticMarkup(<CameraList cameras={[camera(1), camera(2)]} activeCamId={2} onAdd={() => undefined} onSelect={() => undefined} />);
     expect(markup.match(/Status: running/g)).toHaveLength(2);
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
+    expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("Camera 1"));
   });
 });
 

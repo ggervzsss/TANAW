@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
@@ -29,6 +30,7 @@ const authBackgroundImageStyle = {
 
 export function ActivateAccountPage() {
   const clearLocalSession = useAuthStore((state) => state.logout);
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const [activationToken] = useState(readActivationToken);
   const [view, setView] = useState<ActivationView>(activationToken ? "validating" : "invalid");
   const [details, setDetails] = useState<AccountActivationDetails | null>(null);
@@ -76,7 +78,11 @@ export function ActivateAccountPage() {
     const nextErrors = validatePasswordValues(values);
     setErrors(nextErrors);
     setPageMessage("");
-    if (Object.keys(nextErrors).length > 0 || !activationToken) return;
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(event.currentTarget, ["newPassword", "confirmPassword"].filter((fieldName) => nextErrors[fieldName as keyof PasswordErrors]));
+      return;
+    }
+    if (!activationToken) return;
 
     setIsSubmitting(true);
     try {
@@ -213,7 +219,7 @@ function ActivationForm({
         </div>
       </div>
 
-      <div className="tanaw-activation-password-fields grid gap-1.5">
+      <div className="tanaw-activation-password-fields grid gap-4">
         <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
         <PasswordField
           label="Confirm Password"
@@ -221,11 +227,18 @@ function ActivationForm({
           value={values.confirmPassword}
           error={errors.confirmPassword}
           onChange={onChange("confirmPassword")}
-          guidance={<PasswordMatchIndicator id="confirm-password-guidance" password={values.newPassword} confirmation={values.confirmPassword} className="mt-1" />}
+          guidance={
+            <PasswordMatchIndicator
+              id="confirm-password-guidance"
+              password={values.newPassword}
+              confirmation={values.confirmPassword}
+              className={`mt-1.5 ${errors.confirmPassword ? "opacity-70" : ""}`}
+            />
+          }
           guidanceId="confirm-password-guidance"
         />
       </div>
-      <PasswordRequirements password={values.newPassword} />
+      <PasswordRequirements password={values.newPassword} className="mt-3 mb-4" />
 
       {pageMessage ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
@@ -291,7 +304,7 @@ function PasswordField({
   const [isVisible, setIsVisible] = useState(false);
   const errorId = `${name}-error`;
   return (
-    <div>
+    <div data-field-name={name}>
       <label htmlFor={name} className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
         {label}
       </label>
@@ -316,6 +329,7 @@ function PasswordField({
           required
           aria-invalid={Boolean(error)}
           aria-describedby={[error ? errorId : null, guidanceId].filter(Boolean).join(" ") || undefined}
+          data-form-error-focus
           className="h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
         />
         {error ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" aria-hidden="true" /> : null}
@@ -328,9 +342,11 @@ function PasswordField({
           {isVisible ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
         </button>
       </div>
-      <div id={errorId} className="mt-1 min-h-4" aria-live="polite">
-        {error ? <p className="text-xs font-medium text-(--tanaw-error)">{error}</p> : null}
-      </div>
+      {error ? (
+        <p id={errorId} className="mt-1 text-xs font-semibold text-(--tanaw-error)" role="alert">
+          {error}
+        </p>
+      ) : null}
       {guidance}
     </div>
   );
