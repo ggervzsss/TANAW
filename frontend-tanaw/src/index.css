@@ -948,6 +948,14 @@ html.dark .tanaw-login-edge-blur {
     color 220ms ease;
 }
 
+.tanaw-activation-card {
+  max-width: min(36.25rem, 100%);
+}
+
+.tanaw-activation-card .tanaw-password-requirements {
+  margin-bottom: clamp(0.9rem, 2svh, 1rem);
+}
+
 html.dark .tanaw-auth-card {
   --tanaw-auth-input-bg: #0c1728;
   --tanaw-auth-input-bg-hover: #101e32;
@@ -1232,6 +1240,19 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-auth-card {
     border-radius: 1.5rem;
   }
+
+  .tanaw-activation-card {
+    padding-block: 1.25rem;
+  }
+
+  .tanaw-activation-card > header {
+    margin-bottom: 1rem;
+  }
+
+  .tanaw-activation-card .tanaw-activation-banner {
+    margin-bottom: 1rem;
+    padding: 0.875rem;
+  }
 }
 
 @media (max-height: 640px) {
@@ -1505,7 +1526,7 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   }
 }
 
-@media (max-width: 767px), (max-height: 720px) {
+@media (max-width: 767px) {
   .tanaw-stage-particles {
     display: none;
   }
@@ -1513,6 +1534,12 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-stage-glow::before {
     opacity: 0.42;
     animation: none;
+  }
+}
+
+@media (max-height: 560px) {
+  .tanaw-stage-particles .tanaw-hero-particle:nth-child(n + 5) {
+    display: none;
   }
 }
 

@@ -50,7 +50,7 @@ export function PasswordMatchIndicator({ password, confirmation }: { password: s
   const hasConfirmation = confirmation.length > 0;
   const matches = hasConfirmation && password.length > 0 && normalizePassword(password) === normalizePassword(confirmation);
   const state = toRequirementState(hasConfirmation, matches);
-  const label = state === "idle" ? "Re-enter the new password to confirm it" : state === "met" ? "Passwords match" : "Passwords do not match";
+  const label = state === "idle" ? "Re-enter the new password to confirm it." : state === "met" ? "Passwords match" : "Passwords do not match";
 
   return (
     <ul className="mt-2" aria-live="polite">

@@ -162,7 +162,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             />
           </div>
           <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
-          <ContactNumberField name="contactNumber" label="Contact Number" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
+          <ContactNumberField name="contactNumber" label="Contact Number (Optional)" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
           <FormField
             name="enterpriseId"
             label="Enterprise ID Seed"

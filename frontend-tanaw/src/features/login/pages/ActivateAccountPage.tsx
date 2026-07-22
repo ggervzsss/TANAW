@@ -8,7 +8,7 @@ import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/component
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
-import { AuthThemeToggle } from "../components";
+import { AuthParticles, AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { completeAccountActivation, type AccountActivationDetails, validateAccountActivation } from "../services";
 import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
@@ -97,6 +97,7 @@ export function ActivateAccountPage() {
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
+      <AuthParticles />
       <AuthThemeToggle />
 
       <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">
@@ -119,7 +120,7 @@ export function ActivateAccountPage() {
 
         <main className="flex min-h-0 items-center justify-center lg:justify-end">
           <motion.section
-            className="tanaw-auth-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
+            className="tanaw-auth-card tanaw-activation-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.55, ease: "easeOut" }}
@@ -213,9 +214,9 @@ function ActivationForm({
       </div>
 
       <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
-      <PasswordRequirements password={values.newPassword} />
       <PasswordField label="Confirm Password" name="confirmPassword" value={values.confirmPassword} error={errors.confirmPassword} onChange={onChange("confirmPassword")} />
       <PasswordMatchIndicator password={values.newPassword} confirmation={values.confirmPassword} />
+      <PasswordRequirements password={values.newPassword} />
 
       {pageMessage ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">

@@ -1,10 +1,10 @@
-import { type CSSProperties, useEffect, useMemo } from "react";
+import { type CSSProperties, useEffect } from "react";
 import { MapPin } from "lucide-react";
 import { motion } from "motion/react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
-import { AuthThemeToggle, LoginForm } from "../components";
+import { AuthParticles, AuthThemeToggle, LoginForm } from "../components";
 import { useAuthStageGlow, useLogin } from "../hooks";
 import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
 
@@ -30,18 +30,6 @@ export function LoginPage() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const { clearLoginMessage, handleLoginSubmit, lockoutSeconds, loginMessage } = useLogin();
-  const particles = useMemo(
-    () => [
-      { left: "7%", top: "58%", size: 3, delay: "0s", duration: "12s" },
-      { left: "18%", top: "51%", size: 2, delay: "2.6s", duration: "11s" },
-      { left: "23%", top: "74%", size: 3, delay: "0.4s", duration: "14s" },
-      { left: "31%", top: "61%", size: 4, delay: "3.2s", duration: "12.5s" },
-      { left: "44%", top: "55%", size: 3, delay: "4.1s", duration: "13s" },
-      { left: "15%", top: "84%", size: 2, delay: "5.8s", duration: "16s" },
-      { left: "88%", top: "78%", size: 2, delay: "7.1s", duration: "14s" },
-    ],
-    [],
-  );
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLElement>();
 
   useEffect(() => {
@@ -59,33 +47,12 @@ export function LoginPage() {
   }
 
   return (
-    <section
-      ref={stageRef}
-      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
-      style={stageGlowStyle}
-    >
+    <section ref={stageRef} className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)" style={stageGlowStyle}>
       <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
-      <div className="tanaw-stage-particles absolute inset-0" aria-hidden="true">
-        {particles.map((particle, index) => (
-          <span
-            key={index}
-            className="tanaw-hero-particle"
-            style={
-              {
-                left: particle.left,
-                top: particle.top,
-                width: `${particle.size}px`,
-                height: `${particle.size}px`,
-                "--particle-delay": particle.delay,
-                "--particle-duration": particle.duration,
-              } as CSSProperties
-            }
-          />
-        ))}
-      </div>
+      <AuthParticles />
       <AuthThemeToggle />
 
       <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">
@@ -94,7 +61,9 @@ export function LoginPage() {
             <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
               <SampaguitaIcon className="h-8 w-8" />
             </div>
-            <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">Welcome to San Pedro</h2>
+            <h2 className="tanaw-auth-hero-title font-['Montserrat'] text-5xl leading-tight font-bold tracking-normal text-white drop-shadow-[0_10px_22px_rgba(0,0,0,0.28)] xl:text-6xl">
+              Welcome to San Pedro
+            </h2>
             <div className="tanaw-gold-shimmer mt-5 h-0.75 w-28 rounded-full bg-(--tanaw-gold)" />
             <p className="tanaw-auth-hero-copy mt-6 max-w-lg text-lg leading-8 font-medium text-white/95 drop-shadow-[0_8px_18px_rgba(0,0,0,0.25)]">
               Your platform to manage tourism, empower enterprises, and build a thriving community.
@@ -115,7 +84,11 @@ export function LoginPage() {
           >
             <header className="tanaw-auth-card-header mb-8">
               <div className="flex items-center gap-5 sm:gap-7">
-                <img src={SAN_PEDRO_SEAL} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5" />
+                <img
+                  src={SAN_PEDRO_SEAL}
+                  alt="City of San Pedro seal"
+                  className="tanaw-auth-brand-seal h-16 w-16 flex-none object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)] sm:h-21.5 sm:w-21.5"
+                />
                 <div className="min-w-0">
                   <h1 className="tanaw-auth-brand-title font-['Montserrat'] text-2xl leading-tight font-extrabold tracking-normal text-(--tanaw-green) sm:text-[2.35rem]">TANAW PORTAL</h1>
                   <p className="tanaw-auth-brand-subtitle mt-2 text-sm leading-6 font-medium text-(--tanaw-muted) sm:text-lg">San Pedro Tourism Management</p>

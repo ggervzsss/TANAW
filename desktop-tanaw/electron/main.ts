@@ -6,10 +6,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { getMlServiceCommand } from "./ml-service-command";
-import {
-  hasCompatibleCameraRuntime,
-  hasCompatibleMlHealth,
-} from "./ml-service-contract";
+import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
 import { buildWindowsListenerPidScript } from "./ml-service-process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -783,8 +780,8 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
   win = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 1100,
-    minHeight: 720,
+    minWidth: 800,
+    minHeight: 500,
     icon: getWindowIcon(),
     show: false,
     title: "TANAW Enterprise Desktop",
