@@ -92,7 +92,7 @@ export function AdminActivityHistoryPage() {
               {filteredLogs.map((log) => {
                 const group = activityGroupFor(log);
                 return (
-                  <tr key={log.id} onClick={() => setSelectedActivity(log)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                  <tr key={log.id} onClick={() => setSelectedActivity(log)} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
                     <td className="px-4 py-4 font-mono text-xs text-gray-500">{formatPhilippineDateTime(log.timestamp, timeFormat)}</td>
                     <td className="px-4 py-4">
                       <ExpandableTableText primary={log.action} ariaLabel="activity" className="font-semibold text-gray-900" />
@@ -107,7 +107,7 @@ export function AdminActivityHistoryPage() {
                       <ExpandableTableText primary={log.target} ariaLabel="affected item" className="text-sm font-medium text-gray-700" />
                     </td>
                     <td className="px-4 py-4 text-xs leading-relaxed text-gray-600">
-                      <ExpandableTableText primary={log.summary} ariaLabel="activity details" threshold={72} twoLines />
+                      <ExpandableTableText primary={log.summary} ariaLabel="activity details" twoLines />
                     </td>
                   </tr>
                 );
@@ -171,7 +171,7 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
 export function AdminActivityDetailFields({ activity }: { activity: SystemLog }) {
   const { timeFormat } = useSystemDisplayPreferences();
   const expandableValue = (value: string, label: string) => (
-    <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" className="leading-relaxed font-semibold" />
+    <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />
   );
 
   return (

@@ -216,13 +216,13 @@ function SituationTable({ alerts, isLoading, onOpen }: { alerts: PriorityAlert[]
           </thead>
           <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
             {alerts.map((alert) => (
-              <tr key={alert.id} onClick={() => onOpen(alert.id)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
+              <tr key={alert.id} onClick={() => onOpen(alert.id)} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
                 <td className="px-4 py-4 font-bold text-gray-950">{adminAlertLabel(alert)}</td>
                 <td className="px-4 py-4">
                   <ExpandableTableText primary={alert.enterprise ?? alert.requester} ariaLabel="affected establishment" className="font-semibold text-gray-900" />
                 </td>
                 <td className="px-4 py-4">
-                  <ExpandableTableText primary={alert.summary} secondary={alert.requiredAction} ariaLabel="situation and suggested response" threshold={80} twoLines />
+                  <ExpandableTableText primary={alert.summary} secondary={alert.requiredAction} ariaLabel="situation and suggested response" twoLines />
                 </td>
                 <td className="px-4 py-4">
                   <AdminUrgencyBadge alert={alert} />
@@ -274,11 +274,11 @@ function SupportRequestTable({ tickets, isLoading, onOpen }: { tickets: SupportT
           </thead>
           <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
             {tickets.map((ticket) => (
-              <tr key={ticket.id} onClick={() => onOpen(ticket.id)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
+              <tr key={ticket.id} onClick={() => onOpen(ticket.id)} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
                 <td className="px-4 py-4 font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
                 <td className="px-4 py-4 font-bold text-gray-950">{ticket.enterpriseName}</td>
                 <td className="px-4 py-4">
-                  <ExpandableTableText primary={ticket.subject} secondary={ticket.description} ariaLabel="support concern" threshold={80} twoLines />
+                  <ExpandableTableText primary={ticket.subject} secondary={ticket.description} ariaLabel="support concern" twoLines />
                 </td>
                 <td className="px-4 py-4">
                   <PriorityBadge priority={ticket.priority} />

@@ -6,28 +6,29 @@ export function DotSingleReportTable({ report }: { report: IntakeReport }) {
 
   return (
     <div className="w-full">
-      <table className="dot-table mb-4 w-full border-collapse border border-black text-[10px] leading-tight">
+      <table className="dot-table tanaw-official-report-table mb-4 w-full table-fixed border-collapse border border-black text-[10px] leading-tight">
+        <DotTableColumns />
         <DotTableHeader />
         <tbody>
-          <tr className="border-t border-black bg-gray-50 text-center">
+          <tr className="border-t border-black text-center">
             <td className="py-2 text-left font-bold">
               {report.enterprise}
               <br />
               <span className="text-[9px] font-normal text-gray-600">{report.month}</span>
             </td>
-            <td>{report.code}</td>
+            <td className="tanaw-report-code-cell">{report.code}</td>
             <td>{d.provMale}</td>
             <td>{d.provFemale}</td>
-            <td className="bg-gray-50 font-semibold">{d.provTotal}</td>
+            <td className="tanaw-report-total-cell">{d.provTotal}</td>
             <td>{d.otherMale}</td>
             <td>{d.otherFemale}</td>
-            <td className="bg-gray-50 font-semibold">{d.otherTotal}</td>
+            <td className="tanaw-report-total-cell">{d.otherTotal}</td>
             <td>{d.foreignMale}</td>
             <td>{d.foreignFemale}</td>
-            <td className="bg-gray-50 font-semibold">{d.foreignTotal}</td>
-            <td className="bg-gray-100 font-bold">{d.grandMale}</td>
-            <td className="bg-gray-100 font-bold">{d.grandFemale}</td>
-            <td className="bg-gray-200 text-sm font-bold">{report.metrics.unique.toLocaleString()}</td>
+            <td className="tanaw-report-total-cell">{d.foreignTotal}</td>
+            <td className="font-bold">{d.grandMale}</td>
+            <td className="font-bold">{d.grandFemale}</td>
+            <td className="tanaw-report-total-cell tanaw-report-final-total-cell text-sm">{report.metrics.unique.toLocaleString()}</td>
           </tr>
         </tbody>
       </table>
@@ -71,7 +72,8 @@ export function DotFinalReportTable({ report }: { report: FinalReport }) {
 
   return (
     <div className="w-full">
-      <table className="dot-table mb-4 w-full border-collapse border border-black text-[10px] leading-tight">
+      <table className="dot-table tanaw-official-report-table mb-4 w-full table-fixed border-collapse border border-black text-[10px] leading-tight">
+        <DotTableColumns />
         <DotTableHeader />
         <tbody>
           {rows.map(({ source, demographics: d }) => (
@@ -81,37 +83,37 @@ export function DotFinalReportTable({ report }: { report: FinalReport }) {
                 <br />
                 <span className="text-[9px] font-normal text-gray-600">{report.period}</span>
               </td>
-              <td>{source.code}</td>
+              <td className="tanaw-report-code-cell">{source.code}</td>
               <td>{d.provMale}</td>
               <td>{d.provFemale}</td>
-              <td className="bg-gray-50 font-semibold">{d.provTotal}</td>
+              <td className="tanaw-report-total-cell">{d.provTotal}</td>
               <td>{d.otherMale}</td>
               <td>{d.otherFemale}</td>
-              <td className="bg-gray-50 font-semibold">{d.otherTotal}</td>
+              <td className="tanaw-report-total-cell">{d.otherTotal}</td>
               <td>{d.foreignMale}</td>
               <td>{d.foreignFemale}</td>
-              <td className="bg-gray-50 font-semibold">{d.foreignTotal}</td>
-              <td className="bg-gray-100 font-bold">{d.grandMale}</td>
-              <td className="bg-gray-100 font-bold">{d.grandFemale}</td>
-              <td className="bg-gray-200 text-sm font-bold">{source.unique.toLocaleString()}</td>
+              <td className="tanaw-report-total-cell">{d.foreignTotal}</td>
+              <td className="font-bold">{d.grandMale}</td>
+              <td className="font-bold">{d.grandFemale}</td>
+              <td className="tanaw-report-total-cell tanaw-report-final-total-cell text-sm">{source.unique.toLocaleString()}</td>
             </tr>
           ))}
-          <tr className="border-t-2 border-black bg-gray-200 text-center font-bold">
+          <tr className="tanaw-report-consolidated-row border-t-2 border-black text-center font-bold">
             <td colSpan={2} className="py-3 pr-4 text-right tracking-wide uppercase">
               Citywide Consolidated Total
             </td>
             <td>{totals.provMale}</td>
             <td>{totals.provFemale}</td>
-            <td>{totals.provTotal}</td>
+            <td className="tanaw-report-total-cell">{totals.provTotal}</td>
             <td>{totals.otherMale}</td>
             <td>{totals.otherFemale}</td>
-            <td>{totals.otherTotal}</td>
+            <td className="tanaw-report-total-cell">{totals.otherTotal}</td>
             <td>{totals.foreignMale}</td>
             <td>{totals.foreignFemale}</td>
-            <td>{totals.foreignTotal}</td>
+            <td className="tanaw-report-total-cell">{totals.foreignTotal}</td>
             <td>{totals.grandMale}</td>
             <td>{totals.grandFemale}</td>
-            <td className="bg-gray-300 text-base text-black">{totals.total.toLocaleString()}</td>
+            <td className="tanaw-report-total-cell tanaw-report-final-total-cell text-base">{totals.total.toLocaleString()}</td>
           </tr>
         </tbody>
       </table>
@@ -148,17 +150,29 @@ function DotTableHeader() {
       <tr>
         <th>Male</th>
         <th>Female</th>
-        <th>Total</th>
+        <th className="tanaw-report-total-cell">Total</th>
         <th>Male</th>
         <th>Female</th>
-        <th>Total</th>
+        <th className="tanaw-report-total-cell">Total</th>
         <th>Male</th>
         <th>Female</th>
-        <th>Total</th>
+        <th className="tanaw-report-total-cell">Total</th>
         <th>Male</th>
         <th>Female</th>
-        <th>Total</th>
+        <th className="tanaw-report-total-cell tanaw-report-final-total-cell">Total</th>
       </tr>
     </thead>
+  );
+}
+
+function DotTableColumns() {
+  return (
+    <colgroup>
+      <col className="w-[18%]" />
+      <col className="w-[10%]" />
+      {Array.from({ length: 12 }, (_, index) => (
+        <col key={index} className="w-[6%]" />
+      ))}
+    </colgroup>
   );
 }

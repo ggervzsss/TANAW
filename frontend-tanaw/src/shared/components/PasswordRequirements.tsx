@@ -46,14 +46,14 @@ export function PasswordRequirements({ password }: { password: string }) {
   );
 }
 
-export function PasswordMatchIndicator({ password, confirmation }: { password: string; confirmation: string }) {
+export function PasswordMatchIndicator({ password, confirmation, className = "mt-2", id }: { password: string; confirmation: string; className?: string; id?: string }) {
   const hasConfirmation = confirmation.length > 0;
   const matches = hasConfirmation && password.length > 0 && normalizePassword(password) === normalizePassword(confirmation);
   const state = toRequirementState(hasConfirmation, matches);
   const label = state === "idle" ? "Re-enter the new password to confirm it." : state === "met" ? "Passwords match" : "Passwords do not match";
 
   return (
-    <ul className="mt-2" aria-live="polite">
+    <ul id={id} className={className} aria-live="polite">
       <RequirementItem label={label} state={state} />
     </ul>
   );

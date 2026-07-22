@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
@@ -213,9 +213,18 @@ function ActivationForm({
         </div>
       </div>
 
-      <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
-      <PasswordField label="Confirm Password" name="confirmPassword" value={values.confirmPassword} error={errors.confirmPassword} onChange={onChange("confirmPassword")} />
-      <PasswordMatchIndicator password={values.newPassword} confirmation={values.confirmPassword} />
+      <div className="tanaw-activation-password-fields grid gap-1.5">
+        <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
+        <PasswordField
+          label="Confirm Password"
+          name="confirmPassword"
+          value={values.confirmPassword}
+          error={errors.confirmPassword}
+          onChange={onChange("confirmPassword")}
+          guidance={<PasswordMatchIndicator id="confirm-password-guidance" password={values.newPassword} confirmation={values.confirmPassword} className="mt-1" />}
+          guidanceId="confirm-password-guidance"
+        />
+      </div>
       <PasswordRequirements password={values.newPassword} />
 
       {pageMessage ? (
@@ -268,17 +277,21 @@ function PasswordField({
   value,
   error,
   onChange,
+  guidance,
+  guidanceId,
 }: {
   label: string;
   name: keyof PasswordValues;
   value: string;
   error?: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  guidance?: ReactNode;
+  guidanceId?: string;
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const errorId = `${name}-error`;
   return (
-    <div className="mb-3 block">
+    <div>
       <label htmlFor={name} className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
         {label}
       </label>
@@ -302,7 +315,7 @@ function PasswordField({
           maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
           required
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={[error ? errorId : null, guidanceId].filter(Boolean).join(" ") || undefined}
           className="h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
         />
         {error ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" aria-hidden="true" /> : null}
@@ -318,6 +331,7 @@ function PasswordField({
       <div id={errorId} className="mt-1 min-h-4" aria-live="polite">
         {error ? <p className="text-xs font-medium text-(--tanaw-error)">{error}</p> : null}
       </div>
+      {guidance}
     </div>
   );
 }

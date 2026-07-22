@@ -47,13 +47,13 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
                   onSelectAccount(account);
                 }
               }}
-              className="hover:bg-tgreen-dark/6 focus:bg-tgreen-dark/6 focus-visible:ring-tanaw-green/30 cursor-pointer transition outline-none focus-visible:ring-2"
+              className="tanaw-interactive-row focus-visible:ring-tanaw-green/30 cursor-pointer outline-none focus-visible:ring-2"
             >
               <td className="px-4 py-4 text-gray-900">
-                <ExpandableTableText primary={account.displayName} ariaLabel="account name" className="font-bold" threshold={34} />
+                <ExpandableTableText primary={account.displayName} ariaLabel="account name" className="font-bold" />
               </td>
               <td className="px-4 py-4 text-sm text-gray-600">
-                <ExpandableTableText primary={account.email} ariaLabel="account email" threshold={36} />
+                <ExpandableTableText primary={account.email} ariaLabel="account email" />
               </td>
               <td className="px-4 py-4 whitespace-nowrap">
                 <StatusBadge tone="blue">{lguRoleLabel[account.role] ?? account.role}</StatusBadge>

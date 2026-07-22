@@ -124,7 +124,7 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredAlerts.map((alert) => (
-                <tr key={alert.id} onClick={() => openAlert(alert.id)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={alert.id} onClick={() => openAlert(alert.id)} className="tanaw-interactive-row group cursor-pointer">
                   <td className="px-4 py-4 font-mono text-xs font-bold text-gray-600">{alert.id}</td>
                   <td className="px-4 py-4">
                     <div className="font-semibold text-gray-900">{alert.type}</div>
@@ -142,7 +142,6 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
                       ariaLabel="alert source"
                       className="font-semibold text-gray-900"
                       secondaryClassName="text-[10px] font-bold tracking-wide text-gray-500 uppercase"
-                      threshold={38}
                     />
                   </td>
                   <td className="px-4 py-4">
@@ -152,7 +151,6 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
                       ariaLabel="alert summary and required action"
                       className="text-xs leading-relaxed font-semibold text-gray-700"
                       secondaryClassName="text-xs leading-relaxed text-gray-500"
-                      threshold={76}
                       twoLines
                     />
                   </td>

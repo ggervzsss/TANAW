@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, screen, Tray } from "electron";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
@@ -8,6 +8,7 @@ import path from "node:path";
 import { getMlServiceCommand } from "./ml-service-command";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
 import { buildWindowsListenerPidScript } from "./ml-service-process";
+import { createDisplayScaleController } from "./display-scale";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -789,6 +790,41 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
+  const targetWindow = win;
+  const displayScaleController = createDisplayScaleController({
+    getScaleFactor: () => screen.getDisplayMatching(targetWindow.getBounds()).scaleFactor,
+    getAppliedZoomFactor: () => targetWindow.webContents.getZoomFactor(),
+    applyZoomFactor: (zoomFactor) => {
+      if (!targetWindow.isDestroyed() && !targetWindow.webContents.isDestroyed()) {
+        targetWindow.webContents.setZoomFactor(zoomFactor);
+      }
+    },
+    subscribeToDisplayChanges: (listener) => {
+      const handleDisplayMetricsChanged = () => listener();
+      screen.on("display-metrics-changed", handleDisplayMetricsChanged);
+      return () => screen.off("display-metrics-changed", handleDisplayMetricsChanged);
+    },
+    subscribeToWindowChanges: (listener) => {
+      const handleWindowChange = () => listener();
+      const handleZoomChange = (event: Electron.Event) => {
+        event.preventDefault();
+        listener();
+      };
+      targetWindow.on("move", handleWindowChange);
+      targetWindow.on("resize", handleWindowChange);
+      targetWindow.webContents.on("zoom-changed", handleZoomChange);
+      targetWindow.webContents.on("did-finish-load", handleWindowChange);
+      return () => {
+        targetWindow.off("move", handleWindowChange);
+        targetWindow.off("resize", handleWindowChange);
+        if (!targetWindow.webContents.isDestroyed()) {
+          targetWindow.webContents.off("zoom-changed", handleZoomChange);
+          targetWindow.webContents.off("did-finish-load", handleWindowChange);
+        }
+      };
+    },
+  });
+  displayScaleController.start();
   win.maximize();
 
   win.once("ready-to-show", showWindowWhenReady);
@@ -802,6 +838,7 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
   });
 
   win.on("closed", () => {
+    displayScaleController.dispose();
     win = null;
   });
 

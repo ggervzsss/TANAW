@@ -108,4 +108,28 @@ describe("web report PDF generation", () => {
     expect(pdf).toContain("(300) Tj");
     expect(pdf).not.toContain("999,999");
   });
+
+  it("wraps segmented report codes and uses distinct light fills for totals", () => {
+    const report: FinalReport = {
+      id: "SAMPLE-FINAL-MAY-2026",
+      title: "Citywide Tourism Aggregation",
+      period: "May 2026",
+      generatedOn: "May 31, 2026",
+      preparedBy: "LGU Staff",
+      preparedRole: "Staff Processing Division",
+      status: "Finalized",
+      totalEntry: 150,
+      totalExit: 140,
+      totalUnique: 100,
+      enterpriseCount: 1,
+      sources: [{ id: "source", enterprise: "Sample Enterprise", code: "SAMPLE-REP-2605-01", unique: 100, entry: 150, exit: 140 }],
+    };
+
+    const pdf = createFinalReportPdf(report);
+    expect(pdf).toContain("(SAMPLE-REP-) Tj");
+    expect(pdf).toContain("(2605-01) Tj");
+    expect(pdf).toContain("0.83 0.87 0.91 rg");
+    expect(pdf).toContain("0.72 0.79 0.86 rg");
+    expect(pdf).toContain("1 1 1 rg 0 0 842 595 re f");
+  });
 });

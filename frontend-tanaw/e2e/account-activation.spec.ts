@@ -58,6 +58,20 @@ test("opens a valid activation link in a clean browser without an existing sessi
   await expect(page).toHaveURL(/\/activate-account$/);
 });
 
+test("keeps the password fields, confirmation guidance, requirements, and action in the required order", async ({ page }) => {
+  await mockValidActivation(page);
+  await page.goto(`/activate-account#token=${validToken}`);
+
+  const order = await page.locator("form").evaluate((form) => {
+    const selectors = ["#newPassword", "#confirmPassword", '[aria-label^="Re-enter the new password"]', '[aria-label="Password requirements"]', 'button[type="submit"]'];
+    return selectors.map((selector) => Array.from(form.querySelectorAll("input, li, section, button")).indexOf(form.querySelector(selector) as Element));
+  });
+
+  expect(order.every((position) => position >= 0)).toBe(true);
+  expect(order).toEqual([...order].sort((left, right) => left - right));
+  await expect(page.getByLabel("Confirm Password", { exact: true })).toHaveAttribute("aria-describedby", /confirm-password-guidance/);
+});
+
 test("shows a specific missing-token state without calling the backend", async ({ page }) => {
   let validationRequests = 0;
   await page.route("**/auth/account-activation/validate", async (route) => {
