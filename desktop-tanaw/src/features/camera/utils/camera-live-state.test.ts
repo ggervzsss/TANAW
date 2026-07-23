@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { MlCameraLiveState, MlCameraStates } from "../services/ml-service";
-import { mergeCameraStates } from "./camera-live-state";
+import {
+  clearRecoveredCameraRequestErrors,
+  mergeCameraStates,
+} from "./camera-live-state";
 
 describe("mergeCameraStates", () => {
   it("keeps delayed updates attached to their source camera while another camera is selected", () => {
@@ -20,6 +23,31 @@ describe("mergeCameraStates", () => {
   it("drops states outside the active enterprise camera set", () => {
     const updated = mergeCameraStates({ 101: state(101, 1), 999: state(999, 9) }, payload(state(999, 10)), new Set([101]));
     expect(Object.keys(updated)).toEqual(["101"]);
+  });
+});
+
+describe("clearRecoveredCameraRequestErrors", () => {
+  it("clears a stale request timeout after runtime confirms startup is progressing", () => {
+    const errors = {
+      101: "Error invoking remote method 'camera-credentials:request': TimeoutError: The operation was aborted due to timeout",
+    };
+    const starting = state(101, 0);
+    starting.counts.status = "connecting";
+
+    expect(clearRecoveredCameraRequestErrors(errors, [starting])).toEqual({});
+  });
+
+  it("keeps real pipeline failures and unrelated validation errors", () => {
+    const failed = state(101, 0);
+    failed.counts.running = false;
+    failed.counts.status = "failed";
+    failed.counts.error = "Unable to initialize ML model.";
+    const errors = {
+      101: "The ML service did not respond in time.",
+      202: "Enter the camera password.",
+    };
+
+    expect(clearRecoveredCameraRequestErrors(errors, [failed, state(202, 0)])).toBe(errors);
   });
 });
 

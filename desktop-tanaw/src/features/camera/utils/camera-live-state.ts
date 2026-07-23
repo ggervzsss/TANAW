@@ -23,3 +23,36 @@ export function cameraStatusFromRuntime(state: MlCameraLiveState): CameraStatus 
   if (state.counts.status === "starting" || state.counts.status === "connecting" || state.counts.status === "degraded" || state.counts.status === "reconnecting") return state.counts.status;
   return "running";
 }
+
+export function clearRecoveredCameraRequestErrors(
+  current: Record<number, string | null>,
+  states: readonly MlCameraLiveState[],
+) {
+  let next = current;
+  for (const state of states) {
+    const currentError = next[state.camera_id];
+    if (
+      !currentError ||
+      !isRequestTimeoutMessage(currentError) ||
+      !state.counts.running ||
+      state.counts.error ||
+      state.counts.status === "error" ||
+      state.counts.status === "failed"
+    ) {
+      continue;
+    }
+    if (next === current) next = { ...current };
+    delete next[state.camera_id];
+  }
+  return next;
+}
+
+function isRequestTimeoutMessage(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("did not respond in time") ||
+    normalized.includes("aborted due to timeout")
+  );
+}

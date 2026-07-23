@@ -10,7 +10,11 @@ import { CameraPreviewPanel } from "./CameraPreviewPanel";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
 import { requiresCameraCredentials, validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
-import { cameraStatusFromRuntime, mergeCameraStates } from "../utils/camera-live-state";
+import {
+  cameraStatusFromRuntime,
+  clearRecoveredCameraRequestErrors,
+  mergeCameraStates,
+} from "../utils/camera-live-state";
 import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnection, stripStreamCredentials } from "../utils/rtsp";
 import {
   CAMERA_IP_CONFLICT_MESSAGE,
@@ -146,6 +150,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       const registeredCameraIds = activeCameraIdsRef.current;
       const nextStates = payload.cameras.filter((state) => registeredCameraIds.has(state.camera_id));
       setCameraStates((current) => mergeCameraStates(current, payload, registeredCameraIds));
+      setCameraErrors((current) => clearRecoveredCameraRequestErrors(current, nextStates));
       setCameras((current) =>
         updateCamerasWhenChanged(current, (camera) => {
           const state = nextStates.find((candidate) => candidate.camera_id === camera.id);

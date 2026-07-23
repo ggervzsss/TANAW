@@ -409,7 +409,7 @@ async function requestCameraWithCredentials(
     body: JSON.stringify(payload),
     headers: { "Content-Type": "application/json" },
     method: "POST",
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(operation === "start" ? 30_000 : 8000),
   });
   if (!response.ok) {
     throw new Error(`Camera ${operation} request failed (${response.status}).`);

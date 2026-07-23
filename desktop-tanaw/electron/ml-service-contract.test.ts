@@ -7,7 +7,7 @@ describe("ML service compatibility contract", () => {
   });
 
   it("requires both the contract version and collection runtime shape", () => {
-    expect(hasCompatibleMlHealth({ api_contract_version: 2 })).toBe(true);
+    expect(hasCompatibleMlHealth({ api_contract_version: 3 })).toBe(true);
     expect(hasCompatibleCameraRuntime({ cameras: [], enterprise_occupancy: 0 })).toBe(true);
     expect(hasCompatibleCameraRuntime({ cameras: [] })).toBe(false);
   });

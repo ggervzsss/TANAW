@@ -199,7 +199,7 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.2.0"
-    api_contract_version: int = 2
+    api_contract_version: int = 3
     running: bool
     error: str | None = None
     model_loaded: bool = False
