@@ -836,12 +836,15 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     },
   });
   const targetWindow = win;
+  // BrowserWindow.webContents throws once its native window has been destroyed.
+  // Keep a stable reference so shutdown cleanup never reads that late getter.
+  const targetWebContents = targetWindow.webContents;
   const displayScaleController = createDisplayScaleController({
-    getScaleFactor: () => screen.getDisplayMatching(targetWindow.getBounds()).scaleFactor,
-    getAppliedZoomFactor: () => targetWindow.webContents.getZoomFactor(),
+    getScaleFactor: () => (targetWindow.isDestroyed() ? 1 : screen.getDisplayMatching(targetWindow.getBounds()).scaleFactor),
+    getAppliedZoomFactor: () => (targetWebContents.isDestroyed() ? undefined : targetWebContents.getZoomFactor()),
     applyZoomFactor: (zoomFactor) => {
-      if (!targetWindow.isDestroyed() && !targetWindow.webContents.isDestroyed()) {
-        targetWindow.webContents.setZoomFactor(zoomFactor);
+      if (!targetWindow.isDestroyed() && !targetWebContents.isDestroyed()) {
+        targetWebContents.setZoomFactor(zoomFactor);
       }
     },
     subscribeToDisplayChanges: (listener) => {
@@ -857,25 +860,31 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
       };
       targetWindow.on("move", handleWindowChange);
       targetWindow.on("resize", handleWindowChange);
-      targetWindow.webContents.on("zoom-changed", handleZoomChange);
-      targetWindow.webContents.on("did-finish-load", handleWindowChange);
+      targetWebContents.on("zoom-changed", handleZoomChange);
+      targetWebContents.on("did-finish-load", handleWindowChange);
       return () => {
-        targetWindow.off("move", handleWindowChange);
-        targetWindow.off("resize", handleWindowChange);
-        if (!targetWindow.webContents.isDestroyed()) {
-          targetWindow.webContents.off("zoom-changed", handleZoomChange);
-          targetWindow.webContents.off("did-finish-load", handleWindowChange);
+        if (!targetWindow.isDestroyed()) {
+          targetWindow.off("move", handleWindowChange);
+          targetWindow.off("resize", handleWindowChange);
+        }
+        if (!targetWebContents.isDestroyed()) {
+          targetWebContents.off("zoom-changed", handleZoomChange);
+          targetWebContents.off("did-finish-load", handleWindowChange);
         }
       };
     },
   });
   displayScaleController.start();
+  targetWebContents.once("destroyed", () => displayScaleController.dispose());
   win.maximize();
 
   win.once("ready-to-show", showWindowWhenReady);
 
   win.on("close", (event) => {
-    if (isQuitting) return;
+    if (isQuitting) {
+      displayScaleController.dispose();
+      return;
+    }
 
     event.preventDefault();
     win?.hide();
