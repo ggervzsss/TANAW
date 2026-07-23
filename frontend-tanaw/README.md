@@ -131,6 +131,31 @@ User-facing terminology should stay operational and non-technical. The portal
 is intended for LGU staff workflows, so screens should prioritize clear status,
 review actions, auditability, and fast scanning over implementation details.
 
+### Page continuity and official exports
+
+Serializable workflow state uses the versioned `useScopedPageState` utility.
+Keys are scoped by portal, authenticated user ID, role, route, and feature
+namespace. Shareable Batch Reports filters are mirrored in URL search
+parameters; non-sensitive filters and scroll positions use `sessionStorage`
+with an in-memory fallback when storage is unavailable. Server records remain
+owned by TanStack Query and WebSocket invalidation rather than browser storage.
+Logout clears the complete user-scoped namespace.
+
+Passwords, authentication tokens, reset or activation values, File objects, and
+credential-bearing camera URLs must never enter page state. Upload binaries are
+not serialized. Version or validation mismatches are ignored safely.
+
+IT Support Tickets use the backend's resolved-last business order: unresolved
+Urgent, High, Normal, and Low tickets first, with Open before In Review at equal
+priority and stable time/code tie breakers. Real-time query invalidation
+reapplies this order without resetting filters.
+
+Final Report PDF generation uses the dedicated light PDF renderer. Browser
+printing uses the `official-report-document` light-theme boundary and explicit
+print colors, so the application can remain dark while official pages print
+with white backgrounds, dark text, visible table borders, totals, signatures,
+and page information.
+
 ## Related Documentation
 
 - [Root system overview](../README.md)

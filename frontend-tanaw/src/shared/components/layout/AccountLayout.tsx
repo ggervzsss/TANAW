@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
@@ -6,6 +6,7 @@ import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
 import { getCurrentUser } from "../../services/accountManagement";
 import type { UserRole } from "../../types/role.types";
+import { createPageStateKey, readPageState, writePageState } from "../../utils/pageState";
 import { PortalTopbar } from "./PortalTopbar";
 
 type AccountLayoutProps = {
@@ -28,6 +29,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
+  const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const updateUser = useAuthStore((state) => state.updateUser);
   const title = useHeaderStore((state) => state.title);
@@ -48,6 +50,15 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     .filter(Boolean)
     .join(" ");
   const mainContentClassName = isMapView ? "flex h-full min-h-0 w-full flex-col" : "mx-auto w-full max-w-470";
+  const scrollStateKey = useMemo(
+    () =>
+      createPageStateKey(
+        { portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" },
+        pathname,
+        "scroll",
+      ),
+    [pathname, role, user?.id, user?.role],
+  );
 
   const currentUserQuery = useQuery({
     queryKey: ["current-user", token],
@@ -69,9 +80,26 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     }
   }, [currentUserQuery.isError, logout, navigate]);
 
+  useLayoutEffect(() => {
+    const main = mainRef.current;
+    const restored = readPageState(scrollStateKey, 1, isScrollPosition) ?? { mainTop: 0, windowTop: 0 };
+    const restore = () => {
+      main?.scrollTo({ top: restored.mainTop, left: 0 });
+      window.scrollTo({ top: restored.windowTop, left: 0 });
+    };
+    const frame = window.requestAnimationFrame(restore);
+    const settledRestore = window.setTimeout(restore, 250);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settledRestore);
+      writePageState(scrollStateKey, 1, {
+        mainTop: main?.scrollTop ?? 0,
+        windowTop: window.scrollY,
+      });
+    };
+  }, [scrollStateKey]);
+
   useEffect(() => {
-    mainRef.current?.scrollTo({ top: 0, left: 0 });
-    window.scrollTo({ top: 0, left: 0 });
     typedBufferRef.current = "";
     if (pathname !== routes.it.devLog) {
       const resetDevLogUnlock = window.setTimeout(() => setIsDevLogUnlocked(false), 0);
@@ -114,5 +142,18 @@ export function AccountLayout({ role }: AccountLayoutProps) {
         </main>
       </div>
     </section>
+  );
+}
+
+function isScrollPosition(value: unknown): value is { mainTop: number; windowTop: number } {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "mainTop" in value &&
+      "windowTop" in value &&
+      typeof value.mainTop === "number" &&
+      typeof value.windowTop === "number" &&
+      Number.isFinite(value.mainTop) &&
+      Number.isFinite(value.windowTop),
   );
 }

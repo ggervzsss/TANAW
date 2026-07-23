@@ -7,7 +7,7 @@ from math import ceil
 from statistics import fmean
 from typing import cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.date_time import PHILIPPINE_TIME_ZONE
@@ -76,6 +76,12 @@ STAFF_REPORT_NOTIFICATION_TYPES = (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
 )
+SUPPORT_TICKET_PRIORITY_RANK = {
+    "Urgent": 0,
+    "High": 1,
+    "Normal": 2,
+    "Low": 3,
+}
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
 FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
 FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
@@ -418,7 +424,37 @@ def to_support_ticket_message_summary(message: SupportTicketMessage) -> SupportT
 async def list_support_tickets(
     db: AsyncSession, account: Account, limit: int = 100
 ) -> list[SupportTicketSummary]:
-    statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
+    resolved_rank = case((SupportTicket.status == "Resolved", 1), else_=0)
+    priority_rank = case(
+        (SupportTicket.status == "Resolved", 0),
+        *(
+            (SupportTicket.priority == priority, rank)
+            for priority, rank in SUPPORT_TICKET_PRIORITY_RANK.items()
+        ),
+        else_=len(SUPPORT_TICKET_PRIORITY_RANK),
+    )
+    workflow_rank = case(
+        (SupportTicket.status == "Resolved", 0),
+        (SupportTicket.status == "Open", 0),
+        (SupportTicket.status == "In Review", 1),
+        else_=2,
+    )
+    authoritative_activity_at = case(
+        (SupportTicket.status == "Resolved", SupportTicket.updated_at),
+        else_=SupportTicket.created_at,
+    )
+    statement = (
+        select(SupportTicket)
+        .order_by(
+            resolved_rank.asc(),
+            priority_rank.asc(),
+            workflow_rank.asc(),
+            authoritative_activity_at.desc(),
+            SupportTicket.ticket_code.asc(),
+            SupportTicket.id.asc(),
+        )
+        .limit(limit)
+    )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(SupportTicket.enterprise_profile_id == account.id)
     elif account.role == AccountRole.ADMIN:

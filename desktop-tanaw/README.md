@@ -208,6 +208,25 @@ storage. Theme, notification-read state, and other non-authoritative UI
 preferences remain in Chromium storage. Live camera frames remain in memory and
 are never stored as database rows.
 
+RTSP and ONVIF camera creation requires both a non-blank device username and
+device password. These are device credentials and do not use TANAW account
+password-complexity rules. Stream URLs remain credential-free. Existing
+passwords are never populated into the edit form; a blank edit password keeps
+the encrypted value unchanged, while an entered value replaces it. Electron
+refuses plaintext credential persistence when OS secure storage is unavailable,
+returns only username/configured metadata to the renderer, and injects the
+stored secret into local camera test/start requests inside the main process.
+Renderer-only development falls back to memory rather than local or session
+storage.
+
+Enterprise Support Tickets provide Recommended, Newest first, Oldest first,
+Priority: Urgent to Low, Priority: Low to Urgent, Status, and Recently updated
+sorting. Recommended follows the central unresolved priority order and keeps
+resolved requests last. The selected sort and the serializable, non-sensitive
+ticket draft are user/route scoped for the authenticated session; photo drafts
+remain memory-only. Passwords and camera credentials are excluded. Logout
+clears the scoped page and draft state.
+
 The canonical local relationships are:
 
 ```mermaid

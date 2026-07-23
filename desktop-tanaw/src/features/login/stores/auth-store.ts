@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { clearScopedPageState } from "../../../utils/page-state";
 import type { AuthRole, AuthUser, LoginResponse } from "../types";
 
 const REMEMBER_STORAGE_KEY = "tanaw-auth-session-remember";
@@ -33,10 +34,26 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ token: session.token, user: session.user, status: "authenticated", isAuthenticated: true });
   },
   updateUser: (user) => set({ user, status: "authenticated", isAuthenticated: true }),
-  markAnonymous: () => set({ token: null, user: null, status: "anonymous", isAuthenticated: false }),
+  markAnonymous: () => {
+    const user = get().user;
+    if (user) {
+      const scope = {
+        portal: "desktop",
+        role: user.role,
+        userId: user.id,
+      };
+      clearScopedPageState(scope);
+      globalThis.setTimeout(() => clearScopedPageState(scope), 0);
+    }
+    set({ token: null, user: null, status: "anonymous", isAuthenticated: false });
+  },
   logout: () => {
+    const user = get().user;
+    const scope = user ? { portal: "desktop", role: user.role, userId: user.id } : null;
+    if (scope) clearScopedPageState(scope);
     void window.tanawAuthSession?.clear();
     set({ token: null, user: null, status: "anonymous", isAuthenticated: false });
+    if (scope) globalThis.setTimeout(() => clearScopedPageState(scope), 0);
   },
   hasRole: (roles) => {
     const role = get().user?.role;

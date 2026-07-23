@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +20,7 @@ import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
 import { routePaths } from "../router/routePaths";
+import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
 const CameraManagementView = lazy(() =>
@@ -96,6 +97,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
+  const scrollStateKey = useMemo(
+    () =>
+      createPageStateKey(
+        { portal: "desktop", role: user?.role ?? "enterprise", userId: user?.id ?? "anonymous" },
+        viewRouteById[activeView],
+        "scroll",
+      ),
+    [activeView, user?.id, user?.role],
+  );
 
   useDesktopCloudSync(mlContextReady, mlBaseUrl);
 
@@ -198,9 +208,18 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     };
   }, [user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
 
-  useEffect(() => {
-    contentScrollRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [activeView]);
+  useLayoutEffect(() => {
+    const container = contentScrollRef.current;
+    const restored = readPageState(scrollStateKey, 1, isScrollPosition) ?? { top: 0 };
+    const restore = () => container?.scrollTo({ top: restored.top, left: 0 });
+    const frame = window.requestAnimationFrame(restore);
+    const settledRestore = window.setTimeout(restore, 250);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settledRestore);
+      writePageState(scrollStateKey, 1, { top: container?.scrollTop ?? 0 });
+    };
+  }, [scrollStateKey]);
 
   const handleLogout = async () => {
     try {
@@ -531,4 +550,8 @@ function getInitials(value: string) {
 function getEnterpriseCameraStorageKey(user: ReturnType<typeof useAuthStore.getState>["user"]) {
   const scope = user?.enterpriseId || user?.id || user?.email || "anonymous";
   return `tanaw.enterprise.camera-configs:${scope.replace(/[^a-zA-Z0-9._:-]/g, "_")}`;
+}
+
+function isScrollPosition(value: unknown): value is { top: number } {
+  return Boolean(value && typeof value === "object" && "top" in value && typeof value.top === "number" && Number.isFinite(value.top));
 }

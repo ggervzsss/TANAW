@@ -52,6 +52,41 @@ export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
   return ticket.status !== "Resolved";
 }
 
+const priorityRank: Record<SupportTicketPriority, number> = {
+  Urgent: 0,
+  High: 1,
+  Normal: 2,
+  Low: 3,
+};
+
+const workflowRank: Record<SupportTicketStatus, number> = {
+  Open: 0,
+  "In Review": 1,
+  Resolved: 2,
+};
+
+export function compareRecommendedSupportTickets(left: SupportTicket, right: SupportTicket) {
+  const resolvedDifference = Number(left.status === "Resolved") - Number(right.status === "Resolved");
+  if (resolvedDifference !== 0) return resolvedDifference;
+
+  if (left.status !== "Resolved") {
+    const priorityDifference = priorityRank[left.priority] - priorityRank[right.priority];
+    if (priorityDifference !== 0) return priorityDifference;
+    const statusDifference = workflowRank[left.status] - workflowRank[right.status];
+    if (statusDifference !== 0) return statusDifference;
+  }
+
+  const leftTimestamp = Date.parse(left.status === "Resolved" ? left.updatedAt : left.createdAt);
+  const rightTimestamp = Date.parse(right.status === "Resolved" ? right.updatedAt : right.createdAt);
+  const timestampDifference = safeTimestamp(rightTimestamp) - safeTimestamp(leftTimestamp);
+  if (timestampDifference !== 0) return timestampDifference;
+  return left.code.localeCompare(right.code) || left.id.localeCompare(right.id);
+}
+
+export function sortRecommendedSupportTickets(tickets: readonly SupportTicket[]) {
+  return [...tickets].sort(compareRecommendedSupportTickets);
+}
+
 const safeSupportTicketImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function listSupportTickets() {
@@ -134,4 +169,8 @@ function dataUrlToBlob(dataUrl: string, expectedMediaType: SupportTicketAttachme
 
 function getBlobMediaType(value: string | undefined) {
   return value?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
+function safeTimestamp(value: number) {
+  return Number.isFinite(value) ? value : 0;
 }

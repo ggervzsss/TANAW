@@ -2,14 +2,30 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 type PasswordVisibilityInputProps = {
+  ariaDescribedBy?: string;
+  ariaRequired?: boolean;
+  autoComplete?: string;
   hasError?: boolean;
+  id?: string;
+  onBlur?: () => void;
   onChange: (value: string) => void;
   placeholder?: string;
   value: string;
   variant?: "compact" | "modal";
 };
 
-export function PasswordVisibilityInput({ hasError = false, onChange, placeholder, value, variant = "compact" }: PasswordVisibilityInputProps) {
+export function PasswordVisibilityInput({
+  ariaDescribedBy,
+  ariaRequired,
+  autoComplete = "current-password",
+  hasError = false,
+  id,
+  onBlur,
+  onChange,
+  placeholder,
+  value,
+  variant = "compact",
+}: PasswordVisibilityInputProps) {
   const [isVisible, setIsVisible] = useState(false);
   const Icon = isVisible ? EyeOff : Eye;
   const inputClass =
@@ -23,7 +39,20 @@ export function PasswordVisibilityInput({ hasError = false, onChange, placeholde
 
   return (
     <div className="relative">
-      <input type={isVisible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoComplete="current-password" className={inputClass} />
+      <input
+        id={id}
+        type={isVisible ? "text" : "password"}
+        value={value}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        required={ariaRequired}
+        aria-required={ariaRequired}
+        aria-invalid={hasError}
+        aria-describedby={ariaDescribedBy}
+        className={inputClass}
+      />
       <button type="button" onClick={() => setIsVisible((current) => !current)} className={buttonClass} aria-label={isVisible ? "Hide password" : "Show password"} aria-pressed={isVisible}>
         <Icon size={variant === "modal" ? 17 : 14} />
       </button>

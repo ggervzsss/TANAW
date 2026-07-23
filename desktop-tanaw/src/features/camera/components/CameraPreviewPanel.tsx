@@ -16,6 +16,7 @@ type CameraPreviewPanelProps = {
   detections: MlDetections;
   editForm: Camera | null;
   error: string | null;
+  hasStoredPassword: boolean;
   health: MlHealth | null;
   isRestartingService: boolean;
   isEditMode: boolean;
@@ -42,6 +43,7 @@ export function CameraPreviewPanel({
   detections,
   editForm,
   error,
+  hasStoredPassword,
   health,
   isRestartingService,
   isEditMode,
@@ -137,7 +139,15 @@ export function CameraPreviewPanel({
             onTestConnection={onTestConnection}
           />
           <CameraValidationWarnings warnings={warnings} />
-          {isEditMode && editForm ? <CameraEditControls editForm={editForm} onEditFormChange={onEditFormChange} /> : <CameraReadOnlyDetails activeCam={activeCam} />}
+          {isEditMode && editForm ? (
+            <CameraEditControls
+              editForm={editForm}
+              hasExistingPassword={hasStoredPassword}
+              onEditFormChange={onEditFormChange}
+            />
+          ) : (
+            <CameraReadOnlyDetails activeCam={activeCam} />
+          )}
         </aside>
       </div>
     </Card>

@@ -36,6 +36,20 @@ describe("CameraAddModal", () => {
     expect(markup).toContain("Enter a valid IPv4 address, such as 192.168.1.9.");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
   });
+
+  it("requires camera credentials and keeps save disabled until both are present", () => {
+    const missingMarkup = render(values(), {
+      password: "Enter the camera password.",
+      username: "Enter the camera username.",
+    });
+    expect(missingMarkup).toContain("Enter the camera username.");
+    expect(missingMarkup).toContain("Enter the camera password.");
+    expect(missingMarkup).toContain("aria-required=\"true\"");
+    expect(missingMarkup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+
+    const validMarkup = render(values({ username: "camera-user", password: "device pass" }), {});
+    expect(validMarkup).not.toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+  });
 });
 
 function render(newCam: CameraFormValues, errors: Partial<Record<keyof CameraFormValues, string>>) {

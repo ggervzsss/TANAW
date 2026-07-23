@@ -1,13 +1,15 @@
 import { AnimatePresence } from "motion/react";
 import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
+import { useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
+import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
 import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
 import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, EnterpriseReportsModal, ReportActionConfirmDialog, ReportReviewModal } from "../components";
@@ -16,6 +18,14 @@ import { getAvailableMonths, getAvailableYears, getCurrentSubmissionPeriod, getD
 const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
 const EMPTY_REPORTS: IntakeReport[] = [];
 const ALL_BARANGAYS_FILTER = "all";
+const MONTHS = new Set(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]);
+
+type BatchReportsPageState = {
+  barangay: string;
+  month: string;
+  query: string;
+  year: string;
+};
 
 export function StaffBatchReportsPage() {
   const authUser = useAuthStore((state) => state.user);
@@ -26,13 +36,51 @@ export function StaffBatchReportsPage() {
   const reports = reportsQuery.data ?? EMPTY_REPORTS;
   const currentPeriod = getCurrentSubmissionPeriod();
   const defaultPeriod = getDefaultSubmissionPeriod(reports, currentPeriod);
-  const [query, setQuery] = useState("");
-  const [barangayFilter, setBarangayFilter] = useState(ALL_BARANGAYS_FILTER);
-  const [monthFilter, setMonthFilter] = useState(defaultPeriod.month);
-  const [yearFilter, setYearFilter] = useState(defaultPeriod.year);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [hasInitialUrlState] = useState(() => hasBatchReportsUrlState(searchParams));
+  const [initialPageState] = useState<BatchReportsPageState>(() =>
+    parseBatchReportsUrlState(searchParams, {
+      barangay: ALL_BARANGAYS_FILTER,
+      month: defaultPeriod.month,
+      query: "",
+      year: defaultPeriod.year,
+    }),
+  );
+  const [pageState, setPageState] = useScopedPageState({
+    initialValue: initialPageState,
+    isValid: isBatchReportsPageState,
+    namespace: "filters",
+    preferInitial: hasInitialUrlState,
+    version: 1,
+  });
+  const query = pageState.query;
+  const barangayFilter = pageState.barangay;
+  const monthFilter = pageState.month;
+  const yearFilter = pageState.year;
   const [selectedEnterprise, setSelectedEnterprise] = useState<ReportEnterprise | null>(null);
   const [selectedReport, setSelectedReport] = useState<IntakeReport | null>(null);
   const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
+  const initializedUrlRef = useRef(false);
+  const [firstPageState] = useState(pageState);
+
+  useEffect(() => {
+    if (!initializedUrlRef.current) {
+      initializedUrlRef.current = true;
+      const initialParams = batchReportsSearchParams(firstPageState);
+      if (initialParams.toString() !== searchParams.toString()) setSearchParams(initialParams, { replace: true });
+      return;
+    }
+    setPageState((current) => {
+      const urlState = parseBatchReportsUrlState(searchParams, current);
+      return sameBatchReportsPageState(urlState, current) ? current : urlState;
+    });
+  }, [firstPageState, searchParams, setPageState, setSearchParams]);
+
+  const updatePageState = (patch: Partial<BatchReportsPageState>) => {
+    const nextState = { ...pageState, ...patch };
+    setPageState(nextState);
+    setSearchParams(batchReportsSearchParams(nextState), { replace: true });
+  };
 
   const availableMonths = useMemo(() => getAvailableMonths(reports, currentPeriod), [currentPeriod, reports]);
   const availableYears = useMemo(() => getAvailableYears(reports, currentPeriod), [currentPeriod, reports]);
@@ -160,10 +208,10 @@ export function StaffBatchReportsPage() {
           availableMonths={availableMonths}
           availableYears={availableYears}
           allReady={allReady && !consolidateMutation.isPending}
-          onQueryChange={setQuery}
-          onBarangayChange={setBarangayFilter}
-          onMonthChange={setMonthFilter}
-          onYearChange={setYearFilter}
+          onQueryChange={(query) => updatePageState({ query })}
+          onBarangayChange={(barangay) => updatePageState({ barangay })}
+          onMonthChange={(month) => updatePageState({ month })}
+          onYearChange={(year) => updatePageState({ year })}
           onGenerate={handleGenerate}
         />
         <BatchReportsStatusNotice
@@ -211,6 +259,49 @@ export function StaffBatchReportsPage() {
       </AnimatePresence>
     </PageMotion>
   );
+}
+
+function hasBatchReportsUrlState(searchParams: URLSearchParams) {
+  return ["q", "barangay", "month", "year"].some((key) => searchParams.has(key));
+}
+
+function parseBatchReportsUrlState(searchParams: URLSearchParams, fallback: BatchReportsPageState): BatchReportsPageState {
+  const month = searchParams.get("month");
+  const year = searchParams.get("year");
+  return {
+    barangay: searchParams.get("barangay")?.trim() || fallback.barangay,
+    month: month && MONTHS.has(month) ? month : fallback.month,
+    query: searchParams.get("q") ?? fallback.query,
+    year: year && /^\d{4}$/.test(year) ? year : fallback.year,
+  };
+}
+
+function batchReportsSearchParams(state: BatchReportsPageState) {
+  const searchParams = new URLSearchParams();
+  if (state.query) searchParams.set("q", state.query);
+  if (state.barangay !== ALL_BARANGAYS_FILTER) searchParams.set("barangay", state.barangay);
+  searchParams.set("month", state.month);
+  searchParams.set("year", state.year);
+  return searchParams;
+}
+
+function isBatchReportsPageState(value: unknown): value is BatchReportsPageState {
+  if (!value || typeof value !== "object") return false;
+  const state = value as Partial<BatchReportsPageState>;
+  return (
+    typeof state.query === "string" &&
+    state.query.length <= 200 &&
+    typeof state.barangay === "string" &&
+    state.barangay.length <= 120 &&
+    typeof state.month === "string" &&
+    MONTHS.has(state.month) &&
+    typeof state.year === "string" &&
+    /^\d{4}$/.test(state.year)
+  );
+}
+
+function sameBatchReportsPageState(left: BatchReportsPageState, right: BatchReportsPageState) {
+  return left.query === right.query && left.barangay === right.barangay && left.month === right.month && left.year === right.year;
 }
 
 function apiErrorMessage(error: unknown, fallback: string) {

@@ -102,6 +102,36 @@ async def test_admin_support_view_keeps_only_high_and_urgent_requests() -> None:
 
 
 @pytest.mark.asyncio
+async def test_support_ticket_query_uses_canonical_resolved_last_priority_order() -> None:
+    db = MagicMock()
+    scalar_result = MagicMock()
+    scalar_result.all.return_value = []
+    db.scalars = AsyncMock(return_value=scalar_result)
+
+    assert await list_support_tickets(db, _account(role=AccountRole.IT)) == []
+
+    statement = db.scalars.await_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    order_by = sql.split(" ORDER BY ", maxsplit=1)[1]
+    assert "support_tickets.status = 'Resolved'" in order_by
+    assert order_by.index("support_tickets.status = 'Resolved'") < order_by.index(
+        "support_tickets.priority = 'Urgent'"
+    )
+    assert order_by.index("support_tickets.priority = 'Urgent'") < order_by.index(
+        "support_tickets.priority = 'High'"
+    )
+    assert order_by.index("support_tickets.priority = 'High'") < order_by.index(
+        "support_tickets.priority = 'Normal'"
+    )
+    assert order_by.index("support_tickets.priority = 'Normal'") < order_by.index(
+        "support_tickets.priority = 'Low'"
+    )
+    assert order_by.count("support_tickets.status = 'Resolved'") >= 3
+    assert "support_tickets.updated_at" in order_by
+    assert "support_tickets.ticket_code ASC" in order_by
+
+
+@pytest.mark.asyncio
 async def test_login_support_request_exposes_contact_and_notifies_portal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1,9 +1,10 @@
 import { Check, RefreshCw, Video, X } from "lucide-react";
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { CameraFormValues } from "../types/camera";
 import { buildTapoRtspUrl, isValidIpv4, type TapoStreamId } from "../utils/rtsp";
+import { validateCameraForm } from "../utils/camera-form-validation";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
 
@@ -17,8 +18,13 @@ type CameraAddModalProps = {
 };
 
 export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit, onChange }: CameraAddModalProps) {
+  const [touchedCredentials, setTouchedCredentials] = useState({ password: false, username: false });
   const isRtspCamera = newCam.cameraType === "RTSP_CCTV" || newCam.cameraType === "ONVIF_CCTV";
+  const currentErrors = validateCameraForm(newCam);
   const hostError = errors.cameraHost ?? (newCam.cameraHost && !isValidIpv4(newCam.cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined);
+  const usernameError = errors.username ?? (touchedCredentials.username ? currentErrors.username : undefined);
+  const passwordError = errors.password ?? (touchedCredentials.password ? currentErrors.password : undefined);
+  const canSave = Object.keys(currentErrors).length === 0;
   const updateRtspSource = (cameraHost: string, rtspStream: TapoStreamId) => {
     onChange({
       ...newCam,
@@ -56,11 +62,11 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
 
             <form onSubmit={onSubmit} noValidate className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <ModalField label="Camera Name" error={errors.name}>
-                  <input required type="text" value={newCam.name} onChange={(event) => onChange({ ...newCam, name: event.target.value })} className={inputClass(Boolean(errors.name))} />
+                <ModalField id="camera-name" label="Camera Name" error={errors.name} required>
+                  <input id="camera-name" required aria-required="true" type="text" value={newCam.name} onChange={(event) => onChange({ ...newCam, name: event.target.value })} className={inputClass(Boolean(errors.name))} />
                 </ModalField>
-                <ModalField label="Assigned Zone" error={errors.zone}>
-                  <input required type="text" value={newCam.zone} onChange={(event) => onChange({ ...newCam, zone: event.target.value })} className={inputClass(Boolean(errors.zone))} />
+                <ModalField id="camera-zone" label="Assigned Zone" error={errors.zone} required>
+                  <input id="camera-zone" required aria-required="true" type="text" value={newCam.zone} onChange={(event) => onChange({ ...newCam, zone: event.target.value })} className={inputClass(Boolean(errors.zone))} />
                 </ModalField>
               </div>
 
@@ -103,11 +109,33 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
               </section>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <ModalField label="Username" error={errors.username}>
-                  <input type="text" autoComplete="username" value={newCam.username} onChange={(event) => onChange({ ...newCam, username: event.target.value })} className={inputClass(Boolean(errors.username))} />
+                <ModalField id="camera-username" label="Username" error={usernameError} required={isRtspCamera}>
+                  <input
+                    id="camera-username"
+                    required={isRtspCamera}
+                    aria-required={isRtspCamera}
+                    aria-invalid={Boolean(usernameError)}
+                    aria-describedby={usernameError ? "camera-username-error" : undefined}
+                    type="text"
+                    autoComplete="username"
+                    value={newCam.username}
+                    onBlur={() => setTouchedCredentials((current) => ({ ...current, username: true }))}
+                    onChange={(event) => onChange({ ...newCam, username: event.target.value })}
+                    className={inputClass(Boolean(usernameError))}
+                  />
                 </ModalField>
-                <ModalField label="Password" error={errors.password}>
-                  <PasswordVisibilityInput value={newCam.password} onChange={(password) => onChange({ ...newCam, password })} variant="modal" hasError={Boolean(errors.password)} />
+                <ModalField id="camera-password" label="Password" error={passwordError} required={isRtspCamera}>
+                  <PasswordVisibilityInput
+                    id="camera-password"
+                    value={newCam.password}
+                    onBlur={() => setTouchedCredentials((current) => ({ ...current, password: true }))}
+                    onChange={(password) => onChange({ ...newCam, password })}
+                    variant="modal"
+                    autoComplete="new-password"
+                    ariaRequired={isRtspCamera}
+                    ariaDescribedBy={passwordError ? "camera-password-error" : undefined}
+                    hasError={Boolean(passwordError)}
+                  />
                 </ModalField>
               </div>
 
@@ -121,7 +149,7 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
                 </button>
                 <button
                   type="submit"
-                  disabled={isValidating || (isRtspCamera && !isValidIpv4(newCam.cameraHost))}
+                  disabled={isValidating || !canSave}
                   className="flex items-center gap-2 rounded-xl bg-[#065f46] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                   {isValidating ? <><RefreshCw size={16} className="animate-spin" /> Validating Stream...</> : <><Check size={16} /> Save Configuration</>}
@@ -135,12 +163,15 @@ export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit
   );
 }
 
-function ModalField({ children, error, label }: { children: React.ReactNode; error?: string; label: string }) {
+function ModalField({ children, error, id, label, required = false }: { children: React.ReactNode; error?: string; id?: string; label: string; required?: boolean }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">{label}</label>
+      <label htmlFor={id} className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">
+        {label}
+        {required ? <span className="ml-1 text-red-600 dark:text-red-300" aria-hidden="true">*</span> : null}
+      </label>
       {children}
-      {error && <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
+      {error && <p id={id ? `${id}-error` : undefined} className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
     </div>
   );
 }

@@ -173,7 +173,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     <>
       <ModalPortal>
         <motion.div
-          className={`fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none ${viewerLayout.backdrop}`}
+          className={`final-report-print-backdrop fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none ${viewerLayout.backdrop}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -272,7 +272,10 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               </div>
             </div>
 
-            <div className="tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0">
+            <div
+              data-export-theme="light"
+              className="official-report-document tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0"
+            >
               <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <h4 className="mb-3 text-sm font-bold text-gray-800">Report History</h4>
                 <ul className="space-y-2 font-mono text-xs text-gray-600">

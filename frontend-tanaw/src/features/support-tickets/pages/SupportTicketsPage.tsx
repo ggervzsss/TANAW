@@ -7,6 +7,7 @@ import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
+import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
 import {
   fetchSupportTicketAttachmentBlob,
   canReplyToSupportTicket,
@@ -14,8 +15,9 @@ import {
   isSafeSupportTicketImage,
   listSupportTickets,
   replyToSupportTicket,
-  updateSupportTicketStatus,
+  sortRecommendedSupportTickets,
   supportTicketsQueryKey,
+  updateSupportTicketStatus,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
@@ -40,12 +42,32 @@ const priorities: PriorityFilter[] = ["All Priorities", "Urgent", "High", "Norma
 const categories: CategoryFilter[] = ["All Categories", "Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const EMPTY_SUPPORT_TICKETS: SupportTicket[] = [];
 
+type TicketFilterState = {
+  category: CategoryFilter;
+  priority: PriorityFilter;
+  query: string;
+  status: StatusFilter;
+};
+
+const INITIAL_TICKET_FILTERS: TicketFilterState = {
+  category: "All Categories",
+  priority: "All Priorities",
+  query: "",
+  status: "All Statuses",
+};
+
 export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPageProps) {
   const { timeFormat } = useSystemDisplayPreferences();
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Statuses");
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("All Priorities");
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All Categories");
+  const [filters, setFilters] = useScopedPageState({
+    initialValue: INITIAL_TICKET_FILTERS,
+    isValid: isTicketFilterState,
+    namespace: `${mode}-ticket-filters`,
+    version: 1,
+  });
+  const query = filters.query;
+  const statusFilter = filters.status;
+  const priorityFilter = filters.priority;
+  const categoryFilter = filters.category;
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const isItResponder = mode === "it";
@@ -57,7 +79,7 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
   const tickets = ticketsQuery.data ?? EMPTY_SUPPORT_TICKETS;
   const filteredTickets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return tickets.filter((ticket) => {
+    return sortRecommendedSupportTickets(tickets.filter((ticket) => {
       const searchable = [
         ticket.code,
         ticket.enterpriseName,
@@ -77,7 +99,7 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
       const matchesPriority = priorityFilter === "All Priorities" || ticket.priority === priorityFilter;
       const matchesCategory = categoryFilter === "All Categories" || ticket.category === categoryFilter;
       return matchesQuery && matchesStatus && matchesPriority && matchesCategory;
-    });
+    }));
   }, [categoryFilter, priorityFilter, query, statusFilter, tickets]);
 
   const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved");
@@ -135,14 +157,14 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
               placeholder="Search ticket ID, enterprise, subject, category, or status"
               className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
-          <FilterSelect value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={statuses} />
-          <FilterSelect value={priorityFilter} onChange={(value) => setPriorityFilter(value as PriorityFilter)} options={priorities} />
-          <FilterSelect value={categoryFilter} onChange={(value) => setCategoryFilter(value as CategoryFilter)} options={categories} />
+          <FilterSelect value={statusFilter} onChange={(value) => setFilters((current) => ({ ...current, status: value as StatusFilter }))} options={statuses} />
+          <FilterSelect value={priorityFilter} onChange={(value) => setFilters((current) => ({ ...current, priority: value as PriorityFilter }))} options={priorities} />
+          <FilterSelect value={categoryFilter} onChange={(value) => setFilters((current) => ({ ...current, category: value as CategoryFilter }))} options={categories} />
         </div>
 
         <div className="tanaw-data-table overflow-x-auto">
@@ -235,6 +257,18 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
 
       <AnimatePresence>{activeTicketId && <TicketDetailsModal mode={mode} ticketId={activeTicketId} timeFormat={timeFormat} onClose={closeTicketDetails} />}</AnimatePresence>
     </PageMotion>
+  );
+}
+
+function isTicketFilterState(value: unknown): value is TicketFilterState {
+  if (!value || typeof value !== "object") return false;
+  const filters = value as Partial<TicketFilterState>;
+  return (
+    typeof filters.query === "string" &&
+    filters.query.length <= 200 &&
+    statuses.includes(filters.status as StatusFilter) &&
+    priorities.includes(filters.priority as PriorityFilter) &&
+    categories.includes(filters.category as CategoryFilter)
   );
 }
 

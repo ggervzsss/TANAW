@@ -10,6 +10,7 @@ import { useRealtimeEvent } from "../../realtime/realtime-context";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
 import { focusFirstInvalidField } from "../../../utils/focus-first-invalid-field";
+import { useScopedPageState } from "../../../hooks/useScopedPageState";
 import {
   createSupportTicket,
   canReplyToSupportTicket,
@@ -17,11 +18,13 @@ import {
   getSupportTicketAttachmentUrl,
   listSupportTickets,
   replyToSupportTicket,
+  sortSupportTickets,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
   type SupportTicketDetail,
   type SupportTicketPriority,
+  type SupportTicketSort,
 } from "../services/tickets";
 import {
   type TicketFormErrors,
@@ -39,6 +42,7 @@ const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const allowedImageExtensions = new Set(["png", "jpg", "jpeg", "webp"]);
 const maxPhotoBytes = 5 * 1024 * 1024;
 const maxPhotoCount = 5;
+const EMPTY_PHOTOS: SupportTicketAttachment[] = [];
 
 const emptyForm: TicketFormState = {
   affectedArea: "",
@@ -48,6 +52,16 @@ const emptyForm: TicketFormState = {
   priority: "Normal",
   subject: "",
 };
+const initialTicketSort: SupportTicketSort = "recommended";
+const ticketSortOptions: [SupportTicketSort, string][] = [
+  ["recommended", "Recommended"],
+  ["newest", "Newest first"],
+  ["oldest", "Oldest first"],
+  ["priority-high", "Priority: Urgent to Low"],
+  ["priority-low", "Priority: Low to Urgent"],
+  ["status", "Status"],
+  ["recently-updated", "Recently updated"],
+];
 
 export function TicketsView() {
   const user = useAuthStore((state) => state.user);
@@ -55,8 +69,25 @@ export function TicketsView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [form, setForm] = useState<TicketFormState>(emptyForm);
-  const [photos, setPhotos] = useState<SupportTicketAttachment[]>([]);
+  const [form, setForm, clearFormDraft] = useScopedPageState({
+    initialValue: emptyForm,
+    isValid: isTicketFormState,
+    namespace: "support-ticket-draft",
+    version: 1,
+  });
+  const [photos, setPhotos, clearPhotoDraft] = useScopedPageState({
+    initialValue: EMPTY_PHOTOS,
+    isValid: isTicketPhotoDraft,
+    namespace: "support-ticket-photos",
+    storage: "memory",
+    version: 1,
+  });
+  const [ticketSort, setTicketSort] = useScopedPageState({
+    initialValue: initialTicketSort,
+    isValid: isSupportTicketSort,
+    namespace: "support-ticket-sort",
+    version: 1,
+  });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<TicketFormErrors>({});
   const [photoError, setPhotoError] = useState("");
@@ -70,6 +101,7 @@ export function TicketsView() {
   const [previewPhoto, setPreviewPhoto] = useState<SupportTicketAttachment | null>(null);
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? "Enterprise Account";
   const openTicketCount = useMemo(() => tickets.filter((ticket) => ticket.status !== "Resolved").length, [tickets]);
+  const sortedTickets = useMemo(() => sortSupportTickets(tickets, ticketSort), [ticketSort, tickets]);
 
   const refreshTickets = useCallback(async () => {
     setIsLoading(true);
@@ -154,8 +186,8 @@ export function TicketsView() {
         attachments: photos,
       });
       setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
-      setForm(emptyForm);
-      setPhotos([]);
+      clearFormDraft();
+      clearPhotoDraft();
       setFieldErrors({});
       setPhotoError("");
       notifySuccess(`Ticket ${ticket.code} submitted.`);
@@ -372,11 +404,27 @@ export function TicketsView() {
         </Card>
 
         <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_18px_44px_rgba(15,23,42,0.07)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.11)] dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.36)]">
-          <TicketPanelHeader icon={<TicketCheck size={20} />} title="Support Requests" subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`} />
+          <TicketPanelHeader
+            icon={<TicketCheck size={20} />}
+            title="Support Requests"
+            subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`}
+            actions={
+              <div className="w-full sm:w-60">
+                <span className="mb-1 block text-[10px] font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Sort tickets</span>
+                <SelectDropdown
+                  value={ticketSort}
+                  onChange={(value) => setTicketSort(value as SupportTicketSort)}
+                  options={ticketSortOptions}
+                  ariaLabel="Sort tickets"
+                  size="compact"
+                />
+              </div>
+            }
+          />
 
           {tickets.length > 0 ? (
             <div className="max-h-152 divide-y divide-gray-100 overflow-y-auto bg-white dark:divide-slate-700 dark:bg-[#121c31]">
-              {tickets.map((ticket) => (
+              {sortedTickets.map((ticket) => (
                 <article
                   key={ticket.id}
                   role="button"
@@ -465,22 +513,26 @@ export function TicketsView() {
 }
 
 type TicketPanelHeaderProps = {
+  actions?: ReactNode;
   icon: ReactNode;
   subtitle: string;
   title: string;
 };
 
-function TicketPanelHeader({ icon, subtitle, title }: TicketPanelHeaderProps) {
+function TicketPanelHeader({ actions, icon, subtitle, title }: TicketPanelHeaderProps) {
   return (
     <div className="enterprise-ticket-panel-header border-b border-emerald-100 px-6 py-5 dark:border-slate-600">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
-          {icon}
-        </span>
-        <div>
-          <h3 className="text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">{title}</h3>
-          <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-200">{subtitle}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
+            {icon}
+          </span>
+          <div>
+            <h3 className="text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">{title}</h3>
+            <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-200">{subtitle}</p>
+          </div>
         </div>
+        {actions}
       </div>
     </div>
   );
@@ -972,4 +1024,44 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
     }
   }
   return fallback;
+}
+
+function isTicketFormState(value: unknown): value is TicketFormState {
+  if (!value || typeof value !== "object") return false;
+  const form = value as Partial<TicketFormState>;
+  return (
+    typeof form.affectedArea === "string" &&
+    typeof form.cameraNode === "string" &&
+    typeof form.category === "string" &&
+    isSupportTicketCategory(form.category) &&
+    typeof form.description === "string" &&
+    typeof form.priority === "string" &&
+    isSupportTicketPriority(form.priority) &&
+    typeof form.subject === "string"
+  );
+}
+
+function isTicketPhotoDraft(value: unknown): value is SupportTicketAttachment[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= maxPhotoCount &&
+    value.every(
+      (photo) =>
+        Boolean(
+          photo &&
+            typeof photo === "object" &&
+            "dataUrl" in photo &&
+            typeof photo.dataUrl === "string" &&
+            photo.dataUrl.startsWith("data:image/") &&
+            "fileName" in photo &&
+            typeof photo.fileName === "string" &&
+            "sizeBytes" in photo &&
+            typeof photo.sizeBytes === "number",
+        ),
+    )
+  );
+}
+
+function isSupportTicketSort(value: unknown): value is SupportTicketSort {
+  return ticketSortOptions.some(([sort]) => sort === value);
 }

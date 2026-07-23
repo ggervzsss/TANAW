@@ -42,6 +42,14 @@ and workflow events after they have been produced locally.
 - **Test-data tooling**: explicit sample-data generation and cleanup for local
   demonstrations, QA, analytics, and end-to-end reporting tests.
 
+Support Ticket list responses use one canonical database order before the
+result limit is applied. Unresolved tickets are ranked Urgent, High, Normal,
+then Low; Open precedes In Review when priority is equal. Resolved tickets are
+always after active work and use their authoritative `updated_at` value in
+descending order. Ticket code and internal ID provide deterministic final tie
+breakers. This ordering lets REST reads, reconnect resynchronization, and
+WebSocket-driven client invalidations converge on the same queue.
+
 ## Project Structure
 
 ```text
