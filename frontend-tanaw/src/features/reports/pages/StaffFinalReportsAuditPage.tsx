@@ -88,9 +88,9 @@ export function StaffFinalReportsAuditPage() {
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredReports.map((report) => (
-                <tr key={report.id} onClick={() => setSelectedReport(report)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={report.id} onClick={() => setSelectedReport(report)} className="tanaw-interactive-row group cursor-pointer">
                   <td className="group-hover:text-tgreen-dark px-6 py-4 text-gray-600 transition-colors">
-                    <ExpandableTableText primary={report.id} ariaLabel="artifact ID" className="font-mono text-xs font-bold" threshold={24} />
+                    <ExpandableTableText primary={report.id} ariaLabel="artifact ID" className="font-mono text-xs font-bold" />
                   </td>
                   <td className="px-6 py-4">
                     <ExpandableTableText
@@ -99,12 +99,11 @@ export function StaffFinalReportsAuditPage() {
                       ariaLabel="report title and period"
                       className="font-medium"
                       secondaryClassName="text-[10px] font-normal text-gray-500"
-                      threshold={58}
                     />
                   </td>
                   <td className="px-6 py-4 text-xs">{formatPhilippineDateTime(report.generatedOn, timeFormat, { dateStyle: "medium" })}</td>
                   <td className="px-6 py-4 text-xs">
-                    <ExpandableTableText primary={report.preparedBy} ariaLabel="report preparer" threshold={28} />
+                    <ExpandableTableText primary={report.preparedBy} ariaLabel="report preparer" />
                   </td>
                   <td className="px-6 py-4 font-mono text-xs">
                     <div>Entry: {report.totalEntry.toLocaleString()}</div>

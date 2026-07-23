@@ -9,6 +9,7 @@ import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccount
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
   normalizeEmail,
   PERSON_NAME_MAX_LENGTH,
@@ -54,9 +55,23 @@ type PendingSave = {
 const enterpriseCategoryValues = new Set<string>(enterpriseCategories.map((category) => category.value));
 const sanPedroBarangayValues = new Set<string>(sanPedroBarangays);
 const allowedStatusValues = ["active", "inactive"] satisfies UpdateEnterpriseAccountPayload["status"][];
+const enterpriseEditFieldOrder: readonly (keyof EnterpriseEditState)[] = [
+  "enterpriseName",
+  "category",
+  "managerFirstName",
+  "managerMiddleInitial",
+  "managerLastName",
+  "email",
+  "phoneLocal",
+  "buildingCapacity",
+  "barangay",
+  "address",
+  "status",
+];
 
 export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
   const queryClient = useQueryClient();
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EnterpriseEditState>(() => getInitialForm(enterprise));
@@ -147,7 +162,10 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
     setErrors(nextErrors);
     setConfirmMode(null);
     setPendingSave(null);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(event.currentTarget, getInvalidEnterpriseEditFieldNames(nextErrors));
+      return;
+    }
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
     const payload: UpdateEnterpriseAccountPayload = {
@@ -609,6 +627,10 @@ function validateBuildingCapacity(value: string) {
   if (capacity < 1) return "Building capacity must be at least 1.";
   if (capacity > 100000) return "Building capacity cannot exceed 100,000.";
   return null;
+}
+
+function getInvalidEnterpriseEditFieldNames(errors: EnterpriseEditErrors) {
+  return enterpriseEditFieldOrder.filter((fieldName) => errors[fieldName]).map((fieldName) => (fieldName === "phoneLocal" ? "contactNumber" : fieldName));
 }
 
 function getEnterpriseChanges(enterprise: AccountSummary, payload: UpdateEnterpriseAccountPayload) {

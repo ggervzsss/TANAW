@@ -48,7 +48,7 @@ export type RuntimeBackend = "auto" | "cuda" | "openvino" | "cpu";
 export type TrackerProfile = "auto" | "bytetrack" | "botsort";
 export type ReIdMode = "auto" | "off" | "fast" | "quality";
 export type UniqueCountingMode = "entry_only" | "estimated_reid";
-export type CameraStatus = "untested" | "online" | "offline" | "running" | "stopped" | "error";
+export type CameraStatus = "untested" | "online" | "offline" | "starting" | "connecting" | "running" | "degraded" | "reconnecting" | "stopped" | "failed" | "error";
 export type TripwirePoint = { x: number; y: number };
 export type TripwireCurveMode = "linear" | "smooth";
 export type TripwireLine = {
@@ -68,6 +68,8 @@ export type Camera = {
   resolution: string;
   type: string;
   rtsp: string;
+  cameraHost?: string;
+  rtspStream?: "stream1" | "stream2";
   cameraType: CameraType;
   processingProfile: ProcessingProfile;
   confidence: number;

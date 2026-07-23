@@ -26,6 +26,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [contentRect, setContentRect] = useState<ContentRect | null>(null);
   const streamIsAvailable = isProcessing && streamUrl;
+  const isStarting = counts.status === "starting" || counts.status === "connecting" || activeCam.status === "starting";
   const overlayConfig = isEditMode && editForm ? editForm.config : activeCam.config;
   const shouldShowConfigOverlay = true;
   const frameWidth = detections.frame_width ?? 0;
@@ -71,6 +72,8 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
     >
       {streamIsAvailable ? (
         <img key={streamUrl} src={streamUrl} alt={`${activeCam.name} live camera stream`} className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+      ) : isStarting ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black text-sm font-bold tracking-wider text-emerald-300 uppercase">Starting camera stream…</div>
       ) : activeCam.status === "online" || activeCam.status === "untested" || activeCam.status === "stopped" ? (
         <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg/1280px-6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg')] bg-cover bg-center opacity-40"></div>
       ) : (

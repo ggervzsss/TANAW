@@ -7,6 +7,7 @@ import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailC
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
   normalizeEmail,
   PERSON_NAME_MAX_LENGTH,
@@ -50,9 +51,11 @@ type PendingSave = {
 
 const allowedLguRoles = ["staff", "it", "admin"] satisfies UpdateLguAccountPayload["role"][];
 const allowedStatusValues = ["active", "inactive"] satisfies UpdateLguAccountPayload["status"][];
+const lguEditFieldOrder: readonly (keyof LguEditState)[] = ["firstName", "middleInitial", "lastName", "email", "phoneLocal", "role", "status"];
 
 export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResendActivation, onRequestStatusChange }: LguAccountDetailsModalProps) {
   const queryClient = useQueryClient();
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<LguEditState>(() => getInitialForm(account));
@@ -115,7 +118,10 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
     const nextErrors = validateLguEditForm(form);
     setErrors(nextErrors);
     setPendingSave(null);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(event.currentTarget, getInvalidLguEditFieldNames(nextErrors));
+      return;
+    }
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
     const apiName = composeApiPersonName(form);
@@ -427,6 +433,10 @@ function validateLguEditForm(form: LguEditState) {
   if (!allowedStatusValues.includes(form.status)) errors.status = "Choose a valid status.";
 
   return errors;
+}
+
+function getInvalidLguEditFieldNames(errors: LguEditErrors) {
+  return lguEditFieldOrder.filter((fieldName) => errors[fieldName]).map((fieldName) => (fieldName === "phoneLocal" ? "phone" : fieldName));
 }
 
 function getLguChanges(account: AccountSummary, payload: UpdateLguAccountPayload) {

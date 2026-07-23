@@ -5,13 +5,28 @@ from app.storage.local_data_store import LocalDataStore
 
 
 class SessionStore:
-    def __init__(self, app_data_dir: str | None = None, enterprise_id: str | None = None) -> None:
+    def __init__(
+        self,
+        app_data_dir: str | None = None,
+        enterprise_id: str | None = None,
+        camera_id: int | None = None,
+    ) -> None:
+        self._camera_id = camera_id
         self._data_store = LocalDataStore(app_data_dir, enterprise_id)
 
     def load_session(self) -> dict[str, Any] | None:
-        return self._data_store.load_monitoring_state()
+        return self._data_store.load_monitoring_state(self._camera_id)
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        return self._data_store.list_monitoring_states()
 
     def save_session(self, payload: dict[str, Any]) -> None:
+        # Unit-level processing components may operate without a persisted camera
+        # identity. Production pipelines always have a positive camera ID.
+        if payload.get("camera_id") is None:
+            return
+        if self._camera_id is not None and payload.get("camera_id") != self._camera_id:
+            raise ValueError("Camera monitoring state does not match its camera-scoped store.")
         updated_at = datetime.now(UTC).isoformat()
         serializable = self._data_store.save_monitoring_state(payload, updated_at)
         self._data_store.save_count_snapshot(serializable, updated_at)
@@ -95,7 +110,12 @@ class SessionStore:
         return self._data_store.cleanup_expired_visitor_metadata(now)
 
     def metrics_summary(self, include_submitted: bool = False) -> dict[str, int | str | None]:
-        return self._data_store.metrics_summary(include_submitted=include_submitted)
+        return self._data_store.metrics_summary(
+            include_submitted=include_submitted, camera_id=self._camera_id
+        )
+
+    def enterprise_occupancy(self) -> int:
+        return self._data_store.enterprise_occupancy()
 
     def metrics_history(self, include_submitted: bool = False) -> dict[str, Any]:
         return self._data_store.metrics_history(include_submitted=include_submitted)
@@ -113,7 +133,7 @@ class SessionStore:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
-    ) -> dict[str, int | str | None]:
+    ) -> dict[str, Any]:
         return self._data_store.record_report_submission(
             report_id=report_id,
             period=period,

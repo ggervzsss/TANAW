@@ -105,8 +105,8 @@ export function ITDashboardPage() {
 
 function WorkItem({ icon: Icon, label, count, description, href, urgent = false }: { icon: typeof AlertTriangle; label: string; count: number; description: string; href: string; urgent?: boolean }) {
   return (
-    <Link to={href} className="group flex items-center gap-4 px-6 py-5 transition hover:bg-emerald-50/60">
-      <span className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${urgent ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600 group-hover:bg-emerald-100 group-hover:text-emerald-700"}`}>
+    <Link to={href} className="tanaw-interactive-row group flex items-center gap-4 px-6 py-5">
+      <span className={`flex size-11 shrink-0 items-center justify-center rounded-2xl ${urgent ? "bg-red-100 text-red-700" : "tanaw-work-item-icon bg-slate-100 text-slate-600"}`}>
         <Icon size={20} />
       </span>
       <span className="min-w-0 flex-1">

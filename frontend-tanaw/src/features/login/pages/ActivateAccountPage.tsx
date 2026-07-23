@@ -1,14 +1,15 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
-import { AuthThemeToggle } from "../components";
+import { AuthParticles, AuthThemeToggle } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { completeAccountActivation, type AccountActivationDetails, validateAccountActivation } from "../services";
 import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
@@ -29,6 +30,7 @@ const authBackgroundImageStyle = {
 
 export function ActivateAccountPage() {
   const clearLocalSession = useAuthStore((state) => state.logout);
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const [activationToken] = useState(readActivationToken);
   const [view, setView] = useState<ActivationView>(activationToken ? "validating" : "invalid");
   const [details, setDetails] = useState<AccountActivationDetails | null>(null);
@@ -76,7 +78,11 @@ export function ActivateAccountPage() {
     const nextErrors = validatePasswordValues(values);
     setErrors(nextErrors);
     setPageMessage("");
-    if (Object.keys(nextErrors).length > 0 || !activationToken) return;
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(event.currentTarget, ["newPassword", "confirmPassword"].filter((fieldName) => nextErrors[fieldName as keyof PasswordErrors]));
+      return;
+    }
+    if (!activationToken) return;
 
     setIsSubmitting(true);
     try {
@@ -97,6 +103,7 @@ export function ActivateAccountPage() {
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
+      <AuthParticles />
       <AuthThemeToggle />
 
       <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">
@@ -119,7 +126,7 @@ export function ActivateAccountPage() {
 
         <main className="flex min-h-0 items-center justify-center lg:justify-end">
           <motion.section
-            className="tanaw-auth-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
+            className="tanaw-auth-card tanaw-activation-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.55, ease: "easeOut" }}
@@ -212,10 +219,26 @@ function ActivationForm({
         </div>
       </div>
 
-      <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
-      <PasswordRequirements password={values.newPassword} />
-      <PasswordField label="Confirm Password" name="confirmPassword" value={values.confirmPassword} error={errors.confirmPassword} onChange={onChange("confirmPassword")} />
-      <PasswordMatchIndicator password={values.newPassword} confirmation={values.confirmPassword} />
+      <div className="tanaw-activation-password-fields grid gap-4">
+        <PasswordField label="New Password" name="newPassword" value={values.newPassword} error={errors.newPassword} onChange={onChange("newPassword")} />
+        <PasswordField
+          label="Confirm Password"
+          name="confirmPassword"
+          value={values.confirmPassword}
+          error={errors.confirmPassword}
+          onChange={onChange("confirmPassword")}
+          guidance={
+            <PasswordMatchIndicator
+              id="confirm-password-guidance"
+              password={values.newPassword}
+              confirmation={values.confirmPassword}
+              className={`mt-1.5 ${errors.confirmPassword ? "opacity-70" : ""}`}
+            />
+          }
+          guidanceId="confirm-password-guidance"
+        />
+      </div>
+      <PasswordRequirements password={values.newPassword} className="mt-3 mb-4" />
 
       {pageMessage ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
@@ -267,17 +290,21 @@ function PasswordField({
   value,
   error,
   onChange,
+  guidance,
+  guidanceId,
 }: {
   label: string;
   name: keyof PasswordValues;
   value: string;
   error?: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  guidance?: ReactNode;
+  guidanceId?: string;
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const errorId = `${name}-error`;
   return (
-    <div className="mb-3 block">
+    <div data-field-name={name}>
       <label htmlFor={name} className="mb-2 block text-sm font-semibold text-(--tanaw-text)">
         {label}
       </label>
@@ -301,7 +328,8 @@ function PasswordField({
           maxLength={PASSWORD_INPUT_MAX_CODE_UNITS}
           required
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={[error ? errorId : null, guidanceId].filter(Boolean).join(" ") || undefined}
+          data-form-error-focus
           className="h-full w-full rounded-xl bg-transparent px-14 pr-24 text-[15px] font-medium text-(--tanaw-text) outline-none placeholder:text-[#8b93a1]"
         />
         {error ? <AlertCircle className="absolute right-12 h-5 w-5 text-(--tanaw-error)" aria-hidden="true" /> : null}
@@ -314,9 +342,12 @@ function PasswordField({
           {isVisible ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
         </button>
       </div>
-      <div id={errorId} className="mt-1 min-h-4" aria-live="polite">
-        {error ? <p className="text-xs font-medium text-(--tanaw-error)">{error}</p> : null}
-      </div>
+      {error ? (
+        <p id={errorId} className="mt-1 text-xs font-semibold text-(--tanaw-error)" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {guidance}
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function BatchReportsTable({ rows, isLoading, onSelectEnterprise }: Batch
         </thead>
         <tbody className="divide-y divide-gray-100 text-gray-800">
           {rows.map(({ enterprise, currentReport, archivedReports, status }) => (
-            <tr key={enterprise.id} onClick={() => onSelectEnterprise(enterprise)} className="group hover:bg-tgreen-dark/5 cursor-pointer transition">
+            <tr key={enterprise.id} onClick={() => onSelectEnterprise(enterprise)} className="tanaw-interactive-row group cursor-pointer">
               <td className="px-6 py-4">
                 <ExpandableTableText
                   primary={enterprise.name}
@@ -40,11 +40,10 @@ export function BatchReportsTable({ rows, isLoading, onSelectEnterprise }: Batch
                   ariaLabel="enterprise name and category"
                   className="font-semibold"
                   secondaryClassName="text-[10px] font-normal text-gray-500"
-                  threshold={42}
                 />
               </td>
               <td className="px-6 py-4 text-xs">
-                <ExpandableTableText primary={enterprise.barangay} ariaLabel="barangay" threshold={24} />
+                <ExpandableTableText primary={enterprise.barangay} ariaLabel="barangay" />
               </td>
               <td className="px-6 py-4">
                 <div className="flex flex-col gap-1">
@@ -54,7 +53,7 @@ export function BatchReportsTable({ rows, isLoading, onSelectEnterprise }: Batch
               </td>
               <td className="px-6 py-4 text-xs font-bold text-gray-600">{archivedReports.length} submissions</td>
               <td className="px-6 py-4 text-xs">
-                <ExpandableTableText primary={enterprise.complianceOwner} ariaLabel="compliance owner" threshold={32} />
+                <ExpandableTableText primary={enterprise.complianceOwner} ariaLabel="compliance owner" />
               </td>
             </tr>
           ))}

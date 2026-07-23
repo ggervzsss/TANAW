@@ -5,6 +5,7 @@ import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField } from "@/shared/components/ui";
 import { type CreateLguAccountPayload, createLguAccount } from "@/shared/services/accountManagement";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
   PERSON_NAME_MAX_LENGTH,
   composeApiPersonName,
@@ -33,9 +34,11 @@ type LguFormState = {
 type LguFormErrors = Partial<Record<keyof LguFormState, string>>;
 
 const allowedLguRoles = ["staff", "it", "admin"] satisfies CreateLguAccountPayload["role"][];
+const lguFieldOrder: readonly (keyof LguFormState)[] = ["firstName", "middleInitial", "lastName", "email", "phoneLocal", "role"];
 
 export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
   const queryClient = useQueryClient();
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const [form, setForm] = useState<LguFormState>({
     firstName: "",
     middleInitial: "",
@@ -63,7 +66,10 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
     event.preventDefault();
     const nextErrors = validateLguForm(form);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(event.currentTarget, getInvalidLguFieldNames(nextErrors));
+      return;
+    }
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
     const apiName = composeApiPersonName(form);
@@ -169,4 +175,8 @@ function validateLguForm(form: LguFormState) {
   if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid account type.";
 
   return errors;
+}
+
+function getInvalidLguFieldNames(errors: LguFormErrors) {
+  return lguFieldOrder.filter((fieldName) => errors[fieldName]).map((fieldName) => (fieldName === "phoneLocal" ? "phone" : fieldName));
 }

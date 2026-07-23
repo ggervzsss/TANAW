@@ -32,4 +32,11 @@ describe("activity detail presentation", () => {
     expect(markup).not.toContain("internalOnlyToken");
     expect(markup).not.toContain("must-not-render");
   });
+
+  it("places Action and Summary together in the final balanced row", () => {
+    const markup = renderToStaticMarkup(<ActivityDetailFields activity={logWithMetadata} />);
+    expect(markup).toContain("tanaw-detail-grid");
+    expect(markup.indexOf("Action")).toBeLessThan(markup.indexOf("Summary"));
+    expect(markup).not.toContain("md:col-span-2");
+  });
 });

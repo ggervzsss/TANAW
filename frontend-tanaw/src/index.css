@@ -149,6 +149,13 @@
   --tanaw-control-bg: #ffffff;
   --tanaw-control-hover: #f8fafc;
   --tanaw-control-focus: #ffffff;
+  --tanaw-interactive-hover-bg: #f0fdf4;
+  --tanaw-interactive-hover-border: rgb(5 150 105 / 0.28);
+  --tanaw-interactive-selected-bg: #ecfdf5;
+  --tanaw-interactive-active-bg: #dcfce7;
+  --tanaw-interactive-pressed-bg: #d1fae5;
+  --tanaw-interactive-disabled-bg: #f1f5f9;
+  --tanaw-interactive-disabled-text: #94a3b8;
   --tanaw-secondary-text: #64748b;
   --tanaw-muted-text: #7b8794;
   --tanaw-border-subtle: rgb(71 85 105 / 0.18);
@@ -194,6 +201,13 @@ html.dark {
   --tanaw-control-bg: #192633;
   --tanaw-control-hover: #202e3c;
   --tanaw-control-focus: #1d2b39;
+  --tanaw-interactive-hover-bg: #1b302f;
+  --tanaw-interactive-hover-border: rgb(52 211 153 / 0.26);
+  --tanaw-interactive-selected-bg: #17382f;
+  --tanaw-interactive-active-bg: #1d4438;
+  --tanaw-interactive-pressed-bg: #153329;
+  --tanaw-interactive-disabled-bg: #131d27;
+  --tanaw-interactive-disabled-text: #71808d;
   --tanaw-secondary-text: #b8c2cb;
   --tanaw-muted-text: #8f9daa;
   --tanaw-border-subtle: rgb(174 188 201 / 0.16);
@@ -280,8 +294,95 @@ html.dark {
 
 @layer components {
   .profile-menu-button {
-    @apply hover:text-tanaw-green flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200;
+    @apply flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease;
   }
+
+  .profile-menu-button:hover,
+  .profile-menu-button:focus-visible {
+    background: var(--tanaw-control-hover);
+  }
+
+  .profile-menu-danger {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 64%, transparent);
+    color: #b91c1c;
+  }
+
+  .profile-menu-danger:hover,
+  .profile-menu-danger:focus-visible {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 92%, var(--tanaw-surface));
+    color: #991b1b;
+  }
+
+  .profile-menu-danger:active {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, #fecaca);
+  }
+
+  .profile-menu-danger:disabled {
+    background: transparent;
+    color: var(--tanaw-interactive-disabled-text);
+  }
+}
+
+html.dark .profile-menu-danger {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 52%, transparent);
+  color: #fca5a5;
+}
+
+html.dark .profile-menu-danger:hover,
+html.dark .profile-menu-danger:focus-visible {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, var(--tanaw-surface));
+  color: #fecaca;
+}
+
+html.dark .profile-menu-danger:active {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 90%, #3f1d24);
+}
+
+.tanaw-modal-action-panel {
+  border-color: color-mix(in srgb, #059669 24%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-success-surface) 66%, var(--tanaw-surface));
+  box-shadow: var(--tanaw-shadow-soft);
+}
+
+.tanaw-modal-action-panel__title {
+  color: var(--tanaw-text);
+}
+
+.tanaw-modal-action-panel__copy {
+  color: var(--tanaw-secondary-text);
+}
+
+html.dark .tanaw-modal-action-panel {
+  border-color: color-mix(in srgb, #34d399 22%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-success-surface) 38%, var(--tanaw-surface-inset));
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.18);
+}
+
+.tanaw-request-queue {
+  border-color: color-mix(in srgb, #d97706 22%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-warning-surface) 46%, var(--tanaw-surface));
+}
+
+html.dark .tanaw-request-queue {
+  border-color: color-mix(in srgb, #fbbf24 18%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-warning-surface) 24%, var(--tanaw-surface));
+}
+
+.tanaw-detail-grid > * {
+  min-width: 0;
+}
+
+.tanaw-sensitive-input:-webkit-autofill,
+.tanaw-sensitive-input:-webkit-autofill:hover,
+.tanaw-sensitive-input:-webkit-autofill:focus,
+.tanaw-sensitive-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--tanaw-control-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tanaw-control-bg) inset !important;
+  -webkit-text-fill-color: var(--tanaw-text) !important;
+  caret-color: var(--tanaw-text);
 }
 
 @layer utilities {
@@ -709,6 +810,50 @@ html.dark .tanaw-activation-banner__copy {
   outline-offset: 3px;
 }
 
+.tanaw-interactive-row {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.tanaw-interactive-row:is([aria-selected="true"], [data-selected="true"]) {
+  background-color: var(--tanaw-interactive-selected-bg);
+  border-color: var(--tanaw-interactive-hover-border);
+}
+
+.tanaw-interactive-row:is([aria-current="page"], [data-active="true"]) {
+  background-color: var(--tanaw-interactive-active-bg);
+  border-color: var(--tanaw-interactive-hover-border);
+}
+
+.tanaw-interactive-row:is([aria-disabled="true"], [data-disabled="true"]) {
+  background-color: var(--tanaw-interactive-disabled-bg);
+  color: var(--tanaw-interactive-disabled-text);
+  cursor: not-allowed;
+}
+
+.tanaw-interactive-row:not([aria-disabled="true"], [data-disabled="true"]):active {
+  background-color: var(--tanaw-interactive-pressed-bg);
+}
+
+@media (hover: hover) {
+  .tanaw-interactive-row:not([aria-disabled="true"], [data-disabled="true"]):hover,
+  .profile-menu-button:not(:disabled):hover {
+    background-color: var(--tanaw-interactive-hover-bg);
+    border-color: var(--tanaw-interactive-hover-border);
+  }
+
+  .profile-menu-button:not(:disabled):hover {
+    color: var(--tanaw-green);
+  }
+
+  .tanaw-interactive-row:hover .tanaw-work-item-icon {
+    background-color: var(--tanaw-interactive-active-bg);
+    color: var(--tanaw-green);
+  }
+}
+
 .tanaw-toast-viewport {
   position: fixed;
   z-index: 9999;
@@ -946,6 +1091,14 @@ html.dark .tanaw-login-edge-blur {
     border-color 220ms ease,
     box-shadow 220ms ease,
     color 220ms ease;
+}
+
+.tanaw-activation-card {
+  max-width: min(36.25rem, 100%);
+}
+
+.tanaw-activation-card .tanaw-password-requirements {
+  margin-bottom: clamp(0.9rem, 2svh, 1rem);
 }
 
 html.dark .tanaw-auth-card {
@@ -1232,6 +1385,19 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-auth-card {
     border-radius: 1.5rem;
   }
+
+  .tanaw-activation-card {
+    padding-block: 1.25rem;
+  }
+
+  .tanaw-activation-card > header {
+    margin-bottom: 1rem;
+  }
+
+  .tanaw-activation-card .tanaw-activation-banner {
+    margin-bottom: 1rem;
+    padding: 0.875rem;
+  }
 }
 
 @media (max-height: 640px) {
@@ -1505,7 +1671,7 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   }
 }
 
-@media (max-width: 767px), (max-height: 720px) {
+@media (max-width: 767px) {
   .tanaw-stage-particles {
     display: none;
   }
@@ -1513,6 +1679,12 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-stage-glow::before {
     opacity: 0.42;
     animation: none;
+  }
+}
+
+@media (max-height: 560px) {
+  .tanaw-stage-particles .tanaw-hero-particle:nth-child(n + 5) {
+    display: none;
   }
 }
 
@@ -1553,6 +1725,69 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 
 .tanaw-document-preview .dot-table {
   color: inherit;
+}
+
+.tanaw-official-report-table :where(th, td) {
+  background-color: transparent;
+}
+
+.tanaw-official-report-table thead :where(th) {
+  background-color: #e9eef3;
+}
+
+.tanaw-official-report-table .tanaw-report-code-cell {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.tanaw-official-report-table .tanaw-report-total-cell {
+  background-color: #e8edf3;
+  font-weight: 700;
+}
+
+.tanaw-official-report-table .tanaw-report-final-total-cell {
+  background-color: #d4dde8;
+  font-weight: 800;
+}
+
+.tanaw-official-report-table .tanaw-report-consolidated-row > * {
+  background-color: #dfe6ee;
+}
+
+.tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
+  background-color: #d4dde8;
+}
+
+.tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
+  background-color: #c4d0dd;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table :where(tbody th, tbody td) {
+  background-color: transparent;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table thead :where(th) {
+  background-color: #19263a;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-total-cell {
+  background-color: #202f43;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-final-total-cell {
+  background-color: #2a3d55;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > * {
+  background-color: #24344a;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
+  background-color: #2a3d55;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
+  background-color: #344a64;
 }
 
 @keyframes fadeIn {
@@ -1615,6 +1850,30 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 
   html.dark .print-container .tanaw-document-preview :where(.bg-gray-200, .bg-slate-200) {
     background: #e2e8f0 !important;
+  }
+
+  html.dark .print-container .tanaw-official-report-table :where(th, td) {
+    background: transparent !important;
+  }
+
+  html.dark .print-container .tanaw-official-report-table thead :where(th) {
+    background: #e9eef3 !important;
+  }
+
+  html.dark .print-container .tanaw-official-report-table .tanaw-report-total-cell {
+    background: #e8edf3 !important;
+  }
+
+  html.dark .print-container .tanaw-official-report-table .tanaw-report-final-total-cell {
+    background: #d4dde8 !important;
+  }
+
+  html.dark .print-container .tanaw-official-report-table .tanaw-report-consolidated-row > * {
+    background: #dfe6ee !important;
+  }
+
+  html.dark .print-container .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
+    background: #c4d0dd !important;
   }
 
   .print-hide {

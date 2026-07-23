@@ -10,6 +10,8 @@ export type MlServiceStatus = {
 
 export type MlHealth = {
   status: "ok";
+  service_version: string;
+  api_contract_version: number;
   running: boolean;
   error: string | null;
   model_loaded: boolean;
@@ -95,6 +97,8 @@ export type MlHealth = {
   reid_worker_alive: boolean;
   quality_reid_tasks_cleared: number;
   quality_reid_worker_alive: boolean;
+  active_camera_count: number;
+  max_concurrent_cameras: number;
 };
 
 export type MlCounts = {
@@ -149,13 +153,23 @@ export type MlSession = {
 };
 
 export type MlCameraLiveState = {
+  enterprise_id: string;
+  camera_id: number;
   counts: MlCounts;
   detections: MlDetections;
   health: MlHealth;
   session: MlSession;
 };
 
-export type MlCameraLiveEnvelope = { type: "camera.state"; data: MlCameraLiveState } | { type: "heartbeat" };
+export type MlCameraStates = {
+  enterprise_id: string;
+  enterprise_occupancy: number;
+  active_camera_count: number;
+  max_concurrent_cameras: number;
+  cameras: MlCameraLiveState[];
+};
+
+export type MlCameraLiveEnvelope = { type: "camera.states"; data: MlCameraStates } | { type: "heartbeat" };
 
 export type MlEnterpriseContext = {
   enterprise_id: string;
@@ -214,6 +228,17 @@ export type LocalReportSubmission = LocalMetricsSummary & {
   report_id: string;
   submitted_at: string;
   sync_status: string;
+  camera_breakdown: LocalReportCameraTotal[];
+};
+
+export type LocalReportCameraTotal = {
+  camera_id: number | null;
+  camera_name: string | null;
+  entries: number;
+  exits: number;
+  peak_occupancy: number;
+  unique_count: number;
+  total_events: number;
 };
 
 export type LocalReportSubmissionRecord = {
@@ -229,6 +254,7 @@ export type LocalReportSubmissionRecord = {
   sync_status: string;
   synced_at: string | null;
   raw_purged_at?: string | null;
+  camera_breakdown: LocalReportCameraTotal[];
 };
 
 export type LocalReportDraft = {
@@ -267,6 +293,29 @@ export type CameraTestResult = {
   ok: boolean;
   message: string;
 };
+
+export type MlServiceErrorCode =
+  | "service_unavailable"
+  | "route_unavailable"
+  | "camera_not_found"
+  | "invalid_camera_configuration"
+  | "stream_unavailable"
+  | "pipeline_start_failed"
+  | "capacity_limit"
+  | "service_shutting_down"
+  | "request_timeout"
+  | "unknown";
+
+export class MlServiceRequestError extends Error {
+  constructor(
+    public readonly code: MlServiceErrorCode,
+    message: string,
+    public readonly status: number | null = null,
+  ) {
+    super(message);
+    this.name = "MlServiceRequestError";
+  }
+}
 
 export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
 
@@ -319,6 +368,10 @@ export async function getMlCounts(baseUrl: string): Promise<MlCounts> {
 
 export async function getMlSession(baseUrl: string): Promise<MlSession> {
   return requestJson<MlSession>(`${baseUrl}/session`, { method: "GET" }, 2500);
+}
+
+export async function getMlCameraStates(baseUrl: string): Promise<MlCameraStates> {
+  return requestJson<MlCameraStates>(`${baseUrl}/cameras/runtime`, { method: "GET" }, 2500);
 }
 
 export async function setMlEnterpriseContext(baseUrl: string, enterpriseId: string, enterpriseName?: string | null): Promise<MlEnterpriseContext> {
@@ -487,8 +540,12 @@ export async function testCameraConnection(baseUrl: string, camera: Camera): Pro
     {
       method: "POST",
       body: JSON.stringify({
+        camera_id: camera.id,
+        camera_name: camera.name,
         camera_type: camera.cameraType,
+        camera_host: camera.cameraHost || null,
         password: camera.password || null,
+        rtsp_stream: camera.rtspStream || null,
         stream_url: camera.rtsp,
         username: camera.username || null,
       }),
@@ -504,8 +561,10 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera): Pr
       method: "POST",
       body: JSON.stringify({
         camera_name: camera.name,
+        camera_zone: camera.zone,
         camera_id: camera.id,
         camera_type: camera.cameraType,
+        camera_host: camera.cameraHost || null,
         confidence: camera.confidence,
         counting_confidence: camera.confidence,
         entry_line: toMlTripwireLine(camera.config.tripwires.entry),
@@ -522,6 +581,7 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera): Pr
         roi: toMlRoi(camera.config.roi),
         stream_fps: 24,
         stream_url: camera.rtsp,
+        rtsp_stream: camera.rtspStream || null,
         tracking_confidence: camera.trackingConfidence ?? 0.15,
         track_ttl_seconds: 9,
         tripwire_position: camera.config.tripwire / 100,
@@ -533,13 +593,13 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera): Pr
   );
 }
 
-export async function stopCameraProcessing(baseUrl: string): Promise<{ message: string }> {
-  return requestJson<{ message: string }>(`${baseUrl}/camera/stop`, { method: "POST" }, 5000);
+export async function stopCameraProcessing(baseUrl: string, cameraId: number): Promise<{ message: string }> {
+  return requestJson<{ message: string }>(`${baseUrl}/camera/${cameraId}/stop`, { method: "POST" }, 5000);
 }
 
-export function getStreamUrl(baseUrl: string, version: number, overlay = true) {
+export function getStreamUrl(baseUrl: string, cameraId: number, version: number, overlay = true) {
   const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
-  return `${baseUrl}/stream?${params.toString()}`;
+  return `${baseUrl}/camera/${cameraId}/stream?${params.toString()}`;
 }
 
 export function getMlCameraWebSocketUrl(baseUrl: string) {
@@ -549,15 +609,15 @@ export function getMlCameraWebSocketUrl(baseUrl: string) {
 }
 
 export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined, version: number, isProcessing: boolean) {
-  if (isProcessing) {
-    return getStreamUrl(baseUrl, version, false);
+  if (camera && isProcessing) {
+    return getStreamUrl(baseUrl, camera.id, version, false);
   }
 
   if (camera && isNativeBrowserMjpegCamera(camera)) {
     return camera.rtsp.trim();
   }
 
-  return getStreamUrl(baseUrl, version);
+  return camera ? getStreamUrl(baseUrl, camera.id, version) : "";
 }
 
 function isNativeBrowserMjpegCamera(camera: Camera) {
@@ -609,13 +669,17 @@ async function requestJson<T>(url: string, init: RequestInit, timeoutMs: number)
     });
 
     if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
+      throw await getRequestError(response, url);
     }
 
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The ML service did not respond in time.");
+      throw new MlServiceRequestError("request_timeout", "The ML service did not respond in time.");
+    }
+
+    if (error instanceof TypeError) {
+      throw new MlServiceRequestError("service_unavailable", "The local ML service is unavailable.");
     }
 
     throw error;
@@ -635,11 +699,48 @@ function buildHeaders(init: RequestInit) {
   return headers;
 }
 
-async function getErrorMessage(response: Response) {
+async function getRequestError(response: Response, requestUrl: string) {
+  let code: MlServiceErrorCode = response.status === 404 ? "camera_not_found" : "unknown";
+  let message = `Request failed with status ${response.status}.`;
   try {
-    const payload = (await response.json()) as { detail?: string };
-    return payload.detail ?? `Request failed with status ${response.status}.`;
+    const payload = (await response.json()) as {
+      code?: string;
+      message?: string;
+      detail?: string | { code?: string; message?: string };
+    };
+    const detail = typeof payload.detail === "object" ? payload.detail : undefined;
+    code = normalizeServiceErrorCode(payload.code ?? detail?.code, code);
+    message = payload.message ?? detail?.message ?? (typeof payload.detail === "string" ? payload.detail : message);
   } catch {
-    return `Request failed with status ${response.status}.`;
+    // Use the stable status-derived fallback below.
   }
+
+  const pathname = new URL(requestUrl).pathname;
+  if (response.status === 404 && pathname === "/cameras/runtime") {
+    return new MlServiceRequestError(
+      "route_unavailable",
+      "The camera runtime service is unavailable. Restart the local ML service.",
+      response.status,
+    );
+  }
+  if (response.status === 404 && (message === "Not Found" || message === "Request failed with status 404.")) {
+    message = "The requested camera runtime resource is unavailable.";
+  }
+  return new MlServiceRequestError(code, message, response.status);
+}
+
+function normalizeServiceErrorCode(value: string | undefined, fallback: MlServiceErrorCode): MlServiceErrorCode {
+  const supported: MlServiceErrorCode[] = [
+    "service_unavailable",
+    "route_unavailable",
+    "camera_not_found",
+    "invalid_camera_configuration",
+    "stream_unavailable",
+    "pipeline_start_failed",
+    "capacity_limit",
+    "service_shutting_down",
+    "request_timeout",
+    "unknown",
+  ];
+  return supported.includes(value as MlServiceErrorCode) ? (value as MlServiceErrorCode) : fallback;
 }

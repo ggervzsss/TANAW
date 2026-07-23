@@ -1,25 +1,15 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ExpandableTableText } from "./ExpandableTableText";
+import { hasVisualOverflow } from "./overflowMeasurement";
 
-describe("ExpandableTableText", () => {
-  it("offers an accessible View disclosure for long table values", () => {
-    const markup = renderToStaticMarkup(<ExpandableTableText primary={"Long actor name ".repeat(8)} ariaLabel="actor" />);
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain("aria-controls=");
-    expect(markup).toContain('aria-label="View full actor"');
-    expect(markup).toContain(">View<");
+describe("hasVisualOverflow", () => {
+  it("reports horizontal overflow only when rendered content exceeds its box", () => {
+    expect(hasVisualOverflow({ clientHeight: 20, clientWidth: 120, scrollHeight: 20, scrollWidth: 121 })).toBe(false);
+    expect(hasVisualOverflow({ clientHeight: 20, clientWidth: 120, scrollHeight: 20, scrollWidth: 180 })).toBe(true);
   });
 
-  it("does not add disclosure controls to short values", () => {
-    const markup = renderToStaticMarkup(<ExpandableTableText primary="LGU Admin" ariaLabel="actor" />);
-    expect(markup).not.toContain("aria-expanded");
-  });
-
-  it("supports context-specific Show more and Show less labels", () => {
-    const markup = renderToStaticMarkup(<ExpandableTableText primary={"A long activity summary ".repeat(6)} ariaLabel="summary" collapsedLabel="Show more" expandedLabel="Show less" />);
-
-    expect(markup).toContain('aria-label="Show more summary"');
-    expect(markup).toContain(">Show more<");
+  it("reports clipped multiline content using measured height", () => {
+    const metrics = { clientHeight: 40, clientWidth: 180, scrollHeight: 76, scrollWidth: 180 };
+    expect(hasVisualOverflow(metrics)).toBe(false);
+    expect(hasVisualOverflow(metrics, true)).toBe(true);
   });
 });

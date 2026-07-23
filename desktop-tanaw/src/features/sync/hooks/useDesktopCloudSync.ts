@@ -2,15 +2,15 @@ import { useEffect, useRef } from "react";
 import {
   getMlCameraWebSocketUrl,
   type MlCameraLiveEnvelope,
-  type MlCameraLiveState,
+  type MlCameraStates,
 } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
+import { createReconnectingWebSocket } from "../../../utils/reconnecting-websocket";
 import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
 const TELEMETRY_RECONCILE_INTERVAL_MS = 30_000;
 const REPORT_SYNC_INTERVAL_MS = 20_000;
-const LIVE_RECONNECT_MAX_DELAY_MS = 10_000;
 
 type LiveTelemetryState = {
   lastSignature: string | null;
@@ -108,61 +108,25 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
       }
     };
 
-    const handleLiveCameraState = (state: MlCameraLiveState) => {
-      const nextSignature = liveCameraStateSignature(state);
+    const handleLiveCameraStates = (states: MlCameraStates) => {
+      const nextSignature = liveCameraStatesSignature(states);
       if (nextSignature === liveTelemetryRef.current.lastSignature) return;
 
       liveTelemetryRef.current.lastSignature = nextSignature;
       scheduleTelemetrySync();
     };
 
-    let liveSocket: WebSocket | null = null;
-    let liveReconnectTimer: number | undefined;
-    let liveReconnectAttempt = 0;
-
-    const scheduleLiveReconnect = () => {
-      if (isDisposed) return;
-      const delay = Math.min(1000 * 2 ** liveReconnectAttempt, LIVE_RECONNECT_MAX_DELAY_MS);
-      liveReconnectAttempt += 1;
-      liveReconnectTimer = window.setTimeout(connectLiveSocket, delay);
-    };
-
-    const connectLiveSocket = () => {
-      if (liveSocket) {
-        liveSocket.onclose = null;
-        liveSocket.onerror = null;
-        liveSocket.close();
-      }
-
-      try {
-        liveSocket = new WebSocket(getMlCameraWebSocketUrl(mlBaseUrl));
-      } catch {
-        scheduleLiveReconnect();
-        return;
-      }
-
-      liveSocket.onopen = () => {
-        liveReconnectAttempt = 0;
+    const liveConnection = createReconnectingWebSocket({
+      url: getMlCameraWebSocketUrl(mlBaseUrl),
+      onOpen: () => {
         scheduleTelemetrySync();
-      };
-
-      liveSocket.onmessage = (event) => {
-        if (typeof event.data !== "string") return;
-
+      },
+      onMessage: (event) => {
         const envelope = parseLiveCameraEnvelope(event.data);
-        if (envelope?.type !== "camera.state") return;
-
-        handleLiveCameraState(envelope.data);
-      };
-
-      liveSocket.onerror = () => {
-        liveSocket?.close();
-      };
-
-      liveSocket.onclose = () => {
-        scheduleLiveReconnect();
-      };
-    };
+        if (envelope?.type !== "camera.states") return;
+        handleLiveCameraStates(envelope.data);
+      },
+    });
 
     const runAllSync = () => {
       void runPreparation();
@@ -171,7 +135,6 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
     };
 
     runAllSync();
-    connectLiveSocket();
     const telemetryIntervalId = window.setInterval(scheduleTelemetrySync, TELEMETRY_RECONCILE_INTERVAL_MS);
     const preparationIntervalId = window.setInterval(runPreparation, TELEMETRY_RECONCILE_INTERVAL_MS);
     const reportIntervalId = window.setInterval(runReportSync, REPORT_SYNC_INTERVAL_MS);
@@ -180,12 +143,7 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
     return () => {
       isDisposed = true;
       clearLiveTelemetryTimer();
-      if (liveReconnectTimer !== undefined) window.clearTimeout(liveReconnectTimer);
-      if (liveSocket) {
-        liveSocket.onclose = null;
-        liveSocket.onerror = null;
-        liveSocket.close();
-      }
+      liveConnection.dispose();
       window.clearInterval(telemetryIntervalId);
       window.clearInterval(preparationIntervalId);
       window.clearInterval(reportIntervalId);
@@ -202,21 +160,25 @@ function parseLiveCameraEnvelope(rawData: string): MlCameraLiveEnvelope | null {
   }
 }
 
-function liveCameraStateSignature(state: MlCameraLiveState) {
-  const { counts, health, session } = state;
-  return [
-    counts.entry,
-    counts.exit,
-    counts.occupancy,
-    counts.running,
-    counts.status,
-    counts.error ?? "",
-    session.camera_id ?? "",
-    session.running,
-    session.status,
-    session.error ?? "",
-    health.estimated_unique_count,
-    health.confirmed_unique_count,
-    health.degraded_unique_count,
-  ].join("|");
+function liveCameraStatesSignature(states: MlCameraStates) {
+  return [...states.cameras]
+    .sort((left, right) => left.camera_id - right.camera_id)
+    .map(({ camera_id: cameraId, counts, health, session }) =>
+      [
+        cameraId,
+        counts.entry,
+        counts.exit,
+        counts.occupancy,
+        counts.running,
+        counts.status,
+        counts.error ?? "",
+        session.running,
+        session.status,
+        session.error ?? "",
+        health.estimated_unique_count,
+        health.confirmed_unique_count,
+        health.degraded_unique_count,
+      ].join("|"),
+    )
+    .join(";");
 }
