@@ -131,6 +131,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 self.assertTrue(registry.request_start(first))
                 self.assertTrue(initialization_started.wait(timeout=1))
                 self.assertFalse(initialization_finished.is_set())
+                self.assertEqual(registry.camera_states()["pending_camera_ids"], [1])
                 self.assertFalse(registry.request_start(first))
                 with self.assertRaisesRegex(CameraCapacityError, "capacity"):
                     registry.request_start(_config(2))
@@ -139,6 +140,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
 
             self.assertTrue(initialization_finished.wait(timeout=1))
             self.assertTrue(registry.require_pipeline(1).running)
+            self.assertEqual(registry.camera_states()["pending_camera_ids"], [])
 
     def test_enterprise_switch_and_shutdown_stop_every_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

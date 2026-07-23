@@ -194,7 +194,7 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.2.0"
-    api_contract_version: int = 4
+    api_contract_version: int = 5
     running: bool
     error: str | None = None
     model_loaded: bool = False
@@ -351,6 +351,7 @@ class CameraStatesResponse(BaseModel):
     enterprise_occupancy: int = Field(default=0, ge=0)
     active_camera_count: int
     max_concurrent_cameras: int
+    pending_camera_ids: list[int]
     cameras: list[CameraLiveStateResponse]
 
 

@@ -168,6 +168,7 @@ export type MlCameraStates = {
   enterprise_occupancy: number;
   active_camera_count: number;
   max_concurrent_cameras: number;
+  pending_camera_ids: number[];
   cameras: MlCameraLiveState[];
 };
 

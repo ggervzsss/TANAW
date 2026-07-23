@@ -37,13 +37,13 @@ export function CameraMonitoringPanel({
   const isProcessingThisCamera = counts.running;
   const serviceOnline = health?.status === "ok";
   const serviceLabel = serviceOnline ? (health.running ? "ML Service Running" : "ML Service Ready") : "ML Service Offline";
-  const cameraState = getCameraState(activeCam, counts);
+  const cameraState = getCameraState(activeCam, counts, isStarting);
   const streamVerified = ["online", "running"].includes(activeCam.status);
   const streamLabel = streamVerified ? "Stream Verified" : "Stream Needs Check";
   const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
   const modelStatus = formatModelStatus(health);
   const performanceStatus = formatPerformanceStatus(health);
-  const isProcessRunning = counts.running;
+  const isProcessRunning = counts.running && !isStarting;
   const ProcessIcon = isProcessRunning ? Square : Play;
   const processButtonLabel = isProcessRunning ? (isStopping ? "Stopping..." : "Stop") : isStarting ? "Starting..." : "Start";
   const processButtonDisabled = isProcessRunning ? isStopping : isStarting;
@@ -177,8 +177,9 @@ function StatusRow({ icon: Icon, label, tone, tooltip }: StatusRowProps) {
   );
 }
 
-function getCameraState(activeCam: Camera, counts: MlCounts): { label: string; tone: "ok" | "neutral" | "error" } {
+function getCameraState(activeCam: Camera, counts: MlCounts, isStarting: boolean): { label: string; tone: "ok" | "neutral" | "error" } {
   if (counts.status === "connecting") return { label: "Camera Connecting", tone: "neutral" };
+  if (counts.status === "starting" || (isStarting && !counts.running)) return { label: "Camera Starting", tone: "neutral" };
   if (counts.status === "reconnecting") return { label: "Camera Reconnecting", tone: "neutral" };
   if (counts.status === "degraded") return { label: "Camera Degraded", tone: "neutral" };
   if (counts.running) return { label: "Camera Processing", tone: "ok" };

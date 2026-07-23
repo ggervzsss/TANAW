@@ -295,6 +295,7 @@ class CameraPipelineRegistry:
     def camera_states(self) -> dict[str, Any]:
         with self._lock:
             camera_ids = sorted(self._pipelines)
+            pending_camera_ids = sorted(self._pending_starts)
             enterprise_id = self._enterprise_id or ""
         enterprise_occupancy = int(
             self._reporting.metrics_summary(include_submitted=True)["current_occupancy"] or 0
@@ -307,6 +308,7 @@ class CameraPipelineRegistry:
                 1 for camera in cameras if bool(camera["counts"]["running"])
             ),
             "max_concurrent_cameras": self._max_concurrent_cameras,
+            "pending_camera_ids": pending_camera_ids,
             "cameras": cameras,
         }
 
