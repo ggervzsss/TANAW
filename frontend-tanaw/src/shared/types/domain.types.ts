@@ -222,7 +222,6 @@ export type EnterpriseCamera = {
   name: string;
   location: string;
   rtspStatus: string;
-  onvifStatus: string;
   status: CameraStatus;
   lastChecked: string;
 };

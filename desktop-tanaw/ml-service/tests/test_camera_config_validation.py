@@ -9,7 +9,7 @@ class CameraConfigValidationTest(unittest.TestCase):
     def test_valid_roi_and_tripwire_config_is_accepted(self) -> None:
         config = CameraStartRequest.model_validate(
             {
-                "stream_url": "000",
+                "stream_url": "rtsp://192.168.1.20/stream2",
                 "roi": {"top": 0.1, "left": 0.1, "width": 0.8, "height": 0.8},
                 "entry_line": {
                     "start": {"x": 0.35, "y": 0.1},
@@ -27,7 +27,7 @@ class CameraConfigValidationTest(unittest.TestCase):
     def test_sampled_tripwire_paths_are_accepted(self) -> None:
         config = CameraStartRequest.model_validate(
             {
-                "stream_url": "000",
+                "stream_url": "rtsp://192.168.1.20/stream2",
                 "entry_line": {
                     "start": {"x": 0.25, "y": 0.1},
                     "end": {"x": 0.42, "y": 0.9},
@@ -59,44 +59,53 @@ class CameraConfigValidationTest(unittest.TestCase):
     def test_processing_profile_is_validated(self) -> None:
         self.assertEqual(
             CameraStartRequest(
-                stream_url="000", processing_profile="compatibility"
+                stream_url="rtsp://192.168.1.20/stream2", processing_profile="compatibility"
             ).processing_profile,
             "compatibility",
         )
         self.assertEqual(
             CameraStartRequest(
-                stream_url="000", processing_profile="high_accuracy"
+                stream_url="rtsp://192.168.1.20/stream2", processing_profile="high_accuracy"
             ).processing_profile,
             "high_accuracy",
         )
         self.assertEqual(
             CameraStartRequest(
-                stream_url="000", runtime_backend="openvino", tracker_profile="botsort"
+                stream_url="rtsp://192.168.1.20/stream2",
+                runtime_backend="openvino",
+                tracker_profile="botsort",
             ).runtime_backend,
             "openvino",
         )
         with self.assertRaises(ValidationError):
-            CameraStartRequest.model_validate({"stream_url": "000", "runtime_backend": "tensorrt"})
-        with self.assertRaises(ValidationError):
-            CameraStartRequest.model_validate({"stream_url": "000", "runtime_backend": "directml"})
+            CameraStartRequest.model_validate(
+                {"stream_url": "rtsp://192.168.1.20/stream2", "runtime_backend": "tensorrt"}
+            )
         with self.assertRaises(ValidationError):
             CameraStartRequest.model_validate(
-                {"stream_url": "000", "processing_profile": "unsupported"}
+                {"stream_url": "rtsp://192.168.1.20/stream2", "runtime_backend": "directml"}
+            )
+        with self.assertRaises(ValidationError):
+            CameraStartRequest.model_validate(
+                {"stream_url": "rtsp://192.168.1.20/stream2", "processing_profile": "unsupported"}
             )
         for removed_profile in ("experimental_max", "cpu", "accelerated"):
             with self.subTest(removed_profile=removed_profile):
                 with self.assertRaises(ValidationError):
                     CameraStartRequest.model_validate(
-                        {"stream_url": "000", "processing_profile": removed_profile}
+                        {
+                            "stream_url": "rtsp://192.168.1.20/stream2",
+                            "processing_profile": removed_profile,
+                        }
                     )
 
     def test_confidence_aliases_and_modes_are_validated(self) -> None:
-        legacy = CameraStartRequest(stream_url="000", confidence=0.42)
+        legacy = CameraStartRequest(stream_url="rtsp://192.168.1.20/stream2", confidence=0.42)
         self.assertEqual(legacy.counting_confidence, 0.42)
         self.assertEqual(legacy.confidence, 0.42)
 
         explicit = CameraStartRequest(
-            stream_url="000",
+            stream_url="rtsp://192.168.1.20/stream2",
             tracking_confidence=0.12,
             counting_confidence=0.38,
             reid_mode="quality",
@@ -109,19 +118,20 @@ class CameraConfigValidationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "tracking_confidence"):
             CameraStartRequest.model_validate(
                 {
-                    "stream_url": "000",
+                    "stream_url": "rtsp://192.168.1.20/stream2",
                     "tracking_confidence": 0.50,
                     "counting_confidence": 0.35,
                 }
             )
         with self.assertRaises(ValidationError):
-            CameraStartRequest.model_validate({"stream_url": "000", "reid_mode": "slow"})
+            CameraStartRequest.model_validate(
+                {"stream_url": "rtsp://192.168.1.20/stream2", "reid_mode": "slow"}
+            )
 
     def test_rtsp_source_is_canonicalized_from_ipv4_and_profile(self) -> None:
         config = CameraStartRequest.model_validate(
             {
                 "camera_id": 7,
-                "camera_type": "RTSP_CCTV",
                 "camera_host": "192.168.1.20",
                 "rtsp_stream": "stream1",
                 "stream_url": "rtsp://192.168.1.20/stream1",
@@ -137,7 +147,6 @@ class CameraConfigValidationTest(unittest.TestCase):
             CameraStartRequest.model_validate(
                 {
                     "camera_id": 7,
-                    "camera_type": "RTSP_CCTV",
                     "camera_host": "camera.local",
                     "rtsp_stream": "stream2",
                     "stream_url": "rtsp://camera.local/stream2",
@@ -147,24 +156,32 @@ class CameraConfigValidationTest(unittest.TestCase):
             CameraStartRequest.model_validate(
                 {
                     "camera_id": 7,
-                    "camera_type": "RTSP_CCTV",
                     "camera_host": "192.168.1.20",
                     "rtsp_stream": "stream2",
                     "stream_url": "rtsp://192.168.1.21/stream1",
                 }
             )
 
+    def test_non_rtsp_camera_sources_are_rejected(self) -> None:
+        for stream_url in ("0", "http://192.168.1.20/video", "https://192.168.1.20/shot.jpg"):
+            with self.subTest(stream_url=stream_url):
+                with self.assertRaisesRegex(ValidationError, "must start with rtsp://"):
+                    CameraStartRequest.model_validate({"stream_url": stream_url})
+
     def test_roi_outside_frame_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValidationError, "ROI left \\+ width"):
             CameraStartRequest.model_validate(
-                {"stream_url": "000", "roi": {"top": 0.1, "left": 0.4, "width": 0.8, "height": 0.8}}
+                {
+                    "stream_url": "rtsp://192.168.1.20/stream2",
+                    "roi": {"top": 0.1, "left": 0.4, "width": 0.8, "height": 0.8},
+                }
             )
 
     def test_too_small_roi_is_rejected(self) -> None:
         with self.assertRaises(ValidationError):
             CameraStartRequest.model_validate(
                 {
-                    "stream_url": "000",
+                    "stream_url": "rtsp://192.168.1.20/stream2",
                     "roi": {"top": 0.1, "left": 0.1, "width": 0.05, "height": 0.8},
                 }
             )
@@ -173,7 +190,7 @@ class CameraConfigValidationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "Both entry_line and exit_line"):
             CameraStartRequest.model_validate(
                 {
-                    "stream_url": "000",
+                    "stream_url": "rtsp://192.168.1.20/stream2",
                     "entry_line": {
                         "start": {"x": 0.35, "y": 0.1},
                         "end": {"x": 0.35, "y": 0.9},
@@ -185,7 +202,7 @@ class CameraConfigValidationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "at least 0.10"):
             CameraStartRequest.model_validate(
                 {
-                    "stream_url": "000",
+                    "stream_url": "rtsp://192.168.1.20/stream2",
                     "entry_line": {
                         "start": {"x": 0.35, "y": 0.1},
                         "end": {"x": 0.35, "y": 0.12},
@@ -201,7 +218,7 @@ class CameraConfigValidationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "must not overlap"):
             CameraStartRequest.model_validate(
                 {
-                    "stream_url": "000",
+                    "stream_url": "rtsp://192.168.1.20/stream2",
                     "entry_line": {
                         "start": {"x": 0.35, "y": 0.1},
                         "end": {"x": 0.35, "y": 0.9},

@@ -42,7 +42,6 @@ const camera: Camera = {
   resolution: "Adaptive",
   type: "Entry/Exit",
   rtsp: "rtsp://192.168.1.10/stream2",
-  cameraType: "RTSP_CCTV",
   processingProfile: "auto",
   confidence: 0.35,
   config: {

@@ -14,16 +14,8 @@ import cv2
 import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
-from app.camera.stream_reader import (
-    build_ip_webcam_snapshot_url,
-    is_mjpeg_http_stream,
-    iter_mjpeg_frames,
-    open_capture,
-    read_http_jpeg_frame,
-    validate_http_jpeg_snapshot,
-    validate_stream,
-)
-from app.config.camera_config import CameraStartRequest, CameraType, RegionOfInterest, TripwireLine
+from app.camera.stream_reader import open_capture, validate_stream
+from app.config.camera_config import CameraStartRequest, RegionOfInterest, TripwireLine
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import YoloPersonTracker
@@ -167,14 +159,12 @@ class CameraProcessingManager:
     def test_connection(
         self,
         stream_url: str,
-        camera_type: CameraType = "IP_WEBCAM",
         username: str | None = None,
         password: str | None = None,
     ) -> tuple[bool, str]:
         try:
             config = CameraStartRequest(
                 stream_url=stream_url,
-                camera_type=camera_type,
                 username=username,
                 password=password,
             )
@@ -800,115 +790,15 @@ class CameraProcessingManager:
         if not self._is_current_session(session):
             return
 
-        runtime_stream_url = self._runtime_stream_url(config)
-        snapshot_url = (
-            build_ip_webcam_snapshot_url(runtime_stream_url)
-            if config.camera_type == "IP_WEBCAM"
-            else None
-        )
-        if snapshot_url is not None:
-            self._ip_webcam_snapshot_capture_loop(session, snapshot_url)
-            return
-
-        if is_mjpeg_http_stream(runtime_stream_url):
-            self._mjpeg_capture_loop(session, runtime_stream_url)
-        else:
-            self._opencv_capture_loop(session, runtime_stream_url)
+        self._opencv_capture_loop(session, self._runtime_stream_url(config))
 
     def _validate_config_stream(self, config: CameraStartRequest) -> tuple[bool, str]:
         runtime_stream_url = self._runtime_stream_url(config)
-        snapshot_url = (
-            build_ip_webcam_snapshot_url(runtime_stream_url)
-            if config.camera_type == "IP_WEBCAM"
-            else None
-        )
-        if snapshot_url is not None:
-            ok, message = validate_http_jpeg_snapshot(snapshot_url)
-            return ok, redact_stream_credentials(message)
-
         ok, message = validate_stream(runtime_stream_url)
         return ok, redact_stream_credentials(message)
 
     def _runtime_stream_url(self, config: CameraStartRequest) -> str:
         return build_authenticated_stream_url(config.stream_url, config.username, config.password)
-
-    def _ip_webcam_snapshot_capture_loop(
-        self, session: ProcessingSession, snapshot_url: str
-    ) -> None:
-        config = session.config
-        failed_reads = 0
-        reconnect_attempt = 0
-        last_error = "Camera snapshot endpoint stopped returning frames."
-        frame_interval = 1.0 / self._processing_fps(config)
-
-        try:
-            while not session.stop_event.is_set() and self._is_current_session(session):
-                started_at = time.monotonic()
-
-                try:
-                    frame = read_http_jpeg_frame(snapshot_url)
-                except Exception as exc:
-                    frame = None
-                    last_error = str(exc)
-
-                if frame is None:
-                    failed_reads += 1
-                    if failed_reads >= 30:
-                        reconnect_attempt += 1
-                        self._mark_reconnecting(
-                            session,
-                            redact_stream_credentials(
-                                f"Camera snapshot endpoint stopped returning frames: {last_error}"
-                            ),
-                        )
-                        failed_reads = 0
-                        if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
-                            return
-                else:
-                    failed_reads = 0
-                    reconnect_attempt = 0
-                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                    self._publish_raw_frame(session, frame)
-
-                elapsed = time.monotonic() - started_at
-                remaining = frame_interval - elapsed
-                if remaining > 0:
-                    session.stop_event.wait(remaining)
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
-        finally:
-            with self._lock:
-                if (
-                    self._is_current_session_locked(session)
-                    and not session.stop_event.is_set()
-                    and self._state.status not in {"error", "failed"}
-                ):
-                    self._state.status = "stopped"
-
-    def _mjpeg_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
-        config = session.config
-        reconnect_attempt = 0
-        while not session.stop_event.is_set() and self._is_current_session(session):
-            received_frame = False
-            try:
-                for frame in iter_mjpeg_frames(stream_url, session.stop_event):
-                    if session.stop_event.is_set() or not self._is_current_session(session):
-                        return
-                    received_frame = True
-                    reconnect_attempt = 0
-                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                    self._publish_raw_frame(session, frame)
-            except Exception as exc:
-                message = redact_stream_credentials(str(exc))
-            else:
-                message = "Camera stream stopped returning MJPEG frames."
-
-            if session.stop_event.is_set() or not self._is_current_session(session):
-                return
-            reconnect_attempt = 1 if received_frame else reconnect_attempt + 1
-            self._mark_reconnecting(session, message)
-            if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
-                return
 
     def _opencv_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
         config = session.config

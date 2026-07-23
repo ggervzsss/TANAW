@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from app.config.camera_config import reporting_period_key
 
-LOCAL_SCHEMA_VERSION = 3
+LOCAL_SCHEMA_VERSION = 4
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,6 @@ class LocalDataStore:
                         name,
                         zone,
                         status,
-                        camera_type,
                         camera_host,
                         rtsp_stream,
                         stream_url,
@@ -230,12 +229,11 @@ class LocalDataStore:
                         created_at,
                         updated_at
                     )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     on conflict(camera_id) do update set
                         name = excluded.name,
                         zone = excluded.zone,
                         status = excluded.status,
-                        camera_type = excluded.camera_type,
                         camera_host = excluded.camera_host,
                         rtsp_stream = excluded.rtsp_stream,
                         stream_url = excluded.stream_url,
@@ -256,7 +254,6 @@ class LocalDataStore:
                         camera["name"],
                         camera["zone"],
                         camera["status"],
-                        camera["cameraType"],
                         camera.get("cameraHost"),
                         camera.get("rtspStream"),
                         camera["rtsp"],
@@ -1534,7 +1531,7 @@ class LocalDataStore:
                 current_version = _safe_int(
                     version_row["schema_version"] if version_row is not None else None
                 )
-                if current_version not in {1, 2, LOCAL_SCHEMA_VERSION}:
+                if current_version != LOCAL_SCHEMA_VERSION:
                     raise LocalDatabaseResetRequiredError(
                         f"Local TANAW database schema {current_version} is incompatible with "
                         f"the required schema {LOCAL_SCHEMA_VERSION}. Explicitly clear this "
@@ -1556,11 +1553,8 @@ class LocalDataStore:
                     status text not null check (
                         status in ('untested', 'online', 'offline', 'running', 'stopped', 'error')
                     ),
-                    camera_type text not null check (
-                        camera_type in ('IP_WEBCAM', 'RTSP_CCTV', 'USB_WEBCAM', 'ONVIF_CCTV')
-                    ),
-                    camera_host text,
-                    rtsp_stream text check (rtsp_stream in ('stream1', 'stream2')),
+                    camera_host text not null,
+                    rtsp_stream text not null check (rtsp_stream in ('stream1', 'stream2')),
                     stream_url text not null,
                     purpose text not null,
                     resolution text not null,
@@ -1620,7 +1614,7 @@ class LocalDataStore:
 
                 insert or ignore into schema_metadata (
                     singleton_id, schema_version, applied_at
-                ) values (1, 3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                ) values (1, 4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
 
                 create table if not exists count_events (
                     id integer primary key autoincrement,
@@ -1783,69 +1777,6 @@ class LocalDataStore:
                 create index if not exists idx_visitor_sightings_business_date on visitor_sightings(business_date);
                 """
             )
-            if current_version in {1, 2}:
-                _add_column_if_missing(
-                    connection, "camera_profiles", "camera_host", "camera_host text"
-                )
-                _add_column_if_missing(
-                    connection,
-                    "camera_profiles",
-                    "rtsp_stream",
-                    "rtsp_stream text check (rtsp_stream in ('stream1', 'stream2'))",
-                )
-                _add_column_if_missing(
-                    connection, "count_events", "enterprise_id", "enterprise_id text"
-                )
-                _add_column_if_missing(
-                    connection, "count_snapshots", "enterprise_id", "enterprise_id text"
-                )
-                if current_version == 1:
-                    connection.execute(
-                        """
-                    insert or ignore into camera_monitoring_states (
-                        camera_id,
-                        camera_name_snapshot,
-                        running,
-                        status,
-                        error,
-                        started_at,
-                        entry_count,
-                        exit_count,
-                        occupancy_count,
-                        camera_config_json,
-                        updated_at
-                    )
-                    select
-                        camera_id,
-                        camera_name_snapshot,
-                        running,
-                        status,
-                        error,
-                        started_at,
-                        entry_count,
-                        exit_count,
-                        occupancy_count,
-                        camera_config_json,
-                        updated_at
-                    from active_monitoring_state
-                    where singleton_id = 1 and camera_id is not null
-                    """
-                    )
-                _add_column_if_missing(
-                    connection,
-                    "count_events",
-                    "enterprise_occupancy_count",
-                    "enterprise_occupancy_count integer",
-                )
-                self._ensure_enterprise_occupancy_state(connection)
-                connection.execute(
-                    """
-                    update schema_metadata
-                    set schema_version = ?, applied_at = ?
-                    where singleton_id = 1
-                    """,
-                    (LOCAL_SCHEMA_VERSION, _utc_now()),
-                )
             connection.commit()
         finally:
             connection.close()
@@ -1855,16 +1786,6 @@ class LocalDataStore:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _add_column_if_missing(
-    connection: sqlite3.Connection, table: str, column: str, definition: str
-) -> None:
-    columns = {
-        str(row["name"]) for row in connection.execute(f"pragma table_info({table})").fetchall()
-    }
-    if column not in columns:
-        connection.execute(f"alter table {table} add column {definition}")
 
 
 def _load_json_object(value: Any) -> dict[str, Any]:
@@ -1885,7 +1806,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
         "resolution",
         "type",
         "rtsp",
-        "cameraType",
         "processingProfile",
     )
     if isinstance(camera.get("id"), bool) or not isinstance(camera.get("id"), int):
@@ -1914,24 +1834,19 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     if parsed_stream_url.username is not None or parsed_stream_url.password is not None:
         raise ValueError("Camera stream credentials must not be stored in SQLite.")
 
-    camera_host: str | None = None
-    rtsp_stream: str | None = None
-    if camera["cameraType"] in {"RTSP_CCTV", "ONVIF_CCTV"}:
-        raw_host = camera.get("cameraHost") or parsed_stream_url.hostname or ""
-        try:
-            camera_host = str(IPv4Address(str(raw_host).strip()))
-        except ValueError as exc:
-            raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
-        path_profile = parsed_stream_url.path.strip("/").split("/", maxsplit=1)[0]
-        raw_profile = camera.get("rtspStream") or path_profile or "stream2"
-        if raw_profile not in {"stream1", "stream2"}:
-            raise ValueError("RTSP Stream must be stream1 or stream2.")
-        rtsp_stream = str(raw_profile)
-        canonical_url = f"rtsp://{camera_host}/{rtsp_stream}"
-        if stream_url != canonical_url:
-            raise ValueError(
-                "Stream URL conflicts with Camera IP / Host and the selected RTSP Stream."
-            )
+    raw_host = camera.get("cameraHost") or parsed_stream_url.hostname or ""
+    try:
+        camera_host = str(IPv4Address(str(raw_host).strip()))
+    except ValueError as exc:
+        raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
+    path_profile = parsed_stream_url.path.strip("/").split("/", maxsplit=1)[0]
+    raw_profile = camera.get("rtspStream") or path_profile or "stream2"
+    if raw_profile not in {"stream1", "stream2"}:
+        raise ValueError("RTSP Stream must be stream1 or stream2.")
+    rtsp_stream = str(raw_profile)
+    canonical_url = f"rtsp://{camera_host}/{rtsp_stream}"
+    if stream_url != canonical_url:
+        raise ValueError("Stream URL conflicts with Camera IP / Host and the selected RTSP Stream.")
 
     return {
         **camera,

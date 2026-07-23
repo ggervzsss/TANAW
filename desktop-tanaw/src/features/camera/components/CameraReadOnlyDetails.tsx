@@ -30,7 +30,6 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
       <div className="space-y-2">
         <DetailRow label="Camera Address" value={maskStreamCredentials(activeCam.rtsp)} tooltip="The connection address TANAW uses to access this camera." mono />
         <div className="grid grid-cols-2 gap-2">
-          <DetailRow label="Camera Type" value={formatCameraType(activeCam.cameraType)} tooltip="The type of camera connected to TANAW." />
           <DetailRow label="Counting Area" value={activeCam.zone} tooltip="The area monitored by this camera." />
           <DetailRow label="Counting Direction" value="Entry / Exit Lines" tooltip="Lines used to count entering and exiting visitors." />
           <DetailRow label="Counting Mode" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="The visitor-counting mode selected for this camera." />
@@ -67,15 +66,4 @@ function DetailRow({ label, mono = false, tooltip, value }: DetailRowProps) {
       </div>
     </InfoTooltip>
   );
-}
-
-function formatCameraType(cameraType: Camera["cameraType"]) {
-  const labels: Record<Camera["cameraType"], string> = {
-    IP_WEBCAM: "IP Webcam",
-    ONVIF_CCTV: "ONVIF CCTV",
-    RTSP_CCTV: "RTSP CCTV",
-    USB_WEBCAM: "USB Webcam",
-  };
-
-  return labels[cameraType];
 }

@@ -183,7 +183,9 @@ class CameraPipelineRegistryTest(unittest.TestCase):
 
 def _config(camera_id: int) -> CameraStartRequest:
     return CameraStartRequest(
-        camera_id=camera_id, camera_name=f"Camera {camera_id}", stream_url="000"
+        camera_id=camera_id,
+        camera_name=f"Camera {camera_id}",
+        stream_url="rtsp://192.168.1.20/stream2",
     )
 
 

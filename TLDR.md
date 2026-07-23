@@ -303,9 +303,9 @@ Invoke-RestMethod http://127.0.0.1:8765/metrics/summary
 
 Close the desktop before clearing local data.
 
-Remove all local desktop operational data, including real CCTV-derived rows and
-demographic report drafts, while preserving camera definitions, Electron preferences, authentication
-storage, and caches:
+Permanently remove all local desktop data, including databases, RTSP camera
+definitions and encrypted credentials, authentication state, Chromium storage,
+preferences, and caches:
 
 ```shell
 ./scripts/local-mockdata-off
@@ -313,8 +313,9 @@ storage, and caches:
 
 PowerShell: `.\scripts\local-mockdata-off.ps1`
 
-The lower-level inspection and full reset commands still run from
-`desktop-tanaw`.
+This is the full device reset. It is safe to run repeatedly and before or after
+`mockdata-off`, which independently clears backend sample data. Lower-level
+inspection and selective ledger commands still run from `desktop-tanaw`.
 
 Inspect all enterprise ledgers:
 
@@ -408,21 +409,21 @@ completely empty local database is intended.
 
 ## Everyday command cheat sheet
 
-| Goal                         | Command                                                                                                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Start containers             | `docker compose up -d`                                                                                                                                          |
-| Rebuild and start            | `docker compose up --build -d`                                                                                                                                  |
-| Show containers              | `docker compose ps`                                                                                                                                             |
-| Follow logs                  | `docker compose logs -f backend frontend`                                                                                                                       |
-| Install desktop dependencies | From `desktop-tanaw`: `npm ci`, then `uv sync --directory ml-service --frozen`                                                                                  |
-| Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                                                                                                    |
-| Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                                                                                                           |
-| Start desktop                | From `desktop-tanaw`: `npm run dev`                                                                                                                             |
-| Generate sample data         | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                                                                                                         |
-| Show sample-data status      | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                                                                                                 |
-| Refresh sample data          | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                                                                                                   |
-| Remove sample data           | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                                                                                                       |
-| Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                                                                                                           |
-| Clear desktop local ledgers   | `./scripts/local-mockdata-off` or `.\scripts\local-mockdata-off.ps1`                                                                                          |
-| Stop containers              | `docker compose down`                                                                                                                                           |
-| Delete Docker database       | `docker compose down -v`                                                                                                                                        |
+| Goal                         | Command                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| Start containers             | `docker compose up -d`                                                         |
+| Rebuild and start            | `docker compose up --build -d`                                                 |
+| Show containers              | `docker compose ps`                                                            |
+| Follow logs                  | `docker compose logs -f backend frontend`                                      |
+| Install desktop dependencies | From `desktop-tanaw`: `npm ci`, then `uv sync --directory ml-service --frozen` |
+| Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                   |
+| Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                          |
+| Start desktop                | From `desktop-tanaw`: `npm run dev`                                            |
+| Generate sample data         | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                         |
+| Show sample-data status      | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                 |
+| Refresh sample data          | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                   |
+| Remove sample data           | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                       |
+| Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                          |
+| Reset all desktop data       | `./scripts/local-mockdata-off` or `.\scripts\local-mockdata-off.ps1`           |
+| Stop containers              | `docker compose down`                                                          |
+| Delete Docker database       | `docker compose down -v`                                                       |

@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 if ($args.Count -ne 0) {
     Write-Host "Usage: .\scripts\local-mockdata-off.ps1"
-    Write-Host "Removes all local desktop ledger data while preserving camera settings."
+    Write-Host "Permanently removes all TANAW desktop data from this device."
     exit 2
 }
 
@@ -12,7 +12,7 @@ $ExitCode = 0
 
 Push-Location (Join-Path $RepoRoot "desktop-tanaw")
 try {
-    & npm run local-data -- clear --all-ledgers --yes
+    & npm run local-data -- clear --full-device --yes
     $ExitCode = $LASTEXITCODE
 } finally {
     Pop-Location

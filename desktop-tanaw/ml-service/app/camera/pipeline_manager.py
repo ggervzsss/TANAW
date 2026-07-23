@@ -86,7 +86,7 @@ class CameraPipelineRegistry:
             extra={"enterprise_id": self._enterprise_id, "camera_id": payload.camera_id},
         )
         result = self._reporting.test_connection(
-            payload.stream_url, payload.camera_type, payload.username, payload.password
+            payload.stream_url, payload.username, payload.password
         )
         logger.log(
             logging.INFO if result[0] else logging.WARNING,

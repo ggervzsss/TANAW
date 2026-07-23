@@ -21,7 +21,6 @@ const roiFields = [
 ] as const;
 
 export function CameraEditControls({ cameraIpError, editForm, hasExistingPassword, onEditFormChange }: CameraEditControlsProps) {
-  const isRtspCamera = editForm.cameraType === "RTSP_CCTV" || editForm.cameraType === "ONVIF_CCTV";
   const parsedRtsp = parseRtspConnection(editForm.rtsp);
   const cameraHost = editForm.cameraHost ?? parsedRtsp.host;
   const rtspStream = editForm.rtspStream ?? parsedRtsp.streamId;
@@ -70,38 +69,6 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               value={editForm.zone}
               onChange={(event) => onEditFormChange({ ...editForm, zone: event.target.value })}
               className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
-            />
-          </CompactField>
-          {!isRtspCamera && (
-            <CompactField label={editForm.cameraType === "USB_WEBCAM" ? "Camera Device Index" : "Camera Stream Address"}>
-              <input
-                type="text"
-                value={editForm.rtsp}
-                onChange={(event) => onEditFormChange({ ...editForm, rtsp: event.target.value })}
-                className="w-full rounded-sm border border-gray-300 px-2 py-1.5 font-mono text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
-              />
-            </CompactField>
-          )}
-          <CompactField label="Camera Type">
-            <SelectDropdown
-              value={editForm.cameraType}
-              onChange={(cameraType) => {
-                const nextCameraType = cameraType as Camera["cameraType"];
-                const nextIsRtsp = nextCameraType === "RTSP_CCTV" || nextCameraType === "ONVIF_CCTV";
-                onEditFormChange({
-                  ...editForm,
-                  cameraType: nextCameraType,
-                  rtsp: nextIsRtsp ? buildTapoRtspUrl(cameraHost, rtspStream) : editForm.rtsp,
-                });
-              }}
-              options={[
-                ["IP_WEBCAM", "IP Webcam"],
-                ["RTSP_CCTV", "RTSP CCTV"],
-                ["USB_WEBCAM", "USB Webcam"],
-                ["ONVIF_CCTV", "ONVIF CCTV"],
-              ]}
-              ariaLabel="Camera type"
-              size="compact"
             />
           </CompactField>
           <details className="rounded-sm border border-gray-200 bg-gray-50 p-2">
@@ -202,7 +169,14 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                         <label className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</label>
                         <span className="text-[10px] font-bold text-gray-500">{editForm.config.roi[key]}%</span>
                       </div>
-                      <input type="range" min={min} max={max} value={editForm.config.roi[key]} onChange={(event) => updateRoi(key, parseInt(event.target.value, 10))} className="w-full accent-[#2d5eff]" />
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        value={editForm.config.roi[key]}
+                        onChange={(event) => updateRoi(key, parseInt(event.target.value, 10))}
+                        className="w-full accent-[#2d5eff]"
+                      />
                     </div>
                   ))}
                 </div>
@@ -210,38 +184,30 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
             </div>
           </details>
           <div className="grid grid-cols-2 gap-2">
-            <CompactField label="Username" required={isRtspCamera}>
+            <CompactField label="Username" required>
               <input
                 type="text"
-                required={isRtspCamera}
-                aria-required={isRtspCamera}
+                required
+                aria-required="true"
                 autoComplete="username"
                 value={editForm.username ?? ""}
                 onChange={(event) => onEditFormChange({ ...editForm, username: event.target.value })}
                 className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
               />
             </CompactField>
-            <CompactField label="Password" required={isRtspCamera}>
-              <PasswordVisibilityInput
-                value={editForm.password ?? ""}
-                onChange={(password) => onEditFormChange({ ...editForm, password })}
-                autoComplete="new-password"
-              />
-              {hasExistingPassword && !editForm.password ? (
-                <span className="mt-1 block text-[9px] font-semibold text-gray-500">Password configured. Leave blank to keep it unchanged.</span>
-              ) : null}
+            <CompactField label="Password" required>
+              <PasswordVisibilityInput value={editForm.password ?? ""} onChange={(password) => onEditFormChange({ ...editForm, password })} autoComplete="new-password" />
+              {hasExistingPassword && !editForm.password ? <span className="mt-1 block text-[9px] font-semibold text-gray-500">Password configured. Leave blank to keep it unchanged.</span> : null}
             </CompactField>
           </div>
-          {isRtspCamera && (
-            <TapoRtspBuilder
-              host={cameraHost}
-              streamId={rtspStream}
-              error={cameraIpError ?? (cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined)}
-              onHostChange={(host) => updateRtspSource(host, rtspStream)}
-              onStreamChange={(stream) => updateRtspSource(cameraHost, stream)}
-              layout="stacked"
-            />
-          )}
+          <TapoRtspBuilder
+            host={cameraHost}
+            streamId={rtspStream}
+            error={cameraIpError ?? (cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined)}
+            onHostChange={(host) => updateRtspSource(host, rtspStream)}
+            onStreamChange={(stream) => updateRtspSource(cameraHost, stream)}
+            layout="stacked"
+          />
           <CompactField label="Stream URL">
             <input
               readOnly
@@ -252,7 +218,6 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
           </CompactField>
         </div>
       </section>
-
     </div>
   );
 }
@@ -268,7 +233,11 @@ function CompactField({ children, label, required = false }: CompactFieldProps) 
     <label className="block">
       <span className="mb-1 block text-[9px] font-bold tracking-wider text-gray-500 uppercase">
         {label}
-        {required ? <span className="ml-1 text-red-600" aria-hidden="true">*</span> : null}
+        {required ? (
+          <span className="ml-1 text-red-600" aria-hidden="true">
+            *
+          </span>
+        ) : null}
       </span>
       {children}
     </label>

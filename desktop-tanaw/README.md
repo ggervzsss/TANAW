@@ -208,8 +208,8 @@ storage. Theme, notification-read state, and other non-authoritative UI
 preferences remain in Chromium storage. Live camera frames remain in memory and
 are never stored as database rows.
 
-RTSP and ONVIF camera creation requires both a non-blank device username and
-device password. These are device credentials and do not use TANAW account
+TANAW accepts RTSP cameras only. Camera creation requires both a non-blank
+device username and device password. These are device credentials and do not use TANAW account
 password-complexity rules. Stream URLs remain credential-free. Existing
 passwords are never populated into the edit form; a blank edit password keeps
 the encrypted value unchanged, while an entered value replaces it. Electron
@@ -232,7 +232,7 @@ The keyboard-accessible horizontal ellipsis appears only when the current
 column width, wrapping, and font metrics actually clip content; expansion does
 not rely on a character threshold.
 
-RTSP and ONVIF camera IPs are canonicalized before persistence and must be
+RTSP camera IPs are canonicalized before persistence and must be
 unique within the current enterprise camera list. Adding or editing a duplicate
 keeps the form and credentials intact, focuses the IP field, and shows an inline
 conflict. The serialized local configuration write boundary repeats the same
@@ -343,7 +343,10 @@ npm run local-data -- clear --enterprise "<enterprise-id>" --yes
 npm run local-data -- clear --full-device --yes
 ```
 
-This deletes the complete Electron user-data directory, including local ledgers, saved CCTV/IP camera definitions, desktop device IDs, authentication and notification storage, theme and application preferences, Electron caches, and browser local storage.
+This deletes the complete Electron user-data directory, including local ledgers,
+saved RTSP camera definitions and encrypted credential files, authentication and
+notification storage, device IDs, theme and application preferences, Chromium
+local storage, IndexedDB, session storage, cookies, and Electron caches.
 
 The next desktop launch behaves like a new installation on that device.
 
@@ -391,9 +394,8 @@ curl http://127.0.0.1:8765/metrics/summary
 
 Removing the central sample dataset does not delete local desktop rows. Close
 the desktop and use `./scripts/local-mockdata-off` from the project root when
-the local ledger must also be cleared. This removes every local enterprise
-ledger, including real camera-derived rows, while preserving camera settings,
-authentication storage, preferences, and Electron caches.
+all desktop state must also be cleared. This permanently removes the complete
+Electron user-data directory. The next launch behaves like a new installation.
 
 ## Occupancy Corrections
 

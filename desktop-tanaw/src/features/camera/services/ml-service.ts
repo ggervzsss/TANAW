@@ -1,10 +1,7 @@
 import type { Camera } from "../../../types/enterprise";
 import { getMemoryCameraCredential } from "./camera-credentials";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
-import {
-  assertUniqueCameraIps,
-  canonicalizeCameraIp,
-} from "../utils/camera-ip-uniqueness";
+import { assertUniqueCameraIps, canonicalizeCameraIp } from "../utils/camera-ip-uniqueness";
 
 export type MlServiceStatus = {
   baseUrl: string;
@@ -496,11 +493,7 @@ export async function getLocalReportDraft(baseUrl: string, draftKey: string): Pr
   return requestJson<LocalReportDraft | null>(`${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`, { method: "GET" }, 2500);
 }
 
-export async function saveLocalReportDraft(
-  baseUrl: string,
-  draftKey: string,
-  payload: { period: string; reportId: string | null; reportPayload: Record<string, unknown> },
-): Promise<LocalReportDraft> {
+export async function saveLocalReportDraft(baseUrl: string, draftKey: string, payload: { period: string; reportId: string | null; reportPayload: Record<string, unknown> }): Promise<LocalReportDraft> {
   return requestJson<LocalReportDraft>(
     `${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`,
     {
@@ -555,29 +548,17 @@ export async function getMlDetections(baseUrl: string): Promise<MlDetections> {
   return requestJson<MlDetections>(`${baseUrl}/detections`, { method: "GET" }, 2500);
 }
 
-export async function testCameraConnection(
-  baseUrl: string,
-  camera: Camera,
-  credentialScope?: string,
-): Promise<CameraTestResult> {
-  const credential = credentialScope
-    ? getMemoryCameraCredential(credentialScope, camera.id)
-    : undefined;
+export async function testCameraConnection(baseUrl: string, camera: Camera, credentialScope?: string): Promise<CameraTestResult> {
+  const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
     camera_id: camera.id,
     camera_name: camera.name,
-    camera_type: camera.cameraType,
     camera_host: camera.cameraHost || null,
     rtsp_stream: camera.rtspStream || null,
     stream_url: camera.rtsp,
   };
   if (credentialScope && window.tanawCameraCredentials) {
-    return window.tanawCameraCredentials.request(
-      credentialScope,
-      camera.id,
-      "test",
-      payload,
-    ) as Promise<CameraTestResult>;
+    return window.tanawCameraCredentials.request(credentialScope, camera.id, "test", payload) as Promise<CameraTestResult>;
   }
   return requestJson<CameraTestResult>(
     `${baseUrl}/camera/test`,
@@ -593,19 +574,12 @@ export async function testCameraConnection(
   );
 }
 
-export async function startCameraProcessing(
-  baseUrl: string,
-  camera: Camera,
-  credentialScope?: string,
-): Promise<{ message: string }> {
-  const credential = credentialScope
-    ? getMemoryCameraCredential(credentialScope, camera.id)
-    : undefined;
+export async function startCameraProcessing(baseUrl: string, camera: Camera, credentialScope?: string): Promise<{ message: string }> {
+  const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
     camera_name: camera.name,
     camera_zone: camera.zone,
     camera_id: camera.id,
-    camera_type: camera.cameraType,
     camera_host: camera.cameraHost || null,
     confidence: camera.confidence,
     counting_confidence: camera.confidence,
@@ -629,12 +603,7 @@ export async function startCameraProcessing(
     unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
   };
   if (credentialScope && window.tanawCameraCredentials) {
-    return window.tanawCameraCredentials.request(
-      credentialScope,
-      camera.id,
-      "start",
-      payload,
-    ) as Promise<{ message: string }>;
+    return window.tanawCameraCredentials.request(credentialScope, camera.id, "start", payload) as Promise<{ message: string }>;
   }
   return requestJson<{ message: string }>(
     `${baseUrl}/camera/start`,
@@ -670,15 +639,7 @@ export function getPreviewStreamUrl(baseUrl: string, camera: Camera | undefined,
     return getStreamUrl(baseUrl, camera.id, version, false);
   }
 
-  if (camera && isNativeBrowserMjpegCamera(camera)) {
-    return camera.rtsp.trim();
-  }
-
   return camera ? getStreamUrl(baseUrl, camera.id, version) : "";
-}
-
-function isNativeBrowserMjpegCamera(camera: Camera) {
-  return camera.cameraType === "IP_WEBCAM" && /^https?:\/\//i.test(camera.rtsp.trim());
 }
 
 function toMlTripwireLine(line: Camera["config"]["tripwires"]["entry"]) {
@@ -774,11 +735,7 @@ async function getRequestError(response: Response, requestUrl: string) {
 
   const pathname = new URL(requestUrl).pathname;
   if (response.status === 404 && pathname === "/cameras/runtime") {
-    return new MlServiceRequestError(
-      "route_unavailable",
-      "The camera runtime service is unavailable. Restart the local ML service.",
-      response.status,
-    );
+    return new MlServiceRequestError("route_unavailable", "The camera runtime service is unavailable. Restart the local ML service.", response.status);
   }
   if (response.status === 404 && (message === "Not Found" || message === "Request failed with status 404.")) {
     message = "The requested camera runtime resource is unavailable.";

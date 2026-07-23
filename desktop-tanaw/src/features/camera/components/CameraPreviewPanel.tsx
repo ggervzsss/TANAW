@@ -75,7 +75,7 @@ export function CameraPreviewPanel({
         <div className="min-w-0">
           <h3 className="truncate text-sm font-bold text-[#111827]">{activeCam.name}</h3>
           <p className="truncate text-[11px] font-medium text-gray-500">
-            {activeCam.zone} / {formatCameraType(activeCam.cameraType)} / {activeCam.status}
+            {activeCam.zone} / {activeCam.status}
           </p>
         </div>
         <div className="flex gap-2">
@@ -101,7 +101,11 @@ export function CameraPreviewPanel({
               >
                 <Edit2 size={14} />
               </button>
-              <button onClick={onDelete} className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-600 hover:text-red-600" aria-label="Delete camera">
+              <button
+                onClick={onDelete}
+                className="rounded-sm border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-600 hover:text-red-600"
+                aria-label="Delete camera"
+              >
                 <Trash2 size={14} />
               </button>
             </>
@@ -142,12 +146,7 @@ export function CameraPreviewPanel({
           />
           <CameraValidationWarnings warnings={warnings} />
           {isEditMode && editForm ? (
-            <CameraEditControls
-              cameraIpError={cameraIpError}
-              editForm={editForm}
-              hasExistingPassword={hasStoredPassword}
-              onEditFormChange={onEditFormChange}
-            />
+            <CameraEditControls cameraIpError={cameraIpError} editForm={editForm} hasExistingPassword={hasStoredPassword} onEditFormChange={onEditFormChange} />
           ) : (
             <CameraReadOnlyDetails activeCam={activeCam} />
           )}
@@ -155,15 +154,4 @@ export function CameraPreviewPanel({
       </div>
     </Card>
   );
-}
-
-function formatCameraType(cameraType: Camera["cameraType"]) {
-  const labels: Record<Camera["cameraType"], string> = {
-    IP_WEBCAM: "IP Webcam",
-    ONVIF_CCTV: "ONVIF CCTV",
-    RTSP_CCTV: "RTSP CCTV",
-    USB_WEBCAM: "USB Webcam",
-  };
-
-  return labels[cameraType];
 }

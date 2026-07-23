@@ -1,8 +1,7 @@
-import type { Camera, CameraType } from "../../../types/enterprise";
+import type { Camera } from "../../../types/enterprise";
 
 export type CameraFormValues = {
   name: string;
-  cameraType: CameraType;
   cameraHost: string;
   rtspStream: "stream1" | "stream2";
   rtsp: string;

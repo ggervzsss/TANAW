@@ -9,11 +9,7 @@ import { getMlServiceCommand } from "./ml-service-command";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
 import { buildWindowsListenerPidScript } from "./ml-service-process";
 import { createDisplayScaleController } from "./display-scale";
-import {
-  normalizeCameraPassword,
-  normalizeCameraUsername,
-  resolveCameraCredential,
-} from "./camera-credential-validation";
+import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -318,7 +314,6 @@ function loadCameraCredentialStore(): CameraCredentialStore {
       const decrypted = safeStorage.decryptString(Buffer.from(raw.payload, "base64"));
       return normalizeCredentialStore(JSON.parse(decrypted) as unknown);
     }
-
   } catch {
     return {};
   }
@@ -348,11 +343,7 @@ function loadCameraCredentials(scopeInput: unknown): Record<string, CameraCreden
   return toCredentialMetadata(store[scope] ?? {});
 }
 
-function saveCameraCredential(
-  scopeInput: unknown,
-  cameraIdInput: unknown,
-  credentialInput: unknown,
-): CameraCredentialMetadata {
+function saveCameraCredential(scopeInput: unknown, cameraIdInput: unknown, credentialInput: unknown): CameraCredentialMetadata {
   const scope = normalizeCredentialScope(scopeInput);
   const cameraId = normalizeCameraCredentialId(cameraIdInput);
   const store = loadCameraCredentialStore();
@@ -373,28 +364,18 @@ function removeCameraCredential(scopeInput: unknown, cameraIdInput: unknown) {
   saveCameraCredentialStore(store);
 }
 
-async function requestCameraWithCredentials(
-  scopeInput: unknown,
-  cameraIdInput: unknown,
-  operationInput: unknown,
-  payloadInput: unknown,
-) {
+async function requestCameraWithCredentials(scopeInput: unknown, cameraIdInput: unknown, operationInput: unknown, payloadInput: unknown) {
   const scope = normalizeCredentialScope(scopeInput);
   const cameraId = normalizeCameraCredentialId(cameraIdInput);
-  const operation = operationInput === "test" || operationInput === "start"
-    ? operationInput
-    : null;
+  const operation = operationInput === "test" || operationInput === "start" ? operationInput : null;
   if (!operation || !isObjectRecord(payloadInput)) {
     throw new Error("Unsupported secure camera request.");
   }
   const credentials = loadCameraCredentialStore()[scope]?.[cameraId];
-  const requiresCredentials =
-    payloadInput.camera_type === "RTSP_CCTV" ||
-    payloadInput.camera_type === "ONVIF_CCTV";
-  if (requiresCredentials && !credentials?.username) {
+  if (!credentials?.username) {
     throw new Error("Enter the camera username.");
   }
-  if (requiresCredentials && !credentials?.password) {
+  if (!credentials?.password) {
     throw new Error("Enter the camera password.");
   }
 
@@ -467,12 +448,7 @@ function normalizeCredentialScope(value: unknown) {
 }
 
 function normalizeCameraCredentialId(value: unknown) {
-  const cameraId =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && /^\d+$/.test(value)
-        ? Number(value)
-        : Number.NaN;
+  const cameraId = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : Number.NaN;
   if (!Number.isSafeInteger(cameraId) || cameraId < 0) {
     throw new Error("A valid camera ID is required.");
   }
@@ -480,12 +456,7 @@ function normalizeCameraCredentialId(value: unknown) {
 }
 
 function toCredentialMetadata(records: CameraCredentialRecords): Record<string, CameraCredentialMetadata> {
-  return Object.fromEntries(
-    Object.entries(records).map(([cameraId, record]) => [
-      cameraId,
-      { passwordConfigured: Boolean(record.password), username: record.username },
-    ]),
-  );
+  return Object.fromEntries(Object.entries(records).map(([cameraId, record]) => [cameraId, { passwordConfigured: Boolean(record.password), username: record.username }]));
 }
 
 function normalizeCredentialStore(value: unknown): CameraCredentialStore {
@@ -693,20 +664,9 @@ function registerMlServiceIpc() {
 
 function registerCameraCredentialIpc() {
   ipcMain.handle("camera-credentials:load", (_event, scope: unknown) => loadCameraCredentials(scope));
-  ipcMain.handle(
-    "camera-credentials:save",
-    (_event, scope: unknown, cameraId: unknown, credential: unknown) =>
-      saveCameraCredential(scope, cameraId, credential),
-  );
-  ipcMain.handle(
-    "camera-credentials:remove",
-    (_event, scope: unknown, cameraId: unknown) => removeCameraCredential(scope, cameraId),
-  );
-  ipcMain.handle(
-    "camera-credentials:request",
-    (_event, scope: unknown, cameraId: unknown, operation: unknown, payload: unknown) =>
-      requestCameraWithCredentials(scope, cameraId, operation, payload),
-  );
+  ipcMain.handle("camera-credentials:save", (_event, scope: unknown, cameraId: unknown, credential: unknown) => saveCameraCredential(scope, cameraId, credential));
+  ipcMain.handle("camera-credentials:remove", (_event, scope: unknown, cameraId: unknown) => removeCameraCredential(scope, cameraId));
+  ipcMain.handle("camera-credentials:request", (_event, scope: unknown, cameraId: unknown, operation: unknown, payload: unknown) => requestCameraWithCredentials(scope, cameraId, operation, payload));
 }
 
 function registerAuthSessionIpc() {

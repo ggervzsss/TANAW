@@ -1,4 +1,4 @@
-export const ML_API_CONTRACT_VERSION = 3;
+export const ML_API_CONTRACT_VERSION = 4;
 
 export function hasCompatibleMlHealth(value: unknown) {
   return isRecord(value) && value.api_contract_version === ML_API_CONTRACT_VERSION;

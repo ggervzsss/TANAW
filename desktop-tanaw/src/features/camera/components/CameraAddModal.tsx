@@ -1,7 +1,6 @@
 import { Check, RefreshCw, Video, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
-import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { CameraFormValues } from "../types/camera";
 import { buildTapoRtspUrl, isValidIpv4, type TapoStreamId } from "../utils/rtsp";
 import { validateCameraForm } from "../utils/camera-form-validation";
@@ -20,7 +19,6 @@ type CameraAddModalProps = {
 
 export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError, onClose, onSubmit, onChange }: CameraAddModalProps) {
   const [touchedCredentials, setTouchedCredentials] = useState({ password: false, username: false });
-  const isRtspCamera = newCam.cameraType === "RTSP_CCTV" || newCam.cameraType === "ONVIF_CCTV";
   const currentErrors = validateCameraForm(newCam);
   const hostError = errors.cameraHost ?? duplicateIpError ?? (newCam.cameraHost && !isValidIpv4(newCam.cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined);
   const usernameError = errors.username ?? (touchedCredentials.username ? currentErrors.username : undefined);
@@ -64,57 +62,47 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
             <form onSubmit={onSubmit} noValidate className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <ModalField id="camera-name" label="Camera Name" error={errors.name} required>
-                  <input id="camera-name" required aria-required="true" type="text" value={newCam.name} onChange={(event) => onChange({ ...newCam, name: event.target.value })} className={inputClass(Boolean(errors.name))} />
+                  <input
+                    id="camera-name"
+                    required
+                    aria-required="true"
+                    type="text"
+                    value={newCam.name}
+                    onChange={(event) => onChange({ ...newCam, name: event.target.value })}
+                    className={inputClass(Boolean(errors.name))}
+                  />
                 </ModalField>
                 <ModalField id="camera-zone" label="Assigned Zone" error={errors.zone} required>
-                  <input id="camera-zone" required aria-required="true" type="text" value={newCam.zone} onChange={(event) => onChange({ ...newCam, zone: event.target.value })} className={inputClass(Boolean(errors.zone))} />
+                  <input
+                    id="camera-zone"
+                    required
+                    aria-required="true"
+                    type="text"
+                    value={newCam.zone}
+                    onChange={(event) => onChange({ ...newCam, zone: event.target.value })}
+                    className={inputClass(Boolean(errors.zone))}
+                  />
                 </ModalField>
               </div>
 
               <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">
-                <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">Camera Source Configuration</h4>
-                <ModalField label="Camera Type">
-                  <SelectDropdown
-                    value={newCam.cameraType}
-                    onChange={(cameraType) => {
-                      const nextCameraType = cameraType as CameraFormValues["cameraType"];
-                      const nextRtsp = nextCameraType === "RTSP_CCTV" || nextCameraType === "ONVIF_CCTV" ? buildTapoRtspUrl(newCam.cameraHost, newCam.rtspStream) : "";
-                      onChange({ ...newCam, cameraType: nextCameraType, rtsp: nextRtsp });
-                    }}
-                    options={[
-                      ["RTSP_CCTV", "RTSP CCTV"],
-                      ["ONVIF_CCTV", "ONVIF CCTV"],
-                      ["IP_WEBCAM", "IP Webcam"],
-                      ["USB_WEBCAM", "USB Webcam"],
-                    ]}
-                    ariaLabel="Camera type"
-                  />
-                </ModalField>
-
-                {isRtspCamera ? (
-                  <TapoRtspBuilder
-                    host={newCam.cameraHost}
-                    streamId={newCam.rtspStream}
-                    error={hostError}
-                    showHeading={false}
-                    onHostChange={(cameraHost) => updateRtspSource(cameraHost, newCam.rtspStream)}
-                    onStreamChange={(rtspStream) => updateRtspSource(newCam.cameraHost, rtspStream)}
-                  />
-                ) : (
-                  <div className="mt-3">
-                    <ModalField label={newCam.cameraType === "USB_WEBCAM" ? "Camera Device Index" : "Camera Stream Address"} error={errors.rtsp}>
-                      <input required type="text" value={newCam.rtsp} onChange={(event) => onChange({ ...newCam, rtsp: event.target.value })} className={`${inputClass(Boolean(errors.rtsp))} font-mono`} />
-                    </ModalField>
-                  </div>
-                )}
+                <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">RTSP Camera Configuration</h4>
+                <TapoRtspBuilder
+                  host={newCam.cameraHost}
+                  streamId={newCam.rtspStream}
+                  error={hostError}
+                  showHeading={false}
+                  onHostChange={(cameraHost) => updateRtspSource(cameraHost, newCam.rtspStream)}
+                  onStreamChange={(rtspStream) => updateRtspSource(newCam.cameraHost, rtspStream)}
+                />
               </section>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <ModalField id="camera-username" label="Username" error={usernameError} required={isRtspCamera}>
+                <ModalField id="camera-username" label="Username" error={usernameError} required>
                   <input
                     id="camera-username"
-                    required={isRtspCamera}
-                    aria-required={isRtspCamera}
+                    required
+                    aria-required="true"
                     aria-invalid={Boolean(usernameError)}
                     aria-describedby={usernameError ? "camera-username-error" : undefined}
                     type="text"
@@ -125,7 +113,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                     className={inputClass(Boolean(usernameError))}
                   />
                 </ModalField>
-                <ModalField id="camera-password" label="Password" error={passwordError} required={isRtspCamera}>
+                <ModalField id="camera-password" label="Password" error={passwordError} required>
                   <PasswordVisibilityInput
                     id="camera-password"
                     value={newCam.password}
@@ -133,7 +121,7 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                     onChange={(password) => onChange({ ...newCam, password })}
                     variant="modal"
                     autoComplete="new-password"
-                    ariaRequired={isRtspCamera}
+                    ariaRequired
                     ariaDescribedBy={passwordError ? "camera-password-error" : undefined}
                     hasError={Boolean(passwordError)}
                   />
@@ -141,11 +129,20 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               </div>
 
               <ModalField label="Stream URL" error={errors.rtsp}>
-                <input readOnly aria-readonly="true" value={newCam.rtsp} className="w-full cursor-default rounded-xl border border-gray-200 bg-gray-100 p-3 font-mono text-sm text-gray-600 outline-none dark:border-slate-700 dark:bg-[#0b1220] dark:text-slate-300" />
+                <input
+                  readOnly
+                  aria-readonly="true"
+                  value={newCam.rtsp}
+                  className="w-full cursor-default rounded-xl border border-gray-200 bg-gray-100 p-3 font-mono text-sm text-gray-600 outline-none dark:border-slate-700 dark:bg-[#0b1220] dark:text-slate-300"
+                />
               </ModalField>
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-700">
-                <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-[#1d2940]">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-[#111827] transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-[#1d2940]"
+                >
                   Cancel
                 </button>
                 <button
@@ -153,7 +150,15 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                   disabled={isValidating || !canSave}
                   className="flex items-center gap-2 rounded-xl bg-[#065f46] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
-                  {isValidating ? <><RefreshCw size={16} className="animate-spin" /> Validating Stream...</> : <><Check size={16} /> Save Configuration</>}
+                  {isValidating ? (
+                    <>
+                      <RefreshCw size={16} className="animate-spin" /> Validating Stream...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} /> Save Configuration
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -169,10 +174,18 @@ function ModalField({ children, error, id, label, required = false }: { children
     <div>
       <label htmlFor={id} className="mb-1 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">
         {label}
-        {required ? <span className="ml-1 text-red-600 dark:text-red-300" aria-hidden="true">*</span> : null}
+        {required ? (
+          <span className="ml-1 text-red-600 dark:text-red-300" aria-hidden="true">
+            *
+          </span>
+        ) : null}
       </label>
       {children}
-      {error && <p id={id ? `${id}-error` : undefined} className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
+      {error && (
+        <p id={id ? `${id}-error` : undefined} className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

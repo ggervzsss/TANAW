@@ -42,7 +42,6 @@ export type ReportRecord = {
   remarks?: string | null;
 };
 
-export type CameraType = "IP_WEBCAM" | "RTSP_CCTV" | "USB_WEBCAM" | "ONVIF_CCTV";
 export type ProcessingProfile = "auto" | "compatibility" | "balanced" | "high_accuracy" | "emergency";
 export type RuntimeBackend = "auto" | "cuda" | "openvino" | "cpu";
 export type TrackerProfile = "auto" | "bytetrack" | "botsort";
@@ -70,7 +69,6 @@ export type Camera = {
   rtsp: string;
   cameraHost?: string;
   rtspStream?: "stream1" | "stream2";
-  cameraType: CameraType;
   processingProfile: ProcessingProfile;
   confidence: number;
   trackingConfidence?: number;

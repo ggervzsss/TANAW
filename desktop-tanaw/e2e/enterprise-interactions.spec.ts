@@ -169,9 +169,7 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   let dialog = page.getByRole("dialog", { name: "Add Camera" });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await dialog.getByRole("combobox", { name: "Camera type" }).click();
-  await expect(page.getByRole("listbox", { name: "Camera type" }).locator("..")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await page.keyboard.press("Escape");
+  await expect(dialog.getByText("RTSP Camera Configuration", { exact: true })).toBeVisible();
   await dialog.getByText("Password", { exact: true }).locator("..").locator("input").fill("secret-camera-password");
   await dialog.getByRole("button", { name: "Show password" }).click();
   await expect(dialog.getByText("Password", { exact: true }).locator("..").locator("input")).toHaveAttribute("type", "text");

@@ -54,7 +54,7 @@ def main() -> None:
     config_payload = _load_config(args.config)
     config_payload.update(
         {
-            "stream_url": "000",
+            "stream_url": "rtsp://192.168.1.20/stream2",
             "processing_profile": args.profile,
             "runtime_backend": args.runtime,
             "tracker_profile": args.tracker,

@@ -1,8 +1,7 @@
 import type { Camera } from "../../../types/enterprise";
 import { canonicalizeIpv4, parseRtspConnection } from "./rtsp";
 
-export const CAMERA_IP_CONFLICT_MESSAGE =
-  "A camera with this IP address is already configured for this Enterprise.";
+export const CAMERA_IP_CONFLICT_MESSAGE = "A camera with this IP address is already configured for this Enterprise.";
 
 export class CameraIpConflictError extends Error {
   readonly code = "camera_ip_conflict";
@@ -14,19 +13,14 @@ export class CameraIpConflictError extends Error {
   }
 }
 
-export function canonicalCameraIp(camera: Pick<Camera, "cameraHost" | "cameraType" | "rtsp">) {
-  if (camera.cameraType !== "RTSP_CCTV" && camera.cameraType !== "ONVIF_CCTV") return null;
+export function canonicalCameraIp(camera: Pick<Camera, "cameraHost" | "rtsp">) {
   return canonicalizeIpv4(camera.cameraHost ?? "") ?? canonicalizeIpv4(parseRtspConnection(camera.rtsp).host);
 }
 
 export function findCameraIpConflict(cameras: Camera[], candidateIp: string, excludeCameraId?: number) {
   const canonicalCandidate = canonicalizeIpv4(candidateIp);
   if (!canonicalCandidate) return undefined;
-  return cameras.find(
-    (camera) =>
-      camera.id !== excludeCameraId &&
-      canonicalCameraIp(camera) === canonicalCandidate,
-  );
+  return cameras.find((camera) => camera.id !== excludeCameraId && canonicalCameraIp(camera) === canonicalCandidate);
 }
 
 export function assertUniqueCameraIps(cameras: Camera[]) {
@@ -45,9 +39,6 @@ export function canonicalizeCameraIp(camera: Camera): Camera {
   return {
     ...camera,
     cameraHost: ip,
-    rtsp: camera.rtsp.replace(
-      /^(rtsp:\/\/(?:[^/@]+@)?)([^/:]+)/i,
-      (_match, prefix: string) => `${prefix}${ip}`,
-    ),
+    rtsp: camera.rtsp.replace(/^(rtsp:\/\/(?:[^/@]+@)?)([^/:]+)/i, (_match, prefix: string) => `${prefix}${ip}`),
   };
 }

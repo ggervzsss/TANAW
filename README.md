@@ -513,13 +513,11 @@ emails, IDs, report-code prefixes, camera prefix, and ordinary relationships.
 It does not depend on database columns or a tracking table. Because there is no
 row-level provenance, do not reuse these reserved identifiers for real records.
 
-Desktop counts are stored in the enterprise-scoped local SQLite ledger and are
-intentionally independent of PostgreSQL cleanup. To clear those local rows,
-close the desktop and run `./scripts/local-mockdata-off`. That command removes
-all local operational rows—including real camera-derived rows—while preserving
-SQLite camera profiles, authentication storage, preferences, and Electron caches.
-It also removes retired `tanaw_metrics.sqlite3` and `active_session.json`
-artifacts so they cannot block the canonical database.
+Desktop data is independent of PostgreSQL cleanup. To restore the desktop to a
+brand-new-installation state, close it and run `./scripts/local-mockdata-off`.
+The command permanently deletes its complete Electron user-data directory,
+including all local databases, camera definitions and encrypted credentials,
+authentication state, preferences, Chromium storage, and Electron caches.
 
 To use a different target or range:
 
@@ -642,18 +640,18 @@ The repository keeps development and production configuration separate:
 
 The backend production template contains only deployment-specific values:
 
-| Variable | Purpose |
-| --- | --- |
-| `TANAW_ENV` | Enables production validation |
-| `DATABASE_URL` | Managed PostgreSQL connection URL |
-| `JWT_SECRET_KEY` | Token-signing secret |
-| `CORS_ORIGINS` | Authorized public frontend origin |
-| `FRONTEND_PUBLIC_URL` | Public URL used in transactional links |
-| `BOOTSTRAP_IT_USERNAME`, `BOOTSTRAP_IT_PASSWORD` | One-time credentials for an empty database |
-| `EMAIL_DELIVERY_MODE` | Selects production Resend delivery |
-| `RESEND_API_KEY` | Backend-only Resend credential |
-| `EMAIL_SECRET_DERIVATION_KEY` | Separate secret for activation and recovery values |
-| `EMAIL_FROM_ADDRESS` | Sender on a verified domain |
+| Variable                                         | Purpose                                            |
+| ------------------------------------------------ | -------------------------------------------------- |
+| `TANAW_ENV`                                      | Enables production validation                      |
+| `DATABASE_URL`                                   | Managed PostgreSQL connection URL                  |
+| `JWT_SECRET_KEY`                                 | Token-signing secret                               |
+| `CORS_ORIGINS`                                   | Authorized public frontend origin                  |
+| `FRONTEND_PUBLIC_URL`                            | Public URL used in transactional links             |
+| `BOOTSTRAP_IT_USERNAME`, `BOOTSTRAP_IT_PASSWORD` | One-time credentials for an empty database         |
+| `EMAIL_DELIVERY_MODE`                            | Selects production Resend delivery                 |
+| `RESEND_API_KEY`                                 | Backend-only Resend credential                     |
+| `EMAIL_SECRET_DERIVATION_KEY`                    | Separate secret for activation and recovery values |
+| `EMAIL_FROM_ADDRESS`                             | Sender on a verified domain                        |
 
 The frontend production template contains only `VITE_API_BASE_URL`, which is
 compiled into the browser bundle. Vercel supplies its own production marker;
@@ -674,10 +672,9 @@ Sample-data commands reject production environments.
 Desktop records are separate from PostgreSQL and are scoped by enterprise.
 Close the desktop app before manually clearing local data.
 
-Remove all local desktop operational data, including real CCTV-derived rows,
-demographic report drafts, submitted reports, snapshots, and occupancy corrections, while
-preserving saved camera settings, authentication storage, preferences, and
-Electron caches:
+Permanently remove all local desktop state, including every SQLite ledger,
+saved RTSP camera, encrypted credential file, authentication session, Chromium
+storage area, preference, and Electron cache:
 
 ```shell
 ./scripts/local-mockdata-off
@@ -685,8 +682,9 @@ Electron caches:
 
 PowerShell: `.\scripts\local-mockdata-off.ps1`
 
-The script does not remove backend data. Run `./scripts/mockdata-off` separately
-when the central sample dataset should also be removed.
+The script does not remove backend data. It is safe to run before or after
+`./scripts/mockdata-off`; each command owns a separate persistence layer and
+both commands are idempotent.
 
 Inspect all local ledgers:
 
