@@ -7,8 +7,8 @@ const currentRow: ReportLedgerRow = {
   kind: "current",
   report: {
     id: "TANAW-DRAFT",
-    date: "Jul 1 - Jul 31, 2026",
-    period: "Jul 1 - Jul 31, 2026",
+    date: "July 2026",
+    period: "July 2026",
     status: "Draft",
     entries: 100,
     unique: 74,
@@ -55,12 +55,12 @@ describe("ReportLedgerTable layout", () => {
     expect(markup).toContain("Current Reporting Period</span>");
   });
 
-  it("renders compact stored months as complete reporting ranges", () => {
+  it("renders canonical month and year labels", () => {
     const markup = renderToStaticMarkup(
       <ReportLedgerTable activeLedgerKey="pending" ledgerRows={[pendingRow]} onDownloadReport={() => undefined} onPreviewReport={() => undefined} onSelectReport={() => undefined} />,
     );
 
-    expect(markup).toContain("Jun 1 - Jun 30, 2026");
-    expect(markup).not.toContain(">June 2026<");
+    expect(markup).toContain("June 2026");
+    expect(markup).not.toContain("Jun 1 - Jun 30, 2026");
   });
 });

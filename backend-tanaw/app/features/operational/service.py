@@ -57,6 +57,7 @@ from app.features.operational.schemas import (
     VisitorInsightPoint,
     VisitorInsightRange,
     VisitorInsightsSummary,
+    reporting_period_key,
 )
 
 STALE_GATEWAY_SECONDS = 120
@@ -962,7 +963,7 @@ async def ingest_report_submission(
             f"A report for {payload.period} has already been submitted."
         )
     report_status = status_from_payload(payload.payload)
-    month = month_from_submission(payload.period, payload.submittedAt)
+    month = month_from_submission(payload.period)
 
     if existing is None:
         report = EnterpriseReportSubmission(
@@ -1751,15 +1752,7 @@ async def generate_final_report_code(db: AsyncSession, period: str) -> str:
 
 
 def final_report_period(reports: Sequence[EnterpriseReportSubmission]) -> str:
-    first = reports[0]
-    year = (
-        first.period.split(",")[-1].strip()
-        if "," in first.period
-        else str(_aware(first.submitted_at).year)
-    )
-    if not year.isdigit():
-        year = str(_aware(first.submitted_at).year)
-    return f"{first.month} {year}"
+    return reports[0].period
 
 
 def validate_report_review_transition(current_status: str, requested_status: str) -> None:
@@ -1783,8 +1776,8 @@ def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission])
             f"Only reports marked Ready to Consolidate can be included in a final report: {joined_ids}."
         )
 
-    periods = {report.period for report in reports}
-    if len(periods) > 1:
+    period_keys = {reporting_period_key(report.period) for report in reports}
+    if None in period_keys or len(period_keys) > 1:
         raise InvalidReportWorkflowError("A final report can only include one reporting period.")
 
 
@@ -1831,37 +1824,8 @@ def status_from_payload(payload: dict | None) -> str:
     )
 
 
-def month_from_submission(period: str, submitted_at: datetime) -> str:
-    first = period.split(" ", 1)[0].strip()
-    month_names = {
-        "jan": "January",
-        "january": "January",
-        "feb": "February",
-        "february": "February",
-        "mar": "March",
-        "march": "March",
-        "apr": "April",
-        "april": "April",
-        "may": "May",
-        "jun": "June",
-        "june": "June",
-        "jul": "July",
-        "july": "July",
-        "aug": "August",
-        "august": "August",
-        "sep": "September",
-        "sept": "September",
-        "september": "September",
-        "oct": "October",
-        "october": "October",
-        "nov": "November",
-        "november": "November",
-        "dec": "December",
-        "december": "December",
-    }
-    if first.lower() in month_names:
-        return month_names[first.lower()]
-    return _aware(submitted_at).strftime("%B")
+def month_from_submission(period: str) -> str:
+    return period.split(" ", 1)[0]
 
 
 def format_timestamp(value: datetime) -> str:

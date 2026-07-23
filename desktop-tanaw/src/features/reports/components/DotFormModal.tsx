@@ -4,7 +4,7 @@ import { ModalPortal } from "../../../components/ModalPortal";
 import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/enterprise";
 import { demographicCount, getDemographicTotals } from "../utils/demographics";
 import { downloadDotReportPdf } from "../utils/pdf";
-import { formatReportingPeriodRange } from "../utils/reporting-period";
+import { formatReportingPeriodLabel } from "../utils/reporting-period";
 
 type DotFormModalProps = {
   demo: DemoBreakdown;
@@ -18,7 +18,7 @@ type DotFormModalProps = {
 };
 
 export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, notes, reportId = "TANAW-DRAFT", validationMessage = null }: DotFormModalProps) {
-  const periodLabel = formatReportingPeriodRange(period);
+  const periodLabel = formatReportingPeriodLabel(period);
   const tpm = demographicCount(demo.thisProvMale);
   const tpf = demographicCount(demo.thisProvFemale);
   const totalThisProv = tpm + tpf;

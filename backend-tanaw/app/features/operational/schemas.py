@@ -7,34 +7,21 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 REPORTING_TIME_ZONE = ZoneInfo("Asia/Manila")
-REPORTING_PERIOD_RANGE_RE = re.compile(
-    r"^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$"
+REPORTING_PERIOD_MONTH_RE = re.compile(
+    r"^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$"
 )
-REPORTING_PERIOD_MONTH_RE = re.compile(r"^([A-Za-z]+)\s+(\d{4})$")
 MONTH_INDEX_BY_LABEL = {
-    "jan": 1,
     "january": 1,
-    "feb": 2,
     "february": 2,
-    "mar": 3,
     "march": 3,
-    "apr": 4,
     "april": 4,
     "may": 5,
-    "jun": 6,
     "june": 6,
-    "jul": 7,
     "july": 7,
-    "aug": 8,
     "august": 8,
-    "sep": 9,
-    "sept": 9,
     "september": 9,
-    "oct": 10,
     "october": 10,
-    "nov": 11,
     "november": 11,
-    "dec": 12,
     "december": 12,
 }
 
@@ -205,7 +192,7 @@ def _first_present(values: dict, *keys: str) -> object:
 def reporting_period_submission_error(period: str, submitted_at: datetime) -> str | None:
     period_end = _reporting_period_end_date(period)
     if period_end is None:
-        return "Reporting period must include a recognizable month and year before submission."
+        return "Reporting period must use the Month YYYY format, for example June 2026."
 
     submitted_date = _reporting_date(submitted_at)
     opens_on = period_end + timedelta(days=1)
@@ -218,19 +205,15 @@ def reporting_period_submission_error(period: str, submitted_at: datetime) -> st
     )
 
 
+def reporting_period_key(period: str) -> str | None:
+    period_end = _reporting_period_end_date(period)
+    if period_end is None:
+        return None
+    return f"{period_end.year:04d}-{period_end.month:02d}"
+
+
 def _reporting_period_end_date(period: str) -> date | None:
     normalized_period = period.strip()
-    range_match = REPORTING_PERIOD_RANGE_RE.match(normalized_period)
-    if range_match:
-        start_month, end_month, end_day, year = range_match.groups()
-        month = _month_number(end_month or start_month)
-        if month is None:
-            return None
-        try:
-            return date(int(year), month, int(end_day))
-        except ValueError:
-            return None
-
     month_year_match = REPORTING_PERIOD_MONTH_RE.match(normalized_period)
     if month_year_match:
         month_label, year_label = month_year_match.groups()
@@ -258,7 +241,7 @@ def _format_period_date(value: date) -> str:
 
 class DesktopReportSubmissionIngest(BaseModel):
     reportId: str = Field(min_length=3, max_length=80)
-    period: str = Field(default="Current Period", min_length=1, max_length=120)
+    period: str = Field(min_length=1, max_length=120)
     submittedAt: datetime
     entries: int = Field(default=0, ge=0)
     exits: int = Field(default=0, ge=0)

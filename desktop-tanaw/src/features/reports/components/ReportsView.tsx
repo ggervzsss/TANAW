@@ -20,7 +20,7 @@ import { listEnterpriseReportHistory, type EnterpriseIntakeReport } from "../ser
 import { DESKTOP_REPORT_SYNC_EVENT, getDesktopSamplePreparation, prepareDesktopSampleCounts, syncDesktopReportSubmission, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
-import { formatReportingPeriodRange, isSameReportingMonth, reportingMonthKey, shouldPrepareDraftPeriod } from "../utils/reporting-period";
+import { formatReportingPeriodLabel, isSameReportingMonth, reportingMonthKey, shouldPrepareDraftPeriod } from "../utils/reporting-period";
 import { notifyError } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
@@ -311,7 +311,7 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
     downloadDotReportPdf({
       enterpriseName,
       reportId: report.id,
-      period: formatReportingPeriodRange(report.period ?? report.date),
+      period: formatReportingPeriodLabel(report.period ?? report.date),
       metrics: reportMetrics,
       demo: reportDemo,
       notes: report.notes ?? "",
@@ -934,15 +934,13 @@ function getCurrentReportingPeriod() {
 
 function reportingPeriodLabel(value: Date) {
   const reportingValue = reportingDate(value);
-  const month = monthName(reportingValue.monthIndex, "short");
-  const lastDay = lastDayOfMonth(reportingValue.year, reportingValue.monthIndex);
-  return `${month} 1 - ${month} ${lastDay}, ${reportingValue.year}`;
+  return `${monthName(reportingValue.monthIndex)} ${reportingValue.year}`;
 }
 
 function getReportingPeriodSubmissionError(period: string, now = new Date()) {
   const periodEnd = reportingPeriodEndDate(period);
   if (!periodEnd) {
-    return "Reporting period must include a recognizable month and year before submission.";
+    return "Reporting period must use the Month YYYY format, for example June 2026.";
   }
 
   const opensOn = addCalendarDays(periodEnd, 1);
@@ -953,16 +951,7 @@ function getReportingPeriodSubmissionError(period: string, now = new Date()) {
 
 function reportingPeriodEndDate(value: string): CalendarDate | null {
   const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?(\d{1,2}),\s*(\d{4})$/.exec(normalizedValue);
-  if (rangeMatch) {
-    const monthIndex = monthIndexFromLabel(rangeMatch[2] || rangeMatch[1]);
-    const day = Number(rangeMatch[3]);
-    const year = Number(rangeMatch[4]);
-    if (monthIndex === null || !isValidCalendarDate(year, monthIndex, day)) return null;
-    return { day, monthIndex, year };
-  }
-
-  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  const monthYearMatch = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/.exec(normalizedValue);
   if (monthYearMatch) {
     const monthIndex = monthIndexFromLabel(monthYearMatch[1]);
     const year = Number(monthYearMatch[2]);
@@ -982,10 +971,6 @@ type CalendarDate = {
 function monthIndexFromLabel(monthLabel: string): number | null {
   const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
   return typeof monthIndex === "number" ? monthIndex : null;
-}
-
-function isValidCalendarDate(year: number, monthIndex: number, day: number) {
-  return Number.isInteger(year) && Number.isInteger(day) && day >= 1 && day <= lastDayOfMonth(year, monthIndex);
 }
 
 function lastDayOfMonth(year: number, monthIndex: number) {

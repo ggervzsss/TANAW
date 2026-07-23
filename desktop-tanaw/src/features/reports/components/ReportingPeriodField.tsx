@@ -1,4 +1,4 @@
-import { formatReportingPeriodRange } from "../utils/reporting-period";
+import { formatReportingPeriodLabel } from "../utils/reporting-period";
 
 type ReportingPeriodFieldProps = {
   description: string;
@@ -8,7 +8,7 @@ type ReportingPeriodFieldProps = {
 };
 
 export function ReportingPeriodField({ description, isLoading = false, label, period }: ReportingPeriodFieldProps) {
-  const periodLabel = formatReportingPeriodRange(period);
+  const periodLabel = formatReportingPeriodLabel(period);
 
   return (
     <div>

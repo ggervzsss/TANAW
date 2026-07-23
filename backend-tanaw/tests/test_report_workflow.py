@@ -7,6 +7,7 @@ import pytest
 from app.features.operational.models import EnterpriseReportSubmission
 from app.features.operational.schemas import (
     DesktopReportSubmissionIngest,
+    reporting_period_key,
     reporting_period_submission_error,
 )
 from app.features.operational.service import (
@@ -36,21 +37,28 @@ def test_consolidated_status_is_not_a_direct_review_action() -> None:
 
 
 def test_final_report_sources_must_be_ready_and_same_period() -> None:
-    ready_report = _report("REP-001", "Ready to Consolidate", "Jun 1 - Jun 30, 2026")
-    validate_final_report_sources([ready_report])
+    ready_report = _report("REP-001", "Ready to Consolidate", "June 2026")
+    validate_final_report_sources(
+        [ready_report, _report("REP-002", "Ready to Consolidate", "June 2026")]
+    )
 
     with pytest.raises(InvalidReportWorkflowError):
         validate_final_report_sources(
-            [ready_report, _report("REP-002", "Pending Review", "Jun 1 - Jun 30, 2026")]
+            [ready_report, _report("REP-003", "Pending Review", "June 2026")]
         )
 
     with pytest.raises(InvalidReportWorkflowError):
         validate_final_report_sources(
             [
                 ready_report,
-                _report("REP-003", "Ready to Consolidate", "Jul 1 - Jul 31, 2026"),
+                _report("REP-004", "Ready to Consolidate", "July 2026"),
             ]
         )
+
+
+def test_reporting_period_has_canonical_key() -> None:
+    assert reporting_period_key("June 2026") == "2026-06"
+    assert reporting_period_key("Jun 1 - Jun 30, 2026") is None
 
 
 def test_final_report_revision_return_requires_draft_and_owned_sources() -> None:
@@ -79,7 +87,7 @@ def test_returned_final_report_can_be_archived_and_restored() -> None:
 def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() -> None:
     payload = DesktopReportSubmissionIngest(
         reportId="REP-963735",
-        period="Jun 1 - Jun 30, 2026",
+        period="June 2026",
         submittedAt=datetime(2026, 7, 5, 8, 43, 12, tzinfo=UTC),
         entries=747,
         exits=702,
@@ -108,6 +116,7 @@ def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() 
     assert payload.exits == 625
     assert payload.peakOccupancy == 58
     assert payload.uniqueCount == 525
+    assert payload.period == "June 2026"
 
 
 def test_report_demographics_preserve_submitted_breakdown() -> None:
@@ -159,7 +168,7 @@ def test_desktop_submission_rejects_open_reporting_period() -> None:
     with pytest.raises(ValueError, match="Submission opens on Aug 1, 2026"):
         DesktopReportSubmissionIngest(
             reportId="REP-260701",
-            period="Jul 1 - Jul 31, 2026",
+            period="July 2026",
             submittedAt=datetime(2026, 7, 15, 8, 0, tzinfo=UTC),
             entries=10,
             exits=4,
@@ -186,15 +195,21 @@ def test_desktop_submission_rejects_open_reporting_period() -> None:
 
 
 def test_reporting_period_submission_opens_on_next_manila_month() -> None:
-    assert reporting_period_submission_error(
-        "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
-    )
+    assert reporting_period_submission_error("July 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC))
     assert (
-        reporting_period_submission_error(
-            "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
-        )
+        reporting_period_submission_error("July 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC))
         is None
     )
+
+
+def test_desktop_submission_rejects_noncanonical_period_format() -> None:
+    with pytest.raises(ValueError, match="Month YYYY"):
+        DesktopReportSubmissionIngest(
+            reportId="REP-260601",
+            period="Jun 1 - Jun 30, 2026",
+            submittedAt=datetime(2026, 7, 1, 0, 0, tzinfo=UTC),
+            payload={"demo": {}},
+        )
 
 
 def _report(report_id: str, review_status: str, period: str) -> EnterpriseReportSubmission:

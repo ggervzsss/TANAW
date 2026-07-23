@@ -136,13 +136,18 @@ class LocalDataStoreTest(unittest.TestCase):
     def test_reporting_period_submission_opens_after_reporting_month_closes(self) -> None:
         self.assertIsNotNone(
             reporting_period_submission_error(
-                "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
+                "July 2026", datetime(2026, 7, 31, 15, 59, tzinfo=UTC)
             )
         )
         self.assertIsNone(
+            reporting_period_submission_error("July 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC))
+        )
+        self.assertIn(
+            "Month YYYY",
             reporting_period_submission_error(
                 "Jul 1 - Jul 31, 2026", datetime(2026, 7, 31, 16, 0, tzinfo=UTC)
             )
+            or "",
         )
 
     def test_duplicate_reporting_period_is_rejected(self) -> None:
@@ -508,14 +513,14 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period="June 2026",
             )
 
             self.assertEqual(summary["entries"], 40)
             self.assertEqual(summary["exits"], 31)
             self.assertEqual(summary["unique_count"], 24)
             self.assertEqual(summary["unsubmitted_events"], 71)
-            self.assertEqual(summary["period"], "Jun 1 - Jun 30, 2026")
+            self.assertEqual(summary["period"], "June 2026")
             self.assertTrue(summary["prepared"])
             self.assertEqual(store.list_report_submissions(), [])
 
@@ -527,7 +532,7 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period="June 2026",
             )
             self.assertFalse(repeated["prepared"])
             self.assertEqual(repeated["total_events"], 71)
@@ -544,11 +549,11 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period="June 2026",
             )
             self.assertTrue(first["prepared"])
 
-            store.record_report_submission("REP-JUN", "Jun 1 - Jun 30, 2026")
+            store.record_report_submission("REP-JUN", "June 2026")
 
             second = store.prepare_sample_counts(
                 report_id="SAMPLE-JUL",
@@ -558,12 +563,12 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=18,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jul 1 - Jul 31, 2026",
+                period="July 2026",
             )
 
             self.assertTrue(second["prepared"])
             self.assertEqual(second["entries"], 55)
-            self.assertEqual(second["period"], "Jul 1 - Jul 31, 2026")
+            self.assertEqual(second["period"], "July 2026")
             self.assertEqual(len(store.list_report_submissions()), 1)
 
     def test_prepared_counts_do_not_mix_open_periods(self) -> None:
@@ -578,7 +583,7 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period="June 2026",
             )
             self.assertTrue(first["prepared"])
 
@@ -590,12 +595,12 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=18,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jul 1 - Jul 31, 2026",
+                period="July 2026",
             )
 
             self.assertFalse(second["prepared"])
             self.assertEqual(second["entries"], 40)
-            self.assertEqual(second["period"], "Jun 1 - Jun 30, 2026")
+            self.assertEqual(second["period"], "June 2026")
 
     def test_report_submission_does_not_consume_a_different_prepared_period(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -608,13 +613,13 @@ class LocalDataStoreTest(unittest.TestCase):
                 peak_occupancy=12,
                 camera_id=7,
                 camera_name="Main Entrance",
-                period="Jun 1 - Jun 30, 2026",
+                period="June 2026",
             )
             self.assertTrue(prepared["prepared"])
 
             submission = store.record_report_submission(
                 "REP-JUL",
-                "Jul 1 - Jul 31, 2026",
+                "July 2026",
                 metrics={
                     "entries": 55,
                     "exits": 42,
@@ -624,7 +629,7 @@ class LocalDataStoreTest(unittest.TestCase):
             )
 
             self.assertEqual(submission["entries"], 55)
-            self.assertEqual(store.metrics_summary()["period"], "Jun 1 - Jun 30, 2026")
+            self.assertEqual(store.metrics_summary()["period"], "June 2026")
             self.assertEqual(store.metrics_summary()["unsubmitted_events"], 71)
 
     def test_sync_acknowledgements_update_local_state(self) -> None:
