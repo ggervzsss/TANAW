@@ -6,6 +6,7 @@ import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, typ
 import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { canDeactivateAccount } from "@/shared/utils/accountState";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
@@ -241,15 +242,17 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                     Resend activation email
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => onRequestStatusChange(account, nextStatus)}
-                  disabled={isProtected}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
-                >
-                  {account.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
-                  {account.status === "active" ? "Deactivate account" : "Reactivate account"}
-                </button>
+                {account.status === "inactive" || canDeactivateAccount(account) ? (
+                  <button
+                    type="button"
+                    onClick={() => onRequestStatusChange(account, nextStatus)}
+                    disabled={isProtected}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
+                  >
+                    {account.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
+                    {account.status === "active" ? "Deactivate account" : "Reactivate account"}
+                  </button>
+                ) : null}
               </div>
             </div>
           </>
@@ -309,10 +312,12 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                 name="status"
                 label="Status"
                 options={
-                  [
-                    ["active", "Active"],
-                    ["inactive", "Inactive"],
-                  ] satisfies DropdownOption[]
+                    (account.isActivated
+                      ? [
+                          ["active", "Active"],
+                          ["inactive", "Inactive"],
+                        ]
+                      : [["active", "Active"]]) satisfies DropdownOption[]
                 }
                 value={form.status}
                 onChange={(value) => updateField("status", value as LguEditState["status"])}

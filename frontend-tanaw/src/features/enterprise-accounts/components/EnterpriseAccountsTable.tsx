@@ -1,6 +1,8 @@
 import { Building2 } from "lucide-react";
 import { EmptyState, ExpandableTableText, StatusBadge } from "@/shared/components/ui";
 import type { AccountSummary } from "@/shared/services/accountManagement";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type EnterpriseAccountsTableProps = {
   accounts: AccountSummary[];
@@ -10,6 +12,7 @@ type EnterpriseAccountsTableProps = {
 };
 
 export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoading, onSelectEnterprise }: EnterpriseAccountsTableProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-220 table-fixed text-left text-sm">
@@ -72,7 +75,7 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
               <td className="px-4 py-4 text-sm text-gray-500">
                 <ExpandableTableText
                   primary={enterprise.email}
-                  secondary={new Date(enterprise.createdAt).toLocaleDateString()}
+                  secondary={formatPhilippineDateTime(enterprise.createdAt, timeFormat, { dateStyle: "medium" })}
                   ariaLabel="enterprise contact and creation date"
                   secondaryClassName="text-xs text-gray-400"
                 />

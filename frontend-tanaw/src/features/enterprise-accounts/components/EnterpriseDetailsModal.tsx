@@ -8,6 +8,7 @@ import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpris
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { canDeactivateAccount } from "@/shared/utils/accountState";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
@@ -243,14 +244,16 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                       Resend activation email
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setConfirmMode("status")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none"
-                  >
-                    {enterprise.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
-                    {enterprise.status === "active" ? "Deactivate enterprise" : "Reactivate enterprise"}
-                  </button>
+                  {enterprise.status === "inactive" || canDeactivateAccount(enterprise) ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode("status")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none"
+                    >
+                      {enterprise.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
+                      {enterprise.status === "active" ? "Deactivate enterprise" : "Reactivate enterprise"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </>
@@ -331,10 +334,12 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                   name="status"
                   label="Status"
                   options={
-                    [
-                      ["active", "Active"],
-                      ["inactive", "Inactive"],
-                    ] satisfies DropdownOption[]
+                    (enterprise.isActivated
+                      ? [
+                          ["active", "Active"],
+                          ["inactive", "Inactive"],
+                        ]
+                      : [["active", "Active"]]) satisfies DropdownOption[]
                   }
                   value={form.status}
                   onChange={(value) => updateField("status", value as EnterpriseEditState["status"])}
@@ -421,13 +426,13 @@ function ConfirmEnterpriseActivationModal({ enterprise, isPending, onClose, onCo
   return (
     <ModalFrame title="Resend Activation Email" onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
-        <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
             <KeyRound size={20} />
           </span>
           <div>
             <p className="font-bold">This will issue a new activation link.</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
               Any previous activation link for {enterpriseName} will stop working. TANAW will email a new single-use link so the enterprise user can create their password securely.
             </p>
           </div>
@@ -475,13 +480,13 @@ function ConfirmEnterpriseStatusModal({
   return (
     <ModalFrame title={actionLabel} onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
-        <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
             <AlertTriangle size={20} />
           </span>
           <div>
             <p className="font-bold">{isDeactivating ? "This enterprise account will lose TANAW access." : "This enterprise account will regain TANAW access."}</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
               {isDeactivating
                 ? `${enterpriseName} will not be able to sign in until the account is reactivated.`
                 : enterprise.isActivated
@@ -517,10 +522,10 @@ function ConfirmEnterpriseStatusModal({
 
 function EnterpriseActionAccountSummary({ enterprise }: { enterprise: AccountSummary }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-600 dark:bg-[#0c1728]">
       <p className="text-xs font-bold tracking-wide text-slate-500 uppercase">Enterprise</p>
-      <p className="mt-1 font-bold text-slate-900">{enterprise.enterpriseName ?? enterprise.displayName}</p>
-      <p className="text-sm text-slate-600">{enterprise.email}</p>
+      <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">{enterprise.enterpriseName ?? enterprise.displayName}</p>
+      <p className="text-sm text-slate-600 dark:text-slate-300">{enterprise.email}</p>
     </div>
   );
 }

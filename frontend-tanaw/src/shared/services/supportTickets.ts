@@ -48,6 +48,10 @@ export type SupportTicketDetail = SupportTicket & {
 
 export const supportTicketsQueryKey = ["operational", "support-tickets"];
 
+export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
+  return ticket.status !== "Resolved";
+}
+
 const safeSupportTicketImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function listSupportTickets() {

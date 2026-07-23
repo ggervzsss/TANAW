@@ -9,6 +9,8 @@ import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { alertsQueryKey, useAlerts } from "@/shared/hooks/useAlerts";
 import { updateAlertStatus } from "@/shared/services/alerts";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import type { AlertSeverity, PriorityAlert, PriorityAlertStatus, PriorityAlertType } from "@/shared/types";
 import { AlertDetailsModal, AlertStatusBadge, ResolutionBadge, SeverityBadge } from "../components";
 
@@ -22,6 +24,7 @@ const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password
 
 export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const { alerts: allAlerts } = useAlerts();
   const alerts = allAlerts.filter((alert) => alert.owner === "IT");
@@ -156,7 +159,9 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
                   </td>
                   <td className="px-4 py-4">
                     <AlertStatusBadge status={alert.status} label={itIssueStatusLabel(alert.status)} />
-                    <div className="mt-2 text-[10px] font-bold tracking-wide text-gray-400 uppercase">{alert.time}</div>
+                    <time dateTime={alert.time} className="mt-2 block text-[10px] font-bold tracking-wide text-gray-400 uppercase">
+                      {formatPhilippineDateTime(alert.time, timeFormat)}
+                    </time>
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col gap-2">

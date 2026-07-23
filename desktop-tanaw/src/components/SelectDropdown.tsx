@@ -15,12 +15,28 @@ type SelectDropdownProps = {
   searchable?: boolean;
   searchPlaceholder?: string;
   size?: "compact" | "default";
+  ariaInvalid?: boolean;
+  ariaDescribedBy?: string;
+  focusOnFormError?: boolean;
 };
 
 type NormalizedOption = { value: string; label: string; meta?: string; searchText?: string };
 type MenuPosition = { bottom?: number; left: number; maxHeight: number; top?: number; width: number };
 
-export function SelectDropdown({ value, onChange, options, ariaLabel, className = "", disabled = false, searchable = false, searchPlaceholder = "Search options...", size = "default" }: SelectDropdownProps) {
+export function SelectDropdown({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  className = "",
+  disabled = false,
+  searchable = false,
+  searchPlaceholder = "Search options...",
+  size = "default",
+  ariaInvalid = false,
+  ariaDescribedBy,
+  focusOnFormError = false,
+}: SelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -135,6 +151,9 @@ export function SelectDropdown({ value, onChange, options, ariaLabel, className 
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        data-form-error-focus={focusOnFormError ? "" : undefined}
         onClick={() => (isOpen ? closeMenu() : openMenu())}
         onKeyDown={handleKeyDown}
         className={`flex w-full items-center justify-between gap-2 border border-gray-300 bg-white text-left font-semibold text-gray-800 shadow-sm transition outline-none hover:border-emerald-700/50 focus:border-[#065f46] focus:ring-2 focus:ring-emerald-600/15 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:opacity-60 dark:border-slate-600 dark:bg-[#111b2f] dark:text-slate-100 ${size === "compact" ? "min-h-8 rounded-md px-2 py-1.5 text-xs" : "min-h-10 rounded-xl px-3 py-2.5 text-sm"}`}

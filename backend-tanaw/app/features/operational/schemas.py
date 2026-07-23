@@ -505,7 +505,7 @@ class SupportTicketCreate(BaseModel):
     priority: SupportTicketPriority = "Normal"
     subject: str = Field(min_length=3, max_length=160)
     description: str = Field(min_length=10, max_length=4000)
-    affectedArea: str | None = Field(default=None, max_length=120)
+    affectedArea: str = Field(min_length=1, max_length=120)
     cameraNode: str | None = Field(default=None, max_length=120)
     attachments: list[SupportTicketAttachment] = Field(default_factory=list, max_length=5)
 

@@ -153,6 +153,7 @@ async def update_lgu_account(
 
     next_role = account_role_from_value(payload.role)
     next_status = AccountStatus(payload.status)
+    ensure_account_can_deactivate(account, next_status)
     if account.id == actor.id and (
         next_role != AccountRole.IT or next_status != AccountStatus.ACTIVE
     ):
@@ -342,6 +343,7 @@ async def update_enterprise_account(
     previous_email = account.email
     previous_status = account.status
     next_status = AccountStatus(payload.status)
+    ensure_account_can_deactivate(account, next_status)
     email_changed = previous_email != requested_email
     if account.activated_at is not None and email_changed and next_status != AccountStatus.ACTIVE:
         raise HTTPException(
@@ -567,6 +569,7 @@ async def update_account_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
 
     next_status = AccountStatus(payload.status)
+    ensure_account_can_deactivate(account, next_status)
     if is_protected_startup_account(account) and next_status != account.status:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -608,6 +611,21 @@ async def update_account_status(
         metadata={"status": account.status.value},
     )
     return await to_account_summary_with_requests(db, account)
+
+
+def ensure_account_can_deactivate(account: Account, next_status: AccountStatus) -> None:
+    if (
+        next_status == AccountStatus.INACTIVE
+        and account.status == AccountStatus.ACTIVE
+        and account.activated_at is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "account_activation_pending",
+                "message": "This account has not completed activation and cannot be deactivated.",
+            },
+        )
 
 
 async def sync_pending_account_activation(

@@ -428,11 +428,20 @@ async def list_support_tickets(
 
 
 async def get_support_ticket_for_account(
-    db: AsyncSession, account: Account, ticket_id: str
+    db: AsyncSession,
+    account: Account,
+    ticket_id: str,
+    *,
+    for_update: bool = False,
 ) -> SupportTicket | None:
+    statement = select(SupportTicket).where(SupportTicket.id == ticket_id)
+    if for_update:
+        statement = statement.with_for_update(of=SupportTicket).execution_options(
+            populate_existing=True
+        )
     ticket = cast(
         SupportTicket | None,
-        await db.scalar(select(SupportTicket).where(SupportTicket.id == ticket_id)),
+        await db.scalar(statement),
     )
     if ticket is None:
         return None
@@ -523,6 +532,8 @@ async def create_support_ticket_message_with_record(
     *,
     commit: bool = True,
 ) -> tuple[SupportTicketDetail, SupportTicketMessage]:
+    if ticket.status == "Resolved":
+        raise ResolvedTicketConversationError
     message = SupportTicketMessage(
         ticket_id=ticket.id,
         author_account_id=author.id,
@@ -531,9 +542,7 @@ async def create_support_ticket_message_with_record(
         message=payload.message,
     )
     db.add(message)
-    if author.role == AccountRole.ENTERPRISE and ticket.status == "Resolved":
-        ticket.status = "Open"
-    elif author.role == AccountRole.IT and ticket.status == "Open":
+    if author.role == AccountRole.IT and ticket.status == "Open":
         ticket.status = "In Review"
     if commit:
         await db.commit()
@@ -545,6 +554,10 @@ async def create_support_ticket_message_with_record(
     if detail is None:
         raise RuntimeError("Support ticket detail disappeared after reply creation.")
     return detail, message
+
+
+class ResolvedTicketConversationError(ValueError):
+    """Raised when a message is submitted after a ticket conversation is closed."""
 
 
 async def update_support_ticket_status(

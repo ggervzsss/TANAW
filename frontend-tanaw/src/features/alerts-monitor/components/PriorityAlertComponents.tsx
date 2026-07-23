@@ -1,6 +1,8 @@
 import { Bell } from "lucide-react";
 import { DetailField, EmptyState, ExpandableTableText, ModalFrame } from "@/shared/components/ui";
 import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode } from "@/shared/types";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type PriorityAlertListItemProps = {
   alert: PriorityAlert;
@@ -8,6 +10,7 @@ type PriorityAlertListItemProps = {
 };
 
 export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
   return (
     <article className="tanaw-interactive-row cursor-pointer px-6 py-4" onClick={() => onOpen(alert)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -19,13 +22,14 @@ export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemPr
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold tracking-wide text-gray-400 uppercase dark:text-slate-400">
         <span>{alert.type}</span>
         <span>{alert.enterprise ?? alert.requester}</span>
-        <span>{alert.time}</span>
+        <time dateTime={alert.time}>{formatPhilippineDateTime(alert.time, timeFormat)}</time>
       </div>
     </article>
   );
 }
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const expandableValue = (value: string, label: string) => (
     <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />
   );
@@ -35,7 +39,7 @@ export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; on
       <div className="grid gap-4 md:grid-cols-2">
         <DetailField label="Problem" value={alert.type} />
         <DetailField label="Urgency" value={<SeverityBadge severity={alert.severity} label={alert.severity === "Critical" ? "Urgent" : alert.severity === "Warning" ? "Important" : "For Awareness"} />} />
-        <DetailField label="Date and Time" value={alert.time} />
+        <DetailField label="Date and Time" value={<time dateTime={alert.time}>{formatPhilippineDateTime(alert.time, timeFormat)}</time>} />
         <DetailField label="Status" value={<AlertStatusBadge status={alert.status} />} />
         <DetailField label="Reported By" value={alert.requester} />
         <DetailField label="How It Can Be Fixed" value={<ResolutionBadge mode={alert.resolutionMode} />} />

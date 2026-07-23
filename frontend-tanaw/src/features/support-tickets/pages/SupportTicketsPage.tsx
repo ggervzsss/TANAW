@@ -9,6 +9,7 @@ import { Panel } from "@/shared/components/panel";
 import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
 import {
   fetchSupportTicketAttachmentBlob,
+  canReplyToSupportTicket,
   getSupportTicket,
   isSafeSupportTicketImage,
   listSupportTickets,
@@ -23,6 +24,7 @@ import {
 } from "@/shared/services/supportTickets";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
+import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 
 type SupportTicketsPageProps = {
   mode: "admin" | "it";
@@ -280,7 +282,7 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
       setReply("");
       setReplyError("");
     },
-    onError: () => setReplyError("Unable to send reply. Please try again."),
+    onError: (error) => setReplyError(getApiErrorMessage(error, "Unable to send reply. Please try again.")),
   });
   const statusMutation = useMutation({
     mutationFn: (status: SupportTicketStatus) => updateSupportTicketStatus(ticketId, status),
@@ -434,7 +436,12 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
                   </button>
                 )}
 
-                {isItResponder ? (
+                {!canReplyToSupportTicket(ticket) ? (
+                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
+                    This ticket is resolved. The conversation is now closed.
+                    {isItResponder ? " Reopen the ticket to continue the conversation." : ""}
+                  </div>
+                ) : isItResponder ? (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <label className="block">
                       <span className="mb-2 block text-[11px] font-black tracking-wide text-slate-500 uppercase">IT Response</span>

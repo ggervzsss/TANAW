@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.features.accounts.models import (
     Account,
@@ -12,9 +14,17 @@ from app.features.accounts.models import (
 from app.features.auth.router import create_support_request
 from app.features.auth.schemas import SupportRequest
 from app.features.operational.models import OperationalAlert, SupportTicket
-from app.features.operational.router import support_ticket_notification_roles
-from app.features.operational.schemas import SupportTicketDetail, SupportTicketMessageCreate
+from app.features.operational.router import (
+    create_ticket_message,
+    support_ticket_notification_roles,
+)
+from app.features.operational.schemas import (
+    SupportTicketCreate,
+    SupportTicketDetail,
+    SupportTicketMessageCreate,
+)
 from app.features.operational.service import (
+    ResolvedTicketConversationError,
     create_support_ticket_message,
     list_support_tickets,
     list_user_notifications,
@@ -49,6 +59,17 @@ def test_support_ticket_escalation_depends_on_priority() -> None:
         AccountRole.IT,
     ]
     assert support_ticket_notification_roles("Normal") == [AccountRole.IT]
+
+
+def test_support_ticket_requires_a_non_whitespace_affected_area() -> None:
+    with pytest.raises(ValidationError):
+        SupportTicketCreate(
+            category="Other",
+            priority="Normal",
+            subject="Account issue",
+            affectedArea="   ",
+            description="The account page is not loading.",
+        )
 
 
 @pytest.mark.asyncio
@@ -123,20 +144,10 @@ async def test_login_support_request_exposes_contact_and_notifies_portal(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("role", "initial_status", "expected_status"),
-    [
-        (AccountRole.ENTERPRISE, "Resolved", "Open"),
-        (AccountRole.IT, "Open", "In Review"),
-    ],
-)
-async def test_ticket_messages_apply_role_appropriate_status(
+async def test_it_reply_moves_an_open_ticket_to_in_review(
     monkeypatch: pytest.MonkeyPatch,
-    role: AccountRole,
-    initial_status: str,
-    expected_status: str,
 ) -> None:
-    account = _account(role=role)
+    account = _account(role=AccountRole.IT)
     ticket = SupportTicket(
         id="ticket-id",
         ticket_code="TCK-000001",
@@ -146,7 +157,7 @@ async def test_ticket_messages_apply_role_appropriate_status(
         priority="Normal",
         subject="Support request",
         description="Support request description",
-        status=initial_status,
+        status="Open",
     )
     detail = MagicMock(spec=SupportTicketDetail)
     get_detail = AsyncMock(return_value=detail)
@@ -163,5 +174,78 @@ async def test_ticket_messages_apply_role_appropriate_status(
     )
 
     assert result is detail
-    assert ticket.status == expected_status
+    assert ticket.status == "In Review"
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resolved_ticket_rejects_reply_before_persistence() -> None:
+    account = _account(role=AccountRole.ENTERPRISE)
+    ticket = SupportTicket(
+        id="ticket-id",
+        ticket_code="TCK-000001",
+        enterprise_profile_id=account.id,
+        enterprise_name="Test Enterprise",
+        category="Other",
+        priority="Normal",
+        subject="Support request",
+        description="Support request description",
+        status="Resolved",
+    )
+    db = MagicMock()
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+
+    with pytest.raises(ResolvedTicketConversationError):
+        await create_support_ticket_message(
+            db,
+            ticket,
+            account,
+            SupportTicketMessageCreate(message="A late follow-up message."),
+        )
+
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_resolved_ticket_endpoint_returns_structured_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    account = _account(role=AccountRole.ENTERPRISE)
+    ticket = SupportTicket(
+        id="ticket-id",
+        ticket_code="TCK-000001",
+        enterprise_profile_id=account.id,
+        enterprise_name="Test Enterprise",
+        category="Other",
+        priority="Normal",
+        subject="Support request",
+        description="Support request description",
+        status="Resolved",
+    )
+    get_ticket = AsyncMock(return_value=ticket)
+    monkeypatch.setattr(
+        "app.features.operational.router.get_support_ticket_for_account",
+        get_ticket,
+    )
+    db = MagicMock()
+    db.add = MagicMock()
+    db.rollback = AsyncMock()
+
+    with pytest.raises(HTTPException) as raised:
+        await create_ticket_message(
+            ticket.id,
+            SupportTicketMessageCreate(message="A late follow-up message."),
+            account,
+            db,
+        )
+
+    assert raised.value.status_code == 409
+    assert raised.value.detail == {
+        "code": "ticket_resolved",
+        "message": "This ticket is resolved. The conversation is now closed.",
+    }
+    get_ticket.assert_awaited_once_with(db, account, ticket.id, for_update=True)
+    db.add.assert_not_called()
+    db.rollback.assert_awaited_once()

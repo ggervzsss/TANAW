@@ -45,8 +45,12 @@ export type SupportTicketDetail = SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
+export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
+  return ticket.status !== "Resolved";
+}
+
 export type SupportTicketCreatePayload = {
-  affectedArea?: string | null;
+  affectedArea: string;
   cameraNode?: string | null;
   category: SupportTicketCategory;
   description: string;

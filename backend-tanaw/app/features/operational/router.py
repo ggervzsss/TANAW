@@ -58,6 +58,7 @@ from app.features.operational.service import (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     DuplicateReportPeriodError,
     InvalidReportWorkflowError,
+    ResolvedTicketConversationError,
     can_manage_operational_alert,
     create_final_report,
     create_operational_alert,
@@ -693,22 +694,32 @@ async def create_ticket_message(
     account: TicketMessageAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketDetail:
-    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    ticket = await get_support_ticket_for_account(db, account, ticket_id, for_update=True)
     if ticket is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."
         )
-    if account.role == AccountRole.IT:
-        detail, reply_record = await create_support_ticket_message_with_record(
-            db,
-            ticket,
-            account,
-            payload,
-            commit=False,
-        )
-    else:
-        detail = await create_support_ticket_message(db, ticket, account, payload)
-        reply_record = None
+    try:
+        if account.role == AccountRole.IT:
+            detail, reply_record = await create_support_ticket_message_with_record(
+                db,
+                ticket,
+                account,
+                payload,
+                commit=False,
+            )
+        else:
+            detail = await create_support_ticket_message(db, ticket, account, payload)
+            reply_record = None
+    except ResolvedTicketConversationError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ticket_resolved",
+                "message": "This ticket is resolved. The conversation is now closed.",
+            },
+        ) from exc
     if account.role == AccountRole.IT:
         recipient = await get_account_by_id(db, ticket.enterprise_profile_id)
         if recipient is not None and reply_record is not None:
@@ -773,7 +784,7 @@ async def update_ticket_status(
     account: ITAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SupportTicketDetail:
-    ticket = await get_support_ticket_for_account(db, account, ticket_id)
+    ticket = await get_support_ticket_for_account(db, account, ticket_id, for_update=True)
     if ticket is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found."

@@ -1,7 +1,8 @@
 import { isAxiosError } from "axios";
 
 type ValidationErrorDetail = { msg?: string };
-type ApiErrorPayload = { detail?: string | ValidationErrorDetail[] };
+type DomainErrorDetail = { code?: string; message?: string };
+type ApiErrorPayload = { detail?: string | ValidationErrorDetail[] | DomainErrorDetail };
 
 export function getApiErrorMessage(error: unknown, fallback: string) {
   if (!isAxiosError<ApiErrorPayload>(error)) return fallback;
@@ -11,6 +12,7 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   if (Array.isArray(detail)) {
     return detail.find((item) => item.msg)?.msg ?? fallback;
   }
+  if (detail && typeof detail.message === "string") return detail.message;
 
   return fallback;
 }

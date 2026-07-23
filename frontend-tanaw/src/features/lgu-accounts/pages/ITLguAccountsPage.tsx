@@ -27,6 +27,7 @@ export function ITLguAccountsPage() {
 
   const accountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const currentSelectedAccount = selectedAccount ? (accounts.find((account) => account.id === selectedAccount.id) ?? selectedAccount) : null;
   const filteredAccounts = useMemo(() => filterLguAccounts(accounts, query, role, status), [accounts, query, role, status]);
 
   const activationMutation = useMutation({
@@ -72,10 +73,10 @@ export function ITLguAccountsPage() {
 
       <AnimatePresence>
         {createOpen && <CreateLguAccountModal key="create-lgu-account" onClose={() => setCreateOpen(false)} />}
-        {selectedAccount && (
+        {currentSelectedAccount && (
           <LguAccountDetailsModal
-            key={`lgu-account-details-${selectedAccount.id}`}
-            account={selectedAccount}
+            key={`lgu-account-details-${currentSelectedAccount.id}`}
+            account={currentSelectedAccount}
             onClose={() => setSelectedAccount(null)}
             onAccountUpdated={setSelectedAccount}
             onResendActivation={setPendingActivationResend}
@@ -115,7 +116,7 @@ function ConfirmActivationResendModal({ account, isPending, onClose, onConfirm }
           </span>
           <div>
             <p className="font-bold">This will issue a new activation link.</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-100/75">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
               Any previous activation link for {account.displayName} will stop working. TANAW will email a new single-use link so the user can create their password securely.
             </p>
           </div>
@@ -170,7 +171,7 @@ function ConfirmAccountStatusModal({
           </span>
           <div>
             <p className="font-bold">{isDeactivating ? "This account will lose TANAW access." : "This account will regain TANAW access."}</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-100/75">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
               {isDeactivating
                 ? `${pendingStatusChange.account.displayName} will not be able to sign in until the account is reactivated.`
                 : pendingStatusChange.account.isActivated
