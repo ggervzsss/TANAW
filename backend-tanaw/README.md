@@ -50,6 +50,16 @@ descending order. Ticket code and internal ID provide deterministic final tie
 breakers. This ordering lets REST reads, reconnect resynchronization, and
 WebSocket-driven client invalidations converge on the same queue.
 
+Operational technical-issue responses expose canonical urgency as `Normal`,
+`Important`, or `Urgent`; the shared response also preserves operational
+severity for non-technical consumers and notification/log behavior. General LGU and enterprise update schemas reject lifecycle
+fields, so activation and deactivation can only use the dedicated status
+endpoint. Enterprise location edits require a latitude/longitude pair inside
+the San Pedro boundary and reject a selected barangay that does not match the
+authoritative polygon. Successful profile updates retain the existing
+`enterprise.updated` invalidation and record coordinate changes in the audit
+metadata.
+
 ## Project Structure
 
 ```text

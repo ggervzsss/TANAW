@@ -30,6 +30,44 @@ def is_inside_san_pedro(latitude: float, longitude: float) -> bool:
     )
 
 
+def barangay_for_location(latitude: float, longitude: float) -> str | None:
+    matches = barangays_for_location(latitude, longitude)
+    return matches[0] if matches else None
+
+
+def barangays_for_location(latitude: float, longitude: float) -> list[str]:
+    boundary = load_san_pedro_boundary()
+    if boundary is None:
+        return []
+
+    matches: list[str] = []
+    for feature in boundary.get("features", []):
+        if not isinstance(feature, dict) or not feature_contains_point(
+            feature, latitude, longitude
+        ):
+            continue
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        for key in ("display_name", "name", "official_barangay", "alt_name"):
+            value = properties.get(key)
+            if isinstance(value, str) and value.strip():
+                matches.append(" ".join(value.strip().split()))
+                break
+    return matches
+
+
+def barangay_matches_location(barangay: str, latitude: float, longitude: float) -> bool:
+    detected = barangays_for_location(latitude, longitude)
+    return not detected or normalize_barangay(barangay) in {
+        normalize_barangay(item) for item in detected
+    }
+
+
+def normalize_barangay(value: str) -> str:
+    return " ".join(value.casefold().strip().split())
+
+
 @lru_cache(maxsize=1)
 def load_san_pedro_boundary() -> dict[str, Any] | None:
     configured_path = os.environ.get("SAN_PEDRO_GEOJSON_PATH")

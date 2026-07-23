@@ -93,11 +93,13 @@ export type PriorityAlertType = "Maintenance Request" | "Password Reset Request"
 export type PriorityAlertResolutionMode = "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring";
 export type PriorityAlertStatus = "New" | "In Review" | "Resolved";
 export type PriorityAlertOwner = "IT" | "Admin" | "System";
+export type TechnicalIssueUrgency = "Normal" | "Important" | "Urgent";
 
 export type PriorityAlert = {
   id: string;
   type: PriorityAlertType;
   severity: AlertSeverity;
+  urgency: TechnicalIssueUrgency;
   enterprise?: string;
   requester: string;
   summary: string;

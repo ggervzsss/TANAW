@@ -447,7 +447,6 @@ export function TicketsView() {
                         ariaLabel="ticket subject and description"
                         className="mt-1 text-sm font-black text-[#111827] dark:text-slate-100"
                         secondaryClassName="text-xs leading-relaxed text-gray-500 dark:text-slate-300"
-                        threshold={72}
                         twoLines
                       />
                     </div>

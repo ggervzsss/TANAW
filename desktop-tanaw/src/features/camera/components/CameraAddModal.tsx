@@ -12,19 +12,20 @@ type CameraAddModalProps = {
   newCam: CameraFormValues;
   isValidating: boolean;
   errors: Partial<Record<keyof CameraFormValues, string>>;
+  duplicateIpError?: string;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onChange: (values: CameraFormValues) => void;
 };
 
-export function CameraAddModal({ newCam, isValidating, errors, onClose, onSubmit, onChange }: CameraAddModalProps) {
+export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError, onClose, onSubmit, onChange }: CameraAddModalProps) {
   const [touchedCredentials, setTouchedCredentials] = useState({ password: false, username: false });
   const isRtspCamera = newCam.cameraType === "RTSP_CCTV" || newCam.cameraType === "ONVIF_CCTV";
   const currentErrors = validateCameraForm(newCam);
-  const hostError = errors.cameraHost ?? (newCam.cameraHost && !isValidIpv4(newCam.cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined);
+  const hostError = errors.cameraHost ?? duplicateIpError ?? (newCam.cameraHost && !isValidIpv4(newCam.cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined);
   const usernameError = errors.username ?? (touchedCredentials.username ? currentErrors.username : undefined);
   const passwordError = errors.password ?? (touchedCredentials.password ? currentErrors.password : undefined);
-  const canSave = Object.keys(currentErrors).length === 0;
+  const canSave = Object.keys(currentErrors).length === 0 && !duplicateIpError;
   const updateRtspSource = (cameraHost: string, rtspStream: TapoStreamId) => {
     onChange({
       ...newCam,

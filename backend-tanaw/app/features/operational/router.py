@@ -143,7 +143,7 @@ async def ingest_desktop_telemetry(
             await record_operational_log(
                 db,
                 category="Admin Operation",
-                severity="Success" if event_type == "alert.resolved" else alert_summary.severity,
+                severity=("Success" if event_type == "alert.resolved" else alert_summary.severity),
                 actor="TANAW",
                 actor_role="System",
                 action="Alert Resolved" if event_type == "alert.resolved" else "Alert Created",

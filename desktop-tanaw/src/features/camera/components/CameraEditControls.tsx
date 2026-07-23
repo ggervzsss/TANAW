@@ -7,6 +7,7 @@ import { TapoRtspBuilder } from "./TapoRtspBuilder";
 import { buildTapoRtspUrl, isValidIpv4, parseRtspConnection, type TapoStreamId } from "../utils/rtsp";
 
 type CameraEditControlsProps = {
+  cameraIpError?: string;
   editForm: Camera;
   hasExistingPassword: boolean;
   onEditFormChange: React.Dispatch<React.SetStateAction<Camera | null>>;
@@ -19,7 +20,7 @@ const roiFields = [
   { label: "Height", key: "height", min: 20, max: 100 },
 ] as const;
 
-export function CameraEditControls({ editForm, hasExistingPassword, onEditFormChange }: CameraEditControlsProps) {
+export function CameraEditControls({ cameraIpError, editForm, hasExistingPassword, onEditFormChange }: CameraEditControlsProps) {
   const isRtspCamera = editForm.cameraType === "RTSP_CCTV" || editForm.cameraType === "ONVIF_CCTV";
   const parsedRtsp = parseRtspConnection(editForm.rtsp);
   const cameraHost = editForm.cameraHost ?? parsedRtsp.host;
@@ -235,7 +236,7 @@ export function CameraEditControls({ editForm, hasExistingPassword, onEditFormCh
             <TapoRtspBuilder
               host={cameraHost}
               streamId={rtspStream}
-              error={cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined}
+              error={cameraIpError ?? (cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined)}
               onHostChange={(host) => updateRtspSource(host, rtspStream)}
               onStreamChange={(stream) => updateRtspSource(cameraHost, stream)}
               layout="stacked"

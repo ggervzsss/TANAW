@@ -25,6 +25,7 @@ export type {
   PriorityAlertResolutionMode,
   PriorityAlertStatus,
   PriorityAlertType,
+  TechnicalIssueUrgency,
   ReportDemographics,
   ReportEnterprise,
   ReportPayload,

@@ -1,6 +1,10 @@
 import type { Camera } from "../../../types/enterprise";
 import { getMemoryCameraCredential } from "./camera-credentials";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
+import {
+  assertUniqueCameraIps,
+  canonicalizeCameraIp,
+} from "../utils/camera-ip-uniqueness";
 
 export type MlServiceStatus = {
   baseUrl: string;
@@ -397,15 +401,31 @@ export async function listLocalCameras(baseUrl: string): Promise<Camera[]> {
   return requestJson<Camera[]>(`${baseUrl}/cameras`, { method: "GET" }, 2500);
 }
 
+const cameraWriteQueues = new Map<string, Promise<unknown>>();
+
 export async function replaceLocalCameras(baseUrl: string, cameras: Camera[]): Promise<Camera[]> {
-  return requestJson<Camera[]>(
-    `${baseUrl}/cameras`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ cameras }),
-    },
-    5000,
-  );
+  const canonicalCameras = cameras.map(canonicalizeCameraIp);
+  assertUniqueCameraIps(canonicalCameras);
+
+  const previousWrite = cameraWriteQueues.get(baseUrl) ?? Promise.resolve();
+  const write = previousWrite
+    .catch(() => undefined)
+    .then(() =>
+      requestJson<Camera[]>(
+        `${baseUrl}/cameras`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ cameras: canonicalCameras }),
+        },
+        5000,
+      ),
+    );
+  cameraWriteQueues.set(baseUrl, write);
+  try {
+    return await write;
+  } finally {
+    if (cameraWriteQueues.get(baseUrl) === write) cameraWriteQueues.delete(baseUrl);
+  }
 }
 
 export async function getLocalMetricsSummary(baseUrl: string, options: { includeSubmitted?: boolean } = {}): Promise<LocalMetricsSummary> {

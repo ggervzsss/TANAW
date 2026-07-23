@@ -360,6 +360,7 @@ class IntakeReportSummary(BaseModel):
 
 FinalReportArchivedFromStatus = Literal["Draft", "Finalized", "Returned for Revision"]
 FinalReportStatus = Literal["Draft", "Finalized", "Archived", "Returned for Revision"]
+OperationalAlertUrgency = Literal["Normal", "Important", "Urgent"]
 
 
 class FinalReportSourceSummary(BaseModel):
@@ -399,6 +400,7 @@ class OperationalAlertSummary(BaseModel):
         "Failed Login Threshold",
     ]
     severity: Literal["Info", "Warning", "Critical"]
+    urgency: OperationalAlertUrgency
     enterprise: str | None = None
     requester: str
     summary: str

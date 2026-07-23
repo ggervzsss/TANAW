@@ -14,6 +14,7 @@ import { DotFinalReportTable } from "./DotReportTable";
 import { getFinalReportViewerEscapeAction, getFinalReportViewerLayout } from "./finalReportViewerState";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { downloadFinalReportPdf } from "../utils/pdf";
+import { printOfficialReport } from "../utils/print";
 
 type FinalReportViewerProps = {
   report: FinalReport;
@@ -26,6 +27,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
   const { timeFormat } = useSystemDisplayPreferences();
   const viewerRef = useRef<HTMLElement>(null);
+  const printDocumentRef = useRef<HTMLDivElement>(null);
   const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
@@ -246,7 +248,11 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (printDocumentRef.current) {
+                      printOfficialReport(printDocumentRef.current, `${report.id} official report`);
+                    }
+                  }}
                   className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                 >
                   <Printer size={15} /> Print to PDF
@@ -273,6 +279,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
             </div>
 
             <div
+              ref={printDocumentRef}
               data-export-theme="light"
               className="official-report-document tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0"
             >

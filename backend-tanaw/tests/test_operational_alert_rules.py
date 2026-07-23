@@ -20,11 +20,40 @@ from app.features.operational.service import (
     gateway_status_for_snapshot,
     list_operational_alerts,
     resolve_system_setting_enabled,
+    to_operational_alert_summary,
     visitor_activity_condition,
     visitor_baselines_by_enterprise,
     visitor_enterprise_insight,
     visitor_insight_series,
 )
+
+
+@pytest.mark.parametrize(
+    ("stored_severity", "urgency"),
+    [("Info", "Normal"), ("Warning", "Important"), ("Critical", "Urgent")],
+)
+def test_operational_alert_api_exposes_canonical_urgency(
+    stored_severity: str, urgency: str
+) -> None:
+    alert = OperationalAlert(
+        id="ALT-URGENCY",
+        alert_code="ALT-URGENCY",
+        alert_type="Maintenance Request",
+        owner="IT",
+        severity=stored_severity,
+        status="New",
+        enterprise="Enterprise One",
+        requester="Enterprise One",
+        summary="Camera unavailable",
+        required_action="Check the camera connection.",
+        resolution_mode="Remote Review",
+        created_at=datetime.now(UTC),
+    )
+
+    summary = to_operational_alert_summary(alert)
+
+    assert summary.urgency == urgency
+    assert summary.severity == stored_severity
 
 
 def test_visitor_activity_requires_three_matching_baseline_days() -> None:

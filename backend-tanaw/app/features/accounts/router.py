@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.features.accounts.dependencies import require_roles
-from app.features.accounts.location_validation import is_inside_san_pedro
+from app.features.accounts.location_validation import (
+    barangay_for_location,
+    barangay_matches_location,
+    is_inside_san_pedro,
+)
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
 from app.features.accounts.schemas import (
     AccountEmailChangeRequestResolution,
@@ -152,25 +156,23 @@ async def update_lgu_account(
         )
 
     next_role = account_role_from_value(payload.role)
-    next_status = AccountStatus(payload.status)
-    ensure_account_can_deactivate(account, next_status)
-    if account.id == actor.id and (
-        next_role != AccountRole.IT or next_status != AccountStatus.ACTIVE
-    ):
+    if account.id == actor.id and next_role != AccountRole.IT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot remove your own IT Personnel access.",
         )
     await ensure_role_update_keeps_it_access(db, account, next_role)
-    await ensure_privileged_account_remains_available(db, account, next_status)
     requested_email = str(payload.email)
     await ensure_unique_account_email(db, requested_email, account.id)
 
     previous_email = account.email
     previous_role = account.role
-    previous_status = account.status
     email_changed = previous_email != requested_email
-    if account.activated_at is not None and email_changed and next_status != AccountStatus.ACTIVE:
+    if (
+        account.activated_at is not None
+        and email_changed
+        and account.status != AccountStatus.ACTIVE
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Keep the account active while verifying a new email address.",
@@ -185,7 +187,6 @@ async def update_lgu_account(
         AccountRole.IT: "IT Personnel",
         AccountRole.STAFF: "LGU Staff",
     }[next_role]
-    account.status = next_status
     email_change_requested = False
     if email_changed:
         if account.activated_at is None:
@@ -201,22 +202,15 @@ async def update_lgu_account(
             except AccountEmailChangeError as exc:
                 raise email_change_http_exception(exc) from exc
             email_change_requested = True
-    if previous_role != account.role or previous_status != account.status:
+    if previous_role != account.role:
         access_changed_at = datetime.now(UTC)
         account.token_invalid_before = access_changed_at
         await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
-    if account.status == AccountStatus.INACTIVE:
-        await invalidate_account_email_change_requests(
-            db,
-            account.id,
-            invalidated_at=datetime.now(UTC),
-            reason="The account was deactivated before the email change was completed.",
-        )
     await sync_pending_account_activation(
         db,
         account,
         email_changed=email_changed and account.activated_at is None,
-        previous_status=previous_status,
+        previous_status=account.status,
     )
     await db.commit()
     await db.refresh(account)
@@ -265,6 +259,12 @@ async def create_enterprise_account(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Enterprise location must be inside San Pedro, Laguna.",
+        )
+    if not barangay_matches_location(payload.barangay, payload.latitude, payload.longitude):
+        detected_barangay = barangay_for_location(payload.latitude, payload.longitude)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Map location is inside {detected_barangay}, not {payload.barangay}.",
         )
 
     enterprise_id = await generate_enterprise_id(db, payload.enterpriseId or payload.enterpriseName)
@@ -341,15 +341,44 @@ async def update_enterprise_account(
     requested_email = str(payload.email)
     await ensure_unique_account_email(db, requested_email, account.id)
     previous_email = account.email
-    previous_status = account.status
-    next_status = AccountStatus(payload.status)
-    ensure_account_can_deactivate(account, next_status)
     email_changed = previous_email != requested_email
-    if account.activated_at is not None and email_changed and next_status != AccountStatus.ACTIVE:
+    if (
+        account.activated_at is not None
+        and email_changed
+        and account.status != AccountStatus.ACTIVE
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Keep the account active while verifying a new email address.",
         )
+    location_changed = False
+    previous_location = (profile.latitude, profile.longitude)
+    effective_latitude = payload.latitude if payload.latitude is not None else profile.latitude
+    effective_longitude = payload.longitude if payload.longitude is not None else profile.longitude
+    if payload.latitude is not None and payload.longitude is not None:
+        if not is_inside_san_pedro(payload.latitude, payload.longitude):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Enterprise location must be inside San Pedro, Laguna.",
+            )
+        if not barangay_matches_location(payload.barangay, payload.latitude, payload.longitude):
+            detected_barangay = barangay_for_location(payload.latitude, payload.longitude)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Map location is inside {detected_barangay}, not {payload.barangay}.",
+            )
+        location_changed = previous_location != (
+            payload.latitude,
+            payload.longitude,
+        )
+    elif effective_latitude is not None and effective_longitude is not None:
+        if not barangay_matches_location(payload.barangay, effective_latitude, effective_longitude):
+            detected_barangay = barangay_for_location(effective_latitude, effective_longitude)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Map location is inside {detected_barangay}, not {payload.barangay}.",
+            )
+
     profile.enterprise_name = payload.enterpriseName
     account.display_name = payload.enterpriseName
     profile.category = payload.category
@@ -358,7 +387,11 @@ async def update_enterprise_account(
     profile.barangay = payload.barangay
     profile.address = payload.address
     profile.building_capacity = payload.buildingCapacity
-    account.status = next_status
+    if payload.latitude is not None and payload.longitude is not None:
+        profile.latitude = payload.latitude
+        profile.longitude = payload.longitude
+        if location_changed:
+            profile.location_updated_at = datetime.now(UTC)
     email_change_requested = False
     if email_changed:
         if account.activated_at is None:
@@ -374,22 +407,11 @@ async def update_enterprise_account(
             except AccountEmailChangeError as exc:
                 raise email_change_http_exception(exc) from exc
             email_change_requested = True
-    if previous_status != account.status:
-        access_changed_at = datetime.now(UTC)
-        account.token_invalid_before = access_changed_at
-        await invalidate_password_reset_challenges(db, account.id, invalidated_at=access_changed_at)
-    if account.status == AccountStatus.INACTIVE:
-        await invalidate_account_email_change_requests(
-            db,
-            account.id,
-            invalidated_at=datetime.now(UTC),
-            reason="The account was deactivated before the email change was completed.",
-        )
     await sync_pending_account_activation(
         db,
         account,
         email_changed=email_changed and account.activated_at is None,
-        previous_status=previous_status,
+        previous_status=account.status,
     )
     await db.commit()
     await db.refresh(account)
@@ -408,7 +430,11 @@ async def update_enterprise_account(
             "enterpriseId": profile.enterprise_id,
             "barangay": profile.barangay,
             "buildingCapacity": profile.building_capacity,
-            "status": account.status.value,
+            "locationChanged": location_changed,
+            "previousLatitude": previous_location[0],
+            "previousLongitude": previous_location[1],
+            "latitude": profile.latitude,
+            "longitude": profile.longitude,
             "emailChangeRequested": email_change_requested,
             "requestedEmail": requested_email if email_change_requested else None,
         },

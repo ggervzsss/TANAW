@@ -40,6 +40,7 @@ from app.features.operational.schemas import (
     FinalReportSummary,
     IntakeReportSummary,
     OperationalAlertSummary,
+    OperationalAlertUrgency,
     OperationalSummary,
     ReportDemographicsSummary,
     ReportStatusUpdate,
@@ -133,6 +134,7 @@ def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSum
         id=alert.alert_code,
         type=alert.alert_type,  # type: ignore[arg-type]
         severity=alert.severity,  # type: ignore[arg-type]
+        urgency=operational_alert_urgency(alert.severity),
         enterprise=alert.enterprise,
         requester=alert.requester,
         summary=alert.summary,
@@ -142,6 +144,14 @@ def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSum
         owner=alert.owner,  # type: ignore[arg-type]
         time=alert.created_at.isoformat(),
     )
+
+
+def operational_alert_urgency(severity: str) -> OperationalAlertUrgency:
+    if severity == "Critical":
+        return "Urgent"
+    if severity == "Warning":
+        return "Important"
+    return "Normal"
 
 
 def to_user_notification_summary(

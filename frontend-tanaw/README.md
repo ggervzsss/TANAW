@@ -151,10 +151,21 @@ priority and stable time/code tie breakers. Real-time query invalidation
 reapplies this order without resetting filters.
 
 Final Report PDF generation uses the dedicated light PDF renderer. Browser
-printing uses the `official-report-document` light-theme boundary and explicit
-print colors, so the application can remain dark while official pages print
-with white backgrounds, dark text, visible table borders, totals, signatures,
-and page information.
+printing clones only the official report into an isolated light document with
+explicit print colors; it never toggles the live portal theme or prints the
+surrounding modal. Official output therefore keeps white backgrounds, dark
+text, visible table borders, totals, signatures, and page information in every
+portal theme.
+
+Technical Issues expose the canonical `Normal`, `Important`, and `Urgent`
+urgency field throughout the API and UI. Urgency, workflow status, issue type,
+and search filters persist independently in route/user-scoped page state.
+
+General LGU and enterprise profile editing cannot change account lifecycle
+status. Deactivation and reactivation use the dedicated account action. The
+enterprise edit workflow reuses the San Pedro boundary map, keeps the current
+pin visible, and submits paired coordinates only after the selected barangay
+matches the pin.
 
 ## Related Documentation
 

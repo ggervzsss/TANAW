@@ -6,8 +6,8 @@ export const TAPO_STREAM_OPTIONS: Array<{ label: string; value: TapoStreamId }> 
 ];
 
 export function buildTapoRtspUrl(hostInput: string, streamId: TapoStreamId = "stream2") {
-  const host = normalizeIpv4Input(hostInput);
-  return isValidIpv4(host) ? `rtsp://${host}/${streamId}` : "";
+  const host = canonicalizeIpv4(normalizeIpv4Input(hostInput));
+  return host ? `rtsp://${host}/${streamId}` : "";
 }
 
 export function parseRtspConnection(streamUrl: string): { host: string; streamId: TapoStreamId } {
@@ -16,7 +16,7 @@ export function parseRtspConnection(streamUrl: string): { host: string; streamId
     if (url.protocol !== "rtsp:") return { host: "", streamId: "stream2" };
 
     const streamId = url.pathname.replace(/^\/+/, "").split("/")[0] === "stream1" ? "stream1" : "stream2";
-    const host = isValidIpv4(url.hostname) ? url.hostname : "";
+    const host = canonicalizeIpv4(url.hostname) ?? "";
     return { host, streamId };
   } catch {
     return { host: "", streamId: "stream2" };
@@ -54,9 +54,13 @@ export function normalizeIpv4Input(value: string) {
 }
 
 export function isValidIpv4(value: string) {
+  return canonicalizeIpv4(value) !== null;
+}
+
+export function canonicalizeIpv4(value: string) {
   const parts = value.split(".");
-  return (
-    parts.length === 4 &&
-    parts.every((part) => /^\d{1,3}$/.test(part) && String(Number(part)) === part && Number(part) >= 0 && Number(part) <= 255)
-  );
+  if (parts.length !== 4 || !parts.every((part) => /^\d{1,3}$/.test(part))) return null;
+  const octets = parts.map(Number);
+  if (octets.some((octet) => octet < 0 || octet > 255)) return null;
+  return octets.join(".");
 }

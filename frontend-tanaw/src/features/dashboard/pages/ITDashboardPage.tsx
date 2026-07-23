@@ -22,7 +22,7 @@ export function ITDashboardPage() {
   const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries });
 
   const itIssues = alerts.filter((alert) => alert.owner === "IT" && alert.status !== "Resolved");
-  const urgentIssues = itIssues.filter((alert) => alert.severity === "Critical");
+  const urgentIssues = itIssues.filter((alert) => alert.urgency === "Urgent");
   const openSupportRequests = (supportTicketsQuery.data ?? []).filter((ticket) => ticket.status !== "Resolved");
   const pendingAccountRequests = (enterpriseAccountsQuery.data ?? []).reduce((total, account) => total + account.profileChangeRequests.length, 0);
   const emailProblems = (emailDeliveriesQuery.data ?? []).filter(isEmailProblem);

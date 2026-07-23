@@ -50,13 +50,25 @@ describe("CameraAddModal", () => {
     const validMarkup = render(values({ username: "camera-user", password: "device pass" }), {});
     expect(validMarkup).not.toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
   });
+
+  it("keeps the form open and disables saving when the tenant already uses the IP", () => {
+    const markup = render(
+      values({ username: "camera-user", password: "device pass" }),
+      {},
+      "A camera with this IP address is already configured for this Enterprise.",
+    );
+
+    expect(markup).toContain("A camera with this IP address is already configured");
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+  });
 });
 
-function render(newCam: CameraFormValues, errors: Partial<Record<keyof CameraFormValues, string>>) {
+function render(newCam: CameraFormValues, errors: Partial<Record<keyof CameraFormValues, string>>, duplicateIpError?: string) {
   return renderToStaticMarkup(
     <CameraAddModal
       newCam={newCam}
       errors={errors}
+      duplicateIpError={duplicateIpError}
       isValidating={false}
       onChange={() => undefined}
       onClose={() => undefined}

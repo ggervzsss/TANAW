@@ -357,7 +357,6 @@ async def test_pending_email_correction_rotates_delivery_and_deactivation_invali
                 email=corrected_email,
                 phone="+639123456789",
                 role="staff",
-                status="active",
             ),
             stored_actor,
             db,

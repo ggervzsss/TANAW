@@ -26,6 +26,7 @@ export function TapoRtspBuilder({ error, host, layout = "responsive", onHostChan
         <div className="min-w-0">
           <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase dark:text-slate-300">Camera IP / Host</label>
           <input
+            id="camera-ip-host"
             type="text"
             value={host}
             onChange={(event) => onHostChange(normalizeIpv4Input(event.target.value))}

@@ -227,6 +227,19 @@ ticket draft are user/route scoped for the authenticated session; photo drafts
 remain memory-only. Passwords and camera credentials are excluded. Logout
 clears the scoped page and draft state.
 
+Ticket and report-ledger cells measure rendered overflow with `ResizeObserver`.
+The keyboard-accessible horizontal ellipsis appears only when the current
+column width, wrapping, and font metrics actually clip content; expansion does
+not rely on a character threshold.
+
+RTSP and ONVIF camera IPs are canonicalized before persistence and must be
+unique within the current enterprise camera list. Adding or editing a duplicate
+keeps the form and credentials intact, focuses the IP field, and shows an inline
+conflict. The serialized local configuration write boundary repeats the same
+validation so concurrent renderer actions cannot persist a duplicate. Separate
+enterprise lists may reuse the same private IP, and legacy duplicates are
+reported without automatic deletion or merging.
+
 The canonical local relationships are:
 
 ```mermaid
