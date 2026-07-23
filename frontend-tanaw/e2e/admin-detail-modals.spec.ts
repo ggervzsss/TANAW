@@ -61,6 +61,8 @@ async function restoreAdminSession(page: Page) {
   });
   await page.route("**/activity-logs", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([log]) }));
   await page.route("**/operational/alerts", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([alert]) }));
+  await page.route("**/accounts/enterprises", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await page.route("**/operational/tickets", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
 }
 
@@ -76,33 +78,51 @@ test("balances Admin log and alert details with accessible long-text disclosures
   await page.setViewportSize({ width: 1280, height: 900 });
   await restoreAdminSession(page);
 
-  await page.goto("/admin/system-logs");
+  await page.goto("/admin/activity-history");
   await page.getByText(longActor, { exact: true }).first().click();
-  const logDialog = page.getByRole("dialog", { name: "Log Details" });
+  const logDialog = page.getByRole("dialog", { name: "Activity Details" });
   await expect(logDialog).toBeVisible();
   await expect(logDialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expectSameRow(logDialog.getByText("Target", { exact: true }).locator(".."), logDialog.getByText("Summary", { exact: true }).locator(".."));
+  await expectSameRow(logDialog.getByText("Affected Item", { exact: true }).locator(".."), logDialog.getByText("Details", { exact: true }).locator(".."));
 
-  const actorDisclosure = logDialog.getByText("Actor", { exact: true }).locator("..").getByRole("button");
+  const actorDisclosure = logDialog.getByText("Performed By", { exact: true }).locator("..").getByRole("button");
   await expect(actorDisclosure).toHaveAttribute("aria-expanded", "false");
   await actorDisclosure.press("Enter");
   await expect(actorDisclosure).toHaveAttribute("aria-expanded", "true");
-  await expect(actorDisclosure).toHaveAccessibleName("Show less actor");
+  await expect(actorDisclosure).toHaveAccessibleName("Collapse full person or system");
   await actorDisclosure.press("Space");
   await expect(actorDisclosure).toHaveAttribute("aria-expanded", "false");
-  await expect(logDialog.getByRole("button", { name: "Show more action" })).toHaveCount(0);
+  await expect(logDialog.getByRole("button", { name: "Show more activity" })).toHaveCount(0);
   await logDialog.getByRole("button", { name: "Close modal" }).click();
 
-  await page.goto("/admin/alerts-monitor");
-  await page.getByText(alert.id, { exact: true }).click();
-  const alertDialog = page.getByRole("dialog", { name: "Priority Alert Details" });
+  await page.goto(`/admin/operations?view=situations&alert=${alert.id}`);
+  const alertDialog = page.getByRole("dialog", { name: "Maintenance Request" });
   await expect(alertDialog).toBeVisible();
-  await expectSameRow(alertDialog.getByText("Enterprise", { exact: true }).locator(".."), alertDialog.getByText("Summary", { exact: true }).locator(".."));
-  await expect(alertDialog.getByText("Required Action", { exact: true }).locator("..").locator("..")).toHaveClass(/md:col-span-2/);
-  await expect(alertDialog.getByRole("button", { name: "Show more required action" })).toBeVisible();
+  await expectSameRow(alertDialog.getByText("What Happened", { exact: true }).locator(".."), alertDialog.getByText("Suggested Response", { exact: true }).locator(".."));
+  await expect(alertDialog.getByText(longSummary, { exact: true })).toBeVisible();
 
   await alertDialog.getByRole("button", { name: "Close modal" }).click();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await page.getByText(alert.id, { exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Priority Alert Details" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await page.getByText("Maintenance Request", { exact: true }).first().click();
+  await expect(page.getByRole("dialog", { name: "Maintenance Request" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
+});
+
+test("themes the shared Admin response panel without a bright dark-mode surface", async ({ page }) => {
+  await restoreAdminSession(page);
+  await page.goto(`/admin/operations?view=situations&alert=${alert.id}`);
+
+  const dialog = page.getByRole("dialog", { name: "Maintenance Request" });
+  const responsePanel = dialog.locator(".tanaw-modal-action-panel");
+  await expect(responsePanel).toBeVisible();
+  await expect(responsePanel).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(responsePanel.getByText("Record the Admin response")).toBeVisible();
+  await expect(responsePanel.getByRole("button", { name: "Start Review" })).toBeVisible();
+  await expect(responsePanel.getByRole("button", { name: "Mark Resolved" })).toBeVisible();
+
+  const darkBackground = await responsePanel.evaluate((element) => getComputedStyle(element).backgroundColor);
+  await dialog.getByRole("button", { name: "Close modal" }).click();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.getByText("Maintenance Request", { exact: true }).first().click();
+  const lightResponsePanel = page.getByRole("dialog", { name: "Maintenance Request" }).locator(".tanaw-modal-action-panel");
+  await expect.poll(() => lightResponsePanel.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(darkBackground);
 });

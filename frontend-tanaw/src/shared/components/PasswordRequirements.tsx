@@ -3,7 +3,7 @@ import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, getPasswordRequirementStatus,
 
 type RequirementState = "idle" | "met" | "unmet";
 
-export function PasswordRequirements({ password }: { password: string }) {
+export function PasswordRequirements({ password, className = "mt-2 mb-4" }: { password: string; className?: string }) {
   const status = getPasswordRequirementStatus(password);
   const requirements = [
     {
@@ -22,7 +22,7 @@ export function PasswordRequirements({ password }: { password: string }) {
   return (
     <section
       aria-label="Password requirements"
-      className="tanaw-password-requirements mt-2 mb-4 rounded-2xl border border-emerald-100 bg-emerald-50/55 px-4 py-3 shadow-inner shadow-emerald-950/3 dark:border-emerald-400/20 dark:bg-(--tanaw-success-surface) dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+      className={`tanaw-password-requirements rounded-2xl border border-emerald-100 bg-emerald-50/55 px-4 py-3 shadow-inner shadow-emerald-950/3 dark:border-emerald-400/20 dark:bg-(--tanaw-success-surface) dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${className}`}
     >
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-bold tracking-wide text-emerald-900 uppercase dark:text-emerald-200">Password requirements</p>
@@ -46,14 +46,14 @@ export function PasswordRequirements({ password }: { password: string }) {
   );
 }
 
-export function PasswordMatchIndicator({ password, confirmation }: { password: string; confirmation: string }) {
+export function PasswordMatchIndicator({ password, confirmation, className = "mt-2", id }: { password: string; confirmation: string; className?: string; id?: string }) {
   const hasConfirmation = confirmation.length > 0;
   const matches = hasConfirmation && password.length > 0 && normalizePassword(password) === normalizePassword(confirmation);
   const state = toRequirementState(hasConfirmation, matches);
-  const label = state === "idle" ? "Re-enter the new password to confirm it" : state === "met" ? "Passwords match" : "Passwords do not match";
+  const label = state === "idle" ? "Re-enter the new password to confirm it." : state === "met" ? "Passwords match" : "Passwords do not match";
 
   return (
-    <ul className="mt-2" aria-live="polite">
+    <ul id={id} className={className} aria-live="polite">
       <RequirementItem label={label} state={state} />
     </ul>
   );

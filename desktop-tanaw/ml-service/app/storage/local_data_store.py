@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import sqlite3
@@ -6,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -13,7 +15,9 @@ from uuid import uuid4
 
 from app.config.camera_config import reporting_period_key
 
-LOCAL_SCHEMA_VERSION = 1
+LOCAL_SCHEMA_VERSION = 3
+
+logger = logging.getLogger(__name__)
 
 
 class LocalDatabaseResetRequiredError(RuntimeError):
@@ -57,10 +61,12 @@ class LocalDataStore:
         self._retired_database_path = self._root / "tanaw_metrics.sqlite3"
         self._initialized = False
 
-    def load_monitoring_state(self) -> dict[str, Any] | None:
+    def load_monitoring_state(self, camera_id: int | None = None) -> dict[str, Any] | None:
         with self._connection() as connection:
+            where_clause = "where camera_id = ?" if camera_id is not None else ""
+            parameters: tuple[Any, ...] = (camera_id,) if camera_id is not None else ()
             row = connection.execute(
-                """
+                f"""
                 select
                     camera_id,
                     camera_name_snapshot,
@@ -73,9 +79,12 @@ class LocalDataStore:
                     occupancy_count,
                     camera_config_json,
                     updated_at
-                from active_monitoring_state
-                where singleton_id = 1
-                """
+                from camera_monitoring_states
+                {where_clause}
+                order by updated_at desc
+                limit 1
+                """,
+                parameters,
             ).fetchone()
         if row is None:
             return None
@@ -100,6 +109,18 @@ class LocalDataStore:
             "updated_at": row["updated_at"],
         }
 
+    def list_monitoring_states(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            camera_ids = [
+                int(row["camera_id"])
+                for row in connection.execute(
+                    "select camera_id from camera_monitoring_states order by camera_id"
+                ).fetchall()
+            ]
+        return [
+            state for camera_id in camera_ids if (state := self.load_monitoring_state(camera_id))
+        ]
+
     def save_monitoring_state(
         self, payload: dict[str, Any], updated_at: str | None = None
     ) -> dict[str, Any]:
@@ -108,11 +129,13 @@ class LocalDataStore:
         counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
         camera_config = payload.get("camera_config")
         config_payload = camera_config if isinstance(camera_config, dict) else {}
+        camera_id = payload.get("camera_id")
+        if isinstance(camera_id, bool) or not isinstance(camera_id, int) or camera_id <= 0:
+            raise ValueError("Camera ID is required when saving camera monitoring state.")
         with self._connection() as connection:
             connection.execute(
                 """
-                insert into active_monitoring_state (
-                    singleton_id,
+                insert into camera_monitoring_states (
                     camera_id,
                     camera_name_snapshot,
                     running,
@@ -125,9 +148,8 @@ class LocalDataStore:
                     camera_config_json,
                     updated_at
                 )
-                values (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict(singleton_id) do update set
-                    camera_id = excluded.camera_id,
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(camera_id) do update set
                     camera_name_snapshot = excluded.camera_name_snapshot,
                     running = excluded.running,
                     status = excluded.status,
@@ -140,7 +162,7 @@ class LocalDataStore:
                     updated_at = excluded.updated_at
                 """,
                 (
-                    payload.get("camera_id"),
+                    camera_id,
                     payload.get("camera_name"),
                     int(bool(payload.get("running"))),
                     str(payload.get("status") or "stopped"),
@@ -192,6 +214,8 @@ class LocalDataStore:
                         zone,
                         status,
                         camera_type,
+                        camera_host,
+                        rtsp_stream,
                         stream_url,
                         purpose,
                         resolution,
@@ -206,12 +230,14 @@ class LocalDataStore:
                         created_at,
                         updated_at
                     )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     on conflict(camera_id) do update set
                         name = excluded.name,
                         zone = excluded.zone,
                         status = excluded.status,
                         camera_type = excluded.camera_type,
+                        camera_host = excluded.camera_host,
+                        rtsp_stream = excluded.rtsp_stream,
                         stream_url = excluded.stream_url,
                         purpose = excluded.purpose,
                         resolution = excluded.resolution,
@@ -231,6 +257,8 @@ class LocalDataStore:
                         camera["zone"],
                         camera["status"],
                         camera["cameraType"],
+                        camera.get("cameraHost"),
+                        camera.get("rtspStream"),
                         camera["rtsp"],
                         camera["type"],
                         camera["resolution"],
@@ -249,7 +277,8 @@ class LocalDataStore:
         return normalized
 
     def append_count_event(self, payload: dict[str, Any], recorded_at: str | None = None) -> str:
-        event_id = str(uuid4())
+        supplied_event_id = payload.get("event_id")
+        event_id = supplied_event_id.strip() if isinstance(supplied_event_id, str) else str(uuid4())
         recorded_at = recorded_at or _utc_now()
         raw_counts = payload.get("counts")
         counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
@@ -259,11 +288,17 @@ class LocalDataStore:
             is_unique_entry = direction == "entry"
 
         with self._connection() as connection:
-            connection.execute(
+            # Serialize the enterprise-wide read/modify/write across independent
+            # camera pipeline connections so simultaneous events cannot lose an
+            # occupancy increment.
+            connection.execute("begin immediate")
+            current_occupancy = self._ensure_enterprise_occupancy_state(connection)
+            cursor = connection.execute(
                 """
-                insert into count_events (
+                insert or ignore into count_events (
                     event_id,
                     recorded_at,
+                    enterprise_id,
                     camera_id,
                     camera_name,
                     direction,
@@ -276,13 +311,15 @@ class LocalDataStore:
                     reid_score,
                     reid_decision,
                     identity_confidence,
+                    enterprise_occupancy_count,
                     payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, ?)
                 """,
                 (
                     event_id,
                     recorded_at,
+                    payload.get("enterprise_id", self._enterprise_id),
                     payload.get("camera_id"),
                     payload.get("camera_name"),
                     direction,
@@ -298,6 +335,32 @@ class LocalDataStore:
                     json.dumps(payload, sort_keys=True),
                 ),
             )
+            if cursor.rowcount > 0:
+                delta = 1 if direction == "entry" else -1
+                next_occupancy = max(0, current_occupancy + delta)
+                if direction == "exit" and current_occupancy == 0:
+                    logger.warning(
+                        "Enterprise occupancy remained at zero for an unmatched exit event.",
+                        extra={
+                            "enterprise_id": payload.get("enterprise_id", self._enterprise_id),
+                            "camera_id": payload.get("camera_id"),
+                            "event_id": event_id,
+                        },
+                    )
+                connection.execute(
+                    """
+                    update enterprise_occupancy_state
+                    set current_occupancy = ?,
+                        peak_occupancy = max(peak_occupancy, ?),
+                        updated_at = ?
+                    where singleton_id = 1
+                    """,
+                    (next_occupancy, next_occupancy, recorded_at),
+                )
+                connection.execute(
+                    "update count_events set enterprise_occupancy_count = ? where event_id = ?",
+                    (next_occupancy, event_id),
+                )
 
         return event_id
 
@@ -535,6 +598,7 @@ class LocalDataStore:
                 """
                 insert into count_snapshots (
                     recorded_at,
+                    enterprise_id,
                     camera_id,
                     camera_name,
                     entry_count,
@@ -545,10 +609,11 @@ class LocalDataStore:
                     error,
                     payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     recorded_at,
+                    payload.get("enterprise_id", self._enterprise_id),
                     payload.get("camera_id"),
                     payload.get("camera_name"),
                     _safe_int(counts.get("entry")),
@@ -575,21 +640,23 @@ class LocalDataStore:
     ) -> dict[str, Any]:
         correction_id = str(uuid4())
         recorded_at = recorded_at or _utc_now()
-        delta = max(0, new_occupancy) - max(0, old_occupancy)
-        payload = {
-            "correction_id": correction_id,
-            "enterprise_id": enterprise_id,
-            "camera_id": camera_id,
-            "old_occupancy": max(0, old_occupancy),
-            "new_occupancy": max(0, new_occupancy),
-            "delta": delta,
-            "reason": reason,
-            "actor_id": actor_id,
-            "actor_name": actor_name,
-            "recorded_at": recorded_at,
-        }
-
         with self._connection() as connection:
+            connection.execute("begin immediate")
+            authoritative_old_occupancy = self._ensure_enterprise_occupancy_state(connection)
+            normalized_new_occupancy = max(0, new_occupancy)
+            delta = normalized_new_occupancy - authoritative_old_occupancy
+            payload = {
+                "correction_id": correction_id,
+                "enterprise_id": enterprise_id,
+                "camera_id": camera_id,
+                "old_occupancy": authoritative_old_occupancy,
+                "new_occupancy": normalized_new_occupancy,
+                "delta": delta,
+                "reason": reason,
+                "actor_id": actor_id,
+                "actor_name": actor_name,
+                "recorded_at": recorded_at,
+            }
             connection.execute(
                 """
                 insert into occupancy_corrections (
@@ -621,8 +688,22 @@ class LocalDataStore:
                     json.dumps(payload, sort_keys=True),
                 ),
             )
+            connection.execute(
+                """
+                update enterprise_occupancy_state
+                set current_occupancy = ?,
+                    peak_occupancy = max(peak_occupancy, ?),
+                    updated_at = ?
+                where singleton_id = 1
+                """,
+                (normalized_new_occupancy, normalized_new_occupancy, recorded_at),
+            )
 
         return payload
+
+    def enterprise_occupancy(self) -> int:
+        with self._connection() as connection:
+            return self._ensure_enterprise_occupancy_state(connection)
 
     def list_occupancy_corrections(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
@@ -649,8 +730,16 @@ class LocalDataStore:
 
         return [dict(row) for row in rows]
 
-    def metrics_summary(self, include_submitted: bool = False) -> dict[str, int | str | None]:
-        submitted_filter = "" if include_submitted else "where submitted_report_id is null"
+    def metrics_summary(
+        self, include_submitted: bool = False, camera_id: int | None = None
+    ) -> dict[str, int | str | None]:
+        conditions = [] if include_submitted else ["submitted_report_id is null"]
+        parameters: tuple[Any, ...] = ()
+        if camera_id is not None:
+            conditions.append("camera_id = ?")
+            parameters = (camera_id,)
+        submitted_filter = f"where {' and '.join(conditions)}" if conditions else ""
+        camera_filter = " and camera_id = ?" if camera_id is not None else ""
         with self._connection() as connection:
             row = connection.execute(
                 f"""
@@ -662,19 +751,22 @@ class LocalDataStore:
                     sum(case when direction = 'entry' and is_unique_entry = 1 and visitor_id is not null and visitor_id != '' then 1 else 0 end) as confirmed_unique_entries,
                     sum(case when direction = 'entry' and is_unique_entry = 1 and (visitor_id is null or visitor_id = '') then 1 else 0 end) as degraded_unique_entries,
                     max(occupancy_count) as peak_occupancy,
-                    max(occupancy_count) as current_occupancy,
+                    max(enterprise_occupancy_count) as enterprise_peak_occupancy,
                     min(recorded_at) as first_event_at,
                     max(recorded_at) as last_event_at
                 from count_events
                 {submitted_filter}
-                """
+                """,
+                parameters,
             ).fetchone()
 
             unsynced_count = connection.execute(
-                "select count(*) from count_events where synced_at is null"
+                f"select count(*) from count_events where synced_at is null{camera_filter}",
+                parameters if camera_id is not None else (),
             ).fetchone()[0]
             unsubmitted_count = connection.execute(
-                "select count(*) from count_events where submitted_report_id is null"
+                f"select count(*) from count_events where submitted_report_id is null{camera_filter}",
+                parameters if camera_id is not None else (),
             ).fetchone()[0]
             payload_rows = connection.execute(
                 f"""
@@ -683,12 +775,31 @@ class LocalDataStore:
                 {submitted_filter}
                 order by recorded_at asc
                 limit 25
-                """
+                """,
+                parameters,
+            ).fetchall()
+            occupancy_rows = connection.execute(
+                f"""
+                select camera_id, occupancy_count
+                from count_events
+                {submitted_filter}
+                order by recorded_at asc, id asc
+                """,
+                parameters,
             ).fetchall()
             correction_row = connection.execute(
-                """
+                f"""
                 select coalesce(sum(delta), 0) as correction_delta
                 from occupancy_corrections
+                {"where camera_id = ?" if camera_id is not None else ""}
+                """,
+                parameters if camera_id is not None else (),
+            ).fetchone()
+            enterprise_state = connection.execute(
+                """
+                select current_occupancy, peak_occupancy
+                from enterprise_occupancy_state
+                where singleton_id = 1
                 """
             ).fetchone()
 
@@ -696,11 +807,35 @@ class LocalDataStore:
         exits = _safe_int(row["exits"])
         correction_delta = _safe_int(correction_row["correction_delta"])
         current_occupancy = max(0, entries - exits + correction_delta)
+        occupancy_by_camera: dict[int | str, int] = {}
+        enterprise_peak_occupancy = 0
+        for occupancy_row in occupancy_rows:
+            camera_scope: int | str = (
+                int(occupancy_row["camera_id"])
+                if occupancy_row["camera_id"] is not None
+                else "unattributed"
+            )
+            occupancy_by_camera[camera_scope] = max(0, _safe_int(occupancy_row["occupancy_count"]))
+            enterprise_peak_occupancy = max(
+                enterprise_peak_occupancy, sum(occupancy_by_camera.values())
+            )
         estimated_unique_count = _safe_int(row["unique_entries"])
+        if camera_id is None and enterprise_state is not None:
+            current_occupancy = max(0, _safe_int(enterprise_state["current_occupancy"]))
+        recorded_enterprise_peak = _safe_int(row["enterprise_peak_occupancy"])
+        if include_submitted and enterprise_state is not None:
+            recorded_enterprise_peak = max(
+                recorded_enterprise_peak, _safe_int(enterprise_state["peak_occupancy"])
+            )
         return {
             "entries": entries,
             "exits": exits,
-            "peak_occupancy": max(_safe_int(row["peak_occupancy"]), current_occupancy),
+            "peak_occupancy": max(
+                enterprise_peak_occupancy,
+                recorded_enterprise_peak,
+                _safe_int(row["peak_occupancy"]),
+                current_occupancy,
+            ),
             "current_occupancy": current_occupancy,
             "unique_count": estimated_unique_count,
             "estimated_unique_count": estimated_unique_count,
@@ -729,7 +864,11 @@ class LocalDataStore:
         with self._connection() as connection:
             rows = connection.execute(
                 f"""
-                select recorded_at, direction, occupancy_count, is_unique_entry
+                select
+                    recorded_at,
+                    direction,
+                    coalesce(enterprise_occupancy_count, occupancy_count) as occupancy_count,
+                    is_unique_entry
                 from count_events
                 {_submitted_filter_sql(include_submitted)}
                 order by recorded_at asc
@@ -789,7 +928,7 @@ class LocalDataStore:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
-    ) -> dict[str, int | str | None]:
+    ) -> dict[str, Any]:
         submitted_at = _utc_now()
         summary = self.metrics_summary(include_submitted=False)
         existing_submission = self._report_submission(report_id)
@@ -828,6 +967,11 @@ class LocalDataStore:
             existing_submission is None
             and payload_status != "Resubmitted"
             and open_period_matches_submission
+        )
+        camera_breakdown = (
+            self._camera_breakdown_for_open_events()
+            if should_consume_open_events
+            else self._report_camera_breakdown(report_id)
         )
         with self._connection() as connection:
             connection.execute(
@@ -872,6 +1016,35 @@ class LocalDataStore:
             )
             if should_consume_open_events:
                 connection.execute(
+                    "delete from report_camera_totals where report_id = ?", (report_id,)
+                )
+                connection.executemany(
+                    """
+                    insert into report_camera_totals (
+                        report_id,
+                        camera_id,
+                        camera_name,
+                        entries,
+                        exits,
+                        peak_occupancy,
+                        unique_count
+                    )
+                    values (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            report_id,
+                            camera["camera_id"],
+                            camera["camera_name"],
+                            camera["entries"],
+                            camera["exits"],
+                            camera["peak_occupancy"],
+                            camera["unique_count"],
+                        )
+                        for camera in camera_breakdown
+                    ],
+                )
+                connection.execute(
                     """
                     update count_events
                     set submitted_report_id = ?
@@ -885,7 +1058,45 @@ class LocalDataStore:
             "report_id": report_id,
             "submitted_at": submitted_at,
             "sync_status": "pending_cloud_sync",
+            "camera_breakdown": camera_breakdown,
         }
+
+    def _camera_breakdown_for_open_events(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                select
+                    camera_id,
+                    max(camera_name) as camera_name,
+                    sum(case when direction = 'entry' then 1 else 0 end) as entries,
+                    sum(case when direction = 'exit' then 1 else 0 end) as exits,
+                    max(occupancy_count) as peak_occupancy,
+                    sum(
+                        case
+                            when direction = 'entry' and is_unique_entry = 1 then 1
+                            else 0
+                        end
+                    ) as unique_count
+                from count_events
+                where submitted_report_id is null
+                group by camera_id
+                order by camera_id
+                """
+            ).fetchall()
+        return [_camera_breakdown_row(row) for row in rows]
+
+    def _report_camera_breakdown(self, report_id: str) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                select camera_id, camera_name, entries, exits, peak_occupancy, unique_count
+                from report_camera_totals
+                where report_id = ?
+                order by camera_id
+                """,
+                (report_id,),
+            ).fetchall()
+        return [_camera_breakdown_row(row) for row in rows]
 
     def mark_report_synced(self, report_id: str, synced_at: str | None = None) -> bool:
         synced_at = synced_at or _utc_now()
@@ -1018,6 +1229,7 @@ class LocalDataStore:
                 start + timedelta(seconds=(index + 1) * max(1, int((20 * 86400) / max(total, 1))))
             ).isoformat()
             payload = {
+                "enterprise_id": self._enterprise_id,
                 "camera_id": camera_id,
                 "camera_name": camera_name,
                 "direction": direction,
@@ -1042,6 +1254,7 @@ class LocalDataStore:
                 (
                     str(uuid4()),
                     recorded_at,
+                    self._enterprise_id,
                     camera_id,
                     camera_name,
                     direction,
@@ -1062,11 +1275,11 @@ class LocalDataStore:
             connection.executemany(
                 """
                 insert into count_events (
-                    event_id, recorded_at, camera_id, camera_name, direction, track_id,
+                    event_id, recorded_at, enterprise_id, camera_id, camera_name, direction, track_id,
                     entry_count, exit_count, occupancy_count, visitor_id, is_unique_entry,
                     reid_score, reid_decision, identity_confidence, payload_json
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
@@ -1098,7 +1311,12 @@ class LocalDataStore:
                 (report_id,),
             ).fetchone()
 
-        return _report_submission_row(row) if row is not None else None
+        if row is None:
+            return None
+        return {
+            **_report_submission_row(row),
+            "camera_breakdown": self._report_camera_breakdown(str(row["report_id"])),
+        }
 
     def _report_submission_for_period(self, period: str) -> dict[str, Any] | None:
         with self._connection() as connection:
@@ -1124,7 +1342,12 @@ class LocalDataStore:
                 """,
                 (period,),
             ).fetchone()
-        return _report_submission_row(row) if row is not None else None
+        if row is None:
+            return None
+        return {
+            **_report_submission_row(row),
+            "camera_breakdown": self._report_camera_breakdown(str(row["report_id"])),
+        }
 
     def list_report_submissions(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
@@ -1151,7 +1374,13 @@ class LocalDataStore:
                 (limit,),
             ).fetchall()
 
-        return [_report_submission_row(row) for row in rows]
+        return [
+            {
+                **_report_submission_row(row),
+                "camera_breakdown": self._report_camera_breakdown(str(row["report_id"])),
+            }
+            for row in rows
+        ]
 
     def get_report_draft(self, draft_key: str) -> dict[str, Any] | None:
         with self._connection() as connection:
@@ -1227,6 +1456,42 @@ class LocalDataStore:
         finally:
             connection.close()
 
+    def _ensure_enterprise_occupancy_state(self, connection: sqlite3.Connection) -> int:
+        row = connection.execute(
+            "select current_occupancy from enterprise_occupancy_state where singleton_id = 1"
+        ).fetchone()
+        if row is not None:
+            return max(0, _safe_int(row["current_occupancy"]))
+
+        camera_state_row = connection.execute(
+            "select coalesce(sum(occupancy_count), 0) as occupancy from camera_monitoring_states"
+        ).fetchone()
+        event_state_row = connection.execute(
+            """
+            select
+                coalesce(sum(case when direction = 'entry' then 1 else -1 end), 0)
+                + coalesce((select sum(delta) from occupancy_corrections), 0) as occupancy
+            from count_events
+            """
+        ).fetchone()
+        current_occupancy = max(
+            0,
+            _safe_int(camera_state_row["occupancy"] if camera_state_row else None),
+            _safe_int(event_state_row["occupancy"] if event_state_row else None),
+        )
+        connection.execute(
+            """
+            insert or ignore into enterprise_occupancy_state (
+                singleton_id, current_occupancy, peak_occupancy, updated_at
+            ) values (1, ?, ?, ?)
+            """,
+            (current_occupancy, current_occupancy, _utc_now()),
+        )
+        persisted = connection.execute(
+            "select current_occupancy from enterprise_occupancy_state where singleton_id = 1"
+        ).fetchone()
+        return max(0, _safe_int(persisted["current_occupancy"] if persisted else None))
+
     def _initialize(self) -> None:
         if self._initialized:
             return
@@ -1261,6 +1526,7 @@ class LocalDataStore:
                     "Close TANAW and run `npm run local-data -- clear --enterprise "
                     "<enterprise-id> --yes`, then reopen the application."
                 )
+            current_version = 0
             if "schema_metadata" in existing_tables:
                 version_row = connection.execute(
                     "select schema_version from schema_metadata where singleton_id = 1"
@@ -1268,7 +1534,7 @@ class LocalDataStore:
                 current_version = _safe_int(
                     version_row["schema_version"] if version_row is not None else None
                 )
-                if current_version != LOCAL_SCHEMA_VERSION:
+                if current_version not in {1, 2, LOCAL_SCHEMA_VERSION}:
                     raise LocalDatabaseResetRequiredError(
                         f"Local TANAW database schema {current_version} is incompatible with "
                         f"the required schema {LOCAL_SCHEMA_VERSION}. Explicitly clear this "
@@ -1293,6 +1559,8 @@ class LocalDataStore:
                     camera_type text not null check (
                         camera_type in ('IP_WEBCAM', 'RTSP_CCTV', 'USB_WEBCAM', 'ONVIF_CCTV')
                     ),
+                    camera_host text,
+                    rtsp_stream text check (rtsp_stream in ('stream1', 'stream2')),
                     stream_url text not null,
                     purpose text not null,
                     resolution text not null,
@@ -1329,14 +1597,36 @@ class LocalDataStore:
                     updated_at text not null
                 );
 
+                create table if not exists camera_monitoring_states (
+                    camera_id integer primary key,
+                    camera_name_snapshot text,
+                    running integer not null default 0 check (running in (0, 1)),
+                    status text not null,
+                    error text,
+                    started_at text,
+                    entry_count integer not null default 0,
+                    exit_count integer not null default 0,
+                    occupancy_count integer not null default 0,
+                    camera_config_json text not null,
+                    updated_at text not null
+                );
+
+                create table if not exists enterprise_occupancy_state (
+                    singleton_id integer primary key check (singleton_id = 1),
+                    current_occupancy integer not null default 0 check (current_occupancy >= 0),
+                    peak_occupancy integer not null default 0 check (peak_occupancy >= 0),
+                    updated_at text not null
+                );
+
                 insert or ignore into schema_metadata (
                     singleton_id, schema_version, applied_at
-                ) values (1, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                ) values (1, 3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
 
                 create table if not exists count_events (
                     id integer primary key autoincrement,
                     event_id text not null unique,
                     recorded_at text not null,
+                    enterprise_id text,
                     camera_id integer,
                     camera_name text,
                     direction text not null check (direction in ('entry', 'exit')),
@@ -1349,6 +1639,7 @@ class LocalDataStore:
                     reid_score real,
                     reid_decision text,
                     identity_confidence text,
+                    enterprise_occupancy_count integer,
                     payload_json text not null,
                     submitted_report_id text,
                     synced_at text,
@@ -1359,12 +1650,15 @@ class LocalDataStore:
                 );
 
                 create index if not exists idx_count_events_recorded_at on count_events(recorded_at);
+                create index if not exists idx_count_events_camera_recorded_at
+                    on count_events(camera_id, recorded_at);
                 create index if not exists idx_count_events_submitted_report_id on count_events(submitted_report_id);
                 create index if not exists idx_count_events_synced_at on count_events(synced_at);
 
                 create table if not exists count_snapshots (
                     id integer primary key autoincrement,
                     recorded_at text not null,
+                    enterprise_id text,
                     camera_id integer,
                     camera_name text,
                     entry_count integer not null default 0,
@@ -1377,6 +1671,8 @@ class LocalDataStore:
                 );
 
                 create index if not exists idx_count_snapshots_recorded_at on count_snapshots(recorded_at);
+                create index if not exists idx_count_snapshots_camera_recorded_at
+                    on count_snapshots(camera_id, recorded_at);
 
                 create table if not exists report_submissions (
                     report_id text primary key,
@@ -1399,6 +1695,21 @@ class LocalDataStore:
                     report_id text,
                     payload_json text not null,
                     updated_at text not null
+                );
+
+                create table if not exists report_camera_totals (
+                    report_id text not null,
+                    camera_id integer,
+                    camera_name text,
+                    entries integer not null default 0,
+                    exits integer not null default 0,
+                    peak_occupancy integer not null default 0,
+                    unique_count integer not null default 0,
+                    primary key (report_id, camera_id),
+                    constraint fk_report_camera_totals_submission
+                        foreign key (report_id)
+                        references report_submissions(report_id)
+                        on update cascade on delete cascade
                 );
 
                 create table if not exists occupancy_corrections (
@@ -1472,6 +1783,69 @@ class LocalDataStore:
                 create index if not exists idx_visitor_sightings_business_date on visitor_sightings(business_date);
                 """
             )
+            if current_version in {1, 2}:
+                _add_column_if_missing(
+                    connection, "camera_profiles", "camera_host", "camera_host text"
+                )
+                _add_column_if_missing(
+                    connection,
+                    "camera_profiles",
+                    "rtsp_stream",
+                    "rtsp_stream text check (rtsp_stream in ('stream1', 'stream2'))",
+                )
+                _add_column_if_missing(
+                    connection, "count_events", "enterprise_id", "enterprise_id text"
+                )
+                _add_column_if_missing(
+                    connection, "count_snapshots", "enterprise_id", "enterprise_id text"
+                )
+                if current_version == 1:
+                    connection.execute(
+                        """
+                    insert or ignore into camera_monitoring_states (
+                        camera_id,
+                        camera_name_snapshot,
+                        running,
+                        status,
+                        error,
+                        started_at,
+                        entry_count,
+                        exit_count,
+                        occupancy_count,
+                        camera_config_json,
+                        updated_at
+                    )
+                    select
+                        camera_id,
+                        camera_name_snapshot,
+                        running,
+                        status,
+                        error,
+                        started_at,
+                        entry_count,
+                        exit_count,
+                        occupancy_count,
+                        camera_config_json,
+                        updated_at
+                    from active_monitoring_state
+                    where singleton_id = 1 and camera_id is not null
+                    """
+                    )
+                _add_column_if_missing(
+                    connection,
+                    "count_events",
+                    "enterprise_occupancy_count",
+                    "enterprise_occupancy_count integer",
+                )
+                self._ensure_enterprise_occupancy_state(connection)
+                connection.execute(
+                    """
+                    update schema_metadata
+                    set schema_version = ?, applied_at = ?
+                    where singleton_id = 1
+                    """,
+                    (LOCAL_SCHEMA_VERSION, _utc_now()),
+                )
             connection.commit()
         finally:
             connection.close()
@@ -1481,6 +1855,16 @@ class LocalDataStore:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _add_column_if_missing(
+    connection: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
+    columns = {
+        str(row["name"]) for row in connection.execute(f"pragma table_info({table})").fetchall()
+    }
+    if column not in columns:
+        connection.execute(f"alter table {table} add column {definition}")
 
 
 def _load_json_object(value: Any) -> dict[str, Any]:
@@ -1511,6 +1895,16 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     for field in required_string_fields:
         if not isinstance(camera.get(field), str) or not str(camera[field]).strip():
             raise ValueError(f"Camera {field} is required.")
+    raw_status = str(camera["status"])
+    status = (
+        "running"
+        if raw_status in {"starting", "connecting", "degraded", "reconnecting"}
+        else "error"
+        if raw_status == "failed"
+        else raw_status
+    )
+    if status not in {"untested", "online", "offline", "running", "stopped", "error"}:
+        raise ValueError("Camera status is invalid.")
     if camera.get("username") is not None or camera.get("password") is not None:
         raise ValueError("Camera credentials must not be stored in SQLite.")
     if not isinstance(camera.get("config"), dict):
@@ -1520,9 +1914,31 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     if parsed_stream_url.username is not None or parsed_stream_url.password is not None:
         raise ValueError("Camera stream credentials must not be stored in SQLite.")
 
+    camera_host: str | None = None
+    rtsp_stream: str | None = None
+    if camera["cameraType"] in {"RTSP_CCTV", "ONVIF_CCTV"}:
+        raw_host = camera.get("cameraHost") or parsed_stream_url.hostname or ""
+        try:
+            camera_host = str(IPv4Address(str(raw_host).strip()))
+        except ValueError as exc:
+            raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
+        path_profile = parsed_stream_url.path.strip("/").split("/", maxsplit=1)[0]
+        raw_profile = camera.get("rtspStream") or path_profile or "stream2"
+        if raw_profile not in {"stream1", "stream2"}:
+            raise ValueError("RTSP Stream must be stream1 or stream2.")
+        rtsp_stream = str(raw_profile)
+        canonical_url = f"rtsp://{camera_host}/{rtsp_stream}"
+        if stream_url != canonical_url:
+            raise ValueError(
+                "Stream URL conflicts with Camera IP / Host and the selected RTSP Stream."
+            )
+
     return {
         **camera,
         "id": int(camera["id"]),
+        "status": status,
+        "cameraHost": camera_host,
+        "rtspStream": rtsp_stream,
         "rtsp": stream_url,
         "fps": float(camera.get("fps") or 0),
         "confidence": float(camera.get("confidence") or 0.35),
@@ -1531,6 +1947,20 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
             if camera.get("trackingConfidence") is not None
             else None
         ),
+    }
+
+
+def _camera_breakdown_row(row: sqlite3.Row) -> dict[str, Any]:
+    entries = _safe_int(row["entries"])
+    exits = _safe_int(row["exits"])
+    return {
+        "camera_id": int(row["camera_id"]) if row["camera_id"] is not None else None,
+        "camera_name": row["camera_name"],
+        "entries": entries,
+        "exits": exits,
+        "peak_occupancy": _safe_int(row["peak_occupancy"]),
+        "unique_count": _safe_int(row["unique_count"]),
+        "total_events": entries + exits,
     }
 
 

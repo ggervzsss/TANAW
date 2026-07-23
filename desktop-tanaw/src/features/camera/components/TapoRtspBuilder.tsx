@@ -1,70 +1,48 @@
-import { useEffect, useRef, useState } from "react";
 import { RadioTower } from "lucide-react";
 import { SelectDropdown } from "../../../components/SelectDropdown";
-import { buildTapoRtspUrl, parseRtspConnection, TAPO_STREAM_OPTIONS, type TapoStreamId } from "../utils/rtsp";
+import { normalizeIpv4Input, TAPO_STREAM_OPTIONS, type TapoStreamId } from "../utils/rtsp";
 
 type TapoRtspBuilderProps = {
+  error?: string;
+  host: string;
   layout?: "responsive" | "stacked";
-  streamUrl: string;
-  onStreamUrlChange: (streamUrl: string) => void;
+  onHostChange: (host: string) => void;
+  onStreamChange: (streamId: TapoStreamId) => void;
+  showHeading?: boolean;
+  streamId: TapoStreamId;
 };
 
-export function TapoRtspBuilder({ layout = "responsive", streamUrl, onStreamUrlChange }: TapoRtspBuilderProps) {
-  const initialConnection = parseRtspConnection(streamUrl);
-  const lastEmittedStreamUrl = useRef(streamUrl);
-  const [host, setHost] = useState(initialConnection.host);
-  const [streamId, setStreamId] = useState<TapoStreamId>(initialConnection.streamId);
+export function TapoRtspBuilder({ error, host, layout = "responsive", onHostChange, onStreamChange, showHeading = true, streamId }: TapoRtspBuilderProps) {
   const gridClass = layout === "stacked" ? "grid gap-3" : "grid gap-3 md:grid-cols-[minmax(12rem,1fr)_190px]";
 
-  useEffect(() => {
-    if (streamUrl === lastEmittedStreamUrl.current) return;
-
-    lastEmittedStreamUrl.current = streamUrl;
-    if (!streamUrl.trim()) {
-      setHost("");
-      setStreamId("stream2");
-      return;
-    }
-
-    const nextConnection = parseRtspConnection(streamUrl);
-    if (nextConnection.host) {
-      setHost(nextConnection.host);
-      setStreamId(nextConnection.streamId);
-    }
-  }, [streamUrl]);
-
-  const updateConnection = (nextHost: string, nextStreamId: TapoStreamId) => {
-    setHost(nextHost);
-    setStreamId(nextStreamId);
-    const nextStreamUrl = buildTapoRtspUrl(nextHost, nextStreamId);
-    lastEmittedStreamUrl.current = nextStreamUrl;
-    onStreamUrlChange(nextStreamUrl);
-  };
-
   return (
-    <div className="rounded-sm border border-emerald-100 bg-emerald-50/70 p-3">
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold tracking-wider text-[#065f46] uppercase">
-        <RadioTower size={14} /> Tapo C310 RTSP
-      </div>
+    <div className={showHeading ? "rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8" : "mt-3"}>
+      {showHeading && (
+        <div className="mb-3 flex items-center gap-2 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">
+          <RadioTower size={14} /> Camera Source Configuration
+        </div>
+      )}
       <div className={gridClass}>
         <div className="min-w-0">
-          <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">Camera IP / Host</label>
+          <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase dark:text-slate-300">Camera IP / Host</label>
           <input
             type="text"
             value={host}
-            onChange={(event) => updateConnection(event.target.value, streamId)}
+            onChange={(event) => onHostChange(normalizeIpv4Input(event.target.value))}
             placeholder="192.168.1.9"
             autoComplete="off"
-            inputMode="url"
+            inputMode="decimal"
             spellCheck={false}
-            className="w-full min-w-0 rounded-sm border border-emerald-200 bg-white px-2 py-2 font-mono text-[13px] text-gray-800 transition outline-none focus:border-[#065f46]"
+            aria-invalid={Boolean(error)}
+            className={`w-full min-w-0 rounded-xl border bg-white px-3 py-2.5 font-mono text-[13px] text-gray-800 transition outline-none focus:border-[#065f46] dark:bg-[#0f172a] dark:text-white ${error ? "border-red-500" : "border-emerald-200 dark:border-slate-600"}`}
           />
+          {error && <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
         </div>
         <div className="min-w-0">
-          <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase">RTSP Stream</label>
+          <label className="mb-1 block text-[10px] font-bold text-gray-500 uppercase dark:text-slate-300">RTSP Stream</label>
           <SelectDropdown
             value={streamId}
-            onChange={(nextStreamId) => updateConnection(host, nextStreamId as TapoStreamId)}
+            onChange={(nextStreamId) => onStreamChange(nextStreamId as TapoStreamId)}
             options={TAPO_STREAM_OPTIONS.map((option) => [option.value, option.label] as const)}
             ariaLabel="RTSP stream"
             size="compact"

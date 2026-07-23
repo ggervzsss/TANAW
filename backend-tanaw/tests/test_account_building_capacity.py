@@ -23,6 +23,17 @@ def test_enterprise_account_create_defaults_building_capacity() -> None:
     assert payload.buildingCapacity == 100
 
 
+@pytest.mark.parametrize("contact_number", [None, "", "   "])
+def test_enterprise_account_create_accepts_optional_contact_number(
+    contact_number: str | None,
+) -> None:
+    payload = EnterpriseAccountCreate.model_validate(
+        enterprise_create_payload(contactNumber=contact_number)
+    )
+
+    assert payload.contactNumber is None
+
+
 def test_enterprise_account_payloads_validate_building_capacity() -> None:
     with pytest.raises(ValidationError):
         EnterpriseAccountCreate.model_validate(enterprise_create_payload(buildingCapacity=0))

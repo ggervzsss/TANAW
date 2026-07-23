@@ -141,7 +141,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
                 <button type="button" onClick={() => openAccountPage("security")} className="profile-menu-button">
                   <Shield size={14} /> Password Settings
                 </button>
-                <button type="button" onClick={handleLogout} className="text-tanaw-red flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-semibold transition-colors hover:bg-red-50">
+                <button type="button" onClick={handleLogout} className="profile-menu-button profile-menu-danger">
                   <LogOut size={14} /> Logout
                 </button>
               </motion.div>

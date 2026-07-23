@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ModalPortal } from "./ModalPortal";
 import { getNextDropdownIndex } from "./dropdownKeyboard";
+import { shouldShowDropdownSearch } from "./dropdownSearch";
 
 export type SelectDropdownOption = string | readonly [string, string] | { value: string; label: string; meta?: string; searchText?: string };
 
@@ -58,11 +59,13 @@ export function SelectDropdown({
   const activeOptionRef = useRef<HTMLButtonElement | null>(null);
   const listboxId = useId();
   const normalizedOptions = useMemo(() => options.map(normalizeOption), [options]);
+  const searchEnabled = shouldShowDropdownSearch(searchable, normalizedOptions.length);
   const filteredOptions = useMemo(() => {
+    if (!searchEnabled) return normalizedOptions;
     const normalizedSearch = search.trim().toLowerCase();
     if (!normalizedSearch) return normalizedOptions;
     return normalizedOptions.filter((option) => `${option.label} ${option.value} ${option.searchText ?? ""}`.toLowerCase().includes(normalizedSearch));
-  }, [normalizedOptions, search]);
+  }, [normalizedOptions, search, searchEnabled]);
   const selectedOption = normalizedOptions.find((option) => option.value === value);
   const safeActiveIndex = Math.min(activeIndex, Math.max(filteredOptions.length - 1, 0));
   const activeOption = filteredOptions[safeActiveIndex];
@@ -79,7 +82,7 @@ export function SelectDropdown({
     const spaceAbove = rect.top - viewportPadding - gap;
     const openUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
     const availableHeight = Math.max(openUpward ? spaceAbove : spaceBelow, 112);
-    const maxHeight = Math.min(searchable ? 320 : 280, availableHeight);
+    const maxHeight = Math.min(searchEnabled ? 320 : 280, availableHeight);
     const width = Math.min(Math.max(rect.width, 176), window.innerWidth - viewportPadding * 2);
     const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - width - viewportPadding));
 
@@ -89,7 +92,7 @@ export function SelectDropdown({
       maxHeight,
       width,
     });
-  }, [searchable]);
+  }, [searchEnabled]);
 
   const closeMenu = useCallback((restoreFocus = false) => {
     setIsOpen(false);
@@ -131,9 +134,9 @@ export function SelectDropdown({
   }, [isOpen, safeActiveIndex]);
 
   useEffect(() => {
-    if (!isOpen || searchable) return;
+    if (!isOpen || searchEnabled) return;
     menuRef.current?.focus();
-  }, [isOpen, searchable]);
+  }, [isOpen, searchEnabled]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!isOpen && ["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
@@ -157,7 +160,7 @@ export function SelectDropdown({
       setActiveIndex((current) => getNextDropdownIndex(current, filteredOptions.length, event.key as "ArrowDown" | "ArrowUp" | "End" | "Home"));
       return;
     }
-    if (event.key === "Enter" || (!searchable && event.key === " ")) {
+    if (event.key === "Enter" || (!searchEnabled && event.key === " ")) {
       event.preventDefault();
       if (activeOption) selectOption(activeOption);
     }
@@ -168,8 +171,10 @@ export function SelectDropdown({
     : "focus:border-tanaw-green focus:ring-tanaw-green/15 tanaw-data-filter flex min-h-10 items-center justify-between gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-200";
 
   return (
-    <div className={`relative min-w-0 ${className}`}>
-      {label && <span className={`mb-1.5 block font-bold uppercase ${isDirectory ? "text-[9px] tracking-widest text-white/65" : "text-[11px] tracking-wide text-slate-500 dark:text-slate-300"}`}>{label}</span>}
+    <div data-field-name={name} className={`relative min-w-0 ${className}`}>
+      {label && (
+        <span className={`mb-1.5 block font-bold uppercase ${isDirectory ? "text-[9px] tracking-widest text-white/65" : "text-[11px] tracking-wide text-slate-500 dark:text-slate-300"}`}>{label}</span>
+      )}
       {name && <input type="hidden" name={name} value={value} />}
       <button
         ref={buttonRef}
@@ -183,6 +188,8 @@ export function SelectDropdown({
         aria-invalid={Boolean(error)}
         aria-label={ariaLabel ?? label}
         aria-required={required}
+        aria-describedby={error && name ? `${name}-description` : undefined}
+        data-form-error-focus
         onClick={() => (isOpen ? closeMenu() : openMenu())}
         onKeyDown={handleKeyDown}
         className={`${buttonClasses} ${error ? "border-red-400" : ""}`}
@@ -191,11 +198,19 @@ export function SelectDropdown({
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          {selectedOption?.meta && <span className={isDirectory ? "rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white/70" : "text-xs font-semibold text-gray-400 dark:text-slate-400"}>{selectedOption.meta}</span>}
+          {selectedOption?.meta && (
+            <span className={isDirectory ? "rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white/70" : "text-xs font-semibold text-gray-400 dark:text-slate-400"}>
+              {selectedOption.meta}
+            </span>
+          )}
           <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${isDirectory ? "text-white/65" : "text-gray-400 dark:text-slate-400"} ${isOpen ? "rotate-180" : ""}`} />
         </span>
       </button>
-      {error && <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">{error}</p>}
+      {error && (
+        <p id={name ? `${name}-description` : undefined} role="alert" className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-300">
+          {error}
+        </p>
+      )}
 
       <AnimatePresence>
         {isOpen && menuPosition && (
@@ -215,9 +230,11 @@ export function SelectDropdown({
                 isDirectory ? "border border-white/15 bg-slate-950/97 text-white backdrop-blur-md" : "border border-gray-200 bg-white dark:border-slate-700 dark:bg-[#121c31]"
               }`}
             >
-              {searchable && (
+              {searchEnabled && (
                 <div className={`shrink-0 border-b p-2 ${isDirectory ? "border-white/10 bg-black/30" : "border-gray-100 dark:border-slate-700"}`}>
-                  <label className={`relative flex items-center rounded-md border ${isDirectory ? "border-white/15 bg-black/35 text-white" : "border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-[#0f172a]"}`}>
+                  <label
+                    className={`relative flex items-center rounded-md border ${isDirectory ? "border-white/15 bg-black/35 text-white" : "border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-[#0f172a]"}`}
+                  >
                     <Search size={14} className={`absolute left-3 ${isDirectory ? "text-white/55" : "text-gray-400"}`} />
                     <input
                       autoFocus
@@ -265,7 +282,11 @@ export function SelectDropdown({
                     >
                       <span className={isDirectory ? "truncate text-[9px] tracking-widest uppercase" : "truncate"}>{option.label}</span>
                       <span className="flex shrink-0 items-center gap-2">
-                        {option.meta && <span className={isDirectory ? "rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white/60" : "text-xs text-gray-400 dark:text-slate-400"}>{option.meta}</span>}
+                        {option.meta && (
+                          <span className={isDirectory ? "rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white/60" : "text-xs text-gray-400 dark:text-slate-400"}>
+                            {option.meta}
+                          </span>
+                        )}
                         {selected && <Check size={15} className={isDirectory ? "text-sky-300" : "text-emerald-700 dark:text-emerald-300"} />}
                       </span>
                     </button>

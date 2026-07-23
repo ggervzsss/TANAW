@@ -42,7 +42,7 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
                   onSelectEnterprise(enterprise);
                 }
               }}
-              className="hover:bg-tgreen-dark/6 focus:bg-tgreen-dark/6 focus-visible:ring-tanaw-green/30 cursor-pointer transition outline-none focus-visible:ring-2"
+              className="tanaw-interactive-row focus-visible:ring-tanaw-green/30 cursor-pointer outline-none focus-visible:ring-2"
             >
               <td className="px-4 py-4">
                 <div className="flex w-full min-w-0 items-center gap-3 text-left">
@@ -56,14 +56,13 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
                       ariaLabel="enterprise name and category"
                       className="font-bold text-gray-900"
                       secondaryClassName="text-sm text-gray-500"
-                      threshold={42}
                     />
                   </div>
                 </div>
               </td>
               <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-600">{enterprise.barangay ?? "N/A"}</td>
               <td className="px-4 py-4">
-                <ExpandableTableText primary={enterprise.enterpriseId ?? "Pending"} ariaLabel="enterprise ID" className="font-mono text-sm font-semibold text-gray-600" threshold={28} />
+                <ExpandableTableText primary={enterprise.enterpriseId ?? "Pending"} ariaLabel="enterprise ID" className="font-mono text-sm font-semibold text-gray-600" />
               </td>
               <td className="px-4 py-4 whitespace-nowrap">
                 <StatusBadge tone={enterprise.status === "inactive" ? "slate" : enterprise.isActivated ? "green" : "amber"}>
@@ -76,7 +75,6 @@ export function EnterpriseAccountsTable({ accounts, filteredEnterprises, isLoadi
                   secondary={new Date(enterprise.createdAt).toLocaleDateString()}
                   ariaLabel="enterprise contact and creation date"
                   secondaryClassName="text-xs text-gray-400"
-                  threshold={36}
                 />
               </td>
             </tr>

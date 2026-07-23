@@ -4,6 +4,7 @@ import time
 import unittest
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import patch
 
 import numpy as np
 
@@ -125,12 +126,12 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             manager._set_session_error(stale_session, "stale failure")
 
             self.assertIs(manager._active_session, current_session)
-            self.assertNotEqual(manager._state.status, "error")
+            self.assertNotEqual(manager._state.status, "failed")
 
             manager._set_session_error(current_session, "current failure")
 
             self.assertIsNone(manager._active_session)
-            self.assertEqual(manager._state.status, "error")
+            self.assertEqual(manager._state.status, "failed")
             self.assertEqual(manager._state.error, "current failure")
             self.assertTrue(current_session.stop_event.is_set())
 
@@ -569,6 +570,51 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(correction["new_occupancy"], 4)
             self.assertEqual(manager.counts()["occupancy"], 4)
             self.assertEqual(manager.metrics_summary()["current_occupancy"], 4)
+
+    def test_starting_state_is_visible_while_stream_validation_is_in_flight(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            manager.bind_enterprise("enterprise-a", "Enterprise A")
+            validation_started = threading.Event()
+            finish_validation = threading.Event()
+
+            def delayed_validation(_config: CameraStartRequest) -> tuple[bool, str]:
+                validation_started.set()
+                finish_validation.wait(timeout=2)
+                return False, "Expected test stream failure."
+
+            validation_patcher = patch.object(
+                manager, "_validate_config_stream", delayed_validation
+            )
+            validation_patcher.start()
+            self.addCleanup(validation_patcher.stop)
+            errors: list[Exception] = []
+
+            def start_camera() -> None:
+                try:
+                    manager.start(
+                        CameraStartRequest(
+                            camera_id=1,
+                            camera_name="Starting Camera",
+                            stream_url="000",
+                        )
+                    )
+                except Exception as exc:
+                    errors.append(exc)
+
+            thread = threading.Thread(target=start_camera)
+            thread.start()
+            self.assertTrue(validation_started.wait(timeout=2))
+
+            state = manager.counts()
+            self.assertTrue(state["running"])
+            self.assertEqual(state["status"], "starting")
+
+            finish_validation.set()
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(manager.counts()["status"], "failed")
 
     def test_unconfirmed_detection_is_visible_only_above_configured_confidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

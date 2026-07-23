@@ -27,7 +27,7 @@ export function ContactNumberField({ name, label, value, onChange, error, requir
   };
 
   return (
-    <label className="block">
+    <label data-field-name={name} className="block">
       <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-slate-500 uppercase">{label}</span>
       <div
         className={[
@@ -47,6 +47,7 @@ export function ContactNumberField({ name, label, value, onChange, error, requir
           pattern="9[0-9]{9}"
           aria-invalid={Boolean(displayedError)}
           aria-describedby={displayedError ? descriptionId : undefined}
+          data-form-error-focus
           onChange={(event) => handleValueChange(event.target.value)}
           onPaste={(event) => {
             event.preventDefault();

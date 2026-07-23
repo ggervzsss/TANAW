@@ -117,6 +117,43 @@ class CameraConfigValidationTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             CameraStartRequest.model_validate({"stream_url": "000", "reid_mode": "slow"})
 
+    def test_rtsp_source_is_canonicalized_from_ipv4_and_profile(self) -> None:
+        config = CameraStartRequest.model_validate(
+            {
+                "camera_id": 7,
+                "camera_type": "RTSP_CCTV",
+                "camera_host": "192.168.1.20",
+                "rtsp_stream": "stream1",
+                "stream_url": "rtsp://192.168.1.20/stream1",
+            }
+        )
+
+        self.assertEqual(config.camera_host, "192.168.1.20")
+        self.assertEqual(config.rtsp_stream, "stream1")
+        self.assertEqual(config.stream_url, "rtsp://192.168.1.20/stream1")
+
+    def test_rtsp_source_rejects_non_ipv4_and_conflicting_url(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "valid IPv4"):
+            CameraStartRequest.model_validate(
+                {
+                    "camera_id": 7,
+                    "camera_type": "RTSP_CCTV",
+                    "camera_host": "camera.local",
+                    "rtsp_stream": "stream2",
+                    "stream_url": "rtsp://camera.local/stream2",
+                }
+            )
+        with self.assertRaisesRegex(ValidationError, "conflicts"):
+            CameraStartRequest.model_validate(
+                {
+                    "camera_id": 7,
+                    "camera_type": "RTSP_CCTV",
+                    "camera_host": "192.168.1.20",
+                    "rtsp_stream": "stream2",
+                    "stream_url": "rtsp://192.168.1.21/stream1",
+                }
+            )
+
     def test_roi_outside_frame_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValidationError, "ROI left \\+ width"):
             CameraStartRequest.model_validate(

@@ -216,13 +216,13 @@ function SituationTable({ alerts, isLoading, onOpen }: { alerts: PriorityAlert[]
           </thead>
           <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
             {alerts.map((alert) => (
-              <tr key={alert.id} onClick={() => onOpen(alert.id)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
+              <tr key={alert.id} onClick={() => onOpen(alert.id)} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
                 <td className="px-4 py-4 font-bold text-gray-950">{adminAlertLabel(alert)}</td>
                 <td className="px-4 py-4">
                   <ExpandableTableText primary={alert.enterprise ?? alert.requester} ariaLabel="affected establishment" className="font-semibold text-gray-900" />
                 </td>
                 <td className="px-4 py-4">
-                  <ExpandableTableText primary={alert.summary} secondary={alert.requiredAction} ariaLabel="situation and suggested response" threshold={80} twoLines />
+                  <ExpandableTableText primary={alert.summary} secondary={alert.requiredAction} ariaLabel="situation and suggested response" twoLines />
                 </td>
                 <td className="px-4 py-4">
                   <AdminUrgencyBadge alert={alert} />
@@ -274,11 +274,11 @@ function SupportRequestTable({ tickets, isLoading, onOpen }: { tickets: SupportT
           </thead>
           <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
             {tickets.map((ticket) => (
-              <tr key={ticket.id} onClick={() => onOpen(ticket.id)} className="tanaw-data-table-row group hover:bg-tgreen-dark/5 cursor-pointer transition">
+              <tr key={ticket.id} onClick={() => onOpen(ticket.id)} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
                 <td className="px-4 py-4 font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
                 <td className="px-4 py-4 font-bold text-gray-950">{ticket.enterpriseName}</td>
                 <td className="px-4 py-4">
-                  <ExpandableTableText primary={ticket.subject} secondary={ticket.description} ariaLabel="support concern" threshold={80} twoLines />
+                  <ExpandableTableText primary={ticket.subject} secondary={ticket.description} ariaLabel="support concern" twoLines />
                 </td>
                 <td className="px-4 py-4">
                   <PriorityBadge priority={ticket.priority} />
@@ -333,9 +333,9 @@ function AdminSituationDetailsModal({ alert, onClose }: { alert: PriorityAlert; 
         <DetailField label="Suggested Response" value={alert.requiredAction} />
       </div>
 
-      <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-        <p className="text-sm font-black text-emerald-950">Record the Admin response</p>
-        <p className="mt-1 text-xs font-semibold text-emerald-800">This updates the situation for other Admin accounts and records the action in Activity History.</p>
+      <div className="tanaw-modal-action-panel mt-5 rounded-2xl border p-4 shadow-sm">
+        <p className="tanaw-modal-action-panel__title text-sm font-black">Record the Admin response</p>
+        <p className="tanaw-modal-action-panel__copy mt-1 text-xs font-semibold">This updates the situation for other Admin accounts and records the action in Activity History.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {alert.status !== "In Review" && alert.status !== "Resolved" && (
             <StatusButton label="Start Review" icon={Clock3} disabled={statusMutation.isPending} onClick={() => statusMutation.mutate("In Review")} />

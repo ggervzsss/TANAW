@@ -42,4 +42,10 @@ describe("account validation", () => {
     expect(validatePhilippineContactNumber("+633331234567", true)).toContain("starting with 9");
     expect(validatePhilippineContactNumber("+63917123456", true)).toContain("10 digits");
   });
+
+  it("accepts a blank optional contact number without manufacturing a +63 value", () => {
+    expect(normalizePhilippineContactNumber("")).toBe("");
+    expect(validatePhilippineContactNumber("", false)).toBe("");
+    expect(validatePhilippineContactNumber("", true)).toBeTruthy();
+  });
 });

@@ -9,7 +9,7 @@ type PriorityAlertListItemProps = {
 
 export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemProps) {
   return (
-    <article className="cursor-pointer px-6 py-4 transition hover:bg-emerald-50 dark:hover:bg-emerald-500/10" onClick={() => onOpen(alert)}>
+    <article className="tanaw-interactive-row cursor-pointer px-6 py-4" onClick={() => onOpen(alert)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SeverityBadge severity={alert.severity} />
         <ResolutionBadge mode={alert.resolutionMode} />
@@ -27,7 +27,7 @@ export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemPr
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
   const expandableValue = (value: string, label: string) => (
-    <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" className="leading-relaxed font-semibold" />
+    <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />
   );
 
   return (

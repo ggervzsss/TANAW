@@ -7,6 +7,7 @@ import type { BarangayPointResolution } from "@/features/mapview/utils";
 import { ContactNumberField, FormField, ModalFrame, ModalPortal, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
 import { type CreateEnterpriseAccountPayload, createEnterpriseAccount } from "@/shared/services/accountManagement";
+import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import {
   PERSON_NAME_MAX_LENGTH,
@@ -45,9 +46,23 @@ type EnterpriseFormErrors = Partial<Record<keyof EnterpriseFormState, string>>;
 
 const enterpriseCategoryValues = new Set<string>(enterpriseCategories.map((category) => category.value));
 const sanPedroBarangayValues = new Set<string>(sanPedroBarangays);
+const enterpriseFieldOrder: readonly (keyof EnterpriseFormState)[] = [
+  "enterpriseName",
+  "category",
+  "managerFirstName",
+  "managerMiddleInitial",
+  "managerLastName",
+  "email",
+  "contactLocal",
+  "enterpriseId",
+  "buildingCapacity",
+  "address",
+  "barangay",
+];
 
 export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProps) {
   const queryClient = useQueryClient();
+  const focusFirstInvalidField = useFocusFirstInvalidField();
   const [location, setLocation] = useState<LocationDraft | null>(null);
   const [detectedBarangay, setDetectedBarangay] = useState<string | null>(null);
   const [isFullMapOpen, setIsFullMapOpen] = useState(false);
@@ -86,11 +101,13 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
     event.preventDefault();
     const nextErrors = validateEnterpriseForm(form);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(event.currentTarget, getInvalidEnterpriseFieldNames(nextErrors));
+      return;
+    }
     if (!location) {
-      const message = "Choose a map location inside San Pedro before saving.";
-      setLocationError(message);
-      toast.error(message);
+      setLocationError("Choose a map location inside San Pedro before saving.");
+      focusFirstInvalidField(event.currentTarget, ["location"]);
       return;
     }
     if (locationError) {
@@ -162,7 +179,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             />
           </div>
           <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
-          <ContactNumberField name="contactNumber" label="Contact Number" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
+          <ContactNumberField name="contactNumber" label="Contact Number (Optional)" value={form.contactLocal} onChange={(value) => updateField("contactLocal", value)} error={errors.contactLocal} />
           <FormField
             name="enterpriseId"
             label="Enterprise ID Seed"
@@ -190,7 +207,10 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             required
           />
 
-          <div className="rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.68)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.7)_100%)] p-4 shadow-sm ring-1 ring-white md:col-span-2 dark:border-emerald-300/20 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:ring-white/8">
+          <div
+            data-field-name="location"
+            className="rounded-2xl border border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.68)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.7)_100%)] p-4 shadow-sm ring-1 ring-white md:col-span-2 dark:border-emerald-300/20 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:ring-white/8"
+          >
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-bold tracking-wide text-slate-500 uppercase">Map Location</p>
@@ -200,6 +220,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
                 <BoundaryToggleButton showBoundaries={showBoundaries} onClick={() => setShowBoundaries((current) => !current)} />
                 <button
                   type="button"
+                  data-form-error-focus
                   onClick={() => setIsFullMapOpen(true)}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#121c31] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
                 >
@@ -231,7 +252,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             </div>
 
             {locationError && (
-              <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                 <span>{locationError}</span>
               </div>
@@ -518,4 +539,8 @@ function validateBuildingCapacity(value: string) {
   if (capacity < 1) return "Building capacity must be at least 1.";
   if (capacity > 100000) return "Building capacity cannot exceed 100,000.";
   return null;
+}
+
+function getInvalidEnterpriseFieldNames(errors: EnterpriseFormErrors) {
+  return enterpriseFieldOrder.filter((fieldName) => errors[fieldName]).map((fieldName) => (fieldName === "contactLocal" ? "contactNumber" : fieldName));
 }

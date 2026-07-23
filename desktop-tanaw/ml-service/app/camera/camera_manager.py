@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "16")
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
@@ -36,6 +37,11 @@ from app.tracking import ResolvedTrack, TrackIdentityResolver
 NormalizedPath = tuple[tuple[float, float], ...]
 
 logger = logging.getLogger(__name__)
+RECONNECT_MAX_DELAY_SECONDS = 15.0
+
+
+class CameraStreamUnavailableError(ValueError):
+    pass
 
 
 @dataclass
@@ -87,6 +93,7 @@ class ProcessingSession:
     session_id: int
     config: CameraStartRequest
     stop_event: threading.Event
+    event_scope: str = ""
 
 
 @dataclass(frozen=True)
@@ -99,8 +106,9 @@ class PendingEntryEvent:
 
 
 class CameraProcessingManager:
-    def __init__(self, app_data_dir: str | None = None) -> None:
+    def __init__(self, app_data_dir: str | None = None, camera_id: int | None = None) -> None:
         self._app_data_dir = app_data_dir
+        self._camera_id_scope = camera_id
         self._lock = threading.RLock()
         self._active_session: ProcessingSession | None = None
         self._next_session_id = 0
@@ -136,7 +144,7 @@ class CameraProcessingManager:
         )
         self._identity_resolver = TrackIdentityResolver()
         self._pending_entry_events: dict[tuple[int, int], PendingEntryEvent] = {}
-        self._session_store = SessionStore(app_data_dir)
+        self._session_store = SessionStore(app_data_dir, camera_id=camera_id)
         self._visitor_registry = UniqueVisitorRegistry(
             self._session_store,
             model_name=self._reidentifier.model_name,
@@ -175,7 +183,13 @@ class CameraProcessingManager:
 
         return self._validate_config_stream(config)
 
-    def bind_enterprise(self, enterprise_id: str, enterprise_name: str | None = None) -> dict:
+    def bind_enterprise(
+        self,
+        enterprise_id: str,
+        enterprise_name: str | None = None,
+        *,
+        restore_session: bool = True,
+    ) -> dict:
         normalized_id = enterprise_id.strip()
         normalized_name = enterprise_name.strip() if enterprise_name else None
         with self._lock:
@@ -199,7 +213,9 @@ class CameraProcessingManager:
         with self._lock:
             self._enterprise_id = normalized_id
             self._enterprise_name = normalized_name
-            self._session_store = SessionStore(self._app_data_dir, normalized_id)
+            self._session_store = SessionStore(
+                self._app_data_dir, normalized_id, self._camera_id_scope
+            )
             self._visitor_registry = UniqueVisitorRegistry(
                 self._session_store,
                 model_name=self._reidentifier.model_name,
@@ -208,7 +224,7 @@ class CameraProcessingManager:
             self._state = RuntimeState()
             self._config = None
             self._session_updated_at = None
-        restored = self.restore_last_session()
+        restored = self.restore_last_session() if restore_session else False
         return {
             "enterprise_id": normalized_id,
             "enterprise_name": normalized_name,
@@ -224,11 +240,32 @@ class CameraProcessingManager:
             }
 
     def start(self, config: CameraStartRequest) -> None:
+        if config.camera_id is None:
+            raise ValueError("Camera ID is required to start camera processing.")
+        if self._camera_id_scope is not None and config.camera_id != self._camera_id_scope:
+            raise ValueError("Camera configuration does not match this camera pipeline.")
+        self.stop()
+        with self._raw_frame_condition:
+            self._config = config
+            self._state = RuntimeState(running=True, status="starting", error=None)
+            self._latest_jpeg = self._build_status_frame("Checking camera stream...")
+            self._latest_stream_jpeg = self._latest_jpeg
+            self._latest_stream_frame_id += 1
+            self._persist_session_locked()
+            self._raw_frame_condition.notify_all()
+
         ok, message = self._validate_config_stream(config)
         if not ok:
-            raise ValueError(message)
+            with self._raw_frame_condition:
+                self._state = RuntimeState(running=False, status="failed", error=message)
+                self._latest_jpeg = self._build_status_frame(message)
+                self._latest_stream_jpeg = self._latest_jpeg
+                self._latest_stream_frame_id += 1
+                self._persist_session_locked()
+                self._raw_frame_condition.notify_all()
+            raise CameraStreamUnavailableError(message)
 
-        self.stop()
+        saved_snapshot = self._session_store.load_session()
 
         with self._lock:
             self._effective_profile = self._tracker.configure(
@@ -254,6 +291,7 @@ class CameraProcessingManager:
                 paired_line_max_gap_seconds=config.paired_line_max_gap_seconds,
             )
             self._counter.reset()
+            self._restore_saved_snapshot(saved_snapshot)
             self._appearance_buffer = TrackAppearanceBuffer(
                 sample_interval_frames=max(1, int(round(processing_fps)))
             )
@@ -277,7 +315,10 @@ class CameraProcessingManager:
             self._latest_jpeg = self._build_status_frame("Initializing ML model...")
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
-            self._state = RuntimeState(running=False, status="starting", error=None)
+            # Starting is an active lifecycle state. Publishing it before model
+            # warmup lets the collection runtime endpoint represent startup and
+            # makes capacity accounting include in-flight pipelines.
+            self._state = RuntimeState(running=True, status="starting", error=None)
             self._persist_session_locked()
 
         try:
@@ -289,7 +330,7 @@ class CameraProcessingManager:
         except Exception as exc:
             safe_message = redact_stream_credentials(f"Unable to initialize ML model: {exc}")
             with self._raw_frame_condition:
-                self._state = RuntimeState(running=False, status="error", error=safe_message)
+                self._state = RuntimeState(running=False, status="failed", error=safe_message)
                 self._latest_jpeg = self._build_status_frame(safe_message)
                 self._latest_stream_jpeg = self._latest_jpeg
                 self._latest_stream_frame_id += 1
@@ -300,7 +341,10 @@ class CameraProcessingManager:
         with self._lock:
             self._next_session_id += 1
             session = ProcessingSession(
-                session_id=self._next_session_id, config=config, stop_event=threading.Event()
+                session_id=self._next_session_id,
+                config=config,
+                stop_event=threading.Event(),
+                event_scope=uuid4().hex,
             )
             self._reid_worker.begin_session(session.session_id)
             self._quality_reid_worker.begin_session(session.session_id)
@@ -311,24 +355,27 @@ class CameraProcessingManager:
             self._latest_jpeg = self._build_status_frame("Starting camera processing...")
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id = 0
-            self._state = RuntimeState(running=True, status="running", error=None)
+            self._state = RuntimeState(running=True, status="connecting", error=None)
             self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
             self._latest_raw_frame_captured_at = None
             self._latest_tracks = []
             self._reader_thread = threading.Thread(
-                target=self._capture_loop, args=(session,), name="tanaw-camera-reader", daemon=True
+                target=self._capture_loop,
+                args=(session,),
+                name=f"tanaw-camera-{config.camera_id}-reader",
+                daemon=True,
             )
             self._processing_thread = threading.Thread(
                 target=self._processing_loop,
                 args=(session,),
-                name="tanaw-camera-processing",
+                name=f"tanaw-camera-{config.camera_id}-processing",
                 daemon=True,
             )
             self._stream_thread = threading.Thread(
                 target=self._stream_encoding_loop,
                 args=(session,),
-                name="tanaw-camera-stream-encoder",
+                name=f"tanaw-camera-{config.camera_id}-stream-encoder",
                 daemon=True,
             )
             self._reader_thread.start()
@@ -377,7 +424,7 @@ class CameraProcessingManager:
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             self._state.running = False
-            if self._state.status != "error":
+            if self._state.status not in {"error", "failed"}:
                 self._state.status = "stopped"
             if self._enterprise_id is not None or self._config is not None:
                 self._persist_session_locked()
@@ -385,14 +432,18 @@ class CameraProcessingManager:
     def counts(self) -> dict[str, int | str | bool | None]:
         with self._lock:
             snapshot = self._counter.counts.as_dict()
-            return {
-                **snapshot,
-                "running": self._state.running,
-                "status": self._state.status,
-                "error": redact_stream_credentials(self._state.error)
-                if self._state.error
-                else None,
-            }
+            running = self._state.running
+            status = self._state.status
+            error = redact_stream_credentials(self._state.error) if self._state.error else None
+            has_enterprise_context = self._enterprise_id is not None
+        if has_enterprise_context:
+            snapshot["occupancy"] = self._session_store.enterprise_occupancy()
+        return {
+            **snapshot,
+            "running": running,
+            "status": status,
+            "error": error,
+        }
 
     def detections(
         self,
@@ -474,12 +525,7 @@ class CameraProcessingManager:
         camera_id: int | None = None,
     ) -> dict:
         with self._lock:
-            summary = self._session_store.metrics_summary(include_submitted=True)
-            old_occupancy = (
-                self._counter.counts.occupancy
-                if self._state.running
-                else int(summary["current_occupancy"] or 0)
-            )
+            old_occupancy = self._session_store.enterprise_occupancy()
             resolved_camera_id = (
                 camera_id
                 if camera_id is not None
@@ -497,9 +543,6 @@ class CameraProcessingManager:
             actor_name=actor_name,
         )
 
-        with self._lock:
-            self._counter.counts.occupancy = int(correction["new_occupancy"])
-            self._persist_session_locked()
         return correction
 
     def occupancy_corrections(self, limit: int = 100) -> list[dict]:
@@ -686,7 +729,7 @@ class CameraProcessingManager:
                 with self._raw_frame_condition:
                     self._state = RuntimeState(
                         running=False,
-                        status="error",
+                        status="failed",
                         error=redact_stream_credentials(
                             f"Unable to restore monitoring session: {exc}"
                         ),
@@ -794,6 +837,7 @@ class CameraProcessingManager:
     ) -> None:
         config = session.config
         failed_reads = 0
+        reconnect_attempt = 0
         last_error = "Camera snapshot endpoint stopped returning frames."
         frame_interval = 1.0 / self._processing_fps(config)
 
@@ -810,15 +854,19 @@ class CameraProcessingManager:
                 if frame is None:
                     failed_reads += 1
                     if failed_reads >= 30:
-                        self._set_session_error(
+                        reconnect_attempt += 1
+                        self._mark_reconnecting(
                             session,
                             redact_stream_credentials(
                                 f"Camera snapshot endpoint stopped returning frames: {last_error}"
                             ),
                         )
-                        return
+                        failed_reads = 0
+                        if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
+                            return
                 else:
                     failed_reads = 0
+                    reconnect_attempt = 0
                     frame = self._resize_for_processing(frame, self._max_frame_width(config))
                     self._publish_raw_frame(session, frame)
 
@@ -833,59 +881,93 @@ class CameraProcessingManager:
                 if (
                     self._is_current_session_locked(session)
                     and not session.stop_event.is_set()
-                    and self._state.status != "error"
+                    and self._state.status not in {"error", "failed"}
                 ):
                     self._state.status = "stopped"
 
     def _mjpeg_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
         config = session.config
-        try:
-            for frame in iter_mjpeg_frames(stream_url, session.stop_event):
-                if session.stop_event.is_set() or not self._is_current_session(session):
-                    break
+        reconnect_attempt = 0
+        while not session.stop_event.is_set() and self._is_current_session(session):
+            received_frame = False
+            try:
+                for frame in iter_mjpeg_frames(stream_url, session.stop_event):
+                    if session.stop_event.is_set() or not self._is_current_session(session):
+                        return
+                    received_frame = True
+                    reconnect_attempt = 0
+                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
+                    self._publish_raw_frame(session, frame)
+            except Exception as exc:
+                message = redact_stream_credentials(str(exc))
+            else:
+                message = "Camera stream stopped returning MJPEG frames."
 
-                frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                self._publish_raw_frame(session, frame)
-
-            if not session.stop_event.is_set() and self._is_current_session(session):
-                self._set_session_error(session, "Camera stream stopped returning MJPEG frames.")
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
-        finally:
-            with self._lock:
-                if self._is_current_session_locked(session) and self._state.status != "error":
-                    self._state.status = "stopped"
+            if session.stop_event.is_set() or not self._is_current_session(session):
+                return
+            reconnect_attempt = 1 if received_frame else reconnect_attempt + 1
+            self._mark_reconnecting(session, message)
+            if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
+                return
 
     def _opencv_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
         config = session.config
-        capture = open_capture(stream_url)
-        failed_reads = 0
+        reconnect_attempt = 0
+        while not session.stop_event.is_set() and self._is_current_session(session):
+            capture = open_capture(stream_url)
+            failed_reads = 0
+            reconnect_message = "Camera stream could not be opened."
+            try:
+                if capture.isOpened():
+                    while not session.stop_event.is_set() and self._is_current_session(session):
+                        ok, frame = capture.read()
+                        if not ok or frame is None:
+                            failed_reads += 1
+                            if failed_reads >= 90:
+                                reconnect_message = "Camera stream stopped returning frames."
+                                break
+                            session.stop_event.wait(0.05)
+                            continue
 
-        try:
-            if not capture.isOpened():
-                self._set_session_error(session, "Camera stream could not be opened.")
+                        failed_reads = 0
+                        reconnect_attempt = 0
+                        frame = self._resize_for_processing(frame, self._max_frame_width(config))
+                        self._publish_raw_frame(session, frame)
+            except Exception as exc:
+                reconnect_message = redact_stream_credentials(str(exc))
+            finally:
+                capture.release()
+
+            if session.stop_event.is_set() or not self._is_current_session(session):
+                return
+            reconnect_attempt += 1
+            self._mark_reconnecting(session, reconnect_message)
+            if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
                 return
 
-            while not session.stop_event.is_set() and self._is_current_session(session):
-                ok, frame = capture.read()
-                if not ok or frame is None:
-                    failed_reads += 1
-                    if failed_reads >= 90:
-                        self._set_session_error(session, "Camera stream stopped returning frames.")
-                        return
-                    session.stop_event.wait(0.05)
-                    continue
+    def _mark_reconnecting(self, session: ProcessingSession, message: str) -> None:
+        with self._raw_frame_condition:
+            if not self._is_current_session_locked(session):
+                return
+            safe_message = redact_stream_credentials(message)
+            self._state = RuntimeState(running=True, status="reconnecting", error=safe_message)
+            self._latest_jpeg = self._build_status_frame("Reconnecting camera stream...")
+            self._latest_stream_jpeg = self._latest_jpeg
+            self._latest_stream_frame_id += 1
+            self._persist_session_locked()
+            self._raw_frame_condition.notify_all()
+        logger.warning(
+            "Camera pipeline reconnecting.",
+            extra={
+                "enterprise_id": self._enterprise_id,
+                "camera_id": session.config.camera_id,
+                "status": "reconnecting",
+            },
+        )
 
-                failed_reads = 0
-                frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                self._publish_raw_frame(session, frame)
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
-        finally:
-            capture.release()
-            with self._lock:
-                if self._is_current_session_locked(session) and self._state.status != "error":
-                    self._state.status = "stopped"
+    @staticmethod
+    def _reconnect_delay(attempt: int) -> float:
+        return float(min(2 ** max(0, attempt - 1), RECONNECT_MAX_DELAY_SECONDS))
 
     def _publish_raw_frame(
         self, session: ProcessingSession, frame: np.ndarray, captured_at: float | None = None
@@ -958,7 +1040,10 @@ class CameraProcessingManager:
             with self._lock:
                 if self._is_current_session_locked(session):
                     self._state.running = False
-                if self._is_current_session_locked(session) and self._state.status != "error":
+                if self._is_current_session_locked(session) and self._state.status not in {
+                    "error",
+                    "failed",
+                }:
                     self._state.status = "stopped"
 
     def _stream_encoding_loop(self, session: ProcessingSession) -> None:
@@ -1698,7 +1783,7 @@ class CameraProcessingManager:
                 return
 
             safe_message = redact_stream_credentials(message)
-            self._state = RuntimeState(running=False, status="error", error=safe_message)
+            self._state = RuntimeState(running=False, status="failed", error=safe_message)
             self._latest_jpeg = self._build_status_frame(safe_message)
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
@@ -1746,10 +1831,15 @@ class CameraProcessingManager:
 
             counts = self._counter.counts.as_dict()
             visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
+            camera_id = self._config.camera_id if self._config else None
+            direction_count = counts.get(direction, 0)
+            event_scope = session.event_scope or f"legacy-{session.session_id}"
             try:
                 self._session_store.append_event(
                     {
-                        "camera_id": self._config.camera_id if self._config else None,
+                        "event_id": f"{camera_id}:{event_scope}:{direction}:{direction_count}",
+                        "enterprise_id": self._enterprise_id,
+                        "camera_id": camera_id,
                         "camera_name": self._config.camera_name if self._config else None,
                         "direction": direction,
                         "track_id": track.track_id,
@@ -1768,6 +1858,7 @@ class CameraProcessingManager:
     def _persist_session_locked(self) -> None:
         counts = self._counter.counts.as_dict()
         payload = {
+            "enterprise_id": self._enterprise_id,
             "running": self._state.running,
             "status": self._state.status,
             "error": redact_stream_credentials(self._state.error) if self._state.error else None,

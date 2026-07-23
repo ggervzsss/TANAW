@@ -17,6 +17,7 @@ type PdfPalette = {
   border: [number, number, number];
   header: [number, number, number];
   total: [number, number, number];
+  grandTotal: [number, number, number];
   accent: [number, number, number];
 };
 
@@ -27,6 +28,7 @@ const lightExportPalette: PdfPalette = {
   border: [0.38, 0.43, 0.5],
   header: [0.93, 0.95, 0.97],
   total: [0.83, 0.87, 0.91],
+  grandTotal: [0.72, 0.79, 0.86],
   accent: [0.71, 0.54, 0.1],
 };
 
@@ -59,6 +61,7 @@ type TableCell = {
   value: string | number;
   align?: "left" | "right" | "center";
   bold?: boolean;
+  tone?: "total" | "grandTotal";
 };
 
 type TableRow = {
@@ -99,16 +102,16 @@ export function createIntakeReportPdf(report: IntakeReport, timeFormat: SystemTi
       { value: report.code },
       { value: demographics.provMale },
       { value: demographics.provFemale },
-      { value: demographics.provTotal, bold: true },
+      { value: demographics.provTotal, bold: true, tone: "total" },
       { value: demographics.otherMale },
       { value: demographics.otherFemale },
-      { value: demographics.otherTotal, bold: true },
+      { value: demographics.otherTotal, bold: true, tone: "total" },
       { value: demographics.foreignMale },
       { value: demographics.foreignFemale },
-      { value: demographics.foreignTotal, bold: true },
+      { value: demographics.foreignTotal, bold: true, tone: "total" },
       { value: demographics.grandMale, bold: true },
       { value: demographics.grandFemale, bold: true },
-      { value: report.metrics.unique, bold: true },
+      { value: report.metrics.unique, bold: true, tone: "grandTotal" },
     ],
   ]);
 
@@ -209,16 +212,16 @@ function buildFinalReportSourceRow(source: FinalReportSource, period: string): T
     { value: source.code },
     { value: demographics.provMale },
     { value: demographics.provFemale },
-    { value: demographics.provTotal, bold: true },
+    { value: demographics.provTotal, bold: true, tone: "total" },
     { value: demographics.otherMale },
     { value: demographics.otherFemale },
-    { value: demographics.otherTotal, bold: true },
+    { value: demographics.otherTotal, bold: true, tone: "total" },
     { value: demographics.foreignMale },
     { value: demographics.foreignFemale },
-    { value: demographics.foreignTotal, bold: true },
+    { value: demographics.foreignTotal, bold: true, tone: "total" },
     { value: demographics.grandMale, bold: true },
     { value: demographics.grandFemale, bold: true },
-    { value: source.unique, bold: true },
+    { value: source.unique, bold: true, tone: "grandTotal" },
   ];
 }
 
@@ -260,16 +263,16 @@ function buildFinalReportTotalRow(report: FinalReport): TableCell[] {
     { value: "" },
     { value: totals.provMale, bold: true },
     { value: totals.provFemale, bold: true },
-    { value: totals.provTotal, bold: true },
+    { value: totals.provTotal, bold: true, tone: "total" },
     { value: totals.otherMale, bold: true },
     { value: totals.otherFemale, bold: true },
-    { value: totals.otherTotal, bold: true },
+    { value: totals.otherTotal, bold: true, tone: "total" },
     { value: totals.foreignMale, bold: true },
     { value: totals.foreignFemale, bold: true },
-    { value: totals.foreignTotal, bold: true },
+    { value: totals.foreignTotal, bold: true, tone: "total" },
     { value: totals.grandMale, bold: true },
     { value: totals.grandFemale, bold: true },
-    { value: totals.grandMale + totals.grandFemale, bold: true },
+    { value: totals.grandMale + totals.grandFemale, bold: true, tone: "grandTotal" },
   ];
 }
 
@@ -393,18 +396,21 @@ function drawDotTable(commands: PdfCommand[], topY: number, rows: TableRow[]) {
   drawHeaderCell(commands, demoX + sumWidths(DOT_COLUMNS.slice(2, 5)), topY - 30, sumWidths(DOT_COLUMNS.slice(5, 8)), 14, "Other Province");
 
   let headerX = demoX;
-  DOT_COLUMNS.slice(2).forEach((column) => {
-    drawHeaderCell(commands, headerX, topY - 44, column.width, 18, column.label, column.align ?? "center");
+  DOT_COLUMNS.slice(2).forEach((column, index) => {
+    const absoluteColumnIndex = index + 2;
+    const tone = absoluteColumnIndex === DOT_COLUMNS.length - 1 ? "grandTotal" : [4, 7, 10].includes(absoluteColumnIndex) ? "total" : "header";
+    drawHeaderCell(commands, headerX, topY - 44, column.width, 18, column.label, column.align ?? "center", tone);
     headerX += column.width;
   });
 
   let rowTop = topY - DOT_HEADER_HEIGHT;
   rows.forEach((row) => {
     const y = rowTop - row.height;
-    if (row.total) drawFilledRect(commands, tableX, y, sumWidths(DOT_COLUMNS), row.height, 0.88);
+    if (row.total) drawFilledRect(commands, tableX, y, sumWidths(DOT_COLUMNS), row.height, "total");
     let cellX = tableX;
     row.cells.forEach((cell, cellIndex) => {
       const column = DOT_COLUMNS[cellIndex];
+      if (cell.tone) drawFilledRect(commands, cellX, y, column.width, row.height, cell.tone);
       drawRect(commands, cellX, y, column.width, row.height);
       const lines = wrappedLines(formatCell(cell.value), column.width - 8, 7);
       const textTop = y + row.height / 2 + (lines.length * 9) / 2 - 7;
@@ -417,9 +423,18 @@ function drawDotTable(commands: PdfCommand[], topY: number, rows: TableRow[]) {
   return rowTop;
 }
 
-function drawHeaderCell(commands: PdfCommand[], x: number, topY: number, width: number, height: number, label: string, align: "left" | "right" | "center" = "center") {
+function drawHeaderCell(
+  commands: PdfCommand[],
+  x: number,
+  topY: number,
+  width: number,
+  height: number,
+  label: string,
+  align: "left" | "right" | "center" = "center",
+  tone: "header" | "total" | "grandTotal" = "header",
+) {
   const y = topY - height;
-  drawFilledRect(commands, x, y, width, height, 0.92);
+  drawFilledRect(commands, x, y, width, height, tone);
   drawRect(commands, x, y, width, height);
   const lines = wrappedLines(label, width - 8, 7);
   const textTop = y + height / 2 + (lines.length * 9) / 2 - 7;
@@ -470,9 +485,9 @@ function drawRect(commands: PdfCommand[], x: number, y: number, width: number, h
   commands.push(`${rgbStroke(paletteFor(commands).border)} 0.6 w ${x} ${y} ${width} ${height} re S`);
 }
 
-function drawFilledRect(commands: PdfCommand[], x: number, y: number, width: number, height: number, gray: number) {
+function drawFilledRect(commands: PdfCommand[], x: number, y: number, width: number, height: number, tone: "header" | "total" | "grandTotal") {
   const palette = paletteFor(commands);
-  const fill = gray <= 0.89 ? palette.total : palette.header;
+  const fill = palette[tone];
   commands.push(`${rgbFill(fill)} ${x} ${y} ${width} ${height} re f`);
 }
 
@@ -526,22 +541,25 @@ function buildPdf(pages: string[]) {
 
 function wrapText(text: string, maxChars: number) {
   return text.split("\n").flatMap((line) => {
-    const words = line
-      .split(/\s+/)
-      .filter(Boolean)
-      .flatMap((word) => (word.length <= maxChars ? [word] : Array.from({ length: Math.ceil(word.length / maxChars) }, (_, index) => word.slice(index * maxChars, (index + 1) * maxChars))));
     const lines: string[] = [];
-    let current = "";
-    words.forEach((word) => {
-      const next = current ? `${current} ${word}` : word;
-      if (next.length > maxChars && current) {
-        lines.push(current);
-        current = word;
+    let remaining = line.trim();
+
+    while (remaining.length > maxChars) {
+      const candidate = remaining.slice(0, maxChars);
+      const whitespaceBreak = candidate.search(/\s+\S*$/);
+      const hyphenBreak = candidate.lastIndexOf("-") + 1;
+      const breakIndex = Math.max(whitespaceBreak, hyphenBreak);
+
+      if (breakIndex > 0) {
+        lines.push(remaining.slice(0, breakIndex).trimEnd());
+        remaining = remaining.slice(breakIndex).trimStart();
       } else {
-        current = next;
+        lines.push(remaining.slice(0, maxChars));
+        remaining = remaining.slice(maxChars);
       }
-    });
-    if (current) lines.push(current);
+    }
+
+    if (remaining) lines.push(remaining);
     return lines.length ? lines : [""];
   });
 }

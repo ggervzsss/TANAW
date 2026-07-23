@@ -22,7 +22,6 @@ type CameraPreviewPanelProps = {
   isStarting: boolean;
   isStopping: boolean;
   isTesting: boolean;
-  processingCameraId: number | null;
   serviceStatus: MlServiceStatus | null;
   streamUrl: string;
   warnings: string[];
@@ -49,7 +48,6 @@ export function CameraPreviewPanel({
   isStarting,
   isStopping,
   isTesting,
-  processingCameraId,
   serviceStatus,
   streamUrl,
   warnings,
@@ -65,7 +63,7 @@ export function CameraPreviewPanel({
 }: CameraPreviewPanelProps) {
   if (!activeCam) return <NoCameraSelected />;
 
-  const isProcessing = processingCameraId === activeCam.id && counts.running;
+  const isProcessing = counts.running;
 
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-sm shadow-md">
@@ -132,7 +130,6 @@ export function CameraPreviewPanel({
             isStarting={isStarting}
             isStopping={isStopping}
             isTesting={isTesting}
-            processingCameraId={processingCameraId}
             serviceStatus={serviceStatus}
             onRestartService={onRestartService}
             onStartProcessing={onStartProcessing}

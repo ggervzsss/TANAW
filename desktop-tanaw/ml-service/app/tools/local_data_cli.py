@@ -15,11 +15,13 @@ LEDGER_TABLES = (
     "schema_metadata",
     "camera_profiles",
     "active_monitoring_state",
+    "camera_monitoring_states",
     "count_events",
     "count_snapshots",
     "occupancy_corrections",
     "report_drafts",
     "report_submissions",
+    "report_camera_totals",
     "visitor_identities",
     "visitor_model_embeddings",
     "visitor_sightings",
@@ -300,12 +302,14 @@ def _clear_operational_rows(database_path: Path) -> None:
             "visitor_sightings",
             "visitor_model_embeddings",
             "visitor_identities",
+            "report_camera_totals",
             "count_events",
             "count_snapshots",
             "occupancy_corrections",
             "report_drafts",
             "report_submissions",
             "active_monitoring_state",
+            "camera_monitoring_states",
         ):
             connection.execute(f'delete from "{table}"')
         connection.commit()

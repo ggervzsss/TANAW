@@ -7,7 +7,6 @@ type CameraMonitoringPanelProps = {
   activeCam: Camera;
   counts: MlCounts;
   health: MlHealth | null;
-  processingCameraId: number | null;
   serviceStatus: MlServiceStatus | null;
   error: string | null;
   isRestartingService: boolean;
@@ -24,7 +23,6 @@ export function CameraMonitoringPanel({
   activeCam,
   counts,
   health,
-  processingCameraId,
   serviceStatus,
   error,
   isRestartingService,
@@ -36,10 +34,10 @@ export function CameraMonitoringPanel({
   onStopProcessing,
   onTestConnection,
 }: CameraMonitoringPanelProps) {
-  const isProcessingThisCamera = processingCameraId === activeCam.id && counts.running;
+  const isProcessingThisCamera = counts.running;
   const serviceOnline = health?.status === "ok";
   const serviceLabel = serviceOnline ? (health.running ? "ML Service Running" : "ML Service Ready") : "ML Service Offline";
-  const cameraState = getCameraState(activeCam, isProcessingThisCamera);
+  const cameraState = getCameraState(activeCam, counts);
   const streamVerified = ["online", "running"].includes(activeCam.status);
   const streamLabel = streamVerified ? "Stream Verified" : "Stream Needs Check";
   const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
@@ -64,12 +62,13 @@ export function CameraMonitoringPanel({
         <div className="grid auto-rows-fr grid-cols-2 gap-2">
           <MetricBox icon={LogIn} label="Entry" value={counts.entry} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
           <MetricBox icon={LogOut} label="Exit" value={counts.exit} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
-          <MetricBox icon={Users} label="Occupancy" value={counts.occupancy} tone="occupancy" tooltip="Current live occupancy, calculated from entries and exits." />
-          <MetricBox icon={Users} label="Estimated Visitors" value={estimatedUniqueCount} tone="unique" tooltip="Estimated visitors for this camera or reporting period." />
+          <MetricBox icon={Users} label="Occupancy" value={counts.occupancy} tone="occupancy" tooltip="Enterprise-wide live occupancy. This same authoritative value appears on every camera view." />
+          <MetricBox icon={Users} label="Estimated Visitors" value={estimatedUniqueCount} tone="unique" tooltip="Estimated visitors attributed to this camera in the current open reporting period." />
         </div>
       </section>
 
       <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
+        <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
         <div className="space-y-2">
           <StatusRow icon={Activity} label={serviceLabel} tone={serviceOnline ? "ok" : "error"} tooltip="Shows whether the local AI counting service is available." />
           <StatusRow icon={Wifi} label={cameraState.label} tone={cameraState.tone} tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable." />
@@ -178,10 +177,13 @@ function StatusRow({ icon: Icon, label, tone, tooltip }: StatusRowProps) {
   );
 }
 
-function getCameraState(activeCam: Camera, isProcessing: boolean): { label: string; tone: "ok" | "neutral" | "error" } {
-  if (isProcessing) return { label: "Camera Processing", tone: "ok" };
+function getCameraState(activeCam: Camera, counts: MlCounts): { label: string; tone: "ok" | "neutral" | "error" } {
+  if (counts.status === "connecting") return { label: "Camera Connecting", tone: "neutral" };
+  if (counts.status === "reconnecting") return { label: "Camera Reconnecting", tone: "neutral" };
+  if (counts.status === "degraded") return { label: "Camera Degraded", tone: "neutral" };
+  if (counts.running) return { label: "Camera Processing", tone: "ok" };
   if (["online", "running"].includes(activeCam.status)) return { label: "Camera Ready", tone: "ok" };
-  if (activeCam.status === "error" || activeCam.status === "offline") return { label: "Camera Stopped", tone: "error" };
+  if (activeCam.status === "error" || activeCam.status === "failed" || activeCam.status === "offline") return { label: "Camera Failed", tone: "error" };
   return { label: "Camera Stopped", tone: "neutral" };
 }
 

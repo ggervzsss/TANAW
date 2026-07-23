@@ -4,6 +4,7 @@ import type { Camera } from "../../../types/enterprise";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 import { TapoRtspBuilder } from "./TapoRtspBuilder";
+import { buildTapoRtspUrl, isValidIpv4, parseRtspConnection, type TapoStreamId } from "../utils/rtsp";
 
 type CameraEditControlsProps = {
   editForm: Camera;
@@ -19,6 +20,17 @@ const roiFields = [
 
 export function CameraEditControls({ editForm, onEditFormChange }: CameraEditControlsProps) {
   const isRtspCamera = editForm.cameraType === "RTSP_CCTV" || editForm.cameraType === "ONVIF_CCTV";
+  const parsedRtsp = parseRtspConnection(editForm.rtsp);
+  const cameraHost = editForm.cameraHost ?? parsedRtsp.host;
+  const rtspStream = editForm.rtspStream ?? parsedRtsp.streamId;
+  const updateRtspSource = (nextHost: string, nextStream: TapoStreamId) => {
+    onEditFormChange({
+      ...editForm,
+      cameraHost: nextHost,
+      rtsp: buildTapoRtspUrl(nextHost, nextStream),
+      rtspStream: nextStream,
+    });
+  };
   const updateRoi = (key: keyof Camera["config"]["roi"], value: number) => {
     onEditFormChange({
       ...editForm,
@@ -58,18 +70,28 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
               className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
             />
           </CompactField>
-          <CompactField label="Stream URL">
-            <input
-              type="text"
-              value={editForm.rtsp}
-              onChange={(event) => onEditFormChange({ ...editForm, rtsp: event.target.value })}
-              className="w-full rounded-sm border border-gray-300 px-2 py-1.5 font-mono text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
-            />
-          </CompactField>
+          {!isRtspCamera && (
+            <CompactField label={editForm.cameraType === "USB_WEBCAM" ? "Camera Device Index" : "Camera Stream Address"}>
+              <input
+                type="text"
+                value={editForm.rtsp}
+                onChange={(event) => onEditFormChange({ ...editForm, rtsp: event.target.value })}
+                className="w-full rounded-sm border border-gray-300 px-2 py-1.5 font-mono text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
+              />
+            </CompactField>
+          )}
           <CompactField label="Camera Type">
             <SelectDropdown
               value={editForm.cameraType}
-              onChange={(cameraType) => onEditFormChange({ ...editForm, cameraType: cameraType as Camera["cameraType"] })}
+              onChange={(cameraType) => {
+                const nextCameraType = cameraType as Camera["cameraType"];
+                const nextIsRtsp = nextCameraType === "RTSP_CCTV" || nextCameraType === "ONVIF_CCTV";
+                onEditFormChange({
+                  ...editForm,
+                  cameraType: nextCameraType,
+                  rtsp: nextIsRtsp ? buildTapoRtspUrl(cameraHost, rtspStream) : editForm.rtsp,
+                });
+              }}
               options={[
                 ["IP_WEBCAM", "IP Webcam"],
                 ["RTSP_CCTV", "RTSP CCTV"],
@@ -198,12 +220,25 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
               <PasswordVisibilityInput value={editForm.password ?? ""} onChange={(password) => onEditFormChange({ ...editForm, password })} />
             </CompactField>
           </div>
+          {isRtspCamera && (
+            <TapoRtspBuilder
+              host={cameraHost}
+              streamId={rtspStream}
+              error={cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined}
+              onHostChange={(host) => updateRtspSource(host, rtspStream)}
+              onStreamChange={(stream) => updateRtspSource(cameraHost, stream)}
+              layout="stacked"
+            />
+          )}
+          <CompactField label="Stream URL">
+            <input
+              readOnly
+              aria-readonly="true"
+              value={editForm.rtsp}
+              className="w-full cursor-default rounded-sm border border-gray-200 bg-gray-100 px-2 py-1.5 font-mono text-xs text-gray-600 outline-none"
+            />
+          </CompactField>
         </div>
-        {isRtspCamera && (
-          <div className="mt-2">
-            <TapoRtspBuilder streamUrl={editForm.rtsp} onStreamUrlChange={(rtsp) => onEditFormChange({ ...editForm, rtsp })} layout="stacked" />
-          </div>
-        )}
       </section>
 
     </div>

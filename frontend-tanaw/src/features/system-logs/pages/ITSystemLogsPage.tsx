@@ -104,7 +104,7 @@ export function ITSystemLogsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-800">
               {filteredActivities.map((activity) => (
-                <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="hover:bg-tgreen-dark/5 cursor-pointer transition">
+                <tr key={activity.id} onClick={() => setSelectedActivity(activity)} className="tanaw-interactive-row cursor-pointer">
                   <td className="px-3 py-4 font-mono text-xs whitespace-nowrap text-gray-500 lg:px-4">{formatLogTimestamp(activity.timestamp, timeFormat)}</td>
                   <td className="px-3 py-4 whitespace-nowrap lg:px-4">
                     <TypeBadge type={activity.category} />
@@ -122,7 +122,7 @@ export function ITSystemLogsPage() {
                     <ExpandableTableText primary={activity.target} ariaLabel="target" />
                   </td>
                   <td className="px-3 py-4 text-sm leading-relaxed text-gray-600 lg:px-4">
-                    <ExpandableTableText primary={activity.summary} ariaLabel="summary" threshold={72} twoLines />
+                    <ExpandableTableText primary={activity.summary} ariaLabel="summary" twoLines />
                   </td>
                 </tr>
               ))}
@@ -200,18 +200,16 @@ function ActivityDetailsModal({ activity, timeFormat, onClose }: { activity: Sys
 }
 
 export function ActivityDetailFields({ activity, timeFormat = "12-hour" }: { activity: SystemLog; timeFormat?: SystemTimeFormat }) {
-  const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} threshold={72} twoLines collapsedLabel="Show more" expandedLabel="Show less" />;
+  const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} twoLines />;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="tanaw-detail-grid grid gap-4 md:grid-cols-2">
       <DetailField label="Type" value={activity.category} />
       <DetailField label="Actor" value={expandableValue(`${activity.actor} (${activity.actorRole})`, "actor")} />
       <DetailField label="Date and Time" value={formatLogTimestamp(activity.timestamp, timeFormat)} />
       <DetailField label="Target" value={expandableValue(activity.target, "target")} />
       <DetailField label="Action" value={expandableValue(activity.action, "action")} />
-      <div className="md:col-span-2">
-        <DetailField label="Summary" value={expandableValue(activity.summary, "summary")} />
-      </div>
+      <DetailField label="Summary" value={expandableValue(activity.summary, "summary")} />
     </div>
   );
 }

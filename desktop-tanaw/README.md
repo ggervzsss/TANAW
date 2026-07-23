@@ -87,6 +87,11 @@ npm run dev
 Remove-Item Env:TANAW_ML_SERVICE_PORT
 ```
 
+The ML service allows two concurrent camera pipelines by default. Enterprise
+devices with validated additional capacity can set `TANAW_MAX_CONCURRENT_CAMERAS`
+to a whole number from 1 through 16 before launching Electron. Requests above
+the configured limit are rejected without stopping an existing camera.
+
 ### Docker Boundary
 
 The desktop app is not containerized for normal development or production use.

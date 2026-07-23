@@ -293,7 +293,7 @@ html.dark .tanaw-login-edge-blur {
 .tanaw-auth-desktop-stage {
   align-items: safe center;
   grid-template-columns: minmax(0, 1fr) minmax(26.25rem, min(36.25rem, 46vw));
-  height: 100svh;
+  min-height: 100svh;
 }
 
 .tanaw-auth-shell {
@@ -308,7 +308,7 @@ html.dark .tanaw-login-edge-blur {
 }
 
 .tanaw-auth-hero-title {
-  font-size: clamp(2.75rem, 4vw, 3rem);
+  font-size: clamp(2.75rem, 4vw, 3.75rem);
 }
 
 .tanaw-auth-hero-copy {
@@ -368,17 +368,17 @@ html.dark .tanaw-auth-card {
 }
 
 .tanaw-auth-brand-seal {
-  width: clamp(4rem, 9svh, 5rem);
-  height: clamp(4rem, 9svh, 5rem);
+  width: clamp(4rem, 9svh, 5.375rem);
+  height: clamp(4rem, 9svh, 5.375rem);
 }
 
 .tanaw-auth-brand-title {
-  font-size: clamp(1.65rem, 2.8vw, 2rem);
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
 }
 
 .tanaw-auth-brand-subtitle {
   margin-top: clamp(0.35rem, 1svh, 0.5rem);
-  font-size: clamp(0.9rem, 1.35vw, 1rem);
+  font-size: clamp(0.9rem, 1.5vw, 1.125rem);
   line-height: 1.45;
 }
 
@@ -698,6 +698,28 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 @media (max-width: 1120px) {
   .tanaw-auth-desktop-stage {
     grid-template-columns: minmax(0, 1fr) minmax(26.25rem, 47vw);
+  }
+}
+
+@media (max-width: 960px) {
+  .tanaw-auth-desktop-stage {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .tanaw-auth-desktop-stage .tanaw-auth-hero {
+    display: none;
+  }
+
+  .tanaw-auth-desktop-stage .tanaw-auth-card {
+    margin-inline: auto;
+    max-width: 34rem;
+  }
+
+  .tanaw-auth-desktop-stage .tanaw-login-photo {
+    width: 100%;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 

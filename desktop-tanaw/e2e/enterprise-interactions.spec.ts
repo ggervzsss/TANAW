@@ -98,27 +98,37 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.goto("/#/enterprise/cameras");
-  await page.getByRole("button", { name: /Add Camera Node/ }).click();
+  const addCamera = page.getByRole("button", { name: "Add Camera", exact: true });
+  await expect(addCamera).toHaveCount(1);
+  await expect(addCamera).toBeVisible();
+  await addCamera.click();
 
-  let dialog = page.getByRole("dialog", { name: "Register Camera Node" });
+  let dialog = page.getByRole("dialog", { name: "Add Camera" });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await dialog.getByRole("combobox", { name: "Camera type" }).click();
   await expect(page.getByRole("listbox", { name: "Camera type" }).locator("..")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await page.keyboard.press("Escape");
-  await dialog.getByPlaceholder("Optional").last().fill("secret-camera-password");
+  await dialog.getByText("Password", { exact: true }).locator("..").locator("input").fill("secret-camera-password");
   await dialog.getByRole("button", { name: "Show password" }).click();
-  await expect(dialog.getByPlaceholder("Optional").last()).toHaveAttribute("type", "text");
+  await expect(dialog.getByText("Password", { exact: true }).locator("..").locator("input")).toHaveAttribute("type", "text");
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await page.getByRole("button", { name: /Add Camera Node/ }).click();
-  dialog = page.getByRole("dialog", { name: "Register Camera Node" });
+  await addCamera.click();
+  dialog = page.getByRole("dialog", { name: "Add Camera" });
   await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await dialog.getByPlaceholder("e.g., Main Entrance Camera").fill("Entrance");
-  await dialog.getByPlaceholder("e.g., Lobby").fill("Lobby");
-  await dialog.getByPlaceholder("http://192.168.1.25:8080/video").fill("http://127.0.0.1:8080/video");
+  await dialog.getByText("Camera Name", { exact: true }).locator("..").locator("input").fill("Entrance");
+  await dialog.getByText("Assigned Zone", { exact: true }).locator("..").locator("input").fill("Lobby");
+  await dialog.getByText("Camera IP / Host", { exact: true }).locator("..").locator("input").fill("127.0.0.1");
   await dialog.getByRole("button", { name: "Save Configuration" }).click();
+
+  const controlsHeading = page.getByText("SYSTEM STATUS & CONTROLS", { exact: true });
+  await expect(controlsHeading).toBeVisible();
+  await expect(page.getByText("Camera Connection", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Service", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Edit configuration" }).click();
   await page.getByRole("button", { name: "Hide tripwire toolbar" }).click();

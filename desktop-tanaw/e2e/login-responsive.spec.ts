@@ -13,6 +13,7 @@ const enterpriseUser = {
 };
 
 const electronViewports = [
+  { width: 800, height: 500 },
   { width: 1100, height: 720 },
   { width: 1280, height: 800 },
   { width: 1440, height: 900 },
@@ -35,7 +36,13 @@ test("keeps the Enterprise card usable at supported Electron window sizes", asyn
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-    await expect(page.getByRole("heading", { name: "Enterprise Portal" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "TANAW PORTAL" })).toBeVisible();
+    const heroHeading = page.getByRole("heading", { name: "Enterprise Portal", includeHidden: true });
+    if (viewport.width <= 960) {
+      await expect(heroHeading).toBeHidden();
+    } else {
+      await expect(heroHeading).toBeVisible();
+    }
   }
 });
 
