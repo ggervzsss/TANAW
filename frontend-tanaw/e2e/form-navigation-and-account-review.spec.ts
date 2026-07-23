@@ -166,3 +166,76 @@ test("balances Action and Summary in Activity Details and collapses the shared g
   expect(narrowBoxes[1]).not.toBeNull();
   expect(narrowBoxes[1]!.y).toBeGreaterThan(narrowBoxes[0]!.y + narrowBoxes[0]!.height);
 });
+
+test("applies pending-account actions, optional LGU contact copy, and readable dark warnings", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await restoreItSession(page);
+  await page.route("**/accounts/lgu", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await page.goto("/it/lgu-accounts");
+
+  await page.getByRole("button", { name: "Create LGU Account" }).click();
+  const createDialog = page.getByRole("dialog", { name: "Create LGU Account" });
+  await expect(createDialog.getByText("Contact Number (Optional)", { exact: true })).toBeVisible();
+  await expect(createDialog.getByText("+63", { exact: true })).toBeVisible();
+  await createDialog.getByRole("button", { name: "Close modal" }).click();
+
+  await page.route("**/accounts/enterprises", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ ...enterprise, isActivated: false, profileChangeRequests: [] }]),
+    }),
+  );
+  await page.goto("/it/enterprise-accounts");
+  await page.getByText(enterprise.enterpriseName, { exact: true }).first().click();
+  let detailsDialog = page.getByRole("dialog", { name: "Enterprise Details" });
+  await expect(detailsDialog.getByRole("button", { name: "Resend activation email" })).toBeVisible();
+  await expect(detailsDialog.getByRole("button", { name: "Deactivate enterprise" })).toHaveCount(0);
+  await detailsDialog.getByRole("button", { name: "Close modal" }).click();
+
+  await page.route("**/accounts/enterprises", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ ...enterprise, profileChangeRequests: [] }]),
+    }),
+  );
+  await page.reload();
+  await page.getByText(enterprise.enterpriseName, { exact: true }).first().click();
+  detailsDialog = page.getByRole("dialog", { name: "Enterprise Details" });
+  await detailsDialog.getByRole("button", { name: "Deactivate enterprise" }).click();
+  const warningDialog = page.getByRole("dialog", { name: "Deactivate Enterprise" });
+  const warningPanel = warningDialog.locator(".tanaw-warning-panel");
+  await expect(warningPanel).toBeVisible();
+  await expect(warningPanel.getByText("This enterprise account will lose TANAW access.", { exact: true })).toHaveCSS("color", "rgb(252, 211, 77)");
+  await expect(warningPanel.getByText(/will not be able to sign in/)).not.toHaveCSS("color", "rgb(120, 53, 15)");
+  await expect(warningPanel).not.toHaveCSS("background-color", "rgb(254, 243, 199)");
+});
+
+test("formats Technical Issue timestamps in Philippine Time", async ({ page }) => {
+  const alert = {
+    id: "ALT-000099",
+    type: "Failed Login Threshold",
+    severity: "Warning",
+    enterprise: "Test Enterprise",
+    requester: "Test User",
+    summary: "The account reached the failed sign-in threshold.",
+    requiredAction: "Review account activity.",
+    resolutionMode: "Remote Review",
+    status: "New",
+    owner: "IT",
+    time: "2026-07-23T12:11:04.071391+00:00",
+  };
+  await restoreItSession(page);
+  await page.route("**/operational/alerts", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([alert]) }));
+  await page.route("**/operational/tickets", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await page.route("**/accounts/email-deliveries", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await page.goto(`/it/work-center?view=issues&alert=${alert.id}`);
+
+  const dialog = page.getByRole("dialog", { name: "Technical Issue Details" });
+  const timestamp = dialog.locator("time");
+  await expect(timestamp).toHaveAttribute("datetime", alert.time);
+  await expect(timestamp).toContainText("Jul 23, 2026");
+  await expect(timestamp).toContainText("8:11 PM");
+  await expect(dialog.getByText(alert.time, { exact: true })).toHaveCount(0);
+});

@@ -1,5 +1,5 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { AlertTriangle, Building2, CheckCircle2, KeyRound, Pencil, UserCheck, XCircle } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, KeyRound, MapPin, Pencil, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
 import toast from "react-hot-toast/headless";
@@ -8,8 +8,12 @@ import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpris
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { canDeactivateAccount } from "@/shared/utils/accountState";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
+import type { BarangayPointResolution } from "@/features/mapview/utils";
+import type { LocationDraft } from "../types";
+import { LocationPicker } from "./LocationPicker";
 import {
   normalizeEmail,
   PERSON_NAME_MAX_LENGTH,
@@ -41,7 +45,6 @@ type EnterpriseEditState = {
   barangay: string;
   address: string;
   buildingCapacity: string;
-  status: UpdateEnterpriseAccountPayload["status"];
 };
 
 type EnterpriseEditErrors = Partial<Record<keyof EnterpriseEditState, string>>;
@@ -54,7 +57,6 @@ type PendingSave = {
 
 const enterpriseCategoryValues = new Set<string>(enterpriseCategories.map((category) => category.value));
 const sanPedroBarangayValues = new Set<string>(sanPedroBarangays);
-const allowedStatusValues = ["active", "inactive"] satisfies UpdateEnterpriseAccountPayload["status"][];
 const enterpriseEditFieldOrder: readonly (keyof EnterpriseEditState)[] = [
   "enterpriseName",
   "category",
@@ -66,7 +68,6 @@ const enterpriseEditFieldOrder: readonly (keyof EnterpriseEditState)[] = [
   "buildingCapacity",
   "barangay",
   "address",
-  "status",
 ];
 
 export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
@@ -75,6 +76,9 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EnterpriseEditState>(() => getInitialForm(enterprise));
+  const [location, setLocation] = useState<LocationDraft | null>(() => getInitialLocation(enterprise));
+  const [detectedBarangay, setDetectedBarangay] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [errors, setErrors] = useState<EnterpriseEditErrors>({});
   const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
@@ -83,7 +87,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateEnterpriseAccountPayload) => updateEnterpriseAccount(enterprise.id, payload),
     onSuccess: async (updatedEnterprise, payload) => {
-      const activationEmailQueued = !enterprise.isActivated && updatedEnterprise.status === "active" && (payload.email !== enterprise.email || enterprise.status === "inactive");
+      const activationEmailQueued = !enterprise.isActivated && updatedEnterprise.status === "active" && payload.email !== enterprise.email;
       const emailVerificationQueued = enterprise.isActivated && payload.email !== enterprise.email && updatedEnterprise.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
@@ -93,6 +97,9 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       ]);
       onEnterpriseUpdated(updatedEnterprise);
       setForm(getInitialForm(updatedEnterprise));
+      setLocation(getInitialLocation(updatedEnterprise));
+      setDetectedBarangay(null);
+      setLocationError(null);
       setConfirmMode(null);
       setPendingSave(null);
       setIsEditing(false);
@@ -166,6 +173,11 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       focusFirstInvalidField(event.currentTarget, getInvalidEnterpriseEditFieldNames(nextErrors));
       return;
     }
+    if (location && detectedBarangay && detectedBarangay !== form.barangay) {
+      setLocationError(`The selected pin is in ${detectedBarangay}. Use the detected barangay before saving.`);
+      document.querySelector<HTMLElement>('[data-field-name="location"]')?.focus();
+      return;
+    }
 
     const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
     const payload: UpdateEnterpriseAccountPayload = {
@@ -177,7 +189,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       barangay: form.barangay,
       address: form.address.trim(),
       buildingCapacity: Number(form.buildingCapacity),
-      status: form.status,
+      ...(location ? { latitude: location.latitude, longitude: location.longitude } : {}),
     };
     const changes = getEnterpriseChanges(enterprise, payload);
     if (changes.length === 0) {
@@ -243,14 +255,16 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                       Resend activation email
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setConfirmMode("status")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none"
-                  >
-                    {enterprise.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
-                    {enterprise.status === "active" ? "Deactivate enterprise" : "Reactivate enterprise"}
-                  </button>
+                  {enterprise.status === "inactive" || canDeactivateAccount(enterprise) ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmMode("status")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none"
+                    >
+                      {enterprise.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
+                      {enterprise.status === "active" ? "Deactivate enterprise" : "Reactivate enterprise"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </>
@@ -327,20 +341,41 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                   required
                 />
                 <FormField name="address" label="Block / Lot / Street" value={form.address} onChange={(value) => updateField("address", value)} error={errors.address} required />
-                <SearchableDropdownField
-                  name="status"
-                  label="Status"
-                  options={
-                    [
-                      ["active", "Active"],
-                      ["inactive", "Inactive"],
-                    ] satisfies DropdownOption[]
-                  }
-                  value={form.status}
-                  onChange={(value) => updateField("status", value as EnterpriseEditState["status"])}
-                  error={errors.status}
-                  required
-                />
+                <section
+                  data-field-name="location"
+                  tabIndex={-1}
+                  className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/20 md:col-span-2 dark:border-emerald-300/20 dark:bg-emerald-400/6"
+                >
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black tracking-wide text-slate-600 uppercase">Map Location</p>
+                      <p className="mt-1 text-sm text-slate-500">Click or drag the current pin. Only locations inside San Pedro can be saved.</p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm">
+                      <MapPin size={14} />
+                      {location ? `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}` : "Not pinned"}
+                    </span>
+                  </div>
+                  <LocationPicker
+                    location={location}
+                    mapId={`enterprise-edit-location-${enterprise.id}`}
+                    mapHeightClassName="h-80"
+                    onBoundaryDetection={applyBoundaryDetection}
+                    onChange={applySelectedLocation}
+                    onReject={handleLocationRejected}
+                  />
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <LocationDetail label="Detected Barangay" value={detectedBarangay ?? (location ? "Detecting boundary..." : "No pin selected")} />
+                    <LocationDetail label="Selected Barangay" value={form.barangay || "Not selected"} />
+                    <LocationDetail label="Registered Address" value={form.address.trim() || "Not provided"} />
+                  </dl>
+                  {locationError && (
+                    <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                      <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                      <span>{locationError}</span>
+                    </div>
+                  )}
+                </section>
               </div>
 
               {confirmMode === "save" && pendingSave && (
@@ -363,6 +398,9 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                   onClick={() => {
                     setIsEditing(false);
                     setForm(getInitialForm(enterprise));
+                    setLocation(getInitialLocation(enterprise));
+                    setDetectedBarangay(null);
+                    setLocationError(null);
                     setErrors({});
                     setConfirmMode(null);
                     setPendingSave(null);
@@ -413,6 +451,26 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
     setConfirmMode(null);
     setPendingSave(null);
   }
+
+  function applySelectedLocation(nextLocation: LocationDraft, resolution?: BarangayPointResolution) {
+    setLocation(nextLocation);
+    setDetectedBarangay(resolution?.barangayName ?? null);
+    setLocationError(resolution?.isAmbiguous ? "This pin touches multiple barangay boundaries. Move it farther inside the intended barangay." : null);
+    if (resolution?.barangayName && sanPedroBarangayValues.has(resolution.barangayName)) {
+      setForm((current) => ({ ...current, barangay: resolution.barangayName ?? current.barangay }));
+      setErrors((current) => ({ ...current, barangay: undefined }));
+    }
+  }
+
+  function applyBoundaryDetection(selectedLocation: LocationDraft, resolution: BarangayPointResolution) {
+    if (!location || location.latitude !== selectedLocation.latitude || location.longitude !== selectedLocation.longitude) return;
+    applySelectedLocation(selectedLocation, resolution);
+  }
+
+  function handleLocationRejected(message: string) {
+    setLocationError(message);
+    toast.error(message);
+  }
 }
 
 function ConfirmEnterpriseActivationModal({ enterprise, isPending, onClose, onConfirm }: { enterprise: AccountSummary; isPending: boolean; onClose: () => void; onConfirm: () => void }) {
@@ -421,13 +479,13 @@ function ConfirmEnterpriseActivationModal({ enterprise, isPending, onClose, onCo
   return (
     <ModalFrame title="Resend Activation Email" onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
-        <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
             <KeyRound size={20} />
           </span>
           <div>
             <p className="font-bold">This will issue a new activation link.</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
               Any previous activation link for {enterpriseName} will stop working. TANAW will email a new single-use link so the enterprise user can create their password securely.
             </p>
           </div>
@@ -463,7 +521,7 @@ function ConfirmEnterpriseStatusModal({
   onConfirm,
 }: {
   enterprise: AccountSummary;
-  nextStatus: UpdateEnterpriseAccountPayload["status"];
+  nextStatus: AccountSummary["status"];
   isPending: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -475,13 +533,13 @@ function ConfirmEnterpriseStatusModal({
   return (
     <ModalFrame title={actionLabel} onClose={onClose} maxWidthClassName="max-w-lg">
       <div className="space-y-5">
-        <div className="flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
             <AlertTriangle size={20} />
           </span>
           <div>
             <p className="font-bold">{isDeactivating ? "This enterprise account will lose TANAW access." : "This enterprise account will regain TANAW access."}</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80">
+            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
               {isDeactivating
                 ? `${enterpriseName} will not be able to sign in until the account is reactivated.`
                 : enterprise.isActivated
@@ -517,10 +575,10 @@ function ConfirmEnterpriseStatusModal({
 
 function EnterpriseActionAccountSummary({ enterprise }: { enterprise: AccountSummary }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-600 dark:bg-[#0c1728]">
       <p className="text-xs font-bold tracking-wide text-slate-500 uppercase">Enterprise</p>
-      <p className="mt-1 font-bold text-slate-900">{enterprise.enterpriseName ?? enterprise.displayName}</p>
-      <p className="text-sm text-slate-600">{enterprise.email}</p>
+      <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">{enterprise.enterpriseName ?? enterprise.displayName}</p>
+      <p className="text-sm text-slate-600 dark:text-slate-300">{enterprise.email}</p>
     </div>
   );
 }
@@ -590,7 +648,6 @@ function getInitialForm(enterprise: AccountSummary): EnterpriseEditState {
     barangay: enterprise.barangay ?? "",
     address: enterprise.address ?? "",
     buildingCapacity: String(enterprise.buildingCapacity),
-    status: enterprise.status,
   };
 }
 
@@ -615,7 +672,6 @@ function validateEnterpriseEditForm(form: EnterpriseEditState) {
   if (!form.address.trim()) errors.address = "Address is required.";
   const capacityError = validateBuildingCapacity(form.buildingCapacity);
   if (capacityError) errors.buildingCapacity = capacityError;
-  if (!allowedStatusValues.includes(form.status)) errors.status = "Choose a valid status.";
 
   return errors;
 }
@@ -644,6 +700,32 @@ function getEnterpriseChanges(enterprise: AccountSummary, payload: UpdateEnterpr
   if ((enterprise.barangay ?? "") !== payload.barangay) changes.push(`Barangay: ${enterprise.barangay ?? "Not provided"} -> ${payload.barangay}`);
   if ((enterprise.address ?? "") !== payload.address) changes.push("Registered address will be updated.");
   if (enterprise.buildingCapacity !== payload.buildingCapacity) changes.push(`Building capacity: ${enterprise.buildingCapacity} -> ${payload.buildingCapacity}`);
-  if (enterprise.status !== payload.status) changes.push(`Status: ${enterprise.status} -> ${payload.status}`);
+  if (
+    payload.latitude !== undefined &&
+    payload.longitude !== undefined &&
+    (enterprise.latitude !== payload.latitude || enterprise.longitude !== payload.longitude)
+  ) {
+    changes.push(
+      `Map location: ${
+        enterprise.latitude !== null && enterprise.longitude !== null
+          ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}`
+          : "Not pinned"
+      } -> ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)}`,
+    );
+  }
   return changes;
+}
+
+function getInitialLocation(enterprise: AccountSummary): LocationDraft | null {
+  if (enterprise.latitude === null || enterprise.longitude === null) return null;
+  return { latitude: enterprise.latitude, longitude: enterprise.longitude };
+}
+
+function LocationDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-[#121c31]">
+      <dt className="text-[10px] font-black tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</dt>
+      <dd className="mt-1 wrap-break-word font-bold text-slate-800 dark:text-slate-100">{value}</dd>
+    </div>
+  );
 }

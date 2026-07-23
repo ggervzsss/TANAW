@@ -9,7 +9,6 @@ from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.maintenance.runtime import (
     retention_runtime_snapshot,
     run_retention_cleanup_now,
@@ -44,7 +43,7 @@ async def run_retention_now(
             detail="Retention maintenance could not complete.",
         ) from exc
 
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category="IT Activity",
@@ -64,7 +63,6 @@ async def run_retention_now(
             },
         ),
     )
-    await activity_log_manager.broadcast(log)
     return to_status_response(
         retention_runtime_snapshot(),
         interval_seconds=settings.retention_cleanup_interval_seconds,

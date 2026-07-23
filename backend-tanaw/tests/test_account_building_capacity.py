@@ -13,6 +13,7 @@ from app.features.accounts.schemas import (
     BuildingCapacityUpdate,
     EnterpriseAccountCreate,
     EnterpriseAccountUpdate,
+    LguAccountUpdate,
 )
 from app.features.accounts.service import to_account_summary, to_auth_user
 
@@ -73,9 +74,29 @@ def enterprise_create_payload(**overrides: object) -> dict[str, object]:
 
 def enterprise_update_payload(**overrides: object) -> dict[str, object]:
     payload = enterprise_create_payload()
-    payload["status"] = "active"
     payload.update(overrides)
     return payload
+
+
+def test_general_account_updates_reject_lifecycle_fields() -> None:
+    with pytest.raises(ValidationError):
+        EnterpriseAccountUpdate.model_validate(enterprise_update_payload(status="inactive"))
+
+    with pytest.raises(ValidationError):
+        LguAccountUpdate.model_validate(
+            {
+                "firstName": "Alex",
+                "lastName": "Santos",
+                "email": "alex@example.com",
+                "role": "staff",
+                "status": "inactive",
+            }
+        )
+
+
+def test_enterprise_update_requires_paired_coordinates() -> None:
+    with pytest.raises(ValidationError):
+        EnterpriseAccountUpdate.model_validate(enterprise_update_payload(longitude=None))
 
 
 def enterprise_account(*, building_capacity: int) -> Account:

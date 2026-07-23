@@ -16,8 +16,25 @@ contextBridge.exposeInMainWorld("tanawCameraCredentials", {
   load(scope: string) {
     return ipcRenderer.invoke("camera-credentials:load", scope);
   },
-  save(scope: string, records: Record<string, { password?: string; username?: string }>) {
-    return ipcRenderer.invoke("camera-credentials:save", scope, records);
+  save(scope: string, cameraId: number, credential: { password?: string; username: string }) {
+    return ipcRenderer.invoke("camera-credentials:save", scope, cameraId, credential);
+  },
+  remove(scope: string, cameraId: number) {
+    return ipcRenderer.invoke("camera-credentials:remove", scope, cameraId);
+  },
+  request(
+    scope: string,
+    cameraId: number,
+    operation: "start" | "test",
+    payload: Record<string, unknown>,
+  ) {
+    return ipcRenderer.invoke(
+      "camera-credentials:request",
+      scope,
+      cameraId,
+      operation,
+      payload,
+    );
   },
 });
 

@@ -1,5 +1,10 @@
 import type { Camera } from "../../../types/enterprise";
+import { getMemoryCameraCredential } from "./camera-credentials";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
+import {
+  assertUniqueCameraIps,
+  canonicalizeCameraIp,
+} from "../utils/camera-ip-uniqueness";
 
 export type MlServiceStatus = {
   baseUrl: string;
@@ -396,15 +401,31 @@ export async function listLocalCameras(baseUrl: string): Promise<Camera[]> {
   return requestJson<Camera[]>(`${baseUrl}/cameras`, { method: "GET" }, 2500);
 }
 
+const cameraWriteQueues = new Map<string, Promise<unknown>>();
+
 export async function replaceLocalCameras(baseUrl: string, cameras: Camera[]): Promise<Camera[]> {
-  return requestJson<Camera[]>(
-    `${baseUrl}/cameras`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ cameras }),
-    },
-    5000,
-  );
+  const canonicalCameras = cameras.map(canonicalizeCameraIp);
+  assertUniqueCameraIps(canonicalCameras);
+
+  const previousWrite = cameraWriteQueues.get(baseUrl) ?? Promise.resolve();
+  const write = previousWrite
+    .catch(() => undefined)
+    .then(() =>
+      requestJson<Camera[]>(
+        `${baseUrl}/cameras`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ cameras: canonicalCameras }),
+        },
+        5000,
+      ),
+    );
+  cameraWriteQueues.set(baseUrl, write);
+  try {
+    return await write;
+  } finally {
+    if (cameraWriteQueues.get(baseUrl) === write) cameraWriteQueues.delete(baseUrl);
+  }
 }
 
 export async function getLocalMetricsSummary(baseUrl: string, options: { includeSubmitted?: boolean } = {}): Promise<LocalMetricsSummary> {
@@ -534,59 +555,95 @@ export async function getMlDetections(baseUrl: string): Promise<MlDetections> {
   return requestJson<MlDetections>(`${baseUrl}/detections`, { method: "GET" }, 2500);
 }
 
-export async function testCameraConnection(baseUrl: string, camera: Camera): Promise<CameraTestResult> {
+export async function testCameraConnection(
+  baseUrl: string,
+  camera: Camera,
+  credentialScope?: string,
+): Promise<CameraTestResult> {
+  const credential = credentialScope
+    ? getMemoryCameraCredential(credentialScope, camera.id)
+    : undefined;
+  const payload = {
+    camera_id: camera.id,
+    camera_name: camera.name,
+    camera_type: camera.cameraType,
+    camera_host: camera.cameraHost || null,
+    rtsp_stream: camera.rtspStream || null,
+    stream_url: camera.rtsp,
+  };
+  if (credentialScope && window.tanawCameraCredentials) {
+    return window.tanawCameraCredentials.request(
+      credentialScope,
+      camera.id,
+      "test",
+      payload,
+    ) as Promise<CameraTestResult>;
+  }
   return requestJson<CameraTestResult>(
     `${baseUrl}/camera/test`,
     {
       method: "POST",
       body: JSON.stringify({
-        camera_id: camera.id,
-        camera_name: camera.name,
-        camera_type: camera.cameraType,
-        camera_host: camera.cameraHost || null,
-        password: camera.password || null,
-        rtsp_stream: camera.rtspStream || null,
-        stream_url: camera.rtsp,
-        username: camera.username || null,
+        ...payload,
+        password: credential?.password ?? camera.password ?? null,
+        username: credential?.username ?? camera.username ?? null,
       }),
     },
     8000,
   );
 }
 
-export async function startCameraProcessing(baseUrl: string, camera: Camera): Promise<{ message: string }> {
+export async function startCameraProcessing(
+  baseUrl: string,
+  camera: Camera,
+  credentialScope?: string,
+): Promise<{ message: string }> {
+  const credential = credentialScope
+    ? getMemoryCameraCredential(credentialScope, camera.id)
+    : undefined;
+  const payload = {
+    camera_name: camera.name,
+    camera_zone: camera.zone,
+    camera_id: camera.id,
+    camera_type: camera.cameraType,
+    camera_host: camera.cameraHost || null,
+    confidence: camera.confidence,
+    counting_confidence: camera.confidence,
+    entry_line: toMlTripwireLine(camera.config.tripwires.entry),
+    event_cooldown_seconds: 3.6,
+    exit_line: toMlTripwireLine(camera.config.tripwires.exit),
+    paired_line_max_gap_seconds: 18,
+    processing_profile: camera.processingProfile,
+    runtime_backend: "auto",
+    tracker_profile: "auto",
+    pending_reid_wait_seconds: 0.6,
+    reid_mode: camera.reidMode ?? "auto",
+    reverse_direction: camera.config.reverse,
+    roi: toMlRoi(camera.config.roi),
+    stream_fps: 24,
+    stream_url: camera.rtsp,
+    rtsp_stream: camera.rtspStream || null,
+    tracking_confidence: camera.trackingConfidence ?? 0.15,
+    track_ttl_seconds: 9,
+    tripwire_position: camera.config.tripwire / 100,
+    unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
+  };
+  if (credentialScope && window.tanawCameraCredentials) {
+    return window.tanawCameraCredentials.request(
+      credentialScope,
+      camera.id,
+      "start",
+      payload,
+    ) as Promise<{ message: string }>;
+  }
   return requestJson<{ message: string }>(
     `${baseUrl}/camera/start`,
     {
       method: "POST",
       body: JSON.stringify({
-        camera_name: camera.name,
-        camera_zone: camera.zone,
-        camera_id: camera.id,
-        camera_type: camera.cameraType,
-        camera_host: camera.cameraHost || null,
-        confidence: camera.confidence,
-        counting_confidence: camera.confidence,
-        entry_line: toMlTripwireLine(camera.config.tripwires.entry),
-        event_cooldown_seconds: 3.6,
-        exit_line: toMlTripwireLine(camera.config.tripwires.exit),
-        paired_line_max_gap_seconds: 18,
-        password: camera.password || null,
-        processing_profile: camera.processingProfile,
-        runtime_backend: "auto",
-        tracker_profile: "auto",
-        pending_reid_wait_seconds: 0.6,
-        reid_mode: camera.reidMode ?? "auto",
-        reverse_direction: camera.config.reverse,
-        roi: toMlRoi(camera.config.roi),
-        stream_fps: 24,
-        stream_url: camera.rtsp,
-        rtsp_stream: camera.rtspStream || null,
-        tracking_confidence: camera.trackingConfidence ?? 0.15,
-        track_ttl_seconds: 9,
-        tripwire_position: camera.config.tripwire / 100,
-        unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
-        username: camera.username || null,
+        ...payload,
+        password: credential?.password ?? camera.password ?? null,
+        username: credential?.username ?? camera.username ?? null,
       }),
     },
     30_000,

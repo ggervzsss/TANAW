@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTapoRtspUrl, isValidIpv4, normalizeIpv4Input, stripStreamCredentials } from "./rtsp";
+import { buildTapoRtspUrl, canonicalizeIpv4, isValidIpv4, normalizeIpv4Input, stripStreamCredentials } from "./rtsp";
 
 describe("stripStreamCredentials", () => {
   it("removes embedded credentials while retaining the local stream address", () => {
@@ -25,7 +25,9 @@ describe("RTSP source construction", () => {
   it("accepts strict IPv4 addresses and strips invalid input characters", () => {
     expect(isValidIpv4("192.168.1.20")).toBe(true);
     expect(isValidIpv4("192.168.1.999")).toBe(false);
-    expect(isValidIpv4("192.168.01.20")).toBe(false);
+    expect(isValidIpv4("192.168.01.20")).toBe(true);
+    expect(canonicalizeIpv4("192.168.01.020")).toBe("192.168.1.20");
+    expect(buildTapoRtspUrl("192.168.001.020", "stream2")).toBe("rtsp://192.168.1.20/stream2");
     expect(normalizeIpv4Input("rtsp://192.168.1.20")).toBe("192.168.1.20");
   });
 });

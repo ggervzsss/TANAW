@@ -21,6 +21,7 @@ export function ITEnterpriseAccountsPage() {
 
   const accountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const currentSelectedEnterprise = selectedEnterprise ? (accounts.find((account) => account.id === selectedEnterprise.id) ?? selectedEnterprise) : null;
   const barangays = ["All Barangays", ...sanPedroBarangays];
   const filteredEnterprises = useMemo(() => filterEnterpriseAccounts(accounts, query, status, barangay), [accounts, barangay, query, status]);
   const handleEnterpriseUpdated = (updatedEnterprise: AccountSummary) => {
@@ -49,10 +50,10 @@ export function ITEnterpriseAccountsPage() {
       </Panel>
 
       <AnimatePresence>
-        {selectedEnterprise && (
+        {currentSelectedEnterprise && (
           <EnterpriseDetailsModal
-            key={`enterprise-details-${selectedEnterprise.id}`}
-            enterprise={selectedEnterprise}
+            key={`enterprise-details-${currentSelectedEnterprise.id}`}
+            enterprise={currentSelectedEnterprise}
             onClose={() => setSelectedEnterprise(null)}
             onEnterpriseUpdated={setSelectedEnterprise}
           />

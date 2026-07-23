@@ -11,8 +11,7 @@ from starlette.datastructures import URL
 from app.core.http_security import websocket_security_headers
 from app.core.websocket_auth import is_websocket_origin_allowed
 from app.features.accounts.models import Account, AccountRole, AccountStatus
-from app.features.activity_logs import router as activity_logs_router
-from app.features.operational import router as operational_router
+from app.features.realtime import router as realtime_router
 
 TRUSTED_FRONTEND_ORIGIN = "https://tanaw-sanpedro.vercel.app"
 
@@ -50,7 +49,7 @@ def test_websocket_security_headers_include_hsts_for_secure_non_local_handshake(
         WebSocket,
         SimpleNamespace(
             headers={"x-forwarded-proto": "https"},
-            url=URL("wss://tanaw.onrender.com/operational/ws"),
+            url=URL("wss://tanaw.onrender.com/realtime/ws"),
         ),
     )
 
@@ -66,7 +65,7 @@ def test_websocket_security_headers_include_hsts_for_secure_non_local_handshake(
 def test_websocket_security_headers_do_not_hsts_local_development_handshake() -> None:
     websocket = cast(
         WebSocket,
-        SimpleNamespace(headers={}, url=URL("ws://localhost:5174/operational/ws")),
+        SimpleNamespace(headers={}, url=URL("ws://localhost:5174/realtime/ws")),
     )
 
     headers = {key.decode(): value.decode() for key, value in websocket_security_headers(websocket)}
@@ -76,8 +75,12 @@ def test_websocket_security_headers_do_not_hsts_local_development_handshake() ->
 
 
 class AsyncSessionContext:
+    def __init__(self) -> None:
+        self.session = MagicMock()
+        self.session.scalar = AsyncMock(return_value=0)
+
     async def __aenter__(self) -> MagicMock:
-        return MagicMock()
+        return self.session
 
     async def __aexit__(self, *_: object) -> None:
         return None
@@ -96,111 +99,40 @@ def active_it_account() -> Account:
     )
 
 
-def active_staff_account() -> Account:
-    return Account(
-        id="websocket-staff-account-1",
-        email="websocket-staff@example.com",
-        password_hash="unused-password-hash",
-        role=AccountRole.STAFF,
-        display_name="WebSocket Staff",
-        title="LGU Staff",
-        status=AccountStatus.ACTIVE,
-        activated_at=datetime.now(UTC),
-    )
-
-
 @pytest.mark.asyncio
-async def test_operational_websocket_closes_when_session_is_invalidated(
+async def test_realtime_websocket_disconnects_when_session_is_invalidated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     websocket = MagicMock()
-    websocket.receive_text = AsyncMock(return_value="ping")
-    websocket.close = AsyncMock()
-    websocket.send_text = AsyncMock()
-    manager = SimpleNamespace(connect=AsyncMock(), disconnect=MagicMock())
+    websocket.receive_text = AsyncMock(return_value='{"type":"realtime.pong"}')
+    manager = SimpleNamespace(
+        connect=AsyncMock(),
+        disconnect=AsyncMock(),
+        send_protocol=AsyncMock(return_value=True),
+    )
     authenticate = AsyncMock(side_effect=[active_it_account(), None])
     monkeypatch.setattr(
-        operational_router,
+        realtime_router,
         "receive_websocket_bearer_token",
         AsyncMock(return_value="access-token"),
     )
-    monkeypatch.setattr(operational_router, "authenticate_websocket_account", authenticate)
-    monkeypatch.setattr(operational_router, "AsyncSessionLocal", AsyncSessionContext)
-    monkeypatch.setattr(operational_router, "operational_ws_manager", manager)
+    monkeypatch.setattr(realtime_router, "authenticate_websocket_account", authenticate)
+    monkeypatch.setattr(realtime_router, "AsyncSessionLocal", AsyncSessionContext)
+    monkeypatch.setattr(realtime_router, "realtime_manager", manager)
 
-    await operational_router.operational_websocket(cast(WebSocket, websocket))
+    await realtime_router.realtime_websocket(cast(WebSocket, websocket))
 
-    websocket.close.assert_awaited_once_with(code=1008)
-    websocket.send_text.assert_not_awaited()
     assert authenticate.await_count == 2
-    manager.disconnect.assert_called_once()
+    manager.connect.assert_awaited_once()
+    assert any(call.kwargs.get("close_code") == 4401 for call in manager.disconnect.await_args_list)
 
 
 @pytest.mark.asyncio
-async def test_activity_log_websocket_closes_when_session_is_invalidated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    websocket = MagicMock()
-    websocket.receive_text = AsyncMock(return_value="ping")
-    websocket.close = AsyncMock()
-    websocket.send_text = AsyncMock()
-    manager = SimpleNamespace(connect=AsyncMock(), disconnect=MagicMock())
-    authenticate = AsyncMock(side_effect=[active_it_account(), None])
-    monkeypatch.setattr(
-        activity_logs_router,
-        "receive_websocket_bearer_token",
-        AsyncMock(return_value="access-token"),
-    )
-    monkeypatch.setattr(activity_logs_router, "authenticate_websocket_account", authenticate)
-    monkeypatch.setattr(activity_logs_router, "AsyncSessionLocal", AsyncSessionContext)
-    monkeypatch.setattr(activity_logs_router, "activity_log_manager", manager)
-
-    await activity_logs_router.activity_logs_websocket(cast(WebSocket, websocket))
-
-    websocket.close.assert_awaited_once_with(code=1008)
-    websocket.send_text.assert_not_awaited()
-    assert authenticate.await_count == 2
-    manager.disconnect.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_activity_log_websocket_rejects_staff_accounts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    websocket = MagicMock()
-    websocket.close = AsyncMock()
-    manager = SimpleNamespace(connect=AsyncMock(), disconnect=MagicMock())
-    monkeypatch.setattr(
-        activity_logs_router,
-        "receive_websocket_bearer_token",
-        AsyncMock(return_value="access-token"),
-    )
-    monkeypatch.setattr(
-        activity_logs_router,
-        "authenticate_websocket_account",
-        AsyncMock(return_value=active_staff_account()),
-    )
-    monkeypatch.setattr(activity_logs_router, "AsyncSessionLocal", AsyncSessionContext)
-    monkeypatch.setattr(activity_logs_router, "activity_log_manager", manager)
-
-    await activity_logs_router.activity_logs_websocket(cast(WebSocket, websocket))
-
-    websocket.close.assert_awaited_once_with(code=1008)
-    manager.connect.assert_not_awaited()
-    manager.disconnect.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_websocket_authentication_rejects_pending_and_inactive_accounts(
+async def test_realtime_authentication_rejects_pending_inactive_and_revoked_accounts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        operational_router,
-        "decode_access_token",
-        lambda _token: {"sub": "websocket-account-1"},
-    )
-    monkeypatch.setattr(
-        activity_logs_router,
+        realtime_router,
         "decode_access_token",
         lambda _token: {"sub": "websocket-account-1"},
     )
@@ -212,24 +144,26 @@ async def test_websocket_authentication_rejects_pending_and_inactive_accounts(
 
     for account in (pending, inactive):
         monkeypatch.setattr(
-            operational_router,
-            "get_account_by_id",
-            AsyncMock(return_value=account),
-        )
-        monkeypatch.setattr(
-            activity_logs_router,
+            realtime_router,
             "get_account_by_id",
             AsyncMock(return_value=account),
         )
         assert (
-            await operational_router.authenticate_websocket_account(
+            await realtime_router.authenticate_websocket_account(
                 cast(AsyncSession, MagicMock()), "access-token"
             )
             is None
         )
-        assert (
-            await activity_logs_router.authenticate_websocket_account(
-                cast(AsyncSession, MagicMock()), "access-token"
-            )
-            is None
+
+    monkeypatch.setattr(
+        realtime_router,
+        "get_account_by_id",
+        AsyncMock(return_value=active_it_account()),
+    )
+    monkeypatch.setattr(realtime_router, "is_token_invalidated", lambda *_args: True)
+    assert (
+        await realtime_router.authenticate_websocket_account(
+            cast(AsyncSession, MagicMock()), "access-token"
         )
+        is None
+    )

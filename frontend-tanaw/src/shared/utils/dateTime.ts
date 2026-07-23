@@ -13,12 +13,13 @@ export function resolveSystemTimeFormat(value: unknown): SystemTimeFormat {
 }
 
 export function formatPhilippineDateTime(
-  value: string | number | Date,
+  value: string | number | Date | null | undefined,
   timeFormat: SystemTimeFormat,
   options: DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" },
 ) {
+  if (value === null || value === undefined || value === "") return "Date unavailable";
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return typeof value === "string" ? value : "Date unavailable";
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
 
   return new Intl.DateTimeFormat("en-PH", {
     ...options,

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmationDialog } from "../../../components/ConfirmationDialog";
 import type { Camera, CameraStatus } from "../../../types/enterprise";
-import { validateCameraStreamUrl, validateRequiredText } from "../../../utils/form-validation";
+import { validateCameraStreamUrl } from "../../../utils/form-validation";
 import { createBackoffPoller } from "../../../utils/backoff-poller";
 import { createReconnectingWebSocket } from "../../../utils/reconnecting-websocket";
 import { CameraAddModal } from "./CameraAddModal";
@@ -9,8 +9,14 @@ import { CameraList } from "./CameraList";
 import { CameraPreviewPanel } from "./CameraPreviewPanel";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
+import { requiresCameraCredentials, validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
 import { cameraStatusFromRuntime, mergeCameraStates } from "../utils/camera-live-state";
 import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnection, stripStreamCredentials } from "../utils/rtsp";
+import {
+  CAMERA_IP_CONFLICT_MESSAGE,
+  canonicalizeCameraIp,
+  findCameraIpConflict,
+} from "../utils/camera-ip-uniqueness";
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
@@ -29,7 +35,12 @@ import {
   testCameraConnection,
 } from "../services/ml-service";
 import type { MlCameraLiveEnvelope, MlCameraLiveState, MlCameraStates, MlHealth, MlServiceStatus } from "../services/ml-service";
-import { loadCameraCredentials, saveCameraCredentials, type CameraCredentialRecords } from "../services/camera-credentials";
+import {
+  deleteCameraCredential,
+  loadCameraCredentialMetadata,
+  saveCameraCredential,
+  type CameraCredentialMetadataRecords,
+} from "../services/camera-credentials";
 
 type CameraManagementViewProps = {
   cameras: Camera[];
@@ -37,7 +48,6 @@ type CameraManagementViewProps = {
   storageKey: string;
 };
 
-type CameraFormErrors = Partial<Record<keyof CameraFormValues, string>>;
 type CameraAction = "starting" | "stopping" | "testing";
 
 const emptyCameraForm: CameraFormValues = {
@@ -71,10 +81,12 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   const [isValidating, setIsValidating] = useState(false);
   const [editForm, setEditForm] = useState<Camera | null>(null);
   const [cameraPendingDelete, setCameraPendingDelete] = useState<Camera | null>(null);
+  const [credentialMetadata, setCredentialMetadata] = useState<CameraCredentialMetadataRecords>({});
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<MlServiceStatus | null>(null);
   const [serviceHealth, setServiceHealth] = useState<MlHealth | null>(null);
   const [serviceError, setServiceError] = useState<string | null>(null);
+  const [configurationError, setConfigurationError] = useState<string | null>(null);
   const [isMlLiveConnected, setIsMlLiveConnected] = useState(false);
   const [isRestartingService, setIsRestartingService] = useState(false);
   const servicePidRef = useRef<number | null>(null);
@@ -88,13 +100,26 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   const detections = activeState?.detections ?? EMPTY_ML_DETECTIONS;
   const health = activeState?.health ?? serviceHealth;
   const activeAction = activeCam ? cameraActions[activeCam.id] : undefined;
-  const monitoringError = activeCam ? activeState?.counts.error ?? cameraErrors[activeCam.id] ?? serviceError : serviceError;
+  const monitoringError = activeCam
+    ? activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError ?? serviceError
+    : configurationError ?? serviceError;
   const warnings = isEditMode && editForm ? getValidationWarnings(editForm.config) : getValidationWarnings(activeCam?.config);
   const mlBaseUrl = serviceStatus?.baseUrl ?? DEFAULT_ML_SERVICE_BASE_URL;
   const streamVersion = activeCam ? streamVersions[activeCam.id] ?? 0 : 0;
   const streamUrl = useMemo(
     () => getPreviewStreamUrl(mlBaseUrl, activeCam, streamVersion, Boolean(activeState?.counts.running)),
     [activeCam, activeState?.counts.running, mlBaseUrl, streamVersion],
+  );
+  const newCameraIpConflict = useMemo(
+    () => findCameraIpConflict(cameras, newCam.cameraHost),
+    [cameras, newCam.cameraHost],
+  );
+  const editedCameraIpConflict = useMemo(
+    () =>
+      editForm
+        ? findCameraIpConflict(cameras, editForm.cameraHost ?? "", editForm.id)
+        : undefined,
+    [cameras, editForm],
   );
 
   const updateCameraStatus = useCallback(
@@ -165,25 +190,42 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     let disposed = false;
     setHydratedFromStorage(false);
     setServiceError(null);
+    setConfigurationError(null);
     setCameraStates({});
     setCameraErrors({});
+    setCredentialMetadata({});
 
     const hydrateCameras = async () => {
       try {
         const status = await getMlServiceStatus();
         const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-        const [saved, credentials] = await Promise.all([listLocalCameras(baseUrl), loadCameraCredentials(storageKey)]);
-        const normalized = saved.map((camera) => applyStoredCameraCredentials(normalizeCamera(camera), credentials));
+        const [saved, credentials] = await Promise.all([
+          listLocalCameras(baseUrl),
+          loadCameraCredentialMetadata(storageKey),
+        ]);
+        const normalized = saved.map((camera) =>
+          applyStoredCameraMetadata(normalizeCamera(camera), credentials),
+        );
+        const legacyConflict = normalized.find((camera, index) =>
+          Boolean(findCameraIpConflict(normalized.slice(0, index), camera.cameraHost ?? "")),
+        );
         if (!disposed) {
           servicePidRef.current = status.pid;
           setServiceStatus(status);
+          setCredentialMetadata(credentials);
           setCameras(normalized);
           setActiveCamId(normalized[0]?.id ?? null);
           setHydratedFromStorage(true);
+          if (legacyConflict) {
+            setConfigurationError(
+              `${CAMERA_IP_CONFLICT_MESSAGE} Existing entries were left unchanged for review.`,
+            );
+          }
         }
       } catch (error) {
         if (!disposed) {
           setCameras([]);
+          setCredentialMetadata({});
           setActiveCamId(null);
           setServiceError(toErrorMessage(error));
         }
@@ -198,9 +240,10 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   useEffect(() => {
     if (!hydratedFromStorage) return;
-    void replaceLocalCameras(mlBaseUrl, cameras.map(redactCameraForStorage)).catch((error: unknown) => setServiceError(toErrorMessage(error)));
-    void saveCameraCredentials(storageKey, getCameraCredentialRecords(cameras));
-  }, [cameras, hydratedFromStorage, mlBaseUrl, storageKey]);
+    void replaceLocalCameras(mlBaseUrl, cameras.map(redactCameraForStorage))
+      .then(() => setConfigurationError(null))
+      .catch((error: unknown) => setConfigurationError(toErrorMessage(error)));
+  }, [cameras, hydratedFromStorage, mlBaseUrl]);
 
   useEffect(() => {
     if (activeCamId !== null && cameras.some((camera) => camera.id === activeCamId)) return;
@@ -208,7 +251,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   }, [activeCamId, cameras]);
 
   useEffect(() => {
-    if (activeCam && !isEditMode) setEditForm(structuredClone(activeCam));
+    if (activeCam && !isEditMode) setEditForm({ ...structuredClone(activeCam), password: undefined });
   }, [activeCam, isEditMode]);
 
   useEffect(() => {
@@ -254,22 +297,56 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   const handleSave = async () => {
     if (!editForm || !activeCam) return;
-    const validationError = validateCamera(editForm);
+    if (editedCameraIpConflict) {
+      setCameraError(editForm.id, CAMERA_IP_CONFLICT_MESSAGE);
+      document.getElementById("camera-ip-host")?.focus();
+      return;
+    }
+    const replacementPassword = editForm.password?.trim() ? editForm.password : undefined;
+    const hasStoredPassword = Boolean(
+      credentialMetadata[String(editForm.id)]?.passwordConfigured,
+    );
+    const nextCamera = canonicalizeCameraIp({
+      ...editForm,
+      password: undefined,
+      username: editForm.username?.trim(),
+    });
+    const validationError = validateCamera(
+      nextCamera,
+      hasStoredPassword || Boolean(replacementPassword),
+    );
     if (validationError) {
       setCameraError(editForm.id, validationError);
       return;
     }
     const connectionChanged =
-      activeCam.rtsp !== editForm.rtsp ||
-      activeCam.cameraType !== editForm.cameraType ||
-      activeCam.cameraHost !== editForm.cameraHost ||
-      activeCam.rtspStream !== editForm.rtspStream ||
-      activeCam.username !== editForm.username ||
-      activeCam.password !== editForm.password;
+      activeCam.rtsp !== nextCamera.rtsp ||
+      activeCam.cameraType !== nextCamera.cameraType ||
+      activeCam.cameraHost !== nextCamera.cameraHost ||
+      activeCam.rtspStream !== nextCamera.rtspStream ||
+      activeCam.username !== nextCamera.username ||
+      Boolean(replacementPassword);
     const isRunning = Boolean(cameraStates[editForm.id]?.counts.running);
-    const savedCamera: Camera = { ...editForm, status: isRunning ? editForm.status : connectionChanged ? "untested" : editForm.status };
-    setCameras((current) => current.map((camera) => (camera.id === activeCamId ? savedCamera : camera)));
-    setCameraError(savedCamera.id, null);
+    const savedCamera: Camera = { ...nextCamera, status: isRunning ? nextCamera.status : connectionChanged ? "untested" : nextCamera.status };
+    try {
+      if (requiresCameraCredentials(savedCamera.cameraType) || savedCamera.username || replacementPassword) {
+        const metadata = await saveCameraCredential(storageKey, savedCamera.id, {
+          password: replacementPassword,
+          username: savedCamera.username ?? "",
+        });
+        setCredentialMetadata((current) => ({
+          ...current,
+          [String(savedCamera.id)]: metadata,
+        }));
+      }
+      setCameras((current) =>
+        current.map((camera) => (camera.id === activeCamId ? savedCamera : camera)),
+      );
+      setCameraError(savedCamera.id, null);
+    } catch (error) {
+      setCameraError(savedCamera.id, toErrorMessage(error));
+      return;
+    }
 
     if (!isRunning) {
       setIsEditMode(false);
@@ -278,7 +355,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
     setCameraAction(savedCamera.id, "starting");
     try {
-      await startCameraProcessing(mlBaseUrl, savedCamera);
+      await startCameraProcessing(mlBaseUrl, savedCamera, storageKey);
       bumpStreamVersion(savedCamera.id);
       await refreshCameraStates();
       setIsEditMode(false);
@@ -290,13 +367,17 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     }
   };
 
-  const handleAddCamera = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddCamera = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const errors = validateCameraForm(newCam);
+    if (newCameraIpConflict) errors.cameraHost = CAMERA_IP_CONFLICT_MESSAGE;
     setCameraFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      if (errors.cameraHost) document.getElementById("camera-ip-host")?.focus();
+      return;
+    }
     setIsValidating(true);
-    const newCameraNode: Camera = {
+    const newCameraNode: Camera = canonicalizeCameraIp({
       cameraHost: newCam.cameraHost || undefined,
       cameraType: newCam.cameraType,
       confidence: DEFAULT_COUNTING_CONFIDENCE,
@@ -308,15 +389,33 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       fps: 0,
       id: Date.now(),
       name: newCam.name.trim(),
-      password: newCam.password || undefined,
+      password: undefined,
       resolution: "Adaptive",
       rtsp: newCam.rtsp.trim(),
       rtspStream: newCam.rtspStream,
       status: "untested",
       type: "Entry/Exit",
-      username: newCam.username.trim() || undefined,
+      username: newCam.username.trim(),
       zone: newCam.zone.trim(),
-    };
+    });
+    try {
+      if (requiresCameraCredentials(newCameraNode.cameraType) || newCam.username || newCam.password) {
+        const metadata = await saveCameraCredential(storageKey, newCameraNode.id, {
+          password: newCam.password,
+          username: newCam.username,
+        });
+        setCredentialMetadata((current) => ({
+          ...current,
+          [String(newCameraNode.id)]: metadata,
+        }));
+      }
+    } catch (error) {
+      setCameraFormErrors({
+        password: toErrorMessage(error),
+      });
+      setIsValidating(false);
+      return;
+    }
     setCameras((current) => [...current, newCameraNode]);
     setActiveCamId(newCameraNode.id);
     setNewCam(emptyCameraForm);
@@ -331,8 +430,14 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     const cameraId = cameraPendingDelete.id;
     try {
       if (cameraStates[cameraId]?.counts.running) await stopCameraProcessing(mlBaseUrl, cameraId);
+      await deleteCameraCredential(storageKey, cameraId);
       const updated = cameras.filter((camera) => camera.id !== cameraId);
       setCameras(updated);
+      setCredentialMetadata((current) => {
+        const next = { ...current };
+        delete next[String(cameraId)];
+        return next;
+      });
       setCameraStates((current) => {
         const next = { ...current };
         delete next[cameraId];
@@ -351,7 +456,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     setCameraAction(activeCam.id, "testing");
     setCameraError(activeCam.id, null);
     try {
-      const result = await testCameraConnection(mlBaseUrl, activeCam);
+      const result = await testCameraConnection(mlBaseUrl, activeCam, storageKey);
       updateCameraStatus(activeCam.id, result.ok ? "online" : "offline");
       setCameraError(activeCam.id, result.ok ? null : result.message);
     } catch (error) {
@@ -360,7 +465,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     } finally {
       setCameraAction(activeCam.id);
     }
-  }, [activeCam, mlBaseUrl, setCameraAction, setCameraError, updateCameraStatus]);
+  }, [activeCam, mlBaseUrl, setCameraAction, setCameraError, storageKey, updateCameraStatus]);
 
   const handleStartProcessing = useCallback(async () => {
     if (!activeCam) return;
@@ -368,7 +473,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     setCameraError(activeCam.id, null);
     updateCameraStatus(activeCam.id, "starting");
     try {
-      await startCameraProcessing(mlBaseUrl, activeCam);
+      await startCameraProcessing(mlBaseUrl, activeCam, storageKey);
       bumpStreamVersion(activeCam.id);
       await refreshCameraStates();
     } catch (error) {
@@ -377,7 +482,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     } finally {
       setCameraAction(activeCam.id);
     }
-  }, [activeCam, bumpStreamVersion, mlBaseUrl, refreshCameraStates, setCameraAction, setCameraError, updateCameraStatus]);
+  }, [activeCam, bumpStreamVersion, mlBaseUrl, refreshCameraStates, setCameraAction, setCameraError, storageKey, updateCameraStatus]);
 
   const handleStopProcessing = useCallback(async () => {
     if (!activeCam) return;
@@ -418,7 +523,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   return (
     <div className="animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-['Inter'] duration-500">
-      {showAddModal && <CameraAddModal newCam={newCam} isValidating={isValidating} errors={cameraFormErrors} onClose={() => { setShowAddModal(false); setCameraFormErrors({}); }} onSubmit={handleAddCamera} onChange={(values) => { setNewCam(values); setCameraFormErrors({}); }} />}
+      {showAddModal && <CameraAddModal newCam={newCam} isValidating={isValidating} errors={cameraFormErrors} duplicateIpError={newCameraIpConflict ? CAMERA_IP_CONFLICT_MESSAGE : undefined} onClose={() => { setShowAddModal(false); setCameraFormErrors({}); }} onSubmit={handleAddCamera} onChange={(values) => { setNewCam(values); setCameraFormErrors({}); }} />}
       {cameraPendingDelete && (
         <ConfirmationDialog cancelLabel="Keep Camera" confirmLabel="Delete Camera" onCancel={() => setCameraPendingDelete(null)} onConfirm={() => void confirmDeleteCamera()} title="Delete Camera" variant="danger">
           <p>Are you sure you want to delete <span className="font-bold text-[#111827] dark:text-white">{cameraPendingDelete.name}</span>? This will stop visitor counting from this camera.</p>
@@ -437,10 +542,15 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         <div className="min-h-0">
           <CameraPreviewPanel
             activeCam={activeCam}
+            cameraIpError={editedCameraIpConflict ? CAMERA_IP_CONFLICT_MESSAGE : undefined}
             counts={counts}
             detections={detections}
             editForm={editForm}
             error={monitoringError}
+            hasStoredPassword={Boolean(
+              activeCam &&
+                credentialMetadata[String(activeCam.id)]?.passwordConfigured,
+            )}
             health={health}
             isRestartingService={isRestartingService}
             isEditMode={isEditMode}
@@ -470,22 +580,11 @@ function isRuntimeStatus(status: CameraStatus) {
   return status === "starting" || status === "connecting" || status === "running" || status === "degraded" || status === "reconnecting";
 }
 
-function validateCameraForm(values: CameraFormValues) {
-  const errors: CameraFormErrors = {};
-  const nameError = validateRequiredText(values.name, "Camera name", 2);
-  const zoneError = validateRequiredText(values.zone, "Assigned zone", 2);
-  const isRtsp = values.cameraType === "RTSP_CCTV" || values.cameraType === "ONVIF_CCTV";
-  if (nameError) errors.name = nameError;
-  if (zoneError) errors.zone = zoneError;
-  if (isRtsp && !isValidIpv4(values.cameraHost)) errors.cameraHost = "Enter a valid IPv4 address, such as 192.168.1.9.";
-  const streamError = validateCameraStreamUrl(values.rtsp);
-  if (streamError) errors.rtsp = streamError;
-  return errors;
-}
-
-function validateCamera(camera: Camera) {
+function validateCamera(camera: Camera, hasStoredPassword: boolean) {
   const isRtsp = camera.cameraType === "RTSP_CCTV" || camera.cameraType === "ONVIF_CCTV";
   if (isRtsp && !isValidIpv4(camera.cameraHost ?? "")) return "Camera IP must be a valid IPv4 address.";
+  if (isRtsp && !camera.username?.trim()) return "Enter the camera username.";
+  if (isRtsp && !hasStoredPassword) return "Enter the camera password.";
   const streamError = validateCameraStreamUrl(camera.rtsp);
   if (streamError) return streamError;
   if (!Number.isFinite(camera.confidence) || camera.confidence < 0.05 || camera.confidence > 0.95) return "Counting confidence must be between 0.05 and 0.95.";
@@ -521,7 +620,7 @@ function normalizeCamera(camera: Camera): Camera {
     reidMode: normalizeReIdMode(camera.reidMode),
     trackingConfidence: Math.max(0.01, Math.min(rawTrackingConfidence, confidence)),
     uniqueCountingMode: normalizeUniqueCountingMode(camera.uniqueCountingMode),
-    password: normalizeOptionalCredential(camera.password),
+    password: undefined,
     processingProfile: normalizeProcessingProfile(camera.processingProfile),
     fps: camera.fps ?? 0,
     resolution: camera.resolution ?? "Adaptive",
@@ -579,20 +678,17 @@ function redactCameraForStorage(camera: Camera): Camera {
   };
 }
 
-function applyStoredCameraCredentials(camera: Camera, credentials: CameraCredentialRecords): Camera {
+function applyStoredCameraMetadata(
+  camera: Camera,
+  credentials: CameraCredentialMetadataRecords,
+): Camera {
   const record = credentials[String(camera.id)];
   if (!record) return camera;
-  return { ...camera, password: normalizeOptionalCredential(record.password) ?? camera.password, username: normalizeOptionalCredential(record.username) ?? camera.username };
-}
-
-function getCameraCredentialRecords(cameras: Camera[]): CameraCredentialRecords {
-  const records: CameraCredentialRecords = {};
-  for (const camera of cameras) {
-    const username = normalizeOptionalCredential(camera.username);
-    const password = normalizeOptionalCredential(camera.password);
-    if (username || password) records[String(camera.id)] = { password, username };
-  }
-  return records;
+  return {
+    ...camera,
+    password: undefined,
+    username: normalizeOptionalCredential(record.username) ?? camera.username,
+  };
 }
 
 function normalizeOptionalCredential(value: unknown) {

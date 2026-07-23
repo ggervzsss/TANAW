@@ -6,6 +6,7 @@ import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, typ
 import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { canDeactivateAccount } from "@/shared/utils/accountState";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
@@ -39,7 +40,6 @@ type LguEditState = {
   email: string;
   phoneLocal: string;
   role: UpdateLguAccountPayload["role"];
-  status: UpdateLguAccountPayload["status"];
 };
 
 type LguEditErrors = Partial<Record<keyof LguEditState, string>>;
@@ -50,8 +50,7 @@ type PendingSave = {
 };
 
 const allowedLguRoles = ["staff", "it", "admin"] satisfies UpdateLguAccountPayload["role"][];
-const allowedStatusValues = ["active", "inactive"] satisfies UpdateLguAccountPayload["status"][];
-const lguEditFieldOrder: readonly (keyof LguEditState)[] = ["firstName", "middleInitial", "lastName", "email", "phoneLocal", "role", "status"];
+const lguEditFieldOrder: readonly (keyof LguEditState)[] = ["firstName", "middleInitial", "lastName", "email", "phoneLocal", "role"];
 
 export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onResendActivation, onRequestStatusChange }: LguAccountDetailsModalProps) {
   const queryClient = useQueryClient();
@@ -68,7 +67,7 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateLguAccountPayload) => updateLguAccount(account.id, payload),
     onSuccess: async (updatedAccount, payload) => {
-      const activationEmailQueued = !account.isActivated && updatedAccount.status === "active" && (payload.email !== account.email || account.status === "inactive");
+      const activationEmailQueued = !account.isActivated && updatedAccount.status === "active" && payload.email !== account.email;
       const emailVerificationQueued = account.isActivated && payload.email !== account.email && updatedAccount.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
@@ -131,7 +130,6 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
       email: normalizeEmail(form.email),
       phone: normalizedPhone || undefined,
       role: form.role,
-      status: form.status,
     };
     const changes = getLguChanges(account, payload);
     if (changes.length === 0) {
@@ -241,15 +239,17 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                     Resend activation email
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => onRequestStatusChange(account, nextStatus)}
-                  disabled={isProtected}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
-                >
-                  {account.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
-                  {account.status === "active" ? "Deactivate account" : "Reactivate account"}
-                </button>
+                {account.status === "inactive" || canDeactivateAccount(account) ? (
+                  <button
+                    type="button"
+                    onClick={() => onRequestStatusChange(account, nextStatus)}
+                    disabled={isProtected}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 focus:ring-4 focus:ring-slate-100 focus:outline-none disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 disabled:hover:translate-y-0"
+                  >
+                    {account.status === "active" ? <XCircle size={16} /> : <UserCheck size={16} />}
+                    {account.status === "active" ? "Deactivate account" : "Reactivate account"}
+                  </button>
+                ) : null}
               </div>
             </div>
           </>
@@ -303,20 +303,6 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
                 value={form.role}
                 onChange={(value) => updateField("role", value as LguEditState["role"])}
                 error={errors.role}
-                required
-              />
-              <SearchableDropdownField
-                name="status"
-                label="Status"
-                options={
-                  [
-                    ["active", "Active"],
-                    ["inactive", "Inactive"],
-                  ] satisfies DropdownOption[]
-                }
-                value={form.status}
-                onChange={(value) => updateField("status", value as LguEditState["status"])}
-                error={errors.status}
                 required
               />
             </div>
@@ -412,7 +398,6 @@ function getInitialForm(account: AccountSummary): LguEditState {
     email: account.email,
     phoneLocal: account.phone ? toPhilippineLocalDigits(account.phone) : "",
     role: account.role as LguEditState["role"],
-    status: account.status,
   };
 }
 
@@ -430,7 +415,6 @@ function validateLguEditForm(form: LguEditState) {
   if (emailError) errors.email = emailError;
   if (phoneError) errors.phoneLocal = phoneError;
   if (!allowedLguRoles.includes(form.role)) errors.role = "Choose a valid account type.";
-  if (!allowedStatusValues.includes(form.status)) errors.status = "Choose a valid status.";
 
   return errors;
 }
@@ -446,6 +430,5 @@ function getLguChanges(account: AccountSummary, payload: UpdateLguAccountPayload
   if (account.email !== payload.email) changes.push(`Email: ${account.email} -> ${payload.email}`);
   if ((account.phone ?? "") !== (payload.phone ?? "")) changes.push(`Contact number: ${account.phone ?? "Not provided"} -> ${payload.phone ?? "Not provided"}`);
   if (account.role !== payload.role) changes.push(`Account type: ${lguRoleLabel[account.role] ?? account.role} -> ${lguRoleLabel[payload.role]}`);
-  if (account.status !== payload.status) changes.push(`Status: ${account.status} -> ${payload.status}`);
   return changes;
 }

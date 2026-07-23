@@ -1,6 +1,8 @@
 import { Bell } from "lucide-react";
 import { DetailField, EmptyState, ExpandableTableText, ModalFrame } from "@/shared/components/ui";
-import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode } from "@/shared/types";
+import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode, TechnicalIssueUrgency } from "@/shared/types";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
 type PriorityAlertListItemProps = {
   alert: PriorityAlert;
@@ -8,10 +10,11 @@ type PriorityAlertListItemProps = {
 };
 
 export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemProps) {
+  const { timeFormat } = useSystemDisplayPreferences();
   return (
     <article className="tanaw-interactive-row cursor-pointer px-6 py-4" onClick={() => onOpen(alert)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <SeverityBadge severity={alert.severity} />
+        <UrgencyBadge urgency={alert.urgency} />
         <ResolutionBadge mode={alert.resolutionMode} />
       </div>
       <p className="text-charcoal-800 mt-3 mb-1 text-sm font-semibold dark:text-slate-100">{alert.summary}</p>
@@ -19,13 +22,14 @@ export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemPr
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold tracking-wide text-gray-400 uppercase dark:text-slate-400">
         <span>{alert.type}</span>
         <span>{alert.enterprise ?? alert.requester}</span>
-        <span>{alert.time}</span>
+        <time dateTime={alert.time}>{formatPhilippineDateTime(alert.time, timeFormat)}</time>
       </div>
     </article>
   );
 }
 
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
+  const { timeFormat } = useSystemDisplayPreferences();
   const expandableValue = (value: string, label: string) => (
     <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />
   );
@@ -34,8 +38,8 @@ export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; on
     <ModalFrame title="Technical Issue Details" eyebrow={alert.id} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-2">
         <DetailField label="Problem" value={alert.type} />
-        <DetailField label="Urgency" value={<SeverityBadge severity={alert.severity} label={alert.severity === "Critical" ? "Urgent" : alert.severity === "Warning" ? "Important" : "For Awareness"} />} />
-        <DetailField label="Date and Time" value={alert.time} />
+        <DetailField label="Urgency" value={<UrgencyBadge urgency={alert.urgency} />} />
+        <DetailField label="Date and Time" value={<time dateTime={alert.time}>{formatPhilippineDateTime(alert.time, timeFormat)}</time>} />
         <DetailField label="Status" value={<AlertStatusBadge status={alert.status} />} />
         <DetailField label="Reported By" value={alert.requester} />
         <DetailField label="How It Can Be Fixed" value={<ResolutionBadge mode={alert.resolutionMode} />} />
@@ -65,6 +69,15 @@ export function AllAlertsModal({ alerts, onClose, onSelectAlert }: { alerts: Pri
       </div>
     </ModalFrame>
   );
+}
+
+export function UrgencyBadge({ urgency }: { urgency: TechnicalIssueUrgency }) {
+  const classes: Record<TechnicalIssueUrgency, string> = {
+    Normal: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200",
+    Important: "bg-yellow-50 text-yellow-700 dark:bg-yellow-400/15 dark:text-yellow-200",
+    Urgent: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200",
+  };
+  return <span className={`rounded-full px-3 py-1 text-[10px] font-bold whitespace-nowrap uppercase ${classes[urgency]}`}>{urgency}</span>;
 }
 
 export function SeverityBadge({ severity, label = severity }: { severity: AlertSeverity; label?: string }) {

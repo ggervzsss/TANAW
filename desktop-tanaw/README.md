@@ -1,5 +1,7 @@
 # TANAW Enterprise Desktop
 
+Cloud-backed tickets and notifications use the shared authenticated `/realtime/ws` provider. Camera and local ML-service transports remain independent. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+
 Electron, React, TypeScript, Vite, and local FastAPI ML service for
 enterprise-side camera monitoring, local counting, local report drafting, cloud
 sync, and offline-friendly operational workflows.
@@ -205,6 +207,38 @@ SQLite. Electron protects those values with the operating system's secure
 storage. Theme, notification-read state, and other non-authoritative UI
 preferences remain in Chromium storage. Live camera frames remain in memory and
 are never stored as database rows.
+
+RTSP and ONVIF camera creation requires both a non-blank device username and
+device password. These are device credentials and do not use TANAW account
+password-complexity rules. Stream URLs remain credential-free. Existing
+passwords are never populated into the edit form; a blank edit password keeps
+the encrypted value unchanged, while an entered value replaces it. Electron
+refuses plaintext credential persistence when OS secure storage is unavailable,
+returns only username/configured metadata to the renderer, and injects the
+stored secret into local camera test/start requests inside the main process.
+Renderer-only development falls back to memory rather than local or session
+storage.
+
+Enterprise Support Tickets provide Recommended, Newest first, Oldest first,
+Priority: Urgent to Low, Priority: Low to Urgent, Status, and Recently updated
+sorting. Recommended follows the central unresolved priority order and keeps
+resolved requests last. The selected sort and the serializable, non-sensitive
+ticket draft are user/route scoped for the authenticated session; photo drafts
+remain memory-only. Passwords and camera credentials are excluded. Logout
+clears the scoped page and draft state.
+
+Ticket and report-ledger cells measure rendered overflow with `ResizeObserver`.
+The keyboard-accessible horizontal ellipsis appears only when the current
+column width, wrapping, and font metrics actually clip content; expansion does
+not rely on a character threshold.
+
+RTSP and ONVIF camera IPs are canonicalized before persistence and must be
+unique within the current enterprise camera list. Adding or editing a duplicate
+keeps the form and credentials intact, focuses the IP field, and shows an inline
+conflict. The serialized local configuration write boundary repeats the same
+validation so concurrent renderer actions cannot persist a duplicate. Separate
+enterprise lists may reuse the same private IP, and legacy duplicates are
+reported without automatic deletion or merging.
 
 The canonical local relationships are:
 

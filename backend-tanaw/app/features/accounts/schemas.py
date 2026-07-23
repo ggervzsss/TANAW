@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.core.password_policy import (
     PASSWORD_MAX_LENGTH,
@@ -235,12 +235,13 @@ class AccountStatusUpdate(BaseModel):
 
 
 class LguAccountUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     firstName: str = Field(min_length=2, max_length=60)
     lastName: str = Field(min_length=2, max_length=60)
     email: EmailStr
     phone: str | None = Field(default=None, max_length=40)
     role: Literal["admin", "it", "staff"]
-    status: Literal["active", "inactive"]
 
     @field_validator("firstName", "lastName")
     @classmethod
@@ -261,6 +262,8 @@ class LguAccountUpdate(BaseModel):
 
 
 class EnterpriseAccountUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enterpriseName: str = Field(min_length=2, max_length=120)
     category: str = Field(min_length=1, max_length=120)
     managerName: str = Field(min_length=2, max_length=120)
@@ -269,7 +272,14 @@ class EnterpriseAccountUpdate(BaseModel):
     barangay: str = Field(min_length=1, max_length=120)
     address: str = Field(min_length=1, max_length=255)
     buildingCapacity: int = Field(default=100, ge=1, le=100_000)
-    status: Literal["active", "inactive"]
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def require_coordinate_pair(self) -> EnterpriseAccountUpdate:
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Latitude and longitude must be provided together.")
+        return self
 
     @field_validator("enterpriseName")
     @classmethod

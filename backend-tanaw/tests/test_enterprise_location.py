@@ -1,7 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from app.features.accounts.location_validation import is_inside_san_pedro
+from app.features.accounts.location_validation import (
+    barangay_for_location,
+    barangay_matches_location,
+    is_inside_san_pedro,
+)
 from app.features.accounts.models import Account
 from app.features.accounts.schemas import EnterpriseAccountCreate
 from app.main import app
@@ -36,6 +40,15 @@ def test_manual_coordinates_inside_san_pedro_are_accepted() -> None:
 
     assert is_inside_san_pedro(payload.latitude, payload.longitude)
     assert not is_inside_san_pedro(14.5995, 120.9842)
+
+
+def test_manual_coordinates_must_match_the_selected_barangay() -> None:
+    payload = EnterpriseAccountCreate.model_validate(enterprise_payload())
+    detected = barangay_for_location(payload.latitude, payload.longitude)
+
+    assert detected == "San Antonio"
+    assert barangay_matches_location(payload.barangay, payload.latitude, payload.longitude)
+    assert not barangay_matches_location("Poblacion", payload.latitude, payload.longitude)
 
 
 def test_geocoding_api_and_persistence_fields_are_removed() -> None:

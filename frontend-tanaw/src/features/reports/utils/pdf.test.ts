@@ -9,7 +9,7 @@ const intakeReport: IntakeReport = {
   category: "Tourism",
   barangay: "San Antonio",
   month: "May 2026",
-  period: "May 1 - May 31, 2026",
+  period: "May 2026",
   submitted: "2026-05-31T10:15:00Z",
   status: "Ready to Consolidate",
   code: "REP-260501",

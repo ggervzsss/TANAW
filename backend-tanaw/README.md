@@ -1,5 +1,7 @@
 # TANAW Backend
 
+The API exposes the canonical authenticated application gateway at `/realtime/ws` and readiness at `/ready/realtime`. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+
 FastAPI backend for TANAW authentication, account management, enterprise
 operational sync, report review, final-report consolidation, activity logging,
 and controlled test-data tooling.
@@ -39,6 +41,24 @@ and workflow events after they have been produced locally.
   by LGU monitoring and audit screens.
 - **Test-data tooling**: explicit sample-data generation and cleanup for local
   demonstrations, QA, analytics, and end-to-end reporting tests.
+
+Support Ticket list responses use one canonical database order before the
+result limit is applied. Unresolved tickets are ranked Urgent, High, Normal,
+then Low; Open precedes In Review when priority is equal. Resolved tickets are
+always after active work and use their authoritative `updated_at` value in
+descending order. Ticket code and internal ID provide deterministic final tie
+breakers. This ordering lets REST reads, reconnect resynchronization, and
+WebSocket-driven client invalidations converge on the same queue.
+
+Operational technical-issue responses expose canonical urgency as `Normal`,
+`Important`, or `Urgent`; the shared response also preserves operational
+severity for non-technical consumers and notification/log behavior. General LGU and enterprise update schemas reject lifecycle
+fields, so activation and deactivation can only use the dedicated status
+endpoint. Enterprise location edits require a latitude/longitude pair inside
+the San Pedro boundary and reject a selected barangay that does not match the
+authoritative polygon. Successful profile updates retain the existing
+`enterprise.updated` invalidation and record coordinate changes in the audit
+metadata.
 
 ## Project Structure
 

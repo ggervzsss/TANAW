@@ -10,13 +10,11 @@ export function isSameReportingMonth(first: string, second: string) {
   return reportingMonthKey(first) === reportingMonthKey(second);
 }
 
-export function formatReportingPeriodRange(value: string) {
+export function formatReportingPeriodLabel(value: string) {
   const reportingMonth = parseReportingMonth(value);
   if (!reportingMonth) return value;
 
-  const month = SHORT_MONTH_LABELS[reportingMonth.monthIndex];
-  const lastDay = new Date(Date.UTC(reportingMonth.year, reportingMonth.monthIndex + 1, 0)).getUTCDate();
-  return `${month} 1 - ${month} ${lastDay}, ${reportingMonth.year}`;
+  return `${MONTH_LABELS[reportingMonth.monthIndex]} ${reportingMonth.year}`;
 }
 
 export function reportingMonthKey(value: string) {
@@ -28,12 +26,7 @@ export function reportingMonthKey(value: string) {
 
 function parseReportingMonth(value: string) {
   const normalizedValue = value.trim();
-  const rangeMatch = /^([A-Za-z]+)\s+\d{1,2}\s*-\s*(?:([A-Za-z]+)\s+)?\d{1,2},\s*(\d{4})$/.exec(normalizedValue);
-  if (rangeMatch) {
-    return monthValue(rangeMatch[2] || rangeMatch[1], rangeMatch[3]);
-  }
-
-  const monthYearMatch = /^([A-Za-z]+)\s+(\d{4})$/.exec(normalizedValue);
+  const monthYearMatch = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/.exec(normalizedValue);
   if (monthYearMatch) {
     return monthValue(monthYearMatch[1], monthYearMatch[2]);
   }
@@ -48,7 +41,7 @@ function monthValue(monthLabel: string, yearLabel: string) {
   return { monthIndex, year };
 }
 
-const SHORT_MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+const MONTH_LABELS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
 
 const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
   jan: 0,

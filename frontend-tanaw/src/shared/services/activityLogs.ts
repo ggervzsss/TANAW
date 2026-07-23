@@ -1,5 +1,4 @@
 import { apiClient } from "../lib/apiClient";
-import { getWebSocketUrl } from "../config/api.config";
 import type { LogSeverity, SystemLog, SystemLogActorRole, SystemLogCategory } from "../types";
 
 export type CreateActivityLogPayload = {
@@ -37,12 +36,4 @@ export async function recordActivityLog(payload: CreateActivityLogPayload) {
     ...payload,
   });
   return response.data;
-}
-
-export function getActivityLogsWebSocketUrl() {
-  return getWebSocketUrl("/activity-logs/ws");
-}
-
-export function createWebSocketAuthMessage(token: string) {
-  return JSON.stringify({ type: "auth", token });
 }

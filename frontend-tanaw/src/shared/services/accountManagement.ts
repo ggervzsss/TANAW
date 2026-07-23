@@ -80,9 +80,7 @@ export type CreateLguAccountPayload = {
   role: "admin" | "it" | "staff";
 };
 
-export type UpdateLguAccountPayload = CreateLguAccountPayload & {
-  status: "active" | "inactive";
-};
+export type UpdateLguAccountPayload = CreateLguAccountPayload;
 
 export type CreateEnterpriseAccountPayload = {
   enterpriseName: string;
@@ -115,7 +113,8 @@ export type UpdateEnterpriseAccountPayload = {
   barangay: string;
   address: string;
   buildingCapacity: number;
-  status: "active" | "inactive";
+  latitude?: number;
+  longitude?: number;
 };
 
 export async function listLguAccounts() {

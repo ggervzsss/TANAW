@@ -1803,6 +1803,17 @@ html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-con
 }
 
 @media print {
+  :root {
+    color-scheme: light !important;
+  }
+
+  html,
+  body,
+  #root {
+    background: #fff !important;
+    color: #111827 !important;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -1814,65 +1825,83 @@ html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-con
   }
 
   .print-container {
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: fixed !important;
+    inset: 0 !important;
     width: 100%;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
     color: black !important;
     background: white !important;
+    box-shadow: none !important;
+    transform: none !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  html.dark .print-container,
-  html.dark .print-container .tanaw-document-preview {
-    color: #000 !important;
+  .final-report-print-backdrop {
+    background: transparent !important;
+    backdrop-filter: none !important;
+  }
+
+  .official-report-document,
+  html.dark .official-report-document {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    overflow: visible !important;
     background: #fff !important;
-    color-scheme: light;
+    color: #111827 !important;
+    color-scheme: light !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
-  html.dark .print-container .tanaw-document-preview :where(*) {
-    color: #000 !important;
-    border-color: #000 !important;
+  .official-report-document :where(*) {
+    color: #111827 !important;
+    border-color: #111827 !important;
   }
 
-  html.dark .print-container .tanaw-document-preview :where(.bg-white) {
+  .official-report-document :where(.bg-white) {
     background: #fff !important;
   }
 
-  html.dark .print-container .tanaw-document-preview :where(.bg-gray-50, .bg-slate-50) {
+  .official-report-document :where(.bg-gray-50, .bg-slate-50) {
     background: #f8fafc !important;
   }
 
-  html.dark .print-container .tanaw-document-preview :where(.bg-gray-100, .bg-slate-100) {
+  .official-report-document :where(.bg-gray-100, .bg-slate-100) {
     background: #f1f5f9 !important;
   }
 
-  html.dark .print-container .tanaw-document-preview :where(.bg-gray-200, .bg-slate-200) {
+  .official-report-document :where(.bg-gray-200, .bg-slate-200) {
     background: #e2e8f0 !important;
   }
 
-  html.dark .print-container .tanaw-official-report-table :where(th, td) {
+  .official-report-document .tanaw-official-report-table :where(th, td) {
     background: transparent !important;
   }
 
-  html.dark .print-container .tanaw-official-report-table thead :where(th) {
+  .official-report-document .tanaw-official-report-table thead :where(th) {
     background: #e9eef3 !important;
   }
 
-  html.dark .print-container .tanaw-official-report-table .tanaw-report-total-cell {
+  .official-report-document .tanaw-official-report-table .tanaw-report-total-cell {
     background: #e8edf3 !important;
   }
 
-  html.dark .print-container .tanaw-official-report-table .tanaw-report-final-total-cell {
+  .official-report-document .tanaw-official-report-table .tanaw-report-final-total-cell {
     background: #d4dde8 !important;
   }
 
-  html.dark .print-container .tanaw-official-report-table .tanaw-report-consolidated-row > * {
+  .official-report-document .tanaw-official-report-table .tanaw-report-consolidated-row > * {
     background: #dfe6ee !important;
   }
 
-  html.dark .print-container .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
+  .official-report-document .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
     background: #c4d0dd !important;
   }
 

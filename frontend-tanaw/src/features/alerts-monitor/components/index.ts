@@ -1,1 +1,1 @@
-export { AlertDetailsModal, AlertStatusBadge, AllAlertsModal, PriorityAlertListItem, ResolutionBadge, SeverityBadge } from "./PriorityAlertComponents";
+export { AlertDetailsModal, AlertStatusBadge, AllAlertsModal, PriorityAlertListItem, ResolutionBadge, SeverityBadge, UrgencyBadge } from "./PriorityAlertComponents";

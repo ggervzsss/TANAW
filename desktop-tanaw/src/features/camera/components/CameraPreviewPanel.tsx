@@ -12,10 +12,12 @@ import type { MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../servi
 
 type CameraPreviewPanelProps = {
   activeCam?: Camera;
+  cameraIpError?: string;
   counts: MlCounts;
   detections: MlDetections;
   editForm: Camera | null;
   error: string | null;
+  hasStoredPassword: boolean;
   health: MlHealth | null;
   isRestartingService: boolean;
   isEditMode: boolean;
@@ -38,10 +40,12 @@ type CameraPreviewPanelProps = {
 
 export function CameraPreviewPanel({
   activeCam,
+  cameraIpError,
   counts,
   detections,
   editForm,
   error,
+  hasStoredPassword,
   health,
   isRestartingService,
   isEditMode,
@@ -82,7 +86,7 @@ export function CameraPreviewPanel({
               </button>
               <button
                 onClick={onSave}
-                disabled={isStarting}
+                disabled={isStarting || Boolean(cameraIpError)}
                 className="flex items-center gap-1.5 rounded-sm bg-[#065f46] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
               >
                 <Save size={14} /> {isStarting ? "Applying..." : "Save Config"}
@@ -137,7 +141,16 @@ export function CameraPreviewPanel({
             onTestConnection={onTestConnection}
           />
           <CameraValidationWarnings warnings={warnings} />
-          {isEditMode && editForm ? <CameraEditControls editForm={editForm} onEditFormChange={onEditFormChange} /> : <CameraReadOnlyDetails activeCam={activeCam} />}
+          {isEditMode && editForm ? (
+            <CameraEditControls
+              cameraIpError={cameraIpError}
+              editForm={editForm}
+              hasExistingPassword={hasStoredPassword}
+              onEditFormChange={onEditFormChange}
+            />
+          ) : (
+            <CameraReadOnlyDetails activeCam={activeCam} />
+          )}
         </aside>
       </div>
     </Card>

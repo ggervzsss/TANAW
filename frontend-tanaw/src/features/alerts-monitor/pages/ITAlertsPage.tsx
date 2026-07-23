@@ -8,20 +8,36 @@ import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { alertsQueryKey, useAlerts } from "@/shared/hooks/useAlerts";
+import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
 import { updateAlertStatus } from "@/shared/services/alerts";
-import type { AlertSeverity, PriorityAlert, PriorityAlertStatus, PriorityAlertType } from "@/shared/types";
-import { AlertDetailsModal, AlertStatusBadge, ResolutionBadge, SeverityBadge } from "../components";
+import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
+import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
+import type { PriorityAlert, PriorityAlertStatus, PriorityAlertType, TechnicalIssueUrgency } from "@/shared/types";
+import { AlertDetailsModal, AlertStatusBadge, ResolutionBadge, UrgencyBadge } from "../components";
 
-type SeverityFilter = "All Severities" | AlertSeverity;
+type UrgencyFilter = "All Urgencies" | TechnicalIssueUrgency;
 type StatusFilter = "All Statuses" | "Needs Attention" | "Working on It" | "Resolved";
 type TypeFilter = "All Types" | PriorityAlertType;
+type TechnicalIssueFilters = {
+  query: string;
+  status: StatusFilter;
+  type: TypeFilter;
+  urgency: UrgencyFilter;
+};
 
-const severityFilters: SeverityFilter[] = ["All Severities", "Critical", "Warning", "Info"];
+const urgencyFilters: UrgencyFilter[] = ["All Urgencies", "Urgent", "Important", "Normal"];
 const statusFilters: StatusFilter[] = ["All Statuses", "Needs Attention", "Working on It", "Resolved"];
 const typeFilters: TypeFilter[] = ["All Types", "Maintenance Request", "Password Reset Request", "Failed Login Threshold"];
+const initialFilters: TechnicalIssueFilters = {
+  query: "",
+  status: "All Statuses",
+  type: "All Types",
+  urgency: "All Urgencies",
+};
 
 export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
+  const { timeFormat } = useSystemDisplayPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const { alerts: allAlerts } = useAlerts();
   const alerts = allAlerts.filter((alert) => alert.owner === "IT");
@@ -29,30 +45,32 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
     mutationFn: ({ alertId, status }: { alertId: string; status: PriorityAlertStatus }) => updateAlertStatus(alertId, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: alertsQueryKey }),
   });
-  const [query, setQuery] = useState("");
-  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All Severities");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Statuses");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("All Types");
+  const [filters, setFilters] = useScopedPageState<TechnicalIssueFilters>({
+    initialValue: initialFilters,
+    isValid: isTechnicalIssueFilters,
+    namespace: "technical-issue-filters",
+    version: 2,
+  });
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const linkedAlertId = searchParams.get("alert");
   const selectedAlert = alerts.find((alert) => alert.id === (linkedAlertId ?? selectedAlertId)) ?? null;
 
   const filteredAlerts = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = filters.query.trim().toLowerCase();
     return alerts.filter((alert) => {
-      const searchable = [alert.id, alert.type, alert.severity, alert.enterprise ?? "", alert.requester, alert.summary, alert.requiredAction, alert.status, alert.resolutionMode]
+      const searchable = [alert.id, alert.type, alert.urgency, alert.enterprise ?? "", alert.requester, alert.summary, alert.requiredAction, alert.status, alert.resolutionMode]
         .join(" ")
         .toLowerCase();
       const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
-      const matchesSeverity = severityFilter === "All Severities" || alert.severity === severityFilter;
-      const matchesStatus = statusFilter === "All Statuses" || itIssueStatusLabel(alert.status) === statusFilter;
-      const matchesType = typeFilter === "All Types" || alert.type === typeFilter;
-      return matchesQuery && matchesSeverity && matchesStatus && matchesType;
+      const matchesUrgency = filters.urgency === "All Urgencies" || alert.urgency === filters.urgency;
+      const matchesStatus = filters.status === "All Statuses" || itIssueStatusLabel(alert.status) === filters.status;
+      const matchesType = filters.type === "All Types" || alert.type === filters.type;
+      return matchesQuery && matchesUrgency && matchesStatus && matchesType;
     });
-  }, [alerts, query, severityFilter, statusFilter, typeFilter]);
+  }, [alerts, filters]);
 
   const activeAlerts = alerts.filter((alert) => alert.status !== "Resolved");
-  const criticalAlerts = activeAlerts.filter((alert) => alert.severity === "Critical");
+  const urgentAlerts = activeAlerts.filter((alert) => alert.urgency === "Urgent");
   const inReviewAlerts = alerts.filter((alert) => alert.status === "In Review");
   const resolvedAlerts = alerts.filter((alert) => alert.status === "Resolved");
 
@@ -81,7 +99,7 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
 
       <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
         <MetricCard label="Needs Attention" value={activeAlerts.length} foot="Open technical issues" color="#dc2626" footClassName="text-red-600" icon={Bell} />
-        <MetricCard label="Urgent" value={criticalAlerts.length} foot="Needs immediate IT action" color="#b91c1c" footClassName="text-red-600" icon={AlertTriangle} />
+        <MetricCard label="Urgent" value={urgentAlerts.length} foot="Needs immediate IT action" color="#b91c1c" footClassName="text-red-600" icon={AlertTriangle} />
         <MetricCard label="Working on It" value={inReviewAlerts.length} foot="Currently being handled" color="#ca8a04" footClassName="text-yellow-700" icon={Clock3} />
         <MetricCard label="Resolved" value={resolvedAlerts.length} foot="Fixed by IT" color="#065f46" icon={CheckCircle2} />
       </motion.section>
@@ -91,15 +109,15 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
           <div className="relative min-w-65 flex-1">
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              value={filters.query}
+              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
               placeholder="Search issue, enterprise, person, or suggested action"
               className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
-          <FilterSelect value={severityFilter} onChange={(value) => setSeverityFilter(value as SeverityFilter)} options={severityFilters} />
-          <FilterSelect value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={statusFilters} />
-          <FilterSelect value={typeFilter} onChange={(value) => setTypeFilter(value as TypeFilter)} options={typeFilters} />
+          <FilterSelect value={filters.urgency} onChange={(value) => setFilters((current) => ({ ...current, urgency: value as UrgencyFilter }))} options={urgencyFilters} />
+          <FilterSelect value={filters.status} onChange={(value) => setFilters((current) => ({ ...current, status: value as StatusFilter }))} options={statusFilters} />
+          <FilterSelect value={filters.type} onChange={(value) => setFilters((current) => ({ ...current, type: value as TypeFilter }))} options={typeFilters} />
         </div>
 
         <div className="overflow-x-auto">
@@ -133,7 +151,7 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <SeverityBadge severity={alert.severity} label={itUrgencyLabel(alert.severity)} />
+                    <UrgencyBadge urgency={alert.urgency} />
                   </td>
                   <td className="px-4 py-4">
                     <ExpandableTableText
@@ -156,7 +174,9 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
                   </td>
                   <td className="px-4 py-4">
                     <AlertStatusBadge status={alert.status} label={itIssueStatusLabel(alert.status)} />
-                    <div className="mt-2 text-[10px] font-bold tracking-wide text-gray-400 uppercase">{alert.time}</div>
+                    <time dateTime={alert.time} className="mt-2 block text-[10px] font-bold tracking-wide text-gray-400 uppercase">
+                      {formatPhilippineDateTime(alert.time, timeFormat)}
+                    </time>
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col gap-2">
@@ -198,12 +218,6 @@ function itIssueStatusLabel(status: PriorityAlertStatus) {
   return "Resolved";
 }
 
-function itUrgencyLabel(severity: AlertSeverity) {
-  if (severity === "Critical") return "Urgent";
-  if (severity === "Warning") return "Important";
-  return "For Awareness";
-}
-
 function StatusButton({ children, disabled, onClick }: { children: string; disabled: boolean; onClick: () => void }) {
   return (
     <button
@@ -217,5 +231,16 @@ function StatusButton({ children, disabled, onClick }: { children: string; disab
     >
       {children}
     </button>
+  );
+}
+
+function isTechnicalIssueFilters(value: unknown): value is TechnicalIssueFilters {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<TechnicalIssueFilters>;
+  return (
+    typeof candidate.query === "string" &&
+    urgencyFilters.includes(candidate.urgency as UrgencyFilter) &&
+    statusFilters.includes(candidate.status as StatusFilter) &&
+    typeFilters.includes(candidate.type as TypeFilter)
   );
 }

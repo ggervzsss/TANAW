@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Info, PieChart as PieChartIcon } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Card } from "../../../components/Card";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { ReportRecord } from "../../../types/enterprise";
@@ -35,6 +35,7 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
   }));
   const chartData = data.filter((slice) => slice.value > 0);
   const hasData = chartData.length > 0;
+  const activeSlice = activeIndex === null ? null : chartData[activeIndex] ?? null;
 
   return (
     <Card className="flex flex-col border border-gray-200 p-5 shadow-sm transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] dark:border-(--enterprise-border-soft)">
@@ -58,16 +59,6 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
           <div className="relative min-h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <RechartsTooltip
-                  formatter={(value, name) => [Number(value).toLocaleString(), name]}
-                  contentStyle={{
-                    border: "1px solid #d1fae5",
-                    borderRadius: "8px",
-                    boxShadow: "0 16px 36px rgb(15 23 42 / 0.14)",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                  }}
-                />
                 <Pie
                   data={chartData}
                   dataKey="value"
@@ -94,7 +85,20 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            {activeSlice ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="pointer-events-none absolute left-1/2 z-20 max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-full rounded-lg border border-emerald-100 bg-slate-900/95 px-3 py-2 text-center text-xs font-bold text-white shadow-[0_14px_32px_rgba(15,23,42,0.24)] dark:border-slate-600"
+                style={{ top: "calc(50% - 2.75rem)" }}
+              >
+                <span className="block max-w-48 wrap-break-word text-emerald-300">{activeSlice.label}</span>
+                <span className="mt-0.5 block font-mono">
+                  {activeSlice.value.toLocaleString()} · {activeSlice.percent}%
+                </span>
+              </div>
+            ) : null}
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
               <div className="rounded-full bg-white/85 px-4 py-2 text-center shadow-sm ring-1 ring-emerald-100 dark:bg-slate-900/80 dark:ring-slate-700">
                 <p className="text-[10px] font-black tracking-wider text-gray-400 uppercase dark:text-slate-500">Visitors</p>
                 <p className="font-mono text-xl font-black text-[#111827] dark:text-slate-100">{totals.grandTotal.toLocaleString()}</p>
@@ -114,6 +118,18 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
               {data.map((slice) => (
                 <div
                   key={slice.label}
+                  tabIndex={slice.value > 0 ? 0 : -1}
+                  aria-label={`${slice.label}: ${slice.value.toLocaleString()} visitors, ${slice.percent}%`}
+                  onFocus={() => {
+                    const chartIndex = chartData.findIndex((item) => item.label === slice.label);
+                    setActiveIndex(chartIndex >= 0 ? chartIndex : null);
+                  }}
+                  onBlur={() => setActiveIndex(null)}
+                  onMouseEnter={() => {
+                    const chartIndex = chartData.findIndex((item) => item.label === slice.label);
+                    setActiveIndex(chartIndex >= 0 ? chartIndex : null);
+                  }}
+                  onMouseLeave={() => setActiveIndex(null)}
                   className="rounded-sm border border-gray-200 bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 dark:border-slate-700 dark:bg-slate-900"
                   style={{ boxShadow: `inset 3px 0 0 ${slice.color}` }}
                 >

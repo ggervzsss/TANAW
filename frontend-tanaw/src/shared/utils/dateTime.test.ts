@@ -20,4 +20,9 @@ describe("Philippine date and time formatting", () => {
     expect(resolveSystemTimeFormat(undefined)).toBe("12-hour");
     expect(resolveSystemTimeFormat("24-hour")).toBe("24-hour");
   });
+
+  it("uses a safe fallback for missing or invalid values", () => {
+    expect(formatPhilippineDateTime(null, "12-hour")).toBe("Date unavailable");
+    expect(formatPhilippineDateTime("not-a-date", "12-hour")).toBe("Date unavailable");
+  });
 });

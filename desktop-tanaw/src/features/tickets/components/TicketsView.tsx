@@ -6,20 +6,35 @@ import { ModalPortal } from "../../../components/ModalPortal";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
+import { useRealtimeEvent } from "../../realtime/realtime-context";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
+import { focusFirstInvalidField } from "../../../utils/focus-first-invalid-field";
+import { useScopedPageState } from "../../../hooks/useScopedPageState";
 import {
   createSupportTicket,
+  canReplyToSupportTicket,
   getSupportTicket,
   getSupportTicketAttachmentUrl,
   listSupportTickets,
   replyToSupportTicket,
+  sortSupportTickets,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
   type SupportTicketDetail,
   type SupportTicketPriority,
+  type SupportTicketSort,
 } from "../services/tickets";
+import {
+  type TicketFormErrors,
+  type TicketFormField,
+  type TicketFormState,
+  isSupportTicketCategory,
+  isSupportTicketPriority,
+  ticketFormFieldOrder,
+  validateTicketForm,
+} from "./ticket-form-validation";
 
 const categories: SupportTicketCategory[] = ["Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const priorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
@@ -27,15 +42,7 @@ const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const allowedImageExtensions = new Set(["png", "jpg", "jpeg", "webp"]);
 const maxPhotoBytes = 5 * 1024 * 1024;
 const maxPhotoCount = 5;
-
-type TicketFormState = {
-  affectedArea: string;
-  cameraNode: string;
-  category: SupportTicketCategory;
-  description: string;
-  priority: SupportTicketPriority;
-  subject: string;
-};
+const EMPTY_PHOTOS: SupportTicketAttachment[] = [];
 
 const emptyForm: TicketFormState = {
   affectedArea: "",
@@ -45,15 +52,45 @@ const emptyForm: TicketFormState = {
   priority: "Normal",
   subject: "",
 };
+const initialTicketSort: SupportTicketSort = "recommended";
+const ticketSortOptions: [SupportTicketSort, string][] = [
+  ["recommended", "Recommended"],
+  ["newest", "Newest first"],
+  ["oldest", "Oldest first"],
+  ["priority-high", "Priority: Urgent to Low"],
+  ["priority-low", "Priority: Low to Urgent"],
+  ["status", "Status"],
+  ["recently-updated", "Recently updated"],
+];
 
 export function TicketsView() {
   const user = useAuthStore((state) => state.user);
   const { timeFormat } = useSystemDisplayPreferences();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [form, setForm] = useState<TicketFormState>(emptyForm);
-  const [photos, setPhotos] = useState<SupportTicketAttachment[]>([]);
+  const [form, setForm, clearFormDraft] = useScopedPageState({
+    initialValue: emptyForm,
+    isValid: isTicketFormState,
+    namespace: "support-ticket-draft",
+    version: 1,
+  });
+  const [photos, setPhotos, clearPhotoDraft] = useScopedPageState({
+    initialValue: EMPTY_PHOTOS,
+    isValid: isTicketPhotoDraft,
+    namespace: "support-ticket-photos",
+    storage: "memory",
+    version: 1,
+  });
+  const [ticketSort, setTicketSort] = useScopedPageState({
+    initialValue: initialTicketSort,
+    isValid: isSupportTicketSort,
+    namespace: "support-ticket-sort",
+    version: 1,
+  });
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<TicketFormErrors>({});
+  const [photoError, setPhotoError] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,6 +101,7 @@ export function TicketsView() {
   const [previewPhoto, setPreviewPhoto] = useState<SupportTicketAttachment | null>(null);
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? "Enterprise Account";
   const openTicketCount = useMemo(() => tickets.filter((ticket) => ticket.status !== "Resolved").length, [tickets]);
+  const sortedTickets = useMemo(() => sortSupportTickets(tickets, ticketSort), [ticketSort, tickets]);
 
   const refreshTickets = useCallback(async () => {
     setIsLoading(true);
@@ -80,6 +118,18 @@ export function TicketsView() {
   useEffect(() => {
     void refreshTickets();
   }, [refreshTickets]);
+
+  useRealtimeEvent((event) => {
+    if (!event.event_type.startsWith("support_ticket.")) return;
+    void listSupportTickets()
+      .then(setTickets)
+      .catch(() => undefined);
+    if (selectedTicketId && (!event.scope.ticket_id || event.scope.ticket_id === selectedTicketId)) {
+      void getSupportTicket(selectedTicketId)
+        .then(setSelectedTicket)
+        .catch(() => undefined);
+    }
+  });
 
   useEffect(() => {
     if (!selectedTicketId) {
@@ -112,17 +162,22 @@ export function TicketsView() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const validationError = validateTicketForm(form);
-    if (validationError) {
-      setError(validationError);
+    const formElement = event.currentTarget;
+    const nextErrors = validateTicketForm(form);
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setError("");
+      notifyError("Please correct the highlighted ticket fields.");
+      window.requestAnimationFrame(() => focusFirstInvalidField(formElement, ticketFormFieldOrder.filter((field) => nextErrors[field])));
       return;
     }
+    if (!isSupportTicketCategory(form.category) || !isSupportTicketPriority(form.priority)) return;
 
     setIsSubmitting(true);
     setError("");
     try {
       const ticket = await createSupportTicket({
-        affectedArea: trimOptional(form.affectedArea),
+        affectedArea: form.affectedArea.trim(),
         cameraNode: trimOptional(form.cameraNode),
         category: form.category,
         description: form.description.trim(),
@@ -131,8 +186,10 @@ export function TicketsView() {
         attachments: photos,
       });
       setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
-      setForm(emptyForm);
-      setPhotos([]);
+      clearFormDraft();
+      clearPhotoDraft();
+      setFieldErrors({});
+      setPhotoError("");
       notifySuccess(`Ticket ${ticket.code} submitted.`);
     } catch (requestError) {
       const message = getRequestErrorMessage(requestError, "Unable to submit support ticket.");
@@ -148,16 +205,16 @@ export function TicketsView() {
     if (files.length === 0) return;
 
     if (photos.length + files.length > maxPhotoCount) {
-      setError(`You can attach up to ${maxPhotoCount} photos.`);
+      showPhotoError(`You can attach up to ${maxPhotoCount} photos.`);
       return;
     }
 
     try {
       const nextPhotos = await Promise.all(files.map(readTicketPhoto));
       setPhotos((current) => [...current, ...nextPhotos]);
-      setError("");
+      setPhotoError("");
     } catch (fileError) {
-      setError(fileError instanceof Error ? fileError.message : "Unable to attach photo.");
+      showPhotoError(fileError instanceof Error ? fileError.message : "Unable to attach photo.");
     }
   }
 
@@ -172,6 +229,18 @@ export function TicketsView() {
     void handleSelectedFiles(event.dataTransfer.files);
   }
 
+  function clearFieldError(field: TicketFormField) {
+    setFieldErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function showPhotoError(message: string) {
+    setPhotoError(message);
+    setError("");
+    notifyError(message);
+    const formElement = formRef.current;
+    if (formElement) window.requestAnimationFrame(() => focusFirstInvalidField(formElement, ["attachments"]));
+  }
+
   return (
     <div className="animate-in fade-in mx-auto w-full max-w-330 space-y-6 pt-2 font-['Inter'] duration-500">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -182,15 +251,6 @@ export function TicketsView() {
             Submit camera, reporting, maintenance, or account concerns for {enterpriseName}. Admin and IT personnel will be notified.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void refreshTickets()}
-          disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2 text-xs font-black tracking-wide text-[#065f46] uppercase shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-gray-300 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:border-emerald-300/40 dark:hover:bg-[#1d2940]"
-        >
-          <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
-          Refresh
-        </button>
       </div>
 
       {error && (
@@ -204,58 +264,82 @@ export function TicketsView() {
         <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_18px_44px_rgba(15,23,42,0.07)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.11)] dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.36)]">
           <TicketPanelHeader icon={<LifeBuoy size={18} />} title="New Ticket" subtitle="Provide enough detail for remote review or on-site action." />
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-4 bg-white p-6 dark:bg-[#121c31]">
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 bg-white p-6 dark:bg-[#121c31]">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <SelectField
+                name="category"
                 label="Category"
                 value={form.category}
                 options={categories}
                 onChange={(value) => {
                   setError("");
-                  setForm((current) => ({ ...current, category: value as SupportTicketCategory }));
+                  clearFieldError("category");
+                  setForm((current) => ({ ...current, category: value }));
                 }}
+                error={fieldErrors.category}
               />
               <SelectField
+                name="priority"
                 label="Priority"
                 value={form.priority}
                 options={priorities}
                 onChange={(value) => {
                   setError("");
-                  setForm((current) => ({ ...current, priority: value as SupportTicketPriority }));
+                  clearFieldError("priority");
+                  setForm((current) => ({ ...current, priority: value }));
                 }}
+                error={fieldErrors.priority}
               />
             </div>
 
             <InputField
+              name="subject"
               label="Subject"
               value={form.subject}
               placeholder="Brief summary of the issue"
               onChange={(value) => {
                 setError("");
+                clearFieldError("subject");
                 setForm((current) => ({ ...current, subject: value }));
               }}
+              error={fieldErrors.subject}
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <InputField label="Affected Area" value={form.affectedArea} placeholder="Lobby, reports, account" onChange={(value) => setForm((current) => ({ ...current, affectedArea: value }))} />
-              <InputField label="Camera" value={form.cameraNode} placeholder="Optional camera name" onChange={(value) => setForm((current) => ({ ...current, cameraNode: value }))} />
+              <InputField
+                name="affectedArea"
+                label="Affected Area"
+                value={form.affectedArea}
+                placeholder="Lobby, reports, account"
+                onChange={(value) => {
+                  clearFieldError("affectedArea");
+                  setForm((current) => ({ ...current, affectedArea: value }));
+                }}
+                error={fieldErrors.affectedArea}
+              />
+              <InputField name="cameraNode" label="Camera" value={form.cameraNode} placeholder="Optional camera name" onChange={(value) => setForm((current) => ({ ...current, cameraNode: value }))} />
             </div>
 
-            <label className="block">
+            <label data-field-name="description" className="block scroll-mt-28">
               <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Description</span>
               <textarea
                 value={form.description}
                 onChange={(event) => {
                   setError("");
+                  clearFieldError("description");
                   setForm((current) => ({ ...current, description: event.target.value }));
                 }}
                 rows={6}
                 placeholder="Describe what happened, when it started, and any affected workflows."
                 className={fieldClassName("resize-none")}
+                aria-invalid={Boolean(fieldErrors.description)}
+                aria-describedby={fieldErrors.description ? "ticket-description-error" : undefined}
+                data-form-error-focus
               />
+              {fieldErrors.description ? <FieldError id="ticket-description-error" message={fieldErrors.description} /> : null}
             </label>
 
-            <div>
+            <div data-field-name="attachments" className="scroll-mt-28">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Attach Photos</span>
                 <span className="text-[11px] font-semibold text-gray-400 dark:text-slate-300">{photos.length}/{maxPhotoCount} photos</span>
@@ -271,6 +355,9 @@ export function TicketsView() {
                 onDragOver={(event) => event.preventDefault()}
                 onDragLeave={() => setIsDragActive(false)}
                 onDrop={handleDrop}
+                aria-invalid={Boolean(photoError)}
+                aria-describedby={photoError ? "ticket-attachments-error" : undefined}
+                data-form-error-focus
                 className={`flex w-full flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-5 text-center transition ${
                   isDragActive
                     ? "border-[#065f46] bg-emerald-50 text-[#065f46] dark:border-emerald-300/60 dark:bg-emerald-500/15 dark:text-emerald-100"
@@ -281,6 +368,7 @@ export function TicketsView() {
                 <span className="mt-2 text-sm font-bold">Upload or drop photos</span>
                 <span className="mt-1 text-xs font-medium">PNG, JPG, JPEG, or WebP. Max 5 MB each.</span>
               </button>
+              {photoError ? <FieldError id="ticket-attachments-error" message={photoError} /> : null}
               {photos.length > 0 && (
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {photos.map((photo, index) => (
@@ -316,11 +404,27 @@ export function TicketsView() {
         </Card>
 
         <Card className="overflow-hidden rounded-[28px] border-emerald-100/80 shadow-[0_18px_44px_rgba(15,23,42,0.07)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_54px_rgba(15,23,42,0.11)] dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_22px_54px_rgba(0,0,0,0.36)]">
-          <TicketPanelHeader icon={<TicketCheck size={20} />} title="Support Requests" subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`} />
+          <TicketPanelHeader
+            icon={<TicketCheck size={20} />}
+            title="Support Requests"
+            subtitle={`${openTicketCount} open or in-review ticket${openTicketCount === 1 ? "" : "s"}`}
+            actions={
+              <div className="w-full sm:w-60">
+                <span className="mb-1 block text-[10px] font-bold tracking-wider text-gray-500 uppercase dark:text-slate-300">Sort tickets</span>
+                <SelectDropdown
+                  value={ticketSort}
+                  onChange={(value) => setTicketSort(value as SupportTicketSort)}
+                  options={ticketSortOptions}
+                  ariaLabel="Sort tickets"
+                  size="compact"
+                />
+              </div>
+            }
+          />
 
           {tickets.length > 0 ? (
             <div className="max-h-152 divide-y divide-gray-100 overflow-y-auto bg-white dark:divide-slate-700 dark:bg-[#121c31]">
-              {tickets.map((ticket) => (
+              {sortedTickets.map((ticket) => (
                 <article
                   key={ticket.id}
                   role="button"
@@ -343,7 +447,6 @@ export function TicketsView() {
                         ariaLabel="ticket subject and description"
                         className="mt-1 text-sm font-black text-[#111827] dark:text-slate-100"
                         secondaryClassName="text-xs leading-relaxed text-gray-500 dark:text-slate-300"
-                        threshold={72}
                         twoLines
                       />
                     </div>
@@ -409,22 +512,26 @@ export function TicketsView() {
 }
 
 type TicketPanelHeaderProps = {
+  actions?: ReactNode;
   icon: ReactNode;
   subtitle: string;
   title: string;
 };
 
-function TicketPanelHeader({ icon, subtitle, title }: TicketPanelHeaderProps) {
+function TicketPanelHeader({ actions, icon, subtitle, title }: TicketPanelHeaderProps) {
   return (
     <div className="enterprise-ticket-panel-header border-b border-emerald-100 px-6 py-5 dark:border-slate-600">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
-          {icon}
-        </span>
-        <div>
-          <h3 className="text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">{title}</h3>
-          <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-200">{subtitle}</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
+            {icon}
+          </span>
+          <div>
+            <h3 className="text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">{title}</h3>
+            <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-200">{subtitle}</p>
+          </div>
         </div>
+        {actions}
       </div>
     </div>
   );
@@ -444,11 +551,43 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const latestMessageId = ticket?.messages[ticket.messages.length - 1]?.id;
+  const previousMessageIdRef = useRef<string | undefined>(latestMessageId);
+  const isNearConversationBottomRef = useRef(true);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+
+  useEffect(() => {
+    const conversation = conversationRef.current;
+    if (!conversation || !latestMessageId || latestMessageId === previousMessageIdRef.current) return;
+    previousMessageIdRef.current = latestMessageId;
+    if (isNearConversationBottomRef.current) {
+      conversation.scrollTo({
+        top: conversation.scrollHeight,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+      setHasNewMessage(false);
+    } else {
+      setHasNewMessage(true);
+    }
+  }, [latestMessageId]);
+
+  const scrollToLatestMessage = () => {
+    const conversation = conversationRef.current;
+    if (!conversation) return;
+    conversation.scrollTo({
+      top: conversation.scrollHeight,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+    isNearConversationBottomRef.current = true;
+    setHasNewMessage(false);
+  };
 
   async function handleReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = reply.trim();
-    if (!ticket || !message) {
+    if (!ticket || !canReplyToSupportTicket(ticket)) return;
+    if (!message) {
       setReplyError("Write a message before sending your reply.");
       return;
     }
@@ -577,39 +716,60 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
                     <MessageSquare size={16} className="text-[#065f46] dark:text-emerald-200" />
                     Conversation
                   </h4>
-                  <div className="mt-4 space-y-3">
+                  <div
+                    ref={conversationRef}
+                    aria-live="polite"
+                    className="mt-4 max-h-[38dvh] space-y-3 overflow-y-auto pr-1"
+                    onScroll={(event) => {
+                      const element = event.currentTarget;
+                      isNearConversationBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+                      if (isNearConversationBottomRef.current) setHasNewMessage(false);
+                    }}
+                  >
                     <ConversationItem authorName={ticket.submittedBy} authorRole="enterprise" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                     {ticket.messages.map((message) => (
                       <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
                     ))}
                   </div>
-                  <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>
-                    <label className="block">
-                      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Reply in TANAW</span>
-                      <textarea
-                        value={reply}
-                        maxLength={2000}
-                        onChange={(event) => {
-                          setReply(event.target.value);
-                          if (replyError) setReplyError("");
-                        }}
-                        className="min-h-24 w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:focus:border-emerald-300/40"
-                        placeholder="Add information or respond to IT"
-                      />
-                    </label>
-                    {replyError ? <p className="text-xs font-semibold text-red-700 dark:text-red-200">{replyError}</p> : null}
+                  {hasNewMessage ? (
                     <button
-                      type="submit"
-                      disabled={isReplying}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#065f46] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#044a36] disabled:cursor-not-allowed disabled:opacity-70"
+                      type="button"
+                      onClick={scrollToLatestMessage}
+                      className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-100"
                     >
-                      {isReplying ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
-                      {isReplying ? "Sending..." : "Send Reply"}
+                      New message
                     </button>
-                    {ticket.status === "Resolved" ? (
-                      <p className="text-center text-[11px] font-semibold text-gray-500 dark:text-slate-300">Replying will reopen this resolved ticket.</p>
-                    ) : null}
-                  </form>
+                  ) : null}
+                  {!canReplyToSupportTicket(ticket) ? (
+                    <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
+                      This ticket is resolved. The conversation is now closed. Contact IT by creating a new ticket if further assistance is needed.
+                    </div>
+                  ) : (
+                    <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Reply in TANAW</span>
+                        <textarea
+                          value={reply}
+                          maxLength={2000}
+                          onChange={(event) => {
+                            setReply(event.target.value);
+                            if (replyError) setReplyError("");
+                          }}
+                          className="min-h-24 w-full resize-y rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:focus:border-emerald-300/40"
+                          placeholder="Add information or respond to IT"
+                        />
+                      </label>
+                      {replyError ? <p className="text-xs font-semibold text-red-700 dark:text-red-200">{replyError}</p> : null}
+                      <button
+                        type="submit"
+                        disabled={isReplying}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#065f46] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#044a36] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {isReplying ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
+                        {isReplying ? "Sending..." : "Send Reply"}
+                      </button>
+                    </form>
+                  )}
                 </section>
               </div>
             )}
@@ -709,34 +869,68 @@ function authorRoleLabel(role: string) {
 }
 
 type InputFieldProps = {
+  error?: string;
   label: string;
+  name: string;
   onChange: (value: string) => void;
   placeholder: string;
   value: string;
 };
 
-function InputField({ label, onChange, placeholder, value }: InputFieldProps) {
+function InputField({ error, label, name, onChange, placeholder, value }: InputFieldProps) {
+  const errorId = `ticket-${name}-error`;
   return (
-    <label className="block">
+    <label data-field-name={name} className="block scroll-mt-28">
       <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
-      <input type="text" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={fieldClassName()} />
+      <input
+        type="text"
+        name={name}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className={fieldClassName()}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        data-form-error-focus
+      />
+      {error ? <FieldError id={errorId} message={error} /> : null}
     </label>
   );
 }
 
 type SelectFieldProps = {
+  error?: string;
   label: string;
+  name: string;
   onChange: (value: string) => void;
   options: string[];
   value: string;
 };
 
-function SelectField({ label, onChange, options, value }: SelectFieldProps) {
+function SelectField({ error, label, name, onChange, options, value }: SelectFieldProps) {
+  const errorId = `ticket-${name}-error`;
   return (
-    <div className="block">
+    <div data-field-name={name} className="block scroll-mt-28">
       <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
-      <SelectDropdown value={value} onChange={onChange} options={options} ariaLabel={label} />
+      <SelectDropdown
+        value={value}
+        onChange={onChange}
+        options={options}
+        ariaLabel={label}
+        ariaInvalid={Boolean(error)}
+        ariaDescribedBy={error ? errorId : undefined}
+        focusOnFormError
+      />
+      {error ? <FieldError id={errorId} message={error} /> : null}
     </div>
+  );
+}
+
+function FieldError({ id, message }: { id: string; message: string }) {
+  return (
+    <p id={id} role="alert" className="mt-1.5 text-xs font-semibold text-red-700 dark:text-red-200">
+      {message}
+    </p>
   );
 }
 
@@ -803,16 +997,6 @@ function readAsDataUrl(file: File) {
   });
 }
 
-function validateTicketForm(form: TicketFormState) {
-  if (!form.category) return "Select a ticket category.";
-  if (!form.priority) return "Select a ticket priority.";
-  if (!form.subject.trim()) return "Enter a ticket subject.";
-  if (form.subject.trim().length < 3) return "Ticket subject must be at least 3 characters.";
-  if (!form.description.trim()) return "Enter a ticket description.";
-  if (form.description.trim().length < 10) return "Describe the ticket in at least 10 characters.";
-  return "";
-}
-
 function trimOptional(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
@@ -832,10 +1016,51 @@ function getRequestErrorMessage(error: unknown, fallback: string) {
     const response = (error as { response?: { data?: { detail?: unknown } } }).response;
     const detail = response?.data?.detail;
     if (typeof detail === "string") return detail;
+    if (typeof detail === "object" && detail && "message" in detail && typeof detail.message === "string") return detail.message;
     if (Array.isArray(detail) && detail.length > 0) {
       const first = detail[0] as { msg?: unknown };
       if (typeof first.msg === "string") return first.msg;
     }
   }
   return fallback;
+}
+
+function isTicketFormState(value: unknown): value is TicketFormState {
+  if (!value || typeof value !== "object") return false;
+  const form = value as Partial<TicketFormState>;
+  return (
+    typeof form.affectedArea === "string" &&
+    typeof form.cameraNode === "string" &&
+    typeof form.category === "string" &&
+    isSupportTicketCategory(form.category) &&
+    typeof form.description === "string" &&
+    typeof form.priority === "string" &&
+    isSupportTicketPriority(form.priority) &&
+    typeof form.subject === "string"
+  );
+}
+
+function isTicketPhotoDraft(value: unknown): value is SupportTicketAttachment[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= maxPhotoCount &&
+    value.every(
+      (photo) =>
+        Boolean(
+          photo &&
+            typeof photo === "object" &&
+            "dataUrl" in photo &&
+            typeof photo.dataUrl === "string" &&
+            photo.dataUrl.startsWith("data:image/") &&
+            "fileName" in photo &&
+            typeof photo.fileName === "string" &&
+            "sizeBytes" in photo &&
+            typeof photo.sizeBytes === "number",
+        ),
+    )
+  );
+}
+
+function isSupportTicketSort(value: unknown): value is SupportTicketSort {
+  return ticketSortOptions.some(([sort]) => sort === value);
 }

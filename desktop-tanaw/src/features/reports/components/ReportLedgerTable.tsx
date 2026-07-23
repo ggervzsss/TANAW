@@ -5,7 +5,7 @@ import { Card } from "../../../components/Card";
 import { ExpandableText } from "../../../components/ExpandableText";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { ReportRecord } from "../../../types/enterprise";
-import { formatReportingPeriodRange } from "../utils/reporting-period";
+import { formatReportingPeriodLabel } from "../utils/reporting-period";
 
 export type ReportLedgerRowKind = "current" | "pending" | "history";
 
@@ -35,7 +35,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
     return ledgerRows.filter((row) => {
       const matchesStatus = statusFilter === "All" || row.statusLabel === statusFilter;
       const storedPeriod = row.report.period ?? row.report.date;
-      const searchableText = [row.report.id, row.reportLabel, row.reportDescription, storedPeriod, formatReportingPeriodRange(storedPeriod), row.statusLabel].join(" ").toLowerCase();
+      const searchableText = [row.report.id, row.reportLabel, row.reportDescription, storedPeriod, formatReportingPeriodLabel(storedPeriod), row.statusLabel].join(" ").toLowerCase();
       return matchesStatus && (!normalizedSearchQuery || searchableText.includes(normalizedSearchQuery));
     });
   }, [ledgerRows, searchQuery, statusFilter]);
@@ -91,7 +91,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
             {filteredRows.map((row) => {
               const report = row.report;
               const isActive = activeLedgerKey === row.key;
-              const periodLabel = formatReportingPeriodRange(report.period ?? report.date);
+              const periodLabel = formatReportingPeriodLabel(report.period ?? report.date);
               return (
                 <tr
                   key={row.key}
@@ -115,7 +115,6 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                       ariaLabel="report name and description"
                       className="font-mono text-xs font-semibold text-[#111827]"
                       secondaryClassName="text-[10px] font-semibold tracking-wider text-gray-400 uppercase"
-                      threshold={48}
                     />
                   </td>
                   <td className="px-3 py-4 text-sm font-medium text-gray-700 xl:px-5">{periodLabel}</td>

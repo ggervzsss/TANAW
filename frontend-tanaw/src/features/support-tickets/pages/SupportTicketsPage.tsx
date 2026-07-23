@@ -1,20 +1,23 @@
 import { AlertCircle, Clock3, Eye, ImageIcon, MessageSquare, Paperclip, RefreshCw, Search, Send, ShieldCheck, TicketCheck } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
+import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
 import {
   fetchSupportTicketAttachmentBlob,
+  canReplyToSupportTicket,
   getSupportTicket,
   isSafeSupportTicketImage,
   listSupportTickets,
   replyToSupportTicket,
-  updateSupportTicketStatus,
+  sortRecommendedSupportTickets,
   supportTicketsQueryKey,
+  updateSupportTicketStatus,
   type SupportTicket,
   type SupportTicketAttachment,
   type SupportTicketCategory,
@@ -23,6 +26,7 @@ import {
 } from "@/shared/services/supportTickets";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
+import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 
 type SupportTicketsPageProps = {
   mode: "admin" | "it";
@@ -38,25 +42,44 @@ const priorities: PriorityFilter[] = ["All Priorities", "Urgent", "High", "Norma
 const categories: CategoryFilter[] = ["All Categories", "Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const EMPTY_SUPPORT_TICKETS: SupportTicket[] = [];
 
+type TicketFilterState = {
+  category: CategoryFilter;
+  priority: PriorityFilter;
+  query: string;
+  status: StatusFilter;
+};
+
+const INITIAL_TICKET_FILTERS: TicketFilterState = {
+  category: "All Categories",
+  priority: "All Priorities",
+  query: "",
+  status: "All Statuses",
+};
+
 export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPageProps) {
   const { timeFormat } = useSystemDisplayPreferences();
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All Statuses");
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("All Priorities");
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All Categories");
+  const [filters, setFilters] = useScopedPageState({
+    initialValue: INITIAL_TICKET_FILTERS,
+    isValid: isTicketFilterState,
+    namespace: `${mode}-ticket-filters`,
+    version: 1,
+  });
+  const query = filters.query;
+  const statusFilter = filters.status;
+  const priorityFilter = filters.priority;
+  const categoryFilter = filters.category;
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const isItResponder = mode === "it";
   const ticketsQuery = useQuery({
     queryKey: supportTicketsQueryKey,
     queryFn: listSupportTickets,
-    refetchInterval: 30_000,
   });
 
   const tickets = ticketsQuery.data ?? EMPTY_SUPPORT_TICKETS;
   const filteredTickets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return tickets.filter((ticket) => {
+    return sortRecommendedSupportTickets(tickets.filter((ticket) => {
       const searchable = [
         ticket.code,
         ticket.enterpriseName,
@@ -76,7 +99,7 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
       const matchesPriority = priorityFilter === "All Priorities" || ticket.priority === priorityFilter;
       const matchesCategory = categoryFilter === "All Categories" || ticket.category === categoryFilter;
       return matchesQuery && matchesStatus && matchesPriority && matchesCategory;
-    });
+    }));
   }, [categoryFilter, priorityFilter, query, statusFilter, tickets]);
 
   const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved");
@@ -134,22 +157,14 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
             <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
               placeholder="Search ticket ID, enterprise, subject, category, or status"
               className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
-          <FilterSelect value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={statuses} />
-          <FilterSelect value={priorityFilter} onChange={(value) => setPriorityFilter(value as PriorityFilter)} options={priorities} />
-          <FilterSelect value={categoryFilter} onChange={(value) => setCategoryFilter(value as CategoryFilter)} options={categories} />
-          <button
-            type="button"
-            onClick={() => void ticketsQuery.refetch()}
-            className="tanaw-data-refresh inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50"
-          >
-            <RefreshCw size={14} className={ticketsQuery.isFetching ? "animate-spin" : ""} />
-            Refresh
-          </button>
+          <FilterSelect value={statusFilter} onChange={(value) => setFilters((current) => ({ ...current, status: value as StatusFilter }))} options={statuses} />
+          <FilterSelect value={priorityFilter} onChange={(value) => setFilters((current) => ({ ...current, priority: value as PriorityFilter }))} options={priorities} />
+          <FilterSelect value={categoryFilter} onChange={(value) => setFilters((current) => ({ ...current, category: value as CategoryFilter }))} options={categories} />
         </div>
 
         <div className="tanaw-data-table overflow-x-auto">
@@ -245,17 +260,54 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
   );
 }
 
+function isTicketFilterState(value: unknown): value is TicketFilterState {
+  if (!value || typeof value !== "object") return false;
+  const filters = value as Partial<TicketFilterState>;
+  return (
+    typeof filters.query === "string" &&
+    filters.query.length <= 200 &&
+    statuses.includes(filters.status as StatusFilter) &&
+    priorities.includes(filters.priority as PriorityFilter) &&
+    categories.includes(filters.category as CategoryFilter)
+  );
+}
+
 export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mode: "admin" | "it"; ticketId: string; timeFormat: SystemTimeFormat; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<SupportTicketAttachment | null>(null);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const wasNearBottomRef = useRef(true);
+  const previousMessageIdRef = useRef<string | null>(null);
   const isItResponder = mode === "it";
   const detailQuery = useQuery({
     queryKey: [...supportTicketsQueryKey, ticketId],
     queryFn: () => getSupportTicket(ticketId),
   });
   const ticket = detailQuery.data;
+  const latestMessage = ticket?.messages.at(-1);
+
+  useEffect(() => {
+    const messageId = latestMessage?.id ?? null;
+    if (!ticket || messageId === previousMessageIdRef.current) return;
+    const isInitialLoad = previousMessageIdRef.current === null;
+    previousMessageIdRef.current = messageId;
+    const conversation = conversationRef.current;
+    if (!conversation) return;
+    if (isInitialLoad || wasNearBottomRef.current) {
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      window.requestAnimationFrame(() => conversation.scrollTo({ top: conversation.scrollHeight, behavior }));
+      setHasNewMessage(false);
+    } else {
+      setHasNewMessage(true);
+    }
+    if (!isInitialLoad && latestMessage) {
+      setAnnouncement(`New support ticket reply from ${latestMessage.authorName}`);
+    }
+  }, [latestMessage, ticket]);
   const replyMutation = useMutation({
     mutationFn: (message: string) => replyToSupportTicket(ticketId, message),
     onSuccess: (detail) => {
@@ -264,7 +316,7 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
       setReply("");
       setReplyError("");
     },
-    onError: () => setReplyError("Unable to send reply. Please try again."),
+    onError: (error) => setReplyError(getApiErrorMessage(error, "Unable to send reply. Please try again.")),
   });
   const statusMutation = useMutation({
     mutationFn: (status: SupportTicketStatus) => updateSupportTicketStatus(ticketId, status),
@@ -386,14 +438,44 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
                   <MessageSquare size={16} className="text-emerald-700" />
                   Conversation
                 </h4>
-                <div className="mt-4 space-y-3">
+                <div
+                  ref={conversationRef}
+                  onScroll={(event) => {
+                    const target = event.currentTarget;
+                    wasNearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 72;
+                    if (wasNearBottomRef.current) setHasNewMessage(false);
+                  }}
+                  className="mt-4 max-h-80 space-y-3 overflow-y-auto overscroll-contain pr-1"
+                >
                   <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                   {ticket.messages.map((message) => (
                     <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
                   ))}
                 </div>
+                <p className="sr-only" aria-live="polite">{announcement}</p>
+                {hasNewMessage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const conversation = conversationRef.current;
+                      if (!conversation) return;
+                      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+                      conversation.scrollTo({ top: conversation.scrollHeight, behavior });
+                      wasNearBottomRef.current = true;
+                      setHasNewMessage(false);
+                    }}
+                    className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-200"
+                  >
+                    New message
+                  </button>
+                )}
 
-                {isItResponder ? (
+                {!canReplyToSupportTicket(ticket) ? (
+                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
+                    This ticket is resolved. The conversation is now closed.
+                    {isItResponder ? " Reopen the ticket to continue the conversation." : ""}
+                  </div>
+                ) : isItResponder ? (
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <label className="block">
                       <span className="mb-2 block text-[11px] font-black tracking-wide text-slate-500 uppercase">IT Response</span>

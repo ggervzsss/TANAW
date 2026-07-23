@@ -5,10 +5,10 @@ import { BrowserRouter, useLocation } from "react-router-dom";
 import { resolveValue, useToaster, type DefaultToastOptions, type Toast } from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { TOAST_DURATION_MS } from "@/shared/config/app.config";
-import { OperationalSyncBridge } from "@/shared/hooks/useOperationalSync";
 import { AuthSessionManager } from "@/shared/components/auth/AuthSessionManager";
 import { queryClient } from "@/shared/lib/queryClient";
 import { SystemDisplayPreferencesProvider } from "@/shared/providers/SystemDisplayPreferencesProvider";
+import { RealtimeProvider } from "@/shared/realtime/RealtimeProvider";
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -51,12 +51,13 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <OperationalSyncBridge />
         <AuthSessionManager />
-        <SystemDisplayPreferencesProvider>
-          {children}
-          <TanawToaster />
-        </SystemDisplayPreferencesProvider>
+        <RealtimeProvider>
+          <SystemDisplayPreferencesProvider>
+            {children}
+            <TanawToaster />
+          </SystemDisplayPreferencesProvider>
+        </RealtimeProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

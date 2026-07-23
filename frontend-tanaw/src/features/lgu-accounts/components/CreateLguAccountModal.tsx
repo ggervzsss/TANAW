@@ -119,7 +119,7 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
           />
         </div>
         <FormField name="email" label="Email Address" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
-        <ContactNumberField name="phone" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
+        <ContactNumberField name="phone" label="Contact Number (Optional)" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
         <div className="md:col-span-2">
           <SearchableDropdownField
             name="role"

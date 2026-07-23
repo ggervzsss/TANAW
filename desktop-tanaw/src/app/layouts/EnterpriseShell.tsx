@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -7,13 +7,11 @@ import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import {
-  createWebSocketAuthMessage,
-  getOperationalWebSocketUrl,
   listNotifications,
   updateNotificationRead,
   type BackendNotification,
-  type OperationalNotificationEnvelope,
 } from "../../features/notifications/services/notifications";
+import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
@@ -21,8 +19,8 @@ import { useSystemDisplayPreferences } from "../../features/preferences/system-d
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
-import { createReconnectingWebSocket } from "../../utils/reconnecting-websocket";
 import { routePaths } from "../router/routePaths";
+import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
 const CameraManagementView = lazy(() =>
@@ -99,6 +97,15 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
+  const scrollStateKey = useMemo(
+    () =>
+      createPageStateKey(
+        { portal: "desktop", role: user?.role ?? "enterprise", userId: user?.id ?? "anonymous" },
+        viewRouteById[activeView],
+        "scroll",
+      ),
+    [activeView, user?.id, user?.role],
+  );
 
   useDesktopCloudSync(mlContextReady, mlBaseUrl);
 
@@ -155,58 +162,24 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     setBackendNotifications([]);
   }, [enterpriseCameraStorageKey]);
 
-  useEffect(() => {
-    if (!token) return undefined;
-
-    let disposed = false;
-    let heartbeatTimer: number | undefined;
-
-    const clearHeartbeat = () => {
-      if (heartbeatTimer !== undefined) {
-        window.clearInterval(heartbeatTimer);
-        heartbeatTimer = undefined;
-      }
-    };
-
-    const refreshNotifications = async () => {
-      try {
-        const nextNotifications = await listNotifications();
-        if (!disposed) setBackendNotifications(nextNotifications);
-      } catch {
-        if (!disposed) setBackendNotifications([]);
-      }
-    };
-
-    const connection = createReconnectingWebSocket({
-      url: getOperationalWebSocketUrl(),
-      onOpen: (socket) => {
-        const authMessage = createWebSocketAuthMessage();
-        if (authMessage) socket.send(authMessage);
-        heartbeatTimer = window.setInterval(() => {
-          if (socket.readyState === WebSocket.OPEN) socket.send("ping");
-        }, 25000);
-      },
-      onMessage: (event) => {
-        if (event.data === "pong") return;
-        const envelope = parseNotificationEnvelope(event.data);
-        if (!envelope) return;
-        setBackendNotifications((current) => upsertBackendNotification(current, envelope.data));
-      },
-      onClose: () => {
-        clearHeartbeat();
-      },
-    });
-
-    void refreshNotifications();
-    const refreshIntervalId = window.setInterval(() => void refreshNotifications(), 30000);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(refreshIntervalId);
-      clearHeartbeat();
-      connection.dispose();
-    };
+  const refreshBackendNotifications = useCallback(async () => {
+    if (!token) return;
+    try {
+      setBackendNotifications(await listNotifications());
+    } catch {
+      // Preserve the last successful snapshot while the connection recovers.
+    }
   }, [token]);
+
+  useEffect(() => {
+    void refreshBackendNotifications();
+  }, [refreshBackendNotifications]);
+
+  useRealtimeEvent((event) => {
+    if (event.event_type.startsWith("notification.")) {
+      void refreshBackendNotifications();
+    }
+  });
 
   useEffect(() => {
     const enterpriseId = user?.enterpriseId || user?.id;
@@ -235,9 +208,18 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     };
   }, [user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
 
-  useEffect(() => {
-    contentScrollRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [activeView]);
+  useLayoutEffect(() => {
+    const container = contentScrollRef.current;
+    const restored = readPageState(scrollStateKey, 1, isScrollPosition) ?? { top: 0 };
+    const restore = () => container?.scrollTo({ top: restored.top, left: 0 });
+    const frame = window.requestAnimationFrame(restore);
+    const settledRestore = window.setTimeout(restore, 250);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settledRestore);
+      writePageState(scrollStateKey, 1, { top: container?.scrollTop ?? 0 });
+    };
+  }, [scrollStateKey]);
 
   const handleLogout = async () => {
     try {
@@ -322,6 +304,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div
           ref={contentScrollRef}
+          data-form-scroll-container
           className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
@@ -528,18 +511,6 @@ function stableNotificationId(value: string) {
   return Math.abs(hash);
 }
 
-function parseNotificationEnvelope(value: string): OperationalNotificationEnvelope | null {
-  try {
-    const parsed = JSON.parse(value) as OperationalNotificationEnvelope;
-    if (parsed.type === "notification.created" || parsed.type === "notification.updated") {
-      return parsed;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 function upsertBackendNotification(notifications: BackendNotification[], nextNotification: BackendNotification) {
   if (notifications.some((notification) => notification.id === nextNotification.id)) {
     return notifications.map((notification) => (notification.id === nextNotification.id ? nextNotification : notification));
@@ -579,4 +550,8 @@ function getInitials(value: string) {
 function getEnterpriseCameraStorageKey(user: ReturnType<typeof useAuthStore.getState>["user"]) {
   const scope = user?.enterpriseId || user?.id || user?.email || "anonymous";
   return `tanaw.enterprise.camera-configs:${scope.replace(/[^a-zA-Z0-9._:-]/g, "_")}`;
+}
+
+function isScrollPosition(value: unknown): value is { top: number } {
+  return Boolean(value && typeof value === "object" && "top" in value && typeof value.top === "number" && Number.isFinite(value.top));
 }

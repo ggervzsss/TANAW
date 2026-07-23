@@ -94,6 +94,69 @@ test("updates Support Ticket selects in the same theme transaction", async ({ pa
   await expect(priority).toHaveCSS("background-color", initialDarkState.priorityBackground);
 });
 
+test("reveals and focuses the first invalid Support Ticket field", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await signIn(page);
+  await page.goto("/#/enterprise/tickets");
+
+  await page.getByRole("button", { name: "Submit Ticket" }).click();
+  const subject = page.getByPlaceholder("Brief summary of the issue");
+  await expect(subject).toBeFocused();
+  await expect(subject).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Enter a ticket subject.", { exact: true })).toBeVisible();
+
+  await subject.fill("Camera unavailable");
+  await page.getByPlaceholder("Describe what happened, when it started, and any affected workflows.").fill("The camera feed stopped updating this morning.");
+  await page.getByRole("button", { name: "Submit Ticket" }).click();
+  const affectedArea = page.getByPlaceholder("Lobby, reports, account");
+  await expect(affectedArea).toBeFocused();
+  await expect(affectedArea).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Enter the affected area.", { exact: true })).toBeVisible();
+});
+
+test("keeps resolved Support Ticket history visible and closes the composer", async ({ page }) => {
+  const resolvedTicket = {
+    id: "ticket-resolved",
+    code: "TCK-000099",
+    enterpriseId: enterpriseUser.enterpriseId,
+    enterpriseName: enterpriseUser.enterpriseName,
+    submittedBy: enterpriseUser.displayName,
+    category: "Camera Issue",
+    priority: "High",
+    subject: "Resolved camera concern",
+    description: "The camera concern has already been resolved.",
+    affectedArea: "Lobby",
+    cameraNode: null,
+    attachments: [],
+    status: "Resolved",
+    createdAt: "2026-07-23T12:11:04.071391+00:00",
+    updatedAt: "2026-07-23T12:15:04.071391+00:00",
+    messages: [
+      {
+        id: "message-1",
+        authorName: "Default IT Personnel",
+        authorRole: "it",
+        message: "The connection has been restored.",
+        createdAt: "2026-07-23T12:14:04.071391+00:00",
+      },
+    ],
+  };
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  await page.route("**/operational/tickets**", (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname.endsWith("/ticket-resolved") ? resolvedTicket : [resolvedTicket];
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/#/enterprise/tickets");
+
+  await page.getByText("Resolved camera concern", { exact: true }).click();
+  await expect(page.getByText("The connection has been restored.", { exact: true })).toBeVisible();
+  await expect(page.getByText("This ticket is resolved. The conversation is now closed.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Reply in TANAW", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send Reply" })).toHaveCount(0);
+});
+
 test("themes the camera modal and keeps the minimized Tripwire toolbar draggable", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);

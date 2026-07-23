@@ -7,7 +7,7 @@ from math import ceil
 from statistics import fmean
 from typing import cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.date_time import PHILIPPINE_TIME_ZONE
@@ -40,6 +40,7 @@ from app.features.operational.schemas import (
     FinalReportSummary,
     IntakeReportSummary,
     OperationalAlertSummary,
+    OperationalAlertUrgency,
     OperationalSummary,
     ReportDemographicsSummary,
     ReportStatusUpdate,
@@ -56,6 +57,7 @@ from app.features.operational.schemas import (
     VisitorInsightPoint,
     VisitorInsightRange,
     VisitorInsightsSummary,
+    reporting_period_key,
 )
 
 STALE_GATEWAY_SECONDS = 120
@@ -76,6 +78,12 @@ STAFF_REPORT_NOTIFICATION_TYPES = (
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
 )
+SUPPORT_TICKET_PRIORITY_RANK = {
+    "Urgent": 0,
+    "High": 1,
+    "Normal": 2,
+    "Low": 3,
+}
 FINAL_REPORT_ARCHIVED_STATUS = "Archived"
 FINAL_REPORT_RETURNED_STATUS = "Returned for Revision"
 FINAL_REPORT_RESTORABLE_STATUSES = {"Draft", "Finalized", FINAL_REPORT_RETURNED_STATUS}
@@ -127,6 +135,7 @@ def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSum
         id=alert.alert_code,
         type=alert.alert_type,  # type: ignore[arg-type]
         severity=alert.severity,  # type: ignore[arg-type]
+        urgency=operational_alert_urgency(alert.severity),
         enterprise=alert.enterprise,
         requester=alert.requester,
         summary=alert.summary,
@@ -136,6 +145,14 @@ def to_operational_alert_summary(alert: OperationalAlert) -> OperationalAlertSum
         owner=alert.owner,  # type: ignore[arg-type]
         time=alert.created_at.isoformat(),
     )
+
+
+def operational_alert_urgency(severity: str) -> OperationalAlertUrgency:
+    if severity == "Critical":
+        return "Urgent"
+    if severity == "Warning":
+        return "Important"
+    return "Normal"
 
 
 def to_user_notification_summary(
@@ -418,7 +435,37 @@ def to_support_ticket_message_summary(message: SupportTicketMessage) -> SupportT
 async def list_support_tickets(
     db: AsyncSession, account: Account, limit: int = 100
 ) -> list[SupportTicketSummary]:
-    statement = select(SupportTicket).order_by(SupportTicket.created_at.desc()).limit(limit)
+    resolved_rank = case((SupportTicket.status == "Resolved", 1), else_=0)
+    priority_rank = case(
+        (SupportTicket.status == "Resolved", 0),
+        *(
+            (SupportTicket.priority == priority, rank)
+            for priority, rank in SUPPORT_TICKET_PRIORITY_RANK.items()
+        ),
+        else_=len(SUPPORT_TICKET_PRIORITY_RANK),
+    )
+    workflow_rank = case(
+        (SupportTicket.status == "Resolved", 0),
+        (SupportTicket.status == "Open", 0),
+        (SupportTicket.status == "In Review", 1),
+        else_=2,
+    )
+    authoritative_activity_at = case(
+        (SupportTicket.status == "Resolved", SupportTicket.updated_at),
+        else_=SupportTicket.created_at,
+    )
+    statement = (
+        select(SupportTicket)
+        .order_by(
+            resolved_rank.asc(),
+            priority_rank.asc(),
+            workflow_rank.asc(),
+            authoritative_activity_at.desc(),
+            SupportTicket.ticket_code.asc(),
+            SupportTicket.id.asc(),
+        )
+        .limit(limit)
+    )
     if account.role == AccountRole.ENTERPRISE:
         statement = statement.where(SupportTicket.enterprise_profile_id == account.id)
     elif account.role == AccountRole.ADMIN:
@@ -428,11 +475,20 @@ async def list_support_tickets(
 
 
 async def get_support_ticket_for_account(
-    db: AsyncSession, account: Account, ticket_id: str
+    db: AsyncSession,
+    account: Account,
+    ticket_id: str,
+    *,
+    for_update: bool = False,
 ) -> SupportTicket | None:
+    statement = select(SupportTicket).where(SupportTicket.id == ticket_id)
+    if for_update:
+        statement = statement.with_for_update(of=SupportTicket).execution_options(
+            populate_existing=True
+        )
     ticket = cast(
         SupportTicket | None,
-        await db.scalar(select(SupportTicket).where(SupportTicket.id == ticket_id)),
+        await db.scalar(statement),
     )
     if ticket is None:
         return None
@@ -523,6 +579,8 @@ async def create_support_ticket_message_with_record(
     *,
     commit: bool = True,
 ) -> tuple[SupportTicketDetail, SupportTicketMessage]:
+    if ticket.status == "Resolved":
+        raise ResolvedTicketConversationError
     message = SupportTicketMessage(
         ticket_id=ticket.id,
         author_account_id=author.id,
@@ -531,9 +589,7 @@ async def create_support_ticket_message_with_record(
         message=payload.message,
     )
     db.add(message)
-    if author.role == AccountRole.ENTERPRISE and ticket.status == "Resolved":
-        ticket.status = "Open"
-    elif author.role == AccountRole.IT and ticket.status == "Open":
+    if author.role == AccountRole.IT and ticket.status == "Open":
         ticket.status = "In Review"
     if commit:
         await db.commit()
@@ -545,6 +601,10 @@ async def create_support_ticket_message_with_record(
     if detail is None:
         raise RuntimeError("Support ticket detail disappeared after reply creation.")
     return detail, message
+
+
+class ResolvedTicketConversationError(ValueError):
+    """Raised when a message is submitted after a ticket conversation is closed."""
 
 
 async def update_support_ticket_status(
@@ -903,7 +963,7 @@ async def ingest_report_submission(
             f"A report for {payload.period} has already been submitted."
         )
     report_status = status_from_payload(payload.payload)
-    month = month_from_submission(payload.period, payload.submittedAt)
+    month = month_from_submission(payload.period)
 
     if existing is None:
         report = EnterpriseReportSubmission(
@@ -1692,15 +1752,7 @@ async def generate_final_report_code(db: AsyncSession, period: str) -> str:
 
 
 def final_report_period(reports: Sequence[EnterpriseReportSubmission]) -> str:
-    first = reports[0]
-    year = (
-        first.period.split(",")[-1].strip()
-        if "," in first.period
-        else str(_aware(first.submitted_at).year)
-    )
-    if not year.isdigit():
-        year = str(_aware(first.submitted_at).year)
-    return f"{first.month} {year}"
+    return reports[0].period
 
 
 def validate_report_review_transition(current_status: str, requested_status: str) -> None:
@@ -1724,8 +1776,8 @@ def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission])
             f"Only reports marked Ready to Consolidate can be included in a final report: {joined_ids}."
         )
 
-    periods = {report.period for report in reports}
-    if len(periods) > 1:
+    period_keys = {reporting_period_key(report.period) for report in reports}
+    if None in period_keys or len(period_keys) > 1:
         raise InvalidReportWorkflowError("A final report can only include one reporting period.")
 
 
@@ -1772,37 +1824,8 @@ def status_from_payload(payload: dict | None) -> str:
     )
 
 
-def month_from_submission(period: str, submitted_at: datetime) -> str:
-    first = period.split(" ", 1)[0].strip()
-    month_names = {
-        "jan": "January",
-        "january": "January",
-        "feb": "February",
-        "february": "February",
-        "mar": "March",
-        "march": "March",
-        "apr": "April",
-        "april": "April",
-        "may": "May",
-        "jun": "June",
-        "june": "June",
-        "jul": "July",
-        "july": "July",
-        "aug": "August",
-        "august": "August",
-        "sep": "September",
-        "sept": "September",
-        "september": "September",
-        "oct": "October",
-        "october": "October",
-        "nov": "November",
-        "november": "November",
-        "dec": "December",
-        "december": "December",
-    }
-    if first.lower() in month_names:
-        return month_names[first.lower()]
-    return _aware(submitted_at).strftime("%B")
+def month_from_submission(period: str) -> str:
+    return period.split(" ", 1)[0]
 
 
 def format_timestamp(value: datetime) -> str:

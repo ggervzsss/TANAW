@@ -30,6 +30,7 @@ from app.features.operational.models import (
     SupportTicketMessage,
     UserNotification,
 )
+from app.features.realtime.models import RealtimeOutbox
 
 __all__ = [
     "Account",
@@ -52,6 +53,7 @@ __all__ = [
     "OperationalAlert",
     "PasswordResetChallenge",
     "PasswordResetRateLimitBucket",
+    "RealtimeOutbox",
     "SupportTicket",
     "SupportTicketMessage",
     "SystemConfiguration",

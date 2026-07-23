@@ -1367,10 +1367,7 @@ def add_months(value: datetime, months: int) -> datetime:
 
 
 def period_label(month_start: datetime) -> str:
-    next_month = add_months(month_start, 1)
-    last_day = (next_month - timedelta(days=1)).day
-    short = month_start.strftime("%b")
-    return f"{short} 1 - {short} {last_day}, {month_start.year}"
+    return month_start.strftime("%B %Y")
 
 
 def latest_capture_time(month_start: datetime, range_end: datetime) -> datetime:

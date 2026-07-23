@@ -7,7 +7,9 @@ import { TapoRtspBuilder } from "./TapoRtspBuilder";
 import { buildTapoRtspUrl, isValidIpv4, parseRtspConnection, type TapoStreamId } from "../utils/rtsp";
 
 type CameraEditControlsProps = {
+  cameraIpError?: string;
   editForm: Camera;
+  hasExistingPassword: boolean;
   onEditFormChange: React.Dispatch<React.SetStateAction<Camera | null>>;
 };
 
@@ -18,7 +20,7 @@ const roiFields = [
   { label: "Height", key: "height", min: 20, max: 100 },
 ] as const;
 
-export function CameraEditControls({ editForm, onEditFormChange }: CameraEditControlsProps) {
+export function CameraEditControls({ cameraIpError, editForm, hasExistingPassword, onEditFormChange }: CameraEditControlsProps) {
   const isRtspCamera = editForm.cameraType === "RTSP_CCTV" || editForm.cameraType === "ONVIF_CCTV";
   const parsedRtsp = parseRtspConnection(editForm.rtsp);
   const cameraHost = editForm.cameraHost ?? parsedRtsp.host;
@@ -208,23 +210,33 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
             </div>
           </details>
           <div className="grid grid-cols-2 gap-2">
-            <CompactField label="Username">
+            <CompactField label="Username" required={isRtspCamera}>
               <input
                 type="text"
+                required={isRtspCamera}
+                aria-required={isRtspCamera}
+                autoComplete="username"
                 value={editForm.username ?? ""}
                 onChange={(event) => onEditFormChange({ ...editForm, username: event.target.value })}
                 className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
               />
             </CompactField>
-            <CompactField label="Password">
-              <PasswordVisibilityInput value={editForm.password ?? ""} onChange={(password) => onEditFormChange({ ...editForm, password })} />
+            <CompactField label="Password" required={isRtspCamera}>
+              <PasswordVisibilityInput
+                value={editForm.password ?? ""}
+                onChange={(password) => onEditFormChange({ ...editForm, password })}
+                autoComplete="new-password"
+              />
+              {hasExistingPassword && !editForm.password ? (
+                <span className="mt-1 block text-[9px] font-semibold text-gray-500">Password configured. Leave blank to keep it unchanged.</span>
+              ) : null}
             </CompactField>
           </div>
           {isRtspCamera && (
             <TapoRtspBuilder
               host={cameraHost}
               streamId={rtspStream}
-              error={cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined}
+              error={cameraIpError ?? (cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined)}
               onHostChange={(host) => updateRtspSource(host, rtspStream)}
               onStreamChange={(stream) => updateRtspSource(cameraHost, stream)}
               layout="stacked"
@@ -248,12 +260,16 @@ export function CameraEditControls({ editForm, onEditFormChange }: CameraEditCon
 type CompactFieldProps = {
   children: React.ReactNode;
   label: string;
+  required?: boolean;
 };
 
-function CompactField({ children, label }: CompactFieldProps) {
+function CompactField({ children, label, required = false }: CompactFieldProps) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</span>
+      <span className="mb-1 block text-[9px] font-bold tracking-wider text-gray-500 uppercase">
+        {label}
+        {required ? <span className="ml-1 text-red-600" aria-hidden="true">*</span> : null}
+      </span>
       {children}
     </label>
   );

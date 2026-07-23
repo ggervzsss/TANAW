@@ -172,13 +172,11 @@ function getCurrentSubmissionPeriod(date = new Date()): SubmissionPeriod {
   const monthIndex = date.getMonth();
   const month = REPORT_MONTHS[monthIndex];
   const year = String(date.getFullYear());
-  const lastDay = new Date(date.getFullYear(), monthIndex + 1, 0).getDate();
-  const shortMonth = month.slice(0, 3);
 
   return {
     month,
     monthIndex,
-    period: `${shortMonth} 1 - ${shortMonth} ${lastDay}, ${year}`,
+    period: `${month} ${year}`,
     periodKey: `${year}${String(monthIndex + 1).padStart(2, "0")}`,
     year,
   };

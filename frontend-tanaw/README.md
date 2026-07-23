@@ -1,5 +1,7 @@
 # TANAW Frontend
 
+Cloud-backed dynamic data uses the shared authenticated `/realtime/ws` provider with REST initial reads and mutation APIs. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+
 React, TypeScript, Vite, and Tailwind web application for the TANAW LGU portal.
 It gives LGU users role-specific workspaces for monitoring enterprises,
 reviewing submissions, managing accounts, viewing alerts, and auditing final
@@ -128,6 +130,42 @@ analytics views, and Leaflet for map-based enterprise monitoring.
 User-facing terminology should stay operational and non-technical. The portal
 is intended for LGU staff workflows, so screens should prioritize clear status,
 review actions, auditability, and fast scanning over implementation details.
+
+### Page continuity and official exports
+
+Serializable workflow state uses the versioned `useScopedPageState` utility.
+Keys are scoped by portal, authenticated user ID, role, route, and feature
+namespace. Shareable Batch Reports filters are mirrored in URL search
+parameters; non-sensitive filters and scroll positions use `sessionStorage`
+with an in-memory fallback when storage is unavailable. Server records remain
+owned by TanStack Query and WebSocket invalidation rather than browser storage.
+Logout clears the complete user-scoped namespace.
+
+Passwords, authentication tokens, reset or activation values, File objects, and
+credential-bearing camera URLs must never enter page state. Upload binaries are
+not serialized. Version or validation mismatches are ignored safely.
+
+IT Support Tickets use the backend's resolved-last business order: unresolved
+Urgent, High, Normal, and Low tickets first, with Open before In Review at equal
+priority and stable time/code tie breakers. Real-time query invalidation
+reapplies this order without resetting filters.
+
+Final Report PDF generation uses the dedicated light PDF renderer. Browser
+printing clones only the official report into an isolated light document with
+explicit print colors; it never toggles the live portal theme or prints the
+surrounding modal. Official output therefore keeps white backgrounds, dark
+text, visible table borders, totals, signatures, and page information in every
+portal theme.
+
+Technical Issues expose the canonical `Normal`, `Important`, and `Urgent`
+urgency field throughout the API and UI. Urgency, workflow status, issue type,
+and search filters persist independently in route/user-scoped page state.
+
+General LGU and enterprise profile editing cannot change account lifecycle
+status. Deactivation and reactivation use the dedicated account action. The
+enterprise edit workflow reuses the San Pedro boundary map, keeps the current
+pin visible, and submits paired coordinates only after the selected barangay
+matches the pin.
 
 ## Related Documentation
 
