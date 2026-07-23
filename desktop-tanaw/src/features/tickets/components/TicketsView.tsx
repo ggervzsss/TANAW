@@ -6,6 +6,7 @@ import { ModalPortal } from "../../../components/ModalPortal";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
+import { useRealtimeEvent } from "../../realtime/realtime-context";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
 import {
@@ -80,6 +81,18 @@ export function TicketsView() {
   useEffect(() => {
     void refreshTickets();
   }, [refreshTickets]);
+
+  useRealtimeEvent((event) => {
+    if (!event.event_type.startsWith("support_ticket.")) return;
+    void listSupportTickets()
+      .then(setTickets)
+      .catch(() => undefined);
+    if (selectedTicketId && (!event.scope.ticket_id || event.scope.ticket_id === selectedTicketId)) {
+      void getSupportTicket(selectedTicketId)
+        .then(setSelectedTicket)
+        .catch(() => undefined);
+    }
+  });
 
   useEffect(() => {
     if (!selectedTicketId) {
@@ -182,15 +195,6 @@ export function TicketsView() {
             Submit camera, reporting, maintenance, or account concerns for {enterpriseName}. Admin and IT personnel will be notified.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void refreshTickets()}
-          disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2 text-xs font-black tracking-wide text-[#065f46] uppercase shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-gray-300 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:border-emerald-300/40 dark:hover:bg-[#1d2940]"
-        >
-          <RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
-          Refresh
-        </button>
       </div>
 
       {error && (
@@ -444,6 +448,37 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const latestMessageId = ticket?.messages[ticket.messages.length - 1]?.id;
+  const previousMessageIdRef = useRef<string | undefined>(latestMessageId);
+  const isNearConversationBottomRef = useRef(true);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+
+  useEffect(() => {
+    const conversation = conversationRef.current;
+    if (!conversation || !latestMessageId || latestMessageId === previousMessageIdRef.current) return;
+    previousMessageIdRef.current = latestMessageId;
+    if (isNearConversationBottomRef.current) {
+      conversation.scrollTo({
+        top: conversation.scrollHeight,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+      setHasNewMessage(false);
+    } else {
+      setHasNewMessage(true);
+    }
+  }, [latestMessageId]);
+
+  const scrollToLatestMessage = () => {
+    const conversation = conversationRef.current;
+    if (!conversation) return;
+    conversation.scrollTo({
+      top: conversation.scrollHeight,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+    isNearConversationBottomRef.current = true;
+    setHasNewMessage(false);
+  };
 
   async function handleReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -577,12 +612,30 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
                     <MessageSquare size={16} className="text-[#065f46] dark:text-emerald-200" />
                     Conversation
                   </h4>
-                  <div className="mt-4 space-y-3">
+                  <div
+                    ref={conversationRef}
+                    aria-live="polite"
+                    className="mt-4 max-h-[38dvh] space-y-3 overflow-y-auto pr-1"
+                    onScroll={(event) => {
+                      const element = event.currentTarget;
+                      isNearConversationBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+                      if (isNearConversationBottomRef.current) setHasNewMessage(false);
+                    }}
+                  >
                     <ConversationItem authorName={ticket.submittedBy} authorRole="enterprise" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                     {ticket.messages.map((message) => (
                       <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
                     ))}
                   </div>
+                  {hasNewMessage ? (
+                    <button
+                      type="button"
+                      onClick={scrollToLatestMessage}
+                      className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-100"
+                    >
+                      New message
+                    </button>
+                  ) : null}
                   <form className="mt-4 space-y-3 border-t border-emerald-100 pt-4 dark:border-slate-700" onSubmit={handleReply}>
                     <label className="block">
                       <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Reply in TANAW</span>

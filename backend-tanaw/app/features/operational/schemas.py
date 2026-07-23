@@ -588,20 +588,3 @@ class FinalReportRevisionReturn(BaseModel):
         if len(normalized_ids) != len(set(normalized_ids)):
             raise ValueError("Source report IDs must be unique.")
         return normalized_ids
-
-
-class OperationalWebSocketEnvelope(BaseModel):
-    type: Literal[
-        "telemetry.snapshot",
-        "report.submitted",
-        "report.updated",
-        "summary.updated",
-        "final_report.generated",
-        "final_report.updated",
-        "alert.created",
-        "alert.updated",
-        "alert.resolved",
-        "notification.created",
-        "notification.updated",
-    ]
-    data: dict

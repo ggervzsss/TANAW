@@ -8,7 +8,6 @@ export function useAlerts(enabled = true) {
     queryKey: alertsQueryKey,
     queryFn: listAlerts,
     enabled,
-    refetchInterval: 15_000,
   });
   return { ...query, alerts: query.data ?? [] };
 }

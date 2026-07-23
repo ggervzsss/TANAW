@@ -7,6 +7,7 @@ from app.features.auth.router import router as auth_router
 from app.features.mail.router import router as mail_router
 from app.features.maintenance.router import router as maintenance_router
 from app.features.operational.router import router as operational_router
+from app.features.realtime.router import router as realtime_router
 
 api_router = APIRouter()
 api_router.include_router(activity_logs_router)
@@ -16,3 +17,4 @@ api_router.include_router(mail_router)
 api_router.include_router(maintenance_router)
 api_router.include_router(dev_router)
 api_router.include_router(operational_router)
+api_router.include_router(realtime_router)

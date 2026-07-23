@@ -1,6 +1,5 @@
 import { apiClient } from "../lib/apiClient";
-import { getWebSocketUrl } from "../config/api.config";
-import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, PriorityAlert, ReportStatus, TelemetrySnapshot, VisitorInsightRange, VisitorInsights } from "../types";
+import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, TelemetrySnapshot, VisitorInsightRange, VisitorInsights } from "../types";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -19,19 +18,6 @@ export type BackendNotification = {
   createdAt: string;
   readAt: string | null;
 };
-
-export type OperationalWebSocketEnvelope =
-  | { type: "telemetry.snapshot"; data: TelemetrySnapshot }
-  | { type: "report.submitted"; data: IntakeReport }
-  | { type: "report.updated"; data: IntakeReport }
-  | { type: "final_report.generated"; data: FinalReport }
-  | { type: "final_report.updated"; data: FinalReport }
-  | { type: "summary.updated"; data: OperationalSummary }
-  | { type: "alert.created"; data: PriorityAlert }
-  | { type: "alert.updated"; data: PriorityAlert }
-  | { type: "alert.resolved"; data: PriorityAlert }
-  | { type: "notification.created"; data: BackendNotification }
-  | { type: "notification.updated"; data: BackendNotification };
 
 type MapEnterpriseResponse = Omit<MapEnterprise, "lat" | "lng" | "lastSync" | "gatewayStatus"> & {
   lat: number | null;
@@ -129,14 +115,6 @@ export async function listUserNotifications() {
 export async function updateUserNotificationRead(notificationId: string, read: boolean) {
   const response = await apiClient.patch<BackendNotification>(`/operational/notifications/${notificationId}`, { read });
   return response.data;
-}
-
-export function getOperationalWebSocketUrl() {
-  return getWebSocketUrl("/operational/ws");
-}
-
-export function createWebSocketAuthMessage(token: string) {
-  return JSON.stringify({ type: "auth", token });
 }
 
 function hasCoordinates(enterprise: MapEnterpriseResponse): enterprise is MapEnterpriseResponse & { lat: number; lng: number } {

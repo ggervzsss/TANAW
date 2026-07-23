@@ -1,5 +1,7 @@
 # TANAW
 
+See [Realtime architecture](docs/REALTIME_ARCHITECTURE.md) for the authenticated cross-client event pipeline, deployment proxy requirements, recovery behavior, and validation commands.
+
 TANAW is a tourism monitoring, enterprise reporting, and LGU operations platform
 for the City of San Pedro, Laguna. It connects participating enterprises to the
 city through a local desktop application that can count visitors from CCTV/IP

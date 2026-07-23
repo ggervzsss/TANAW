@@ -1,7 +1,7 @@
 import { AlertCircle, Clock3, Eye, ImageIcon, MessageSquare, Paperclip, RefreshCw, Search, Send, ShieldCheck, TicketCheck } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MetricCard } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
@@ -50,7 +50,6 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
   const ticketsQuery = useQuery({
     queryKey: supportTicketsQueryKey,
     queryFn: listSupportTickets,
-    refetchInterval: 30_000,
   });
 
   const tickets = ticketsQuery.data ?? EMPTY_SUPPORT_TICKETS;
@@ -142,14 +141,6 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
           <FilterSelect value={statusFilter} onChange={(value) => setStatusFilter(value as StatusFilter)} options={statuses} />
           <FilterSelect value={priorityFilter} onChange={(value) => setPriorityFilter(value as PriorityFilter)} options={priorities} />
           <FilterSelect value={categoryFilter} onChange={(value) => setCategoryFilter(value as CategoryFilter)} options={categories} />
-          <button
-            type="button"
-            onClick={() => void ticketsQuery.refetch()}
-            className="tanaw-data-refresh inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50"
-          >
-            <RefreshCw size={14} className={ticketsQuery.isFetching ? "animate-spin" : ""} />
-            Refresh
-          </button>
         </div>
 
         <div className="tanaw-data-table overflow-x-auto">
@@ -250,12 +241,37 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<SupportTicketAttachment | null>(null);
+  const [hasNewMessage, setHasNewMessage] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const wasNearBottomRef = useRef(true);
+  const previousMessageIdRef = useRef<string | null>(null);
   const isItResponder = mode === "it";
   const detailQuery = useQuery({
     queryKey: [...supportTicketsQueryKey, ticketId],
     queryFn: () => getSupportTicket(ticketId),
   });
   const ticket = detailQuery.data;
+  const latestMessage = ticket?.messages.at(-1);
+
+  useEffect(() => {
+    const messageId = latestMessage?.id ?? null;
+    if (!ticket || messageId === previousMessageIdRef.current) return;
+    const isInitialLoad = previousMessageIdRef.current === null;
+    previousMessageIdRef.current = messageId;
+    const conversation = conversationRef.current;
+    if (!conversation) return;
+    if (isInitialLoad || wasNearBottomRef.current) {
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      window.requestAnimationFrame(() => conversation.scrollTo({ top: conversation.scrollHeight, behavior }));
+      setHasNewMessage(false);
+    } else {
+      setHasNewMessage(true);
+    }
+    if (!isInitialLoad && latestMessage) {
+      setAnnouncement(`New support ticket reply from ${latestMessage.authorName}`);
+    }
+  }, [latestMessage, ticket]);
   const replyMutation = useMutation({
     mutationFn: (message: string) => replyToSupportTicket(ticketId, message),
     onSuccess: (detail) => {
@@ -386,12 +402,37 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
                   <MessageSquare size={16} className="text-emerald-700" />
                   Conversation
                 </h4>
-                <div className="mt-4 space-y-3">
+                <div
+                  ref={conversationRef}
+                  onScroll={(event) => {
+                    const target = event.currentTarget;
+                    wasNearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 72;
+                    if (wasNearBottomRef.current) setHasNewMessage(false);
+                  }}
+                  className="mt-4 max-h-80 space-y-3 overflow-y-auto overscroll-contain pr-1"
+                >
                   <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                   {ticket.messages.map((message) => (
                     <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
                   ))}
                 </div>
+                <p className="sr-only" aria-live="polite">{announcement}</p>
+                {hasNewMessage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const conversation = conversationRef.current;
+                      if (!conversation) return;
+                      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+                      conversation.scrollTo({ top: conversation.scrollHeight, behavior });
+                      wasNearBottomRef.current = true;
+                      setHasNewMessage(false);
+                    }}
+                    className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-200"
+                  >
+                    New message
+                  </button>
+                )}
 
                 {isItResponder ? (
                   <div className="mt-4 border-t border-slate-100 pt-4">

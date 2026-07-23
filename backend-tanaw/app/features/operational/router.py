@@ -1,22 +1,16 @@
-import asyncio
 import base64
 import binascii
-from contextlib import suppress
 from typing import Annotated
 
-import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.security import decode_access_token
-from app.core.websocket_auth import receive_websocket_bearer_token
-from app.db.session import AsyncSessionLocal, get_db
+from app.db.session import get_db
 from app.features.accounts.dependencies import (
     get_current_operational_account,
-    is_token_invalidated,
     require_roles,
 )
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
@@ -24,7 +18,6 @@ from app.features.accounts.options import format_enterprise_category
 from app.features.accounts.service import get_account_by_id
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.mail.models import EmailTemplateName
 from app.features.mail.service import email_idempotency_key, enqueue_email
 from app.features.operational.models import (
@@ -44,7 +37,6 @@ from app.features.operational.schemas import (
     OperationalAlertStatusUpdate,
     OperationalAlertSummary,
     OperationalSummary,
-    OperationalWebSocketEnvelope,
     ReportStatusUpdate,
     SamplePreparationCounts,
     SamplePreparationSummary,
@@ -105,11 +97,9 @@ from app.features.operational.service import (
 from app.features.operational.service import (
     list_final_reports as list_final_report_records,
 )
-from app.features.operational.websocket import operational_ws_manager
 from app.features.sample_data.dataset import prepared_counts, sample_dataset_marker_email
 
 router = APIRouter(prefix="/operational", tags=["operational"])
-WEBSOCKET_REAUTH_INTERVAL_SECONDS = 30.0
 
 OperationalReadAccount = Annotated[
     Account, Depends(require_roles({"admin", "it", "staff", "enterprise"}))
@@ -135,21 +125,9 @@ async def ingest_desktop_telemetry(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TelemetrySnapshotSummary:
     snapshot = await ingest_telemetry(db, account, payload)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="telemetry.snapshot", data=snapshot.model_dump(mode="json")
-        )
-    )
-    await broadcast_summary(db)
     for event_type, alert_summary in await evaluate_telemetry_alerts(db, account, payload):
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type=event_type,  # type: ignore[arg-type]
-                data=alert_summary.model_dump(mode="json"),
-            )
-        )
         if event_type == "alert.created" and alert_summary.owner == "Admin":
-            notifications = await create_role_notifications(
+            await create_role_notifications(
                 db,
                 recipient_roles=[AccountRole.ADMIN],
                 title=f"{alert_summary.enterprise or alert_summary.requester} needs attention.",
@@ -160,13 +138,6 @@ async def ingest_desktop_telemetry(
                 source_type="operational.alert",
                 source_id=alert_summary.id,
             )
-            for notification in notifications:
-                await operational_ws_manager.broadcast(
-                    OperationalWebSocketEnvelope(
-                        type="notification.created",
-                        data=notification.model_dump(mode="json"),
-                    )
-                )
         if alert_summary.owner == "Admin":
             await record_operational_log(
                 db,
@@ -207,12 +178,6 @@ async def ingest_desktop_telemetry(
             source_id=sync_source_id,
         )
         sync_alert_summary = to_operational_alert_summary(sync_alert)
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="alert.updated" if existing_sync_alert else "alert.created",
-                data=sync_alert_summary.model_dump(mode="json"),
-            )
-        )
         if existing_sync_alert is None:
             await notify_it_technical_issue(db, account, sync_alert_summary)
     elif payload.metrics.unsyncedEvents == 0:
@@ -246,12 +211,6 @@ async def ingest_desktop_telemetry(
             source_id=session_source_id,
         )
         maintenance_alert_summary = to_operational_alert_summary(maintenance_alert)
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="alert.updated" if existing_session_alert else "alert.created",
-                data=maintenance_alert_summary.model_dump(mode="json"),
-            )
-        )
         if existing_session_alert is None:
             await notify_it_technical_issue(db, account, maintenance_alert_summary)
             await record_operational_log(
@@ -285,7 +244,7 @@ async def notify_it_technical_issue(
     db: AsyncSession, actor: Account, alert: OperationalAlertSummary
 ) -> None:
     affected_name = alert.enterprise or alert.requester
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=[AccountRole.IT],
         title=f"{affected_name} has a technical issue.",
@@ -297,13 +256,6 @@ async def notify_it_technical_issue(
         source_id=alert.id,
         replace_existing_for_source=True,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
 
 
 async def resolve_and_publish_it_alert(
@@ -322,19 +274,7 @@ async def resolve_and_publish_it_alert(
     if resolved is None:
         return
     summary = to_operational_alert_summary(resolved)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(type="alert.resolved", data=summary.model_dump(mode="json"))
-    )
-    notifications = await mark_source_notifications_read(
-        db, source_type="operational.alert", source_id=summary.id
-    )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.updated",
-                data=notification.model_dump(mode="json"),
-            )
-        )
+    await mark_source_notifications_read(db, source_type="operational.alert", source_id=summary.id)
     await record_operational_log(
         db,
         category="System",
@@ -363,11 +303,6 @@ async def ingest_desktop_report_submission(
         report = await ingest_report_submission(db, account, payload)
     except DuplicateReportPeriodError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    envelope = OperationalWebSocketEnvelope(
-        type="report.submitted", data=report.model_dump(mode="json")
-    )
-    await operational_ws_manager.broadcast(envelope)
-    await broadcast_summary(db)
     await notify_staff_report_submission(db, account, report)
     await record_operational_log(
         db,
@@ -485,9 +420,6 @@ async def update_intake_report_status(
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
 
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(type="report.updated", data=report.model_dump(mode="json"))
-    )
     await record_operational_log(
         db,
         category="Staff Operation",
@@ -533,12 +465,6 @@ async def generate_final_report(
             detail="No report submissions were found for consolidation.",
         )
 
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="final_report.generated", data=final_report.model_dump(mode="json")
-        )
-    )
-    await broadcast_summary(db)
     await record_operational_log(
         db,
         category="Staff Operation",
@@ -568,12 +494,6 @@ async def return_final_report_revision(
     if final_report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
 
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="final_report.updated", data=final_report.model_dump(mode="json")
-        )
-    )
-    await broadcast_summary(db)
     await record_operational_log(
         db,
         category="Staff Operation",
@@ -607,11 +527,6 @@ async def update_final_report_workflow_status(
     if final_report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Final report not found.")
 
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="final_report.updated", data=final_report.model_dump(mode="json")
-        )
-    )
     await record_operational_log(
         db,
         category="Staff Operation",
@@ -739,7 +654,7 @@ async def create_enterprise_support_ticket(
         if attachment_count
         else ""
     )
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=support_ticket_notification_roles(ticket.priority),
         title=f"{enterprise} submitted support ticket {ticket.code}.",
@@ -751,13 +666,6 @@ async def create_enterprise_support_ticket(
         source_id=ticket.id,
         replace_existing_for_source=True,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
     await record_operational_log(
         db,
         category="Enterprise Activity",
@@ -829,7 +737,7 @@ async def create_ticket_message(
             severity="Info",
         )
     else:
-        notifications = await create_role_notifications(
+        await create_role_notifications(
             db,
             recipient_roles=[AccountRole.IT],
             title=f"{detail.enterpriseName} replied to support ticket {detail.code}.",
@@ -841,13 +749,6 @@ async def create_ticket_message(
             source_id=detail.id,
             replace_existing_for_source=True,
         )
-        for notification in notifications:
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type="notification.created",
-                    data=notification.model_dump(mode="json"),
-                )
-            )
     actor_role = "IT Personnel" if account.role == AccountRole.IT else "Enterprise Account"
     activity_category = "IT Activity" if account.role == AccountRole.IT else "Enterprise Activity"
     await record_operational_log(
@@ -890,19 +791,12 @@ async def update_ticket_status(
             severity="Success" if detail.status == "Resolved" else "Info",
         )
         if detail.status == "Resolved":
-            notifications = await mark_source_notifications_read(
+            await mark_source_notifications_read(
                 db,
                 source_type="support.ticket",
                 source_id=detail.id,
                 recipient_role=AccountRole.IT,
             )
-            for notification in notifications:
-                await operational_ws_manager.broadcast(
-                    OperationalWebSocketEnvelope(
-                        type="notification.updated",
-                        data=notification.model_dump(mode="json"),
-                    )
-                )
         await record_operational_log(
             db,
             category="IT Activity",
@@ -943,12 +837,6 @@ async def update_notification_read_status(
     notification = await set_user_notification_read(db, account, notification_id, read=payload.read)
     if notification is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found.")
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.updated",
-            data=notification.model_dump(mode="json"),
-        )
-    )
     return notification
 
 
@@ -983,13 +871,7 @@ async def create_enterprise_notification(
         source_type=payload.sourceType,
         source_id=payload.sourceId,
     )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.created",
-            data=notification.model_dump(mode="json"),
-        )
-    )
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category="Staff Operation",
@@ -1004,7 +886,6 @@ async def create_enterprise_notification(
             sourceId=notification.id,
         ),
     )
-    await activity_log_manager.broadcast(log)
     return notification
 
 
@@ -1084,23 +965,10 @@ async def update_alert_status(
     await db.commit()
     await db.refresh(alert)
     alert_summary = to_operational_alert_summary(alert)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="alert.resolved" if payload.status == "Resolved" else "alert.updated",
-            data=alert_summary.model_dump(mode="json"),
-        )
-    )
     if payload.status == "Resolved":
-        notifications = await mark_source_notifications_read(
+        await mark_source_notifications_read(
             db, source_type="operational.alert", source_id=alert_summary.id
         )
-        for notification in notifications:
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type="notification.updated",
-                    data=notification.model_dump(mode="json"),
-                )
-            )
     actor_role = "Admin" if actor.role == AccountRole.ADMIN else "IT Personnel"
     activity_category = "Admin Operation" if actor.role == AccountRole.ADMIN else "IT Activity"
     await record_operational_log(
@@ -1146,90 +1014,6 @@ async def list_enterprise_accounts(
     return []
 
 
-@router.websocket("/ws")
-async def operational_websocket(
-    websocket: WebSocket, query_token: Annotated[str | None, Query(alias="token")] = None
-) -> None:
-    token = await receive_websocket_bearer_token(websocket, query_token)
-    if token is None:
-        return
-
-    async with AsyncSessionLocal() as db:
-        account = await authenticate_websocket_account(db, token)
-
-    if account is None:
-        await websocket.close(code=1008)
-        return
-
-    await operational_ws_manager.connect(
-        websocket,
-        account.role.value,
-        account.id,
-        enterprise_identifier(account) if account.role == AccountRole.ENTERPRISE else None,
-    )
-    receive_task: asyncio.Task[str] | None = asyncio.create_task(websocket.receive_text())
-    try:
-        while True:
-            if receive_task is None:
-                raise RuntimeError("WebSocket receive task is unavailable.")
-            active_receive_task = receive_task
-            completed, _ = await asyncio.wait(
-                {active_receive_task},
-                timeout=WEBSOCKET_REAUTH_INTERVAL_SECONDS,
-            )
-            if not completed:
-                message = None
-            else:
-                try:
-                    message = active_receive_task.result()
-                finally:
-                    receive_task = None
-                receive_task = asyncio.create_task(websocket.receive_text())
-            async with AsyncSessionLocal() as db:
-                current_account = await authenticate_websocket_account(db, token)
-            if current_account is None:
-                await websocket.close(code=1008)
-                return
-            if message == "ping":
-                await websocket.send_text("pong")
-    except WebSocketDisconnect:
-        pass
-    finally:
-        if receive_task is not None:
-            receive_task.cancel()
-            with suppress(asyncio.CancelledError, WebSocketDisconnect):
-                await receive_task
-        operational_ws_manager.disconnect(websocket, account.role.value)
-
-
-async def authenticate_websocket_account(db: AsyncSession, token: str) -> Account | None:
-    try:
-        payload = decode_access_token(token)
-    except jwt.PyJWTError:
-        return None
-
-    account_id = payload.get("sub")
-    if not isinstance(account_id, str):
-        return None
-
-    account = await get_account_by_id(db, account_id)
-    if (
-        account is None
-        or account.status != AccountStatus.ACTIVE
-        or account.activated_at is None
-        or is_token_invalidated(payload, account)
-    ):
-        return None
-    return account
-
-
-async def broadcast_summary(db: AsyncSession) -> None:
-    summary = await get_operational_summary(db, None)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(type="summary.updated", data=summary.model_dump(mode="json"))
-    )
-
-
 async def notify_enterprise_ticket_update(
     db: AsyncSession,
     *,
@@ -1247,7 +1031,7 @@ async def notify_enterprise_ticket_update(
         or recipient.activated_at is None
     ):
         return
-    notification = await create_user_notification(
+    await create_user_notification(
         db,
         recipient=recipient,
         title=title,
@@ -1257,12 +1041,6 @@ async def notify_enterprise_ticket_update(
         actor=actor,
         source_type="support.ticket",
         source_id=ticket.id,
-    )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.created",
-            data=notification.model_dump(mode="json"),
-        )
     )
 
 
@@ -1276,7 +1054,7 @@ async def notify_staff_report_submission(
         if is_resubmission
         else STAFF_REPORT_SUBMITTED_NOTIFICATION
     )
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=[AccountRole.STAFF],
         title=notification_type,
@@ -1287,13 +1065,6 @@ async def notify_staff_report_submission(
         source_type="enterprise.report",
         source_id=report.id,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
 
 
 def staff_report_notification_is_resubmission(report: IntakeReportSummary) -> bool:
@@ -1320,7 +1091,7 @@ async def record_operational_log(
     source_id: str,
     metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category=category,  # type: ignore[arg-type]
@@ -1334,7 +1105,6 @@ async def record_operational_log(
             metadata=metadata,
         ),
     )
-    await activity_log_manager.broadcast(log)
 
 
 def enterprise_status_from_telemetry(telemetry: TelemetrySnapshotSummary | None) -> str:

@@ -26,6 +26,12 @@ from app.features.maintenance.runtime import (
     start_retention_cleanup_worker,
     stop_retention_cleanup_worker,
 )
+from app.features.realtime.runtime import (
+    realtime_runtime_health,
+    realtime_runtime_ready,
+    start_realtime_runtime,
+    stop_realtime_runtime,
+)
 
 
 @asynccontextmanager
@@ -39,9 +45,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await initialize_email_runtime(settings)
     await start_email_outbox_worker(settings)
     await start_retention_cleanup_worker(settings)
+    await start_realtime_runtime(settings)
     try:
         yield
     finally:
+        await stop_realtime_runtime()
         await stop_retention_cleanup_worker()
         await stop_email_outbox_worker()
         await close_email_runtime()
@@ -99,4 +107,14 @@ async def maintenance_readiness() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
         content={"status": "ready" if ready else "not_ready"},
+    )
+
+
+@app.get("/ready/realtime")
+@app.head("/ready/realtime")
+async def realtime_readiness() -> JSONResponse:
+    ready = realtime_runtime_ready()
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=realtime_runtime_health(),
     )

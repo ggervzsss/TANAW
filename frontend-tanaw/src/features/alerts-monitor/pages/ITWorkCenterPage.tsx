@@ -29,8 +29,8 @@ export function ITWorkCenterPage() {
   const highlightedAccountId = searchParams.get("account");
   const { alerts } = useAlerts();
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
-  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets, refetchInterval: 30_000 });
-  const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries, refetchInterval: 30_000 });
+  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
+  const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries });
 
   const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ACCOUNTS;
   const supportTickets = supportTicketsQuery.data ?? EMPTY_TICKETS;

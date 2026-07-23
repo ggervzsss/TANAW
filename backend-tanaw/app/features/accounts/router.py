@@ -39,7 +39,6 @@ from app.features.accounts.service import (
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.auth.account_activation import (
     AccountActivationError,
     invalidate_account_activation_tokens,
@@ -58,12 +57,10 @@ from app.features.mail.dev_log import (
 from app.features.mail.dev_log import (
     list_dev_deliveries as list_ephemeral_dev_deliveries,
 )
-from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     create_user_notification,
     mark_source_notifications_read,
 )
-from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 dev_router = APIRouter(prefix="/dev", tags=["dev"])
@@ -772,7 +769,7 @@ async def resolve_verified_email_change_request(
     notification_account_id = account.id
     notification_request_id = request.id
     try:
-        notification = await create_user_notification(
+        await create_user_notification(
             db,
             recipient=account,
             title=f"Email change request {resolution_label}.",
@@ -785,12 +782,6 @@ async def resolve_verified_email_change_request(
             actor=actor,
             source_type="account.profile.email",
             source_id=request.id,
-        )
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
         )
     except Exception:
         await db.rollback()
@@ -809,19 +800,12 @@ async def resolve_verified_email_change_request(
 async def mark_it_account_request_complete(
     db: AsyncSession, *, source_type: str, account_id: str
 ) -> None:
-    notifications = await mark_source_notifications_read(
+    await mark_source_notifications_read(
         db,
         source_type=source_type,
         source_id=account_id,
         recipient_role=AccountRole.IT,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.updated",
-                data=notification.model_dump(mode="json"),
-            )
-        )
 
 
 async def notify_enterprise_profile_change_resolution(
@@ -835,7 +819,7 @@ async def notify_enterprise_profile_change_resolution(
 ) -> None:
     request_label = profile_request_label(request_type)
     resolution_text = "approved" if approved else "declined"
-    notification = await create_user_notification(
+    await create_user_notification(
         db,
         recipient=account,
         title=f"{request_label} change request {resolution_text}.",
@@ -853,11 +837,6 @@ async def notify_enterprise_profile_change_resolution(
         ),
         source_id=account.id,
     )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="notification.created", data=notification.model_dump(mode="json")
-        )
-    )
 
 
 async def record_account_log(
@@ -873,7 +852,7 @@ async def record_account_log(
     source_id: str,
     metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category=category,  # type: ignore[arg-type]
@@ -887,7 +866,6 @@ async def record_account_log(
             metadata=metadata,
         ),
     )
-    await activity_log_manager.broadcast(log)
 
 
 @dev_router.get("/deliveries", response_model=list[DeliverySummary])

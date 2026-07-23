@@ -18,8 +18,8 @@ export function ITDashboardPage() {
   const operationalSummaryQuery = useOperationalSummary();
   const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
-  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets, refetchInterval: 30_000 });
-  const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries, refetchInterval: 30_000 });
+  const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
+  const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries });
 
   const itIssues = alerts.filter((alert) => alert.owner === "IT" && alert.status !== "Resolved");
   const urgentIssues = itIssues.filter((alert) => alert.severity === "Critical");

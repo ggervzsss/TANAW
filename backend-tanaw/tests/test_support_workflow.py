@@ -99,10 +99,8 @@ async def test_login_support_request_exposes_contact_and_notifies_portal(
     )
     create_alert = AsyncMock(return_value=alert)
     create_notifications = AsyncMock(return_value=[])
-    broadcast = AsyncMock()
     monkeypatch.setattr("app.features.auth.router.create_operational_alert", create_alert)
     monkeypatch.setattr("app.features.auth.router.create_role_notifications", create_notifications)
-    monkeypatch.setattr("app.features.auth.router.operational_ws_manager.broadcast", broadcast)
 
     result = await create_support_request(
         SupportRequest(
@@ -122,7 +120,6 @@ async def test_login_support_request_exposes_contact_and_notifies_portal(
     assert alert_kwargs["required_action"].endswith("requester@example.com.")
     assert alert_kwargs["source_id"].startswith("login-support:")
     create_notifications.assert_awaited_once()
-    broadcast.assert_awaited_once()
 
 
 @pytest.mark.asyncio

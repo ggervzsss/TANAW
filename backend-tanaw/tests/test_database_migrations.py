@@ -12,11 +12,14 @@ from app.db.migrations import (
 )
 
 
-def test_migration_history_has_one_canonical_baseline() -> None:
+def test_migration_history_has_canonical_baseline_and_realtime_outbox() -> None:
     versions_directory = Path(__file__).resolve().parents[1] / "alembic" / "versions"
     migration_names = sorted(path.name for path in versions_directory.glob("*.py"))
 
-    assert migration_names == ["20260720_0001_initial_tanaw_schema.py"]
+    assert migration_names == [
+        "20260720_0001_initial_tanaw_schema.py",
+        "20260723_0002_realtime_outbox.py",
+    ]
 
 
 def test_canonical_schema_enforces_owned_record_relationships() -> None:

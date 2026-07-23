@@ -32,7 +32,6 @@ export function ITEmailDeliveriesPage({ embedded = false, problemsOnly = false }
   const deliveriesQuery = useQuery({
     queryKey: ["email-deliveries"],
     queryFn: listEmailDeliveries,
-    refetchInterval: 5_000,
   });
   const retryMutation = useMutation({
     mutationFn: retryEmailDelivery,

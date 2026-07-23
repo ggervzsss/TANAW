@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -7,13 +7,11 @@ import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import {
-  createWebSocketAuthMessage,
-  getOperationalWebSocketUrl,
   listNotifications,
   updateNotificationRead,
   type BackendNotification,
-  type OperationalNotificationEnvelope,
 } from "../../features/notifications/services/notifications";
+import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
@@ -21,7 +19,6 @@ import { useSystemDisplayPreferences } from "../../features/preferences/system-d
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
-import { createReconnectingWebSocket } from "../../utils/reconnecting-websocket";
 import { routePaths } from "../router/routePaths";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 
@@ -155,58 +152,24 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     setBackendNotifications([]);
   }, [enterpriseCameraStorageKey]);
 
-  useEffect(() => {
-    if (!token) return undefined;
-
-    let disposed = false;
-    let heartbeatTimer: number | undefined;
-
-    const clearHeartbeat = () => {
-      if (heartbeatTimer !== undefined) {
-        window.clearInterval(heartbeatTimer);
-        heartbeatTimer = undefined;
-      }
-    };
-
-    const refreshNotifications = async () => {
-      try {
-        const nextNotifications = await listNotifications();
-        if (!disposed) setBackendNotifications(nextNotifications);
-      } catch {
-        if (!disposed) setBackendNotifications([]);
-      }
-    };
-
-    const connection = createReconnectingWebSocket({
-      url: getOperationalWebSocketUrl(),
-      onOpen: (socket) => {
-        const authMessage = createWebSocketAuthMessage();
-        if (authMessage) socket.send(authMessage);
-        heartbeatTimer = window.setInterval(() => {
-          if (socket.readyState === WebSocket.OPEN) socket.send("ping");
-        }, 25000);
-      },
-      onMessage: (event) => {
-        if (event.data === "pong") return;
-        const envelope = parseNotificationEnvelope(event.data);
-        if (!envelope) return;
-        setBackendNotifications((current) => upsertBackendNotification(current, envelope.data));
-      },
-      onClose: () => {
-        clearHeartbeat();
-      },
-    });
-
-    void refreshNotifications();
-    const refreshIntervalId = window.setInterval(() => void refreshNotifications(), 30000);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(refreshIntervalId);
-      clearHeartbeat();
-      connection.dispose();
-    };
+  const refreshBackendNotifications = useCallback(async () => {
+    if (!token) return;
+    try {
+      setBackendNotifications(await listNotifications());
+    } catch {
+      // Preserve the last successful snapshot while the connection recovers.
+    }
   }, [token]);
+
+  useEffect(() => {
+    void refreshBackendNotifications();
+  }, [refreshBackendNotifications]);
+
+  useRealtimeEvent((event) => {
+    if (event.event_type.startsWith("notification.")) {
+      void refreshBackendNotifications();
+    }
+  });
 
   useEffect(() => {
     const enterpriseId = user?.enterpriseId || user?.id;
@@ -526,18 +489,6 @@ function stableNotificationId(value: string) {
     hash |= 0;
   }
   return Math.abs(hash);
-}
-
-function parseNotificationEnvelope(value: string): OperationalNotificationEnvelope | null {
-  try {
-    const parsed = JSON.parse(value) as OperationalNotificationEnvelope;
-    if (parsed.type === "notification.created" || parsed.type === "notification.updated") {
-      return parsed;
-    }
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 function upsertBackendNotification(notifications: BackendNotification[], nextNotification: BackendNotification) {

@@ -9,7 +9,6 @@ from app.features.accounts.dependencies import require_roles
 from app.features.accounts.models import Account
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus
 from app.features.mail.schemas import EmailDeliverySummary
 from app.features.mail.service import (
@@ -62,7 +61,7 @@ async def retry_email_delivery(
     except EmailOutboxRetryError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category="IT Activity",
@@ -76,7 +75,6 @@ async def retry_email_delivery(
             metadata={"purpose": record.purpose, "manualRetryCount": record.manual_retry_count},
         ),
     )
-    await activity_log_manager.broadcast(log)
     return to_email_delivery_summary(record)
 
 

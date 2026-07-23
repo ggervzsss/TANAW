@@ -50,7 +50,6 @@ from app.features.accounts.service import (
 )
 from app.features.activity_logs.schemas import ActivityLogCreate
 from app.features.activity_logs.service import create_activity_log, get_actor_role_label
-from app.features.activity_logs.websocket import activity_log_manager
 from app.features.auth.account_activation import (
     AccountActivationError,
     complete_account_activation,
@@ -99,7 +98,6 @@ from app.features.auth.service import (
     register_failed_login,
     resolve_login_lockout_policy,
 )
-from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     NOTIFY_FAILED_LOGIN_LOCKOUT_KEY,
     create_operational_alert,
@@ -108,7 +106,6 @@ from app.features.operational.service import (
     system_setting_enabled,
     to_operational_alert_summary,
 )
-from app.features.operational.websocket import operational_ws_manager
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -158,13 +155,7 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         source_id=f"failed-login-threshold:{account.id}",
     )
     alert_summary = to_operational_alert_summary(alert)
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="alert.created",
-            data=alert_summary.model_dump(mode="json"),
-        )
-    )
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=[AccountRole.IT],
         title=f"{account.display_name}'s account is temporarily locked.",
@@ -176,13 +167,6 @@ async def notify_failed_login_threshold(db: AsyncSession, account: Account) -> N
         source_id=alert_summary.id,
         replace_existing_for_source=True,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
 
 
 async def notify_enterprise_account_change(
@@ -197,7 +181,7 @@ async def notify_enterprise_account_change(
     if account.role != AccountRole.ENTERPRISE:
         return
 
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=ENTERPRISE_CHANGE_NOTIFICATION_ROLES,
         title=title,
@@ -209,13 +193,6 @@ async def notify_enterprise_account_change(
         source_id=account.id,
         replace_existing_for_source=True,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
 
 
 async def get_login_lockout_policy(db: AsyncSession) -> LoginLockoutPolicy:
@@ -668,13 +645,7 @@ async def create_support_request(
         enterprise=None,
         source_id=f"login-support:{hashlib.sha256(requester_email.encode()).hexdigest()}",
     )
-    await operational_ws_manager.broadcast(
-        OperationalWebSocketEnvelope(
-            type="alert.created",
-            data=to_operational_alert_summary(alert).model_dump(mode="json"),
-        )
-    )
-    notifications = await create_role_notifications(
+    await create_role_notifications(
         db,
         recipient_roles=[AccountRole.IT],
         title=f"Login support requested by {requester_name}.",
@@ -686,13 +657,6 @@ async def create_support_request(
         source_id=alert.id,
         replace_existing_for_source=True,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.created",
-                data=notification.model_dump(mode="json"),
-            )
-        )
     return StatusResponse(status="ok")
 
 
@@ -951,19 +915,12 @@ async def cancel_business_email_change(
         source_id=account.id,
         metadata={"requestId": request.id, "requestedEmail": request.requested_email},
     )
-    notifications = await mark_source_notifications_read(
+    await mark_source_notifications_read(
         db,
         source_type="enterprise.profile.email",
         source_id=account.id,
         recipient_role=AccountRole.IT,
     )
-    for notification in notifications:
-        await operational_ws_manager.broadcast(
-            OperationalWebSocketEnvelope(
-                type="notification.updated",
-                data=notification.model_dump(mode="json"),
-            )
-        )
     return AccountChangeRequestResponse(
         status="cancelled",
         message="The pending email change request was cancelled.",
@@ -1103,7 +1060,7 @@ async def record_auth_log(
     source_id: str,
     metadata: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
-    log = await create_activity_log(
+    await create_activity_log(
         db,
         ActivityLogCreate(
             category=category,  # type: ignore[arg-type]
@@ -1117,4 +1074,3 @@ async def record_auth_log(
             metadata=metadata,
         ),
     )
-    await activity_log_manager.broadcast(log)

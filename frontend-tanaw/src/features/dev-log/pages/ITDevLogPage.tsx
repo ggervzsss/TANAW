@@ -56,7 +56,6 @@ export function ITDevLogPage() {
   const deliveriesQuery = useQuery({
     queryKey: ["dev-deliveries"],
     queryFn: listDevDeliveries,
-    refetchInterval: 10_000,
   });
 
   const deliveries = deliveriesQuery.data ?? EMPTY_DELIVERIES;

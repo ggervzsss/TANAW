@@ -24,12 +24,10 @@ from app.features.mail.service import (
     RESEND_IDEMPOTENCY_WINDOW,
 )
 from app.features.mail.templates import EmailContent
-from app.features.operational.schemas import OperationalWebSocketEnvelope
 from app.features.operational.service import (
     create_role_notifications,
     mark_source_notifications_read,
 )
-from app.features.operational.websocket import operational_ws_manager
 
 logger = logging.getLogger("uvicorn.error")
 _worker_task: asyncio.Task[None] | None = None
@@ -423,7 +421,7 @@ async def _record_failure(
 async def _notify_it_email_problem(db: AsyncSession, outbox: EmailOutbox) -> None:
     try:
         purpose = outbox.purpose.replace("_", " ")
-        notifications = await create_role_notifications(
+        await create_role_notifications(
             db,
             recipient_roles=[AccountRole.IT],
             title=f"Email to {outbox.recipient} needs attention.",
@@ -441,13 +439,6 @@ async def _notify_it_email_problem(db: AsyncSession, outbox: EmailOutbox) -> Non
             source_id=outbox.id,
             replace_existing_for_source=True,
         )
-        for notification in notifications:
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type="notification.created",
-                    data=notification.model_dump(mode="json"),
-                )
-            )
     except Exception:
         await db.rollback()
         logger.exception("Failed to notify IT about email delivery outbox_id=%s", outbox.id)
@@ -455,16 +446,7 @@ async def _notify_it_email_problem(db: AsyncSession, outbox: EmailOutbox) -> Non
 
 async def _mark_email_problem_resolved(db: AsyncSession, outbox_id: str) -> None:
     try:
-        notifications = await mark_source_notifications_read(
-            db, source_type="email.delivery", source_id=outbox_id
-        )
-        for notification in notifications:
-            await operational_ws_manager.broadcast(
-                OperationalWebSocketEnvelope(
-                    type="notification.updated",
-                    data=notification.model_dump(mode="json"),
-                )
-            )
+        await mark_source_notifications_read(db, source_type="email.delivery", source_id=outbox_id)
     except Exception:
         await db.rollback()
         logger.exception("Failed to close IT email notification outbox_id=%s", outbox_id)

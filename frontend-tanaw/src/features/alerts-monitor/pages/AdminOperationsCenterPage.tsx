@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, Building2, CheckCircle2, Clock3, MapPinned, RefreshCw, Search, TicketCheck, UserRoundCog } from "lucide-react";
+import { AlertTriangle, Bell, Building2, CheckCircle2, Clock3, MapPinned, Search, TicketCheck, UserRoundCog } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
@@ -33,7 +33,6 @@ const operationsViews: { id: OperationsView; label: string }[] = [
 export function AdminOperationsCenterPage() {
   const { alerts, isLoading: alertsLoading } = useAlerts();
   const { timeFormat } = useSystemDisplayPreferences();
-  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
@@ -48,7 +47,6 @@ export function AdminOperationsCenterPage() {
   const supportTicketsQuery = useQuery({
     queryKey: supportTicketsQueryKey,
     queryFn: listSupportTickets,
-    refetchInterval: 30_000,
   });
 
   const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ENTERPRISE_ACCOUNTS;
@@ -155,14 +153,6 @@ export function AdminOperationsCenterPage() {
                 className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
               />
             </div>
-            <button
-              type="button"
-              onClick={() => void (view === "situations" ? queryClient.invalidateQueries({ queryKey: alertsQueryKey }) : supportTicketsQuery.refetch())}
-              className="tanaw-data-refresh inline-flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-xs font-black tracking-wide text-emerald-700 uppercase shadow-sm transition hover:bg-emerald-50"
-            >
-              <RefreshCw size={14} className={alertsLoading || supportTicketsQuery.isFetching ? "animate-spin" : ""} />
-              Refresh
-            </button>
           </div>
         )}
 
