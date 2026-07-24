@@ -140,21 +140,47 @@ def test_enterprise_insight_marks_unusual_activity() -> None:
 
 
 def test_enterprise_map_uses_neutral_status_when_device_is_offline_or_inactive() -> None:
-    assert enterprise_status_from_telemetry(None) == "Inactive"
+    assert enterprise_status_from_telemetry(None, building_capacity=100) == "Inactive"
 
     telemetry = _telemetry_summary(gateway_status="Offline")
 
-    assert enterprise_status_from_telemetry(telemetry) == "Offline"
+    assert enterprise_status_from_telemetry(telemetry, building_capacity=100) == "Offline"
 
 
-def test_enterprise_map_reserves_critical_status_for_device_errors() -> None:
+@pytest.mark.parametrize(
+    (
+        "gateway_status",
+        "telemetry_status",
+        "error",
+        "current_occupancy",
+        "unsynced_events",
+        "expected_status",
+    ),
+    [
+        ("Offline", "error", "Counting service unavailable", 0, 0, "Issue"),
+        ("Sync Delayed", "stopped", None, 0, 3, "Issue"),
+        ("Connected", "running", None, 100, 0, "High Occupancy"),
+        ("Connected", "running", None, 80, 0, "Warning"),
+        ("Connected", "running", None, 79, 0, "Normal"),
+    ],
+)
+def test_enterprise_map_status_uses_health_and_capacity(
+    gateway_status: str,
+    telemetry_status: str,
+    error: str | None,
+    current_occupancy: int,
+    unsynced_events: int,
+    expected_status: str,
+) -> None:
     telemetry = _telemetry_summary(
-        gateway_status="Offline",
-        status="error",
-        error="Counting service unavailable",
+        gateway_status=gateway_status,
+        status=telemetry_status,
+        error=error,
+        current_occupancy=current_occupancy,
+        unsynced_events=unsynced_events,
     )
 
-    assert enterprise_status_from_telemetry(telemetry) == "Critical"
+    assert enterprise_status_from_telemetry(telemetry, building_capacity=100) == expected_status
 
 
 def _hourly_observation(
@@ -176,6 +202,8 @@ def _telemetry_summary(
     gateway_status: str,
     status: str = "stopped",
     error: str | None = None,
+    current_occupancy: int = 0,
+    unsynced_events: int = 0,
 ) -> TelemetrySnapshotSummary:
     now = datetime.now(UTC)
     return TelemetrySnapshotSummary(
@@ -186,14 +214,14 @@ def _telemetry_summary(
         receivedAt=now,
         entries=0,
         exits=0,
-        currentOccupancy=0,
+        currentOccupancy=current_occupancy,
         peakOccupancy=0,
         uniqueCount=0,
         confirmedUniqueCount=0,
         degradedUniqueCount=0,
         totalEvents=0,
         unsubmittedEvents=0,
-        unsyncedEvents=0,
+        unsyncedEvents=unsynced_events,
         running=False,
         status=status,
         error=error,

@@ -1,4 +1,4 @@
-export type EnterpriseStatus = "Normal" | "Warning" | "Critical" | "Offline" | "Inactive";
+export type EnterpriseStatus = "Normal" | "Warning" | "High Occupancy" | "Issue" | "Offline" | "Inactive";
 export type CameraStatus = "Online" | "Offline" | "Unstable";
 export type GatewayStatus = "Connected" | "Sync Delayed" | "Offline" | "Not Linked" | "Closed";
 export type AlertSeverity = "Info" | "Warning" | "Critical";

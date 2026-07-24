@@ -383,7 +383,7 @@ export function AdminEnterpriseMap() {
       const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
       const marker = L.marker([enterprise.lat, enterprise.lng], {
         icon: L.divIcon({
-          className: enterprise.status === "Critical" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
+          className: enterprise.status === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
           iconAnchor: [8, 8],
           popupAnchor: [0, -10],
           html: `<span style="background-color:${color};width:18px;height:18px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:${markerShadow};"></span>`,

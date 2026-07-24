@@ -935,7 +935,7 @@ async def list_map_enterprises(
                 "lng": profile.longitude,
                 "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
                 "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
-                "status": enterprise_status_from_telemetry(telemetry),
+                "status": enterprise_status_from_telemetry(telemetry, profile.building_capacity),
                 "contact": enterprise.phone or enterprise.email,
                 "lastSync": telemetry.receivedAt.isoformat() if telemetry else None,
                 "gatewayStatus": telemetry.gatewayStatus
@@ -1118,13 +1118,19 @@ async def record_operational_log(
     )
 
 
-def enterprise_status_from_telemetry(telemetry: TelemetrySnapshotSummary | None) -> str:
+def enterprise_status_from_telemetry(
+    telemetry: TelemetrySnapshotSummary | None, building_capacity: int
+) -> str:
     if telemetry is None:
         return "Inactive"
     if telemetry.error or telemetry.status == "error":
-        return "Critical"
+        return "Issue"
     if telemetry.gatewayStatus == "Offline":
         return "Offline"
     if telemetry.gatewayStatus == "Sync Delayed" or telemetry.unsyncedEvents > 0:
+        return "Issue"
+    if telemetry.currentOccupancy >= building_capacity:
+        return "High Occupancy"
+    if telemetry.currentOccupancy * 100 >= building_capacity * 80:
         return "Warning"
     return "Normal"
