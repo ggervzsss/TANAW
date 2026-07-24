@@ -385,7 +385,7 @@ export function toMapEnterprise(account: AccountSummary): MapEnterprise | null {
 }
 
 function getEnterpriseMapStatus(account: AccountSummary): EnterpriseStatus {
-  if (account.status === "inactive") return "Warning";
+  if (account.status === "inactive") return "Inactive";
   return "Normal";
 }
 
@@ -410,13 +410,6 @@ export function fitMapToSanPedroBounds(map: L.Map, layer: L.GeoJSON | null) {
     maxZoom: 13.45,
     padding: [48, 48],
   });
-}
-
-export function getEnterpriseStatusColor(status: EnterpriseStatus | "No Data") {
-  if (status === "Critical") return "#a40e0e";
-  if (status === "Warning") return "#ff6204";
-  if (status === "Normal") return "#055b25";
-  return "#64748b";
 }
 
 function escapeHtml(value: string) {

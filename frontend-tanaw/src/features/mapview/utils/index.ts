@@ -10,7 +10,6 @@ export {
   getBarangayLabel,
   getBaseBoundaryStyle,
   getDimmedBoundaryStyle,
-  getEnterpriseStatusColor,
   getEnterprisesByBarangay,
   getFeatureValue,
   getGeoJsonColor,
@@ -30,6 +29,6 @@ export {
   toMapEnterprise,
 } from "./enterpriseMapUtils";
 export { getCurrentLeafletMapTheme, mountLeafletThemeLayer } from "./leafletTheme";
-export { getDarkStatusBadgeClass } from "./mapStatusStyles";
+export { getDarkStatusBadgeClass, getEnterpriseStatusColor } from "./mapStatusStyles";
 export type { BarangayPointResolution, GeoJsonFeatureCollection } from "./enterpriseMapUtils";
 export type { LeafletMapTheme } from "./leafletTheme";
