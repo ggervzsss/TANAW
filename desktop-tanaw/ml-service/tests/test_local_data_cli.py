@@ -84,13 +84,28 @@ class LocalDataCliTest(unittest.TestCase):
             app_data_dir = Path(parent) / "desktop-tanaw"
             store = LocalDataStore(str(app_data_dir), "enterprise@example.test")
             store.append_count_event(_event())
-            browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
-            browser_file.parent.mkdir(parents=True)
-            browser_file.write_text("camera settings", encoding="utf-8")
+            persistent_files = (
+                app_data_dir / "Local Storage" / "leveldb" / "000001.log",
+                app_data_dir / "IndexedDB" / "app.indexeddb.leveldb" / "000001.log",
+                app_data_dir / "Session Storage" / "000001.log",
+                app_data_dir / "Network" / "Cookies",
+                app_data_dir / "Cache" / "cache.data",
+                app_data_dir / "camera-credentials.json",
+                app_data_dir / "auth-session.json",
+                app_data_dir / ".hidden-state",
+            )
+            for persistent_file in persistent_files:
+                persistent_file.parent.mkdir(parents=True, exist_ok=True)
+                persistent_file.write_text("persisted desktop data", encoding="utf-8")
 
             result = clear_local_data(app_data_dir, full_device=True)
 
             self.assertEqual(result["scope"], "full-device")
+            self.assertTrue(result["existed"])
+            self.assertFalse(app_data_dir.exists())
+
+            repeated_result = clear_local_data(app_data_dir, full_device=True)
+            self.assertFalse(repeated_result["existed"])
             self.assertFalse(app_data_dir.exists())
 
 
@@ -116,7 +131,6 @@ def _camera_profile() -> dict:
         "rtsp": "rtsp://192.168.1.20/stream1",
         "cameraHost": "192.168.1.20",
         "rtspStream": "stream1",
-        "cameraType": "RTSP_CCTV",
         "processingProfile": "auto",
         "confidence": 0.35,
         "trackingConfidence": 0.15,

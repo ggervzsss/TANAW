@@ -22,6 +22,10 @@ class ApiContractTest(unittest.TestCase):
         self.assertIn(("POST", "/camera/start"), http_routes)
         self.assertIn(("GET", "/camera/{camera_id}/stream"), http_routes)
         self.assertIn("/camera/ws", websocket_routes)
+        start_route = next(
+            route for route in app.routes if getattr(route, "path", None) == "/camera/start"
+        )
+        self.assertEqual(getattr(start_route, "status_code", None), 202)
 
     def test_health_identifies_the_runtime_contract(self) -> None:
         health = build_health_payload()

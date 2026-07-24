@@ -30,7 +30,6 @@ function camera(id: number): Camera {
     rtsp: `rtsp://192.168.1.${id}/stream2`,
     cameraHost: `192.168.1.${id}`,
     rtspStream: "stream2",
-    cameraType: "RTSP_CCTV",
     processingProfile: "auto",
     confidence: 0.35,
     config: {

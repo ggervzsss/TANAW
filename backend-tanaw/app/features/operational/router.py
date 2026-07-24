@@ -1120,9 +1120,11 @@ async def record_operational_log(
 
 def enterprise_status_from_telemetry(telemetry: TelemetrySnapshotSummary | None) -> str:
     if telemetry is None:
-        return "Warning"
-    if telemetry.gatewayStatus == "Offline" or telemetry.error:
+        return "Inactive"
+    if telemetry.error or telemetry.status == "error":
         return "Critical"
+    if telemetry.gatewayStatus == "Offline":
+        return "Offline"
     if telemetry.gatewayStatus == "Sync Delayed" or telemetry.unsyncedEvents > 0:
         return "Warning"
     return "Normal"

@@ -18,7 +18,6 @@ describe("camera form credential validation", () => {
 function values(overrides: Partial<CameraFormValues> = {}): CameraFormValues {
   return {
     cameraHost: "192.168.1.9",
-    cameraType: "RTSP_CCTV",
     name: "Lobby Camera",
     password: "device pass",
     rtsp: "rtsp://192.168.1.9/stream2",

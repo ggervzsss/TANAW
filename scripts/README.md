@@ -39,8 +39,8 @@ $env:TANAW_MOCK_SCENARIO = "peak-traffic"
 .\scripts\mockdata-on.ps1
 ```
 
-`local-mockdata-off` removes operational rows from every desktop database, including rows created
-from real CCTV detections, prepared sample counts, reports, snapshots, and
-occupancy corrections. It preserves SQLite camera profiles, Electron preferences,
-auth storage, and other desktop device state. It also deletes retired
-`tanaw_metrics.sqlite3` and `active_session.json` files.
+`local-mockdata-off` permanently deletes the complete TANAW Electron user-data
+directory: every desktop database, saved RTSP camera and encrypted credential
+file, authentication state, Chromium storage, preferences, and caches. It is
+idempotent and can be run before or after `mockdata-off`, which independently
+clears the backend sample dataset.

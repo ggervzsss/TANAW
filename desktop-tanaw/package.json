@@ -19,6 +19,8 @@
     "local-data": "uv run --directory ml-service python -m app.tools.local_data_cli",
     "models:setup": "uv --cache-dir .uv-cache run --directory ml-service python scripts/setup_detector_models.py",
     "models:setup:openvino": "uv --cache-dir .uv-cache run --directory ml-service python scripts/setup_detector_models.py --export-openvino",
+    "models:setup:reid": "uv --cache-dir .uv-cache run --directory ml-service --group export python scripts/export_person_reid_onnx.py --profile all",
+    "models:verify": "uv --cache-dir .uv-cache run --directory ml-service python -m scripts.verify_model_assets",
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",
     "prettier": "prettier --write .",

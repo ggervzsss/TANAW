@@ -14,22 +14,19 @@ import cv2
 import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
-from app.camera.stream_reader import (
-    build_ip_webcam_snapshot_url,
-    is_mjpeg_http_stream,
-    iter_mjpeg_frames,
-    open_capture,
-    read_http_jpeg_frame,
-    validate_http_jpeg_snapshot,
-    validate_stream,
-)
-from app.config.camera_config import CameraStartRequest, CameraType, RegionOfInterest, TripwireLine
+from app.camera.stream_reader import open_capture, validate_stream
+from app.config.camera_config import CameraStartRequest, RegionOfInterest, TripwireLine
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import YoloPersonTracker
 from app.identity import UniqueVisitorRegistry, VisitorDecision
-from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
-from app.reid.person_reid import get_reid_model_availability
+from app.reid import (
+    AsyncReIdWorker,
+    PersonReIdentifier,
+    TrackAppearanceBuffer,
+    get_reid_model_availability,
+    get_reid_model_profile,
+)
 from app.runtime.hardware import get_runtime_capabilities
 from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack, TrackIdentityResolver
@@ -122,16 +119,17 @@ class CameraProcessingManager:
         self._latest_jpeg: bytes | None = None
         self._latest_stream_jpeg: bytes | None = None
         self._latest_stream_frame_id = 0
+        self._latest_processed_frame: np.ndarray | None = None
+        self._latest_processed_frame_id = 0
         self._latest_tracks: list[DisplayTrack] = []
         self._state = RuntimeState()
         self._config: CameraStartRequest | None = None
         self._counter = TripwireCounter()
         self._tracker = YoloPersonTracker()
-        self._reidentifier = PersonReIdentifier()
+        self._reidentifier = PersonReIdentifier.from_profile(get_reid_model_profile("fast"))
         self._reid_worker = AsyncReIdWorker(self._reidentifier)
-        self._quality_reidentifier = PersonReIdentifier(
-            model_path="person_reid.onnx",
-            model_name="torchreid_osnet_ain_x1_0_msmt17_onnx",
+        self._quality_reidentifier = PersonReIdentifier.from_profile(
+            get_reid_model_profile("quality")
         )
         self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
         self._appearance_buffer = TrackAppearanceBuffer()
@@ -167,14 +165,12 @@ class CameraProcessingManager:
     def test_connection(
         self,
         stream_url: str,
-        camera_type: CameraType = "IP_WEBCAM",
         username: str | None = None,
         password: str | None = None,
     ) -> tuple[bool, str]:
         try:
             config = CameraStartRequest(
                 stream_url=stream_url,
-                camera_type=camera_type,
                 username=username,
                 password=password,
             )
@@ -359,6 +355,8 @@ class CameraProcessingManager:
             self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
             self._latest_raw_frame_captured_at = None
+            self._latest_processed_frame = None
+            self._latest_processed_frame_id = 0
             self._latest_tracks = []
             self._reader_thread = threading.Thread(
                 target=self._capture_loop,
@@ -418,6 +416,8 @@ class CameraProcessingManager:
             self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
             self._latest_raw_frame_captured_at = None
+            self._latest_processed_frame = None
+            self._latest_processed_frame_id = 0
             self._latest_tracks = []
             self._pending_entry_events.clear()
             self._latest_jpeg = self._build_status_frame("Camera processing stopped.")
@@ -800,115 +800,15 @@ class CameraProcessingManager:
         if not self._is_current_session(session):
             return
 
-        runtime_stream_url = self._runtime_stream_url(config)
-        snapshot_url = (
-            build_ip_webcam_snapshot_url(runtime_stream_url)
-            if config.camera_type == "IP_WEBCAM"
-            else None
-        )
-        if snapshot_url is not None:
-            self._ip_webcam_snapshot_capture_loop(session, snapshot_url)
-            return
-
-        if is_mjpeg_http_stream(runtime_stream_url):
-            self._mjpeg_capture_loop(session, runtime_stream_url)
-        else:
-            self._opencv_capture_loop(session, runtime_stream_url)
+        self._opencv_capture_loop(session, self._runtime_stream_url(config))
 
     def _validate_config_stream(self, config: CameraStartRequest) -> tuple[bool, str]:
         runtime_stream_url = self._runtime_stream_url(config)
-        snapshot_url = (
-            build_ip_webcam_snapshot_url(runtime_stream_url)
-            if config.camera_type == "IP_WEBCAM"
-            else None
-        )
-        if snapshot_url is not None:
-            ok, message = validate_http_jpeg_snapshot(snapshot_url)
-            return ok, redact_stream_credentials(message)
-
         ok, message = validate_stream(runtime_stream_url)
         return ok, redact_stream_credentials(message)
 
     def _runtime_stream_url(self, config: CameraStartRequest) -> str:
         return build_authenticated_stream_url(config.stream_url, config.username, config.password)
-
-    def _ip_webcam_snapshot_capture_loop(
-        self, session: ProcessingSession, snapshot_url: str
-    ) -> None:
-        config = session.config
-        failed_reads = 0
-        reconnect_attempt = 0
-        last_error = "Camera snapshot endpoint stopped returning frames."
-        frame_interval = 1.0 / self._processing_fps(config)
-
-        try:
-            while not session.stop_event.is_set() and self._is_current_session(session):
-                started_at = time.monotonic()
-
-                try:
-                    frame = read_http_jpeg_frame(snapshot_url)
-                except Exception as exc:
-                    frame = None
-                    last_error = str(exc)
-
-                if frame is None:
-                    failed_reads += 1
-                    if failed_reads >= 30:
-                        reconnect_attempt += 1
-                        self._mark_reconnecting(
-                            session,
-                            redact_stream_credentials(
-                                f"Camera snapshot endpoint stopped returning frames: {last_error}"
-                            ),
-                        )
-                        failed_reads = 0
-                        if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
-                            return
-                else:
-                    failed_reads = 0
-                    reconnect_attempt = 0
-                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                    self._publish_raw_frame(session, frame)
-
-                elapsed = time.monotonic() - started_at
-                remaining = frame_interval - elapsed
-                if remaining > 0:
-                    session.stop_event.wait(remaining)
-        except Exception as exc:
-            self._set_session_error(session, redact_stream_credentials(str(exc)))
-        finally:
-            with self._lock:
-                if (
-                    self._is_current_session_locked(session)
-                    and not session.stop_event.is_set()
-                    and self._state.status not in {"error", "failed"}
-                ):
-                    self._state.status = "stopped"
-
-    def _mjpeg_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
-        config = session.config
-        reconnect_attempt = 0
-        while not session.stop_event.is_set() and self._is_current_session(session):
-            received_frame = False
-            try:
-                for frame in iter_mjpeg_frames(stream_url, session.stop_event):
-                    if session.stop_event.is_set() or not self._is_current_session(session):
-                        return
-                    received_frame = True
-                    reconnect_attempt = 0
-                    frame = self._resize_for_processing(frame, self._max_frame_width(config))
-                    self._publish_raw_frame(session, frame)
-            except Exception as exc:
-                message = redact_stream_credentials(str(exc))
-            else:
-                message = "Camera stream stopped returning MJPEG frames."
-
-            if session.stop_event.is_set() or not self._is_current_session(session):
-                return
-            reconnect_attempt = 1 if received_frame else reconnect_attempt + 1
-            self._mark_reconnecting(session, message)
-            if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
-                return
 
     def _opencv_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
         config = session.config
@@ -1019,6 +919,8 @@ class CameraProcessingManager:
                 with self._lock:
                     if not self._is_current_session_locked(session):
                         return
+                    self._latest_processed_frame = frame
+                    self._latest_processed_frame_id = frame_id
                     self._latest_tracks = tracks
                     self._state.status = "running"
                     self._state.error = None
@@ -1027,6 +929,7 @@ class CameraProcessingManager:
                         self._processing_frame_age_ms = max(
                             0.0, (started_at - captured_at) * 1000.0
                         )
+                    self._raw_frame_condition.notify_all()
 
                 elapsed = time.monotonic() - started_at
                 # If capture advanced while inference was running, prioritize the freshest
@@ -1051,20 +954,20 @@ class CameraProcessingManager:
         if not self._is_current_session(session):
             return
 
-        last_encoded_raw_frame_id = 0
+        last_encoded_processed_frame_id = 0
         frame_interval = 1.0 / max(config.stream_fps, 1.0)
 
         try:
             while not session.stop_event.is_set() and self._is_current_session(session):
                 frame_snapshot = self._next_display_frame_snapshot(
-                    session, last_encoded_raw_frame_id, timeout=1.0
+                    session, last_encoded_processed_frame_id, timeout=1.0
                 )
                 if frame_snapshot is None:
                     continue
 
                 (
                     frame,
-                    raw_frame_id,
+                    processed_frame_id,
                     tracks,
                     tripwire_position,
                     entry_line,
@@ -1087,7 +990,7 @@ class CameraProcessingManager:
                         return
                     self._latest_stream_jpeg = encoded
                     self._latest_stream_frame_id += 1
-                    last_encoded_raw_frame_id = raw_frame_id
+                    last_encoded_processed_frame_id = processed_frame_id
                     self._raw_frame_condition.notify_all()
 
                 elapsed = time.monotonic() - started_at
@@ -1098,14 +1001,14 @@ class CameraProcessingManager:
             self._set_session_error(session, str(exc))
 
     def _next_display_frame_snapshot(
-        self, session: ProcessingSession, last_encoded_raw_frame_id: int, timeout: float
+        self, session: ProcessingSession, last_encoded_processed_frame_id: int, timeout: float
     ) -> DisplayFrameSnapshot | None:
         with self._raw_frame_condition:
             self._raw_frame_condition.wait_for(
                 lambda: (
                     session.stop_event.is_set()
                     or not self._is_current_session_locked(session)
-                    or self._latest_raw_frame_id > last_encoded_raw_frame_id
+                    or self._latest_processed_frame_id > last_encoded_processed_frame_id
                 ),
                 timeout=timeout,
             )
@@ -1113,15 +1016,15 @@ class CameraProcessingManager:
             if (
                 session.stop_event.is_set()
                 or not self._is_current_session_locked(session)
-                or self._latest_raw_frame is None
-                or self._latest_raw_frame_id <= last_encoded_raw_frame_id
+                or self._latest_processed_frame is None
+                or self._latest_processed_frame_id <= last_encoded_processed_frame_id
             ):
                 return None
 
             counts = self._counter.counts
             return (
-                self._latest_raw_frame.copy(),
-                self._latest_raw_frame_id,
+                self._latest_processed_frame.copy(),
+                self._latest_processed_frame_id,
                 list(self._latest_tracks),
                 self._counter.tripwire_position,
                 self._counter.entry_line,
@@ -1943,26 +1846,18 @@ class CameraProcessingManager:
 
     def _configure_reid_locked(self, config: CameraStartRequest) -> None:
         self._effective_reid_mode = self._resolve_reid_mode(config.reid_mode)
-        fast_model_path = "person_reid_cpu.onnx"
-        fast_model_name = "torchreid_osnet_x0_25_msmt17_onnx"
-        quality_model_path = "person_reid.onnx"
-        quality_model_name = "torchreid_osnet_ain_x1_0_msmt17_onnx"
+        fast_profile = get_reid_model_profile("fast")
+        quality_profile = get_reid_model_profile("quality")
         if (
-            self._reidentifier.model_path == fast_model_path
-            and self._quality_reidentifier.model_path == quality_model_path
+            self._reidentifier.model_path == fast_profile.filename
+            and self._quality_reidentifier.model_path == quality_profile.filename
         ):
             return
 
         self._reid_worker.close()
         self._quality_reid_worker.close()
-        self._reidentifier = PersonReIdentifier(
-            model_path=fast_model_path,
-            model_name=fast_model_name,
-        )
-        self._quality_reidentifier = PersonReIdentifier(
-            model_path=quality_model_path,
-            model_name=quality_model_name,
-        )
+        self._reidentifier = PersonReIdentifier.from_profile(fast_profile)
+        self._quality_reidentifier = PersonReIdentifier.from_profile(quality_profile)
         self._reid_worker = AsyncReIdWorker(self._reidentifier)
         self._quality_reid_worker = AsyncReIdWorker(self._quality_reidentifier, max_queue_size=4)
         self._visitor_registry = UniqueVisitorRegistry(

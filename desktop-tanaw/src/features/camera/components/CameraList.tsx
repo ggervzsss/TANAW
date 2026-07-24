@@ -37,13 +37,14 @@ export function CameraList({ cameras, activeCamId, onAdd, onSelect }: CameraList
               </div>
               <div className="grid gap-1 text-[11px] font-medium text-gray-500 dark:text-slate-400">
                 <span className="truncate">Zone: {camera.zone}</span>
-                <span className="truncate">Type: {formatCameraType(camera.cameraType)}</span>
                 <span className="capitalize">Status: {camera.status}</span>
               </div>
             </div>
           );
         })}
-        {cameras.length === 0 && <div className="rounded-sm border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-slate-600 dark:text-slate-400">No cameras registered.</div>}
+        {cameras.length === 0 && (
+          <div className="rounded-sm border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-slate-600 dark:text-slate-400">No cameras registered.</div>
+        )}
       </div>
     </Card>
   );
@@ -54,15 +55,4 @@ function statusDotClass(status: Camera["status"]) {
   if (status === "starting" || status === "connecting" || status === "degraded" || status === "reconnecting") return "bg-amber-400 shadow-[0_0_4px_#fbbf24]";
   if (status === "offline" || status === "failed" || status === "error") return "bg-tanaw-red";
   return "bg-slate-400";
-}
-
-function formatCameraType(cameraType: Camera["cameraType"]) {
-  const labels: Record<Camera["cameraType"], string> = {
-    IP_WEBCAM: "IP Webcam",
-    ONVIF_CCTV: "ONVIF CCTV",
-    RTSP_CCTV: "RTSP CCTV",
-    USB_WEBCAM: "USB Webcam",
-  };
-
-  return labels[cameraType];
 }

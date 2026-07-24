@@ -36,6 +36,7 @@ class CameraPipelineRegistry:
         self._lifecycle_lock = threading.RLock()
         self._pipelines: dict[int, CameraProcessingManager] = {}
         self._config_fingerprints: dict[int, str] = {}
+        self._pending_starts: dict[int, str] = {}
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
         self._pipeline_factory = pipeline_factory
@@ -85,7 +86,7 @@ class CameraPipelineRegistry:
             extra={"enterprise_id": self._enterprise_id, "camera_id": payload.camera_id},
         )
         result = self._reporting.test_connection(
-            payload.stream_url, payload.camera_type, payload.username, payload.password
+            payload.stream_url, payload.username, payload.password
         )
         logger.log(
             logging.INFO if result[0] else logging.WARNING,
@@ -97,66 +98,141 @@ class CameraPipelineRegistry:
     def start(self, config: CameraStartRequest) -> bool:
         if config.camera_id is None:
             raise ValueError("Camera ID is required to start camera processing.")
+
+        with self._lifecycle_lock:
+            try:
+                return self._start_locked(config)
+            except CameraCapacityError:
+                raise
+            except Exception:
+                logger.exception("Camera %s failed to start.", config.camera_id)
+                raise
+
+    def request_start(self, config: CameraStartRequest) -> bool:
+        """Accept a camera start without blocking on stream and model initialization."""
+        if config.camera_id is None:
+            raise ValueError("Camera ID is required to start camera processing.")
         camera_id = config.camera_id
         fingerprint = config.model_dump_json()
 
+        with self._lock:
+            self._require_enterprise_locked()
+            existing = self._pipelines.get(camera_id)
+            if (
+                existing is not None
+                and existing.running
+                and self._config_fingerprints.get(camera_id) == fingerprint
+            ):
+                logger.info("Ignored duplicate start for camera %s.", camera_id)
+                return False
+            if camera_id in self._pending_starts:
+                logger.info("Ignored in-flight duplicate start for camera %s.", camera_id)
+                return False
+            self._raise_if_capacity_reached_locked(camera_id)
+            self._pending_starts[camera_id] = fingerprint
+
+        thread = threading.Thread(
+            target=self._run_requested_start,
+            args=(config, fingerprint),
+            name=f"tanaw-camera-{camera_id}-startup",
+            daemon=True,
+        )
+        try:
+            thread.start()
+        except Exception:
+            with self._lock:
+                if self._pending_starts.get(camera_id) == fingerprint:
+                    self._pending_starts.pop(camera_id, None)
+            raise
+        return True
+
+    def _run_requested_start(self, config: CameraStartRequest, fingerprint: str) -> None:
+        camera_id = config.camera_id
+        if camera_id is None:
+            return
+
         with self._lifecycle_lock:
             with self._lock:
-                if self._enterprise_id is None:
-                    raise ValueError("An enterprise context must be selected first.")
-                existing = self._pipelines.get(camera_id)
-                if (
-                    existing is not None
-                    and existing.running
-                    and self._config_fingerprints.get(camera_id) == fingerprint
-                ):
-                    logger.info("Ignored duplicate start for camera %s.", camera_id)
-                    return False
-                active_other_cameras = sum(
-                    1
-                    for other_id, pipeline in self._pipelines.items()
-                    if other_id != camera_id and pipeline.running
-                )
-                if active_other_cameras >= self._max_concurrent_cameras:
-                    logger.warning(
-                        "Camera worker capacity rejected a start request.",
-                        extra={
-                            "enterprise_id": self._enterprise_id,
-                            "camera_id": camera_id,
-                            "max_concurrent_cameras": self._max_concurrent_cameras,
-                        },
-                    )
-                    raise CameraCapacityError(
-                        "Camera worker capacity reached "
-                        f"({self._max_concurrent_cameras} concurrent cameras)."
-                    )
-
-            if existing is not None:
-                existing.stop()
-            else:
-                existing = self._pipeline_factory(self._app_data_dir, camera_id=camera_id)
-                existing.bind_enterprise(
-                    self._enterprise_id, self._enterprise_name, restore_session=False
-                )
-                with self._lock:
-                    self._pipelines[camera_id] = existing
-
+                if self._pending_starts.get(camera_id) != fingerprint:
+                    return
             try:
-                existing.start(config)
+                self._start_locked(config)
             except Exception:
+                logger.exception("Camera %s failed during requested startup.", camera_id)
+            finally:
                 with self._lock:
-                    self._config_fingerprints.pop(camera_id, None)
-                logger.exception("Camera %s failed to start.", camera_id)
-                raise
+                    if self._pending_starts.get(camera_id) == fingerprint:
+                        self._pending_starts.pop(camera_id, None)
 
+    def _start_locked(self, config: CameraStartRequest) -> bool:
+        camera_id = config.camera_id
+        if camera_id is None:
+            raise ValueError("Camera ID is required to start camera processing.")
+        fingerprint = config.model_dump_json()
+
+        with self._lock:
+            self._require_enterprise_locked()
+            existing = self._pipelines.get(camera_id)
+            if (
+                existing is not None
+                and existing.running
+                and self._config_fingerprints.get(camera_id) == fingerprint
+            ):
+                logger.info("Ignored duplicate start for camera %s.", camera_id)
+                return False
+            self._raise_if_capacity_reached_locked(camera_id)
+            enterprise_id = self._enterprise_id
+            enterprise_name = self._enterprise_name
+
+        if existing is not None:
+            existing.stop()
+        else:
+            existing = self._pipeline_factory(self._app_data_dir, camera_id=camera_id)
+            existing.bind_enterprise(enterprise_id or "", enterprise_name, restore_session=False)
             with self._lock:
-                self._config_fingerprints[camera_id] = fingerprint
-            logger.info("Started isolated processing pipeline for camera %s.", camera_id)
-            return True
+                self._pipelines[camera_id] = existing
+
+        try:
+            existing.start(config)
+        except Exception:
+            with self._lock:
+                self._config_fingerprints.pop(camera_id, None)
+            raise
+
+        with self._lock:
+            self._config_fingerprints[camera_id] = fingerprint
+        logger.info("Started isolated processing pipeline for camera %s.", camera_id)
+        return True
+
+    def _require_enterprise_locked(self) -> None:
+        if self._enterprise_id is None:
+            raise ValueError("An enterprise context must be selected first.")
+
+    def _raise_if_capacity_reached_locked(self, camera_id: int) -> None:
+        active_other_camera_ids = {
+            other_id
+            for other_id, pipeline in self._pipelines.items()
+            if other_id != camera_id and pipeline.running
+        }
+        pending_other_camera_ids = set(self._pending_starts) - {camera_id}
+        if len(active_other_camera_ids | pending_other_camera_ids) < self._max_concurrent_cameras:
+            return
+        logger.warning(
+            "Camera worker capacity rejected a start request.",
+            extra={
+                "enterprise_id": self._enterprise_id,
+                "camera_id": camera_id,
+                "max_concurrent_cameras": self._max_concurrent_cameras,
+            },
+        )
+        raise CameraCapacityError(
+            f"Camera worker capacity reached ({self._max_concurrent_cameras} concurrent cameras)."
+        )
 
     def stop(self, camera_id: int) -> bool:
         with self._lifecycle_lock:
             with self._lock:
+                self._pending_starts.pop(camera_id, None)
                 pipeline = self._pipelines.get(camera_id)
             if pipeline is None:
                 return False
@@ -173,6 +249,7 @@ class CameraPipelineRegistry:
 
     def _stop_all_locked(self) -> int:
         with self._lock:
+            self._pending_starts.clear()
             pipelines = list(self._pipelines.items())
         stopped = 0
         for camera_id, pipeline in pipelines:
@@ -218,6 +295,7 @@ class CameraPipelineRegistry:
     def camera_states(self) -> dict[str, Any]:
         with self._lock:
             camera_ids = sorted(self._pipelines)
+            pending_camera_ids = sorted(self._pending_starts)
             enterprise_id = self._enterprise_id or ""
         enterprise_occupancy = int(
             self._reporting.metrics_summary(include_submitted=True)["current_occupancy"] or 0
@@ -230,6 +308,7 @@ class CameraPipelineRegistry:
                 1 for camera in cameras if bool(camera["counts"]["running"])
             ),
             "max_concurrent_cameras": self._max_concurrent_cameras,
+            "pending_camera_ids": pending_camera_ids,
             "cameras": cameras,
         }
 

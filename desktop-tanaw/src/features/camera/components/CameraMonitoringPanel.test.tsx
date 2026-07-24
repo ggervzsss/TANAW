@@ -31,7 +31,49 @@ describe("CameraMonitoringPanel", () => {
     expect(markup).toContain("Test");
     expect(markup).toContain("Start");
   });
+
+  it("keeps the camera in a starting state while an accepted start initializes", () => {
+    const markup = renderPanel({
+      counts: { ...EMPTY_ML_COUNTS, status: "stopped" },
+      isStarting: true,
+    });
+
+    expect(markup).toContain("Camera Starting");
+    expect(markup).toContain("Starting...");
+    expect(markup).toContain("disabled");
+    expect(markup).not.toContain(">Start<");
+  });
+
+  it("reports model warmup as starting instead of processing", () => {
+    const markup = renderPanel({
+      counts: { ...EMPTY_ML_COUNTS, running: true, status: "starting" },
+      isStarting: true,
+    });
+
+    expect(markup).toContain("Camera Starting");
+    expect(markup).not.toContain("Camera Processing");
+  });
 });
+
+function renderPanel({ counts = EMPTY_ML_COUNTS, isStarting = false }: { counts?: typeof EMPTY_ML_COUNTS; isStarting?: boolean }) {
+  return renderToStaticMarkup(
+    <CameraMonitoringPanel
+      activeCam={camera}
+      counts={counts}
+      health={null}
+      serviceStatus={null}
+      error={null}
+      isRestartingService={false}
+      isStarting={isStarting}
+      isStopping={false}
+      isTesting={false}
+      onRestartService={() => undefined}
+      onStartProcessing={() => undefined}
+      onStopProcessing={() => undefined}
+      onTestConnection={() => undefined}
+    />,
+  );
+}
 
 const camera: Camera = {
   id: 1,
@@ -42,7 +84,6 @@ const camera: Camera = {
   resolution: "Adaptive",
   type: "Entry/Exit",
   rtsp: "rtsp://192.168.1.10/stream2",
-  cameraType: "RTSP_CCTV",
   processingProfile: "auto",
   confidence: 0.35,
   config: {

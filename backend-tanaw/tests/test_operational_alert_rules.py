@@ -9,6 +9,7 @@ from app.features.operational.models import (
     OperationalAlert,
     UserNotification,
 )
+from app.features.operational.router import enterprise_status_from_telemetry
 from app.features.operational.schemas import TelemetrySnapshotSummary, VisitorInsightPoint
 from app.features.operational.service import (
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
@@ -138,6 +139,24 @@ def test_enterprise_insight_marks_unusual_activity() -> None:
     assert insight.differencePercent == 125
 
 
+def test_enterprise_map_uses_neutral_status_when_device_is_offline_or_inactive() -> None:
+    assert enterprise_status_from_telemetry(None) == "Inactive"
+
+    telemetry = _telemetry_summary(gateway_status="Offline")
+
+    assert enterprise_status_from_telemetry(telemetry) == "Offline"
+
+
+def test_enterprise_map_reserves_critical_status_for_device_errors() -> None:
+    telemetry = _telemetry_summary(
+        gateway_status="Offline",
+        status="error",
+        error="Counting service unavailable",
+    )
+
+    assert enterprise_status_from_telemetry(telemetry) == "Critical"
+
+
 def _hourly_observation(
     enterprise_id: str, start_at: datetime, average_visitors: int
 ) -> HourlyVisitorObservation:
@@ -149,6 +168,36 @@ def _hourly_observation(
         start_at=start_at,
         average_visitors=average_visitors,
         peak_visitors=average_visitors,
+    )
+
+
+def _telemetry_summary(
+    *,
+    gateway_status: str,
+    status: str = "stopped",
+    error: str | None = None,
+) -> TelemetrySnapshotSummary:
+    now = datetime.now(UTC)
+    return TelemetrySnapshotSummary(
+        id="snapshot-status",
+        enterpriseId="enterprise-status",
+        enterpriseName="Enterprise Status",
+        capturedAt=now,
+        receivedAt=now,
+        entries=0,
+        exits=0,
+        currentOccupancy=0,
+        peakOccupancy=0,
+        uniqueCount=0,
+        confirmedUniqueCount=0,
+        degradedUniqueCount=0,
+        totalEvents=0,
+        unsubmittedEvents=0,
+        unsyncedEvents=0,
+        running=False,
+        status=status,
+        error=error,
+        gatewayStatus=gateway_status,
     )
 
 

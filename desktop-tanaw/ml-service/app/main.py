@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.camera.auth import redact_stream_credentials
-from app.camera.camera_manager import CameraStreamUnavailableError
 from app.camera.pipeline_manager import CameraCapacityError, CameraPipelineRegistry
 from app.config.camera_config import (
     CameraProfilesRequest,
@@ -45,7 +44,7 @@ CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.2.0"
-API_CONTRACT_VERSION = 2
+API_CONTRACT_VERSION = 5
 
 
 class CameraApiError(RuntimeError):
@@ -124,16 +123,12 @@ def test_camera(payload: CameraTestRequest) -> CameraTestResponse:
     return CameraTestResponse(ok=ok, message=message)
 
 
-@app.post("/camera/start")
+@app.post("/camera/start", status_code=202)
 def start_camera(payload: CameraStartRequest) -> dict[str, Any]:
     try:
-        started = manager.start(payload)
+        accepted = manager.request_start(payload)
     except CameraCapacityError as exc:
         raise CameraApiError(429, "capacity_limit", str(exc)) from exc
-    except CameraStreamUnavailableError as exc:
-        raise CameraApiError(
-            422, "stream_unavailable", redact_stream_credentials(str(exc))
-        ) from exc
     except ValueError as exc:
         raise CameraApiError(
             400,
@@ -146,9 +141,11 @@ def start_camera(payload: CameraStartRequest) -> dict[str, Any]:
         ) from exc
 
     return {
-        "message": "Camera processing started." if started else "Camera is already running.",
+        "message": (
+            "Camera startup accepted." if accepted else "Camera is already running or starting."
+        ),
         "camera_id": payload.camera_id,
-        "started": started,
+        "accepted": accepted,
     }
 
 

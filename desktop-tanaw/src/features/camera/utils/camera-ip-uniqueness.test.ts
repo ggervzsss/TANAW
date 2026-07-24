@@ -1,25 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import {
-  CAMERA_IP_CONFLICT_MESSAGE,
-  assertUniqueCameraIps,
-  canonicalizeCameraIp,
-  findCameraIpConflict,
-} from "./camera-ip-uniqueness";
+import { CAMERA_IP_CONFLICT_MESSAGE, assertUniqueCameraIps, canonicalizeCameraIp, findCameraIpConflict } from "./camera-ip-uniqueness";
 
 describe("camera IP uniqueness", () => {
   it("treats equivalent IPv4 spellings and RTSP stream variants as the same camera IP", () => {
-    const cameras = [
-      camera(1, "192.168.001.009", "stream1"),
-    ];
+    const cameras = [camera(1, "192.168.001.009", "stream1")];
 
     expect(findCameraIpConflict(cameras, "192.168.1.9")?.id).toBe(1);
-    expect(() =>
-      assertUniqueCameraIps([
-        ...cameras,
-        camera(2, "192.168.1.9", "stream2"),
-      ]),
-    ).toThrow(CAMERA_IP_CONFLICT_MESSAGE);
+    expect(() => assertUniqueCameraIps([...cameras, camera(2, "192.168.1.9", "stream2")])).toThrow(CAMERA_IP_CONFLICT_MESSAGE);
   });
 
   it("allows an edit to retain its own IP and allows different tenant lists to reuse it", () => {
@@ -42,7 +30,6 @@ describe("camera IP uniqueness", () => {
 function camera(id: number, host: string, stream: "stream1" | "stream2" = "stream2"): Camera {
   return {
     cameraHost: host,
-    cameraType: "RTSP_CCTV",
     confidence: 0.35,
     config: {
       reverse: false,

@@ -596,7 +596,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                         CameraStartRequest(
                             camera_id=1,
                             camera_name="Starting Camera",
-                            stream_url="000",
+                            stream_url="rtsp://192.168.1.20/stream2",
                         )
                     )
                 except Exception as exc:
@@ -646,7 +646,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
 def _session(session_id: int, **config_values: Any) -> ProcessingSession:
     return ProcessingSession(
         session_id=session_id,
-        config=CameraStartRequest(stream_url="000", **config_values),
+        config=CameraStartRequest(stream_url="rtsp://192.168.1.20/stream2", **config_values),
         stop_event=threading.Event(),
     )
 

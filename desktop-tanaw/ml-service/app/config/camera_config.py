@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-CameraType = Literal["IP_WEBCAM", "RTSP_CCTV", "USB_WEBCAM", "ONVIF_CCTV"]
 RtspStreamProfile = Literal["stream1", "stream2"]
 ProcessingProfile = Literal[
     "auto",
@@ -83,7 +82,6 @@ class CameraStartRequest(BaseModel):
     camera_id: int | None = Field(default=None, ge=1)
     camera_name: str | None = Field(default=None, max_length=120)
     camera_zone: str | None = Field(default=None, max_length=120)
-    camera_type: CameraType = "IP_WEBCAM"
     camera_host: str | None = Field(default=None, max_length=15)
     rtsp_stream: RtspStreamProfile | None = None
     username: str | None = Field(default=None, max_length=120)
@@ -129,15 +127,10 @@ class CameraStartRequest(BaseModel):
         if not normalized:
             raise ValueError("Stream URL is required.")
 
-        if normalized.isdigit():
+        if normalized.startswith("rtsp://"):
             return normalized
 
-        if normalized.startswith(("http://", "https://", "rtsp://")):
-            return normalized
-
-        raise ValueError(
-            "Stream URL must start with http://, https://, rtsp://, or be a numeric webcam index."
-        )
+        raise ValueError("Stream URL must start with rtsp://.")
 
     @model_validator(mode="after")
     def validate_counting_geometry(self) -> CameraStartRequest:
@@ -170,7 +163,6 @@ class CameraTestRequest(BaseModel):
     camera_id: int = Field(ge=1)
     camera_name: str | None = Field(default=None, max_length=120)
     stream_url: str = Field(..., min_length=3)
-    camera_type: CameraType = "IP_WEBCAM"
     camera_host: str | None = Field(default=None, max_length=15)
     rtsp_stream: RtspStreamProfile | None = None
     username: str | None = Field(default=None, max_length=120)
@@ -188,7 +180,10 @@ class CameraTestRequest(BaseModel):
     @field_validator("stream_url")
     @classmethod
     def validate_stream_url(cls, value: str) -> str:
-        return CameraStartRequest(stream_url=value).stream_url
+        normalized = value.strip()
+        if not normalized.startswith("rtsp://"):
+            raise ValueError("Stream URL must start with rtsp://.")
+        return normalized
 
 
 class CameraTestResponse(BaseModel):
@@ -199,7 +194,7 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.2.0"
-    api_contract_version: int = 2
+    api_contract_version: int = 5
     running: bool
     error: str | None = None
     model_loaded: bool = False
@@ -356,6 +351,7 @@ class CameraStatesResponse(BaseModel):
     enterprise_occupancy: int = Field(default=0, ge=0)
     active_camera_count: int
     max_concurrent_cameras: int
+    pending_camera_ids: list[int]
     cameras: list[CameraLiveStateResponse]
 
 
@@ -610,11 +606,9 @@ class SyncMarkResponse(BaseModel):
 
 
 def _normalize_rtsp_source(data: dict[str, Any]) -> None:
-    camera_type = data.get("camera_type", "IP_WEBCAM")
-    if camera_type not in {"RTSP_CCTV", "ONVIF_CCTV"}:
-        return
-
     raw_stream_url = str(data.get("stream_url") or "").strip()
+    if not raw_stream_url.startswith("rtsp://"):
+        raise ValueError("Stream URL must start with rtsp://.")
     raw_host = str(data.get("camera_host") or "").strip()
     raw_profile = data.get("rtsp_stream")
     parsed = urlsplit(raw_stream_url) if raw_stream_url else None

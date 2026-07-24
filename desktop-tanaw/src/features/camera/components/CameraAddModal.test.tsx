@@ -10,21 +10,12 @@ vi.mock("../../../components/ModalPortal", () => ({
 describe("CameraAddModal", () => {
   it("renders the required field order and a copyable read-only generated URL", () => {
     const markup = render(values(), {});
-    const labels = [
-      "Camera Name",
-      "Assigned Zone",
-      "Camera Type",
-      "Camera IP / Host",
-      "RTSP Stream",
-      "Username",
-      "Password",
-      "Stream URL",
-    ];
+    const labels = ["Camera Name", "Assigned Zone", "Camera IP / Host", "RTSP Stream", "Username", "Password", "Stream URL"];
     const positions = labels.map((label) => markup.indexOf(label));
 
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
-    expect(markup).toContain("readonly=\"\"");
+    expect(markup).toContain('readonly=""');
     expect(markup).toContain("rtsp://192.168.1.9/stream2");
     expect(markup).not.toContain("Optional");
     expect(markup).not.toContain("Credentials and video processing");
@@ -44,7 +35,7 @@ describe("CameraAddModal", () => {
     });
     expect(missingMarkup).toContain("Enter the camera username.");
     expect(missingMarkup).toContain("Enter the camera password.");
-    expect(missingMarkup).toContain("aria-required=\"true\"");
+    expect(missingMarkup).toContain('aria-required="true"');
     expect(missingMarkup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
 
     const validMarkup = render(values({ username: "camera-user", password: "device pass" }), {});
@@ -52,11 +43,7 @@ describe("CameraAddModal", () => {
   });
 
   it("keeps the form open and disables saving when the tenant already uses the IP", () => {
-    const markup = render(
-      values({ username: "camera-user", password: "device pass" }),
-      {},
-      "A camera with this IP address is already configured for this Enterprise.",
-    );
+    const markup = render(values({ username: "camera-user", password: "device pass" }), {}, "A camera with this IP address is already configured for this Enterprise.");
 
     expect(markup).toContain("A camera with this IP address is already configured");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
@@ -65,22 +52,13 @@ describe("CameraAddModal", () => {
 
 function render(newCam: CameraFormValues, errors: Partial<Record<keyof CameraFormValues, string>>, duplicateIpError?: string) {
   return renderToStaticMarkup(
-    <CameraAddModal
-      newCam={newCam}
-      errors={errors}
-      duplicateIpError={duplicateIpError}
-      isValidating={false}
-      onChange={() => undefined}
-      onClose={() => undefined}
-      onSubmit={() => undefined}
-    />,
+    <CameraAddModal newCam={newCam} errors={errors} duplicateIpError={duplicateIpError} isValidating={false} onChange={() => undefined} onClose={() => undefined} onSubmit={() => undefined} />,
   );
 }
 
 function values(overrides: Partial<CameraFormValues> = {}): CameraFormValues {
   return {
     cameraHost: "192.168.1.9",
-    cameraType: "RTSP_CCTV",
     name: "Tapo C310",
     password: "",
     rtsp: "rtsp://192.168.1.9/stream2",

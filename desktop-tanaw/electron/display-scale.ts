@@ -6,7 +6,7 @@ export type DisplayScaleSubscription = (listener: () => void) => () => void;
 
 export type DisplayScaleControllerOptions = {
   applyZoomFactor: (zoomFactor: number) => void;
-  getAppliedZoomFactor?: () => number;
+  getAppliedZoomFactor?: () => number | undefined;
   getScaleFactor: () => number;
   subscribeToDisplayChanges: DisplayScaleSubscription;
   subscribeToWindowChanges: DisplayScaleSubscription;

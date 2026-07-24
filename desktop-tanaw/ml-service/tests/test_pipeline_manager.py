@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 
 from app.camera.camera_manager import CameraProcessingManager
@@ -107,6 +108,40 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 registry.start(_config(2))
             self.assertTrue(registry.require_pipeline(1).running)
 
+    def test_requested_start_returns_while_slow_initialization_continues(self) -> None:
+        initialization_started = threading.Event()
+        finish_initialization = threading.Event()
+        initialization_finished = threading.Event()
+
+        class SlowPipeline(FakePipeline):
+            def start(self, config: CameraStartRequest) -> None:
+                initialization_started.set()
+                finish_initialization.wait(timeout=2)
+                super().start(config)
+                initialization_finished.set()
+
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(
+                directory, max_concurrent_cameras=1, pipeline_factory=SlowPipeline
+            )
+            registry.bind_enterprise("enterprise@example.test")
+            first = _config(1)
+
+            try:
+                self.assertTrue(registry.request_start(first))
+                self.assertTrue(initialization_started.wait(timeout=1))
+                self.assertFalse(initialization_finished.is_set())
+                self.assertEqual(registry.camera_states()["pending_camera_ids"], [1])
+                self.assertFalse(registry.request_start(first))
+                with self.assertRaisesRegex(CameraCapacityError, "capacity"):
+                    registry.request_start(_config(2))
+            finally:
+                finish_initialization.set()
+
+            self.assertTrue(initialization_finished.wait(timeout=1))
+            self.assertTrue(registry.require_pipeline(1).running)
+            self.assertEqual(registry.camera_states()["pending_camera_ids"], [])
+
     def test_enterprise_switch_and_shutdown_stop_every_pipeline(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             registry = CameraPipelineRegistry(
@@ -150,7 +185,9 @@ class CameraPipelineRegistryTest(unittest.TestCase):
 
 def _config(camera_id: int) -> CameraStartRequest:
     return CameraStartRequest(
-        camera_id=camera_id, camera_name=f"Camera {camera_id}", stream_url="000"
+        camera_id=camera_id,
+        camera_name=f"Camera {camera_id}",
+        stream_url="rtsp://192.168.1.20/stream2",
     )
 
 

@@ -33,11 +33,15 @@ class LocalDataStoreTest(unittest.TestCase):
                 foreign_keys = connection.execute(
                     "pragma foreign_key_list(count_events)"
                 ).fetchall()
+                camera_columns = {
+                    str(row[1]) for row in connection.execute("pragma table_info(camera_profiles)")
+                }
 
             self.assertIn("camera_profiles", tables)
             self.assertIn("active_monitoring_state", tables)
             self.assertIn("enterprise_occupancy_state", tables)
             self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
+            self.assertNotIn("camera_type", camera_columns)
             self.assertTrue(
                 any(
                     row[2] == "report_submissions"
@@ -750,32 +754,17 @@ class LocalDataStoreTest(unittest.TestCase):
 
             self.assertEqual(first.enterprise_occupancy(), 20)
 
-    def test_schema_two_migrates_enterprise_occupancy_without_data_loss(self) -> None:
+    def test_older_schema_requires_an_explicit_full_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            original.save_monitoring_state(
-                {
-                    "running": False,
-                    "status": "stopped",
-                    "error": None,
-                    "camera_id": 7,
-                    "camera_name": "Legacy Camera",
-                    "camera_config": {"camera_id": 7},
-                    "counts": {"entry": 4, "exit": 1, "occupancy": 3},
-                }
-            )
+            original.metrics_summary()
             with closing(sqlite3.connect(original._database_path)) as connection:
-                connection.execute("delete from enterprise_occupancy_state")
-                connection.execute("update schema_metadata set schema_version = 2")
+                connection.execute("update schema_metadata set schema_version = 3")
                 connection.commit()
 
-            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            self.assertEqual(migrated.enterprise_occupancy(), 3)
-            with migrated._connection() as connection:
-                version = connection.execute(
-                    "select schema_version from schema_metadata where singleton_id = 1"
-                ).fetchone()[0]
-            self.assertEqual(version, LOCAL_SCHEMA_VERSION)
+            incompatible = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "incompatible"):
+                incompatible.metrics_summary()
 
     def test_report_camera_breakdown_survives_raw_event_purge(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -796,38 +785,6 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(len(submission["camera_breakdown"]), 2)
             self.assertEqual(persisted["camera_breakdown"], submission["camera_breakdown"])
             self.assertEqual(sum(camera["entries"] for camera in persisted["camera_breakdown"]), 2)
-
-    def test_schema_one_state_migrates_to_camera_keyed_storage(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            original.metrics_summary()
-            connection = sqlite3.connect(original._database_path)
-            try:
-                connection.execute("update schema_metadata set schema_version = 1")
-                connection.execute(
-                    """
-                    insert into active_monitoring_state (
-                        singleton_id, camera_id, camera_name_snapshot, running, status,
-                        error, started_at, entry_count, exit_count, occupancy_count,
-                        camera_config_json, updated_at
-                    ) values (1, 42, 'Legacy Camera', 1, 'running', null, null, 3, 1, 2, '{}', ?)
-                    """,
-                    (datetime.now(UTC).isoformat(),),
-                )
-                connection.commit()
-            finally:
-                connection.close()
-
-            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            state = migrated.load_monitoring_state(42)
-            assert state is not None
-            self.assertEqual(state["camera_name"], "Legacy Camera")
-            self.assertEqual(state["counts"]["entry"], 3)
-            with migrated._connection() as migrated_connection:
-                version = migrated_connection.execute(
-                    "select schema_version from schema_metadata where singleton_id = 1"
-                ).fetchone()[0]
-            self.assertEqual(version, LOCAL_SCHEMA_VERSION)
 
 
 def _event(
@@ -863,7 +820,6 @@ def _camera_profile() -> dict:
         "rtsp": "rtsp://192.168.1.20/stream1",
         "cameraHost": "192.168.1.20",
         "rtspStream": "stream1",
-        "cameraType": "RTSP_CCTV",
         "processingProfile": "auto",
         "confidence": 0.35,
         "trackingConfidence": 0.15,

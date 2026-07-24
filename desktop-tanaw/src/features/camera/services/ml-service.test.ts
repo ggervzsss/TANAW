@@ -15,6 +15,7 @@ describe("secure camera service requests", () => {
 
     expect(request).toHaveBeenCalledOnce();
     const payload = request.mock.calls[0]?.[3] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("camera_type");
     expect(payload).not.toHaveProperty("password");
     expect(payload).not.toHaveProperty("username");
     expect(payload.stream_url).toBe("rtsp://192.168.1.9/stream2");
@@ -28,12 +29,10 @@ describe("camera configuration write boundary", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(
-      replaceLocalCameras("http://127.0.0.1:8765", [
-        camera(),
-        { ...camera(), id: 2, cameraHost: "192.168.001.009", rtsp: "rtsp://192.168.001.009/stream1" },
-      ]),
-    ).rejects.toMatchObject({ code: "camera_ip_conflict", field: "camera_ip" });
+    await expect(replaceLocalCameras("http://127.0.0.1:8765", [camera(), { ...camera(), id: 2, cameraHost: "192.168.001.009", rtsp: "rtsp://192.168.001.009/stream1" }])).rejects.toMatchObject({
+      code: "camera_ip_conflict",
+      field: "camera_ip",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -70,7 +69,6 @@ describe("camera configuration write boundary", () => {
 function camera(): Camera {
   return {
     cameraHost: "192.168.1.9",
-    cameraType: "RTSP_CCTV",
     confidence: 0.35,
     config: {
       reverse: false,
