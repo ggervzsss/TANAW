@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -6,6 +8,8 @@ from typing import Any
 
 import cv2
 import numpy as np
+
+from app.reid.model_registry import ReIdModelProfile
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,14 @@ class PersonReIdentifier:
         self._total_inference_ms = 0.0
         self._inference_count = 0
         self._lock = Lock()
+
+    @classmethod
+    def from_profile(cls, profile: ReIdModelProfile) -> PersonReIdentifier:
+        return cls(
+            model_path=profile.filename,
+            input_size=profile.input_size,
+            model_name=profile.model_name,
+        )
 
     def status(self) -> dict[str, bool | int | float | str | list[str] | None]:
         if not self._lock.acquire(blocking=False):
@@ -181,11 +193,6 @@ class PersonReIdentifier:
         if bundled_path.exists():
             return str(bundled_path)
 
-        fallback_path = service_root / "models" / "person_reid.onnx"
-        if requested_path.name == "person_reid_cpu.onnx" and fallback_path.exists():
-            self.model_name = "torchreid_osnet_ain_x1_0_msmt17_onnx"
-            return str(fallback_path)
-
         raise FileNotFoundError(
             f"ReID model file was not found at {bundled_path}. "
             "Unique visitor counting will run in degraded mode until a bundled ONNX model is available."
@@ -208,19 +215,6 @@ class PersonReIdentifier:
         if self._inference_count <= 0:
             return None
         return self._total_inference_ms / self._inference_count
-
-
-def get_reid_model_availability() -> dict[str, dict[str, bool | str]]:
-    service_root = Path(__file__).resolve().parents[2]
-    models_root = service_root / "models"
-    return {
-        "person_reid_cpu": _model_availability(models_root / "person_reid_cpu.onnx"),
-        "person_reid_quality": _model_availability(models_root / "person_reid.onnx"),
-    }
-
-
-def _model_availability(path: Path) -> dict[str, bool | str]:
-    return {"path": str(path), "exists": path.exists(), "required": True}
 
 
 def _crop(frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:

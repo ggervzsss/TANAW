@@ -1,0 +1,8 @@
+clips/*
+cache/*
+ground-truth/*
+results/*
+!clips/.gitkeep
+!cache/.gitkeep
+!ground-truth/.gitkeep
+!results/.gitkeep

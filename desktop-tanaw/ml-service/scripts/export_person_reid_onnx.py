@@ -1,12 +1,14 @@
 # pyright: reportMissingImports=false
 import argparse
+from collections.abc import Mapping
 from pathlib import Path
 from tempfile import gettempdir
+from typing import Any
 
-import gdown
 import onnx
 import torch
 import torch.nn.functional as F
+from gdown.download import download
 from torch import nn
 from torchreid import models, utils
 
@@ -39,23 +41,43 @@ class NormalizedFeatureExtractor(nn.Module):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", choices=sorted(MODEL_PROFILES), default="quality")
+    parser = argparse.ArgumentParser(
+        description="Download and export TANAW's pinned OSNet ReID profiles to ONNX."
+    )
+    parser.add_argument(
+        "--profile",
+        choices=[*sorted(MODEL_PROFILES), "all"],
+        default="all",
+        help="Profile to export. Defaults to both required profiles.",
+    )
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
-    profile = MODEL_PROFILES[args.profile]
 
     service_root = Path(__file__).resolve().parents[1]
     models_dir = service_root / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
 
+    selected_profiles = (
+        list(MODEL_PROFILES.values()) if args.profile == "all" else [MODEL_PROFILES[args.profile]]
+    )
+    for profile in selected_profiles:
+        _export_profile(profile, models_dir, force=args.force)
+    print("ReID model setup complete.")
+
+
+def _export_profile(profile: Mapping[str, Any], models_dir: Path, *, force: bool) -> None:
     checkpoint_dir = Path(gettempdir()) / "tanaw-reid-export"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpoint_dir / f"{profile['model_source']}.pth"
     output_path = models_dir / profile["output_name"]
 
+    if output_path.is_file() and not force:
+        print(f"{output_path.name} already exists; skipping export.")
+        return
+
     if not checkpoint_path.exists():
         print(f"Downloading {profile['model_source']} checkpoint...")
-        gdown.download(id=profile["google_drive_file_id"], output=str(checkpoint_path), quiet=False)
+        download(id=profile["google_drive_file_id"], output=str(checkpoint_path), quiet=False)
 
     backbone = models.build_model(
         name=profile["model_name"], num_classes=1000, pretrained=False, use_gpu=False

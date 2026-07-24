@@ -6,7 +6,12 @@ import numpy as np
 
 from app.counting.geometry import Centroid
 from app.detection.yolo_detector import TrackResult
-from app.reid import PersonReIdentifier, TrackAppearanceBuffer
+from app.reid import (
+    PersonReIdentifier,
+    TrackAppearanceBuffer,
+    get_reid_model_availability,
+    get_reid_model_profile,
+)
 
 
 class ReIdComponentsTest(unittest.TestCase):
@@ -22,6 +27,8 @@ class ReIdComponentsTest(unittest.TestCase):
             self.assertIsNotNone(status["reid_error"])
 
     def test_bundled_reid_model_loads_and_outputs_normalized_embedding(self) -> None:
+        if not get_reid_model_profile("fast").path().is_file():
+            self.skipTest("Bundled fast ReID model is not installed.")
         reidentifier = PersonReIdentifier()
 
         reidentifier.warmup()
@@ -67,6 +74,16 @@ class ReIdComponentsTest(unittest.TestCase):
         buffer.record_sample(1, np.array([1.0, 0.0], dtype=np.float32), quality=0.9, frame_index=1)
 
         self.assertFalse(buffer.should_sample(track, 200, 200, 2))
+
+    def test_reid_profiles_have_distinct_required_assets(self) -> None:
+        fast = get_reid_model_profile("fast")
+        quality = get_reid_model_profile("quality")
+        availability = get_reid_model_availability()
+
+        self.assertNotEqual(fast.filename, quality.filename)
+        self.assertEqual(availability["fast"]["path"], str(fast.path()))
+        self.assertEqual(availability["quality"]["path"], str(quality.path()))
+        self.assertTrue(availability["fast"]["required"])
 
 
 def _track(confidence: float, bbox: tuple[int, int, int, int]) -> TrackResult:

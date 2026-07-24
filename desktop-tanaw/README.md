@@ -31,6 +31,7 @@ cd desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
 npm run models:setup
+npm run models:setup:reid
 printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
 npm run dev
 ```
@@ -49,6 +50,7 @@ Set-Location desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
 npm run models:setup
+npm run models:setup:reid
 Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
 npm run dev
 ```
@@ -163,6 +165,30 @@ models/yolo11m_640_openvino_model/
 ```
 
 PowerShell uses the same npm scripts.
+
+## ReID Model Setup
+
+The live `fast` and `quality` ReID modes use distinct, pinned OSNet ONNX assets.
+Export both before ReID testing:
+
+```bash
+npm run models:setup:reid
+```
+
+This prepares:
+
+- `models/person_reid_cpu.onnx`: OSNet x0.25 for low-latency track association
+- `models/person_reid.onnx`: OSNet-AIN x1.0 for higher-quality visitor confirmation
+
+Verify a proposed stress-test stack before recording results:
+
+```bash
+npm run models:verify -- --profile balanced --reid fast
+```
+
+The live app still degrades safely when an asset is unavailable. The replay
+tool intentionally refuses to run a requested ReID variant with missing assets,
+because silently substituting a model would invalidate the comparison.
 
 ## ML Processing Profiles
 
@@ -431,46 +457,80 @@ Prediction frame example:
 }
 ```
 
-Run replay and evaluation:
+Create the detector cache once. This captures identical YOLO and BoT-SORT
+source tracks for every ReID comparison:
 
 ```bash
-uv run --directory ml-service python scripts/replay_tracking.py \
+uv run --directory ml-service python -m scripts.replay_tracking \
   --video evaluation/crossing-01.mp4 \
   --config evaluation/camera-config.json \
   --profile balanced \
   --runtime auto \
-  --tracker auto \
-  --output evaluation/predictions.jsonl
+  --tracker botsort \
+  --reid off \
+  --detections-cache evaluation/cache/crossing-01-balanced-botsort.jsonl \
+  --rebuild-cache \
+  --output evaluation/results/crossing-01-off.jsonl \
+  --summary-output evaluation/results/crossing-01-off-summary.json
 
-uv run --directory ml-service python scripts/evaluate_tracking.py \
+uv run --directory ml-service python -m scripts.replay_tracking \
+  --video evaluation/crossing-01.mp4 \
+  --config evaluation/camera-config.json \
+  --profile balanced \
+  --runtime auto \
+  --tracker botsort \
+  --reid fast \
+  --detections-cache evaluation/cache/crossing-01-balanced-botsort.jsonl \
+  --output evaluation/results/crossing-01-fast.jsonl \
+  --summary-output evaluation/results/crossing-01-fast-summary.json
+
+uv run --directory ml-service python -m scripts.evaluate_tracking \
   --ground-truth evaluation/ground-truth.jsonl \
-  --predictions evaluation/predictions.jsonl
+  --predictions evaluation/results/crossing-01-fast.jsonl \
+  --report-output evaluation/results/crossing-01-fast-report.json
 ```
 
-PowerShell:
+The `quality` replay runs fast association plus quality embedding extraction,
+matching the cost and sampling roles of the live pipeline. Track IDs should
+therefore be compared between `off` and `fast`; within-clip quality runs measure
+the additional extraction cost. Cross-session unique-visitor gallery decisions
+still require a live integration test. Detector time is retained from the cache
+while association/ReID time is measured for each run. Use `--rebuild-cache`
+whenever the clip, crop, detector profile, tracker, confidence, sampling rate,
+runtime, or model configuration changes.
+
+PowerShell uses the same arguments with backtick line continuation:
 
 ```powershell
-uv run --directory ml-service python scripts/replay_tracking.py `
+uv run --directory ml-service python -m scripts.replay_tracking `
   --video evaluation/crossing-01.mp4 `
   --config evaluation/camera-config.json `
   --profile balanced `
   --runtime auto `
-  --tracker auto `
-  --output evaluation/predictions.jsonl
+  --tracker botsort `
+  --reid fast `
+  --detections-cache evaluation/cache/crossing-01-balanced-botsort.jsonl `
+  --output evaluation/results/crossing-01-fast.jsonl
 
-uv run --directory ml-service python scripts/evaluate_tracking.py `
+uv run --directory ml-service python -m scripts.evaluate_tracking `
   --ground-truth evaluation/ground-truth.jsonl `
-  --predictions evaluation/predictions.jsonl
+  --predictions evaluation/results/crossing-01-fast.jsonl `
+  --report-output evaluation/results/crossing-01-fast-report.json
 ```
 
 Useful profile checks:
 
 ```bash
-uv run --directory ml-service python scripts/replay_tracking.py --video evaluation/crossing-01.mp4 --output evaluation/predictions-compatibility.jsonl --profile compatibility --tracker bytetrack
-uv run --directory ml-service python scripts/replay_tracking.py --video evaluation/crossing-01.mp4 --output evaluation/predictions-balanced.jsonl --profile balanced --tracker botsort
-uv run --directory ml-service python scripts/replay_tracking.py --video evaluation/crossing-01.mp4 --output evaluation/predictions-high-accuracy.jsonl --profile high_accuracy --tracker botsort
-uv run --directory ml-service python scripts/replay_tracking.py --video evaluation/crossing-01.mp4 --output evaluation/predictions-emergency.jsonl --profile emergency --tracker bytetrack
+uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-compatibility.jsonl --profile compatibility --tracker bytetrack
+uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-balanced.jsonl --profile balanced --tracker botsort
+uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-high-accuracy.jsonl --profile high_accuracy --tracker botsort
+uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-emergency.jsonl --profile emergency --tracker bytetrack
 ```
+
+See [`ml-service/evaluation/README.md`](ml-service/evaluation/README.md) for
+scenario naming, raw-clip requirements, labeling, and the comparison matrix.
+For a copy-and-paste Linux and Windows walkthrough, use the
+[`Camera Stress-Test Guide`](ml-service/evaluation/CAMERA_STRESS_TEST_GUIDE.md).
 
 ## Quality Checks
 

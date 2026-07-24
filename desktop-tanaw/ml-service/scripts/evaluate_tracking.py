@@ -14,6 +14,11 @@ def main() -> None:
     parser.add_argument("--predictions", required=True, type=Path)
     parser.add_argument("--iou-threshold", type=float, default=0.5)
     parser.add_argument("--event-frame-tolerance", type=int, default=2)
+    parser.add_argument(
+        "--report-output",
+        type=Path,
+        help="Optional JSON report path for retaining comparable run artifacts.",
+    )
     args = parser.parse_args()
 
     ground_truth = _load_frames(args.ground_truth)
@@ -24,7 +29,17 @@ def main() -> None:
         iou_threshold=args.iou_threshold,
         event_frame_tolerance=args.event_frame_tolerance,
     )
-    print(json.dumps(metrics, indent=2, sort_keys=True))
+    report = {
+        "ground_truth": str(args.ground_truth),
+        "predictions": str(args.predictions),
+        "iou_threshold": args.iou_threshold,
+        "event_frame_tolerance": args.event_frame_tolerance,
+        "metrics": metrics,
+    }
+    if args.report_output is not None:
+        args.report_output.parent.mkdir(parents=True, exist_ok=True)
+        args.report_output.write_text(json.dumps(report, indent=2, sort_keys=True), "utf-8")
+    print(json.dumps(report, indent=2, sort_keys=True))
 
 
 def evaluate(
