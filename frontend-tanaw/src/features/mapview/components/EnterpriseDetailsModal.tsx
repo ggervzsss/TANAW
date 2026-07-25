@@ -91,8 +91,9 @@ function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: Rea
 function StatusBadge({ status }: { status: EnterpriseStatus }) {
   const classes: Record<EnterpriseStatus, string> = {
     Normal: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
-    Warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
-    Critical: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
+    Warning: "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
+    "High Occupancy": "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
+    Issue: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-300/30 dark:bg-orange-500/15 dark:text-orange-200",
     Offline: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
     Inactive: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
   };
