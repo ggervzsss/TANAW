@@ -9,7 +9,7 @@ type InfoTooltipProps = {
   focusable?: boolean;
 };
 
-const HOVER_DELAY_MS = 3000;
+const HOVER_DELAY_MS = 500;
 const FOCUS_DELAY_MS = 450;
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
