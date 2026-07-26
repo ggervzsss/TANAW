@@ -5,7 +5,10 @@ import { assertUniqueCameraIps, canonicalizeCameraIp } from "../utils/camera-ip-
 
 export type MlServiceStatus = {
   baseUrl: string;
+  desktopBuild: string;
+  desktopVersion: string;
   error: string | null;
+  packaged: boolean;
   pid: number | null;
   running: boolean;
 };
@@ -69,6 +72,12 @@ export type MlHealth = {
   analytics_fps: number | null;
   processing_frame_age_ms: number | null;
   processing_frames_skipped: number;
+  raw_frame_id: number;
+  processed_frame_id: number;
+  stream_frame_id: number;
+  raw_frame_stale_ms: number | null;
+  processed_frame_stale_ms: number | null;
+  stream_frame_stale_ms: number | null;
   reid_queue_depth: number;
   reid_tasks_pending: number;
   reid_tasks_dropped: number;
@@ -78,6 +87,9 @@ export type MlHealth = {
   identity_active_tracks: number;
   identity_stitches: number;
   identity_splits: number;
+  identity_active_swaps: number;
+  identity_pending_swaps: number;
+  reid_results_stale: number;
   estimated_unique_count: number;
   confirmed_unique_count: number;
   degraded_unique_count: number;
@@ -346,16 +358,32 @@ export async function getMlServiceStatus(): Promise<MlServiceStatus> {
     try {
       return await window.tanawMlService.getStatus();
     } catch {
-      return { baseUrl: DEFAULT_ML_SERVICE_BASE_URL, error: "Electron ML service bridge is unavailable.", pid: null, running: false };
+      return {
+        baseUrl: DEFAULT_ML_SERVICE_BASE_URL,
+        desktopBuild: "development",
+        desktopVersion: "web",
+        error: "Electron ML service bridge is unavailable.",
+        packaged: false,
+        pid: null,
+        running: false,
+      };
     }
   }
 
-  return { baseUrl: DEFAULT_ML_SERVICE_BASE_URL, error: null, pid: null, running: false };
+  return { baseUrl: DEFAULT_ML_SERVICE_BASE_URL, desktopBuild: "development", desktopVersion: "web", error: null, packaged: false, pid: null, running: false };
 }
 
 export async function restartMlService(): Promise<MlServiceStatus> {
   if (!window.tanawMlService) {
-    return { baseUrl: DEFAULT_ML_SERVICE_BASE_URL, error: "Restart is only available inside Electron.", pid: null, running: false };
+    return {
+      baseUrl: DEFAULT_ML_SERVICE_BASE_URL,
+      desktopBuild: "development",
+      desktopVersion: "web",
+      error: "Restart is only available inside Electron.",
+      packaged: false,
+      pid: null,
+      running: false,
+    };
   }
 
   return window.tanawMlService.restart();

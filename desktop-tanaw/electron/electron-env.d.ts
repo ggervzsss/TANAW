@@ -30,19 +30,28 @@ interface Window {
   tanawMlService?: {
     getStatus: () => Promise<{
       baseUrl: string;
+      desktopBuild: string;
+      desktopVersion: string;
       error: string | null;
+      packaged: boolean;
       pid: number | null;
       running: boolean;
     }>;
     restart: () => Promise<{
       baseUrl: string;
+      desktopBuild: string;
+      desktopVersion: string;
       error: string | null;
+      packaged: boolean;
       pid: number | null;
       running: boolean;
     }>;
     stopCamera: () => Promise<{
       baseUrl: string;
+      desktopBuild: string;
+      desktopVersion: string;
       error: string | null;
+      packaged: boolean;
       pid: number | null;
       running: boolean;
     }>;

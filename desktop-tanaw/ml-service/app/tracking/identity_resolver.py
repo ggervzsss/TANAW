@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from math import hypot
 from threading import RLock
@@ -27,6 +28,16 @@ class EmbeddingResolution:
     remap_from: int | None = None
     remap_to: int | None = None
     swapped: bool = False
+    swap_from: int | None = None
+    swap_to: int | None = None
+    record_sample: bool = True
+
+
+@dataclass
+class PendingActiveSwap:
+    candidate_track_id: int
+    observations: int
+    last_observed_at: float
 
 
 @dataclass
@@ -40,6 +51,8 @@ class StableTrack:
     last_seen_at: float
     appearance: np.ndarray | None = None
     appearance_samples: int = 0
+    quality_appearance: np.ndarray | None = None
+    quality_appearance_samples: int = 0
     active: bool = True
     identity_state: str = "new"
     identity_score: float | None = None
@@ -54,18 +67,31 @@ class TrackIdentityResolver:
         max_jump_distance_fraction: float = 0.30,
         appearance_match_threshold: float = 0.76,
         appearance_margin: float = 0.05,
+        appearance_track_ttl_seconds: float = 15.0,
+        appearance_max_spatial_distance_fraction: float = 0.60,
+        active_swap_confirmation_samples: int = 3,
+        active_swap_confirmation_window_seconds: float = 5.0,
     ) -> None:
         self.lost_track_ttl_seconds = lost_track_ttl_seconds
         self.max_spatial_distance_fraction = max_spatial_distance_fraction
         self.max_jump_distance_fraction = max_jump_distance_fraction
         self.appearance_match_threshold = appearance_match_threshold
         self.appearance_margin = appearance_margin
+        self.appearance_track_ttl_seconds = max(
+            appearance_track_ttl_seconds, lost_track_ttl_seconds
+        )
+        self.appearance_max_spatial_distance_fraction = appearance_max_spatial_distance_fraction
+        self.active_swap_confirmation_samples = max(2, active_swap_confirmation_samples)
+        self.active_swap_confirmation_window_seconds = active_swap_confirmation_window_seconds
         self._next_track_id = 0
         self._source_to_stable: dict[int, int] = {}
         self._tracks: dict[int, StableTrack] = {}
         self._aliases: dict[int, int] = {}
+        self._pending_active_swaps: dict[int, PendingActiveSwap] = {}
+        self._frame_diagonal = 1.0
         self._stitch_count = 0
         self._split_count = 0
+        self._active_swap_count = 0
         self._lock = RLock()
 
     def reset(self) -> None:
@@ -74,8 +100,11 @@ class TrackIdentityResolver:
             self._source_to_stable.clear()
             self._tracks.clear()
             self._aliases.clear()
+            self._pending_active_swaps.clear()
+            self._frame_diagonal = 1.0
             self._stitch_count = 0
             self._split_count = 0
+            self._active_swap_count = 0
 
     def status(self) -> dict[str, int]:
         with self._lock:
@@ -83,6 +112,8 @@ class TrackIdentityResolver:
                 "identity_active_tracks": sum(1 for state in self._tracks.values() if state.active),
                 "identity_stitches": self._stitch_count,
                 "identity_splits": self._split_count,
+                "identity_active_swaps": self._active_swap_count,
+                "identity_pending_swaps": len(self._pending_active_swaps),
             }
 
     def resolve(
@@ -103,6 +134,7 @@ class TrackIdentityResolver:
         frame_height: int,
     ) -> list[ResolvedTrack]:
         diagonal = max(hypot(frame_width, frame_height), 1.0)
+        self._frame_diagonal = diagonal
         self._expire_tracks(now)
         for track_state in self._tracks.values():
             track_state.active = False
@@ -157,9 +189,16 @@ class TrackIdentityResolver:
         stable_track_id: int,
         embedding: np.ndarray,
         now: float,
+        appearance_space: str = "fast",
     ) -> EmbeddingResolution | None:
         with self._lock:
-            return self._record_embedding_locked(source_track_id, stable_track_id, embedding, now)
+            return self._record_embedding_locked(
+                source_track_id,
+                stable_track_id,
+                embedding,
+                now,
+                appearance_space,
+            )
 
     def _record_embedding_locked(
         self,
@@ -167,10 +206,13 @@ class TrackIdentityResolver:
         stable_track_id: int,
         embedding: np.ndarray,
         now: float,
+        appearance_space: str,
     ) -> EmbeddingResolution | None:
         normalized = _normalize(embedding)
         if normalized is None:
             return None
+        if appearance_space not in {"fast", "quality"}:
+            raise ValueError(f"Unsupported appearance space: {appearance_space}")
 
         current_id = self._canonical(stable_track_id)
         mapped_id = self._canonical(self._source_to_stable.get(source_track_id))
@@ -181,10 +223,11 @@ class TrackIdentityResolver:
             return None
 
         candidate, candidate_score, second_score = self._best_appearance_candidate(
-            current.track_id, normalized, now
+            current.track_id, normalized, now, appearance_space
         )
+        current_appearance = self._appearance(current, appearance_space)
         current_score = (
-            float(current.appearance @ normalized) if current.appearance is not None else None
+            float(current_appearance @ normalized) if current_appearance is not None else None
         )
         if (
             candidate is not None
@@ -193,19 +236,34 @@ class TrackIdentityResolver:
         ):
             if (
                 candidate.active
-                and current.appearance is not None
+                and current_appearance is not None
                 and current_score is not None
                 and candidate_score - current_score >= self.appearance_margin
             ):
+                if not self._confirm_active_swap(current, candidate, now):
+                    current.identity_state = "swap_pending"
+                    current.identity_score = candidate_score
+                    current.identity_source = f"appearance_{appearance_space}"
+                    return EmbeddingResolution(
+                        track_id=current.track_id,
+                        record_sample=False,
+                    )
                 self._swap_active_tracks(current, candidate)
                 candidate.identity_state = "reidentified"
                 candidate.identity_score = candidate_score
-                candidate.identity_source = "appearance"
+                candidate.identity_source = f"appearance_{appearance_space}"
                 self._split_count += 1
-                self._update_appearance(candidate, normalized)
-                return EmbeddingResolution(track_id=candidate.track_id, swapped=True)
+                self._active_swap_count += 1
+                self._update_appearance(candidate, normalized, appearance_space)
+                return EmbeddingResolution(
+                    track_id=candidate.track_id,
+                    swapped=True,
+                    swap_from=current.track_id,
+                    swap_to=candidate.track_id,
+                )
             if candidate.active:
-                self._update_appearance(current, normalized)
+                self._pending_active_swaps.pop(current.track_id, None)
+                self._update_appearance(current, normalized, appearance_space)
                 return EmbeddingResolution(track_id=current.track_id)
 
             previous_id = current.track_id
@@ -214,25 +272,31 @@ class TrackIdentityResolver:
             current = self._tracks[target_id]
             current.identity_state = "reidentified"
             current.identity_score = candidate_score
-            current.identity_source = "appearance"
+            current.identity_source = f"appearance_{appearance_space}"
             self._stitch_count += 1
-            self._update_appearance(current, normalized)
+            self._pending_active_swaps.pop(previous_id, None)
+            self._update_appearance(current, normalized, appearance_space)
             return EmbeddingResolution(
                 track_id=target_id,
                 remap_from=previous_id,
                 remap_to=target_id,
             )
 
-        self._update_appearance(current, normalized)
+        self._pending_active_swaps.pop(current.track_id, None)
+        self._update_appearance(current, normalized, appearance_space)
         if current.identity_source == "detector":
             current.identity_state = "confirmed"
             current.identity_score = 1.0
-            current.identity_source = "appearance"
+            current.identity_source = f"appearance_{appearance_space}"
         return EmbeddingResolution(track_id=current.track_id)
 
     def canonical_track_id(self, track_id: int) -> int:
         with self._lock:
             return self._canonical(track_id) or track_id
+
+    def canonical_track_ids(self, track_ids: Iterable[int]) -> frozenset[int]:
+        with self._lock:
+            return frozenset(self._canonical(track_id) or track_id for track_id in track_ids)
 
     def _best_spatial_candidate(
         self,
@@ -269,14 +333,24 @@ class TrackIdentityResolver:
         current_track_id: int,
         embedding: np.ndarray,
         now: float,
+        appearance_space: str,
     ) -> tuple[StableTrack | None, float, float]:
         matches: list[tuple[float, StableTrack]] = []
         for state in self._tracks.values():
-            if state.track_id == current_track_id or state.appearance is None:
+            appearance = self._appearance(state, appearance_space)
+            if state.track_id == current_track_id or appearance is None:
                 continue
-            if now - state.last_seen_at > self.lost_track_ttl_seconds:
+            if now - state.last_seen_at > self.appearance_track_ttl_seconds:
                 continue
-            matches.append((float(state.appearance @ embedding), state))
+            current = self._tracks.get(current_track_id)
+            if (
+                current is not None
+                and not state.active
+                and _distance(state.centroid, current.centroid) / self._frame_diagonal
+                > self.appearance_max_spatial_distance_fraction
+            ):
+                continue
+            matches.append((float(appearance @ embedding), state))
 
         if not matches:
             return None, -1.0, -1.0
@@ -361,17 +435,56 @@ class TrackIdentityResolver:
         self._source_to_stable[current_source] = candidate.track_id
         self._source_to_stable[candidate_source] = current.track_id
 
-    def _update_appearance(self, state: StableTrack, embedding: np.ndarray) -> None:
-        if state.appearance is None:
-            state.appearance = embedding
-            state.appearance_samples = 1
+    def _confirm_active_swap(
+        self, current: StableTrack, candidate: StableTrack, now: float
+    ) -> bool:
+        pending = self._pending_active_swaps.get(current.track_id)
+        if (
+            pending is None
+            or pending.candidate_track_id != candidate.track_id
+            or now - pending.last_observed_at > self.active_swap_confirmation_window_seconds
+        ):
+            self._pending_active_swaps[current.track_id] = PendingActiveSwap(
+                candidate_track_id=candidate.track_id,
+                observations=1,
+                last_observed_at=now,
+            )
+            return False
+
+        pending.observations += 1
+        pending.last_observed_at = now
+        if pending.observations < self.active_swap_confirmation_samples:
+            return False
+
+        self._pending_active_swaps.pop(current.track_id, None)
+        self._pending_active_swaps.pop(candidate.track_id, None)
+        return True
+
+    @staticmethod
+    def _appearance(state: StableTrack, appearance_space: str) -> np.ndarray | None:
+        return state.quality_appearance if appearance_space == "quality" else state.appearance
+
+    def _update_appearance(
+        self, state: StableTrack, embedding: np.ndarray, appearance_space: str
+    ) -> None:
+        appearance_attribute = (
+            "quality_appearance" if appearance_space == "quality" else "appearance"
+        )
+        samples_attribute = (
+            "quality_appearance_samples" if appearance_space == "quality" else "appearance_samples"
+        )
+        appearance = getattr(state, appearance_attribute)
+        samples = getattr(state, samples_attribute)
+        if appearance is None:
+            setattr(state, appearance_attribute, embedding)
+            setattr(state, samples_attribute, 1)
             return
 
-        count = min(state.appearance_samples, 8)
-        updated = _normalize((state.appearance * count + embedding) / (count + 1))
+        count = min(samples, 8)
+        updated = _normalize((appearance * count + embedding) / (count + 1))
         if updated is not None:
-            state.appearance = updated
-            state.appearance_samples = count + 1
+            setattr(state, appearance_attribute, updated)
+            setattr(state, samples_attribute, count + 1)
 
     def _predicted_centroid(self, state: StableTrack, now: float) -> Centroid:
         elapsed = min(max(now - state.last_seen_at, 0.0), self.lost_track_ttl_seconds)
@@ -384,10 +497,12 @@ class TrackIdentityResolver:
         expired = [
             track_id
             for track_id, state in self._tracks.items()
-            if now - state.last_seen_at > self.lost_track_ttl_seconds * 2.0
+            if now - state.last_seen_at
+            > max(self.lost_track_ttl_seconds * 2.0, self.appearance_track_ttl_seconds)
         ]
         for track_id in expired:
             del self._tracks[track_id]
+            self._pending_active_swaps.pop(track_id, None)
         for source_id, stable_id in list(self._source_to_stable.items()):
             if self._canonical(stable_id) not in self._tracks:
                 del self._source_to_stable[source_id]

@@ -43,6 +43,7 @@ export function CameraMonitoringPanel({
   const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
   const modelStatus = formatModelStatus(health);
   const performanceStatus = formatPerformanceStatus(health);
+  const frameFreshness = formatFrameFreshness(health, counts.running);
   const isProcessRunning = counts.running && !isStarting;
   const ProcessIcon = isProcessRunning ? Square : Play;
   const processButtonLabel = isProcessRunning ? (isStopping ? "Stopping..." : "Stop") : isStarting ? "Starting..." : "Start";
@@ -75,7 +76,20 @@ export function CameraMonitoringPanel({
           <StatusRow icon={CheckCircle} label={streamLabel} tone={streamVerified ? "ok" : "neutral"} tooltip="Shows whether the stream configuration has been verified." />
           <StatusRow icon={Activity} label={modelStatus} tone={health?.model_ready ? "ok" : "neutral"} tooltip="Shows the active detector model, runtime, and tracker selected by TANAW." />
           <StatusRow icon={Activity} label={performanceStatus} tone="neutral" tooltip="Shows current detector latency and analytics throughput." />
+          <StatusRow
+            icon={Activity}
+            label={frameFreshness.label}
+            tone={frameFreshness.tone}
+            tooltip="Compares the age of the latest captured, processed, and preview frames to identify pipeline or display stalls."
+          />
         </div>
+        <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400">
+          Desktop {serviceStatus?.desktopVersion ?? "unknown"} ({serviceStatus?.packaged ? "packaged" : "development"}) · ML {health?.service_version ?? "unknown"} · API{" "}
+          {health?.api_contract_version ?? "unknown"}
+        </p>
+        <p className="truncate text-[9px] font-medium text-gray-400" title={serviceStatus?.desktopBuild}>
+          Desktop build: {serviceStatus?.desktopBuild ?? "unknown"}
+        </p>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <InfoTooltip content="Refreshes or checks the local service connection." focusable={false}>
@@ -200,6 +214,20 @@ function formatPerformanceStatus(health: MlHealth | null) {
   const fps = typeof health?.analytics_fps === "number" ? `${health.analytics_fps.toFixed(1)} FPS` : "FPS adaptive";
   const p95 = typeof health?.detector_p95_ms === "number" ? `${Math.round(health.detector_p95_ms)} ms p95` : "p95 pending";
   return `${fps} / ${p95}`;
+}
+
+function formatFrameFreshness(health: MlHealth | null, isRunning: boolean): { label: string; tone: "ok" | "neutral" | "error" } {
+  if (!isRunning) return { label: "Frame Telemetry Idle", tone: "neutral" };
+  const ages = [health?.raw_frame_stale_ms, health?.processed_frame_stale_ms, health?.stream_frame_stale_ms].filter((age): age is number => typeof age === "number");
+  if (ages.length === 0) return { label: "Frame Freshness Pending", tone: "neutral" };
+  const staleMs = Math.max(...ages);
+  if (staleMs >= 3000) return { label: `Frame Stale ${formatFrameAge(staleMs)}`, tone: "error" };
+  if (staleMs >= 1000) return { label: `Frame Delayed ${formatFrameAge(staleMs)}`, tone: "neutral" };
+  return { label: `Frame Fresh ${formatFrameAge(staleMs)}`, tone: "ok" };
+}
+
+function formatFrameAge(ageMs: number) {
+  return ageMs >= 1000 ? `${(ageMs / 1000).toFixed(1)} s` : `${Math.round(ageMs)} ms`;
 }
 
 function formatProfile(profile: string | null | undefined) {

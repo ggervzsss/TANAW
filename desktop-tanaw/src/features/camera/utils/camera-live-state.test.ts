@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { MlCameraLiveState, MlCameraStates } from "../services/ml-service";
-import { clearRecoveredCameraRequestErrors, isAcceptedCameraStartSettled, mergeCameraStates } from "./camera-live-state";
+import {
+  clearRecoveredCameraRequestErrors,
+  isAcceptedCameraStartSettled,
+  isCameraPreviewReady,
+  isCameraStartOutcomeUncertain,
+  mergeCameraStates,
+} from "./camera-live-state";
 
 describe("mergeCameraStates", () => {
   it("keeps delayed updates attached to their source camera while another camera is selected", () => {
@@ -65,13 +71,36 @@ describe("isAcceptedCameraStartSettled", () => {
     expect(isAcceptedCameraStartSettled(payload([stopped]), 101)).toBe(false);
   });
 
-  it("settles when runtime confirms that startup progressed or failed", () => {
+  it("does not settle only because an initializing runtime is marked active", () => {
+    const connecting = state(101, 0);
+    connecting.counts.status = "connecting";
+
+    expect(isAcceptedCameraStartSettled(payload([connecting]), 101)).toBe(false);
+  });
+
+  it("settles when runtime becomes usable or fails", () => {
     expect(isAcceptedCameraStartSettled(payload([state(101, 0)]), 101)).toBe(true);
 
     const failed = state(101, 0);
     failed.counts.running = false;
     failed.counts.status = "failed";
     expect(isAcceptedCameraStartSettled(payload([failed]), 101)).toBe(true);
+  });
+});
+
+describe("camera startup and preview recovery", () => {
+  it("treats an IPC timeout as an uncertain startup outcome", () => {
+    expect(isCameraStartOutcomeUncertain(new Error("TimeoutError: The operation was aborted due to timeout"))).toBe(true);
+    expect(isCameraStartOutcomeUncertain(new Error("Invalid camera password."))).toBe(false);
+  });
+
+  it("waits for a usable runtime state before attaching the preview", () => {
+    const starting = state(101, 0);
+    starting.counts.status = "starting";
+    expect(isCameraPreviewReady(starting)).toBe(false);
+
+    const running = state(101, 0);
+    expect(isCameraPreviewReady(running)).toBe(true);
   });
 });
 

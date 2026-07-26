@@ -389,6 +389,27 @@ class TripwireCounterTest(unittest.TestCase):
 
         self.assertNotIn(1, counter.tracks)
 
+    def test_confirmed_identity_swap_exchanges_pending_tripwire_state(self) -> None:
+        counter = TripwireCounter(
+            entry_line=((0.35, 0.0), (0.35, 1.0)),
+            exit_line=((0.65, 0.0), (0.65, 1.0)),
+        )
+        counter.reset()
+        self._update(counter, 1, 50, 80)
+        self._update(counter, 1, 90, 80)
+        self._update(counter, 2, 150, 80)
+
+        counter.swap_tracks(1, 2)
+
+        first_state = counter.debug_state(1)
+        second_state = counter.debug_state(2)
+        self.assertIsNotNone(first_state)
+        self.assertIsNotNone(second_state)
+        assert first_state is not None
+        assert second_state is not None
+        self.assertIsNone(first_state["pending_line"])
+        self.assertEqual(second_state["pending_line"], "entry")
+
     def _update(
         self,
         counter: TripwireCounter,

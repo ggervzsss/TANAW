@@ -29,12 +29,14 @@ from app.reid import (
 )
 from app.runtime.hardware import get_runtime_capabilities
 from app.storage.session_store import SessionStore
-from app.tracking import ResolvedTrack, TrackIdentityResolver
+from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
 
 NormalizedPath = tuple[tuple[float, float], ...]
 
 logger = logging.getLogger(__name__)
 RECONNECT_MAX_DELAY_SECONDS = 15.0
+FAST_REID_RESULT_MAX_AGE_SECONDS = 2.5
+QUALITY_REID_RESULT_MAX_AGE_SECONDS = 6.0
 
 
 class CameraStreamUnavailableError(ValueError):
@@ -116,6 +118,8 @@ class CameraProcessingManager:
         self._latest_raw_frame: np.ndarray | None = None
         self._latest_raw_frame_id = 0
         self._latest_raw_frame_captured_at: float | None = None
+        self._latest_processed_at: float | None = None
+        self._latest_stream_encoded_at: float | None = None
         self._latest_jpeg: bytes | None = None
         self._latest_stream_jpeg: bytes | None = None
         self._latest_stream_frame_id = 0
@@ -154,6 +158,7 @@ class CameraProcessingManager:
         self._effective_reid_mode = "fast"
         self._processing_frame_age_ms: float | None = None
         self._processing_frames_skipped = 0
+        self._reid_results_stale = 0
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
 
@@ -301,13 +306,15 @@ class CameraProcessingManager:
                 stop_when_full=True,
             )
             self._identity_resolver = TrackIdentityResolver(
-                lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0)
+                lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0),
+                appearance_track_ttl_seconds=max(config.track_ttl_seconds, 15.0),
             )
             self._pending_entry_events.clear()
             self._visitor_registry.prepare(config.camera_id)
             self._visitor_registry.reset_session_tracks()
             self._processing_frame_age_ms = None
             self._processing_frames_skipped = 0
+            self._reid_results_stale = 0
             self._latest_jpeg = self._build_status_frame("Initializing ML model...")
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
@@ -355,6 +362,8 @@ class CameraProcessingManager:
             self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
             self._latest_raw_frame_captured_at = None
+            self._latest_processed_at = None
+            self._latest_stream_encoded_at = None
             self._latest_processed_frame = None
             self._latest_processed_frame_id = 0
             self._latest_tracks = []
@@ -416,6 +425,8 @@ class CameraProcessingManager:
             self._latest_raw_frame = None
             self._latest_raw_frame_id = 0
             self._latest_raw_frame_captured_at = None
+            self._latest_processed_at = None
+            self._latest_stream_encoded_at = None
             self._latest_processed_frame = None
             self._latest_processed_frame_id = 0
             self._latest_tracks = []
@@ -550,9 +561,17 @@ class CameraProcessingManager:
 
     def model_status(self) -> dict:
         with self._lock:
+            now = time.monotonic()
             runtime_status = {
                 "processing_frame_age_ms": self._processing_frame_age_ms,
                 "processing_frames_skipped": self._processing_frames_skipped,
+                "raw_frame_id": self._latest_raw_frame_id,
+                "processed_frame_id": self._latest_processed_frame_id,
+                "stream_frame_id": self._latest_stream_frame_id,
+                "raw_frame_stale_ms": _age_ms(now, self._latest_raw_frame_captured_at),
+                "processed_frame_stale_ms": _age_ms(now, self._latest_processed_at),
+                "stream_frame_stale_ms": _age_ms(now, self._latest_stream_encoded_at),
+                "reid_results_stale": self._reid_results_stale,
                 "pending_unique_entries": len(self._pending_entry_events),
                 "tracking_confidence": self._config.tracking_confidence if self._config else None,
                 "counting_confidence": self._config.counting_confidence if self._config else None,
@@ -921,6 +940,7 @@ class CameraProcessingManager:
                         return
                     self._latest_processed_frame = frame
                     self._latest_processed_frame_id = frame_id
+                    self._latest_processed_at = time.monotonic()
                     self._latest_tracks = tracks
                     self._state.status = "running"
                     self._state.error = None
@@ -990,6 +1010,7 @@ class CameraProcessingManager:
                         return
                     self._latest_stream_jpeg = encoded
                     self._latest_stream_frame_id += 1
+                    self._latest_stream_encoded_at = time.monotonic()
                     last_encoded_processed_frame_id = processed_frame_id
                     self._raw_frame_condition.notify_all()
 
@@ -1396,7 +1417,9 @@ class CameraProcessingManager:
 
     def _apply_reid_results(self, session: ProcessingSession, now: float) -> None:
         for result in self._reid_worker.poll(session.session_id):
-            if result.embedding is None:
+            if result.embedding is None or self._reid_result_is_stale(
+                result.requested_at, now, FAST_REID_RESULT_MAX_AGE_SECONDS
+            ):
                 continue
             canonical_track_id = self._identity_resolver.canonical_track_id(result.track_id)
             resolution = self._identity_resolver.record_embedding(
@@ -1407,30 +1430,80 @@ class CameraProcessingManager:
             )
             if resolution is None:
                 continue
-            self._appearance_buffer.record_sample(
-                resolution.track_id,
-                result.embedding,
-                result.quality,
-                self._counter.frame_index,
-            )
-            if resolution.remap_from is None or resolution.remap_to is None:
-                continue
-            self._counter.remap_track(resolution.remap_from, resolution.remap_to)
-            self._appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
-            self._quality_appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
-            self._visitor_registry.remap_session_track(resolution.remap_from, resolution.remap_to)
+            if resolution.record_sample:
+                self._appearance_buffer.record_sample(
+                    resolution.track_id,
+                    result.embedding,
+                    result.quality,
+                    self._counter.frame_index,
+                )
+            self._apply_identity_resolution(resolution)
 
         for result in self._quality_reid_worker.poll(session.session_id):
-            if result.embedding is None:
+            if result.embedding is None or self._reid_result_is_stale(
+                result.requested_at, now, QUALITY_REID_RESULT_MAX_AGE_SECONDS
+            ):
                 continue
             track_id = self._identity_resolver.canonical_track_id(result.track_id)
-            self._quality_appearance_buffer.record_sample(
+            resolution = self._identity_resolver.record_embedding(
+                result.source_track_id,
                 track_id,
                 result.embedding,
-                result.quality,
-                self._counter.frame_index,
+                now,
+                appearance_space="quality",
             )
-            self._visitor_registry.record_quality_embedding_for_track(track_id, result.embedding)
+            if resolution is None:
+                continue
+            if resolution.record_sample:
+                self._quality_appearance_buffer.record_sample(
+                    resolution.track_id,
+                    result.embedding,
+                    result.quality,
+                    self._counter.frame_index,
+                )
+                self._visitor_registry.record_quality_embedding_for_track(
+                    resolution.track_id, result.embedding
+                )
+            self._apply_identity_resolution(resolution)
+
+    def _reid_result_is_stale(
+        self, requested_at: float, now: float, max_age_seconds: float
+    ) -> bool:
+        if requested_at > now or now - requested_at <= max_age_seconds:
+            return False
+        with self._lock:
+            self._reid_results_stale += 1
+        return True
+
+    def _apply_identity_resolution(self, resolution: EmbeddingResolution) -> None:
+        if (
+            resolution.swapped
+            and resolution.swap_from is not None
+            and resolution.swap_to is not None
+        ):
+            self._counter.swap_tracks(resolution.swap_from, resolution.swap_to)
+            logger.info(
+                "Confirmed active track identity swap.",
+                extra={
+                    "camera_id": self._config.camera_id if self._config else None,
+                    "first_track_id": resolution.swap_from,
+                    "second_track_id": resolution.swap_to,
+                },
+            )
+        if resolution.remap_from is None or resolution.remap_to is None:
+            return
+        self._counter.remap_track(resolution.remap_from, resolution.remap_to)
+        self._appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+        self._quality_appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+        self._visitor_registry.remap_session_track(resolution.remap_from, resolution.remap_to)
+        logger.info(
+            "Reattached track to an inactive identity.",
+            extra={
+                "camera_id": self._config.camera_id if self._config else None,
+                "previous_track_id": resolution.remap_from,
+                "target_track_id": resolution.remap_to,
+            },
+        )
 
     def _crop_track(self, frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:
         frame_height, frame_width = frame.shape[:2]
@@ -1871,7 +1944,9 @@ class CameraProcessingManager:
             return requested_mode
 
         profile_config = getattr(self._tracker, "effective_profile", self._effective_profile)
-        if profile_config in {"balanced", "high_accuracy"}:
+        if profile_config == "high_accuracy":
+            return "quality"
+        if profile_config == "balanced":
             return "fast"
         return "off"
 
@@ -1882,7 +1957,7 @@ class CameraProcessingManager:
         return self._effective_reid_mode == "quality"
 
     def _reid_sampling_enabled(self, config: CameraStartRequest) -> bool:
-        return config.unique_counting_mode == "estimated_reid" and self._fast_reid_enabled()
+        return self._fast_reid_enabled()
 
     def _counting_debug(
         self,
@@ -1912,6 +1987,12 @@ class CameraProcessingManager:
 
 def _safe_int(value: Any) -> int:
     return value if isinstance(value, int) else 0
+
+
+def _age_ms(now: float, observed_at: float | None) -> float | None:
+    if observed_at is None:
+        return None
+    return max(0.0, (now - observed_at) * 1000.0)
 
 
 def _seconds_to_frames(seconds: float, processing_fps: float) -> int:

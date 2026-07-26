@@ -34,7 +34,7 @@ REID_MODEL_PROFILES: dict[ReIdModelKey, ReIdModelProfile] = {
         filename="person_reid.onnx",
         model_name="torchreid_osnet_ain_x1_0_msmt17_onnx",
         input_size=(128, 256),
-        role="higher-accuracy unique-visitor confirmation",
+        role="higher-accuracy ambiguous track association and unique-visitor confirmation",
     ),
 }
 

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, screen, Tray } from "electron";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,7 @@ import { createDisplayScaleController } from "./display-scale";
 import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const desktopBuild = getDesktopBuildFingerprint();
 
 // The built directory structure:
 // dist/index.html
@@ -212,10 +213,21 @@ function isMlServiceRunning() {
 async function getMlServiceStatusPayload() {
   return {
     baseUrl: mlServiceUrl,
+    desktopBuild,
+    desktopVersion: app.getVersion(),
     error: mlServiceError,
+    packaged: app.isPackaged,
     pid: mlServiceProcess?.pid ?? (mlServiceConnectedExternally ? await findMlServiceListenerPid() : null),
     running: isMlServiceRunning(),
   };
+}
+
+function getDesktopBuildFingerprint() {
+  try {
+    return statSync(fileURLToPath(import.meta.url)).mtime.toISOString();
+  } catch {
+    return "unknown";
+  }
 }
 
 async function isMlServiceReachable(timeoutMs = 750) {

@@ -46,8 +46,12 @@ class TrackIdentityResolverTest(unittest.TestCase):
         assert remap is not None
         self.assertEqual((remap.remap_from, remap.remap_to), (second.track_id, first.track_id))
         self.assertEqual(resolver.canonical_track_id(second.track_id), first.track_id)
+        self.assertEqual(
+            resolver.canonical_track_ids((first.track_id, second.track_id)),
+            frozenset({first.track_id}),
+        )
 
-    def test_appearance_corrects_active_source_id_swap(self) -> None:
+    def test_appearance_requires_confirmation_before_active_source_id_swap(self) -> None:
         resolver = TrackIdentityResolver(appearance_match_threshold=0.70)
         first_embedding = _embedding([1.0, 0.0, 0.0])
         second_embedding = _embedding([0.0, 1.0, 0.0])
@@ -66,20 +70,69 @@ class TrackIdentityResolverTest(unittest.TestCase):
             400,
             200,
         )
-        correction = resolver.record_embedding(10, first.track_id, second_embedding, 1.3)
+        pending = resolver.record_embedding(10, first.track_id, second_embedding, 1.3)
+
+        self.assertIsNotNone(pending)
+        assert pending is not None
+        self.assertFalse(pending.swapped)
+        self.assertFalse(pending.record_sample)
+        unchanged = resolver.resolve(
+            [_track(10, (185, 20, 225, 180)), _track(20, (75, 20, 115, 180))],
+            1.4,
+            400,
+            200,
+        )
+        unchanged_by_source = {track.source_track_id: track.track_id for track in unchanged}
+        self.assertEqual(unchanged_by_source[10], first.track_id)
+        self.assertEqual(unchanged_by_source[20], second.track_id)
+
+        resolver.record_embedding(10, first.track_id, second_embedding, 1.5)
+        correction = resolver.record_embedding(10, first.track_id, second_embedding, 1.6)
 
         self.assertIsNotNone(correction)
         assert correction is not None
         self.assertTrue(correction.swapped)
         corrected = resolver.resolve(
             [_track(10, (185, 20, 225, 180)), _track(20, (75, 20, 115, 180))],
-            1.4,
+            1.7,
             400,
             200,
         )
         by_source = {track.source_track_id: track.track_id for track in corrected}
         self.assertEqual(by_source[10], second.track_id)
         self.assertEqual(by_source[20], first.track_id)
+        self.assertEqual(resolver.status()["identity_active_swaps"], 1)
+
+    def test_quality_embedding_recovers_identity_after_motion_ttl(self) -> None:
+        resolver = TrackIdentityResolver(
+            lost_track_ttl_seconds=3.0,
+            appearance_track_ttl_seconds=15.0,
+            max_spatial_distance_fraction=0.05,
+            appearance_match_threshold=0.70,
+        )
+        embedding = _embedding([0.0, 1.0, 0.0])
+
+        first = resolver.resolve([_track(1, (20, 20, 60, 180))], 1.0, 400, 200)[0]
+        resolver.record_embedding(
+            1,
+            first.track_id,
+            embedding,
+            1.1,
+            appearance_space="quality",
+        )
+        second = resolver.resolve([_track(2, (240, 20, 280, 180))], 8.0, 400, 200)[0]
+
+        remap = resolver.record_embedding(
+            2,
+            second.track_id,
+            embedding,
+            8.1,
+            appearance_space="quality",
+        )
+
+        self.assertIsNotNone(remap)
+        assert remap is not None
+        self.assertEqual((remap.remap_from, remap.remap_to), (second.track_id, first.track_id))
 
     def test_unconfirmed_detector_result_does_not_create_stable_identity(self) -> None:
         resolver = TrackIdentityResolver()

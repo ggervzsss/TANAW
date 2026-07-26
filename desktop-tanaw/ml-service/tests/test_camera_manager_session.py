@@ -47,6 +47,24 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(status["confirmed_unique_count"], 0)
             self.assertEqual(retired_database.read_bytes(), b"retired")
 
+    def test_health_status_exposes_frame_freshness_and_stale_reid_results(self) -> None:
+        manager = CameraProcessingManager()
+
+        self.assertTrue(manager._reid_result_is_stale(1.0, 4.0, 2.5))
+        status = manager.model_status()
+
+        self.assertEqual(status["reid_results_stale"], 1)
+        self.assertEqual(status["raw_frame_id"], 0)
+        self.assertIsNone(status["stream_frame_stale_ms"])
+
+    def test_high_accuracy_auto_mode_enables_quality_reid(self) -> None:
+        manager = CameraProcessingManager()
+        manager._tracker = cast(
+            Any, type("TrackerProfile", (), {"effective_profile": "high_accuracy"})()
+        )
+
+        self.assertEqual(manager._resolve_reid_mode("auto"), "quality")
+
     def test_enterprise_binding_switches_session_store_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = CameraProcessingManager(directory)
