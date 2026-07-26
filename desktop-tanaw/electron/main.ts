@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { getMlServiceCommand } from "./ml-service-command";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
+import { classifyMlServiceStderr } from "./ml-service-log";
 import { buildWindowsListenerPidScript } from "./ml-service-process";
 import { createDisplayScaleController } from "./display-scale";
 import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
@@ -150,7 +151,11 @@ async function startMlService() {
   });
 
   child.stderr?.on("data", (chunk) => {
-    console.error(`[tanaw-ml] ${String(chunk).trim()}`);
+    const message = String(chunk).trim();
+    if (!message) {
+      return;
+    }
+    console[classifyMlServiceStderr(message)](`[tanaw-ml] ${message}`);
   });
 
   child.on("error", (error) => {

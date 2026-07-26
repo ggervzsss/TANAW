@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
 from collections import deque
 from dataclasses import dataclass, replace
 from pathlib import Path
-from tempfile import gettempdir
 from threading import Lock
 from time import monotonic
 from typing import Any
@@ -12,10 +10,10 @@ from typing import Any
 import numpy as np
 
 from app.counting.geometry import Centroid, bbox_centroid
+from app.runtime.config_directories import configure_third_party_directories
 from app.runtime.hardware import get_runtime_capabilities
 
-os.environ.setdefault("MPLCONFIGDIR", str(Path(gettempdir()) / "tanaw-matplotlib"))
-os.environ.setdefault("YOLO_CONFIG_DIR", str(Path(gettempdir()) / "tanaw-ultralytics"))
+configure_third_party_directories()
 
 PROCESSING_PROFILE_VALUES = {
     "auto",
