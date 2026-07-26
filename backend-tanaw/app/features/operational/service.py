@@ -742,39 +742,6 @@ def can_manage_operational_alert(account: Account, alert: OperationalAlert) -> b
     return False
 
 
-def can_view_operational_event(role: str, event_type: str) -> bool:
-    notification_events = {"notification.created", "notification.updated"}
-    if role == AccountRole.ADMIN.value:
-        return True
-    if role == AccountRole.IT.value:
-        return (
-            event_type
-            in {
-                "telemetry.snapshot",
-                "summary.updated",
-                "alert.created",
-                "alert.updated",
-                "alert.resolved",
-            }
-            | notification_events
-        )
-    if role == AccountRole.STAFF.value:
-        return (
-            event_type
-            in {
-                "report.submitted",
-                "report.updated",
-                "summary.updated",
-                "final_report.generated",
-                "final_report.updated",
-            }
-            | notification_events
-        )
-    if role == AccountRole.ENTERPRISE.value:
-        return event_type in {"report.updated", "notification.created", "notification.updated"}
-    return False
-
-
 def visitor_activity_condition(
     current_occupancy: int,
     baseline_occupancies: Sequence[int | float],

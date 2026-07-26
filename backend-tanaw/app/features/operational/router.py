@@ -362,14 +362,6 @@ async def get_desktop_sample_preparation(
     )
 
 
-@router.get("/telemetry/latest", response_model=list[TelemetrySnapshotSummary])
-async def get_latest_telemetry(
-    account: OperationalReadAccount,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[TelemetrySnapshotSummary]:
-    return await list_latest_telemetry(db, account)
-
-
 @router.get("/telemetry/summary", response_model=OperationalSummary)
 async def get_summary(
     account: OperationalReadAccount,
@@ -995,34 +987,6 @@ async def update_alert_status(
         metadata={"previousStatus": previous_status, "newStatus": payload.status},
     )
     return alert_summary
-
-
-@router.get("/system-activities")
-async def list_system_activities(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
-
-
-@router.get("/system-logs")
-async def list_system_logs(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
-
-
-@router.get("/lgu-accounts")
-async def list_lgu_accounts(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
-
-
-@router.get("/enterprise-accounts")
-async def list_enterprise_accounts(
-    _: Annotated[Account, Depends(get_current_operational_account)],
-) -> list[dict]:
-    return []
 
 
 async def notify_enterprise_ticket_update(

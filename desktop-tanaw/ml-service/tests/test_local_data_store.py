@@ -42,6 +42,9 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertIn("enterprise_occupancy_state", tables)
             self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
             self.assertNotIn("camera_type", camera_columns)
+            self.assertNotIn("purpose", camera_columns)
+            self.assertNotIn("resolution", camera_columns)
+            self.assertNotIn("fps", camera_columns)
             self.assertTrue(
                 any(
                     row[2] == "report_submissions"
@@ -814,9 +817,6 @@ def _camera_profile() -> dict:
         "name": "Main Entrance",
         "status": "untested",
         "zone": "Entrance",
-        "fps": 0.0,
-        "resolution": "Adaptive",
-        "type": "Entry/Exit",
         "rtsp": "rtsp://192.168.1.20/stream1",
         "cameraHost": "192.168.1.20",
         "rtspStream": "stream1",

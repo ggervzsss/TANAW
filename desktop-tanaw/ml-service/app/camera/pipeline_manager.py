@@ -271,12 +271,6 @@ class CameraPipelineRegistry:
             raise KeyError(camera_id)
         return pipeline
 
-    def camera_state(self, camera_id: int) -> dict[str, Any]:
-        enterprise_occupancy = int(
-            self._reporting.metrics_summary(include_submitted=True)["current_occupancy"] or 0
-        )
-        return self._camera_state(camera_id, enterprise_occupancy)
-
     def _camera_state(self, camera_id: int, enterprise_occupancy: int) -> dict[str, Any]:
         pipeline = self.require_pipeline(camera_id)
         enterprise_id = self._enterprise_id or ""

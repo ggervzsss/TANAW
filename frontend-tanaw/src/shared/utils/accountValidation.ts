@@ -2,7 +2,6 @@ export const PHILIPPINE_MOBILE_ERROR = "Enter 10 digits starting with 9 after +6
 export const NAME_ERROR = "Use letters, spaces, hyphen, or apostrophe only.";
 export const EMAIL_ERROR = "Enter a valid email address.";
 export const PERSON_NAME_MAX_LENGTH = 50;
-export const MIDDLE_INITIAL_MAX_LENGTH = 1;
 
 export type PersonNameParts = {
   firstName: string;

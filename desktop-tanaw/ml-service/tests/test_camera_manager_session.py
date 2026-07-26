@@ -29,9 +29,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             result = manager.bind_enterprise("enterprise-a@tanaw.test", "Enterprise A")
 
             self.assertTrue(result["changed"])
-            self.assertEqual(
-                manager.enterprise_context()["enterprise_id"], "enterprise-a@tanaw.test"
-            )
+            self.assertEqual(result["enterprise_id"], "enterprise-a@tanaw.test")
             self.assertEqual(retired_database.read_bytes(), b"retired")
 
     def test_health_status_does_not_open_an_unbound_database(self) -> None:

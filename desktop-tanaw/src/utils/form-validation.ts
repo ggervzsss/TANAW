@@ -138,18 +138,3 @@ export function validateRtspUrl(value: string) {
   }
   return "";
 }
-
-export function validateCameraStreamUrl(value: string) {
-  const normalized = value.trim();
-  if (!normalized) return "Stream URL is required.";
-  if (/^\d+$/.test(normalized)) return "";
-
-  try {
-    const url = new URL(normalized);
-    if (["http:", "https:", "rtsp:"].includes(url.protocol)) return "";
-  } catch {
-    return "Enter a valid HTTP, HTTPS, RTSP, or numeric webcam source.";
-  }
-
-  return "Enter a valid HTTP, HTTPS, RTSP, or numeric webcam source.";
-}

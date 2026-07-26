@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { routes } from "@/app/routers/routes";
-import { useAuthStore } from "@/app/store";
+import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalNotifications } from "@/shared/hooks/useOperationalSync";
 import { updateUserNotificationRead, type BackendNotification, type BackendNotificationSeverity } from "@/shared/services/operationalSync";
 import type { UserRole } from "@/shared/types/role.types";

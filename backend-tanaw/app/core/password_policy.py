@@ -37,7 +37,6 @@ def _required_strings(data: dict[str, object], key: str) -> tuple[str, ...]:
 _PASSWORD_POLICY_DATA = _load_password_policy_data()
 PASSWORD_MIN_LENGTH = _required_int(_PASSWORD_POLICY_DATA, "minimumLength")
 PASSWORD_MAX_LENGTH = _required_int(_PASSWORD_POLICY_DATA, "maximumLength")
-PASSWORD_POLICY_MESSAGE = _required_string(_PASSWORD_POLICY_DATA, "policyMessage")
 PASSWORD_TOO_SHORT_MESSAGE = _required_string(_PASSWORD_POLICY_DATA, "tooShortMessage")
 PASSWORD_TOO_LONG_MESSAGE = _required_string(_PASSWORD_POLICY_DATA, "tooLongMessage")
 PASSWORD_COMMON_MESSAGE = _required_string(_PASSWORD_POLICY_DATA, "commonMessage")

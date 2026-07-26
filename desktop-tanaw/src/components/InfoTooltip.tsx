@@ -11,6 +11,7 @@ type InfoTooltipProps = {
 
 const HOVER_DELAY_MS = 3000;
 const FOCUS_DELAY_MS = 450;
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 type TooltipPosition = {
   left: number;
@@ -80,7 +81,7 @@ export function InfoTooltip({ align = "right", children, className = "", content
     setIsPositioned(false);
   }, [clearOpenTimer]);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!isOpen) return undefined;
 
     updatePosition();

@@ -1,5 +1,5 @@
 import { apiClient } from "../lib/apiClient";
-import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, TelemetrySnapshot, VisitorInsightRange, VisitorInsights } from "../types";
+import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, VisitorInsightRange, VisitorInsights } from "../types";
 
 export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
 
@@ -44,11 +44,6 @@ export type FinalReportRevisionPayload = {
   sourceReportIds: string[];
   remarks: string;
 };
-
-export async function listLatestTelemetry() {
-  const response = await apiClient.get<TelemetrySnapshot[]>("/operational/telemetry/latest");
-  return response.data;
-}
 
 export async function getOperationalSummary() {
   const response = await apiClient.get<OperationalSummary>("/operational/telemetry/summary");

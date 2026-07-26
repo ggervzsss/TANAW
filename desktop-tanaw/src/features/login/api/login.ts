@@ -33,11 +33,6 @@ export async function getCurrentUser() {
   return normalizeSession({ token: "", user: response.data }).user;
 }
 
-export async function updateCurrentProfile(payload: { managerName: string; email: string; phone?: string; enterpriseName: string; address?: string; displayImageDataUrl?: string | null }) {
-  const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile", payload);
-  return normalizeSession({ token: "", user: response.data }).user;
-}
-
 export async function updateProfileImage(displayImageDataUrl: string | null) {
   const response = await staffApi.patch<LoginResponse["user"]>("/auth/profile/display-image", { displayImageDataUrl });
   return normalizeSession({ token: "", user: response.data }).user;

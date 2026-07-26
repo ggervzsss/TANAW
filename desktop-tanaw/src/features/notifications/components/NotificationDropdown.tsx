@@ -1,5 +1,5 @@
 import { AlertCircle, AlertTriangle, Bell, CheckCircle, Inbox } from "lucide-react";
-import type { EnterpriseNotification, EnterpriseView } from "../../../types/enterprise";
+import type { EnterpriseNotification } from "../../../types/enterprise";
 
 type NotificationDropdownProps = {
   isOpen: boolean;
@@ -97,5 +97,3 @@ export function NotificationDropdown({ isOpen, notifications, unreadCount, onTog
     </div>
   );
 }
-
-export type NotificationTarget = EnterpriseView;

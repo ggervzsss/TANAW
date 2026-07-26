@@ -10,5 +10,3 @@ export const routePaths = {
   enterpriseNotifications: "/enterprise/notifications",
   enterpriseTickets: "/enterprise/tickets",
 } as const;
-
-export type AppRoute = (typeof routePaths)[keyof typeof routePaths];

@@ -13,6 +13,10 @@ describe("camera form credential validation", () => {
   it("accepts device passwords without applying account-password complexity", () => {
     expect(validateCameraForm(values({ username: "camera-user", password: "1234" }))).toEqual({});
   });
+
+  it.each(["https://192.168.1.9/video", "0"])("rejects non-RTSP camera sources", (rtsp) => {
+    expect(validateCameraForm(values({ rtsp })).rtsp).toBe("Enter a valid RTSP URL starting with rtsp://.");
+  });
 });
 
 function values(overrides: Partial<CameraFormValues> = {}): CameraFormValues {

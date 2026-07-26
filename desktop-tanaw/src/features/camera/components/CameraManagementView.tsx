@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmationDialog } from "../../../components/ConfirmationDialog";
 import type { Camera, CameraStatus } from "../../../types/enterprise";
-import { validateCameraStreamUrl } from "../../../utils/form-validation";
+import { validateRtspUrl } from "../../../utils/form-validation";
 import { createBackoffPoller } from "../../../utils/backoff-poller";
 import { createReconnectingWebSocket } from "../../../utils/reconnecting-websocket";
 import { CameraAddModal } from "./CameraAddModal";
@@ -482,15 +482,12 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       trackingConfidence: DEFAULT_TRACKING_CONFIDENCE,
       uniqueCountingMode: "estimated_reid",
       config: { reverse: false, roi: DEFAULT_ROI, tripwire: 50, tripwires: getDefaultTripwires(50) },
-      fps: 0,
       id: Date.now(),
       name: newCam.name.trim(),
       password: undefined,
-      resolution: "Adaptive",
       rtsp: newCam.rtsp.trim(),
       rtspStream: newCam.rtspStream,
       status: "untested",
-      type: "Entry/Exit",
       username: newCam.username.trim(),
       zone: newCam.zone.trim(),
     });
@@ -717,7 +714,7 @@ function validateCamera(camera: Camera, hasStoredPassword: boolean) {
   if (!isValidIpv4(camera.cameraHost ?? "")) return "Camera IP must be a valid IPv4 address.";
   if (!camera.username?.trim()) return "Enter the camera username.";
   if (!hasStoredPassword) return "Enter the camera password.";
-  const streamError = validateCameraStreamUrl(camera.rtsp);
+  const streamError = validateRtspUrl(camera.rtsp);
   if (streamError) return streamError;
   if (!Number.isFinite(camera.confidence) || camera.confidence < 0.05 || camera.confidence > 0.95) return "Counting confidence must be between 0.05 and 0.95.";
   if (!Number.isFinite(camera.trackingConfidence ?? 0.15) || (camera.trackingConfidence ?? 0.15) < 0.01 || (camera.trackingConfidence ?? 0.15) > camera.confidence)
@@ -753,8 +750,6 @@ function normalizeCamera(camera: Camera): Camera {
     uniqueCountingMode: normalizeUniqueCountingMode(camera.uniqueCountingMode),
     password: undefined,
     processingProfile: normalizeProcessingProfile(camera.processingProfile),
-    fps: camera.fps ?? 0,
-    resolution: camera.resolution ?? "Adaptive",
     rtsp: maskStreamCredentials(normalizedStreamUrl),
     rtspStream,
     status: camera.status && isRuntimeStatus(camera.status) ? "stopped" : (camera.status ?? "untested"),

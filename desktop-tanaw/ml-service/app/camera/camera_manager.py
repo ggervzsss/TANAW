@@ -233,13 +233,6 @@ class CameraProcessingManager:
             "session_restored": restored,
         }
 
-    def enterprise_context(self) -> dict:
-        with self._lock:
-            return {
-                "enterprise_id": self._enterprise_id,
-                "enterprise_name": self._enterprise_name,
-            }
-
     def start(self, config: CameraStartRequest) -> None:
         if config.camera_id is None:
             raise ValueError("Camera ID is required to start camera processing.")
@@ -759,15 +752,6 @@ class CameraProcessingManager:
                 return False
         finally:
             self._restoring_session = False
-
-    def latest_frame(self) -> bytes:
-        with self._lock:
-            if self._latest_stream_jpeg is not None:
-                return self._latest_stream_jpeg
-            if self._latest_jpeg is not None:
-                return self._latest_jpeg
-            else:
-                return self._build_status_frame("No camera stream available.")
 
     def wait_for_stream_frame(
         self, last_frame_id: int, timeout: float = 1.0, overlay: bool = True

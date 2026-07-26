@@ -846,23 +846,6 @@ def ensure_email_available(existing: Account | None, email: str) -> None:
         )
 
 
-async def list_active_enterprises(db: AsyncSession) -> list[Account]:
-    return list(
-        (
-            await db.scalars(
-                select(Account)
-                .join(Account.enterprise_profile)
-                .where(
-                    Account.role == AccountRole.ENTERPRISE,
-                    Account.status == AccountStatus.ACTIVE,
-                    Account.activated_at.is_not(None),
-                )
-                .order_by(EnterpriseProfile.enterprise_name.asc(), Account.display_name.asc())
-            )
-        ).all()
-    )
-
-
 async def resolve_target_enterprise(
     db: AsyncSession, identifier: str | None, generated_enterprises: list[Account]
 ) -> Account:

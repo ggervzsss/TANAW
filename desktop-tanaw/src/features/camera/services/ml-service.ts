@@ -280,19 +280,6 @@ export type LocalReportDraft = {
   updated_at: string;
 };
 
-export type OccupancyCorrection = {
-  correction_id: string;
-  enterprise_id: string | null;
-  camera_id: number | null;
-  old_occupancy: number;
-  new_occupancy: number;
-  delta: number;
-  reason: string;
-  actor_id: string | null;
-  actor_name: string | null;
-  recorded_at: string;
-};
-
 export type SamplePreparationRequest = {
   enterpriseId: string;
   enterpriseName: string;
@@ -393,10 +380,6 @@ export async function getMlHealth(baseUrl: string): Promise<MlHealth> {
   return requestJson<MlHealth>(`${baseUrl}/health`, { method: "GET" }, 2500);
 }
 
-export async function getMlCounts(baseUrl: string): Promise<MlCounts> {
-  return requestJson<MlCounts>(`${baseUrl}/counts`, { method: "GET" }, 2500);
-}
-
 export async function getMlSession(baseUrl: string): Promise<MlSession> {
   return requestJson<MlSession>(`${baseUrl}/session`, { method: "GET" }, 2500);
 }
@@ -417,10 +400,6 @@ export async function setMlEnterpriseContext(baseUrl: string, enterpriseId: stri
     },
     10_000,
   );
-}
-
-export async function restoreMlSession(baseUrl: string): Promise<MlSession> {
-  return requestJson<MlSession>(`${baseUrl}/session/restore`, { method: "POST" }, 8000);
 }
 
 export async function listLocalCameras(baseUrl: string): Promise<Camera[]> {
@@ -460,26 +439,6 @@ export async function getLocalMetricsSummary(baseUrl: string, options: { include
 
 export async function getLocalMetricsHistory(baseUrl: string, options: { includeSubmitted?: boolean } = {}): Promise<LocalMetricsHistory> {
   return requestJson<LocalMetricsHistory>(`${baseUrl}/metrics/history${queryFromOptions(options)}`, { method: "GET" }, 2500);
-}
-
-export async function recordOccupancyCorrection(
-  baseUrl: string,
-  payload: { newOccupancy: number; reason: string; actorId?: string | null; actorName?: string | null; cameraId?: number | null },
-): Promise<OccupancyCorrection> {
-  return requestJson<OccupancyCorrection>(
-    `${baseUrl}/occupancy/correction`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        new_occupancy: payload.newOccupancy,
-        reason: payload.reason,
-        actor_id: payload.actorId ?? null,
-        actor_name: payload.actorName ?? null,
-        camera_id: payload.cameraId ?? null,
-      }),
-    },
-    5000,
-  );
 }
 
 export async function recordLocalReportSubmission(
@@ -571,10 +530,6 @@ export async function prepareLocalSampleCounts(baseUrl: string, payload: SampleP
     },
     15_000,
   );
-}
-
-export async function getMlDetections(baseUrl: string): Promise<MlDetections> {
-  return requestJson<MlDetections>(`${baseUrl}/detections`, { method: "GET" }, 2500);
 }
 
 export async function testCameraConnection(baseUrl: string, camera: Camera, credentialScope?: string): Promise<CameraTestResult> {

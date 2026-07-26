@@ -16,7 +16,6 @@ from app.features.operational.service import (
     NOTIFY_SYNC_DELAY_KEY,
     HourlyVisitorObservation,
     can_manage_operational_alert,
-    can_view_operational_event,
     create_role_notifications,
     gateway_status_for_snapshot,
     list_operational_alerts,
@@ -227,12 +226,6 @@ def _telemetry_summary(
         error=error,
         gatewayStatus=gateway_status,
     )
-
-
-def test_it_receives_live_alert_websocket_events() -> None:
-    assert can_view_operational_event("it", "alert.created")
-    assert can_view_operational_event("it", "alert.updated")
-    assert can_view_operational_event("it", "alert.resolved")
 
 
 def test_alert_management_follows_operational_ownership() -> None:

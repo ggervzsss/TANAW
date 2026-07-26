@@ -222,7 +222,6 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
               {previewState === "live" ? "LIVE" : "RECOVERING"}
             </span>
             <span className="rounded-full border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">{fpsLabel}</span>
-            <span className="rounded-full border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">{activeCam.resolution}</span>
           </div>
         )}
       </div>
