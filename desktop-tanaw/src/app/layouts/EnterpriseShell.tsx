@@ -13,6 +13,7 @@ import {
 } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
+import { usePersistentIssue } from "../../features/toasts/services/persistent-issue";
 import { applyThemePreference, getInitialThemePreference, persistThemePreference, resolveThemePreference } from "../../features/security/utils/theme";
 import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSync";
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
@@ -92,6 +93,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [theme, setTheme] = useState<ThemePreference>(getInitialThemePreference);
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
+  const [mlContextError, setMlContextError] = useState<string | null>(null);
   const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
@@ -108,6 +110,12 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   );
 
   useDesktopCloudSync(mlContextReady, mlBaseUrl);
+  usePersistentIssue({
+    id: "ml-enterprise-context",
+    message: mlContextError,
+    title: "Camera service unavailable",
+    tone: "error",
+  });
 
   const currentUserQuery = useQuery({
     queryKey: ["enterprise-current-user", token],
@@ -185,11 +193,13 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     const enterpriseId = user?.enterpriseId || user?.id;
     if (!enterpriseId) {
       setMlContextReady(false);
+      setMlContextError(null);
       return;
     }
 
     let disposed = false;
     setMlContextReady(false);
+    setMlContextError(null);
     void getMlServiceStatus()
       .then((status) => {
         const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
@@ -197,10 +207,20 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         return setMlEnterpriseContext(baseUrl, enterpriseId, user?.enterpriseName ?? user?.displayName ?? user?.name);
       })
       .then(() => {
-        if (!disposed) setMlContextReady(true);
+        if (!disposed) {
+          setMlContextReady(true);
+          setMlContextError(null);
+        }
       })
-      .catch(() => {
-        if (!disposed) setMlContextReady(false);
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setMlContextReady(false);
+          setMlContextError(
+            error instanceof Error
+              ? error.message
+              : "TANAW could not initialize the local camera service.",
+          );
+        }
       });
 
     return () => {

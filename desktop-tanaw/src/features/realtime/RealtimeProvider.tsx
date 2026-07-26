@@ -1,10 +1,10 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { WifiOff } from "lucide-react";
 import { staffApi } from "../../lib/axios";
 import { useAuthStore } from "../login/stores/auth-store";
 import { RealtimeContext, type RealtimeListener } from "./realtime-context";
 import { isRealtimeEnvelope, realtimeOrderingKey, type RealtimeConnectionState, type RealtimeEnvelope } from "./types";
+import { usePersistentIssue } from "../toasts/services/persistent-issue";
 
 const MAX_DEDUPLICATION_EVENTS = 2_048;
 const MAX_RECONNECT_DELAY_MS = 30_000;
@@ -189,18 +189,16 @@ function getRealtimeUrl() {
 }
 
 function RealtimeStatus({ state }: { state: RealtimeConnectionState }) {
-  if (!["offline", "reconnecting", "resynchronizing"].includes(state)) return null;
-  let label = "Live updates paused. Reconnecting...";
-  if (state === "offline") label = "Live updates paused while offline";
-  if (state === "resynchronizing") label = "Restoring live updates...";
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="fixed right-4 bottom-4 z-2000 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/95 px-4 py-2 text-xs font-bold text-amber-800 shadow-lg backdrop-blur dark:border-amber-300/25 dark:bg-slate-900/95 dark:text-amber-200"
-    >
-      <WifiOff size={14} aria-hidden="true" />
-      {label}
-    </div>
-  );
+  let message: string | null = null;
+  if (state === "offline") message = "Live updates are paused while the device is offline.";
+  if (state === "reconnecting") message = "TANAW is reconnecting to live updates automatically.";
+  if (state === "resynchronizing") message = "TANAW is restoring live updates.";
+
+  usePersistentIssue({
+    id: "realtime-connection",
+    message,
+    title: "Live updates paused",
+    tone: "warning",
+  });
+  return null;
 }

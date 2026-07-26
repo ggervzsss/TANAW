@@ -3,11 +3,10 @@ import { useSystemDisplayPreferences } from "../../preferences/system-display-pr
 import { formatPhilippineDateTime } from "../../../utils/date-time";
 
 type DashboardHeaderProps = {
-  error: string | null;
   summary: LocalMetricsSummary | null;
 };
 
-export function DashboardHeader({ error, summary }: DashboardHeaderProps) {
+export function DashboardHeader({ summary }: DashboardHeaderProps) {
   const { timeFormat } = useSystemDisplayPreferences();
 
   return (
@@ -22,7 +21,6 @@ export function DashboardHeader({ error, summary }: DashboardHeaderProps) {
             </span>
           )}
         </p>
-        {error && <p className="mt-1 text-xs font-semibold text-red-600">Visitor counts unavailable: {error}</p>}
       </div>
     </div>
   );

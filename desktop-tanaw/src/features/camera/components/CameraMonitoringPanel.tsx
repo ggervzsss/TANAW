@@ -2,6 +2,7 @@ import { Activity, CheckCircle, LogIn, LogOut, Play, RefreshCw, Square, Users, W
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
 import type { MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
+import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
@@ -52,6 +53,22 @@ export function CameraMonitoringPanel({
     ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
     : "bg-[#065f46] text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
   const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
+  const processingError = error ?? health?.error ?? serviceStatus?.error ?? counts.error;
+
+  usePersistentIssue({
+    id: `camera-processing-${activeCam.id}`,
+    message: processingError,
+    title: `${activeCam.name} unavailable`,
+    tone: "error",
+  });
+  usePersistentIssue({
+    id: `camera-fallback-${activeCam.id}`,
+    message: health?.fallback_reason
+      ? "AI fallback mode is active. Visitor counts may be less accurate."
+      : null,
+    title: `${activeCam.name} using fallback`,
+    tone: "warning",
+  });
 
   return (
     <div className="space-y-3">
@@ -125,13 +142,6 @@ export function CameraMonitoringPanel({
           </InfoTooltip>
         </div>
       </section>
-
-      {(error || health?.error || serviceStatus?.error || counts.error) && (
-        <div className="rounded-sm border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">{error ?? health?.error ?? serviceStatus?.error ?? counts.error}</div>
-      )}
-      {health?.fallback_reason && (
-        <div className="rounded-sm border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">AI fallback mode is active. Counts may be less accurate.</div>
-      )}
     </div>
   );
 }
