@@ -34,7 +34,13 @@ export function useOperationalFinalReports() {
 
 export function useOperationalMapEnterprises() {
   const token = useAuthStore((state) => state.token);
-  return useQuery({ queryKey: operationalMapEnterprisesQueryKey, queryFn: listOperationalMapEnterprises, enabled: Boolean(token) });
+  return useQuery({
+    queryKey: operationalMapEnterprisesQueryKey,
+    queryFn: listOperationalMapEnterprises,
+    enabled: Boolean(token),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+  });
 }
 
 export function useVisitorInsights(params: VisitorInsightParams, enabled = true) {

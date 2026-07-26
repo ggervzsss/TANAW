@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from "../../login/stores/auth-store";
 import { createReconnectingWebSocket } from "../../../utils/reconnecting-websocket";
 import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
+import { CAMERA_FRAME_STALE_AFTER_MS } from "../services/camera-monitoring";
 
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
 const TELEMETRY_RECONCILE_INTERVAL_MS = 30_000;
@@ -175,10 +176,14 @@ function liveCameraStatesSignature(states: MlCameraStates) {
         session.running,
         session.status,
         session.error ?? "",
+        health.running,
+        health.model_ready,
+        health.processed_frame_stale_ms !== null && health.processed_frame_stale_ms <= CAMERA_FRAME_STALE_AFTER_MS,
         health.estimated_unique_count,
         health.confirmed_unique_count,
         health.degraded_unique_count,
       ].join("|"),
     )
+    .concat(`pending:${[...states.pending_camera_ids].sort((left, right) => left - right).join(",")}`)
     .join(";");
 }

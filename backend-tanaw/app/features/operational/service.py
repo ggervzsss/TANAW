@@ -30,6 +30,7 @@ from app.features.operational.models import (
     UserNotification,
 )
 from app.features.operational.schemas import (
+    DesktopCameraMonitoringSummary,
     DesktopReportSubmissionIngest,
     DesktopTelemetryIngest,
     FinalReportArchivedFromStatus,
@@ -1520,6 +1521,7 @@ def to_telemetry_summary(
         error=snapshot.error,
         analyticsFps=snapshot.analytics_fps,
         gatewayStatus=gateway_status_for_snapshot(snapshot),
+        monitoring=telemetry_monitoring_from_payload(snapshot.payload_json),
     )
 
 
@@ -1558,6 +1560,16 @@ def parse_report_payload(payload_json: str | None) -> dict | None:
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def telemetry_monitoring_from_payload(
+    payload_json: str | None,
+) -> DesktopCameraMonitoringSummary:
+    payload = parse_report_payload(payload_json)
+    monitoring = payload.get("monitoring") if payload else None
+    if not isinstance(monitoring, dict):
+        return DesktopCameraMonitoringSummary()
+    return DesktopCameraMonitoringSummary.model_validate(monitoring)
 
 
 def report_demographics_from_payload(
@@ -1779,9 +1791,7 @@ def gateway_status_for_snapshot(snapshot: EnterpriseTelemetrySnapshot) -> str:
         return "Offline"
     if age > STALE_GATEWAY_SECONDS:
         return "Sync Delayed"
-    if snapshot.unsynced_events > 0:
-        return "Sync Delayed"
-    return "Connected" if snapshot.running or snapshot.total_events > 0 else "Connected"
+    return "Connected"
 
 
 def status_from_payload(payload: dict | None) -> str:

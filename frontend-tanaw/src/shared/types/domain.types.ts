@@ -1,7 +1,18 @@
-export type EnterpriseStatus = "Normal" | "Warning" | "High Occupancy" | "Issue" | "Offline" | "Inactive";
+export type MonitoringStatus = "Fully Monitoring" | "Partially Monitoring" | "Stopped" | "Fault" | "Offline" | "Not Configured" | "Updates Delayed";
+export type OccupancyStatus = "Normal" | "Warning" | "High Occupancy" | "No Data";
 export type GatewayStatus = "Connected" | "Sync Delayed" | "Offline" | "Not Linked" | "Closed";
 export type AlertSeverity = "Info" | "Warning" | "Critical";
 export type LogSeverity = AlertSeverity | "Success";
+
+export type CameraMonitoringSummary = {
+  status: "not_configured" | "stopped" | "partial" | "running" | "error";
+  configuredCameraCount: number;
+  activeCameraCount: number;
+  healthyCameraCount: number;
+  startingCameraCount: number;
+  stoppedCameraCount: number;
+  errorCameraCount: number;
+};
 
 export type MapEnterprise = {
   id: string;
@@ -13,7 +24,9 @@ export type MapEnterprise = {
   lng: number;
   totalLiveOccupancy: number;
   estimatedUniqueCount: number;
-  status: EnterpriseStatus;
+  monitoringStatus: MonitoringStatus;
+  occupancyStatus: OccupancyStatus;
+  cameraMonitoring: CameraMonitoringSummary | null;
   operatingHours?: string;
   contact?: string;
   trend?: "Up" | "Stable" | "Down";

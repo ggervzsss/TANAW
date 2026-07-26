@@ -9,8 +9,15 @@ from app.features.operational.models import (
     OperationalAlert,
     UserNotification,
 )
-from app.features.operational.router import enterprise_status_from_telemetry
-from app.features.operational.schemas import TelemetrySnapshotSummary, VisitorInsightPoint
+from app.features.operational.router import (
+    monitoring_status_from_telemetry,
+    occupancy_status_from_telemetry,
+)
+from app.features.operational.schemas import (
+    DesktopCameraMonitoringSummary,
+    TelemetrySnapshotSummary,
+    VisitorInsightPoint,
+)
 from app.features.operational.service import (
     NOTIFY_GATEWAY_SERVICE_ERROR_KEY,
     NOTIFY_SYNC_DELAY_KEY,
@@ -139,11 +146,13 @@ def test_enterprise_insight_marks_unusual_activity() -> None:
 
 
 def test_enterprise_map_uses_neutral_status_when_device_is_offline_or_inactive() -> None:
-    assert enterprise_status_from_telemetry(None, building_capacity=100) == "Inactive"
+    assert monitoring_status_from_telemetry(None) == "Offline"
+    assert occupancy_status_from_telemetry(None, building_capacity=100) == "No Data"
 
     telemetry = _telemetry_summary(gateway_status="Offline")
 
-    assert enterprise_status_from_telemetry(telemetry, building_capacity=100) == "Offline"
+    assert monitoring_status_from_telemetry(telemetry) == "Offline"
+    assert occupancy_status_from_telemetry(telemetry, building_capacity=100) == "No Data"
 
 
 @pytest.mark.parametrize(
@@ -151,35 +160,63 @@ def test_enterprise_map_uses_neutral_status_when_device_is_offline_or_inactive()
         "gateway_status",
         "telemetry_status",
         "error",
-        "current_occupancy",
         "unsynced_events",
+        "monitoring_state",
         "expected_status",
     ),
     [
-        ("Offline", "error", "Counting service unavailable", 0, 0, "Issue"),
-        ("Sync Delayed", "stopped", None, 0, 3, "Issue"),
-        ("Connected", "running", None, 100, 0, "High Occupancy"),
-        ("Connected", "running", None, 80, 0, "Warning"),
-        ("Connected", "running", None, 79, 0, "Normal"),
+        ("Offline", "error", "Counting service unavailable", 0, "running", "Offline"),
+        ("Connected", "error", "Counting service unavailable", 0, "running", "Fault"),
+        ("Sync Delayed", "stopped", None, 3, "stopped", "Updates Delayed"),
+        ("Connected", "running", None, 0, "running", "Fully Monitoring"),
+        ("Connected", "running", None, 0, "partial", "Partially Monitoring"),
+        ("Connected", "stopped", None, 0, "stopped", "Stopped"),
+        ("Connected", "stopped", None, 0, "not_configured", "Not Configured"),
     ],
 )
-def test_enterprise_map_status_uses_health_and_capacity(
+def test_enterprise_map_monitoring_status_uses_gateway_and_camera_health(
     gateway_status: str,
     telemetry_status: str,
     error: str | None,
-    current_occupancy: int,
     unsynced_events: int,
+    monitoring_state: str,
     expected_status: str,
 ) -> None:
     telemetry = _telemetry_summary(
         gateway_status=gateway_status,
         status=telemetry_status,
         error=error,
-        current_occupancy=current_occupancy,
         unsynced_events=unsynced_events,
+        monitoring_state=monitoring_state,
     )
 
-    assert enterprise_status_from_telemetry(telemetry, building_capacity=100) == expected_status
+    assert monitoring_status_from_telemetry(telemetry) == expected_status
+
+
+@pytest.mark.parametrize(
+    ("gateway_status", "current_occupancy", "capacity", "expected_status"),
+    [
+        ("Offline", 100, 100, "No Data"),
+        ("Sync Delayed", 100, 100, "No Data"),
+        ("Connected", 100, 100, "High Occupancy"),
+        ("Connected", 80, 100, "Warning"),
+        ("Connected", 79, 100, "Normal"),
+        ("Connected", 0, 0, "No Data"),
+    ],
+)
+def test_enterprise_map_occupancy_status_is_independent_of_monitoring(
+    gateway_status: str,
+    current_occupancy: int,
+    capacity: int,
+    expected_status: str,
+) -> None:
+    telemetry = _telemetry_summary(
+        gateway_status=gateway_status,
+        current_occupancy=current_occupancy,
+        monitoring_state="stopped",
+    )
+
+    assert occupancy_status_from_telemetry(telemetry, capacity) == expected_status
 
 
 def _hourly_observation(
@@ -203,6 +240,7 @@ def _telemetry_summary(
     error: str | None = None,
     current_occupancy: int = 0,
     unsynced_events: int = 0,
+    monitoring_state: str = "stopped",
 ) -> TelemetrySnapshotSummary:
     now = datetime.now(UTC)
     return TelemetrySnapshotSummary(
@@ -225,6 +263,11 @@ def _telemetry_summary(
         status=status,
         error=error,
         gatewayStatus=gateway_status,
+        monitoring=DesktopCameraMonitoringSummary(
+            status=monitoring_state,  # type: ignore[arg-type]
+            configuredCameraCount=1,
+            stoppedCameraCount=1 if monitoring_state == "stopped" else 0,
+        ),
     )
 
 
@@ -262,7 +305,7 @@ async def test_alert_list_is_scoped_to_operational_owner(
         assert f"'{owner}'" in sql
 
 
-def test_unsynced_gateway_snapshot_is_reported_as_sync_delayed() -> None:
+def test_fresh_gateway_snapshot_remains_connected_while_records_finish_syncing() -> None:
     snapshot = EnterpriseTelemetrySnapshot(
         enterprise_profile_id="account-1",
         enterprise_name="Enterprise One",
@@ -282,7 +325,7 @@ def test_unsynced_gateway_snapshot_is_reported_as_sync_delayed() -> None:
     )
     snapshot.received_at = datetime.now(UTC)
 
-    assert gateway_status_for_snapshot(snapshot) == "Sync Delayed"
+    assert gateway_status_for_snapshot(snapshot) == "Connected"
 
 
 def test_notification_setting_uses_stable_key_value() -> None:

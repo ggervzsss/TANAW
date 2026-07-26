@@ -7,6 +7,7 @@ import {
   getMlHealth,
   getMlServiceStatus,
   getMlSession,
+  listLocalCameras,
   listLocalReportSubmissions,
   markLocalEventsSynced,
   markLocalReportSynced,
@@ -19,6 +20,7 @@ import {
 } from "../../camera/services/ml-service";
 import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 import { isSameReportingMonth } from "../../reports/utils/reporting-period";
+import { buildCameraMonitoringSummary, type CameraMonitoringSummary } from "./camera-monitoring";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 
@@ -62,6 +64,7 @@ type DesktopTelemetryPayload = {
     reidQueueDepth: number;
     qualityReidQueueDepth: number;
   };
+  monitoring: CameraMonitoringSummary;
   payload: Record<string, unknown>;
 };
 
@@ -133,12 +136,14 @@ function selectSamplePreparationCounts(preparation: BackendSamplePreparation, pe
 export async function syncDesktopTelemetry() {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const [metrics, session, health, cameraStates] = await Promise.all([
+  const [metrics, session, health, cameraStates, cameras] = await Promise.all([
     getLocalMetricsSummary(baseUrl, { includeSubmitted: true }),
     resolveOptional(() => getMlSession(baseUrl)),
     resolveOptional(() => getMlHealth(baseUrl)),
     resolveOptional(() => getMlCameraStates(baseUrl)),
+    resolveOptional(() => listLocalCameras(baseUrl)),
   ]);
+  const monitoring = buildCameraMonitoringSummary(cameras, cameraStates, serviceStatus);
 
   const payload: DesktopTelemetryPayload = {
     deviceId: getDesktopDeviceId(),
@@ -159,17 +164,14 @@ export async function syncDesktopTelemetry() {
     },
     session: sessionSummary(session, serviceStatus),
     health: healthSummary(health),
+    monitoring,
     payload: {
       service: {
         ...serviceStatus,
-        activeCameraCount: cameraStates?.active_camera_count ?? 0,
+        activeCameraCount: monitoring.activeCameraCount,
+        configuredCameraCount: monitoring.configuredCameraCount,
         maxConcurrentCameras: cameraStates?.max_concurrent_cameras ?? 0,
-        cameras: cameraStates?.cameras.map((state) => ({
-          cameraId: state.camera_id,
-          running: state.counts.running,
-          status: state.counts.status,
-          error: state.counts.error,
-        })) ?? [],
+        cameras: monitoring.cameras,
       },
       syncedAt: new Date().toISOString(),
     },

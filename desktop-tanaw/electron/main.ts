@@ -849,6 +849,7 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     title: "TANAW Enterprise Desktop",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
+      backgroundThrottling: false,
     },
   });
   const targetWindow = win;

@@ -927,7 +927,11 @@ async def list_map_enterprises(
                 "lng": profile.longitude,
                 "totalLiveOccupancy": telemetry.currentOccupancy if telemetry else 0,
                 "estimatedUniqueCount": telemetry.uniqueCount if telemetry else 0,
-                "status": enterprise_status_from_telemetry(telemetry, profile.building_capacity),
+                "monitoringStatus": monitoring_status_from_telemetry(telemetry),
+                "occupancyStatus": occupancy_status_from_telemetry(
+                    telemetry, profile.building_capacity
+                ),
+                "cameraMonitoring": telemetry.monitoring.model_dump() if telemetry else None,
                 "contact": enterprise.phone or enterprise.email,
                 "lastSync": telemetry.receivedAt.isoformat() if telemetry else None,
                 "gatewayStatus": telemetry.gatewayStatus
@@ -1082,17 +1086,37 @@ async def record_operational_log(
     )
 
 
-def enterprise_status_from_telemetry(
-    telemetry: TelemetrySnapshotSummary | None, building_capacity: int
+def monitoring_status_from_telemetry(
+    telemetry: TelemetrySnapshotSummary | None,
 ) -> str:
     if telemetry is None:
-        return "Inactive"
-    if telemetry.error or telemetry.status == "error":
-        return "Issue"
+        return "Offline"
     if telemetry.gatewayStatus == "Offline":
         return "Offline"
-    if telemetry.gatewayStatus == "Sync Delayed" or telemetry.unsyncedEvents > 0:
-        return "Issue"
+    if telemetry.error or telemetry.status == "error":
+        return "Fault"
+    if telemetry.gatewayStatus == "Sync Delayed":
+        return "Updates Delayed"
+    return {
+        "running": "Fully Monitoring",
+        "partial": "Partially Monitoring",
+        "stopped": "Stopped",
+        "error": "Fault",
+        "not_configured": "Not Configured",
+    }[telemetry.monitoring.status]
+
+
+def occupancy_status_from_telemetry(
+    telemetry: TelemetrySnapshotSummary | None, building_capacity: int
+) -> str:
+    if (
+        telemetry is None
+        or telemetry.gatewayStatus != "Connected"
+        or telemetry.error
+        or telemetry.status == "error"
+        or building_capacity <= 0
+    ):
+        return "No Data"
     if telemetry.currentOccupancy >= building_capacity:
         return "High Occupancy"
     if telemetry.currentOccupancy * 100 >= building_capacity * 80:

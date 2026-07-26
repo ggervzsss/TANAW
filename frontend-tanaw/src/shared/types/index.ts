@@ -1,7 +1,7 @@
 export type { AuthUser, UserRole } from "./role.types";
 export type {
   AlertSeverity,
-  EnterpriseStatus,
+  CameraMonitoringSummary,
   FinalReport,
   FinalReportArchivedFromStatus,
   FinalReportSource,
@@ -10,6 +10,8 @@ export type {
   IntakeReport,
   LogSeverity,
   MapEnterprise,
+  MonitoringStatus,
+  OccupancyStatus,
   PriorityAlert,
   PriorityAlertOwner,
   PriorityAlertResolutionMode,
