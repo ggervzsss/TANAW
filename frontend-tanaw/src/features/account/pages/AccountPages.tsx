@@ -447,6 +447,7 @@ function Field({
           {input}
           <button
             type="button"
+            tabIndex={-1}
             onClick={() => setIsPasswordVisible((current) => !current)}
             className="hover:text-tanaw-green focus-visible:ring-tanaw-green/30 absolute top-1/2 right-3 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-emerald-50 focus-visible:ring-2 focus-visible:outline-none"
             aria-label={isPasswordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
