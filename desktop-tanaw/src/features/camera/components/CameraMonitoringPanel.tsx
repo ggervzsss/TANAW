@@ -42,6 +42,7 @@ export function CameraMonitoringPanel({
   const streamVerified = ["online", "running"].includes(activeCam.status);
   const streamLabel = streamVerified ? "Stream Verified" : "Stream Needs Check";
   const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
+  const pendingUniqueEntries = health?.pending_unique_entries ?? 0;
   const modelStatus = formatModelStatus(health);
   const performanceStatus = formatPerformanceStatus(health);
   const frameFreshness = formatFrameFreshness(health, counts.running);
@@ -73,8 +74,22 @@ export function CameraMonitoringPanel({
           <MetricBox icon={LogIn} label="Entry" value={counts.entry} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
           <MetricBox icon={LogOut} label="Exit" value={counts.exit} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
           <MetricBox icon={Users} label="Occupancy" value={counts.occupancy} tone="occupancy" tooltip="Enterprise-wide live occupancy. This same authoritative value appears on every camera view." />
-          <MetricBox icon={Users} label="Estimated Visitors" value={estimatedUniqueCount} tone="unique" tooltip="Estimated visitors attributed to this camera in the current open reporting period." />
+          <MetricBox
+            icon={Users}
+            label="Estimated Visitors"
+            value={estimatedUniqueCount}
+            tone="unique"
+            tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded until TANAW gets stronger evidence."
+          />
         </div>
+        {pendingUniqueEntries > 0 ? (
+          <div className="mt-2 flex items-start gap-2 rounded-sm border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <span>
+              {pendingUniqueEntries} provisional {pendingUniqueEntries === 1 ? "identity is" : "identities are"} excluded from the visitor estimate pending a stronger match.
+            </span>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">

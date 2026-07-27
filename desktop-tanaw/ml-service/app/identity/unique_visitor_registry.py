@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from uuid import uuid4
@@ -30,6 +30,13 @@ class VisitorDecision:
 
 
 @dataclass
+class VisitorPrototype:
+    prototype_index: int
+    embedding: np.ndarray
+    embedding_count: int
+
+
+@dataclass
 class VisitorIdentity:
     visitor_id: str
     business_date: str
@@ -38,6 +45,9 @@ class VisitorIdentity:
     embedding_count: int
     model_name: str
     expires_at: str
+    identity_status: str = "confirmed"
+    canonical_visitor_id: str | None = None
+    prototypes: list[VisitorPrototype] = field(default_factory=list)
 
 
 @dataclass
@@ -61,6 +71,8 @@ class UniqueVisitorRegistry:
         quality_model_name: str | None = None,
         quality_strong_match_threshold: float = 0.74,
         quality_top_match_margin: float = 0.05,
+        max_prototypes_per_identity: int = 3,
+        prototype_update_threshold: float = 0.82,
     ) -> None:
         self._session_store = session_store
         self.model_name = model_name
@@ -72,6 +84,8 @@ class UniqueVisitorRegistry:
         self.quality_model_name = quality_model_name
         self.quality_strong_match_threshold = quality_strong_match_threshold
         self.quality_top_match_margin = quality_top_match_margin
+        self.max_prototypes_per_identity = max(1, max_prototypes_per_identity)
+        self.prototype_update_threshold = prototype_update_threshold
         self._business_date: str | None = None
         self._camera_id: int | None = None
         self._gallery: list[VisitorIdentity] = []
@@ -117,6 +131,9 @@ class UniqueVisitorRegistry:
     def status(self) -> dict[str, int | str | None]:
         return {
             "reid_gallery_size": len(self._gallery),
+            "reid_provisional_gallery_size": sum(
+                identity.identity_status == "provisional" for identity in self._gallery
+            ),
             "reid_quality_gallery_size": len(self._quality_gallery),
             "reid_business_date": self._business_date,
             "reid_last_cleanup_at": self._last_cleanup_at,
@@ -198,7 +215,6 @@ class UniqueVisitorRegistry:
             match = fast_match
 
         if match is not None:
-            self._track_visitors[track_id] = match.visitor_id
             selected_fast_score = float(match.embedding @ normalized)
             if (
                 decision_name != "matched_existing_quality"
@@ -207,6 +223,46 @@ class UniqueVisitorRegistry:
                 self._update_identity(match, normalized, now)
             if quality_normalized is not None:
                 self._update_quality_embedding(match.visitor_id, quality_normalized, now)
+
+            if match.identity_status == "provisional":
+                canonical, reconciliation_score = self._best_reconciliation_match(match)
+                if canonical is not None:
+                    self._merge_identity(match, canonical, now)
+                    self._track_visitors[track_id] = canonical.visitor_id
+                    decision = VisitorDecision(
+                        visitor_id=canonical.visitor_id,
+                        is_unique_entry=False,
+                        reid_score=reconciliation_score,
+                        reid_decision="reconciled_existing",
+                        identity_confidence="high",
+                        business_date=business_date,
+                    )
+                    self._persist_sighting(
+                        decision, track_id, camera_id, detection_confidence, bbox, now
+                    )
+                    return decision
+
+                match.identity_status = "confirmed"
+                self._session_store.resolve_visitor_identity(
+                    match.visitor_id,
+                    identity_status="confirmed",
+                    recorded_at=now.isoformat(),
+                )
+                self._track_visitors[track_id] = match.visitor_id
+                decision = VisitorDecision(
+                    visitor_id=match.visitor_id,
+                    is_unique_entry=True,
+                    reid_score=score,
+                    reid_decision="provisional_confirmed",
+                    identity_confidence="high",
+                    business_date=business_date,
+                )
+                self._persist_sighting(
+                    decision, track_id, camera_id, detection_confidence, bbox, now
+                )
+                return decision
+
+            self._track_visitors[track_id] = match.visitor_id
             decision = VisitorDecision(
                 visitor_id=match.visitor_id,
                 is_unique_entry=False,
@@ -233,6 +289,14 @@ class UniqueVisitorRegistry:
             embedding_count=1,
             model_name=self.model_name,
             expires_at=self.expires_at_for(now).isoformat(),
+            identity_status="provisional" if confidence == "low" else "confirmed",
+            prototypes=[
+                VisitorPrototype(
+                    prototype_index=0,
+                    embedding=normalized,
+                    embedding_count=1,
+                )
+            ],
         )
         self._gallery.append(identity)
         self._track_visitors[track_id] = visitor_id
@@ -241,7 +305,7 @@ class UniqueVisitorRegistry:
             self._update_quality_embedding(visitor_id, quality_normalized, now)
         decision = VisitorDecision(
             visitor_id=visitor_id,
-            is_unique_entry=True,
+            is_unique_entry=confidence == "high",
             reid_score=fast_score,
             reid_decision=decision_name,
             identity_confidence=confidence,
@@ -276,6 +340,27 @@ class UniqueVisitorRegistry:
     ) -> list[VisitorIdentity]:
         rows = self._session_store.load_active_visitor_identities(business_date, now.isoformat())
         gallery: list[VisitorIdentity] = []
+        prototypes_by_visitor: dict[str, list[VisitorPrototype]] = {}
+        prototype_rows = self._session_store.load_active_visitor_identity_prototypes(
+            business_date, self.model_name, now.isoformat()
+        )
+        for prototype_row in prototype_rows:
+            prototype_embedding = np.frombuffer(
+                prototype_row["representative_embedding"], dtype=np.float32
+            )
+            if prototype_embedding.size != int(prototype_row["embedding_dim"]):
+                continue
+            normalized_prototype = _normalize_embedding(prototype_embedding)
+            if normalized_prototype is None:
+                continue
+            prototypes_by_visitor.setdefault(prototype_row["visitor_id"], []).append(
+                VisitorPrototype(
+                    prototype_index=int(prototype_row["prototype_index"]),
+                    embedding=normalized_prototype,
+                    embedding_count=int(prototype_row["embedding_count"]),
+                )
+            )
+
         for row in rows:
             if row.get("model_name") != self.model_name:
                 continue
@@ -292,6 +377,13 @@ class UniqueVisitorRegistry:
             normalized = _normalize_embedding(embedding)
             if normalized is None:
                 continue
+            prototypes = prototypes_by_visitor.get(row["visitor_id"]) or [
+                VisitorPrototype(
+                    prototype_index=0,
+                    embedding=normalized,
+                    embedding_count=int(row["embedding_count"]),
+                )
+            ]
             gallery.append(
                 VisitorIdentity(
                     visitor_id=row["visitor_id"],
@@ -301,6 +393,9 @@ class UniqueVisitorRegistry:
                     embedding_count=int(row["embedding_count"]),
                     model_name=row["model_name"],
                     expires_at=row["expires_at"],
+                    identity_status=row.get("identity_status") or "confirmed",
+                    canonical_visitor_id=row.get("canonical_visitor_id"),
+                    prototypes=prototypes,
                 )
             )
         return gallery
@@ -350,10 +445,10 @@ class UniqueVisitorRegistry:
         if not self._gallery:
             return None, None, 1.0
 
-        gallery_embeddings = np.stack([identity.embedding for identity in self._gallery]).astype(
-            np.float32
+        scores = np.asarray(
+            [self._identity_score(identity, embedding) for identity in self._gallery],
+            dtype=np.float32,
         )
-        scores = gallery_embeddings @ embedding.astype(np.float32)
         order = np.argsort(scores)[::-1]
         best_index = int(order[0])
         best_score = float(scores[best_index])
@@ -393,7 +488,115 @@ class UniqueVisitorRegistry:
         identity.embedding = updated_embedding
         identity.embedding_count = updated_count
         identity.expires_at = self.expires_at_for(now).isoformat()
+        self._update_prototype(identity, embedding, now)
         self._persist_identity(identity, now)
+
+    def _identity_score(self, identity: VisitorIdentity, embedding: np.ndarray) -> float:
+        scores = [float(identity.embedding @ embedding)]
+        scores.extend(float(prototype.embedding @ embedding) for prototype in identity.prototypes)
+        return max(scores)
+
+    def _update_prototype(
+        self,
+        identity: VisitorIdentity,
+        embedding: np.ndarray,
+        now: datetime,
+        sample_count: int = 1,
+    ) -> None:
+        if not identity.prototypes:
+            prototype = VisitorPrototype(0, embedding, sample_count)
+            identity.prototypes.append(prototype)
+            self._persist_prototype(identity, prototype, now)
+            return
+
+        scores = [float(prototype.embedding @ embedding) for prototype in identity.prototypes]
+        best_index = int(np.argmax(scores))
+        if (
+            scores[best_index] < self.prototype_update_threshold
+            and len(identity.prototypes) < self.max_prototypes_per_identity
+        ):
+            prototype = VisitorPrototype(
+                prototype_index=max(item.prototype_index for item in identity.prototypes) + 1,
+                embedding=embedding,
+                embedding_count=sample_count,
+            )
+            identity.prototypes.append(prototype)
+            self._persist_prototype(identity, prototype, now)
+            return
+
+        prototype = identity.prototypes[best_index]
+        updated_count = prototype.embedding_count + sample_count
+        updated_embedding = _normalize_embedding(
+            (prototype.embedding * prototype.embedding_count + embedding * sample_count)
+            / updated_count
+        )
+        if updated_embedding is None:
+            return
+        prototype.embedding = updated_embedding
+        prototype.embedding_count = updated_count
+        self._persist_prototype(identity, prototype, now)
+
+    def _best_reconciliation_match(
+        self, provisional: VisitorIdentity
+    ) -> tuple[VisitorIdentity | None, float | None]:
+        confirmed = [
+            identity
+            for identity in self._gallery
+            if identity.visitor_id != provisional.visitor_id
+            and identity.identity_status == "confirmed"
+        ]
+        if not confirmed:
+            return None, None
+
+        provisional_embeddings = [provisional.embedding]
+        provisional_embeddings.extend(item.embedding for item in provisional.prototypes)
+        scores = [
+            max(self._identity_score(identity, embedding) for embedding in provisional_embeddings)
+            for identity in confirmed
+        ]
+        order = np.argsort(np.asarray(scores, dtype=np.float32))[::-1]
+        best_index = int(order[0])
+        best_score = float(scores[best_index])
+        second_score = float(scores[int(order[1])]) if len(order) > 1 else -1.0
+        if (
+            best_score >= self.strong_match_threshold
+            and best_score - second_score >= self.top_match_margin
+        ):
+            return confirmed[best_index], best_score
+        return None, best_score
+
+    def _merge_identity(
+        self, provisional: VisitorIdentity, canonical: VisitorIdentity, now: datetime
+    ) -> None:
+        for prototype in provisional.prototypes:
+            self._update_prototype(
+                canonical,
+                prototype.embedding,
+                now,
+                sample_count=prototype.embedding_count,
+            )
+        canonical.expires_at = self.expires_at_for(now).isoformat()
+        self._persist_identity(canonical, now)
+
+        quality_embedding = self._quality_gallery.get(provisional.visitor_id)
+        if quality_embedding is not None:
+            self._update_quality_embedding(canonical.visitor_id, quality_embedding.embedding, now)
+
+        provisional.identity_status = "merged"
+        provisional.canonical_visitor_id = canonical.visitor_id
+        self._session_store.resolve_visitor_identity(
+            provisional.visitor_id,
+            identity_status="merged",
+            canonical_visitor_id=canonical.visitor_id,
+            recorded_at=now.isoformat(),
+        )
+        self._gallery = [
+            identity for identity in self._gallery if identity.visitor_id != provisional.visitor_id
+        ]
+        self._quality_gallery.pop(provisional.visitor_id, None)
+        for track_id, visitor_id in list(self._track_visitors.items()):
+            if visitor_id == provisional.visitor_id:
+                self._track_visitors[track_id] = canonical.visitor_id
 
     def _update_quality_embedding(
         self, visitor_id: str, embedding: np.ndarray, now: datetime
@@ -440,6 +643,23 @@ class UniqueVisitorRegistry:
             embedding_count=identity.embedding_count,
             model_name=identity.model_name,
             expires_at=identity.expires_at,
+            identity_status=identity.identity_status,
+            canonical_visitor_id=identity.canonical_visitor_id,
+            recorded_at=now.isoformat(),
+        )
+        for prototype in identity.prototypes:
+            self._persist_prototype(identity, prototype, now)
+
+    def _persist_prototype(
+        self, identity: VisitorIdentity, prototype: VisitorPrototype, now: datetime
+    ) -> None:
+        self._session_store.upsert_visitor_identity_prototype(
+            visitor_id=identity.visitor_id,
+            model_name=identity.model_name,
+            prototype_index=prototype.prototype_index,
+            embedding=prototype.embedding.astype(np.float32).tobytes(),
+            embedding_dim=int(prototype.embedding.size),
+            embedding_count=prototype.embedding_count,
             recorded_at=now.isoformat(),
         )
 

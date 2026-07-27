@@ -215,11 +215,17 @@ Counting uses:
 
 Unique visitor fields are estimates:
 
-- `estimated_unique_count`: daily unique estimate used by the UI.
-- `confirmed_unique_count`: entries linked to a ReID visitor ID.
+- `estimated_unique_count`: confirmed and degraded daily unique estimate used by the UI.
+- `confirmed_unique_count`: high-confidence entries linked to a confirmed ReID identity.
 - `degraded_unique_count`: entries counted as unique when ReID is off, unavailable, or timed out.
-- `pending_unique_entries`: entries waiting briefly for async ReID.
+- `pending_unique_entries`: ambiguous ReID identities excluded from the estimate until later evidence confirms or reconciles them.
 - `repeat_entry_count`: entry events linked to an existing visitor or otherwise not unique.
+
+Confirmed identities retain multiple appearance prototypes. When clothing or
+another appearance change creates an ambiguous identity, TANAW keeps it
+provisional. A later strong sighting either merges it into a confirmed identity
+or promotes it as a genuinely new visitor. This reduces immediate overcounting
+without silently rewriting submitted reports.
 
 ## Local Data And Ledgers
 

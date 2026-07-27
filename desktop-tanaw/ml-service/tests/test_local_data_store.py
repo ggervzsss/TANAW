@@ -67,6 +67,120 @@ class LocalDataStoreTest(unittest.TestCase):
             ):
                 store.metrics_summary()
 
+    def test_schema_five_is_migrated_without_clearing_local_data(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store._database_path.parent.mkdir(parents=True)
+            with closing(sqlite3.connect(store._database_path)) as connection:
+                connection.executescript(
+                    """
+                    create table schema_metadata (
+                        singleton_id integer primary key,
+                        schema_version integer not null,
+                        applied_at text not null
+                    );
+                    insert into schema_metadata values (1, 5, '2026-06-07T00:00:00+00:00');
+                    create table visitor_identities (
+                        visitor_id text primary key,
+                        business_date text not null,
+                        camera_id integer,
+                        first_seen_at text not null,
+                        last_seen_at text not null,
+                        representative_embedding blob not null,
+                        embedding_dim integer not null,
+                        embedding_count integer not null default 1,
+                        model_name text not null,
+                        expires_at text not null
+                    );
+                    insert into visitor_identities values (
+                        'visitor-1',
+                        '2026-06-07',
+                        1,
+                        '2026-06-07T01:00:00+00:00',
+                        '2026-06-07T01:00:00+00:00',
+                        X'0000000000000000',
+                        2,
+                        1,
+                        'fast',
+                        '2026-06-08T02:00:00+00:00'
+                    );
+                    """
+                )
+
+            store.metrics_summary()
+
+            with closing(sqlite3.connect(store._database_path)) as connection:
+                version = connection.execute(
+                    "select schema_version from schema_metadata where singleton_id = 1"
+                ).fetchone()
+                identity = connection.execute(
+                    """
+                    select identity_status, canonical_visitor_id
+                    from visitor_identities
+                    where visitor_id = 'visitor-1'
+                    """
+                ).fetchone()
+                prototype_count = connection.execute(
+                    """
+                    select count(*)
+                    from visitor_identity_prototypes
+                    where visitor_id = 'visitor-1'
+                    """
+                ).fetchone()
+
+            self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
+            self.assertEqual(identity, ("confirmed", None))
+            self.assertEqual(prototype_count, (1,))
+
+    def test_schema_five_migration_reclassifies_unsubmitted_ambiguous_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            original.upsert_visitor_identity(
+                visitor_id="visitor-ambiguous",
+                business_date="2026-06-07",
+                camera_id=1,
+                embedding=b"\x00" * 8,
+                embedding_dim=2,
+                embedding_count=1,
+                model_name="fast",
+                expires_at="2026-06-08T02:00:00+00:00",
+                recorded_at="2026-06-07T01:00:00+00:00",
+            )
+            original.append_visitor_sighting(
+                {
+                    "visitor_id": "visitor-ambiguous",
+                    "business_date": "2026-06-07",
+                    "camera_id": 1,
+                    "track_id": 99,
+                    "direction": "entry",
+                    "reid_decision": "ambiguous_new",
+                    "identity_confidence": "low",
+                },
+                "2026-06-07T01:00:00+00:00",
+            )
+            event = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
+            event.update(
+                {
+                    "visitor_id": "visitor-ambiguous",
+                    "reid_decision": "ambiguous_new",
+                    "identity_confidence": "low",
+                }
+            )
+            original.append_count_event(event)
+            with closing(sqlite3.connect(original._database_path)) as connection:
+                connection.execute("update schema_metadata set schema_version = 5")
+                connection.commit()
+
+            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            summary = migrated.metrics_summary()
+            identity = migrated.load_active_visitor_identities(
+                "2026-06-07", "2026-06-07T01:01:00+00:00"
+            )[0]
+
+            self.assertEqual(summary["estimated_unique_count"], 0)
+            self.assertEqual(summary["pending_unique_entries"], 1)
+            self.assertEqual(identity["identity_status"], "provisional")
+
     def test_retired_database_filename_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
@@ -391,8 +505,10 @@ class LocalDataStoreTest(unittest.TestCase):
             confirmed = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
             confirmed["visitor_id"] = "visitor-1"
             confirmed["reid_decision"] = "new"
+            confirmed["identity_confidence"] = "high"
             degraded = _event("entry", entry=2, exit=0, occupancy=2, is_unique_entry=True)
             degraded["reid_decision"] = "degraded_no_embedding"
+            degraded["identity_confidence"] = "degraded"
             store.append_count_event(confirmed)
             store.append_count_event(degraded)
 
@@ -403,6 +519,44 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(summary["confirmed_unique_count"], 1)
             self.assertEqual(summary["degraded_unique_count"], 1)
             self.assertEqual(summary["repeat_entry_count"], 0)
+
+    def test_provisional_identity_is_pending_until_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)))
+            store.upsert_visitor_identity(
+                visitor_id="visitor-provisional",
+                business_date="2026-06-07",
+                camera_id=1,
+                embedding=b"\x00" * 8,
+                embedding_dim=2,
+                embedding_count=1,
+                model_name="fast",
+                expires_at="2026-06-08T02:00:00+00:00",
+                identity_status="provisional",
+                recorded_at="2026-06-07T01:00:00+00:00",
+            )
+            event = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=False)
+            event.update(
+                {
+                    "visitor_id": "visitor-provisional",
+                    "reid_decision": "ambiguous_new",
+                    "identity_confidence": "low",
+                }
+            )
+            store.append_count_event(event)
+
+            pending = store.metrics_summary()
+            store.resolve_visitor_identity(
+                "visitor-provisional",
+                identity_status="confirmed",
+            )
+            resolved = store.metrics_summary()
+
+            self.assertEqual(pending["estimated_unique_count"], 0)
+            self.assertEqual(pending["confirmed_unique_count"], 0)
+            self.assertEqual(pending["pending_unique_entries"], 1)
+            self.assertEqual(pending["repeat_entry_count"], 0)
+            self.assertEqual(resolved["pending_unique_entries"], 0)
 
     def test_occupancy_corrections_are_audited_and_included_in_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

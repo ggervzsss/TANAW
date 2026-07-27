@@ -204,6 +204,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             frame = np.zeros((200, 200, 3), dtype=np.uint8)
             self.assertIsNone(manager._detect_and_count(session, frame, 0.35)[0].direction)
             manager._appearance_buffer.record_sample(1, _embedding([1.0, 0.0, 0.0]), 0.95, 1)
+            manager._appearance_buffer.record_sample(1, _embedding([0.99, 0.01, 0.0]), 0.90, 2)
             entry_track = manager._detect_and_count(session, frame, 0.35)[0]
 
             self.assertEqual(entry_track.direction, "entry")
@@ -241,6 +242,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(len(manager._pending_entry_events), 1)
 
             manager._appearance_buffer.record_sample(1, _embedding([1.0, 0.0, 0.0]), 0.95, 2)
+            manager._appearance_buffer.record_sample(1, _embedding([0.99, 0.01, 0.0]), 0.90, 3)
             manager._flush_pending_entry_events(session, time.monotonic())
 
             summary = manager.metrics_summary()

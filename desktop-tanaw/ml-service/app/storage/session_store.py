@@ -52,6 +52,8 @@ class SessionStore:
         embedding_count: int,
         model_name: str,
         expires_at: str,
+        identity_status: str = "confirmed",
+        canonical_visitor_id: str | None = None,
         recorded_at: str | None = None,
     ) -> None:
         self._data_store.upsert_visitor_identity(
@@ -63,6 +65,44 @@ class SessionStore:
             embedding_count=embedding_count,
             model_name=model_name,
             expires_at=expires_at,
+            identity_status=identity_status,
+            canonical_visitor_id=canonical_visitor_id,
+            recorded_at=recorded_at,
+        )
+
+    def upsert_visitor_identity_prototype(
+        self,
+        *,
+        visitor_id: str,
+        model_name: str,
+        prototype_index: int,
+        embedding: bytes,
+        embedding_dim: int,
+        embedding_count: int,
+        recorded_at: str | None = None,
+    ) -> None:
+        self._data_store.upsert_visitor_identity_prototype(
+            visitor_id=visitor_id,
+            model_name=model_name,
+            prototype_index=prototype_index,
+            embedding=embedding,
+            embedding_dim=embedding_dim,
+            embedding_count=embedding_count,
+            recorded_at=recorded_at,
+        )
+
+    def resolve_visitor_identity(
+        self,
+        visitor_id: str,
+        *,
+        identity_status: str,
+        canonical_visitor_id: str | None = None,
+        recorded_at: str | None = None,
+    ) -> None:
+        self._data_store.resolve_visitor_identity(
+            visitor_id,
+            identity_status=identity_status,
+            canonical_visitor_id=canonical_visitor_id,
             recorded_at=recorded_at,
         )
 
@@ -102,6 +142,16 @@ class SessionStore:
         now: str | None = None,
     ) -> list[dict[str, Any]]:
         return self._data_store.load_active_visitor_model_embeddings(business_date, model_name, now)
+
+    def load_active_visitor_identity_prototypes(
+        self,
+        business_date: str,
+        model_name: str,
+        now: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self._data_store.load_active_visitor_identity_prototypes(
+            business_date, model_name, now
+        )
 
     def cleanup_expired_visitor_metadata(self, now: str | None = None) -> int:
         return self._data_store.cleanup_expired_visitor_metadata(now)

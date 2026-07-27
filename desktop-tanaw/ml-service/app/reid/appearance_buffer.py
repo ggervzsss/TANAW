@@ -144,6 +144,10 @@ class TrackAppearanceBuffer:
             return None
         return (weighted / norm).astype(np.float32)
 
+    def sample_count_for_track(self, track_id: int) -> int:
+        state = self._tracks.get(track_id)
+        return len(state.samples) if state is not None else 0
+
     def quality_score(self, track: TrackLike, frame_width: int, frame_height: int) -> float:
         x1, y1, x2, y2 = track.bbox
         bbox_width = max(0, x2 - x1)

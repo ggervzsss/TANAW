@@ -211,6 +211,7 @@ class HealthResponse(BaseModel):
     reid_average_inference_ms: float | None = None
     reid_providers: list[str] = Field(default_factory=list)
     reid_gallery_size: int = 0
+    reid_provisional_gallery_size: int = 0
     reid_quality_gallery_size: int = 0
     reid_business_date: str | None = None
     reid_last_cleanup_at: str | None = None

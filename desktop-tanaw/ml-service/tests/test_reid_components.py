@@ -67,6 +67,8 @@ class ReIdComponentsTest(unittest.TestCase):
         assert embedding is not None
         self.assertAlmostEqual(float(np.linalg.norm(embedding)), 1.0, places=5)
         self.assertGreater(float(embedding[0]), float(embedding[1]))
+        self.assertEqual(buffer.sample_count_for_track(1), 2)
+        self.assertEqual(buffer.sample_count_for_track(999), 0)
 
     def test_quality_buffer_stops_sampling_when_full(self) -> None:
         buffer = TrackAppearanceBuffer(max_samples_per_track=1, stop_when_full=True)

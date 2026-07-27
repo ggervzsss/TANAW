@@ -33,6 +33,7 @@ export type MlHealth = {
   reid_average_inference_ms: number | null;
   reid_providers: string[];
   reid_gallery_size: number;
+  reid_provisional_gallery_size: number;
   reid_quality_gallery_size: number;
   reid_business_date: string | null;
   reid_last_cleanup_at: string | null;

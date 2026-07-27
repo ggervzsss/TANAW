@@ -15,7 +15,8 @@ from uuid import uuid4
 
 from app.config.camera_config import reporting_period_key
 
-LOCAL_SCHEMA_VERSION = 5
+LOCAL_SCHEMA_VERSION = 6
+MIGRATABLE_SCHEMA_VERSIONS = {5}
 
 logger = logging.getLogger(__name__)
 
@@ -363,6 +364,8 @@ class LocalDataStore:
         embedding_count: int,
         model_name: str,
         expires_at: str,
+        identity_status: str = "confirmed",
+        canonical_visitor_id: str | None = None,
         recorded_at: str | None = None,
     ) -> None:
         recorded_at = recorded_at or _utc_now()
@@ -379,16 +382,20 @@ class LocalDataStore:
                     embedding_dim,
                     embedding_count,
                     model_name,
-                    expires_at
+                    expires_at,
+                    identity_status,
+                    canonical_visitor_id
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(visitor_id) do update set
                     last_seen_at = excluded.last_seen_at,
                     representative_embedding = excluded.representative_embedding,
                     embedding_dim = excluded.embedding_dim,
                     embedding_count = excluded.embedding_count,
                     model_name = excluded.model_name,
-                    expires_at = excluded.expires_at
+                    expires_at = excluded.expires_at,
+                    identity_status = excluded.identity_status,
+                    canonical_visitor_id = excluded.canonical_visitor_id
                 """,
                 (
                     visitor_id,
@@ -401,6 +408,80 @@ class LocalDataStore:
                     embedding_count,
                     model_name,
                     expires_at,
+                    identity_status,
+                    canonical_visitor_id,
+                ),
+            )
+
+    def upsert_visitor_identity_prototype(
+        self,
+        *,
+        visitor_id: str,
+        model_name: str,
+        prototype_index: int,
+        embedding: bytes,
+        embedding_dim: int,
+        embedding_count: int,
+        recorded_at: str | None = None,
+    ) -> None:
+        recorded_at = recorded_at or _utc_now()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                insert into visitor_identity_prototypes (
+                    visitor_id,
+                    model_name,
+                    prototype_index,
+                    representative_embedding,
+                    embedding_dim,
+                    embedding_count,
+                    updated_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?)
+                on conflict(visitor_id, model_name, prototype_index) do update set
+                    representative_embedding = excluded.representative_embedding,
+                    embedding_dim = excluded.embedding_dim,
+                    embedding_count = excluded.embedding_count,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    visitor_id,
+                    model_name,
+                    prototype_index,
+                    embedding,
+                    embedding_dim,
+                    embedding_count,
+                    recorded_at,
+                ),
+            )
+
+    def resolve_visitor_identity(
+        self,
+        visitor_id: str,
+        *,
+        identity_status: str,
+        canonical_visitor_id: str | None = None,
+        recorded_at: str | None = None,
+    ) -> None:
+        if identity_status not in {"confirmed", "provisional", "merged"}:
+            raise ValueError(f"Unsupported visitor identity status: {identity_status}")
+        if identity_status == "merged" and not canonical_visitor_id:
+            raise ValueError("Merged visitor identities require a canonical visitor ID.")
+
+        with self._connection() as connection:
+            connection.execute(
+                """
+                update visitor_identities
+                set identity_status = ?,
+                    canonical_visitor_id = ?,
+                    last_seen_at = ?
+                where visitor_id = ?
+                """,
+                (
+                    identity_status,
+                    canonical_visitor_id,
+                    recorded_at or _utc_now(),
+                    visitor_id,
                 ),
             )
 
@@ -506,13 +587,50 @@ class LocalDataStore:
                     embedding_dim,
                     embedding_count,
                     model_name,
-                    expires_at
+                    expires_at,
+                    identity_status,
+                    canonical_visitor_id
                 from visitor_identities
                 where business_date = ?
                     and expires_at > ?
+                    and identity_status != 'merged'
                 order by last_seen_at desc
                 """,
                 (business_date, now),
+            ).fetchall()
+
+        return [dict(row) for row in rows]
+
+    def load_active_visitor_identity_prototypes(
+        self,
+        business_date: str,
+        model_name: str,
+        now: str | None = None,
+    ) -> list[dict[str, Any]]:
+        now = now or _utc_now()
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                select
+                    prototypes.visitor_id,
+                    identities.business_date,
+                    identities.camera_id,
+                    prototypes.model_name,
+                    prototypes.prototype_index,
+                    prototypes.representative_embedding,
+                    prototypes.embedding_dim,
+                    prototypes.embedding_count,
+                    identities.expires_at
+                from visitor_identity_prototypes as prototypes
+                join visitor_identities as identities
+                    on identities.visitor_id = prototypes.visitor_id
+                where identities.business_date = ?
+                    and identities.expires_at > ?
+                    and identities.identity_status != 'merged'
+                    and prototypes.model_name = ?
+                order by prototypes.visitor_id, prototypes.prototype_index
+                """,
+                (business_date, now, model_name),
             ).fetchall()
 
         return [dict(row) for row in rows]
@@ -541,6 +659,7 @@ class LocalDataStore:
                     on identities.visitor_id = embeddings.visitor_id
                 where identities.business_date = ?
                     and identities.expires_at > ?
+                    and identities.identity_status != 'merged'
                     and embeddings.model_name = ?
                 order by embeddings.updated_at desc
                 """,
@@ -736,8 +855,23 @@ class LocalDataStore:
                     sum(case when direction = 'entry' then 1 else 0 end) as entries,
                     sum(case when direction = 'exit' then 1 else 0 end) as exits,
                     sum(case when direction = 'entry' and is_unique_entry = 1 then 1 else 0 end) as unique_entries,
-                    sum(case when direction = 'entry' and is_unique_entry = 1 and visitor_id is not null and visitor_id != '' then 1 else 0 end) as confirmed_unique_entries,
-                    sum(case when direction = 'entry' and is_unique_entry = 1 and (visitor_id is null or visitor_id = '') then 1 else 0 end) as degraded_unique_entries,
+                    sum(case when direction = 'entry' and is_unique_entry = 1 and identity_confidence = 'high' then 1 else 0 end) as confirmed_unique_entries,
+                    sum(case when direction = 'entry' and is_unique_entry = 1 and coalesce(identity_confidence, 'degraded') != 'high' then 1 else 0 end) as degraded_unique_entries,
+                    sum(
+                        case
+                            when direction = 'entry'
+                                and is_unique_entry = 0
+                                and reid_decision = 'ambiguous_new'
+                                and exists (
+                                    select 1
+                                    from visitor_identities
+                                    where visitor_identities.visitor_id = count_events.visitor_id
+                                        and visitor_identities.identity_status = 'provisional'
+                                )
+                            then 1
+                            else 0
+                        end
+                    ) as pending_unique_entries,
                     max(occupancy_count) as peak_occupancy,
                     max(enterprise_occupancy_count) as enterprise_peak_occupancy,
                     min(recorded_at) as first_event_at,
@@ -808,6 +942,7 @@ class LocalDataStore:
                 enterprise_peak_occupancy, sum(occupancy_by_camera.values())
             )
         estimated_unique_count = _safe_int(row["unique_entries"])
+        pending_unique_entries = _safe_int(row["pending_unique_entries"])
         if camera_id is None and enterprise_state is not None:
             current_occupancy = max(0, _safe_int(enterprise_state["current_occupancy"]))
         recorded_enterprise_peak = _safe_int(row["enterprise_peak_occupancy"])
@@ -829,8 +964,8 @@ class LocalDataStore:
             "estimated_unique_count": estimated_unique_count,
             "confirmed_unique_count": _safe_int(row["confirmed_unique_entries"]),
             "degraded_unique_count": _safe_int(row["degraded_unique_entries"]),
-            "pending_unique_entries": 0,
-            "repeat_entry_count": max(0, entries - estimated_unique_count),
+            "pending_unique_entries": pending_unique_entries,
+            "repeat_entry_count": max(0, entries - estimated_unique_count - pending_unique_entries),
             "occupancy_correction_delta": correction_delta,
             "total_events": _safe_int(row["total_events"]),
             "unsubmitted_events": _safe_int(unsubmitted_count),
@@ -1522,6 +1657,9 @@ class LocalDataStore:
                 current_version = _safe_int(
                     version_row["schema_version"] if version_row is not None else None
                 )
+                if current_version in MIGRATABLE_SCHEMA_VERSIONS:
+                    self._migrate_schema(connection, current_version)
+                    current_version = LOCAL_SCHEMA_VERSION
                 if current_version != LOCAL_SCHEMA_VERSION:
                     raise LocalDatabaseResetRequiredError(
                         f"Local TANAW database schema {current_version} is incompatible with "
@@ -1722,11 +1860,34 @@ class LocalDataStore:
                     embedding_dim integer not null,
                     embedding_count integer not null default 1,
                     model_name text not null,
-                    expires_at text not null
+                    expires_at text not null,
+                    identity_status text not null default 'confirmed' check (
+                        identity_status in ('confirmed', 'provisional', 'merged')
+                    ),
+                    canonical_visitor_id text
                 );
 
                 create index if not exists idx_visitor_identities_business_date on visitor_identities(business_date);
                 create index if not exists idx_visitor_identities_expires_at on visitor_identities(expires_at);
+                create index if not exists idx_visitor_identities_status on visitor_identities(identity_status);
+
+                create table if not exists visitor_identity_prototypes (
+                    visitor_id text not null,
+                    model_name text not null,
+                    prototype_index integer not null check (prototype_index >= 0),
+                    representative_embedding blob not null,
+                    embedding_dim integer not null,
+                    embedding_count integer not null default 1,
+                    updated_at text not null,
+                    primary key (visitor_id, model_name, prototype_index),
+                    constraint fk_visitor_identity_prototypes_identity
+                        foreign key (visitor_id)
+                        references visitor_identities(visitor_id)
+                        on update cascade on delete cascade
+                );
+
+                create index if not exists idx_visitor_identity_prototypes_model
+                    on visitor_identity_prototypes(model_name);
 
                 create table if not exists visitor_model_embeddings (
                     visitor_id text not null,
@@ -1772,6 +1933,125 @@ class LocalDataStore:
             connection.close()
 
         self._initialized = True
+
+    def _migrate_schema(self, connection: sqlite3.Connection, current_version: int) -> None:
+        if current_version != 5:
+            return
+
+        identity_columns = {
+            str(row["name"])
+            for row in connection.execute("pragma table_info(visitor_identities)").fetchall()
+        }
+        if "identity_status" not in identity_columns:
+            connection.execute(
+                """
+                alter table visitor_identities
+                    add column identity_status text not null default 'confirmed'
+                    check (identity_status in ('confirmed', 'provisional', 'merged'))
+                """
+            )
+        if "canonical_visitor_id" not in identity_columns:
+            connection.execute(
+                "alter table visitor_identities add column canonical_visitor_id text"
+            )
+
+        existing_tables = {
+            str(row["name"])
+            for row in connection.execute("select name from sqlite_master where type = 'table'")
+        }
+        if "visitor_sightings" in existing_tables:
+            connection.execute(
+                """
+                update visitor_identities
+                set identity_status = 'provisional'
+                where exists (
+                    select 1
+                    from visitor_sightings
+                    where visitor_sightings.visitor_id = visitor_identities.visitor_id
+                        and visitor_sightings.reid_decision = 'ambiguous_new'
+                )
+                    and not exists (
+                        select 1
+                        from visitor_sightings
+                        where visitor_sightings.visitor_id = visitor_identities.visitor_id
+                            and visitor_sightings.reid_decision = 'provisional_confirmed'
+                    )
+                """
+            )
+        if "count_events" in existing_tables:
+            ambiguous_events = connection.execute(
+                """
+                select id, payload_json
+                from count_events
+                where submitted_report_id is null
+                    and direction = 'entry'
+                    and reid_decision = 'ambiguous_new'
+                    and coalesce(identity_confidence, 'low') = 'low'
+                """
+            ).fetchall()
+            for event in ambiguous_events:
+                payload = _load_json_object(event["payload_json"])
+                payload["is_unique_entry"] = False
+                connection.execute(
+                    """
+                    update count_events
+                    set is_unique_entry = 0,
+                        payload_json = ?,
+                        synced_at = null
+                    where id = ?
+                    """,
+                    (json.dumps(payload, sort_keys=True), event["id"]),
+                )
+
+        connection.executescript(
+            """
+            create index if not exists idx_visitor_identities_status
+                on visitor_identities(identity_status);
+
+            create table if not exists visitor_identity_prototypes (
+                visitor_id text not null,
+                model_name text not null,
+                prototype_index integer not null check (prototype_index >= 0),
+                representative_embedding blob not null,
+                embedding_dim integer not null,
+                embedding_count integer not null default 1,
+                updated_at text not null,
+                primary key (visitor_id, model_name, prototype_index),
+                constraint fk_visitor_identity_prototypes_identity
+                    foreign key (visitor_id)
+                    references visitor_identities(visitor_id)
+                    on update cascade on delete cascade
+            );
+
+            create index if not exists idx_visitor_identity_prototypes_model
+                on visitor_identity_prototypes(model_name);
+
+            insert or ignore into visitor_identity_prototypes (
+                visitor_id,
+                model_name,
+                prototype_index,
+                representative_embedding,
+                embedding_dim,
+                embedding_count,
+                updated_at
+            )
+            select
+                visitor_id,
+                model_name,
+                0,
+                representative_embedding,
+                embedding_dim,
+                embedding_count,
+                last_seen_at
+            from visitor_identities;
+
+            update schema_metadata
+            set schema_version = 6,
+                applied_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            where singleton_id = 1;
+            """
+        )
+        connection.commit()
 
 
 def _utc_now() -> str:

@@ -287,7 +287,7 @@ class CameraProcessingManager:
             self._counter.reset()
             self._restore_saved_snapshot(saved_snapshot)
             self._appearance_buffer = TrackAppearanceBuffer(
-                sample_interval_frames=max(1, int(round(processing_fps)))
+                sample_interval_frames=max(1, int(round(processing_fps / 3.0)))
             )
             self._quality_appearance_buffer = TrackAppearanceBuffer(
                 max_samples_per_track=2,
@@ -1340,9 +1340,7 @@ class CameraProcessingManager:
         if not self._fast_reid_enabled():
             return self._degraded_unique_entry_decision("reid_off")
 
-        embedding = self._appearance_buffer.embedding_for_track(track.track_id)
-        quality_embedding = self._quality_appearance_buffer.embedding_for_track(track.track_id)
-        if embedding is not None or quality_embedding is not None:
+        if self._track_has_reid_consensus(track.track_id):
             return self._resolve_unique_entry(session, track)
 
         with self._lock:
@@ -1380,14 +1378,9 @@ class CameraProcessingManager:
                 if event.session_id != session.session_id:
                     del self._pending_entry_events[key]
                     continue
-                embedding = self._appearance_buffer.embedding_for_track(event.track.track_id)
-                quality_embedding = self._quality_appearance_buffer.embedding_for_track(
-                    event.track.track_id
-                )
                 if (
                     force
-                    or embedding is not None
-                    or quality_embedding is not None
+                    or self._track_has_reid_consensus(event.track.track_id)
                     or now >= event.expires_at
                 ):
                     ready_events.append(event)
@@ -1398,6 +1391,12 @@ class CameraProcessingManager:
                 continue
             visitor_decision = self._resolve_unique_entry(session, event.track)
             self._persist_count_event(session, event.track, event.direction, visitor_decision)
+
+    def _track_has_reid_consensus(self, track_id: int) -> bool:
+        return (
+            self._appearance_buffer.sample_count_for_track(track_id) >= 2
+            or self._quality_appearance_buffer.sample_count_for_track(track_id) >= 2
+        )
 
     def _apply_reid_results(self, session: ProcessingSession, now: float) -> None:
         for result in self._reid_worker.poll(session.session_id):
