@@ -369,15 +369,31 @@ cd desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
 npm run models:setup
+npm run models:setup:reid
+```
+
+Linux:
+
+```shell
+printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
+npm run dev
+```
+
+Windows PowerShell:
+
+```powershell
+Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
 npm run dev
 ```
 
 `npm run models:setup` installs all supported YOLO11 detector assets. For
 CPU/OpenVINO testing, use `npm run models:setup:openvino` from `desktop-tanaw`.
+`npm run models:setup:reid` installs the pinned OSNet assets used by the live
+ReID modes.
 
 `npm run dev` starts the Electron development app. Electron then starts the
-local ML service automatically and uses the central API at
-`http://localhost:8000` by default.
+local ML service automatically. The desktop `.env.local` points the Electron
+renderer at the central API at `http://localhost:8000`.
 
 To run an already-built desktop application:
 

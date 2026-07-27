@@ -240,15 +240,33 @@ cd desktop-tanaw
 npm ci
 uv sync --directory ml-service --frozen
 npm run models:setup
+npm run models:setup:reid
+```
+
+Linux:
+
+```shell
+printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
+npm run dev
+```
+
+Windows PowerShell:
+
+```powershell
+Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
 npm run dev
 ```
 
 The last command keeps running and opens Electron. It also starts the local ML
-service at <http://127.0.0.1:8765>.
+service at <http://127.0.0.1:8765>. The desktop `.env.local` points the Electron
+renderer at the Dockerized backend.
 
 If PowerShell blocks `npm.ps1`, use:
 
 ```powershell
+npm.cmd ci
+npm.cmd run models:setup
+npm.cmd run models:setup:reid
 npm.cmd run dev
 ```
 
@@ -417,6 +435,7 @@ completely empty local database is intended.
 | Follow logs                  | `docker compose logs -f backend frontend`                                      |
 | Install desktop dependencies | From `desktop-tanaw`: `npm ci`, then `uv sync --directory ml-service --frozen` |
 | Install YOLO11 models        | From `desktop-tanaw`: `npm run models:setup`                                   |
+| Install ReID models          | From `desktop-tanaw`: `npm run models:setup:reid`                              |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                          |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                            |
 | Generate sample data         | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                         |
