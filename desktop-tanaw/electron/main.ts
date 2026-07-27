@@ -8,7 +8,12 @@ import path from "node:path";
 import { getMlServiceCommand } from "./ml-service-command";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
 import { classifyMlServiceStderr } from "./ml-service-log";
-import { buildWindowsListenerPidScript } from "./ml-service-process";
+import {
+  buildWindowsListenerPidScript,
+  buildWindowsTerminateTreeArgs,
+  shouldTerminateExternalService,
+  waitForListenerRelease,
+} from "./ml-service-process";
 import { createDisplayScaleController } from "./display-scale";
 import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
 
@@ -33,6 +38,8 @@ let mlServiceProcess: ChildProcess | null = null;
 let mlServiceError: string | null = null;
 let mlServiceConnectedExternally = false;
 let isQuitting = false;
+let mlServiceShutdownComplete = false;
+let mlServiceShutdownPromise: Promise<void> | null = null;
 
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
@@ -120,7 +127,7 @@ async function startMlService() {
     }
     console.info(`[tanaw-ml] Replacing incompatible local ML service process ${listenerPid}.`);
     await terminateProcessId(listenerPid, 3000);
-    if (await isMlServiceReachable(300)) {
+    if ((await findMlServiceListenerPid()) !== null) {
       mlServiceError = `The incompatible local ML service on port ${mlServicePort} could not be stopped.`;
       updateTrayMenu();
       return;
@@ -197,13 +204,19 @@ async function stopMlService(waitMs = 0) {
 
   const serviceProcess = mlServiceProcess;
   mlServiceProcess = null;
-  serviceProcess.kill();
+  const servicePid = serviceProcess.pid;
 
-  if (waitMs > 0) {
-    const exited = await waitForProcessExit(serviceProcess, waitMs);
-    if (!exited) {
-      serviceProcess.kill("SIGKILL");
-      await waitForProcessExit(serviceProcess, 1500);
+  if (process.platform === "win32" && servicePid) {
+    await terminateProcessId(servicePid, Math.max(waitMs, 1500));
+  } else {
+    serviceProcess.kill();
+
+    if (waitMs > 0) {
+      const exited = await waitForProcessExit(serviceProcess, waitMs);
+      if (!exited) {
+        serviceProcess.kill("SIGKILL");
+        await waitForProcessExit(serviceProcess, 1500);
+      }
     }
   }
 
@@ -231,20 +244,6 @@ function getDesktopBuildFingerprint() {
     return statSync(fileURLToPath(import.meta.url)).mtime.toISOString();
   } catch {
     return "unknown";
-  }
-}
-
-async function isMlServiceReachable(timeoutMs = 750) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(`${mlServiceUrl}/health`, { method: "GET", signal: controller.signal });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -595,7 +594,7 @@ function normalizeProcessPath(value: string) {
 async function terminateProcessId(pid: number, waitMs: number) {
   try {
     if (process.platform === "win32") {
-      await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T"], { timeout: Math.max(waitMs, 1500), windowsHide: true });
+      await execFileAsync("taskkill.exe", buildWindowsTerminateTreeArgs(pid), { timeout: Math.max(waitMs, 1500), windowsHide: true });
     } else {
       process.kill(pid);
     }
@@ -609,7 +608,10 @@ async function terminateProcessId(pid: number, waitMs: number) {
 
   try {
     if (process.platform === "win32") {
-      await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { timeout: 1500, windowsHide: true });
+      const listenerPid = await findMlServiceListenerPid();
+      if (listenerPid) {
+        await execFileAsync("taskkill.exe", buildWindowsTerminateTreeArgs(listenerPid), { timeout: 1500, windowsHide: true });
+      }
     } else {
       process.kill(pid, "SIGKILL");
     }
@@ -620,16 +622,7 @@ async function terminateProcessId(pid: number, waitMs: number) {
 }
 
 async function waitForMlServicePortRelease(timeoutMs: number) {
-  const deadline = Date.now() + timeoutMs;
-
-  while (Date.now() < deadline) {
-    if (!(await isMlServiceReachable(250))) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-
-  return false;
+  return waitForListenerRelease(findMlServiceListenerPid, timeoutMs);
 }
 
 function waitForProcessExit(process: ChildProcess, timeoutMs: number) {
@@ -921,14 +914,28 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
 
 async function quitApplication() {
   isQuitting = true;
-  if (isMlServiceRunning()) {
-    await stopCameraProcessingFromTray();
-  }
-  stopMlService();
+  await shutdownMlServiceForQuit();
+  mlServiceShutdownComplete = true;
   if (win && !win.isDestroyed()) {
     win.destroy();
   }
   app.quit();
+}
+
+function shutdownMlServiceForQuit() {
+  if (!mlServiceShutdownPromise) {
+    mlServiceShutdownPromise = (async () => {
+      if (isMlServiceRunning()) {
+        await stopCameraProcessingFromTray();
+      }
+      if (shouldTerminateExternalService(mlServiceConnectedExternally, Boolean(mlServiceProcess))) {
+        await stopExternalMlService(3000);
+      } else {
+        await stopMlService(3000);
+      }
+    })();
+  }
+  return mlServiceShutdownPromise;
 }
 
 if (gotSingleInstanceLock) {
@@ -936,9 +943,17 @@ if (gotSingleInstanceLock) {
     updateTrayMenu();
   });
 
-  app.on("before-quit", () => {
+  app.on("before-quit", (event) => {
     isQuitting = true;
-    void stopMlService();
+    if (mlServiceShutdownComplete) {
+      return;
+    }
+
+    event.preventDefault();
+    void shutdownMlServiceForQuit().finally(() => {
+      mlServiceShutdownComplete = true;
+      app.quit();
+    });
   });
 
   app.on("activate", () => {

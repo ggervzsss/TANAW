@@ -292,7 +292,10 @@ profile is deleted and therefore are not foreign keys to `camera_profiles`.
 `report_drafts.report_id` can identify either a local or already-synchronized
 cloud report, so it is also intentionally unconstrained.
 
-Commands below run from `desktop-tanaw`. Close the desktop application before running any clear command.
+Commands below run from `desktop-tanaw`. Before any clear command, quit TANAW
+from the system tray and stop `npm run dev` with `Ctrl+C`. The repository-level
+`local-mockdata-off` script refuses to clear data while the desktop is still
+open and removes a leftover workspace-owned ML listener before resetting.
 
 ### Inspect Local Data
 

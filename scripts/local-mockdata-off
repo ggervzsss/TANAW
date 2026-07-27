@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DESKTOP_ROOT="$REPO_ROOT/desktop-tanaw"
 
 if [ "$#" -ne 0 ]; then
   echo "Usage: ./scripts/local-mockdata-off"
@@ -10,5 +11,37 @@ if [ "$#" -ne 0 ]; then
   exit 2
 fi
 
-cd "$REPO_ROOT/desktop-tanaw"
+if pgrep -af "electron.*$DESKTOP_ROOT" >/dev/null 2>&1; then
+  echo "TANAW is still running. Use the tray menu to Quit TANAW and stop npm run dev with Ctrl+C before resetting local data." >&2
+  exit 1
+fi
+
+if command -v lsof >/dev/null 2>&1; then
+  LISTENER_PID="$(lsof -nP -iTCP:8765 -sTCP:LISTEN -t 2>/dev/null | head -n 1 || true)"
+  if [ -n "$LISTENER_PID" ]; then
+    LISTENER_COMMAND="$(ps -p "$LISTENER_PID" -o command= 2>/dev/null || true)"
+    if [[ "$LISTENER_COMMAND" != *"$DESKTOP_ROOT/ml-service"* ]]; then
+      echo "Port 8765 is used by a process outside this TANAW workspace. Stop PID $LISTENER_PID manually before resetting local data." >&2
+      exit 1
+    fi
+
+    echo "Stopping leftover TANAW ML service process $LISTENER_PID..."
+    kill "$LISTENER_PID" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+      if ! lsof -nP -iTCP:8765 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.15
+    done
+    if lsof -nP -iTCP:8765 -sTCP:LISTEN -t >/dev/null 2>&1; then
+      kill -9 "$LISTENER_PID" 2>/dev/null || true
+    fi
+    if lsof -nP -iTCP:8765 -sTCP:LISTEN -t >/dev/null 2>&1; then
+      echo "The TANAW ML service did not release port 8765. Local data was not removed." >&2
+      exit 1
+    fi
+  fi
+fi
+
+cd "$DESKTOP_ROOT"
 exec npm run local-data -- clear --full-device --yes

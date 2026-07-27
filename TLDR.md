@@ -319,7 +319,9 @@ Invoke-RestMethod http://127.0.0.1:8765/metrics/summary
 
 ## 10. Desktop local-data commands
 
-Close the desktop before clearing local data.
+Quit TANAW from the system tray and stop `npm run dev` with `Ctrl+C` before
+clearing local data. `local-mockdata-off` refuses to clear while the desktop is
+still open and stops a leftover TANAW ML listener before resetting.
 
 Permanently remove all local desktop data, including databases, RTSP camera
 definitions and encrypted credentials, authentication state, Chromium storage,

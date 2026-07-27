@@ -43,4 +43,7 @@ $env:TANAW_MOCK_SCENARIO = "peak-traffic"
 directory: every desktop database, saved RTSP camera and encrypted credential
 file, authentication state, Chromium storage, preferences, and caches. It is
 idempotent and can be run before or after `mockdata-off`, which independently
-clears the backend sample dataset.
+clears the backend sample dataset. Quit TANAW from its tray menu and stop
+`npm run dev` with `Ctrl+C` first. The script refuses to clear data while the
+desktop is still open and safely terminates a leftover TANAW ML listener from
+this workspace before removing files.
