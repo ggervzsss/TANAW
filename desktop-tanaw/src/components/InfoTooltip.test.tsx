@@ -24,4 +24,14 @@ describe("InfoTooltip keyboard semantics", () => {
     expect(markup).not.toContain("<button");
     expect(markup).not.toContain("tabindex");
   });
+
+  it("supports a contextual accessible label for status-detail icons", () => {
+    const markup = renderToStaticMarkup(
+      <InfoTooltip ariaLabel="Camera Failed details" content="RTSP camera stream could not be opened.">
+        <span>!</span>
+      </InfoTooltip>,
+    );
+
+    expect(markup).toContain('aria-label="Camera Failed details"');
+  });
 });

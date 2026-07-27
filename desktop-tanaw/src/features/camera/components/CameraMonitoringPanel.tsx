@@ -1,8 +1,8 @@
-import { Activity, CheckCircle, LogIn, LogOut, Play, RefreshCw, Square, Users, Wifi } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle, CircleAlert, LogIn, LogOut, Play, RefreshCw, Square, Users, Wifi } from "lucide-react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
+import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
 import type { MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
-import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
@@ -53,22 +53,14 @@ export function CameraMonitoringPanel({
     ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
     : "bg-[#065f46] text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
   const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
-  const processingError = error ?? health?.error ?? serviceStatus?.error ?? counts.error;
-
-  usePersistentIssue({
-    id: `camera-processing-${activeCam.id}`,
-    message: processingError,
-    title: `${activeCam.name} unavailable`,
-    tone: "error",
-  });
-  usePersistentIssue({
-    id: `camera-fallback-${activeCam.id}`,
-    message: health?.fallback_reason
-      ? "AI fallback mode is active. Visitor counts may be less accurate."
-      : null,
-    title: `${activeCam.name} using fallback`,
-    tone: "warning",
-  });
+  const serviceIssue = serviceStatus?.error ? getUserFacingIssueMessage(serviceStatus.error) : null;
+  const cameraIssueSource = error ?? health?.error ?? counts.error;
+  const cameraIssue = cameraIssueSource ? getUserFacingIssueMessage(cameraIssueSource) : null;
+  const fallbackIssue = health?.fallback_reason ? "AI fallback mode is active. Visitor counts may be less accurate." : null;
+  const frameIssue =
+    frameFreshness.tone === "error"
+      ? "The latest camera frame is stale. Check the stream connection and camera processing status."
+      : null;
 
   return (
     <div className="space-y-3">
@@ -88,13 +80,32 @@ export function CameraMonitoringPanel({
       <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
         <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
         <div className="space-y-2">
-          <StatusRow icon={Activity} label={serviceLabel} tone={serviceOnline ? "ok" : "error"} tooltip="Shows whether the local AI counting service is available." />
-          <StatusRow icon={Wifi} label={cameraState.label} tone={cameraState.tone} tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable." />
+          <StatusRow
+            icon={Activity}
+            issue={serviceIssue ? { message: serviceIssue, tone: "error" } : null}
+            label={serviceLabel}
+            tone={serviceOnline ? "ok" : "error"}
+            tooltip="Shows whether the local AI counting service is available."
+          />
+          <StatusRow
+            icon={Wifi}
+            issue={cameraIssue ? { message: `${activeCam.name} unavailable: ${cameraIssue}`, tone: "error" } : null}
+            label={cameraState.label}
+            tone={cameraState.tone}
+            tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable."
+          />
           <StatusRow icon={CheckCircle} label={streamLabel} tone={streamVerified ? "ok" : "neutral"} tooltip="Shows whether the stream configuration has been verified." />
-          <StatusRow icon={Activity} label={modelStatus} tone={health?.model_ready ? "ok" : "neutral"} tooltip="Shows the active detector model, runtime, and tracker selected by TANAW." />
+          <StatusRow
+            icon={Activity}
+            issue={fallbackIssue ? { message: fallbackIssue, tone: "warning" } : null}
+            label={modelStatus}
+            tone={health?.model_ready ? "ok" : "neutral"}
+            tooltip="Shows the active detector model, runtime, and tracker selected by TANAW."
+          />
           <StatusRow icon={Activity} label={performanceStatus} tone="neutral" tooltip="Shows current detector latency and analytics throughput." />
           <StatusRow
             icon={Activity}
+            issue={frameIssue ? { message: frameIssue, tone: "error" } : null}
             label={frameFreshness.label}
             tone={frameFreshness.tone}
             tooltip="Compares the age of the latest captured, processed, and preview frames to identify pipeline or display stalls."
@@ -177,12 +188,16 @@ function MetricBox({ icon: Icon, label, tone, tooltip, value }: MetricBoxProps) 
 
 type StatusRowProps = {
   icon: typeof Activity;
+  issue?: {
+    message: string;
+    tone: "error" | "warning";
+  } | null;
   label: string;
   tone: "ok" | "neutral" | "error";
   tooltip: string;
 };
 
-function StatusRow({ icon: Icon, label, tone, tooltip }: StatusRowProps) {
+function StatusRow({ icon: Icon, issue, label, tone, tooltip }: StatusRowProps) {
   const toneClass = {
     error: "border-red-200 bg-red-50 text-red-700",
     neutral: "border-gray-200 bg-gray-50 text-gray-600",
@@ -190,13 +205,34 @@ function StatusRow({ icon: Icon, label, tone, tooltip }: StatusRowProps) {
   }[tone];
 
   return (
-    <InfoTooltip content={tooltip} focusable={false}>
-      <div className={`flex items-center justify-between gap-3 rounded-sm border px-3 py-2 text-[11px] font-bold transition-colors ${toneClass}`}>
+    <div className={`flex items-center justify-between gap-3 rounded-sm border px-3 py-2 text-[11px] font-bold transition-colors ${toneClass}`}>
+      <InfoTooltip content={tooltip} focusable={false} className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
           <Icon size={14} className="shrink-0" />
           <span className="truncate">{label}</span>
         </span>
-      </div>
+      </InfoTooltip>
+      {issue ? <StatusIssueTooltip issue={issue} label={label} /> : null}
+    </div>
+  );
+}
+
+function StatusIssueTooltip({ issue, label }: { issue: NonNullable<StatusRowProps["issue"]>; label: string }) {
+  const isError = issue.tone === "error";
+  const Icon = isError ? CircleAlert : AlertTriangle;
+
+  return (
+    <InfoTooltip
+      align="right"
+      ariaLabel={`${label} details`}
+      className={`shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${
+        isError
+          ? "text-red-600 hover:text-red-800 focus-visible:outline-red-600 dark:text-red-300 dark:hover:text-red-100"
+          : "text-amber-600 hover:text-amber-800 focus-visible:outline-amber-600 dark:text-amber-300 dark:hover:text-amber-100"
+      }`}
+      content={issue.message}
+    >
+      <Icon size={15} aria-hidden="true" />
     </InfoTooltip>
   );
 }

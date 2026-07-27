@@ -53,16 +53,39 @@ describe("CameraMonitoringPanel", () => {
     expect(markup).toContain("Camera Starting");
     expect(markup).not.toContain("Camera Processing");
   });
+
+  it("shows camera failure details through a compact status-row tooltip", () => {
+    const markup = renderPanel({
+      activeCam: { ...camera, status: "failed" },
+      error: "RTSP camera stream could not be opened.",
+    });
+
+    expect(markup).toContain("Camera Failed");
+    expect(markup).toContain('aria-label="Camera Failed details"');
+    expect(markup).not.toContain("RTSP camera stream could not be opened.");
+    expect(markup).not.toContain("Current system issues");
+    expect(markup).not.toContain("fixed right-4 bottom-4");
+  });
 });
 
-function renderPanel({ counts = EMPTY_ML_COUNTS, isStarting = false }: { counts?: typeof EMPTY_ML_COUNTS; isStarting?: boolean }) {
+function renderPanel({
+  activeCam = camera,
+  counts = EMPTY_ML_COUNTS,
+  error = null,
+  isStarting = false,
+}: {
+  activeCam?: Camera;
+  counts?: typeof EMPTY_ML_COUNTS;
+  error?: string | null;
+  isStarting?: boolean;
+}) {
   return renderToStaticMarkup(
     <CameraMonitoringPanel
-      activeCam={camera}
+      activeCam={activeCam}
       counts={counts}
       health={null}
       serviceStatus={null}
-      error={null}
+      error={error}
       isRestartingService={false}
       isStarting={isStarting}
       isStopping={false}

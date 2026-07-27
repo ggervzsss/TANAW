@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 type InfoTooltipProps = {
   align?: "left" | "right";
+  ariaLabel?: string;
   children: ReactNode;
   className?: string;
   content: string;
@@ -20,7 +21,7 @@ type TooltipPosition = {
   width: number;
 };
 
-export function InfoTooltip({ align = "right", children, className = "", content, focusable = true }: InfoTooltipProps) {
+export function InfoTooltip({ align = "right", ariaLabel = "More information", children, className = "", content, focusable = true }: InfoTooltipProps) {
   const tooltipId = useId();
   const triggerRef = useRef<HTMLElement | null>(null);
   const tooltipRef = useRef<HTMLSpanElement>(null);
@@ -135,7 +136,7 @@ export function InfoTooltip({ align = "right", children, className = "", content
         }}
         type="button"
         className={`group inline-flex border-0 bg-transparent p-0 text-inherit ${className}`}
-        aria-label="More information"
+        aria-label={ariaLabel}
         aria-describedby={isOpen ? tooltipId : undefined}
         aria-expanded={isOpen}
         onClick={() => {
