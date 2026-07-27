@@ -77,10 +77,9 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
             self.assertEqual(decision.identity_confidence, "low")
             self.assertEqual(registry.status()["reid_provisional_gallery_size"], 1)
 
-    def test_repeated_outfit_change_reconciles_with_confirmed_identity(self) -> None:
+    def test_low_confidence_repeat_is_confirmed_instead_of_falsely_merged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = SessionStore(str(Path(directory)))
-            registry = UniqueVisitorRegistry(store)
+            registry = UniqueVisitorRegistry(SessionStore(str(Path(directory))))
             first = registry.resolve_entry(
                 track_id=1,
                 camera_id=10,
@@ -97,7 +96,7 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
                 bbox=(12, 12, 82, 182),
                 now=_utc("2026-06-07T02:00:00+00:00"),
             )
-            reconciled = registry.resolve_entry(
+            promoted = registry.resolve_entry(
                 track_id=3,
                 camera_id=10,
                 embedding=_embedding([0.78, 0.626, 0.0]),
@@ -107,24 +106,155 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
             )
 
             self.assertFalse(provisional.is_unique_entry)
+            self.assertTrue(promoted.is_unique_entry)
+            self.assertEqual(promoted.reid_decision, "provisional_confirmed")
+            self.assertEqual(promoted.visitor_id, provisional.visitor_id)
+            self.assertNotEqual(promoted.visitor_id, first.visitor_id)
+            self.assertEqual(registry.status()["reid_gallery_size"], 2)
+            self.assertEqual(registry.status()["reid_provisional_gallery_size"], 0)
+
+    def test_strict_reconciliation_is_quarantined_and_can_be_rolled_back(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = SessionStore(str(Path(directory)))
+            registry = UniqueVisitorRegistry(store)
+            first = registry.resolve_entry(
+                track_id=1,
+                camera_id=10,
+                embedding=_embedding([1.0, 0.0, 0.0]),
+                detection_confidence=0.9,
+                bbox=(10, 10, 80, 180),
+                now=_utc("2026-06-07T01:00:00+00:00"),
+            )
+            provisional = registry.resolve_entry(
+                track_id=2,
+                camera_id=10,
+                embedding=_embedding([0.79, 0.613, 0.0]),
+                detection_confidence=0.9,
+                bbox=(12, 12, 82, 182),
+                now=_utc("2026-06-07T02:00:00+00:00"),
+            )
+            reconciled = registry.resolve_entry(
+                track_id=3,
+                camera_id=10,
+                embedding=_embedding([0.83, 0.558, 0.0]),
+                detection_confidence=0.9,
+                bbox=(14, 12, 84, 182),
+                now=_utc("2026-06-07T02:10:00+00:00"),
+            )
+
+            self.assertFalse(provisional.is_unique_entry)
             self.assertFalse(reconciled.is_unique_entry)
             self.assertEqual(reconciled.reid_decision, "reconciled_existing")
             self.assertEqual(reconciled.visitor_id, first.visitor_id)
-            self.assertEqual(registry.status()["reid_gallery_size"], 1)
-            self.assertEqual(registry.status()["reid_provisional_gallery_size"], 0)
 
-            restarted = UniqueVisitorRegistry(store)
-            repeat = restarted.resolve_entry(
-                track_id=4,
-                camera_id=10,
-                embedding=_embedding([0.69, 0.724, 0.0]),
-                detection_confidence=0.9,
-                bbox=(16, 12, 86, 182),
+            prototypes = store.load_active_visitor_identity_prototypes(
+                "2026-06-07",
+                registry.model_name,
+                "2026-06-07T02:11:00+00:00",
+            )
+            self.assertEqual(len(prototypes), 1)
+            self.assertEqual(prototypes[0]["visitor_id"], first.visitor_id)
+            self.assertEqual(prototypes[0]["embedding_count"], 1)
+
+            assert provisional.visitor_id is not None
+            restored = registry.restore_merged_identity(
+                provisional.visitor_id,
                 now=_utc("2026-06-07T02:20:00+00:00"),
             )
+            self.assertTrue(restored)
+            self.assertEqual(registry.status()["reid_gallery_size"], 2)
+
+            repeat = registry.resolve_entry(
+                track_id=4,
+                camera_id=10,
+                embedding=_embedding([0.79, 0.613, 0.0]),
+                detection_confidence=0.9,
+                bbox=(16, 12, 86, 182),
+                now=_utc("2026-06-07T02:21:00+00:00"),
+            )
             self.assertFalse(repeat.is_unique_entry)
-            self.assertEqual(repeat.visitor_id, first.visitor_id)
+            self.assertEqual(repeat.visitor_id, provisional.visitor_id)
             self.assertEqual(repeat.reid_decision, "matched_existing")
+
+    def test_quality_disagreement_blocks_fast_reconciliation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = UniqueVisitorRegistry(
+                SessionStore(str(Path(directory))),
+                model_name="fast",
+                quality_model_name="quality",
+            )
+            first = registry.resolve_entry(
+                track_id=1,
+                camera_id=10,
+                embedding=_embedding([1.0, 0.0, 0.0]),
+                quality_embedding=_embedding([1.0, 0.0, 0.0]),
+                detection_confidence=0.9,
+                bbox=(10, 10, 80, 180),
+                now=_utc("2026-06-07T01:00:00+00:00"),
+            )
+            provisional = registry.resolve_entry(
+                track_id=2,
+                camera_id=10,
+                embedding=_embedding([0.79, 0.613, 0.0]),
+                quality_embedding=_embedding([0.0, 1.0, 0.0]),
+                detection_confidence=0.9,
+                bbox=(12, 12, 82, 182),
+                now=_utc("2026-06-07T02:00:00+00:00"),
+            )
+            promoted = registry.resolve_entry(
+                track_id=3,
+                camera_id=10,
+                embedding=_embedding([0.83, 0.558, 0.0]),
+                quality_embedding=_embedding([0.0, 1.0, 0.0]),
+                detection_confidence=0.9,
+                bbox=(14, 12, 84, 182),
+                now=_utc("2026-06-07T02:10:00+00:00"),
+            )
+
+            self.assertTrue(promoted.is_unique_entry)
+            self.assertEqual(promoted.reid_decision, "provisional_confirmed")
+            self.assertEqual(promoted.visitor_id, provisional.visitor_id)
+            self.assertNotEqual(promoted.visitor_id, first.visitor_id)
+
+    def test_fast_and_quality_consensus_reconciles_outfit_change(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = UniqueVisitorRegistry(
+                SessionStore(str(Path(directory))),
+                model_name="fast",
+                quality_model_name="quality",
+            )
+            first = registry.resolve_entry(
+                track_id=1,
+                camera_id=10,
+                embedding=_embedding([1.0, 0.0, 0.0]),
+                quality_embedding=_embedding([1.0, 0.0, 0.0]),
+                detection_confidence=0.9,
+                bbox=(10, 10, 80, 180),
+                now=_utc("2026-06-07T01:00:00+00:00"),
+            )
+            provisional = registry.resolve_entry(
+                track_id=2,
+                camera_id=10,
+                embedding=_embedding([0.75, 0.661, 0.0]),
+                quality_embedding=_embedding([0.81, 0.586, 0.0]),
+                detection_confidence=0.9,
+                bbox=(12, 12, 82, 182),
+                now=_utc("2026-06-07T02:00:00+00:00"),
+            )
+            reconciled = registry.resolve_entry(
+                track_id=3,
+                camera_id=10,
+                embedding=_embedding([0.79, 0.613, 0.0]),
+                quality_embedding=_embedding([0.81, 0.586, 0.0]),
+                detection_confidence=0.9,
+                bbox=(14, 12, 84, 182),
+                now=_utc("2026-06-07T02:10:00+00:00"),
+            )
+
+            self.assertFalse(provisional.is_unique_entry)
+            self.assertFalse(reconciled.is_unique_entry)
+            self.assertEqual(reconciled.reid_decision, "reconciled_existing")
+            self.assertEqual(reconciled.visitor_id, first.visitor_id)
 
     def test_repeated_provisional_identity_is_promoted_when_still_distinct(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -158,6 +288,40 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
             self.assertTrue(promoted.is_unique_entry)
             self.assertEqual(promoted.reid_decision, "provisional_confirmed")
             self.assertEqual(promoted.visitor_id, provisional.visitor_id)
+            self.assertEqual(registry.status()["reid_provisional_gallery_size"], 0)
+
+    def test_same_track_reentry_confirms_provisional_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = UniqueVisitorRegistry(SessionStore(str(Path(directory))))
+            registry.resolve_entry(
+                track_id=1,
+                camera_id=10,
+                embedding=_embedding([1.0, 0.0, 0.0]),
+                detection_confidence=0.9,
+                bbox=(10, 10, 80, 180),
+                now=_utc("2026-06-07T01:00:00+00:00"),
+            )
+            provisional = registry.resolve_entry(
+                track_id=2,
+                camera_id=10,
+                embedding=_embedding([0.68, 0.73, 0.0]),
+                detection_confidence=0.9,
+                bbox=(12, 12, 82, 182),
+                now=_utc("2026-06-07T02:00:00+00:00"),
+            )
+            reentry = registry.resolve_entry(
+                track_id=2,
+                camera_id=10,
+                embedding=_embedding([0.69, 0.72, 0.0]),
+                detection_confidence=0.9,
+                bbox=(14, 12, 84, 182),
+                now=_utc("2026-06-07T02:10:00+00:00"),
+            )
+
+            self.assertFalse(provisional.is_unique_entry)
+            self.assertTrue(reentry.is_unique_entry)
+            self.assertEqual(reentry.reid_decision, "provisional_confirmed")
+            self.assertEqual(reentry.visitor_id, provisional.visitor_id)
             self.assertEqual(registry.status()["reid_provisional_gallery_size"], 0)
 
     def test_missing_embedding_degrades_to_unique_without_identity_record(self) -> None:
@@ -348,6 +512,20 @@ class UniqueVisitorRegistryTest(unittest.TestCase):
                 "2026-06-07T01:02:00+00:00",
             )
             self.assertEqual(len(rows), 1)
+
+            rejected = registry.record_quality_embedding_for_track(
+                1,
+                _embedding([1.0, 0.0, 0.0]),
+                now=_utc("2026-06-07T01:03:00+00:00"),
+            )
+            unchanged = store.load_active_visitor_model_embeddings(
+                "2026-06-07",
+                "quality",
+                "2026-06-07T01:04:00+00:00",
+            )
+
+            self.assertFalse(rejected)
+            self.assertEqual(unchanged[0]["embedding_count"], 1)
 
 
 def _embedding(values: list[float]) -> np.ndarray:

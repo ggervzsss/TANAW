@@ -485,6 +485,85 @@ class LocalDataStore:
                 ),
             )
 
+    def restore_visitor_identity(
+        self,
+        visitor_id: str,
+        *,
+        recorded_at: str | None = None,
+    ) -> bool:
+        recorded_at = recorded_at or _utc_now()
+        with self._connection() as connection:
+            restored = connection.execute(
+                """
+                update visitor_identities
+                set identity_status = 'confirmed',
+                    canonical_visitor_id = null,
+                    last_seen_at = ?
+                where visitor_id = ?
+                    and identity_status = 'merged'
+                """,
+                (recorded_at, visitor_id),
+            ).rowcount
+            if not restored:
+                return False
+
+            event = connection.execute(
+                """
+                select id, payload_json
+                from count_events
+                where visitor_id = ?
+                    and direction = 'entry'
+                    and submitted_report_id is null
+                order by recorded_at asc
+                limit 1
+                """,
+                (visitor_id,),
+            ).fetchone()
+            if event is not None:
+                payload = _load_json_object(event["payload_json"])
+                payload.update(
+                    {
+                        "identity_confidence": "high",
+                        "is_unique_entry": True,
+                        "reid_decision": "merge_rolled_back",
+                    }
+                )
+                connection.execute(
+                    """
+                    update count_events
+                    set is_unique_entry = 1,
+                        reid_decision = 'merge_rolled_back',
+                        identity_confidence = 'high',
+                        payload_json = ?,
+                        synced_at = null
+                    where id = ?
+                    """,
+                    (json.dumps(payload, sort_keys=True), event["id"]),
+                )
+
+            sighting = connection.execute(
+                """
+                select sighting_id
+                from visitor_sightings
+                where visitor_id = ?
+                    and direction = 'entry'
+                order by recorded_at asc
+                limit 1
+                """,
+                (visitor_id,),
+            ).fetchone()
+            if sighting is not None:
+                connection.execute(
+                    """
+                    update visitor_sightings
+                    set reid_decision = 'merge_rolled_back',
+                        identity_confidence = 'high'
+                    where sighting_id = ?
+                    """,
+                    (sighting["sighting_id"],),
+                )
+        return True
+
     def append_visitor_sighting(
         self, payload: dict[str, Any], recorded_at: str | None = None
     ) -> str:

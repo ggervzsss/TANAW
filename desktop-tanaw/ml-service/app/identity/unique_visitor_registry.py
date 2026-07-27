@@ -66,11 +66,17 @@ class UniqueVisitorRegistry:
         timezone_name: str = "Asia/Manila",
         retention_grace_hours: int = 2,
         strong_match_threshold: float = 0.72,
+        confirmed_match_threshold: float = 0.80,
         new_visitor_threshold: float = 0.60,
         top_match_margin: float = 0.05,
         quality_model_name: str | None = None,
         quality_strong_match_threshold: float = 0.74,
+        quality_confirmed_match_threshold: float = 0.82,
         quality_top_match_margin: float = 0.05,
+        reconciliation_match_threshold: float = 0.80,
+        consensus_reconciliation_match_threshold: float = 0.75,
+        quality_reconciliation_match_threshold: float = 0.80,
+        min_provisional_observations: int = 2,
         max_prototypes_per_identity: int = 3,
         prototype_update_threshold: float = 0.82,
     ) -> None:
@@ -79,11 +85,30 @@ class UniqueVisitorRegistry:
         self.timezone = ZoneInfo(timezone_name)
         self.retention_grace_hours = retention_grace_hours
         self.strong_match_threshold = strong_match_threshold
+        self.confirmed_match_threshold = max(strong_match_threshold, confirmed_match_threshold)
         self.new_visitor_threshold = new_visitor_threshold
         self.top_match_margin = top_match_margin
         self.quality_model_name = quality_model_name
         self.quality_strong_match_threshold = quality_strong_match_threshold
+        self.quality_confirmed_match_threshold = max(
+            quality_strong_match_threshold, quality_confirmed_match_threshold
+        )
         self.quality_top_match_margin = quality_top_match_margin
+        self.reconciliation_match_threshold = max(
+            strong_match_threshold, reconciliation_match_threshold
+        )
+        self.consensus_reconciliation_match_threshold = max(
+            strong_match_threshold,
+            min(
+                reconciliation_match_threshold,
+                consensus_reconciliation_match_threshold,
+            ),
+        )
+        self.quality_reconciliation_match_threshold = max(
+            quality_strong_match_threshold,
+            quality_reconciliation_match_threshold,
+        )
+        self.min_provisional_observations = max(2, min_provisional_observations)
         self.max_prototypes_per_identity = max(1, max_prototypes_per_identity)
         self.prototype_update_threshold = prototype_update_threshold
         self._business_date: str | None = None
@@ -153,21 +178,49 @@ class UniqueVisitorRegistry:
         now = now or datetime.now(UTC)
         self.prepare(camera_id, now)
         business_date = self.business_date_for(now)
+        normalized = _normalize_embedding(embedding) if embedding is not None else None
+        quality_normalized = (
+            _normalize_embedding(quality_embedding) if quality_embedding is not None else None
+        )
 
         if track_id in self._track_visitors:
             visitor_id = self._track_visitors[track_id]
+            identity = self._identity_for_visitor(visitor_id)
+            if (
+                identity is not None
+                and identity.identity_status == "provisional"
+                and normalized is not None
+            ):
+                repeat_score = self._identity_score(identity, normalized)
+                if repeat_score >= self.strong_match_threshold:
+                    self._update_identity(identity, normalized, now)
+                    self._update_quality_embedding_if_consistent(identity, quality_normalized, now)
+                    return self._resolve_provisional_identity(
+                        identity,
+                        track_id=track_id,
+                        camera_id=camera_id,
+                        score=repeat_score,
+                        detection_confidence=detection_confidence,
+                        bbox=bbox,
+                        now=now,
+                    )
+
             decision = VisitorDecision(
                 visitor_id=visitor_id,
                 is_unique_entry=False,
                 reid_score=1.0,
                 reid_decision="track_existing",
-                identity_confidence="high",
+                identity_confidence=(
+                    "low"
+                    if identity is not None and identity.identity_status == "provisional"
+                    else "high"
+                ),
                 business_date=business_date,
             )
             self._persist_sighting(decision, track_id, camera_id, detection_confidence, bbox, now)
             return decision
 
-        if embedding is None:
+        if normalized is None and embedding is None:
             return VisitorDecision(
                 visitor_id=None,
                 is_unique_entry=True,
@@ -177,7 +230,6 @@ class UniqueVisitorRegistry:
                 business_date=business_date,
             )
 
-        normalized = _normalize_embedding(embedding)
         if normalized is None:
             return VisitorDecision(
                 visitor_id=None,
@@ -188,9 +240,6 @@ class UniqueVisitorRegistry:
                 business_date=business_date,
             )
 
-        quality_normalized = (
-            _normalize_embedding(quality_embedding) if quality_embedding is not None else None
-        )
         quality_match, quality_score, quality_margin = self._best_quality_match(quality_normalized)
         fast_match, fast_score, fast_margin = self._best_match(normalized)
 
@@ -200,7 +249,7 @@ class UniqueVisitorRegistry:
         if (
             quality_match is not None
             and quality_score is not None
-            and quality_score >= self.quality_strong_match_threshold
+            and quality_score >= self._quality_match_threshold(quality_match)
             and quality_margin >= self.quality_top_match_margin
         ):
             match = quality_match
@@ -209,58 +258,37 @@ class UniqueVisitorRegistry:
         elif (
             fast_match is not None
             and fast_score is not None
-            and fast_score >= self.strong_match_threshold
+            and fast_score >= self._fast_match_threshold(fast_match)
             and fast_margin >= self.top_match_margin
+            and not self._quality_disagrees_with_fast_match(
+                fast_match,
+                quality_match,
+                quality_score,
+                quality_margin,
+            )
         ):
             match = fast_match
 
         if match is not None:
             selected_fast_score = float(match.embedding @ normalized)
-            if (
-                decision_name != "matched_existing_quality"
-                or selected_fast_score >= self.new_visitor_threshold
+            if match.identity_status == "provisional":
+                self._update_identity(match, normalized, now)
+            elif selected_fast_score >= max(
+                self.confirmed_match_threshold, self.prototype_update_threshold
             ):
                 self._update_identity(match, normalized, now)
-            if quality_normalized is not None:
-                self._update_quality_embedding(match.visitor_id, quality_normalized, now)
+            self._update_quality_embedding_if_consistent(match, quality_normalized, now)
 
             if match.identity_status == "provisional":
-                canonical, reconciliation_score = self._best_reconciliation_match(match)
-                if canonical is not None:
-                    self._merge_identity(match, canonical, now)
-                    self._track_visitors[track_id] = canonical.visitor_id
-                    decision = VisitorDecision(
-                        visitor_id=canonical.visitor_id,
-                        is_unique_entry=False,
-                        reid_score=reconciliation_score,
-                        reid_decision="reconciled_existing",
-                        identity_confidence="high",
-                        business_date=business_date,
-                    )
-                    self._persist_sighting(
-                        decision, track_id, camera_id, detection_confidence, bbox, now
-                    )
-                    return decision
-
-                match.identity_status = "confirmed"
-                self._session_store.resolve_visitor_identity(
-                    match.visitor_id,
-                    identity_status="confirmed",
-                    recorded_at=now.isoformat(),
+                return self._resolve_provisional_identity(
+                    match,
+                    track_id=track_id,
+                    camera_id=camera_id,
+                    score=score,
+                    detection_confidence=detection_confidence,
+                    bbox=bbox,
+                    now=now,
                 )
-                self._track_visitors[track_id] = match.visitor_id
-                decision = VisitorDecision(
-                    visitor_id=match.visitor_id,
-                    is_unique_entry=True,
-                    reid_score=score,
-                    reid_decision="provisional_confirmed",
-                    identity_confidence="high",
-                    business_date=business_date,
-                )
-                self._persist_sighting(
-                    decision, track_id, camera_id, detection_confidence, bbox, now
-                )
-                return decision
 
             self._track_visitors[track_id] = match.visitor_id
             decision = VisitorDecision(
@@ -314,6 +342,27 @@ class UniqueVisitorRegistry:
         self._persist_sighting(decision, track_id, camera_id, detection_confidence, bbox, now)
         return decision
 
+    def restore_merged_identity(
+        self,
+        visitor_id: str,
+        now: datetime | None = None,
+    ) -> bool:
+        now = now or datetime.now(UTC)
+        restored = self._session_store.restore_visitor_identity(
+            visitor_id,
+            recorded_at=now.isoformat(),
+        )
+        if not restored:
+            return False
+
+        self._track_visitors.clear()
+        if self._business_date is not None:
+            self._gallery = self._load_gallery(self._business_date, self._camera_id, now)
+            self._quality_gallery = self._load_quality_gallery(
+                self._business_date, self._camera_id, now
+            )
+        return True
+
     def record_quality_embedding_for_track(
         self,
         track_id: int,
@@ -323,6 +372,14 @@ class UniqueVisitorRegistry:
         visitor_id = self._track_visitors.get(track_id)
         normalized = _normalize_embedding(embedding)
         if visitor_id is None or normalized is None:
+            return False
+        identity = self._identity_for_visitor(visitor_id)
+        if identity is None:
+            return False
+        existing = self._quality_gallery.get(visitor_id)
+        if existing is not None and float(
+            existing.embedding @ normalized
+        ) < self._quality_match_threshold(identity):
             return False
         self._update_quality_embedding(visitor_id, normalized, now or datetime.now(UTC))
         return True
@@ -438,6 +495,135 @@ class UniqueVisitorRegistry:
                 model_name=row["model_name"],
             )
         return gallery
+
+    def _identity_for_visitor(self, visitor_id: str) -> VisitorIdentity | None:
+        return next(
+            (identity for identity in self._gallery if identity.visitor_id == visitor_id),
+            None,
+        )
+
+    def _fast_match_threshold(self, identity: VisitorIdentity) -> float:
+        if identity.identity_status == "provisional":
+            return self.strong_match_threshold
+        return self.confirmed_match_threshold
+
+    def _quality_match_threshold(self, identity: VisitorIdentity) -> float:
+        if identity.identity_status == "provisional":
+            return self.quality_strong_match_threshold
+        return self.quality_confirmed_match_threshold
+
+    def _quality_disagrees_with_fast_match(
+        self,
+        fast_match: VisitorIdentity,
+        quality_match: VisitorIdentity | None,
+        quality_score: float | None,
+        quality_margin: float,
+    ) -> bool:
+        if quality_match is None or quality_score is None:
+            return False
+        if (
+            quality_score < self._quality_match_threshold(quality_match)
+            or quality_margin < self.quality_top_match_margin
+        ):
+            return False
+        return quality_match.visitor_id != fast_match.visitor_id
+
+    def _update_quality_embedding_if_consistent(
+        self,
+        identity: VisitorIdentity,
+        embedding: np.ndarray | None,
+        now: datetime,
+    ) -> None:
+        if embedding is None or self.quality_model_name is None:
+            return
+
+        existing = self._quality_gallery.get(identity.visitor_id)
+        if existing is None:
+            self._update_quality_embedding(identity.visitor_id, embedding, now)
+            return
+
+        score = float(existing.embedding @ embedding)
+        if score >= self._quality_match_threshold(identity):
+            self._update_quality_embedding(identity.visitor_id, embedding, now)
+
+    def _resolve_provisional_identity(
+        self,
+        provisional: VisitorIdentity,
+        *,
+        track_id: int,
+        camera_id: int | None,
+        score: float | None,
+        detection_confidence: float | None,
+        bbox: tuple[int, int, int, int] | None,
+        now: datetime,
+    ) -> VisitorDecision:
+        business_date = self.business_date_for(now)
+        if provisional.embedding_count < self.min_provisional_observations:
+            self._track_visitors[track_id] = provisional.visitor_id
+            decision = VisitorDecision(
+                visitor_id=provisional.visitor_id,
+                is_unique_entry=False,
+                reid_score=score,
+                reid_decision="provisional_pending",
+                identity_confidence="low",
+                business_date=business_date,
+            )
+            self._persist_sighting(
+                decision,
+                track_id,
+                camera_id,
+                detection_confidence,
+                bbox,
+                now,
+            )
+            return decision
+
+        canonical, reconciliation_score = self._best_reconciliation_match(provisional)
+        if canonical is not None:
+            self._merge_identity(provisional, canonical, now)
+            self._track_visitors[track_id] = canonical.visitor_id
+            decision = VisitorDecision(
+                visitor_id=canonical.visitor_id,
+                is_unique_entry=False,
+                reid_score=reconciliation_score,
+                reid_decision="reconciled_existing",
+                identity_confidence="high",
+                business_date=business_date,
+            )
+            self._persist_sighting(
+                decision,
+                track_id,
+                camera_id,
+                detection_confidence,
+                bbox,
+                now,
+            )
+            return decision
+
+        provisional.identity_status = "confirmed"
+        self._session_store.resolve_visitor_identity(
+            provisional.visitor_id,
+            identity_status="confirmed",
+            recorded_at=now.isoformat(),
+        )
+        self._track_visitors[track_id] = provisional.visitor_id
+        decision = VisitorDecision(
+            visitor_id=provisional.visitor_id,
+            is_unique_entry=True,
+            reid_score=score,
+            reid_decision="provisional_confirmed",
+            identity_confidence="high",
+            business_date=business_date,
+        )
+        self._persist_sighting(
+            decision,
+            track_id,
+            camera_id,
+            detection_confidence,
+            bbox,
+            now,
+        )
+        return decision
 
     def _best_match(
         self, embedding: np.ndarray
@@ -558,29 +744,61 @@ class UniqueVisitorRegistry:
         best_index = int(order[0])
         best_score = float(scores[best_index])
         second_score = float(scores[int(order[1])]) if len(order) > 1 else -1.0
+        candidate = confirmed[best_index]
+        quality_agreement = self._quality_reconciliation_agreement(
+            provisional, candidate, confirmed
+        )
+        required_fast_score = (
+            self.consensus_reconciliation_match_threshold
+            if quality_agreement is True
+            else self.reconciliation_match_threshold
+        )
         if (
-            best_score >= self.strong_match_threshold
+            best_score >= required_fast_score
             and best_score - second_score >= self.top_match_margin
+            and quality_agreement is not False
         ):
-            return confirmed[best_index], best_score
+            return candidate, best_score
         return None, best_score
+
+    def _quality_reconciliation_agreement(
+        self,
+        provisional: VisitorIdentity,
+        candidate: VisitorIdentity,
+        confirmed: list[VisitorIdentity],
+    ) -> bool | None:
+        provisional_quality = self._quality_gallery.get(provisional.visitor_id)
+        candidate_quality = self._quality_gallery.get(candidate.visitor_id)
+        if provisional_quality is None or candidate_quality is None:
+            return None
+
+        quality_candidates = [
+            identity for identity in confirmed if identity.visitor_id in self._quality_gallery
+        ]
+        scores = [
+            float(
+                self._quality_gallery[identity.visitor_id].embedding @ provisional_quality.embedding
+            )
+            for identity in quality_candidates
+        ]
+        order = np.argsort(np.asarray(scores, dtype=np.float32))[::-1]
+        best_index = int(order[0])
+        best_score = float(scores[best_index])
+        second_score = float(scores[int(order[1])]) if len(order) > 1 else -1.0
+        return (
+            quality_candidates[best_index].visitor_id == candidate.visitor_id
+            and best_score >= self.quality_reconciliation_match_threshold
+            and best_score - second_score >= self.quality_top_match_margin
+        )
 
     def _merge_identity(
         self, provisional: VisitorIdentity, canonical: VisitorIdentity, now: datetime
     ) -> None:
-        for prototype in provisional.prototypes:
-            self._update_prototype(
-                canonical,
-                prototype.embedding,
-                now,
-                sample_count=prototype.embedding_count,
-            )
+        # Keep reconciled appearance data on the alias identity. This prevents an
+        # incorrect merge from permanently contaminating the canonical gallery
+        # and makes the merge safe to roll back.
         canonical.expires_at = self.expires_at_for(now).isoformat()
         self._persist_identity(canonical, now)
-
-        quality_embedding = self._quality_gallery.get(provisional.visitor_id)
-        if quality_embedding is not None:
-            self._update_quality_embedding(canonical.visitor_id, quality_embedding.embedding, now)
 
         provisional.identity_status = "merged"
         provisional.canonical_visitor_id = canonical.visitor_id

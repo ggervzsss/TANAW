@@ -106,6 +106,17 @@ class SessionStore:
             recorded_at=recorded_at,
         )
 
+    def restore_visitor_identity(
+        self,
+        visitor_id: str,
+        *,
+        recorded_at: str | None = None,
+    ) -> bool:
+        return self._data_store.restore_visitor_identity(
+            visitor_id,
+            recorded_at=recorded_at,
+        )
+
     def append_visitor_sighting(
         self, payload: dict[str, Any], recorded_at: str | None = None
     ) -> str:

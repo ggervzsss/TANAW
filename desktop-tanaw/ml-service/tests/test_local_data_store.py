@@ -558,6 +558,80 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(pending["repeat_entry_count"], 0)
             self.assertEqual(resolved["pending_unique_entries"], 0)
 
+    def test_merged_identity_rollback_restores_unique_count(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)))
+            store.upsert_visitor_identity(
+                visitor_id="visitor-canonical",
+                business_date="2026-06-07",
+                camera_id=1,
+                embedding=b"\x00" * 8,
+                embedding_dim=2,
+                embedding_count=1,
+                model_name="fast",
+                expires_at="2026-06-08T02:00:00+00:00",
+                recorded_at="2026-06-07T01:00:00+00:00",
+            )
+            store.upsert_visitor_identity(
+                visitor_id="visitor-alias",
+                business_date="2026-06-07",
+                camera_id=1,
+                embedding=b"\x00" * 8,
+                embedding_dim=2,
+                embedding_count=2,
+                model_name="fast",
+                expires_at="2026-06-08T02:00:00+00:00",
+                identity_status="provisional",
+                recorded_at="2026-06-07T02:00:00+00:00",
+            )
+            store.append_visitor_sighting(
+                {
+                    "visitor_id": "visitor-alias",
+                    "business_date": "2026-06-07",
+                    "camera_id": 1,
+                    "track_id": 2,
+                    "direction": "entry",
+                    "reid_decision": "ambiguous_new",
+                    "identity_confidence": "low",
+                },
+                "2026-06-07T02:00:00+00:00",
+            )
+            event = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=False)
+            event.update(
+                {
+                    "visitor_id": "visitor-alias",
+                    "reid_decision": "ambiguous_new",
+                    "identity_confidence": "low",
+                }
+            )
+            store.append_count_event(event)
+            store.resolve_visitor_identity(
+                "visitor-alias",
+                identity_status="merged",
+                canonical_visitor_id="visitor-canonical",
+            )
+
+            restored = store.restore_visitor_identity("visitor-alias")
+            summary = store.metrics_summary()
+            identities = store.load_active_visitor_identities(
+                "2026-06-07", "2026-06-07T02:01:00+00:00"
+            )
+
+            self.assertTrue(restored)
+            self.assertEqual(summary["estimated_unique_count"], 1)
+            self.assertEqual(summary["confirmed_unique_count"], 1)
+            self.assertEqual(summary["pending_unique_entries"], 0)
+            self.assertEqual(
+                {identity["visitor_id"] for identity in identities},
+                {"visitor-canonical", "visitor-alias"},
+            )
+            alias = next(
+                identity for identity in identities if identity["visitor_id"] == "visitor-alias"
+            )
+            self.assertEqual(alias["identity_status"], "confirmed")
+            self.assertIsNone(alias["canonical_visitor_id"])
+            self.assertFalse(store.restore_visitor_identity("visitor-alias"))
+
     def test_occupancy_corrections_are_audited_and_included_in_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise-a")
