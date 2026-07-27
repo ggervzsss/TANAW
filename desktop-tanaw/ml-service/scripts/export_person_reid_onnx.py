@@ -100,6 +100,7 @@ def _export_profile(profile: Mapping[str, Any], models_dir: Path, *, force: bool
         opset_version=18,
         do_constant_folding=True,
         external_data=False,
+        verbose=False,
     )
 
     onnx_model = onnx.load(str(output_path))

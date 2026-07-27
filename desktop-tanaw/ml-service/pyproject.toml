@@ -43,6 +43,7 @@ export = [
     "gdown>=6.1.0",
     "onnx>=1.21.0",
     "onnxscript>=0.7.0",
+    "tensorboard>=2.21.0",
     "torchreid>=0.2.5",
 ]
 
