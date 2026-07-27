@@ -76,6 +76,10 @@ From `desktop-tanaw`, create one detector cache with `--rebuild-cache` and
 The deterministic replay applies embeddings one frame after sampling, matching
 the ordering of the live asynchronous pipeline. It intentionally removes
 thread-scheduling noise so model/association changes can be compared fairly.
+The `unique_stable_tracks` summary is canonicalized after all appearance
+remaps. `unique_stable_tracks_before_reid_remaps` shows the pre-remap diagnostic
+total, and each JSONL frame records any `identity_updates` so remaps and
+confirmed active-ID swaps can be audited against the annotated video.
 The quality variant measures quality-embedding extraction, but cross-session
 visitor-gallery decisions still need a live integration test. Use live health
 telemetry afterward to inspect gallery decisions, queue drops, frame age,

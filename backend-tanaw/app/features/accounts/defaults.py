@@ -107,10 +107,3 @@ def get_development_account_specs(
             last_name="Personnel",
         ),
     )
-
-
-def get_startup_account_specs(
-    settings: StartupAccountSettings,
-) -> tuple[StartupAccountSpec, ...]:
-    bootstrap = get_bootstrap_account_spec(settings)
-    return ((bootstrap,) if bootstrap is not None else ()) + get_development_account_specs(settings)

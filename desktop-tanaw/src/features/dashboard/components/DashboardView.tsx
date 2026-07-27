@@ -12,6 +12,7 @@ import type { LocalMetricsHistory, LocalMetricsSummary } from "../../camera/serv
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
 import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
+import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 
 type DotPreviewState = {
   demo: DemoBreakdown;
@@ -29,6 +30,19 @@ export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
   const [previewReport, setPreviewReport] = useState<DotPreviewState | null>(null);
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
+
+  usePersistentIssue({
+    id: "dashboard-visitor-counts",
+    message: metricsError,
+    title: "Visitor counts unavailable",
+    tone: "error",
+  });
+  usePersistentIssue({
+    id: "dashboard-report-previews",
+    message: ledgerError,
+    title: "Report previews unavailable",
+    tone: "warning",
+  });
 
   const refreshDashboardMetrics = useCallback(async () => {
     try {
@@ -95,8 +109,7 @@ export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
         />
       )}
 
-      <DashboardHeader error={metricsError} summary={summary} />
-      {ledgerError && <p className="-mt-4 text-xs font-semibold text-amber-700 dark:text-amber-300">Submitted report previews unavailable: {ledgerError}</p>}
+      <DashboardHeader summary={summary} />
       <DashboardMetricsGrid summary={summary} />
       <HistoricalTrendChart data={history.historical[trendFilter]} summary={summary} trendFilter={trendFilter} onTrendFilterChange={setTrendFilter} />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

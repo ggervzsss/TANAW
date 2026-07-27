@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from app.config.camera_config import reporting_period_key
 
-LOCAL_SCHEMA_VERSION = 4
+LOCAL_SCHEMA_VERSION = 5
 
 logger = logging.getLogger(__name__)
 
@@ -216,9 +216,6 @@ class LocalDataStore:
                         camera_host,
                         rtsp_stream,
                         stream_url,
-                        purpose,
-                        resolution,
-                        fps,
                         processing_profile,
                         tracking_confidence,
                         counting_confidence,
@@ -229,7 +226,7 @@ class LocalDataStore:
                         created_at,
                         updated_at
                     )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     on conflict(camera_id) do update set
                         name = excluded.name,
                         zone = excluded.zone,
@@ -237,9 +234,6 @@ class LocalDataStore:
                         camera_host = excluded.camera_host,
                         rtsp_stream = excluded.rtsp_stream,
                         stream_url = excluded.stream_url,
-                        purpose = excluded.purpose,
-                        resolution = excluded.resolution,
-                        fps = excluded.fps,
                         processing_profile = excluded.processing_profile,
                         tracking_confidence = excluded.tracking_confidence,
                         counting_confidence = excluded.counting_confidence,
@@ -257,9 +251,6 @@ class LocalDataStore:
                         camera.get("cameraHost"),
                         camera.get("rtspStream"),
                         camera["rtsp"],
-                        camera["type"],
-                        camera["resolution"],
-                        camera["fps"],
                         camera["processingProfile"],
                         camera.get("trackingConfidence"),
                         camera["confidence"],
@@ -1539,7 +1530,7 @@ class LocalDataStore:
                     )
 
             connection.executescript(
-                """
+                f"""
                 create table if not exists schema_metadata (
                     singleton_id integer primary key check (singleton_id = 1),
                     schema_version integer not null,
@@ -1556,9 +1547,6 @@ class LocalDataStore:
                     camera_host text not null,
                     rtsp_stream text not null check (rtsp_stream in ('stream1', 'stream2')),
                     stream_url text not null,
-                    purpose text not null,
-                    resolution text not null,
-                    fps real not null default 0,
                     processing_profile text not null check (
                         processing_profile in (
                             'auto', 'compatibility', 'balanced', 'high_accuracy', 'emergency'
@@ -1614,7 +1602,9 @@ class LocalDataStore:
 
                 insert or ignore into schema_metadata (
                     singleton_id, schema_version, applied_at
-                ) values (1, 4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+                ) values (
+                    1, {LOCAL_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                );
 
                 create table if not exists count_events (
                     id integer primary key autoincrement,
@@ -1803,8 +1793,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
         "name",
         "status",
         "zone",
-        "resolution",
-        "type",
         "rtsp",
         "processingProfile",
     )
@@ -1855,7 +1843,6 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
         "cameraHost": camera_host,
         "rtspStream": rtsp_stream,
         "rtsp": stream_url,
-        "fps": float(camera.get("fps") or 0),
         "confidence": float(camera.get("confidence") or 0.35),
         "trackingConfidence": (
             float(camera["trackingConfidence"])

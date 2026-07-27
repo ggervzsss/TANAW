@@ -66,34 +66,3 @@ async def purge_expired_logs(
         ),
     )
     return ActivityLogPurgeResponse(deletedCount=deleted_count, retentionDays=retention_days)
-
-
-@router.post("", response_model=ActivityLogSummary, status_code=status.HTTP_201_CREATED)
-async def record_activity_log(
-    payload: ActivityLogCreate,
-    account: Annotated[Account, Depends(get_current_operational_account)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ActivityLogSummary:
-    if account.role == AccountRole.STAFF and payload.category not in {
-        "Staff Submission",
-        "Staff Operation",
-    }:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Staff accounts can only record staff reporting activity.",
-        )
-    if account.role == AccountRole.ENTERPRISE:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Enterprise accounts cannot record working logs.",
-        )
-
-    log = await create_activity_log(
-        db,
-        ActivityLogCreate(
-            **payload.model_dump(exclude={"actor", "actorRole"}),
-            actor=account.display_name,
-            actorRole=get_actor_role_label(account),  # type: ignore[arg-type]
-        ),
-    )
-    return log

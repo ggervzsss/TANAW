@@ -250,6 +250,12 @@ class HealthResponse(BaseModel):
     analytics_fps: float | None = None
     processing_frame_age_ms: float | None = None
     processing_frames_skipped: int = 0
+    raw_frame_id: int = 0
+    processed_frame_id: int = 0
+    stream_frame_id: int = 0
+    raw_frame_stale_ms: float | None = None
+    processed_frame_stale_ms: float | None = None
+    stream_frame_stale_ms: float | None = None
     reid_queue_depth: int = 0
     reid_tasks_pending: int = 0
     reid_tasks_dropped: int = 0
@@ -259,6 +265,9 @@ class HealthResponse(BaseModel):
     identity_active_tracks: int = 0
     identity_stitches: int = 0
     identity_splits: int = 0
+    identity_active_swaps: int = 0
+    identity_pending_swaps: int = 0
+    reid_results_stale: int = 0
     confirmed_unique_count: int = 0
     estimated_unique_count: int = 0
     degraded_unique_count: int = 0

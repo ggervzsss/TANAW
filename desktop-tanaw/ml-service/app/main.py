@@ -17,8 +17,6 @@ from app.config.camera_config import (
     CameraStatesResponse,
     CameraTestRequest,
     CameraTestResponse,
-    CountResponse,
-    DetectionResponse,
     EnterpriseContextRequest,
     EnterpriseContextResponse,
     HealthResponse,
@@ -44,7 +42,7 @@ CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.2.0"
-API_CONTRACT_VERSION = 5
+API_CONTRACT_VERSION = 6
 
 
 class CameraApiError(RuntimeError):
@@ -178,11 +176,6 @@ def replace_cameras(payload: CameraProfilesRequest) -> list[dict[str, Any]]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@app.get("/counts", response_model=CountResponse)
-def counts() -> CountResponse:
-    return CountResponse.model_validate(manager.aggregate_session()["counts"])
-
-
 @app.get("/session", response_model=SessionResponse)
 def session() -> SessionResponse:
     return SessionResponse(**manager.aggregate_session())
@@ -191,46 +184,6 @@ def session() -> SessionResponse:
 @app.get("/cameras/runtime", response_model=CameraStatesResponse)
 def camera_states() -> CameraStatesResponse:
     return CameraStatesResponse.model_validate(manager.camera_states())
-
-
-@app.get("/camera/{camera_id}/state")
-def camera_state(camera_id: int) -> dict[str, Any]:
-    try:
-        return manager.camera_state(camera_id)
-    except KeyError as exc:
-        raise CameraApiError(
-            404, "camera_not_found", "Camera pipeline has not been started."
-        ) from exc
-
-
-@app.get("/camera/{camera_id}/counts", response_model=CountResponse)
-def camera_counts(camera_id: int) -> CountResponse:
-    try:
-        return CountResponse.model_validate(manager.require_pipeline(camera_id).counts())
-    except KeyError as exc:
-        raise CameraApiError(
-            404, "camera_not_found", "Camera pipeline has not been started."
-        ) from exc
-
-
-@app.get("/camera/{camera_id}/session", response_model=SessionResponse)
-def camera_session(camera_id: int) -> SessionResponse:
-    try:
-        return SessionResponse(**manager.require_pipeline(camera_id).session())
-    except KeyError as exc:
-        raise CameraApiError(
-            404, "camera_not_found", "Camera pipeline has not been started."
-        ) from exc
-
-
-@app.get("/camera/{camera_id}/detections", response_model=DetectionResponse)
-def camera_detections(camera_id: int) -> DetectionResponse:
-    try:
-        return DetectionResponse.model_validate(manager.require_pipeline(camera_id).detections())
-    except KeyError as exc:
-        raise CameraApiError(
-            404, "camera_not_found", "Camera pipeline has not been started."
-        ) from exc
 
 
 @app.get("/metrics/summary", response_model=MetricsSummaryResponse)
@@ -347,19 +300,6 @@ def prepare_sample_counts(payload: SamplePrepareRequest) -> SamplePrepareRespons
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/session/restore", response_model=SessionResponse)
-def restore_session() -> SessionResponse:
-    return SessionResponse(**manager.aggregate_session())
-
-
-@app.get("/detections", response_model=DetectionResponse)
-def detections() -> DetectionResponse:
-    states = manager.camera_states()["cameras"]
-    if len(states) == 1:
-        return DetectionResponse.model_validate(states[0]["detections"])
-    return DetectionResponse(running=False, status="aggregate", tracks=[])
-
-
 @app.websocket("/camera/ws")
 async def camera_state_websocket(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -431,10 +371,11 @@ async def wait_for_camera_websocket_client(websocket: WebSocket, timeout_seconds
     return True
 
 
-def build_health_payload() -> dict[str, Any]:
+def build_health_payload(registry: CameraPipelineRegistry | None = None) -> dict[str, Any]:
+    active_manager = registry or manager
     return HealthResponse.model_validate(
         {
-            **manager.service_health(),
+            **active_manager.service_health(),
             "service_version": SERVICE_VERSION,
             "api_contract_version": API_CONTRACT_VERSION,
         }

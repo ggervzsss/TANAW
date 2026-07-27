@@ -89,12 +89,6 @@ class PersonReIdentifier:
             self._ready = True
             self._status = "ready"
 
-    def embed(self, frame: np.ndarray, bbox: tuple[int, int, int, int]) -> EmbeddingResult | None:
-        crop = _crop(frame, bbox)
-        if crop is None:
-            return None
-        return self.embed_crop(crop)
-
     def embed_crop(self, crop: np.ndarray) -> EmbeddingResult | None:
         session = self._load_session()
         if session is None or self._input_name is None or self._output_name is None:
@@ -215,15 +209,3 @@ class PersonReIdentifier:
         if self._inference_count <= 0:
             return None
         return self._total_inference_ms / self._inference_count
-
-
-def _crop(frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:
-    height, width = frame.shape[:2]
-    x1, y1, x2, y2 = bbox
-    x1 = max(0, min(width - 1, int(x1)))
-    y1 = max(0, min(height - 1, int(y1)))
-    x2 = max(0, min(width, int(x2)))
-    y2 = max(0, min(height, int(y2)))
-    if x2 <= x1 or y2 <= y1:
-        return None
-    return frame[y1:y2, x1:x2]

@@ -19,8 +19,10 @@ import {
   getBaseBoundaryStyle,
   getCurrentLeafletMapTheme,
   getDimmedBoundaryStyle,
-  getDarkStatusBadgeClass,
-  getEnterpriseStatusColor,
+  getDarkMonitoringBadgeClass,
+  getMonitoringStatusColor,
+  getOccupancyBadgeClass,
+  getOccupancyRingColor,
   getEnterprisesByBarangay,
   getFeatureValue,
   getHoverBoundaryStyle,
@@ -121,6 +123,7 @@ export function AdminEnterpriseMap() {
   const applyBoundarySelection = useCallback(
     (barangayName: string | null) => {
       const selectedKey = barangayName ? normalizeBarangayName(barangayName) : "";
+      activeBoundaryRef.current = null;
 
       boundaryLayerRef.current?.getLayers().forEach((layer) => {
         if (!(layer instanceof L.Path)) return;
@@ -378,15 +381,16 @@ export function AdminEnterpriseMap() {
     markersRef.current = {};
 
     visibleEnterprises.forEach((enterprise) => {
-      const color = getEnterpriseStatusColor(enterprise.status);
+      const color = getMonitoringStatusColor(enterprise.monitoringStatus);
+      const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
       const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
       const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
       const marker = L.marker([enterprise.lat, enterprise.lng], {
         icon: L.divIcon({
-          className: enterprise.status === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
-          iconAnchor: [8, 8],
+          className: enterprise.occupancyStatus === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
+          iconAnchor: [12, 12],
           popupAnchor: [0, -10],
-          html: `<span style="background-color:${color};width:18px;height:18px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:${markerShadow};"></span>`,
+          html: `<span style="background-color:${color};width:20px;height:20px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:0 0 0 4px ${occupancyRingColor},${markerShadow};"></span>`,
         }),
       }).addTo(map);
 
@@ -522,6 +526,7 @@ export function AdminEnterpriseMap() {
                   </button>
                 </div>
               </div>
+              <MonitoringLegend />
             </div>
 
             {/* Dropdown Selector section (Fixed size, shrink-0, overflow-visible for dropdown menu) */}
@@ -732,13 +737,21 @@ function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapE
             <span className="truncate">{enterprise.fullAddress}</span>
           </div>
         </div>
-        <span className={`flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-widest uppercase ${getDarkStatusBadgeClass(enterprise.status)}`}>
-          {enterprise.status}
+        <span className={`flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-widest uppercase ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}`}>
+          {enterprise.monitoringStatus}
         </span>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/15 pt-2 font-mono text-[10px]">
-        <span className="truncate text-white/70">{enterprise.category}</span>
+        <span className="truncate text-white/70">
+          {enterprise.cameraMonitoring
+            ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras`
+            : "No camera telemetry"}
+        </span>
+        <span className={`justify-self-end rounded border px-1.5 py-0.5 font-sans text-[8px] font-black tracking-wider uppercase ${getOccupancyBadgeClass(enterprise.occupancyStatus)}`}>
+          {enterprise.occupancyStatus}
+        </span>
+        <span className="text-white/70">Live Occupancy</span>
         <span className="flex items-center justify-end gap-1 font-bold text-white">
           <Activity size={12} className="text-tanaw-sky" />
           {enterprise.totalLiveOccupancy.toLocaleString()}
@@ -747,6 +760,27 @@ function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapE
         <span className="text-right font-bold text-white">{enterprise.estimatedUniqueCount.toLocaleString()}</span>
       </div>
     </button>
+  );
+}
+
+function MonitoringLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[8px] font-bold tracking-wider text-white/70 uppercase">
+      <LegendItem color="#16a34a" label="All Running" />
+      <LegendItem color="#ea580c" label="Partial" />
+      <LegendItem color="#64748b" label="Stopped" />
+      <LegendItem color="#dc2626" label="Fault" />
+      <span className="text-white/50">Outer ring: occupancy alert</span>
+    </div>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="h-2 w-2 rounded-full ring-1 ring-white/40" style={{ backgroundColor: color }} aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 

@@ -20,11 +20,6 @@ export type AuthUser = {
   displayImageDataUrl?: string | null;
 };
 
-export type LoginRequest = {
-  username: string;
-  password: string;
-};
-
 export type LoginResponse = {
   token: string;
   user: AuthUser;

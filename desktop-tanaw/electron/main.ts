@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, screen, Tray } from "electron";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -7,11 +7,13 @@ import path from "node:path";
 
 import { getMlServiceCommand } from "./ml-service-command";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
+import { classifyMlServiceStderr } from "./ml-service-log";
 import { buildWindowsListenerPidScript } from "./ml-service-process";
 import { createDisplayScaleController } from "./display-scale";
 import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const desktopBuild = getDesktopBuildFingerprint();
 
 // The built directory structure:
 // dist/index.html
@@ -21,7 +23,6 @@ process.env.APP_ROOT = path.join(__dirname, "..");
 
 // Use ['ENV_NAME'] to avoid the vite:define plugin.
 export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
-export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
@@ -150,7 +151,11 @@ async function startMlService() {
   });
 
   child.stderr?.on("data", (chunk) => {
-    console.error(`[tanaw-ml] ${String(chunk).trim()}`);
+    const message = String(chunk).trim();
+    if (!message) {
+      return;
+    }
+    console[classifyMlServiceStderr(message)](`[tanaw-ml] ${message}`);
   });
 
   child.on("error", (error) => {
@@ -212,10 +217,21 @@ function isMlServiceRunning() {
 async function getMlServiceStatusPayload() {
   return {
     baseUrl: mlServiceUrl,
+    desktopBuild,
+    desktopVersion: app.getVersion(),
     error: mlServiceError,
+    packaged: app.isPackaged,
     pid: mlServiceProcess?.pid ?? (mlServiceConnectedExternally ? await findMlServiceListenerPid() : null),
     running: isMlServiceRunning(),
   };
+}
+
+function getDesktopBuildFingerprint() {
+  try {
+    return statSync(fileURLToPath(import.meta.url)).mtime.toISOString();
+  } catch {
+    return "unknown";
+  }
 }
 
 async function isMlServiceReachable(timeoutMs = 750) {
@@ -833,6 +849,7 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     title: "TANAW Enterprise Desktop",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
+      backgroundThrottling: false,
     },
   });
   const targetWindow = win;

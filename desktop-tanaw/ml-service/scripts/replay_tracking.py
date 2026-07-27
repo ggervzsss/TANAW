@@ -227,7 +227,12 @@ def main() -> None:
                         )
 
                 association_started_at = monotonic()
-                reid.begin_frame(resolver, counter, counter.frame_index + 1, timestamp)
+                identity_updates = reid.begin_frame(
+                    resolver,
+                    counter,
+                    counter.frame_index + 1,
+                    timestamp,
+                )
                 tracks = resolver.resolve(source_tracks, timestamp, frame_width, frame_height)
                 counter.begin_frame(timestamp)
                 events: list[dict[str, int | str]] = []
@@ -316,6 +321,7 @@ def main() -> None:
                                 for track in tracks
                             ],
                             "events": events,
+                            "identity_updates": identity_updates,
                             "detector_ms": detector_ms,
                             "association_ms": association_ms,
                             "processing_ms": processing_ms,
@@ -340,6 +346,7 @@ def main() -> None:
         if writer is not None:
             writer.release()
 
+    canonical_unique_stable_tracks = resolver.canonical_track_ids(unique_stable_tracks)
     summary = {
         "video": str(args.video),
         "source_frames": source_frame_count,
@@ -368,7 +375,8 @@ def main() -> None:
         "multi_track_frames": multi_track_frames,
         "low_confidence_tracks": low_confidence_tracks,
         "outside_roi_tracks": outside_roi_tracks,
-        "unique_stable_tracks": len(unique_stable_tracks),
+        "unique_stable_tracks": len(canonical_unique_stable_tracks),
+        "unique_stable_tracks_before_reid_remaps": len(unique_stable_tracks),
         "unique_source_tracks": len(unique_source_tracks),
         "source_track_switches": source_track_switches,
         "identity": resolver.status(),

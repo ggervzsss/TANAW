@@ -1,8 +1,8 @@
-import { Activity, BarChart3, Building2, Clock, MapPin, Phone, Radio, TrendingUp, Users } from "lucide-react";
+import { Activity, BarChart3, Building2, Camera, Clock, MapPin, Phone, Radio, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import type { EnterpriseStatus, GatewayStatus } from "@/shared/types";
+import type { GatewayStatus, MonitoringStatus, OccupancyStatus } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
@@ -36,8 +36,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <EnterpriseMetricCard icon={<Activity size={16} />} label="Total Live Occupancy" value={enterprise.totalLiveOccupancy.toLocaleString()} />
             <EnterpriseMetricCard icon={<Users size={16} />} label="Estimated Unique Visitors" value={enterprise.estimatedUniqueCount.toLocaleString()} />
-            <EnterpriseMetricCard icon={<Radio size={16} />} label="Status" value={<StatusBadge status={enterprise.status} />} />
-            <EnterpriseMetricCard icon={<TrendingUp size={16} />} label="Trend" value={enterprise.trend ?? "Stable"} />
+            <EnterpriseMetricCard icon={<Radio size={16} />} label="Camera Monitoring" value={<MonitoringStatusBadge status={enterprise.monitoringStatus} />} />
+            <EnterpriseMetricCard icon={<Activity size={16} />} label="Occupancy Alert" value={<OccupancyStatusBadge status={enterprise.occupancyStatus} />} />
           </div>
           <button
             type="button"
@@ -52,6 +52,15 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
         <section className="grid gap-3 sm:grid-cols-2">
           <EnterpriseDetailRow icon={<Building2 size={15} />} label="Category" value={enterprise.category} />
           <EnterpriseDetailRow icon={<Radio size={15} />} label="Desktop App Status" value={<DesktopAppStatusBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
+          <EnterpriseDetailRow
+            icon={<Camera size={15} />}
+            label="Camera Coverage"
+            value={
+              enterprise.cameraMonitoring
+                ? `${enterprise.cameraMonitoring.healthyCameraCount} of ${enterprise.cameraMonitoring.configuredCameraCount} cameras actively counting`
+                : "No camera telemetry received"
+            }
+          />
           <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ? formatPhilippineDateTime(enterprise.lastSync, timeFormat) : "No update recorded"} />
           <EnterpriseDetailRow icon={<Phone size={15} />} label="Contact" value={enterprise.contact ?? "No contact listed"} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<MapPin size={15} />} label="Full Address" value={enterprise.fullAddress} />
@@ -88,14 +97,26 @@ function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: Rea
   );
 }
 
-function StatusBadge({ status }: { status: EnterpriseStatus }) {
-  const classes: Record<EnterpriseStatus, string> = {
-    Normal: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
+function MonitoringStatusBadge({ status }: { status: MonitoringStatus }) {
+  const classes: Record<MonitoringStatus, string> = {
+    "Fully Monitoring": "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
+    "Partially Monitoring": "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-300/30 dark:bg-orange-500/15 dark:text-orange-200",
+    "Updates Delayed": "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-300/30 dark:bg-orange-500/15 dark:text-orange-200",
+    Fault: "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
+    Stopped: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
+    Offline: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
+    "Not Configured": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
+  };
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;
+}
+
+function OccupancyStatusBadge({ status }: { status: OccupancyStatus }) {
+  const classes: Record<OccupancyStatus, string> = {
+    Normal: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-300/30 dark:bg-sky-500/15 dark:text-sky-200",
     Warning: "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-300/30 dark:bg-yellow-400/15 dark:text-yellow-200",
     "High Occupancy": "border-red-200 bg-red-50 text-red-700 dark:border-red-300/30 dark:bg-red-500/15 dark:text-red-200",
-    Issue: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-300/30 dark:bg-orange-500/15 dark:text-orange-200",
-    Offline: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
-    Inactive: "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
+    "No Data": "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200",
   };
 
   return <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] uppercase ${classes[status]}`}>{status}</span>;

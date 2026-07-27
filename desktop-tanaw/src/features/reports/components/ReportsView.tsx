@@ -24,6 +24,7 @@ import { formatReportingPeriodLabel, isSameReportingMonth, reportingMonthKey, sh
 import { notifyError } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
+import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 
 type ReportsViewProps = {
   enterpriseName: string;
@@ -61,6 +62,19 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
   const [isPeriodChanging, setIsPeriodChanging] = useState(false);
   const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendSamplePreparationCounts[]>([]);
   const reportsHistoryRef = useRef(reportsHistory);
+
+  usePersistentIssue({
+    id: "reports-local-metrics",
+    message: metricsError,
+    title: "Local metrics unavailable",
+    tone: "error",
+  });
+  usePersistentIssue({
+    id: "reports-submissions",
+    message: ledgerError,
+    title: "Report submissions unavailable",
+    tone: "warning",
+  });
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
@@ -484,8 +498,6 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
           <p className="mt-1 text-sm text-gray-500">Prepare unfinished monthly reports and review submitted report history.</p>
-          {metricsError && <p className="mt-1 text-xs font-semibold text-red-600">Local metrics unavailable: {metricsError}</p>}
-          {ledgerError && <p className="mt-1 text-xs font-semibold text-red-600">Report submissions unavailable: {ledgerError}</p>}
         </div>
       </div>
 

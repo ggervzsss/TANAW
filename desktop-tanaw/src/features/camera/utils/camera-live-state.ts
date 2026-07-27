@@ -24,7 +24,17 @@ export function isAcceptedCameraStartSettled(payload: MlCameraStates, cameraId: 
   if (payload.pending_camera_ids.includes(cameraId)) return false;
   const state = payload.cameras.find((camera) => camera.camera_id === cameraId);
   if (!state) return false;
-  return state.counts.running || state.counts.status === "failed" || state.counts.status === "error";
+  return isCameraPreviewReady(state) || state.counts.status === "failed" || state.counts.status === "error";
+}
+
+export function isCameraPreviewReady(state: MlCameraLiveState | undefined) {
+  if (!state?.counts.running) return false;
+  return !["starting", "connecting", "stopped", "failed", "error"].includes(state.counts.status);
+}
+
+export function isCameraStartOutcomeUncertain(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return isRequestTimeoutMessage(message);
 }
 
 export function clearRecoveredCameraRequestErrors(current: Record<number, string | null>, states: readonly MlCameraLiveState[]) {

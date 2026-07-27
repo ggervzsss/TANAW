@@ -7,6 +7,7 @@ import { routePaths } from "../router/routePaths";
 import { AuthSessionManager } from "../../features/login/components/AuthSessionManager";
 import { SystemDisplayPreferencesProvider } from "../../features/preferences/SystemDisplayPreferencesProvider";
 import { RealtimeProvider } from "../../features/realtime/RealtimeProvider";
+import { PersistentIssueProvider } from "../../features/toasts/components/PersistentIssueProvider";
 
 const TOAST_DURATION_MS = 3200;
 
@@ -46,12 +47,14 @@ export function AppProviders({ children }: PropsWithChildren) {
     <QueryClientProvider client={queryClient}>
       <HashRouter>
         <AuthSessionManager />
-        <RealtimeProvider>
-          <SystemDisplayPreferencesProvider>
-            {children}
-            <TanawToaster />
-          </SystemDisplayPreferencesProvider>
-        </RealtimeProvider>
+        <PersistentIssueProvider>
+          <RealtimeProvider>
+            <SystemDisplayPreferencesProvider>
+              {children}
+              <TanawToaster />
+            </SystemDisplayPreferencesProvider>
+          </RealtimeProvider>
+        </PersistentIssueProvider>
       </HashRouter>
     </QueryClientProvider>
   );

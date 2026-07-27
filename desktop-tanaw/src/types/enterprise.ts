@@ -43,8 +43,6 @@ export type ReportRecord = {
 };
 
 export type ProcessingProfile = "auto" | "compatibility" | "balanced" | "high_accuracy" | "emergency";
-export type RuntimeBackend = "auto" | "cuda" | "openvino" | "cpu";
-export type TrackerProfile = "auto" | "bytetrack" | "botsort";
 export type ReIdMode = "auto" | "off" | "fast" | "quality";
 export type UniqueCountingMode = "entry_only" | "estimated_reid";
 export type CameraStatus = "untested" | "online" | "offline" | "starting" | "connecting" | "running" | "degraded" | "reconnecting" | "stopped" | "failed" | "error";
@@ -63,9 +61,6 @@ export type Camera = {
   name: string;
   status: CameraStatus;
   zone: string;
-  fps: number;
-  resolution: string;
-  type: string;
   rtsp: string;
   cameraHost?: string;
   rtspStream?: "stream1" | "stream2";

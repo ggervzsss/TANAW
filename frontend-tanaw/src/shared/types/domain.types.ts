@@ -1,8 +1,18 @@
-export type EnterpriseStatus = "Normal" | "Warning" | "High Occupancy" | "Issue" | "Offline" | "Inactive";
-export type CameraStatus = "Online" | "Offline" | "Unstable";
+export type MonitoringStatus = "Fully Monitoring" | "Partially Monitoring" | "Stopped" | "Fault" | "Offline" | "Not Configured" | "Updates Delayed";
+export type OccupancyStatus = "Normal" | "Warning" | "High Occupancy" | "No Data";
 export type GatewayStatus = "Connected" | "Sync Delayed" | "Offline" | "Not Linked" | "Closed";
 export type AlertSeverity = "Info" | "Warning" | "Critical";
 export type LogSeverity = AlertSeverity | "Success";
+
+export type CameraMonitoringSummary = {
+  status: "not_configured" | "stopped" | "partial" | "running" | "error";
+  configuredCameraCount: number;
+  activeCameraCount: number;
+  healthyCameraCount: number;
+  startingCameraCount: number;
+  stoppedCameraCount: number;
+  errorCameraCount: number;
+};
 
 export type MapEnterprise = {
   id: string;
@@ -14,7 +24,9 @@ export type MapEnterprise = {
   lng: number;
   totalLiveOccupancy: number;
   estimatedUniqueCount: number;
-  status: EnterpriseStatus;
+  monitoringStatus: MonitoringStatus;
+  occupancyStatus: OccupancyStatus;
+  cameraMonitoring: CameraMonitoringSummary | null;
   operatingHours?: string;
   contact?: string;
   trend?: "Up" | "Stable" | "Down";
@@ -58,37 +70,6 @@ export type VisitorInsights = {
   lastUpdatedAt: string | null;
 };
 
-export type Enterprise = {
-  id: string;
-  enterpriseName: string;
-  barangay: string;
-  status: "Active" | "Archived";
-  category: string;
-  gatewayStatus: GatewayStatus;
-};
-
-export type SystemActivityType = "LOGIN" | "CONNECTION" | "ACCOUNT CONFIG" | "ENTERPRISE CONFIG" | "IT ACTION" | "SYSTEM";
-export type SystemActivityTimePeriod = "Today" | "Earlier";
-export type SystemActivityDeviceState = "Offline" | "Delayed" | "Healthy";
-
-export type SystemActivity = {
-  id: string;
-  severity: AlertSeverity;
-  type: SystemActivityType;
-  time: string;
-  initiatedBy: string;
-  enterprise?: string;
-  device?: string;
-  accountName?: string;
-  summary: string;
-  recommendedAction: string;
-  timePeriod: SystemActivityTimePeriod;
-  actorType: "LGU Account" | "Enterprise Account" | "IT Personnel" | "System";
-  target?: string;
-  deviceState?: SystemActivityDeviceState;
-  requiresEnterpriseAttention?: boolean;
-};
-
 export type PriorityAlertType = "Maintenance Request" | "Password Reset Request" | "Submission Delay" | "Foot Traffic Alert" | "Occupancy Spike" | "Failed Login Threshold";
 export type PriorityAlertResolutionMode = "On-site Visit Required" | "In-system Action" | "Staff Follow-up" | "Remote Review" | "Admin Monitoring";
 export type PriorityAlertStatus = "New" | "In Review" | "Resolved";
@@ -108,50 +89,6 @@ export type PriorityAlert = {
   status: PriorityAlertStatus;
   owner: PriorityAlertOwner;
   time: string;
-};
-
-export type PipelineAlert = {
-  id: string;
-  severity: AlertSeverity;
-  device: string;
-  msg: string;
-  status: "New" | "Acknowledged" | "Resolved";
-  time: string;
-};
-
-export type PipelineHealth = {
-  enterpriseId: string;
-  name: string;
-  barangay: string;
-  gatewayStatus: GatewayStatus;
-  warnings: PipelineAlert[];
-};
-
-export type TelemetrySnapshot = {
-  id: string;
-  enterpriseId: string;
-  enterpriseName: string;
-  category?: string | null;
-  barangay?: string | null;
-  cameraId?: string | null;
-  cameraName?: string | null;
-  capturedAt: string;
-  receivedAt: string;
-  entries: number;
-  exits: number;
-  currentOccupancy: number;
-  peakOccupancy: number;
-  uniqueCount: number;
-  confirmedUniqueCount: number;
-  degradedUniqueCount: number;
-  totalEvents: number;
-  unsubmittedEvents: number;
-  unsyncedEvents: number;
-  running: boolean;
-  status: string;
-  error?: string | null;
-  analyticsFps?: number | null;
-  gatewayStatus: GatewayStatus;
 };
 
 export type OperationalSummary = {
@@ -188,10 +125,6 @@ export type SystemLog = {
 export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated" | "Missing";
 export type FinalReportArchivedFromStatus = "Draft" | "Finalized" | "Returned for Revision";
 export type FinalReportStatus = FinalReportArchivedFromStatus | "Archived";
-export type LguAccountRoleLabel = "Admin" | "IT Personnel" | "LGU Staff";
-export type LguAccountStatus = "Active" | "Inactive";
-export type EnterpriseAccountStatus = "Active" | "Archived" | "Suspended";
-
 export type ReportDemographics = {
   thisProvMale: number;
   thisProvFemale: number;
@@ -203,43 +136,6 @@ export type ReportDemographics = {
 
 export type ReportPayload = Record<string, unknown> & {
   demo?: Partial<Record<keyof ReportDemographics, number | string>>;
-};
-
-export type LguAccount = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: LguAccountRoleLabel;
-  status: LguAccountStatus;
-  phone: string;
-  lastLogin: string;
-  createdAt: string;
-};
-
-export type EnterpriseCamera = {
-  id: string;
-  name: string;
-  location: string;
-  rtspStatus: string;
-  status: CameraStatus;
-  lastChecked: string;
-};
-
-export type EnterpriseAccount = {
-  id: string;
-  enterpriseName: string;
-  category: string;
-  managerName: string;
-  email: string;
-  contactNumber: string;
-  barangay: string;
-  address: string;
-  gatewayStatus: GatewayStatus;
-  gatewayId?: string;
-  accountStatus: EnterpriseAccountStatus;
-  lastSync: string;
-  cameras: EnterpriseCamera[];
 };
 
 export type IntakeReport = {

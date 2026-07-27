@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from statistics import mean
+from typing import Literal, TypedDict
 
 import numpy as np
 
@@ -13,7 +14,7 @@ from app.reid import (
     get_reid_model_profile,
     missing_reid_models,
 )
-from app.tracking import ResolvedTrack, TrackIdentityResolver
+from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,13 @@ class PendingEmbedding:
     source_track_id: int
     embedding: np.ndarray
     quality: float
+
+
+class ReplayIdentityUpdate(TypedDict):
+    kind: Literal["remap", "swap"]
+    appearance_space: Literal["fast", "quality"]
+    from_track_id: int
+    to_track_id: int
 
 
 class ReplayReIdCoordinator:
@@ -61,6 +69,7 @@ class ReplayReIdCoordinator:
         self._quality_inference_ms: list[float] = []
         self._failed_samples = 0
         self._remaps = 0
+        self._swaps = 0
 
         if self.fast is not None:
             self.fast.warmup()
@@ -75,7 +84,8 @@ class ReplayReIdCoordinator:
         counter: TripwireCounter,
         frame_index: int,
         now: float,
-    ) -> None:
+    ) -> tuple[ReplayIdentityUpdate, ...]:
+        updates: list[ReplayIdentityUpdate] = []
         for pending in self._pending_fast:
             canonical_track_id = resolver.canonical_track_id(pending.track_id)
             resolution = resolver.record_embedding(
@@ -86,32 +96,40 @@ class ReplayReIdCoordinator:
             )
             if resolution is None:
                 continue
-            self.fast_buffer.record_sample(
-                resolution.track_id,
-                pending.embedding,
-                pending.quality,
-                frame_index,
-            )
-            if resolution.remap_from is None or resolution.remap_to is None:
-                continue
-            counter.remap_track(resolution.remap_from, resolution.remap_to)
-            self.fast_buffer.remap_track(resolution.remap_from, resolution.remap_to)
-            self.quality_buffer.remap_track(resolution.remap_from, resolution.remap_to)
-            self._remaps += 1
+            if resolution.record_sample:
+                self.fast_buffer.record_sample(
+                    resolution.track_id,
+                    pending.embedding,
+                    pending.quality,
+                    frame_index,
+                )
+            updates.extend(self._apply_resolution(counter, resolution, "fast"))
 
         for pending in self._pending_quality:
             track_id = resolver.canonical_track_id(pending.track_id)
-            self.quality_buffer.record_sample(
+            resolution = resolver.record_embedding(
+                pending.source_track_id,
                 track_id,
                 pending.embedding,
-                pending.quality,
-                frame_index,
+                now,
+                appearance_space="quality",
             )
+            if resolution is None:
+                continue
+            if resolution.record_sample:
+                self.quality_buffer.record_sample(
+                    resolution.track_id,
+                    pending.embedding,
+                    pending.quality,
+                    frame_index,
+                )
+            updates.extend(self._apply_resolution(counter, resolution, "quality"))
 
         self._pending_fast = []
         self._pending_quality = []
         self.fast_buffer.begin_frame(frame_index)
         self.quality_buffer.begin_frame(frame_index)
+        return tuple(updates)
 
     def sample_tracks(
         self,
@@ -181,6 +199,7 @@ class ReplayReIdCoordinator:
             "quality_samples": len(self._quality_inference_ms),
             "failed_samples": self._failed_samples,
             "identity_remaps": self._remaps,
+            "identity_swaps": self._swaps,
             "fast_average_inference_ms": (
                 mean(self._fast_inference_ms) if self._fast_inference_ms else None
             ),
@@ -197,6 +216,44 @@ class ReplayReIdCoordinator:
         raise RuntimeError(
             f"The {profile} ReID model could not be initialized: {status['reid_error']}"
         )
+
+    def _apply_resolution(
+        self,
+        counter: TripwireCounter,
+        resolution: EmbeddingResolution,
+        appearance_space: Literal["fast", "quality"],
+    ) -> tuple[ReplayIdentityUpdate, ...]:
+        updates: list[ReplayIdentityUpdate] = []
+        if (
+            resolution.swapped
+            and resolution.swap_from is not None
+            and resolution.swap_to is not None
+        ):
+            counter.swap_tracks(resolution.swap_from, resolution.swap_to)
+            self._swaps += 1
+            updates.append(
+                {
+                    "kind": "swap",
+                    "appearance_space": appearance_space,
+                    "from_track_id": resolution.swap_from,
+                    "to_track_id": resolution.swap_to,
+                }
+            )
+        if resolution.remap_from is None or resolution.remap_to is None:
+            return tuple(updates)
+        counter.remap_track(resolution.remap_from, resolution.remap_to)
+        self.fast_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+        self.quality_buffer.remap_track(resolution.remap_from, resolution.remap_to)
+        self._remaps += 1
+        updates.append(
+            {
+                "kind": "remap",
+                "appearance_space": appearance_space,
+                "from_track_id": resolution.remap_from,
+                "to_track_id": resolution.remap_to,
+            }
+        )
+        return tuple(updates)
 
 
 def _crop(frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:

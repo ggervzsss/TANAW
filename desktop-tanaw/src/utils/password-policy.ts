@@ -3,7 +3,6 @@ import passwordPolicyData from "../data/commonPasswords.json";
 export const PASSWORD_MIN_LENGTH = passwordPolicyData.minimumLength;
 export const PASSWORD_MAX_LENGTH = passwordPolicyData.maximumLength;
 export const PASSWORD_INPUT_MAX_CODE_UNITS = PASSWORD_MAX_LENGTH * 2;
-export const PASSWORD_POLICY_MESSAGE = passwordPolicyData.policyMessage;
 export const PASSWORD_TOO_SHORT_MESSAGE = passwordPolicyData.tooShortMessage;
 export const PASSWORD_TOO_LONG_MESSAGE = passwordPolicyData.tooLongMessage;
 export const PASSWORD_COMMON_MESSAGE = passwordPolicyData.commonMessage;

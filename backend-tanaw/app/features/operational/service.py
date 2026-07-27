@@ -30,6 +30,7 @@ from app.features.operational.models import (
     UserNotification,
 )
 from app.features.operational.schemas import (
+    DesktopCameraMonitoringSummary,
     DesktopReportSubmissionIngest,
     DesktopTelemetryIngest,
     FinalReportArchivedFromStatus,
@@ -739,39 +740,6 @@ def can_manage_operational_alert(account: Account, alert: OperationalAlert) -> b
         return alert.owner == "Admin"
     if account.role == AccountRole.IT:
         return alert.owner == "IT"
-    return False
-
-
-def can_view_operational_event(role: str, event_type: str) -> bool:
-    notification_events = {"notification.created", "notification.updated"}
-    if role == AccountRole.ADMIN.value:
-        return True
-    if role == AccountRole.IT.value:
-        return (
-            event_type
-            in {
-                "telemetry.snapshot",
-                "summary.updated",
-                "alert.created",
-                "alert.updated",
-                "alert.resolved",
-            }
-            | notification_events
-        )
-    if role == AccountRole.STAFF.value:
-        return (
-            event_type
-            in {
-                "report.submitted",
-                "report.updated",
-                "summary.updated",
-                "final_report.generated",
-                "final_report.updated",
-            }
-            | notification_events
-        )
-    if role == AccountRole.ENTERPRISE.value:
-        return event_type in {"report.updated", "notification.created", "notification.updated"}
     return False
 
 
@@ -1553,6 +1521,7 @@ def to_telemetry_summary(
         error=snapshot.error,
         analyticsFps=snapshot.analytics_fps,
         gatewayStatus=gateway_status_for_snapshot(snapshot),
+        monitoring=telemetry_monitoring_from_payload(snapshot.payload_json),
     )
 
 
@@ -1591,6 +1560,16 @@ def parse_report_payload(payload_json: str | None) -> dict | None:
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def telemetry_monitoring_from_payload(
+    payload_json: str | None,
+) -> DesktopCameraMonitoringSummary:
+    payload = parse_report_payload(payload_json)
+    monitoring = payload.get("monitoring") if payload else None
+    if not isinstance(monitoring, dict):
+        return DesktopCameraMonitoringSummary()
+    return DesktopCameraMonitoringSummary.model_validate(monitoring)
 
 
 def report_demographics_from_payload(
@@ -1812,9 +1791,7 @@ def gateway_status_for_snapshot(snapshot: EnterpriseTelemetrySnapshot) -> str:
         return "Offline"
     if age > STALE_GATEWAY_SECONDS:
         return "Sync Delayed"
-    if snapshot.unsynced_events > 0:
-        return "Sync Delayed"
-    return "Connected" if snapshot.running or snapshot.total_events > 0 else "Connected"
+    return "Connected"
 
 
 def status_from_payload(payload: dict | None) -> str:

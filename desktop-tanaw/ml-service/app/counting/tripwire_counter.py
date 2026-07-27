@@ -229,6 +229,21 @@ class TripwireCounter:
         if previous.last_movement_delta is not None:
             target.last_movement_delta = previous.last_movement_delta
 
+    def swap_tracks(self, first_track_id: int, second_track_id: int) -> None:
+        if first_track_id == second_track_id:
+            return
+        first = self.tracks.get(first_track_id)
+        second = self.tracks.get(second_track_id)
+        if first is None and second is None:
+            return
+        if second is None:
+            self.tracks[second_track_id] = self.tracks.pop(first_track_id)
+            return
+        if first is None:
+            self.tracks[first_track_id] = self.tracks.pop(second_track_id)
+            return
+        self.tracks[first_track_id], self.tracks[second_track_id] = second, first
+
     def debug_state(self, track_id: int) -> dict[str, int | float | str | bool | None] | None:
         state = self.tracks.get(track_id)
         if state is None:

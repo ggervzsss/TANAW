@@ -17,9 +17,6 @@ class SessionStore:
     def load_session(self) -> dict[str, Any] | None:
         return self._data_store.load_monitoring_state(self._camera_id)
 
-    def list_sessions(self) -> list[dict[str, Any]]:
-        return self._data_store.list_monitoring_states()
-
     def save_session(self, payload: dict[str, Any]) -> None:
         # Unit-level processing components may operate without a persisted camera
         # identity. Production pipelines always have a positive camera ID.

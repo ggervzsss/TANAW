@@ -1,20 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { getDarkStatusBadgeClass, getEnterpriseStatusColor } from "./mapStatusStyles";
+import { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getOccupancyBadgeClass, getOccupancyRingColor } from "./mapStatusStyles";
 
-describe("enterprise map availability styles", () => {
-  it.each(["Offline", "Inactive"] as const)("uses neutral gray styling for %s enterprises", (status) => {
-    expect(getEnterpriseStatusColor(status)).toBe("#64748b");
-    expect(getDarkStatusBadgeClass(status)).toContain("slate");
-    expect(getDarkStatusBadgeClass(status)).not.toContain("red");
+describe("enterprise map monitoring styles", () => {
+  it.each(["Stopped", "Offline", "Not Configured"] as const)("uses neutral gray styling for %s enterprises", (status) => {
+    expect(getMonitoringStatusColor(status)).toBe("#64748b");
+    expect(getDarkMonitoringBadgeClass(status)).toContain("slate");
+    expect(getDarkMonitoringBadgeClass(status)).not.toContain("red");
   });
 
   it.each([
-    ["Normal", "#055b25", "green"],
-    ["Warning", "#ca8a04", "yellow"],
-    ["High Occupancy", "#b91c1c", "red"],
-    ["Issue", "#ea580c", "orange"],
+    ["Fully Monitoring", "#16a34a", "green"],
+    ["Partially Monitoring", "#ea580c", "orange"],
+    ["Updates Delayed", "#ea580c", "orange"],
+    ["Fault", "#dc2626", "red"],
   ] as const)("uses the semantic palette for %s", (status, color, classColor) => {
-    expect(getEnterpriseStatusColor(status)).toBe(color);
-    expect(getDarkStatusBadgeClass(status)).toContain(classColor);
+    expect(getMonitoringStatusColor(status)).toBe(color);
+    expect(getDarkMonitoringBadgeClass(status)).toContain(classColor);
+  });
+
+  it.each([
+    ["Normal", "transparent", "sky"],
+    ["No Data", "transparent", "slate"],
+    ["Warning", "#facc15", "yellow"],
+    ["High Occupancy", "#ef4444", "red"],
+  ] as const)("uses a separate occupancy ring and badge for %s", (status, color, classColor) => {
+    expect(getOccupancyRingColor(status)).toBe(color);
+    expect(getOccupancyBadgeClass(status)).toContain(classColor);
   });
 });

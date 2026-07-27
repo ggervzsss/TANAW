@@ -26,9 +26,8 @@ export {
   sanPedroFallbackCenter,
   sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
-  toMapEnterprise,
 } from "./enterpriseMapUtils";
 export { getCurrentLeafletMapTheme, mountLeafletThemeLayer } from "./leafletTheme";
-export { getDarkStatusBadgeClass, getEnterpriseStatusColor } from "./mapStatusStyles";
+export { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getOccupancyBadgeClass, getOccupancyRingColor } from "./mapStatusStyles";
 export type { BarangayPointResolution, GeoJsonFeatureCollection } from "./enterpriseMapUtils";
 export type { LeafletMapTheme } from "./leafletTheme";

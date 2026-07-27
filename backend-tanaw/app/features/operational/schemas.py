@@ -64,12 +64,38 @@ class DesktopHealthSummary(BaseModel):
     qualityReidQueueDepth: int = Field(default=0, ge=0)
 
 
+CameraMonitoringState = Literal["not_configured", "stopped", "partial", "running", "error"]
+CameraRuntimeState = Literal["stopped", "starting", "running", "error"]
+
+
+class DesktopCameraMonitoringItem(BaseModel):
+    cameraId: int
+    cameraName: str = Field(max_length=120)
+    status: CameraRuntimeState
+    running: bool = False
+    error: str | None = Field(default=None, max_length=1000)
+
+
+class DesktopCameraMonitoringSummary(BaseModel):
+    status: CameraMonitoringState = "not_configured"
+    configuredCameraCount: int = Field(default=0, ge=0)
+    activeCameraCount: int = Field(default=0, ge=0)
+    healthyCameraCount: int = Field(default=0, ge=0)
+    startingCameraCount: int = Field(default=0, ge=0)
+    stoppedCameraCount: int = Field(default=0, ge=0)
+    errorCameraCount: int = Field(default=0, ge=0)
+    cameras: list[DesktopCameraMonitoringItem] = Field(default_factory=list)
+
+
 class DesktopTelemetryIngest(BaseModel):
     deviceId: str | None = Field(default=None, max_length=120)
     capturedAt: datetime | None = None
     metrics: DesktopMetricsSummary
     session: DesktopSessionSummary = Field(default_factory=DesktopSessionSummary)
     health: DesktopHealthSummary = Field(default_factory=DesktopHealthSummary)
+    monitoring: DesktopCameraMonitoringSummary = Field(
+        default_factory=DesktopCameraMonitoringSummary
+    )
     payload: dict | None = None
 
 
@@ -98,6 +124,9 @@ class TelemetrySnapshotSummary(BaseModel):
     error: str | None = None
     analyticsFps: float | None = None
     gatewayStatus: str
+    monitoring: DesktopCameraMonitoringSummary = Field(
+        default_factory=DesktopCameraMonitoringSummary
+    )
 
 
 class OperationalSummary(BaseModel):

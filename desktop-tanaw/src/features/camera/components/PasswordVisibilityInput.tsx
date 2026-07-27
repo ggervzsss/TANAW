@@ -53,7 +53,7 @@ export function PasswordVisibilityInput({
         aria-describedby={ariaDescribedBy}
         className={inputClass}
       />
-      <button type="button" onClick={() => setIsVisible((current) => !current)} className={buttonClass} aria-label={isVisible ? "Hide password" : "Show password"} aria-pressed={isVisible}>
+      <button type="button" tabIndex={-1} onClick={() => setIsVisible((current) => !current)} className={buttonClass} aria-label={isVisible ? "Hide password" : "Show password"} aria-pressed={isVisible}>
         <Icon size={variant === "modal" ? 17 : 14} />
       </button>
     </div>
