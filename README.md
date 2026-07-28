@@ -294,7 +294,6 @@ and the optional Resend settings developers commonly change:
 POSTGRES_DB=TanawDB
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-this-local-password
-POSTGRES_HOST_PORT=5433
 DATABASE_URL=postgresql+asyncpg://postgres:change-this-local-password@db:5432/TanawDB
 JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 
@@ -321,12 +320,17 @@ excludes `.env`; commit `.env.example`, never the populated `.env`.
 Local URLs, ports, token lifetimes, polling, cooldowns, and retention policies
 use the defaults maintained in the codebase and do not need entries here.
 
-To inspect the local database with DBeaver, create a PostgreSQL connection using
-host `localhost`, port `5432`, and the database, username, and password from
-`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The database is bound
-only to localhost.
-Keep `DATABASE_URL` on `db:5432` because the backend connects from inside the
-Compose network.
+PostgreSQL is available only inside the Compose network and does not reserve a
+host port. This prevents startup conflicts with a PostgreSQL installation or
+another service already using host port `5432`. Inspect it without publishing a
+host port:
+
+```shell
+docker compose exec db psql -U postgres -d TanawDB
+```
+
+Keep `DATABASE_URL` on `db:5432` because the backend connects inside the Compose
+network.
 
 ### 3. Start the database, API, and web portal
 
