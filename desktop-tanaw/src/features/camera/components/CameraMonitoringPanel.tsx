@@ -3,6 +3,7 @@ import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
 import type { MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
+import type { CameraPreviewState } from "./CameraVideoPreview";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
@@ -14,6 +15,7 @@ type CameraMonitoringPanelProps = {
   isStarting: boolean;
   isStopping: boolean;
   isTesting: boolean;
+  previewState: CameraPreviewState;
   onRestartService: () => void;
   onStartProcessing: () => void;
   onStopProcessing: () => void;
@@ -30,6 +32,7 @@ export function CameraMonitoringPanel({
   isStarting,
   isStopping,
   isTesting,
+  previewState,
   onRestartService,
   onStartProcessing,
   onStopProcessing,
@@ -39,13 +42,25 @@ export function CameraMonitoringPanel({
   const serviceOnline = health?.status === "ok";
   const serviceLabel = serviceOnline ? (health.running ? "ML Service Running" : "ML Service Ready") : "ML Service Offline";
   const cameraState = getCameraState(activeCam, counts, isStarting);
-  const streamVerified = ["online", "running"].includes(activeCam.status);
-  const streamLabel = streamVerified ? "Stream Verified" : "Stream Needs Check";
+  const frameFreshness = formatFrameFreshness(health, counts.running);
+  const displayedFrameIsFresh =
+    previewState === "live" && frameFreshness.tone !== "error";
+  const streamVerified = counts.running
+    ? displayedFrameIsFresh
+    : activeCam.status === "online";
+  const streamLabel = streamVerified
+    ? counts.running
+      ? "Live Preview Verified"
+      : "Stream Verified"
+    : counts.running && previewState === "failed"
+      ? "Live Preview Unavailable"
+      : counts.running && previewState !== "live"
+      ? "Restoring Live Preview"
+      : "Stream Needs Check";
   const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
   const pendingUniqueEntries = health?.pending_unique_entries ?? 0;
   const modelStatus = formatModelStatus(health);
   const performanceStatus = formatPerformanceStatus(health);
-  const frameFreshness = formatFrameFreshness(health, counts.running);
   const isProcessRunning = counts.running && !isStarting;
   const ProcessIcon = isProcessRunning ? Square : Play;
   const processButtonLabel = isProcessRunning ? (isStopping ? "Stopping..." : "Stop") : isStarting ? "Starting..." : "Start";

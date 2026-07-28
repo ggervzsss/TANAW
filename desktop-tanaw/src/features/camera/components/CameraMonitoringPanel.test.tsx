@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../types/enterprise";
 import { EMPTY_ML_COUNTS } from "../services/ml-service";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
+import type { CameraPreviewState } from "./CameraVideoPreview";
 
 describe("CameraMonitoringPanel", () => {
   it("labels the status and control block below Live Metrics", () => {
@@ -17,6 +18,7 @@ describe("CameraMonitoringPanel", () => {
         isStarting={false}
         isStopping={false}
         isTesting={false}
+        previewState="connecting"
         onRestartService={() => undefined}
         onStartProcessing={() => undefined}
         onStopProcessing={() => undefined}
@@ -66,6 +68,23 @@ describe("CameraMonitoringPanel", () => {
     expect(markup).not.toContain("Current system issues");
     expect(markup).not.toContain("fixed right-4 bottom-4");
   });
+
+  it("does not claim the live preview is verified before a frame is displayed", () => {
+    const reconnectingMarkup = renderPanel({
+      activeCam: { ...camera, status: "running" },
+      counts: { ...EMPTY_ML_COUNTS, running: true, status: "running" },
+      previewState: "retrying",
+    });
+    expect(reconnectingMarkup).toContain("Restoring Live Preview");
+    expect(reconnectingMarkup).not.toContain("Live Preview Verified");
+
+    const liveMarkup = renderPanel({
+      activeCam: { ...camera, status: "running" },
+      counts: { ...EMPTY_ML_COUNTS, running: true, status: "running" },
+      previewState: "live",
+    });
+    expect(liveMarkup).toContain("Live Preview Verified");
+  });
 });
 
 function renderPanel({
@@ -73,11 +92,13 @@ function renderPanel({
   counts = EMPTY_ML_COUNTS,
   error = null,
   isStarting = false,
+  previewState = "connecting",
 }: {
   activeCam?: Camera;
   counts?: typeof EMPTY_ML_COUNTS;
   error?: string | null;
   isStarting?: boolean;
+  previewState?: CameraPreviewState;
 }) {
   return renderToStaticMarkup(
     <CameraMonitoringPanel
@@ -90,6 +111,7 @@ function renderPanel({
       isStarting={isStarting}
       isStopping={false}
       isTesting={false}
+      previewState={previewState}
       onRestartService={() => undefined}
       onStartProcessing={() => undefined}
       onStopProcessing={() => undefined}

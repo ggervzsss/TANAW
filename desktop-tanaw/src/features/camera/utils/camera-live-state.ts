@@ -29,7 +29,7 @@ export function isAcceptedCameraStartSettled(payload: MlCameraStates, cameraId: 
 
 export function isCameraPreviewReady(state: MlCameraLiveState | undefined) {
   if (!state?.counts.running) return false;
-  return !["starting", "connecting", "stopped", "failed", "error"].includes(state.counts.status);
+  return state.counts.status === "running" || state.counts.status === "degraded";
 }
 
 export function isCameraStartOutcomeUncertain(error: unknown) {

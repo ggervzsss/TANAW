@@ -22,6 +22,7 @@ class ApiContractTest(unittest.TestCase):
 
         self.assertIn(("GET", "/cameras/runtime"), http_routes)
         self.assertIn(("POST", "/camera/start"), http_routes)
+        self.assertIn(("PATCH", "/camera/{camera_id}/counting-config"), http_routes)
         self.assertIn(("GET", "/camera/{camera_id}/stream"), http_routes)
         self.assertIn("/camera/ws", websocket_routes)
         self.assertNotIn(("GET", "/counts"), http_routes)
@@ -38,6 +39,8 @@ class ApiContractTest(unittest.TestCase):
 
         self.assertEqual(health["service_version"], SERVICE_VERSION)
         self.assertEqual(health["api_contract_version"], API_CONTRACT_VERSION)
+        self.assertEqual(API_CONTRACT_VERSION, 8)
+        self.assertTrue(health["tripwire_hot_update"])
 
 
 if __name__ == "__main__":

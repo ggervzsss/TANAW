@@ -99,6 +99,10 @@ describe("camera startup and preview recovery", () => {
     starting.counts.status = "starting";
     expect(isCameraPreviewReady(starting)).toBe(false);
 
+    const reconnecting = state(101, 0);
+    reconnecting.counts.status = "reconnecting";
+    expect(isCameraPreviewReady(reconnecting)).toBe(false);
+
     const running = state(101, 0);
     expect(isCameraPreviewReady(running)).toBe(true);
   });

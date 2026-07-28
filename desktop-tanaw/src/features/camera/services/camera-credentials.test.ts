@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getCameraPasswordReplacement,
   loadCameraCredentialMetadata,
   saveCameraCredential,
 } from "./camera-credentials";
@@ -45,6 +46,30 @@ describe("camera credential storage", () => {
 
     expect(await loadCameraCredentialMetadata("test-enterprise")).toEqual({
       "1": { passwordConfigured: true, username: "camera-user" },
+    });
+  });
+
+  it("treats blank and mask-only password edits as keep-existing requests", () => {
+    expect(getCameraPasswordReplacement("")).toBeUndefined();
+    expect(getCameraPasswordReplacement("********")).toBeUndefined();
+    expect(getCameraPasswordReplacement("••••••••")).toBeUndefined();
+    expect(getCameraPasswordReplacement("replacement secret")).toBe(
+      "replacement secret",
+    );
+  });
+
+  it("preserves the in-memory secret when an edit submits masked text", async () => {
+    await saveCameraCredential("masked-edit-enterprise", 2, {
+      password: "existing secret",
+      username: "camera-user",
+    });
+    await saveCameraCredential("masked-edit-enterprise", 2, {
+      password: "********",
+      username: "camera-user",
+    });
+
+    expect(await loadCameraCredentialMetadata("masked-edit-enterprise")).toEqual({
+      "2": { passwordConfigured: true, username: "camera-user" },
     });
   });
 });

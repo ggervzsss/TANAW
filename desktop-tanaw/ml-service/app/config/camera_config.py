@@ -74,6 +74,27 @@ class RegionOfInterest(BaseModel):
         return self
 
 
+class CameraCountingConfigUpdate(BaseModel):
+    require_active_worker: bool = False
+    tripwire_position: float = Field(default=0.5, ge=0.1, le=0.9)
+    entry_line: TripwireLine
+    exit_line: TripwireLine
+    roi: RegionOfInterest = Field(default_factory=RegionOfInterest)
+    reverse_direction: bool = False
+
+    @model_validator(mode="after")
+    def validate_counting_geometry(self) -> CameraCountingConfigUpdate:
+        entry_length = _path_length(self.entry_line)
+        exit_length = _path_length(self.exit_line)
+        if entry_length < 0.10 or exit_length < 0.10:
+            raise ValueError("Tripwire paths must be at least 0.10 normalized units long.")
+
+        if _paths_overlap(self.entry_line, self.exit_line, tolerance=0.03):
+            raise ValueError("Entry and exit tripwire paths must not overlap.")
+
+        return self
+
+
 class CameraStartRequest(BaseModel):
     stream_url: str = Field(..., min_length=3)
     tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
@@ -194,7 +215,8 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.2.0"
-    api_contract_version: int = 5
+    api_contract_version: int = 8
+    tripwire_hot_update: bool = True
     running: bool
     error: str | None = None
     model_loaded: bool = False

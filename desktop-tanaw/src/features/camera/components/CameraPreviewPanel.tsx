@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Edit2, Save, Trash2 } from "lucide-react";
 import { Card } from "../../../components/Card";
 import type { Camera } from "../../../types/enterprise";
@@ -6,7 +6,7 @@ import { CameraEditControls } from "./CameraEditControls";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
 import { CameraReadOnlyDetails } from "./CameraReadOnlyDetails";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
-import { CameraVideoPreview } from "./CameraVideoPreview";
+import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
 import { NoCameraSelected } from "./NoCameraSelected";
 import type { MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
 
@@ -21,6 +21,7 @@ type CameraPreviewPanelProps = {
   health: MlHealth | null;
   isRestartingService: boolean;
   isEditMode: boolean;
+  isSaving: boolean;
   isStarting: boolean;
   isStopping: boolean;
   isTesting: boolean;
@@ -49,6 +50,7 @@ export function CameraPreviewPanel({
   health,
   isRestartingService,
   isEditMode,
+  isSaving,
   isStarting,
   isStopping,
   isTesting,
@@ -65,6 +67,13 @@ export function CameraPreviewPanel({
   onTestConnection,
   onEditFormChange,
 }: CameraPreviewPanelProps) {
+  const [previewState, setPreviewState] =
+    useState<CameraPreviewState>("connecting");
+
+  useEffect(() => {
+    setPreviewState("connecting");
+  }, [activeCam?.id]);
+
   if (!activeCam) return <NoCameraSelected />;
 
   const isProcessing = counts.running;
@@ -81,15 +90,19 @@ export function CameraPreviewPanel({
         <div className="flex gap-2">
           {isEditMode ? (
             <>
-              <button onClick={onCancelEdit} className="rounded-sm border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-100">
+              <button
+                onClick={onCancelEdit}
+                disabled={isSaving}
+                className="rounded-sm border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 Cancel
               </button>
               <button
                 onClick={onSave}
-                disabled={isStarting || Boolean(cameraIpError)}
+                disabled={isSaving || isStarting || Boolean(cameraIpError)}
                 className="flex items-center gap-1.5 rounded-sm bg-[#065f46] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#044a36] disabled:cursor-not-allowed disabled:bg-gray-400"
               >
-                <Save size={14} /> {isStarting ? "Applying..." : "Save Config"}
+                <Save size={14} /> {isSaving ? "Saving..." : isStarting ? "Restoring..." : "Save Config"}
               </button>
             </>
           ) : (
@@ -124,6 +137,7 @@ export function CameraPreviewPanel({
             isProcessing={isProcessing}
             isEditMode={isEditMode}
             onEditFormChange={onEditFormChange}
+            onPreviewStateChange={setPreviewState}
             streamUrl={streamUrl}
           />
         </div>
@@ -138,6 +152,7 @@ export function CameraPreviewPanel({
             isStarting={isStarting}
             isStopping={isStopping}
             isTesting={isTesting}
+            previewState={previewState}
             serviceStatus={serviceStatus}
             onRestartService={onRestartService}
             onStartProcessing={onStartProcessing}

@@ -17,6 +17,7 @@ export type MlHealth = {
   status: "ok";
   service_version: string;
   api_contract_version: number;
+  tripwire_hot_update: boolean;
   running: boolean;
   error: string | null;
   model_loaded: boolean;
@@ -305,6 +306,9 @@ export type MlServiceErrorCode =
   | "stream_unavailable"
   | "pipeline_start_failed"
   | "capacity_limit"
+  | "camera_not_active"
+  | "tripwire_persistence_failed"
+  | "tripwire_worker_update_failed"
   | "service_shutting_down"
   | "request_timeout"
   | "unknown";
@@ -604,6 +608,35 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
   );
 }
 
+export async function updateCameraCountingConfig(
+  baseUrl: string,
+  camera: Camera,
+  options: { requireActiveWorker: boolean },
+): Promise<{
+  camera_id: number;
+  persisted: boolean;
+  worker_applied: boolean;
+  session_id: number | null;
+  raw_frame_id: number | null;
+  stream_frame_id: number | null;
+}> {
+  return requestJson(
+    `${baseUrl}/camera/${camera.id}/counting-config`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        entry_line: toMlTripwireLine(camera.config.tripwires.entry),
+        exit_line: toMlTripwireLine(camera.config.tripwires.exit),
+        require_active_worker: options.requireActiveWorker,
+        reverse_direction: camera.config.reverse,
+        roi: toMlRoi(camera.config.roi),
+        tripwire_position: camera.config.tripwire / 100,
+      }),
+    },
+    5000,
+  );
+}
+
 export async function stopCameraProcessing(baseUrl: string, cameraId: number): Promise<{ message: string }> {
   return requestJson<{ message: string }>(`${baseUrl}/camera/${cameraId}/stop`, { method: "POST" }, 5000);
 }
@@ -722,6 +755,17 @@ async function getRequestError(response: Response, requestUrl: string) {
   if (response.status === 404 && pathname === "/cameras/runtime") {
     return new MlServiceRequestError("route_unavailable", "The camera runtime service is unavailable. Restart the local ML service.", response.status);
   }
+  if (
+    response.status === 404 &&
+    pathname.endsWith("/counting-config") &&
+    (message === "Not Found" || message === "Request failed with status 404.")
+  ) {
+    return new MlServiceRequestError(
+      "route_unavailable",
+      "The local ML service does not support live Tripwire updates.",
+      response.status,
+    );
+  }
   if (response.status === 404 && (message === "Not Found" || message === "Request failed with status 404.")) {
     message = "The requested camera runtime resource is unavailable.";
   }
@@ -737,6 +781,9 @@ function normalizeServiceErrorCode(value: string | undefined, fallback: MlServic
     "stream_unavailable",
     "pipeline_start_failed",
     "capacity_limit",
+    "camera_not_active",
+    "tripwire_persistence_failed",
+    "tripwire_worker_update_failed",
     "service_shutting_down",
     "request_timeout",
     "unknown",

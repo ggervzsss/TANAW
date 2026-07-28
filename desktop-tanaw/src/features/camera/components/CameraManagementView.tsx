@@ -22,6 +22,14 @@ import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnecti
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import {
+  createCameraUpdateGate,
+  getCameraSaveRuntimeAction,
+  hasCameraConnectionChange,
+  hasCameraCountingConfigChange,
+  hasCameraRestartRequiredChange,
+  mergeConfirmedCameraCountingConfig,
+} from "../utils/camera-update";
+import {
   DEFAULT_ML_SERVICE_BASE_URL,
   EMPTY_ML_COUNTS,
   EMPTY_ML_DETECTIONS,
@@ -36,9 +44,24 @@ import {
   startCameraProcessing,
   stopCameraProcessing,
   testCameraConnection,
+  updateCameraCountingConfig,
 } from "../services/ml-service";
-import type { MlCameraLiveEnvelope, MlCameraLiveState, MlCameraStates, MlHealth, MlServiceStatus } from "../services/ml-service";
-import { deleteCameraCredential, loadCameraCredentialMetadata, saveCameraCredential, type CameraCredentialMetadataRecords } from "../services/camera-credentials";
+import {
+  MlServiceRequestError,
+  type MlCameraLiveEnvelope,
+  type MlCameraLiveState,
+  type MlCameraStates,
+  type MlHealth,
+  type MlServiceStatus,
+} from "../services/ml-service";
+import {
+  deleteCameraCredential,
+  getCameraPasswordReplacement,
+  loadCameraCredentialMetadata,
+  saveCameraCredential,
+  type CameraCredentialMetadataRecords,
+} from "../services/camera-credentials";
+import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 
 type CameraManagementViewProps = {
   cameras: Camera[];
@@ -46,7 +69,7 @@ type CameraManagementViewProps = {
   storageKey: string;
 };
 
-type CameraAction = "requesting-start" | "starting" | "stopping" | "testing";
+type CameraAction = "requesting-start" | "saving" | "starting" | "stopping" | "testing";
 
 const emptyCameraForm: CameraFormValues = {
   cameraHost: "",
@@ -69,6 +92,8 @@ const CAMERA_START_SETTLE_TIMEOUT_MESSAGE = "Camera startup did not reach a runn
 
 export function CameraManagementView({ cameras, setCameras, storageKey }: CameraManagementViewProps) {
   const [activeCamId, setActiveCamId] = useState<number | null>(cameras[0]?.id ?? null);
+  const activeCamIdRef = useRef(activeCamId);
+  activeCamIdRef.current = activeCamId;
   const [cameraStates, setCameraStates] = useState<Record<number, MlCameraLiveState>>({});
   const [cameraErrors, setCameraErrors] = useState<Record<number, string | null>>({});
   const [cameraActions, setCameraActions] = useState<Record<number, CameraAction | undefined>>({});
@@ -76,6 +101,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   cameraActionsRef.current = cameraActions;
   const cameraStartDeadlinesRef = useRef<Record<number, number>>({});
   const cameraPreviewReadyRef = useRef<Record<number, boolean>>({});
+  const cameraUpdateGateRef = useRef(createCameraUpdateGate());
   const [pendingCameraIds, setPendingCameraIds] = useState<ReadonlySet<number>>(new Set());
   const [streamVersions, setStreamVersions] = useState<Record<number, number>>({});
   const [isEditMode, setIsEditMode] = useState(false);
@@ -104,6 +130,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   const detections = activeState?.detections ?? EMPTY_ML_DETECTIONS;
   const health = activeState?.health ?? serviceHealth;
   const activeAction = activeCam ? cameraActions[activeCam.id] : undefined;
+  const isActiveCameraSaving = activeAction === "saving";
   const isActiveCameraStarting = Boolean(activeCam && (isStartAction(activeAction) || pendingCameraIds.has(activeCam.id)));
   const monitoringError = activeCam ? (activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError ?? serviceError) : (configurationError ?? serviceError);
   const warnings = isEditMode && editForm ? getValidationWarnings(editForm.config) : getValidationWarnings(activeCam?.config);
@@ -403,13 +430,15 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   const handleSave = async () => {
     if (!editForm || !activeCam) return;
+    const cameraId = editForm.id;
+    if (cameraUpdateGateRef.current.isActive(cameraId)) return;
     if (editedCameraIpConflict) {
-      setCameraError(editForm.id, CAMERA_IP_CONFLICT_MESSAGE);
+      setCameraError(cameraId, CAMERA_IP_CONFLICT_MESSAGE);
       document.getElementById("camera-ip-host")?.focus();
       return;
     }
-    const replacementPassword = editForm.password?.trim() ? editForm.password : undefined;
-    const hasStoredPassword = Boolean(credentialMetadata[String(editForm.id)]?.passwordConfigured);
+    const replacementPassword = getCameraPasswordReplacement(editForm.password);
+    const hasStoredPassword = Boolean(credentialMetadata[String(cameraId)]?.passwordConfigured);
     const nextCamera = canonicalizeCameraIp({
       ...editForm,
       password: undefined,
@@ -417,35 +446,105 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     });
     const validationError = validateCamera(nextCamera, hasStoredPassword || Boolean(replacementPassword));
     if (validationError) {
-      setCameraError(editForm.id, validationError);
+      setCameraError(cameraId, validationError);
       return;
     }
-    const connectionChanged =
-      activeCam.rtsp !== nextCamera.rtsp ||
-      activeCam.cameraHost !== nextCamera.cameraHost ||
-      activeCam.rtspStream !== nextCamera.rtspStream ||
-      activeCam.username !== nextCamera.username ||
-      Boolean(replacementPassword);
-    const isRunning = Boolean(cameraStates[editForm.id]?.counts.running);
+    const connectionChanged = hasCameraConnectionChange(
+      activeCam,
+      nextCamera,
+      Boolean(replacementPassword),
+    );
+    const isRunning =
+      cameraStates[cameraId]?.counts.running ?? isRuntimeStatus(activeCam.status);
+    const runtimeAction = getCameraSaveRuntimeAction(activeCam, nextCamera, {
+      isRunning,
+      passwordChanged: Boolean(replacementPassword),
+    });
+    const countingConfigChanged = hasCameraCountingConfigChange(activeCam, nextCamera);
+    const restartRequired = hasCameraRestartRequiredChange(
+      activeCam,
+      nextCamera,
+      Boolean(replacementPassword),
+    );
+    const shouldRestart = runtimeAction === "restart";
+    const shouldUpdateCounting = countingConfigChanged && !restartRequired;
+    const credentialChanged =
+      activeCam.username !== nextCamera.username || Boolean(replacementPassword);
     const savedCamera: Camera = { ...nextCamera, status: isRunning ? nextCamera.status : connectionChanged ? "untested" : nextCamera.status };
+    const savedCameras = cameras.map((camera) => (camera.id === cameraId ? savedCamera : camera));
+    if (!cameraUpdateGateRef.current.begin(cameraId)) return;
+    setCameraAction(cameraId, "saving");
     try {
-      const metadata = await saveCameraCredential(storageKey, savedCamera.id, {
-        password: replacementPassword,
-        username: savedCamera.username ?? "",
-      });
-      setCredentialMetadata((current) => ({
-        ...current,
-        [String(savedCamera.id)]: metadata,
-      }));
-      setCameras((current) => current.map((camera) => (camera.id === activeCamId ? savedCamera : camera)));
+      if (credentialChanged) {
+        const metadata = await saveCameraCredential(storageKey, savedCamera.id, {
+          password: replacementPassword,
+          username: savedCamera.username ?? "",
+        });
+        setCredentialMetadata((current) => ({
+          ...current,
+          [String(savedCamera.id)]: metadata,
+        }));
+      }
+      if (shouldUpdateCounting) {
+        const acknowledgement = await updateCameraCountingConfig(
+          mlBaseUrl,
+          savedCamera,
+          { requireActiveWorker: isRunning },
+        );
+        if (!acknowledgement.persisted) {
+          throw new MlServiceRequestError(
+            "tripwire_persistence_failed",
+            "The Tripwire configuration was not persisted.",
+          );
+        }
+        if (isRunning && !acknowledgement.worker_applied) {
+          throw new MlServiceRequestError(
+            "tripwire_worker_update_failed",
+            "The active camera worker did not acknowledge the Tripwire update.",
+          );
+        }
+      } else {
+        await replaceLocalCameras(mlBaseUrl, savedCameras.map(redactCameraForStorage));
+      }
+      setCameras((current) =>
+        current.map((camera) =>
+          camera.id === cameraId
+            ? shouldUpdateCounting
+              ? mergeConfirmedCameraCountingConfig(camera, savedCamera.config)
+              : savedCamera
+            : camera,
+        ),
+      );
       setCameraError(savedCamera.id, null);
+      if (!shouldRestart) {
+        notifySuccess(
+          shouldUpdateCounting
+            ? "Tripwire configuration saved"
+            : "Camera configuration updated.",
+        );
+      }
     } catch (error) {
-      setCameraError(savedCamera.id, toErrorMessage(error));
+      setCameraAction(cameraId);
+      const message = shouldUpdateCounting
+        ? getTripwireSaveErrorMessage(error)
+        : toErrorMessage(error);
+      if (shouldUpdateCounting) {
+        setEditForm((current) =>
+          current?.id === cameraId
+            ? { ...current, config: structuredClone(activeCam.config) }
+            : current,
+        );
+      }
+      setCameraError(savedCamera.id, message);
+      notifyError(message);
+      cameraUpdateGateRef.current.end(cameraId);
       return;
     }
 
-    if (!isRunning) {
-      setIsEditMode(false);
+    if (!shouldRestart) {
+      setCameraAction(cameraId);
+      cameraUpdateGateRef.current.end(cameraId);
+      if (activeCamIdRef.current === cameraId) setIsEditMode(false);
       return;
     }
 
@@ -454,13 +553,15 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
       await startCameraProcessing(mlBaseUrl, savedCamera, storageKey);
       setCameraAction(savedCamera.id, "starting");
       void refreshCameraStates().catch(() => undefined);
-      setIsEditMode(false);
+      if (activeCamIdRef.current === cameraId) setIsEditMode(false);
     } catch (error) {
       const remainsPending = handleCameraStartFailure(savedCamera.id, error);
       if (remainsPending) {
         void refreshCameraStates().catch(() => undefined);
-        setIsEditMode(false);
+        if (activeCamIdRef.current === cameraId) setIsEditMode(false);
       }
+    } finally {
+      cameraUpdateGateRef.current.end(cameraId);
     }
   };
 
@@ -663,6 +764,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             activeCamId={activeCamId}
             onAdd={openAddModal}
             onSelect={(cameraId) => {
+              activeCamIdRef.current = cameraId;
               setActiveCamId(cameraId);
               setIsEditMode(false);
             }}
@@ -680,6 +782,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             health={health}
             isRestartingService={isRestartingService}
             isEditMode={isEditMode}
+            isSaving={isActiveCameraSaving}
             isStarting={isActiveCameraStarting}
             isStopping={activeAction === "stopping"}
             isTesting={activeAction === "testing"}
@@ -837,4 +940,35 @@ function getDefaultTripwires(centerX: number) {
 
 function toErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "The ML camera service request failed.";
+}
+
+function getTripwireSaveErrorMessage(error: unknown) {
+  if (!(error instanceof MlServiceRequestError)) {
+    return "Unable to save Tripwire configuration. The live camera stream was not interrupted.";
+  }
+
+  if (error.status === 422 || error.code === "invalid_camera_configuration") {
+    return "The Tripwire paths are invalid. Adjust the Entry and Exit geometry and try again.";
+  }
+
+  const messages: Partial<Record<typeof error.code, string>> = {
+    camera_not_active:
+      "The camera is no longer processing. Its existing Tripwire configuration was not changed.",
+    camera_not_found:
+      "The selected camera configuration no longer exists. Refresh Camera Setup and try again.",
+    request_timeout:
+      "The camera worker did not acknowledge the Tripwire update in time. The live stream remains active.",
+    route_unavailable:
+      "Live Tripwire updates are unavailable because the local ML service is outdated.",
+    service_unavailable:
+      "The local ML service is unavailable. The existing Tripwire configuration remains active.",
+    tripwire_persistence_failed:
+      "Unable to persist the Tripwire configuration. The active geometry was not changed.",
+    tripwire_worker_update_failed:
+      "The active camera worker rejected the Tripwire update. The previous geometry remains active.",
+  };
+  return (
+    messages[error.code] ??
+    "Unable to save Tripwire configuration. The live camera stream was not interrupted."
+  );
 }

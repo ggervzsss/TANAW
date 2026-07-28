@@ -2,10 +2,25 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.config.camera_config import CameraStartRequest
+from app.config.camera_config import CameraCountingConfigUpdate, CameraStartRequest
 
 
 class CameraConfigValidationTest(unittest.TestCase):
+    def test_counting_hot_update_rejects_invalid_geometry_without_a_stream_url(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "must not overlap"):
+            CameraCountingConfigUpdate.model_validate(
+                {
+                    "entry_line": {
+                        "start": {"x": 0.35, "y": 0.1},
+                        "end": {"x": 0.35, "y": 0.9},
+                    },
+                    "exit_line": {
+                        "start": {"x": 0.35, "y": 0.1},
+                        "end": {"x": 0.35, "y": 0.9},
+                    },
+                }
+            )
+
     def test_valid_roi_and_tripwire_config_is_accepted(self) -> None:
         config = CameraStartRequest.model_validate(
             {

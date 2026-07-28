@@ -10,8 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.camera.auth import redact_stream_credentials
-from app.camera.pipeline_manager import CameraCapacityError, CameraPipelineRegistry
+from app.camera.pipeline_manager import (
+    CameraCapacityError,
+    CameraNotActiveError,
+    CameraPipelineRegistry,
+    TripwirePersistenceError,
+    TripwireWorkerUpdateError,
+)
 from app.config.camera_config import (
+    CameraCountingConfigUpdate,
     CameraProfilesRequest,
     CameraStartRequest,
     CameraStatesResponse,
@@ -42,7 +49,7 @@ CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.2.0"
-API_CONTRACT_VERSION = 6
+API_CONTRACT_VERSION = 8
 
 
 class CameraApiError(RuntimeError):
@@ -155,6 +162,28 @@ def stop_camera(camera_id: int) -> dict[str, Any]:
         "camera_id": camera_id,
         "stopped": stopped,
     }
+
+
+@app.patch("/camera/{camera_id}/counting-config")
+def update_camera_counting_config(
+    camera_id: int, payload: CameraCountingConfigUpdate
+) -> dict[str, object]:
+    try:
+        return manager.update_counting_config(camera_id, payload)
+    except KeyError as exc:
+        raise CameraApiError(
+            404, "camera_not_found", "The selected camera configuration was not found."
+        ) from exc
+    except CameraNotActiveError as exc:
+        raise CameraApiError(409, "camera_not_active", redact_stream_credentials(str(exc))) from exc
+    except TripwirePersistenceError as exc:
+        raise CameraApiError(
+            500, "tripwire_persistence_failed", redact_stream_credentials(str(exc))
+        ) from exc
+    except TripwireWorkerUpdateError as exc:
+        raise CameraApiError(
+            409, "tripwire_worker_update_failed", redact_stream_credentials(str(exc))
+        ) from exc
 
 
 @app.post("/cameras/stop")
@@ -378,6 +407,7 @@ def build_health_payload(registry: CameraPipelineRegistry | None = None) -> dict
             **active_manager.service_health(),
             "service_version": SERVICE_VERSION,
             "api_contract_version": API_CONTRACT_VERSION,
+            "tripwire_hot_update": True,
         }
     ).model_dump(mode="json")
 

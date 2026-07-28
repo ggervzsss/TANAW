@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Camera } from "../../../types/enterprise";
 import type { MlCounts, MlDetections, MlHealth } from "../services/ml-service";
-import { getPreviewRetryDelayMs, withPreviewRetryVersion } from "../utils/camera-preview-recovery";
+import {
+  canRetryPreview,
+  getPreviewRetryDelayMs,
+  hasRenderablePreviewFrame,
+  isCurrentPreviewRequest,
+  withPreviewRetryVersion,
+} from "../utils/camera-preview-recovery";
 import { CameraOverlayConfig } from "./CameraOverlayConfig";
 
 type CameraVideoPreviewProps = {
@@ -13,8 +19,11 @@ type CameraVideoPreviewProps = {
   isProcessing: boolean;
   isEditMode: boolean;
   onEditFormChange: Dispatch<SetStateAction<Camera | null>>;
+  onPreviewStateChange?: (state: CameraPreviewState) => void;
   streamUrl: string;
 };
+
+export type CameraPreviewState = "connecting" | "failed" | "live" | "retrying";
 
 type ContentRect = {
   height: number;
@@ -23,13 +32,16 @@ type ContentRect = {
   width: number;
 };
 
-export function CameraVideoPreview({ activeCam, counts, detections, editForm, health, isProcessing, isEditMode, onEditFormChange, streamUrl }: CameraVideoPreviewProps) {
+export function CameraVideoPreview({ activeCam, counts, detections, editForm, health, isProcessing, isEditMode, onEditFormChange, onPreviewStateChange, streamUrl }: CameraVideoPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const previewImageRef = useRef<HTMLImageElement | null>(null);
+  const previewSourceRef = useRef(streamUrl);
+  previewSourceRef.current = streamUrl;
   const connectWatchdogRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const [contentRect, setContentRect] = useState<ContentRect | null>(null);
   const [previewAttempt, setPreviewAttempt] = useState(0);
-  const [previewState, setPreviewState] = useState<"connecting" | "live" | "retrying">("connecting");
+  const [previewState, setPreviewState] = useState<CameraPreviewState>("connecting");
   const streamIsAvailable = Boolean(isProcessing && streamUrl);
   const effectiveStreamUrl = useMemo(() => withPreviewRetryVersion(streamUrl, previewAttempt), [previewAttempt, streamUrl]);
   const isStarting = counts.status === "starting" || counts.status === "connecting" || activeCam.status === "starting";
@@ -53,13 +65,20 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
   }, []);
 
   const schedulePreviewRetry = useCallback(() => {
+    if (previewSourceRef.current !== streamUrl) return;
     if (retryTimerRef.current !== null) return;
+    if (!canRetryPreview(previewAttempt)) {
+      setPreviewState("failed");
+      return;
+    }
     setPreviewState("retrying");
+    const retrySource = streamUrl;
     retryTimerRef.current = window.setTimeout(() => {
       retryTimerRef.current = null;
+      if (previewSourceRef.current !== retrySource) return;
       setPreviewAttempt((attempt) => attempt + 1);
     }, getPreviewRetryDelayMs(previewAttempt));
-  }, [previewAttempt]);
+  }, [previewAttempt, streamUrl]);
 
   useEffect(() => {
     clearPreviewTimers();
@@ -68,15 +87,31 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
   }, [activeCam.id, clearPreviewTimers, streamUrl]);
 
   useEffect(() => {
+    onPreviewStateChange?.(previewState);
+  }, [onPreviewStateChange, previewState]);
+
+  useEffect(() => {
     if (!streamIsAvailable) {
       clearPreviewTimers();
       return;
     }
     setPreviewState("connecting");
-    connectWatchdogRef.current = window.setTimeout(() => {
-      connectWatchdogRef.current = null;
-      schedulePreviewRetry();
-    }, 10_000);
+    const startedAt = Date.now();
+    const checkForDecodedFrame = () => {
+      const image = previewImageRef.current;
+      if (image && hasRenderablePreviewFrame(image.naturalWidth, image.naturalHeight)) {
+        connectWatchdogRef.current = null;
+        setPreviewState("live");
+        return;
+      }
+      if (Date.now() - startedAt >= 10_000) {
+        connectWatchdogRef.current = null;
+        schedulePreviewRetry();
+        return;
+      }
+      connectWatchdogRef.current = window.setTimeout(checkForDecodedFrame, 250);
+    };
+    connectWatchdogRef.current = window.setTimeout(checkForDecodedFrame, 250);
     return clearPreviewTimers;
   }, [clearPreviewTimers, effectiveStreamUrl, schedulePreviewRetry, streamIsAvailable]);
 
@@ -117,19 +152,38 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
     >
       {streamIsAvailable ? (
         <img
+          ref={previewImageRef}
           key={effectiveStreamUrl}
           src={effectiveStreamUrl}
           alt={`${activeCam.name} live camera stream`}
           className="absolute inset-0 h-full w-full object-contain"
           draggable={false}
-          onError={() => {
+          onError={(event) => {
+            if (
+              !isCurrentPreviewRequest(
+                previewSourceRef.current,
+                streamUrl,
+                previewImageRef.current,
+                event.currentTarget,
+              )
+            )
+              return;
             if (connectWatchdogRef.current !== null) {
               window.clearTimeout(connectWatchdogRef.current);
               connectWatchdogRef.current = null;
             }
             schedulePreviewRetry();
           }}
-          onLoad={() => {
+          onLoad={(event) => {
+            if (
+              !isCurrentPreviewRequest(
+                previewSourceRef.current,
+                streamUrl,
+                previewImageRef.current,
+                event.currentTarget,
+              )
+            )
+              return;
             if (connectWatchdogRef.current !== null) {
               window.clearTimeout(connectWatchdogRef.current);
               connectWatchdogRef.current = null;
@@ -147,9 +201,22 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
       {!streamIsAvailable && <div className="absolute inset-0 bg-black/30"></div>}
       {streamIsAvailable && previewState !== "live" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-          <span className="rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold tracking-wide text-amber-200 uppercase shadow-sm backdrop-blur-sm">
-            {previewState === "retrying" ? "Reconnecting preview…" : "Connecting preview…"}
-          </span>
+          {previewState === "failed" ? (
+            <button
+              type="button"
+              className="pointer-events-auto rounded-full border border-red-300/50 bg-black/80 px-3 py-1 text-[10px] font-bold tracking-wide text-red-200 uppercase shadow-sm backdrop-blur-sm"
+              onClick={() => {
+                setPreviewAttempt(0);
+                setPreviewState("connecting");
+              }}
+            >
+              Unable to restore preview — Retry
+            </button>
+          ) : (
+            <span className="rounded-full border border-amber-300/40 bg-black/75 px-3 py-1 text-[10px] font-bold tracking-wide text-amber-200 uppercase shadow-sm backdrop-blur-sm">
+              {previewState === "retrying" ? "Reconnecting preview…" : "Connecting preview…"}
+            </span>
+          )}
         </div>
       )}
 
@@ -215,11 +282,15 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
           <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
             <span
               className={`flex items-center gap-1 rounded-full border bg-black/60 px-2 py-1 text-[10px] font-bold shadow-sm backdrop-blur-sm ${
-                previewState === "live" ? "border-green-500/50 text-green-400" : "border-amber-400/50 text-amber-200"
+                previewState === "live"
+                  ? "border-green-500/50 text-green-400"
+                  : previewState === "failed"
+                    ? "border-red-400/50 text-red-200"
+                    : "border-amber-400/50 text-amber-200"
               }`}
             >
               <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${previewState === "live" ? "bg-green-400" : "bg-amber-300"}`}></span>
-              {previewState === "live" ? "LIVE" : "RECOVERING"}
+              {previewState === "live" ? "LIVE" : previewState === "failed" ? "PREVIEW FAILED" : "RECOVERING"}
             </span>
             <span className="rounded-full border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">{fpsLabel}</span>
           </div>

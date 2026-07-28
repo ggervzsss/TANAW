@@ -15,7 +15,12 @@ import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
 from app.camera.stream_reader import open_capture, validate_stream
-from app.config.camera_config import CameraStartRequest, RegionOfInterest, TripwireLine
+from app.config.camera_config import (
+    CameraCountingConfigUpdate,
+    CameraStartRequest,
+    RegionOfInterest,
+    TripwireLine,
+)
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import YoloPersonTracker
@@ -87,7 +92,7 @@ DisplayFrameSnapshot = tuple[
 ]
 
 
-@dataclass(frozen=True)
+@dataclass
 class ProcessingSession:
     session_id: int
     config: CameraStartRequest
@@ -109,6 +114,7 @@ class CameraProcessingManager:
         self._app_data_dir = app_data_dir
         self._camera_id_scope = camera_id
         self._lock = threading.RLock()
+        self._counting_lock = threading.RLock()
         self._active_session: ProcessingSession | None = None
         self._next_session_id = 0
         self._processing_thread: threading.Thread | None = None
@@ -145,6 +151,9 @@ class CameraProcessingManager:
             stop_when_full=True,
         )
         self._identity_resolver = TrackIdentityResolver()
+        # Counting follows physical motion only. ReID is allowed to remap appearance
+        # identities without moving an in-progress paired-line crossing to another key.
+        self._counting_track_resolver = TrackIdentityResolver(appearance_track_ttl_seconds=2.5)
         self._pending_entry_events: dict[tuple[int, int], PendingEntryEvent] = {}
         self._session_store = SessionStore(app_data_dir, camera_id=camera_id)
         self._visitor_registry = UniqueVisitorRegistry(
@@ -302,6 +311,11 @@ class CameraProcessingManager:
                 lost_track_ttl_seconds=min(config.track_ttl_seconds, 3.0),
                 appearance_track_ttl_seconds=max(config.track_ttl_seconds, 15.0),
             )
+            counting_track_ttl_seconds = min(config.track_ttl_seconds, 3.0)
+            self._counting_track_resolver = TrackIdentityResolver(
+                lost_track_ttl_seconds=counting_track_ttl_seconds,
+                appearance_track_ttl_seconds=counting_track_ttl_seconds,
+            )
             self._pending_entry_events.clear()
             self._visitor_registry.prepare(config.camera_id)
             self._visitor_registry.reset_session_tracks()
@@ -346,6 +360,7 @@ class CameraProcessingManager:
             self._quality_reid_worker.begin_session(session.session_id)
             self._tracker.reset_tracking()
             self._identity_resolver.reset()
+            self._counting_track_resolver.reset()
             self._active_session = session
             self._config = config
             self._latest_jpeg = self._build_status_frame("Starting camera processing...")
@@ -382,6 +397,49 @@ class CameraProcessingManager:
             self._processing_thread.start()
             self._stream_thread.start()
             self._persist_session_locked()
+
+    def update_counting_config(self, update: CameraCountingConfigUpdate) -> dict[str, object]:
+        with self._counting_lock:
+            with self._raw_frame_condition:
+                session = self._active_session
+                if session is None or not self._state.running:
+                    raise RuntimeError(
+                        "Camera processing must be running to update Tripwire settings."
+                    )
+
+                entry_line = self._normalized_line(update.entry_line)
+                exit_line = self._normalized_line(update.exit_line)
+                if entry_line is None or exit_line is None:
+                    raise ValueError("Both entry and exit Tripwire paths are required.")
+
+                updated_config = session.config.model_copy(
+                    update={
+                        "tripwire_position": update.tripwire_position,
+                        "entry_line": update.entry_line,
+                        "exit_line": update.exit_line,
+                        "roi": update.roi,
+                        "reverse_direction": update.reverse_direction,
+                    }
+                )
+                self._flush_pending_entry_events(session, time.monotonic(), force=True)
+                self._counter.update_geometry(
+                    tripwire_position=update.tripwire_position,
+                    entry_line=entry_line,
+                    exit_line=exit_line,
+                    reverse_direction=update.reverse_direction,
+                )
+                session.config = updated_config
+                self._config = updated_config
+                self._persist_session_locked()
+                self._raw_frame_condition.notify_all()
+
+                return {
+                    "camera_id": updated_config.camera_id,
+                    "session_id": session.session_id,
+                    "raw_frame_id": self._latest_raw_frame_id,
+                    "stream_frame_id": self._latest_stream_frame_id,
+                    "counts": self._counter.counts.as_dict(),
+                }
 
     def stop(self) -> None:
         threads: list[threading.Thread]
@@ -1074,6 +1132,23 @@ class CameraProcessingManager:
         tracking_confidence: float,
         counting_confidence: float | None = None,
     ) -> list[DisplayTrack]:
+        with self._counting_lock:
+            if not self._is_current_session(session):
+                return []
+            return self._detect_and_count_locked(
+                session,
+                frame,
+                tracking_confidence,
+                counting_confidence,
+            )
+
+    def _detect_and_count_locked(
+        self,
+        session: ProcessingSession,
+        frame: np.ndarray,
+        tracking_confidence: float,
+        counting_confidence: float | None = None,
+    ) -> list[DisplayTrack]:
         counting_confidence = (
             counting_confidence if counting_confidence is not None else tracking_confidence
         )
@@ -1085,6 +1160,10 @@ class CameraProcessingManager:
         if not self._is_current_session(session):
             return []
         tracks = self._identity_resolver.resolve(source_tracks, now, frame_width, frame_height)
+        counting_tracks = self._counting_track_resolver.resolve(
+            source_tracks, now, frame_width, frame_height
+        )
+        counting_track_ids = {track.source_track_id: track.track_id for track in counting_tracks}
 
         display_tracks: list[DisplayTrack] = []
         self._counter.begin_frame(now)
@@ -1108,13 +1187,18 @@ class CameraProcessingManager:
                 continue
 
             counting_eligible = inside_roi and counting_confidence_passed
+            counting_track_id = counting_track_ids.get(track.source_track_id, track.source_track_id)
             if counting_eligible and self._reid_sampling_enabled(session.config):
                 self._schedule_track_embedding(
                     session, frame, track, frame_width, frame_height, now
                 )
             directions = (
                 self._counter.update_many(
-                    track.track_id, track.counting_point, frame_width, frame_height, track.bbox
+                    counting_track_id,
+                    track.counting_point,
+                    frame_width,
+                    frame_height,
+                    track.bbox,
                 )
                 if counting_eligible
                 else []
@@ -1156,7 +1240,7 @@ class CameraProcessingManager:
                     identity_score=track.identity_score,
                     identity_source=track.identity_source,
                     counting_debug=self._counting_debug(
-                        track.track_id,
+                        counting_track_id,
                         inside_roi=inside_roi,
                         counting_confidence_passed=counting_confidence_passed,
                         tracking_confidence=tracking_confidence,
@@ -1464,9 +1548,8 @@ class CameraProcessingManager:
             and resolution.swap_from is not None
             and resolution.swap_to is not None
         ):
-            self._counter.swap_tracks(resolution.swap_from, resolution.swap_to)
             logger.info(
-                "Confirmed active track identity swap.",
+                "Confirmed active appearance identity swap; preserving motion counting tracks.",
                 extra={
                     "camera_id": self._config.camera_id if self._config else None,
                     "first_track_id": resolution.swap_from,
@@ -1475,7 +1558,6 @@ class CameraProcessingManager:
             )
         if resolution.remap_from is None or resolution.remap_to is None:
             return
-        self._counter.remap_track(resolution.remap_from, resolution.remap_to)
         self._appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
         self._quality_appearance_buffer.remap_track(resolution.remap_from, resolution.remap_to)
         self._visitor_registry.remap_session_track(resolution.remap_from, resolution.remap_to)
@@ -1960,6 +2042,7 @@ class CameraProcessingManager:
 
         return {
             **debug,
+            "counting_track_id": track_id,
             "roi_passed": inside_roi,
             "counting_confidence_passed": counting_confidence_passed,
             "tracking_confidence": tracking_confidence,

@@ -34,7 +34,7 @@ export async function saveCameraCredential(
   const existing = records[String(cameraId)];
   const username = normalizeRequiredUsername(credential.username);
   const password =
-    normalizeCameraPassword(credential.password) ??
+    getCameraPasswordReplacement(credential.password) ??
     existing?.password;
   if (!password) throw new Error("Enter the camera password.");
   records[String(cameraId)] = { password, username };
@@ -60,6 +60,11 @@ export function getMemoryCameraCredential(
 ): CameraCredentialSecret | undefined {
   if (window.tanawCameraCredentials) return undefined;
   return memoryCredentials.get(scope)?.[String(cameraId)];
+}
+
+export function getCameraPasswordReplacement(value: unknown) {
+  const password = normalizeCameraPassword(value);
+  return password && !isMaskedCameraPassword(password) ? password : undefined;
 }
 
 function toMetadata(
@@ -104,6 +109,10 @@ function normalizeCameraUsername(value: unknown) {
 
 function normalizeCameraPassword(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function isMaskedCameraPassword(value: string) {
+  return /^[*•●·]+$/u.test(value.trim());
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

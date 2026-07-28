@@ -9,7 +9,11 @@ export function resolveCameraCredential(
 ): SecureCameraCredential {
   if (!isObjectRecord(value)) throw new Error("Camera credentials are required.");
   const username = normalizeCameraUsername(value.username);
-  const password = normalizeCameraPassword(value.password) ?? existing?.password;
+  const replacement = normalizeCameraPassword(value.password);
+  const password =
+    replacement && !isMaskedCameraPassword(replacement)
+      ? replacement
+      : existing?.password;
   if (!username) throw new Error("Enter the camera username.");
   if (!password) throw new Error("Enter the camera password.");
   return { password, username };
@@ -23,6 +27,10 @@ export function normalizeCameraUsername(value: unknown) {
 
 export function normalizeCameraPassword(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function isMaskedCameraPassword(value: string) {
+  return /^[*•●·]+$/u.test(value.trim());
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

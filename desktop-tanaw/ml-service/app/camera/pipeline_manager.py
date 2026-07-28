@@ -7,7 +7,13 @@ from collections.abc import Callable
 from typing import Any
 
 from app.camera.camera_manager import CameraProcessingManager
-from app.config.camera_config import CameraStartRequest, CameraTestRequest
+from app.config.camera_config import (
+    CameraCountingConfigUpdate,
+    CameraStartRequest,
+    CameraTestRequest,
+    TripwireLine,
+    TripwirePoint,
+)
 from app.runtime.hardware import get_runtime_capabilities
 
 logger = logging.getLogger(__name__)
@@ -17,6 +23,18 @@ MAX_CONFIGURABLE_CONCURRENT_CAMERAS = 16
 
 
 class CameraCapacityError(ValueError):
+    pass
+
+
+class CameraNotActiveError(RuntimeError):
+    pass
+
+
+class TripwirePersistenceError(RuntimeError):
+    pass
+
+
+class TripwireWorkerUpdateError(RuntimeError):
     pass
 
 
@@ -125,7 +143,8 @@ class CameraPipelineRegistry:
             ):
                 logger.info("Ignored duplicate start for camera %s.", camera_id)
                 return False
-            if camera_id in self._pending_starts:
+            pending_fingerprint = self._pending_starts.get(camera_id)
+            if pending_fingerprint == fingerprint:
                 logger.info("Ignored in-flight duplicate start for camera %s.", camera_id)
                 return False
             self._raise_if_capacity_reached_locked(camera_id)
@@ -184,9 +203,7 @@ class CameraPipelineRegistry:
             enterprise_id = self._enterprise_id
             enterprise_name = self._enterprise_name
 
-        if existing is not None:
-            existing.stop()
-        else:
+        if existing is None:
             existing = self._pipeline_factory(self._app_data_dir, camera_id=camera_id)
             existing.bind_enterprise(enterprise_id or "", enterprise_name, restore_session=False)
             with self._lock:
@@ -270,6 +287,69 @@ class CameraPipelineRegistry:
         if pipeline is None:
             raise KeyError(camera_id)
         return pipeline
+
+    def update_counting_config(
+        self, camera_id: int, update: CameraCountingConfigUpdate
+    ) -> dict[str, object]:
+        with self._lifecycle_lock:
+            previous_profiles = self._reporting.list_camera_profiles()
+            found_profile = False
+            updated_profiles: list[dict[str, Any]] = []
+            for profile in previous_profiles:
+                if int(profile["id"]) == camera_id:
+                    updated_profiles.append(_profile_with_counting_update(profile, update))
+                    found_profile = True
+                else:
+                    updated_profiles.append(profile)
+            if not found_profile:
+                raise KeyError(camera_id)
+
+            pipeline = self.pipeline(camera_id)
+            worker_is_active = pipeline is not None and pipeline.running
+            if update.require_active_worker and not worker_is_active:
+                raise CameraNotActiveError(
+                    "The selected camera is no longer processing. Retry after its status refreshes."
+                )
+
+            try:
+                self._reporting.replace_camera_profiles(updated_profiles)
+            except (OSError, ValueError) as exc:
+                raise TripwirePersistenceError(
+                    "The Tripwire configuration could not be persisted."
+                ) from exc
+
+            if not worker_is_active or pipeline is None:
+                return {
+                    "camera_id": camera_id,
+                    "persisted": True,
+                    "worker_applied": False,
+                    "session_id": None,
+                    "raw_frame_id": None,
+                    "stream_frame_id": None,
+                }
+
+            try:
+                result = pipeline.update_counting_config(update)
+            except Exception as exc:
+                try:
+                    self._reporting.replace_camera_profiles(previous_profiles)
+                except Exception:
+                    logger.exception(
+                        "Tripwire worker update failed and persistence rollback also failed.",
+                        extra={"enterprise_id": self._enterprise_id, "camera_id": camera_id},
+                    )
+                raise TripwireWorkerUpdateError(
+                    "The active camera worker rejected the Tripwire configuration."
+                ) from exc
+            logger.info(
+                "Updated counting geometry without restarting the camera pipeline.",
+                extra={"enterprise_id": self._enterprise_id, "camera_id": camera_id},
+            )
+            return {
+                **result,
+                "persisted": True,
+                "worker_applied": True,
+            }
 
     def _camera_state(self, camera_id: int, enterprise_occupancy: int) -> dict[str, Any]:
         pipeline = self.require_pipeline(camera_id)
@@ -449,3 +529,46 @@ def _max_concurrent_cameras(explicit_value: int | None) -> int:
             f"{MAX_CONFIGURABLE_CONCURRENT_CAMERAS}."
         )
     return value
+
+
+def _profile_with_counting_update(
+    profile: dict[str, Any], update: CameraCountingConfigUpdate
+) -> dict[str, Any]:
+    existing_config = profile.get("config")
+    if not isinstance(existing_config, dict):
+        raise ValueError("Camera counting configuration is missing.")
+
+    return {
+        **profile,
+        "config": {
+            **existing_config,
+            "tripwire": update.tripwire_position * 100.0,
+            "tripwires": {
+                "entry": _renderer_tripwire_line(update.entry_line),
+                "exit": _renderer_tripwire_line(update.exit_line),
+            },
+            "roi": {
+                "top": update.roi.top * 100.0,
+                "left": update.roi.left * 100.0,
+                "width": update.roi.width * 100.0,
+                "height": update.roi.height * 100.0,
+            },
+            "reverse": update.reverse_direction,
+        },
+    }
+
+
+def _renderer_tripwire_line(line: TripwireLine) -> dict[str, Any]:
+    def point(value: TripwirePoint) -> dict[str, float]:
+        return {"x": value.x * 100.0, "y": value.y * 100.0}
+
+    payload: dict[str, Any] = {
+        "start": point(line.start),
+        "end": point(line.end),
+        "curve": line.curve,
+    }
+    if line.points is not None:
+        payload["points"] = [point(value) for value in line.points]
+    if line.sampled_points is not None:
+        payload["sampledPoints"] = [point(value) for value in line.sampled_points]
+    return payload

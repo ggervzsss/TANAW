@@ -9,13 +9,14 @@ from unittest.mock import patch
 import numpy as np
 
 from app.camera.camera_manager import CameraProcessingManager, ProcessingSession
-from app.config.camera_config import CameraStartRequest
+from app.config.camera_config import CameraCountingConfigUpdate, CameraStartRequest
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import TrackResult
 from app.identity import UniqueVisitorRegistry
 from app.reid import PersonReIdentifier, TrackAppearanceBuffer
 from app.storage.session_store import SessionStore
+from app.tracking import ResolvedTrack
 
 
 class CameraProcessingManagerSessionTest(unittest.TestCase):
@@ -527,6 +528,42 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             _flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
+    def test_appearance_id_churn_during_crossing_preserves_motion_counting_state(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(1, unique_counting_mode="entry_only")
+            manager._tracker = cast(
+                Any,
+                _FakeTracker(
+                    [
+                        [_track_with_center(21, 150)],
+                        [_track_with_center(21, 110)],
+                        [_track_with_center(21, 50)],
+                    ]
+                ),
+            )
+            manager._identity_resolver = cast(Any, _ChurningAppearanceResolver([12, 8, 14]))
+            with manager._lock:
+                manager._config = session.config
+                manager._counter = _counter_for_config(session.config)
+                manager._active_session = session
+
+            frame = np.zeros((200, 200, 3), dtype=np.uint8)
+            first = manager._detect_and_count(session, frame, 0.35)[0]
+            pending = manager._detect_and_count(session, frame, 0.35)[0]
+            entry = manager._detect_and_count(session, frame, 0.35)[0]
+
+            self.assertEqual([first.track_id, pending.track_id, entry.track_id], [12, 8, 14])
+            self.assertIsNone(first.direction)
+            self.assertIsNone(pending.direction)
+            self.assertEqual(entry.direction, "entry")
+            self.assertIsNotNone(entry.counting_debug)
+            assert entry.counting_debug is not None
+            self.assertEqual(entry.counting_debug["counting_track_id"], 1)
+            self.assertEqual(manager.metrics_summary()["entries"], 1)
+
     def test_low_confidence_track_is_kept_internal_but_not_displayed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
@@ -660,6 +697,72 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertFalse(visible[0].counting_eligible)
             self.assertEqual(manager._identity_resolver.status()["identity_active_tracks"], 0)
 
+    def test_counting_geometry_hot_update_preserves_the_active_camera_session(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manager = _manager_with_store(directory)
+            session = _custom_tripwire_session(17, camera_id=1)
+            counter = _counter_for_config(session.config)
+            counter.counts.entry = 9
+            counter.counts.exit = 4
+            counter.counts.occupancy = 5
+            counter.begin_frame(10.0)
+            counter.update_many(91, Centroid(20, 40), 200, 200)
+            manager._counter = counter
+            manager._active_session = session
+            manager._config = session.config
+            manager._state.running = True
+            manager._state.status = "running"
+            manager._latest_raw_frame_id = 301
+            manager._latest_stream_frame_id = 299
+            tracker = manager._tracker
+            identity_resolver = manager._identity_resolver
+            counting_resolver = manager._counting_track_resolver
+
+            result = manager.update_counting_config(
+                CameraCountingConfigUpdate.model_validate(
+                    {
+                        "entry_line": {
+                            "start": {"x": 0.25, "y": 0.0},
+                            "end": {"x": 0.25, "y": 1.0},
+                        },
+                        "exit_line": {
+                            "start": {"x": 0.75, "y": 0.0},
+                            "end": {"x": 0.75, "y": 1.0},
+                        },
+                        "reverse_direction": True,
+                        "roi": {"top": 0.1, "left": 0.1, "width": 0.8, "height": 0.8},
+                        "tripwire_position": 0.55,
+                    }
+                )
+            )
+
+            self.assertIs(manager._active_session, session)
+            self.assertIs(manager._counter, counter)
+            self.assertIs(manager._tracker, tracker)
+            self.assertIs(manager._identity_resolver, identity_resolver)
+            self.assertIs(manager._counting_track_resolver, counting_resolver)
+            self.assertEqual(manager._latest_raw_frame_id, 301)
+            self.assertEqual(manager._latest_stream_frame_id, 299)
+            self.assertEqual(manager._counter.counts.entry, 9)
+            self.assertEqual(manager._counter.counts.exit, 4)
+            self.assertEqual(manager._counter.counts.occupancy, 5)
+            self.assertEqual(manager._counter.frame_index, 1)
+            self.assertEqual(manager._counter.tracks, {})
+            self.assertEqual(manager._counter.entry_line, ((0.25, 0.0), (0.25, 1.0)))
+            self.assertTrue(manager._counter.reverse_direction)
+            self.assertEqual(session.config.roi.left, 0.1)
+            self.assertEqual(result["session_id"], 17)
+            self.assertEqual(result["raw_frame_id"], 301)
+
+            manager._publish_raw_frame(
+                session,
+                np.full((8, 8, 3), 127, dtype=np.uint8),
+                captured_at=20.0,
+            )
+            self.assertIs(manager._active_session, session)
+            self.assertEqual(manager._latest_raw_frame_id, 302)
+            self.assertEqual(manager.counts()["entry"], 9)
+
 
 def _session(session_id: int, **config_values: Any) -> ProcessingSession:
     return ProcessingSession(
@@ -669,11 +772,12 @@ def _session(session_id: int, **config_values: Any) -> ProcessingSession:
     )
 
 
-def _custom_tripwire_session(session_id: int) -> ProcessingSession:
+def _custom_tripwire_session(session_id: int, **config_values: Any) -> ProcessingSession:
     return _session(
         session_id,
         entry_line={"start": {"x": 0.35, "y": 0.0}, "end": {"x": 0.35, "y": 1.0}},
         exit_line={"start": {"x": 0.65, "y": 0.0}, "end": {"x": 0.65, "y": 1.0}},
+        **config_values,
     )
 
 
@@ -743,6 +847,35 @@ class _FakeTracker:
     def track_people(self, frame: np.ndarray, confidence: float) -> list[TrackResult]:
         self.seen_confidences.append(confidence)
         return self._responses.pop(0)
+
+
+class _ChurningAppearanceResolver:
+    def __init__(self, stable_ids: list[int]) -> None:
+        self._stable_ids = stable_ids
+
+    def resolve(
+        self,
+        tracks: list[TrackResult],
+        now: float,
+        frame_width: int,
+        frame_height: int,
+    ) -> list[ResolvedTrack]:
+        del now, frame_width, frame_height
+        stable_id = self._stable_ids.pop(0)
+        return [
+            ResolvedTrack(
+                track_id=stable_id,
+                source_track_id=track.track_id,
+                bbox=track.bbox,
+                confidence=track.confidence,
+                centroid=track.centroid,
+                counting_point=track.counting_point,
+                identity_state="reidentified",
+                identity_score=0.9,
+                identity_source="appearance_quality",
+            )
+            for track in tracks
+        ]
 
 
 class _SpyReIdentifier:

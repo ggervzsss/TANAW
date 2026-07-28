@@ -26,4 +26,20 @@ describe("main-process camera credential validation", () => {
       username: "camera-user",
     });
   });
+
+  it("never stores a mask placeholder as the camera password", () => {
+    const existing = { password: "old secret", username: "camera-user" };
+    expect(
+      resolveCameraCredential(
+        { password: "********", username: "camera-user" },
+        existing,
+      ),
+    ).toEqual(existing);
+    expect(() =>
+      resolveCameraCredential({
+        password: "••••••••",
+        username: "camera-user",
+      }),
+    ).toThrow("Enter the camera password.");
+  });
 });

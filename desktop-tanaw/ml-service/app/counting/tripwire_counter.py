@@ -69,6 +69,22 @@ class TripwireCounter:
         self.current_time = None
         self.tracks.clear()
 
+    def update_geometry(
+        self,
+        *,
+        tripwire_position: float,
+        entry_line: NormalizedPath,
+        exit_line: NormalizedPath,
+        reverse_direction: bool,
+    ) -> None:
+        self.tripwire_position = tripwire_position
+        self.entry_line = entry_line
+        self.exit_line = exit_line
+        self.reverse_direction = reverse_direction
+        # A line moving across an existing centroid must not be interpreted as a
+        # person crossing it. Aggregate counts and frame continuity remain intact.
+        self.tracks.clear()
+
     def line_x(self, frame_width: int) -> int:
         return int(frame_width * self.tripwire_position)
 

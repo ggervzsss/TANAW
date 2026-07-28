@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import { replaceLocalCameras, testCameraConnection } from "./ml-service";
+import {
+  replaceLocalCameras,
+  testCameraConnection,
+  updateCameraCountingConfig,
+} from "./ml-service";
 
 describe("secure camera service requests", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -63,6 +67,83 @@ describe("camera configuration write boundary", () => {
     expect(payload.cameras[0]?.cameraHost).toBe("192.168.1.9");
     expect(payload.cameras[0]?.rtsp).toBe("rtsp://192.168.1.9/stream2");
     expect(payload.cameras[0]).not.toHaveProperty("password");
+  });
+
+  it("hot-updates counting geometry with a credential-free persisted profile", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          camera_id: 1,
+          persisted: true,
+          raw_frame_id: 42,
+          session_id: 7,
+          stream_frame_id: 41,
+          worker_applied: true,
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("window", {
+      clearTimeout,
+      setTimeout,
+    });
+
+    await updateCameraCountingConfig(
+      "http://127.0.0.1:8765",
+      {
+        ...camera(),
+        password: "must-not-leave-renderer",
+        username: "camera-user",
+      },
+      { requireActiveWorker: true },
+    );
+
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const payload = JSON.parse(String(request.body)) as {
+      reverse_direction: boolean;
+      require_active_worker: boolean;
+      tripwire_position: number;
+    };
+    expect(url).toBe("http://127.0.0.1:8765/camera/1/counting-config");
+    expect(request.method).toBe("PATCH");
+    expect(JSON.stringify(payload)).not.toContain("password");
+    expect(JSON.stringify(payload)).not.toContain("username");
+    expect(JSON.stringify(payload)).not.toContain("rtsp");
+    expect(JSON.stringify(payload)).not.toContain("stream_url");
+    expect(payload.require_active_worker).toBe(true);
+    expect(payload.tripwire_position).toBe(0.5);
+    expect(payload.reverse_direction).toBe(false);
+  });
+
+  it("identifies an older ML service that does not expose the Tripwire route", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Not Found" }), {
+          headers: { "Content-Type": "application/json" },
+          status: 404,
+        }),
+      ),
+    );
+    vi.stubGlobal("window", {
+      clearTimeout,
+      setTimeout,
+    });
+
+    await expect(
+      updateCameraCountingConfig(
+        "http://127.0.0.1:8765",
+        camera(),
+        { requireActiveWorker: true },
+      ),
+    ).rejects.toMatchObject({
+      code: "route_unavailable",
+      status: 404,
+    });
   });
 });
 
