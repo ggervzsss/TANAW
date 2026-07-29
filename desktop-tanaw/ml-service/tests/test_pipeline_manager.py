@@ -6,6 +6,7 @@ from typing import Any, cast
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.pipeline_manager import (
     CameraCapacityError,
+    CameraConfigurationCapacityError,
     CameraNotActiveError,
     CameraPipelineRegistry,
     TripwireWorkerUpdateError,
@@ -93,6 +94,103 @@ class FakePipeline(CameraProcessingManager):
 
 
 class CameraPipelineRegistryTest(unittest.TestCase):
+    def test_default_policy_supports_six_configured_and_active_cameras(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(directory, pipeline_factory=FakePipeline)
+            registry.bind_enterprise("enterprise@example.test")
+            registry.replace_camera_profiles([_profile(camera_id) for camera_id in range(1, 7)])
+
+            for camera_id in range(1, 7):
+                self.assertTrue(registry.start(_config(camera_id)))
+
+            states = registry.camera_states()
+            self.assertEqual(states["active_camera_count"], 6)
+            self.assertEqual(states["max_configured_cameras"], 6)
+            self.assertEqual(states["max_concurrent_cameras"], 6)
+            self.assertEqual(
+                [camera["camera_id"] for camera in states["cameras"]],
+                [1, 2, 3, 4, 5, 6],
+            )
+            self.assertEqual(
+                [camera["counts"]["entry"] for camera in states["cameras"]],
+                [1, 2, 3, 4, 5, 6],
+            )
+
+            with self.assertRaisesRegex(
+                CameraCapacityError, "processing limit of 6 active cameras"
+            ):
+                registry.start(_config(7))
+            self.assertTrue(
+                all(registry.require_pipeline(camera_id).running for camera_id in range(1, 7))
+            )
+
+    def test_stopping_worker_frees_active_capacity_without_affecting_others(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(
+                directory, max_concurrent_cameras=6, pipeline_factory=FakePipeline
+            )
+            registry.bind_enterprise("enterprise@example.test")
+            for camera_id in range(1, 7):
+                registry.start(_config(camera_id))
+
+            self.assertTrue(registry.stop(3))
+            self.assertTrue(registry.start(_config(7)))
+            self.assertEqual(registry.camera_states()["active_camera_count"], 6)
+            self.assertFalse(registry.require_pipeline(3).running)
+            self.assertTrue(
+                all(
+                    registry.require_pipeline(camera_id).running for camera_id in [1, 2, 4, 5, 6, 7]
+                )
+            )
+
+    def test_seventh_profile_is_rejected_and_deleting_one_frees_the_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(directory, pipeline_factory=FakePipeline)
+            registry.bind_enterprise("enterprise@example.test")
+            six_profiles = [_profile(camera_id) for camera_id in range(1, 7)]
+            registry.replace_camera_profiles(six_profiles)
+
+            with self.assertRaisesRegex(
+                CameraConfigurationCapacityError, "register up to 6 cameras"
+            ):
+                registry.replace_camera_profiles([*six_profiles, _profile(7)])
+
+            registry.start(_config(1))
+            registry.replace_camera_profiles([*six_profiles[1:], _profile(7)])
+            with self.assertRaises(KeyError):
+                registry.require_pipeline(1)
+            self.assertEqual(
+                [profile["id"] for profile in registry.list_camera_profiles()],
+                [2, 3, 4, 5, 6, 7],
+            )
+
+    def test_failed_sixth_worker_releases_capacity_and_preserves_five_workers(self) -> None:
+        class SixthCameraFails(FakePipeline):
+            def start(self, config: CameraStartRequest) -> None:
+                if config.camera_id == 6:
+                    raise RuntimeError("simulated stream failure")
+                super().start(config)
+
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(
+                directory,
+                max_concurrent_cameras=6,
+                pipeline_factory=SixthCameraFails,
+            )
+            registry.bind_enterprise("enterprise@example.test")
+            for camera_id in range(1, 6):
+                registry.start(_config(camera_id))
+
+            with self.assertRaisesRegex(RuntimeError, "simulated stream failure"):
+                registry.start(_config(6))
+            self.assertTrue(registry.start(_config(7)))
+            self.assertEqual(registry.camera_states()["active_camera_count"], 6)
+            self.assertTrue(
+                all(
+                    registry.require_pipeline(camera_id).running for camera_id in [1, 2, 3, 4, 5, 7]
+                )
+            )
+
     def test_two_cameras_run_independently_and_duplicate_start_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             registry = CameraPipelineRegistry(
@@ -314,7 +412,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             registry.bind_enterprise("enterprise@example.test")
             registry.start(_config(1))
 
-            with self.assertRaisesRegex(CameraCapacityError, "capacity"):
+            with self.assertRaisesRegex(CameraCapacityError, "processing limit"):
                 registry.start(_config(2))
             self.assertTrue(registry.require_pipeline(1).running)
 
@@ -343,7 +441,7 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 self.assertFalse(initialization_finished.is_set())
                 self.assertEqual(registry.camera_states()["pending_camera_ids"], [1])
                 self.assertFalse(registry.request_start(first))
-                with self.assertRaisesRegex(CameraCapacityError, "capacity"):
+                with self.assertRaisesRegex(CameraCapacityError, "processing limit"):
                     registry.request_start(_config(2))
             finally:
                 finish_initialization.set()

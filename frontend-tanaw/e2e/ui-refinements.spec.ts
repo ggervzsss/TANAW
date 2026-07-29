@@ -116,8 +116,9 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("SAMPLE-FINAL-MAY-2026-0001.pdf");
   await download.saveAs(testInfo.outputPath("official-final-report.pdf"));
-  await viewer.getByRole("button", { name: "Print to PDF" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-print-invoked", "true");
+  await expect(viewer.getByRole("button", { name: "Print to PDF" })).toHaveCount(0);
+  await expect(page.locator('iframe[title="Official report print document"]')).toHaveCount(0);
+  await expect(page.locator("html")).not.toHaveAttribute("data-print-invoked", "true");
   const fullscreen = page.getByRole("button", { name: "Open fullscreen report view" });
   await fullscreen.click();
   await expect(viewer).toHaveClass(/max-w-none/);
@@ -125,7 +126,7 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await page.keyboard.press("Escape");
   await expect(viewer).not.toHaveClass(/max-w-none/);
   await expect(page.getByRole("button", { name: "Open fullscreen report view" })).toHaveAttribute("aria-pressed", "false");
-  await page.keyboard.press("Escape");
+  await viewer.getByRole("button", { name: "Close final report" }).click();
   await expect(viewer).toBeHidden();
 
   await reportRow.click();

@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.camera.auth import redact_stream_credentials
 from app.camera.pipeline_manager import (
     CameraCapacityError,
+    CameraConfigurationCapacityError,
     CameraNotActiveError,
     CameraPipelineRegistry,
     TripwirePersistenceError,
@@ -49,7 +50,7 @@ CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.2.0"
-API_CONTRACT_VERSION = 8
+API_CONTRACT_VERSION = 9
 
 
 class CameraApiError(RuntimeError):
@@ -201,6 +202,8 @@ def list_cameras() -> list[dict[str, Any]]:
 def replace_cameras(payload: CameraProfilesRequest) -> list[dict[str, Any]]:
     try:
         return manager.replace_camera_profiles(payload.cameras)
+    except CameraConfigurationCapacityError as exc:
+        raise CameraApiError(409, "camera_configuration_limit", str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

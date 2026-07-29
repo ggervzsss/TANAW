@@ -123,6 +123,7 @@ function cameraStates(cameras: MlCameraLiveState[]): MlCameraStates {
     enterprise_id: "enterprise-1",
     enterprise_occupancy: 0,
     active_camera_count: cameras.filter((item) => item.counts.running).length,
+    max_configured_cameras: 6,
     max_concurrent_cameras: 4,
     pending_camera_ids: [],
     cameras,

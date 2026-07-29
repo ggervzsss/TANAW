@@ -21,7 +21,12 @@ describe("support ticket form validation", () => {
       subject: " ",
     });
 
-    expect(ticketFormFieldOrder.filter((field) => errors[field])).toEqual(["category", "priority", "subject", "affectedArea", "description"]);
+    expect(ticketFormFieldOrder.filter((field) => errors[field])).toEqual([
+      "category",
+      "priority",
+      "subject",
+      "description",
+    ]);
   });
 
   it("keeps camera optional and accepts a complete ticket", () => {
@@ -31,5 +36,32 @@ describe("support ticket form validation", () => {
   it("enforces useful subject and description lengths", () => {
     expect(validateTicketForm({ ...validForm, subject: "ab" }).subject).toContain("3 characters");
     expect(validateTicketForm({ ...validForm, description: "short" }).description).toContain("10 characters");
+  });
+
+  it("does not require hidden fields for report or account concerns", () => {
+    expect(
+      validateTicketForm({
+        ...validForm,
+        affectedArea: "",
+        cameraNode: "",
+        category: "Report Concern",
+      }),
+    ).toEqual({});
+    expect(
+      validateTicketForm({
+        ...validForm,
+        affectedArea: "",
+        cameraNode: "",
+        category: "Account & Security",
+      }),
+    ).toEqual({});
+  });
+
+  it("keeps affected area required for camera, maintenance, and other concerns", () => {
+    for (const category of ["Camera Issue", "Maintenance", "Other"]) {
+      expect(
+        validateTicketForm({ ...validForm, affectedArea: "", category }).affectedArea,
+      ).toBe("Enter the affected area.");
+    }
   });
 });

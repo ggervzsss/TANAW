@@ -48,7 +48,7 @@ export function StaffFinalReportsAuditPage() {
 
   return (
     <PageMotion>
-      <PageHeader title="Final Reports Audit" description="Review, print, and download official consolidated reports for DOT submission." />
+      <PageHeader title="Final Reports Audit" description="Review and download official consolidated reports for DOT submission." />
       {finalReportsQuery.isError && <p className="mb-4 text-sm font-semibold text-red-600">Final reports could not be loaded from the backend. Refresh or check the API connection.</p>}
 
       <Panel className="overflow-hidden">

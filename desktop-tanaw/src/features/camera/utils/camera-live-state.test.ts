@@ -113,6 +113,7 @@ function payload(cameras: MlCameraLiveState[], pendingCameraIds: number[] = []):
     enterprise_id: "enterprise-1",
     enterprise_occupancy: 0,
     active_camera_count: cameras.length,
+    max_configured_cameras: 6,
     max_concurrent_cameras: 2,
     pending_camera_ids: pendingCameraIds,
     cameras,

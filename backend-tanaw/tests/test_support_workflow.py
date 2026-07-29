@@ -72,6 +72,58 @@ def test_support_ticket_requires_a_non_whitespace_affected_area() -> None:
         )
 
 
+def test_report_and_account_concerns_accept_and_normalize_hidden_fields() -> None:
+    for category in ("Report Concern", "Account & Security"):
+        payload = SupportTicketCreate(
+            category=category,
+            priority="Normal",
+            subject="Portal concern",
+            description="The requested workflow is not available.",
+            affectedArea="stale area",
+            cameraNode="stale camera",
+        )
+        assert payload.affectedArea is None
+        assert payload.cameraNode is None
+
+
+def test_camera_and_maintenance_concerns_preserve_relevant_fields() -> None:
+    for category in ("Camera Issue", "Maintenance"):
+        payload = SupportTicketCreate(
+            category=category,
+            priority="Normal",
+            subject="On-site concern",
+            description="The affected workflow requires technical review.",
+            affectedArea="Main Lobby",
+            cameraNode="Entrance Camera",
+        )
+        assert payload.affectedArea == "Main Lobby"
+        assert payload.cameraNode == "Entrance Camera"
+
+
+def test_irrelevant_camera_value_is_removed_from_other_concern() -> None:
+    payload = SupportTicketCreate(
+        category="Other",
+        priority="Normal",
+        subject="Other concern",
+        description="The concern does not match another support category.",
+        affectedArea="Enterprise portal",
+        cameraNode="another enterprise camera",
+    )
+    assert payload.affectedArea == "Enterprise portal"
+    assert payload.cameraNode is None
+
+
+def test_support_ticket_rejects_unknown_category() -> None:
+    with pytest.raises(ValidationError):
+        SupportTicketCreate(
+            category="Stream Issue",  # type: ignore[arg-type]
+            priority="Normal",
+            subject="Unknown category",
+            description="The category is not part of the supported workflow.",
+            affectedArea="Lobby",
+        )
+
+
 @pytest.mark.asyncio
 async def test_staff_notification_query_keeps_only_report_submissions() -> None:
     db = MagicMock()

@@ -519,7 +519,7 @@ class SupportTicketCreate(BaseModel):
     priority: SupportTicketPriority = "Normal"
     subject: str = Field(min_length=3, max_length=160)
     description: str = Field(min_length=10, max_length=4000)
-    affectedArea: str = Field(min_length=1, max_length=120)
+    affectedArea: str | None = Field(default=None, min_length=1, max_length=120)
     cameraNode: str | None = Field(default=None, max_length=120)
     attachments: list[SupportTicketAttachment] = Field(default_factory=list, max_length=5)
 
@@ -530,6 +530,24 @@ class SupportTicketCreate(BaseModel):
             return value
         normalized = " ".join(value.strip().split())
         return normalized or None
+
+    @model_validator(mode="after")
+    def validate_category_fields(self) -> SupportTicketCreate:
+        field_policy = {
+            "Camera Issue": (True, True),
+            "Report Concern": (False, False),
+            "Maintenance": (True, True),
+            "Account & Security": (False, False),
+            "Other": (True, False),
+        }
+        requires_affected_area, accepts_camera = field_policy[self.category]
+        if requires_affected_area and not self.affectedArea:
+            raise ValueError("Affected area is required for this ticket category.")
+        if not requires_affected_area:
+            self.affectedArea = None
+        if not accepts_camera:
+            self.cameraNode = None
+        return self
 
 
 class SupportTicketSummary(BaseModel):

@@ -1,4 +1,4 @@
-import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Maximize2, Minimize2, Printer, X } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, CheckCircle, Download, Maximize2, Minimize2, X } from "lucide-react";
 import { motion } from "motion/react";
 import toast from "react-hot-toast/headless";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,6 @@ import { DotFinalReportTable } from "./DotReportTable";
 import { getFinalReportViewerEscapeAction, getFinalReportViewerLayout } from "./finalReportViewerState";
 import { ReportActionConfirmDialog } from "./ReportActionConfirmDialog";
 import { downloadFinalReportPdf } from "../utils/pdf";
-import { printOfficialReport } from "../utils/print";
 
 type FinalReportViewerProps = {
   report: FinalReport;
@@ -27,7 +26,6 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
   const queryClient = useQueryClient();
   const { timeFormat } = useSystemDisplayPreferences();
   const viewerRef = useRef<HTMLElement>(null);
-  const printDocumentRef = useRef<HTMLDivElement>(null);
   const [confirmAction, setConfirmAction] = useState<FinalReportConfirmAction>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
@@ -175,7 +173,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
     <>
       <ModalPortal>
         <motion.div
-          className={`final-report-print-backdrop fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] backdrop-blur-[6px] print:bg-white print:p-0 print:backdrop-blur-none ${viewerLayout.backdrop}`}
+          className={`fixed inset-0 z-1300 flex items-center justify-center bg-[rgba(3,20,12,0.68)] backdrop-blur-[6px] ${viewerLayout.backdrop}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -185,13 +183,13 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
             role="dialog"
             aria-modal="true"
             aria-label={`${report.id} official artifact viewer`}
-            className={`print-container relative z-1301 flex w-full flex-col overflow-hidden border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 transition-[width,height,max-width,max-height,border-radius] duration-200 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 print:max-h-none print:border-none print:shadow-none ${viewerLayout.panel}`}
+            className={`relative z-1301 flex w-full flex-col overflow-hidden border-white/85 bg-white shadow-[0_34px_100px_rgba(2,20,8,0.36)] ring-1 ring-black/4 transition-[width,height,max-width,max-height,border-radius] duration-200 dark:border-slate-600 dark:bg-[#121c31] dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8 ${viewerLayout.panel}`}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
-            <div className="print-hide flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:text-slate-100">
+            <div className="flex items-center justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] p-4 text-black dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)] dark:text-slate-100">
               <div>
                 <p className="text-[10px] font-bold tracking-[0.18em] text-emerald-700 uppercase">{report.id}</p>
                 <h3 className="text-tanaw-navy mt-1 text-lg font-bold">Official Artifact Viewer</h3>
@@ -248,17 +246,6 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (printDocumentRef.current) {
-                      printOfficialReport(printDocumentRef.current, `${report.id} official report`);
-                    }
-                  }}
-                  className="text-tanaw-green inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-emerald-50 dark:border-emerald-300/20 dark:bg-[#172033] dark:text-emerald-200 dark:hover:bg-emerald-500/10"
-                >
-                  <Printer size={15} /> Print to PDF
-                </button>
-                <button
-                  type="button"
                   onClick={() => setIsFullscreen((current) => !current)}
                   aria-label={isFullscreen ? "Exit fullscreen report view" : "Open fullscreen report view"}
                   aria-pressed={isFullscreen}
@@ -278,12 +265,8 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
               </div>
             </div>
 
-            <div
-              ref={printDocumentRef}
-              data-export-theme="light"
-              className="official-report-document tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black print:overflow-visible print:p-0"
-            >
-              <div className="print-hide mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div className="tanaw-document-preview flex grow flex-col overflow-y-auto bg-white p-8 text-black">
+              <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <h4 className="mb-3 text-sm font-bold text-gray-800">Report History</h4>
                 <ul className="space-y-2 font-mono text-xs text-gray-600">
                   <li className="flex items-center justify-between border-b border-gray-200 pb-2">
@@ -344,7 +327,7 @@ export function FinalReportViewer({ report, onClose }: FinalReportViewerProps) {
       {showReturnDialog && report.status === "Draft" && (
         <ModalPortal>
           <motion.div
-            className="print-hide fixed inset-0 z-1400 flex min-h-dvh items-center justify-center overflow-y-auto bg-[rgba(3,20,12,0.72)] p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-1400 flex min-h-dvh items-center justify-center overflow-y-auto bg-[rgba(3,20,12,0.72)] p-4 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

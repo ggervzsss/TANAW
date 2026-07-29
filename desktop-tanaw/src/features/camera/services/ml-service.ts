@@ -114,6 +114,7 @@ export type MlHealth = {
   quality_reid_tasks_cleared: number;
   quality_reid_worker_alive: boolean;
   active_camera_count: number;
+  max_configured_cameras: number;
   max_concurrent_cameras: number;
 };
 
@@ -181,6 +182,7 @@ export type MlCameraStates = {
   enterprise_id: string;
   enterprise_occupancy: number;
   active_camera_count: number;
+  max_configured_cameras: number;
   max_concurrent_cameras: number;
   pending_camera_ids: number[];
   cameras: MlCameraLiveState[];
@@ -306,6 +308,7 @@ export type MlServiceErrorCode =
   | "stream_unavailable"
   | "pipeline_start_failed"
   | "capacity_limit"
+  | "camera_configuration_limit"
   | "camera_not_active"
   | "tripwire_persistence_failed"
   | "tripwire_worker_update_failed"
@@ -781,6 +784,7 @@ function normalizeServiceErrorCode(value: string | undefined, fallback: MlServic
     "stream_unavailable",
     "pipeline_start_failed",
     "capacity_limit",
+    "camera_configuration_limit",
     "camera_not_active",
     "tripwire_persistence_failed",
     "tripwire_worker_update_failed",

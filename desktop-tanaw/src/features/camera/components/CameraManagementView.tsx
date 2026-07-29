@@ -22,6 +22,11 @@ import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnecti
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import {
+  cameraConfigurationLimitMessage,
+  DEFAULT_ENTERPRISE_CAMERA_LIMIT,
+  hasReachedCameraConfigurationLimit,
+} from "../utils/camera-capacity";
+import {
   createCameraUpdateGate,
   getCameraSaveRuntimeAction,
   hasCameraConnectionChange,
@@ -136,6 +141,8 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   const warnings = isEditMode && editForm ? getValidationWarnings(editForm.config) : getValidationWarnings(activeCam?.config);
   const mlBaseUrl = serviceStatus?.baseUrl ?? DEFAULT_ML_SERVICE_BASE_URL;
   const streamVersion = activeCam ? (streamVersions[activeCam.id] ?? 0) : 0;
+  const configuredCameraLimit =
+    serviceHealth?.max_configured_cameras ?? DEFAULT_ENTERPRISE_CAMERA_LIMIT;
   const previewIsReady = !isActiveCameraStarting && isCameraPreviewReady(activeState);
   const streamUrl = useMemo(() => getPreviewStreamUrl(mlBaseUrl, activeCam, streamVersion, previewIsReady), [activeCam, mlBaseUrl, previewIsReady, streamVersion]);
   const newCameraIpConflict = useMemo(() => findCameraIpConflict(cameras, newCam.cameraHost), [cameras, newCam.cameraHost]);
@@ -567,6 +574,13 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
 
   const handleAddCamera = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (hasReachedCameraConfigurationLimit(cameras.length, configuredCameraLimit)) {
+      const message = cameraConfigurationLimitMessage(configuredCameraLimit);
+      setConfigurationError(message);
+      notifyError(message);
+      setShowAddModal(false);
+      return;
+    }
     const errors = validateCameraForm(newCam);
     if (newCameraIpConflict) errors.cameraHost = CAMERA_IP_CONFLICT_MESSAGE;
     setCameraFormErrors(errors);
@@ -714,6 +728,12 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   }, [setCameras]);
 
   const openAddModal = () => {
+    if (hasReachedCameraConfigurationLimit(cameras.length, configuredCameraLimit)) {
+      const message = cameraConfigurationLimitMessage(configuredCameraLimit);
+      setConfigurationError(message);
+      notifyError(message);
+      return;
+    }
     setCameraFormErrors({});
     setShowAddModal(true);
   };
@@ -762,6 +782,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
           <CameraList
             cameras={cameras}
             activeCamId={activeCamId}
+            cameraLimit={configuredCameraLimit}
             onAdd={openAddModal}
             onSelect={(cameraId) => {
               activeCamIdRef.current = cameraId;

@@ -18,11 +18,16 @@ from app.runtime.hardware import get_runtime_capabilities
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_CONCURRENT_CAMERAS = 2
+DEFAULT_MAX_CONFIGURED_CAMERAS = 6
+DEFAULT_MAX_CONCURRENT_CAMERAS = 6
 MAX_CONFIGURABLE_CONCURRENT_CAMERAS = 16
 
 
 class CameraCapacityError(ValueError):
+    pass
+
+
+class CameraConfigurationCapacityError(ValueError):
     pass
 
 
@@ -44,11 +49,17 @@ class CameraPipelineRegistry:
     def __init__(
         self,
         app_data_dir: str | None = None,
+        max_configured_cameras: int = DEFAULT_MAX_CONFIGURED_CAMERAS,
         max_concurrent_cameras: int | None = None,
         pipeline_factory: Callable[..., CameraProcessingManager] = CameraProcessingManager,
         reporting_manager: CameraProcessingManager | None = None,
     ) -> None:
         self._app_data_dir = app_data_dir
+        if not 1 <= max_configured_cameras <= DEFAULT_MAX_CONFIGURED_CAMERAS:
+            raise ValueError(
+                f"Configured camera capacity must be between 1 and {DEFAULT_MAX_CONFIGURED_CAMERAS}."
+            )
+        self._max_configured_cameras = max_configured_cameras
         self._max_concurrent_cameras = _max_concurrent_cameras(max_concurrent_cameras)
         self._lock = threading.RLock()
         self._lifecycle_lock = threading.RLock()
@@ -63,6 +74,10 @@ class CameraPipelineRegistry:
     @property
     def max_concurrent_cameras(self) -> int:
         return self._max_concurrent_cameras
+
+    @property
+    def max_configured_cameras(self) -> int:
+        return self._max_configured_cameras
 
     def bind_enterprise(self, enterprise_id: str, enterprise_name: str | None = None) -> dict:
         normalized_id = enterprise_id.strip()
@@ -243,7 +258,8 @@ class CameraPipelineRegistry:
             },
         )
         raise CameraCapacityError(
-            f"Camera worker capacity reached ({self._max_concurrent_cameras} concurrent cameras)."
+            "The configured processing limit of "
+            f"{self._max_concurrent_cameras} active cameras has been reached."
         )
 
     def stop(self, camera_id: int) -> bool:
@@ -381,6 +397,7 @@ class CameraPipelineRegistry:
             "active_camera_count": sum(
                 1 for camera in cameras if bool(camera["counts"]["running"])
             ),
+            "max_configured_cameras": self._max_configured_cameras,
             "max_concurrent_cameras": self._max_concurrent_cameras,
             "pending_camera_ids": pending_camera_ids,
             "cameras": cameras,
@@ -398,6 +415,7 @@ class CameraPipelineRegistry:
             "error": errors[0] if errors else None,
             "runtime_capabilities": get_runtime_capabilities(),
             "active_camera_count": states["active_camera_count"],
+            "max_configured_cameras": self._max_configured_cameras,
             "max_concurrent_cameras": self._max_concurrent_cameras,
         }
 
@@ -409,6 +427,7 @@ class CameraPipelineRegistry:
             "error": counts["error"] if isinstance(counts["error"], str) else None,
             **pipeline.model_status(),
             "active_camera_count": 1 if counts["running"] else 0,
+            "max_configured_cameras": self._max_configured_cameras,
             "max_concurrent_cameras": self._max_concurrent_cameras,
         }
 
@@ -417,6 +436,11 @@ class CameraPipelineRegistry:
 
     def replace_camera_profiles(self, cameras: list[dict[str, Any]]) -> list[dict[str, Any]]:
         with self._lifecycle_lock:
+            if len(cameras) > self._max_configured_cameras:
+                raise CameraConfigurationCapacityError(
+                    "This Enterprise account can register up to "
+                    f"{self._max_configured_cameras} cameras."
+                )
             previous_ids = {int(camera["id"]) for camera in self._reporting.list_camera_profiles()}
             profiles = self._reporting.replace_camera_profiles(cameras)
             retained_ids = {int(camera["id"]) for camera in profiles}

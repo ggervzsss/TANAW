@@ -215,7 +215,7 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.2.0"
-    api_contract_version: int = 8
+    api_contract_version: int = 9
     tripwire_hot_update: bool = True
     running: bool
     error: str | None = None
@@ -315,6 +315,7 @@ class HealthResponse(BaseModel):
     quality_reid_tasks_cleared: int = 0
     quality_reid_worker_alive: bool = False
     active_camera_count: int = 0
+    max_configured_cameras: int = 6
     max_concurrent_cameras: int = 0
 
 
@@ -382,6 +383,7 @@ class CameraStatesResponse(BaseModel):
     enterprise_id: str
     enterprise_occupancy: int = Field(default=0, ge=0)
     active_camera_count: int
+    max_configured_cameras: int
     max_concurrent_cameras: int
     pending_camera_ids: list[int]
     cameras: list[CameraLiveStateResponse]

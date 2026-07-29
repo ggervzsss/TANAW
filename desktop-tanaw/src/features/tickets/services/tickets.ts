@@ -76,7 +76,7 @@ export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
 }
 
 export type SupportTicketCreatePayload = {
-  affectedArea: string;
+  affectedArea?: string | null;
   cameraNode?: string | null;
   category: SupportTicketCategory;
   description: string;

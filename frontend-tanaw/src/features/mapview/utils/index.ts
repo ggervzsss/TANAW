@@ -28,6 +28,10 @@ export {
   SAN_PEDRO_BARANGAYS_URL,
 } from "./enterpriseMapUtils";
 export { getCurrentLeafletMapTheme, mountLeafletThemeLayer } from "./leafletTheme";
+export { calculateAdaptiveMapDuration, MapMotionController, prefersReducedMapMotion, resolveMapCameraPosition } from "./mapCamera";
+export { initialMapInteractionState, mapInteractionReducer, shouldClearBarangayFromMapClick } from "./mapInteractionState";
 export { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getOccupancyBadgeClass, getOccupancyRingColor } from "./mapStatusStyles";
 export type { BarangayPointResolution, GeoJsonFeatureCollection } from "./enterpriseMapUtils";
 export type { LeafletMapTheme } from "./leafletTheme";
+export type { MapCameraTransitionOptions, ResolvedMapCameraPosition, ResolvedMapCameraTarget } from "./mapCamera";
+export type { MapCameraTarget, MapDeselectReason, MapInteractionAction, MapInteractionState } from "./mapInteractionState";

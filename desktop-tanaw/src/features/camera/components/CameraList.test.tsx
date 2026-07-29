@@ -5,16 +5,32 @@ import { CameraList } from "./CameraList";
 
 describe("CameraList", () => {
   it("keeps one Add Camera action above an empty camera list", () => {
-    const markup = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} onAdd={() => undefined} onSelect={() => undefined} />);
+    const markup = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />);
     expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("No cameras registered."));
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
   });
 
   it("shows independent running cards and retains one sidebar action", () => {
-    const markup = renderToStaticMarkup(<CameraList cameras={[camera(1), camera(2)]} activeCamId={2} onAdd={() => undefined} onSelect={() => undefined} />);
+    const markup = renderToStaticMarkup(<CameraList cameras={[camera(1), camera(2)]} activeCamId={2} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />);
     expect(markup.match(/Status: running/g)).toHaveLength(2);
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
     expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("Camera 1"));
+  });
+
+  it("renders six independent cards and disables registration at the policy limit", () => {
+    const markup = renderToStaticMarkup(
+      <CameraList
+        cameras={Array.from({ length: 6 }, (_, index) => camera(index + 1))}
+        activeCamId={6}
+        cameraLimit={6}
+        onAdd={() => undefined}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(markup.match(/Status: running/g)).toHaveLength(6);
+    expect(markup).toContain("This Enterprise account can register up to 6 cameras.");
+    expect(markup).toContain("disabled");
   });
 });
 

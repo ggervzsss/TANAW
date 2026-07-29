@@ -368,8 +368,8 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
                 <DetailField label="Account ID" value={ticket.enterpriseId} />
                 <DetailField label="Category" value={<CategoryBadge category={ticket.category} />} />
                 <DetailField label="Submitted" value={formatTicketTime(ticket.createdAt, timeFormat)} />
-                <DetailField label="Affected Area" value={ticket.affectedArea || "Not specified"} />
-                <DetailField label="Camera" value={ticket.cameraNode || "Not specified"} />
+                {ticket.affectedArea ? <DetailField label="Affected Area" value={ticket.affectedArea} /> : null}
+                {ticket.cameraNode ? <DetailField label="Camera" value={ticket.cameraNode} /> : null}
               </div>
 
               <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">

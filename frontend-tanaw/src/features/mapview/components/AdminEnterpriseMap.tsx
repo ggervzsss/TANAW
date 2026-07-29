@@ -2,7 +2,7 @@ import L, { type GeoJSONOptions, type Layer } from "leaflet";
 import { Activity, ArrowLeft, BarChart3, Building2, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useAuthStore } from "@/app/store/authStore";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
 import { SelectDropdown } from "@/shared/components/ui";
@@ -13,8 +13,8 @@ import {
   createBoundaryTooltipHtml,
   createPopupHtml,
   createTooltipHtml,
-  fitMapToSanPedroBounds,
   getActiveBoundaryStyle,
+  getBarangayForPoint,
   getBarangayLabel,
   getBaseBoundaryStyle,
   getCurrentLeafletMapTheme,
@@ -28,14 +28,19 @@ import {
   getHoverBoundaryStyle,
   isBoundaryPolygonFeature,
   isPointInsideSanPedro,
+  initialMapInteractionState,
+  MapMotionController,
+  mapInteractionReducer,
   mountLeafletThemeLayer,
   normalizeBarangayName,
   normalizeGeoJson,
   sanPedroFallbackCenter,
   sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
+  shouldClearBarangayFromMapClick,
   type GeoJsonFeatureCollection,
   type LeafletMapTheme,
+  type MapDeselectReason,
 } from "../utils";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
 import { VisitorInsightsDrawer } from "./VisitorInsightsDrawer";
@@ -48,21 +53,24 @@ export function AdminEnterpriseMap() {
   const mapRef = useRef<L.Map | null>(null);
   const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
   const activeBoundaryRef = useRef<L.Path | null>(null);
+  const citywideBoundsRef = useRef<L.LatLngBounds | null>(null);
+  const barangayBoundsRef = useRef<Map<string, L.LatLngBounds>>(new Map());
+  const mapMotionControllerRef = useRef<MapMotionController | null>(null);
   const markersRef = useRef<Record<string, L.Marker>>({});
   const selectedBarangayNameRef = useRef<string | null>(null);
   const hasInitialOverviewFitRef = useRef(false);
+  const lastCameraCommandKeyRef = useRef<string | null>(null);
 
   const [boundary, setBoundary] = useState<GeoJsonFeatureCollection | null>(null);
   const [isBoundaryLoading, setIsBoundaryLoading] = useState(true);
   const [isBoundaryError, setIsBoundaryError] = useState(false);
   const [isDirectoryCollapsed, setIsDirectoryCollapsed] = useState(false);
   const [showBoundaries, setShowBoundaries] = useState(true);
-  const [selectedBarangayName, setSelectedBarangayName] = useState<string | null>(null);
-  const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string | null>(null);
-  const [insightEnterpriseId, setInsightEnterpriseId] = useState<string | null>(null);
+  const [mapInteractionState, dispatchMapInteraction] = useReducer(mapInteractionReducer, initialMapInteractionState);
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [insightRange, setInsightRange] = useState<VisitorInsightRange>("7d");
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
+  const { cameraTarget, insightEnterpriseId, selectedBarangayName, selectedEnterpriseId } = mapInteractionState;
   const token = useAuthStore((state) => state.token);
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
   const mapEnterprisesQuery = useOperationalMapEnterprises();
@@ -164,50 +172,53 @@ export function AdminEnterpriseMap() {
     (barangayName: string, layer?: L.Path) => {
       const targetLayer = layer ?? findBoundaryLayerByName(barangayName);
       selectedBarangayNameRef.current = barangayName;
-      setSelectedBarangayName(barangayName);
-      setSelectedEnterpriseId(null);
-      setInsightEnterpriseId(null);
+      dispatchMapInteraction({ type: "select-barangay", barangayName });
       applyBoundarySelection(barangayName);
-
-      const map = mapRef.current;
-      if (!map || !targetLayer || !(targetLayer instanceof L.Polygon)) return;
-
-      const bounds = targetLayer.getBounds();
-      if (!bounds?.isValid()) return;
-
-      const mapSize = map.getSize();
-      const shouldOffsetForSidebar = !isDirectoryCollapsed && mapSize.x >= 820;
-
-      map.stop();
-      map.flyToBounds(bounds.pad(0.38), {
-        animate: true,
-        duration: 0.95,
-        easeLinearity: 0.18,
-        maxZoom: 14.35,
-        paddingTopLeft: shouldOffsetForSidebar ? [410, 56] : [36, 36],
-        paddingBottomRight: [56, 56],
-      });
-      targetLayer.openTooltip();
+      mapRef.current?.closePopup();
+      targetLayer?.openTooltip();
     },
-    [applyBoundarySelection, findBoundaryLayerByName, isDirectoryCollapsed],
+    [applyBoundarySelection, findBoundaryLayerByName],
   );
 
-  const clearSelectedBarangay = useCallback(() => {
-    selectedBarangayNameRef.current = null;
-    setSelectedBarangayName(null);
-    setSelectedEnterpriseId(null);
-    setInsightEnterpriseId(null);
-    applyBoundarySelection(null);
+  const selectEnterprise = useCallback(
+    (enterprise: MapEnterprise) => {
+      selectedBarangayNameRef.current = enterprise.barangay;
+      dispatchMapInteraction({
+        type: "select-enterprise",
+        barangayName: enterprise.barangay,
+        enterpriseId: enterprise.id,
+      });
+      applyBoundarySelection(enterprise.barangay);
+    },
+    [applyBoundarySelection],
+  );
 
-    if (mapRef.current) {
-      fitMapToSanPedroBounds(mapRef.current, boundaryLayerRef.current);
-    }
-  }, [applyBoundarySelection]);
+  const clearBarangaySelection = useCallback(
+    (reason: MapDeselectReason) => {
+      selectedBarangayNameRef.current = null;
+      dispatchMapInteraction({ type: "clear-barangay", reason });
+      applyBoundarySelection(null);
+      mapRef.current?.closePopup();
+    },
+    [applyBoundarySelection],
+  );
 
   const closeEnterpriseDetails = useCallback(() => {
-    setSelectedEnterpriseId(null);
+    dispatchMapInteraction({ type: "close-enterprise" });
     mapRef.current?.closePopup();
   }, []);
+
+  const mapThemeRef = useRef(mapTheme);
+  const showBoundariesRef = useRef(showBoundaries);
+  const applyBoundarySelectionRef = useRef(applyBoundarySelection);
+  const selectBarangayRef = useRef(selectBarangay);
+
+  useEffect(() => {
+    mapThemeRef.current = mapTheme;
+    showBoundariesRef.current = showBoundaries;
+    applyBoundarySelectionRef.current = applyBoundarySelection;
+    selectBarangayRef.current = selectBarangay;
+  }, [applyBoundarySelection, mapTheme, selectBarangay, showBoundaries]);
 
   useEffect(() => {
     if (!selectedEnterprise) return undefined;
@@ -265,13 +276,16 @@ export function AdminEnterpriseMap() {
     if (mapRef.current) return undefined;
 
     const map = L.map(mapContainerId, {
+      center: sanPedroFallbackCenter,
       maxBounds: sanPedroRelaxedFallbackBounds,
       maxBoundsViscosity: 0.35,
       maxZoom: 18,
       minZoom: 11.2,
+      zoom: 11.65,
       zoomControl: false,
-    }).setView(sanPedroFallbackCenter, 11.65);
+    });
     mapRef.current = map;
+    mapMotionControllerRef.current = new MapMotionController(map);
 
     map.createPane("boundaryPane");
     const boundaryPane = map.getPane("boundaryPane");
@@ -287,7 +301,11 @@ export function AdminEnterpriseMap() {
       Object.values(markersRef.current).forEach((marker) => marker.remove());
       markersRef.current = {};
       activeBoundaryRef.current = null;
+      citywideBoundsRef.current = null;
+      barangayBoundsRef.current.clear();
       boundaryLayerRef.current?.remove();
+      mapMotionControllerRef.current?.dispose();
+      mapMotionControllerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -295,14 +313,32 @@ export function AdminEnterpriseMap() {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !boundary) return undefined;
+
+    const handleMapClick = (event: L.LeafletMouseEvent) => {
+      const clickedBarangayName = getBarangayForPoint(boundary, event.latlng.lat, event.latlng.lng);
+      if (shouldClearBarangayFromMapClick(selectedBarangayNameRef.current, clickedBarangayName)) {
+        clearBarangaySelection("map-background");
+      }
+    };
+
+    map.on("click", handleMapClick);
+    return () => {
+      map.off("click", handleMapClick);
+    };
+  }, [boundary, clearBarangaySelection]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !boundary) return;
 
-    boundaryLayerRef.current?.remove();
+    const previousBoundaryLayer = boundaryLayerRef.current;
+    previousBoundaryLayer?.remove();
     activeBoundaryRef.current = null;
 
     const boundaryStyle: GeoJSONOptions["style"] = (geoFeature) => {
       const name = getBarangayLabel(geoFeature);
-      return getBaseBoundaryStyle(name, mapTheme, "boundaryPane", "admin");
+      return getBaseBoundaryStyle(name, mapThemeRef.current, "boundaryPane", "admin");
     };
 
     const onEachFeature: GeoJSONOptions["onEachFeature"] = (geoFeature, layer: Layer) => {
@@ -319,109 +355,195 @@ export function AdminEnterpriseMap() {
         mouseover: (event) => {
           const target = event.target as L.Path;
           const isActive = activeBoundaryRef.current === target;
-          target.setStyle(isActive ? getActiveBoundaryStyle(mapTheme) : getHoverBoundaryStyle(mapTheme));
+          target.setStyle(isActive ? getActiveBoundaryStyle(mapThemeRef.current) : getHoverBoundaryStyle(mapThemeRef.current));
           target.bringToFront();
         },
         mouseout: (event) => {
           const target = event.target as L.Path;
           if (activeBoundaryRef.current === target) {
-            target.setStyle(getActiveBoundaryStyle(mapTheme));
+            target.setStyle(getActiveBoundaryStyle(mapThemeRef.current));
             return;
           }
 
-          applyBoundarySelection(selectedBarangayNameRef.current);
+          applyBoundarySelectionRef.current(selectedBarangayNameRef.current);
         },
-        click: (event) => selectBarangay(name, event.target as L.Path),
+        click: (event: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(event.originalEvent);
+          selectBarangayRef.current(name, event.target as L.Path);
+        },
       });
     };
 
-    boundaryLayerRef.current = L.geoJSON(boundary, {
+    const boundaryLayer = L.geoJSON(boundary, {
       style: boundaryStyle,
       onEachFeature,
     });
+    boundaryLayerRef.current = boundaryLayer;
+    citywideBoundsRef.current = boundaryLayer.getBounds();
+    barangayBoundsRef.current = new Map(
+      boundaryLayer
+        .getLayers()
+        .filter((layer): layer is L.Polygon & { feature?: GeoJSON.Feature } => layer instanceof L.Polygon && "feature" in layer)
+        .map((layer) => [normalizeBarangayName(getBarangayLabel(layer.feature)), layer.getBounds()]),
+    );
+
+    if (showBoundariesRef.current) {
+      boundaryLayer.addTo(map);
+    }
+
+    applyBoundarySelectionRef.current(selectedBarangayNameRef.current);
+
+    return () => {
+      boundaryLayer.remove();
+      if (boundaryLayerRef.current === boundaryLayer) {
+        boundaryLayerRef.current = null;
+        citywideBoundsRef.current = null;
+        barangayBoundsRef.current.clear();
+      }
+    };
+  }, [boundary]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const boundaryLayer = boundaryLayerRef.current;
+    if (!map || !boundaryLayer) return;
 
     if (showBoundaries) {
-      boundaryLayerRef.current.addTo(map);
+      if (!map.hasLayer(boundaryLayer)) boundaryLayer.addTo(map);
+      return;
     }
 
-    applyBoundarySelection(selectedBarangayNameRef.current);
-    if (!selectedBarangayNameRef.current && !hasInitialOverviewFitRef.current) {
-      fitMapToSanPedroBounds(map, boundaryLayerRef.current);
+    if (map.hasLayer(boundaryLayer)) boundaryLayer.remove();
+  }, [boundary, showBoundaries]);
+
+  useEffect(() => {
+    const boundaryLayer = boundaryLayerRef.current;
+    if (!boundaryLayer) return;
+
+    if (selectedBarangayName) {
+      applyBoundarySelection(selectedBarangayName);
+      return;
+    }
+
+    boundaryLayer.setStyle((geoFeature) => getBaseBoundaryStyle(getBarangayLabel(geoFeature), mapTheme, "boundaryPane", "admin"));
+  }, [applyBoundarySelection, boundary, mapTheme, selectedBarangayName]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const motionController = mapMotionControllerRef.current;
+    const boundaryLayer = boundaryLayerRef.current;
+    if (!map || !motionController || !boundaryLayer) return;
+
+    let commandKey: string;
+
+    if (cameraTarget.type === "citywide") {
+      const bounds = citywideBoundsRef.current ?? boundaryLayer.getBounds();
+      if (!bounds.isValid()) return;
+      commandKey = `citywide:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
+      if (lastCameraCommandKeyRef.current === commandKey) return;
+
+      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, immediate: !hasInitialOverviewFitRef.current });
+      hasInitialOverviewFitRef.current = true;
+    } else if (cameraTarget.type === "barangay") {
+      const targetLayer = findBoundaryLayerByName(cameraTarget.barangayName);
+      if (!targetLayer || !(targetLayer instanceof L.Polygon)) return;
+      const bounds = barangayBoundsRef.current.get(normalizeBarangayName(cameraTarget.barangayName)) ?? targetLayer.getBounds();
+      if (!bounds.isValid()) return;
+      commandKey = `barangay:${normalizeBarangayName(cameraTarget.barangayName)}:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
+      if (lastCameraCommandKeyRef.current === commandKey) return;
+
+      motionController.setTarget({ type: "barangay", bounds }, { directoryCollapsed: isDirectoryCollapsed });
+      hasInitialOverviewFitRef.current = true;
+    } else {
+      const enterprise = mapEnterprises.find((item) => item.id === cameraTarget.enterpriseId);
+      if (!enterprise) return;
+      commandKey = `enterprise:${enterprise.id}:${enterprise.lat}:${enterprise.lng}:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
+      if (lastCameraCommandKeyRef.current === commandKey) return;
+
+      motionController.setTarget({ type: "enterprise", center: [enterprise.lat, enterprise.lng], zoom: 16 }, { directoryCollapsed: isDirectoryCollapsed });
       hasInitialOverviewFitRef.current = true;
     }
-  }, [applyBoundarySelection, boundary, mapTheme, selectBarangay, showBoundaries]);
+
+    lastCameraCommandKeyRef.current = commandKey;
+  }, [boundary, cameraTarget, findBoundaryLayerByName, isDirectoryCollapsed, mapEnterprises]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return undefined;
 
-    const timers = [0, 120, 280].map((delay) =>
-      window.setTimeout(() => {
-        map.invalidateSize({ pan: false });
-        const boundaryLayer = boundaryLayerRef.current;
-
-        if (!selectedBarangayNameRef.current && boundaryLayer) {
-          fitMapToSanPedroBounds(map, boundaryLayer);
-          hasInitialOverviewFitRef.current = true;
-        }
-        applyBoundarySelection(selectedBarangayNameRef.current);
-      }, delay),
-    );
-
+    const timer = window.setTimeout(() => {
+      map.invalidateSize({ pan: false });
+    }, 240);
     return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
+      window.clearTimeout(timer);
     };
-  }, [applyBoundarySelection, isDirectoryCollapsed]);
+  }, [isDirectoryCollapsed]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    Object.values(markersRef.current).forEach((marker) => marker.remove());
-    markersRef.current = {};
+    const enterpriseIds = new Set(mapEnterprises.map((enterprise) => enterprise.id));
 
-    visibleEnterprises.forEach((enterprise) => {
-      const color = getMonitoringStatusColor(enterprise.monitoringStatus);
-      const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
-      const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
-      const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
-      const marker = L.marker([enterprise.lat, enterprise.lng], {
-        icon: L.divIcon({
-          className: enterprise.occupancyStatus === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
-          iconAnchor: [12, 12],
-          popupAnchor: [0, -10],
-          html: `<span style="background-color:${color};width:20px;height:20px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:0 0 0 4px ${occupancyRingColor},${markerShadow};"></span>`,
-        }),
-      }).addTo(map);
+    Object.entries(markersRef.current).forEach(([enterpriseId, marker]) => {
+      if (enterpriseIds.has(enterpriseId)) return;
 
-      marker.bindTooltip(createTooltipHtml(enterprise, color), {
-        direction: "top",
-        offset: [0, -10],
-        opacity: 0.95,
-      });
-      marker.bindPopup(createPopupHtml(enterprise, color), {
-        closeButton: false,
-      });
-      marker.on("click", () => {
-        selectBarangay(enterprise.barangay);
-        setSelectedEnterpriseId(enterprise.id);
-      });
-      markersRef.current[enterprise.id] = marker;
+      marker.remove();
+      delete markersRef.current[enterpriseId];
     });
-  }, [mapTheme, selectBarangay, visibleEnterprises]);
+
+    mapEnterprises.forEach((enterprise) => {
+      const color = getMonitoringStatusColor(enterprise.monitoringStatus);
+      let marker = markersRef.current[enterprise.id];
+
+      if (marker) {
+        marker.setLatLng([enterprise.lat, enterprise.lng]);
+        marker.setIcon(createEnterpriseMarkerIcon(enterprise, color, mapTheme));
+        marker.setTooltipContent(createTooltipHtml(enterprise, color));
+        marker.setPopupContent(createPopupHtml(enterprise, color));
+      } else {
+        marker = L.marker([enterprise.lat, enterprise.lng], {
+          icon: createEnterpriseMarkerIcon(enterprise, color, mapTheme),
+        });
+        marker.bindTooltip(createTooltipHtml(enterprise, color), {
+          direction: "top",
+          offset: [0, -10],
+          opacity: 0.95,
+        });
+        marker.bindPopup(createPopupHtml(enterprise, color), {
+          closeButton: false,
+        });
+        markersRef.current[enterprise.id] = marker;
+      }
+
+      marker.off("click");
+      marker.on("click", (event: L.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(event.originalEvent);
+        selectEnterprise(enterprise);
+      });
+    });
+  }, [mapEnterprises, mapTheme, selectEnterprise]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const visibleEnterpriseIds = new Set(visibleEnterprises.map((enterprise) => enterprise.id));
+    Object.entries(markersRef.current).forEach(([enterpriseId, marker]) => {
+      if (visibleEnterpriseIds.has(enterpriseId)) {
+        if (!map.hasLayer(marker)) marker.addTo(map);
+        return;
+      }
+
+      if (map.hasLayer(marker)) marker.remove();
+    });
+  }, [visibleEnterprises]);
 
   useEffect(() => {
     if (!selectedEnterpriseId || !mapRef.current || !markersRef.current[selectedEnterpriseId]) return;
 
-    const enterprise = mapEnterprises.find((item) => item.id === selectedEnterpriseId);
-    if (!enterprise) return;
-
-    mapRef.current.flyTo([enterprise.lat, enterprise.lng], 16, {
-      duration: 1.1,
-      easeLinearity: 0.25,
-    });
     markersRef.current[selectedEnterpriseId].openPopup();
-  }, [mapEnterprises, selectedEnterpriseId]);
+  }, [selectedEnterpriseId, visibleEnterprises]);
 
   return (
     <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
@@ -467,7 +589,7 @@ export function AdminEnterpriseMap() {
             enterpriseId={insightEnterpriseId ?? undefined}
             barangay={insightEnterpriseId ? undefined : (selectedBarangayName ?? undefined)}
             onRangeChange={setInsightRange}
-            onShowArea={() => setInsightEnterpriseId(null)}
+            onShowArea={() => dispatchMapInteraction({ type: "show-area-insights" })}
             onClose={() => setIsInsightsOpen(false)}
           />
         )}
@@ -536,7 +658,7 @@ export function AdminEnterpriseMap() {
                 ariaLabel="Select barangay"
                 value={selectedBarangayName ?? ""}
                 options={barangayDropdownOptions}
-                onChange={(barangayName) => (barangayName ? selectBarangay(barangayName) : clearSelectedBarangay())}
+                onChange={(barangayName) => (barangayName ? selectBarangay(barangayName) : clearBarangaySelection("all-barangays"))}
                 searchable
                 searchPlaceholder="Search barangay..."
                 variant="directory"
@@ -557,7 +679,7 @@ export function AdminEnterpriseMap() {
                   >
                     <button
                       type="button"
-                      onClick={clearSelectedBarangay}
+                      onClick={() => clearBarangaySelection("back")}
                       className="focus:ring-tanaw-sky flex shrink-0 items-center gap-2 rounded-lg border border-white/15 bg-slate-950/35 px-3 py-2 text-left text-[9px] font-black tracking-widest text-white/75 uppercase transition hover:border-white/25 hover:bg-slate-950/50 hover:text-white focus:ring-2 focus:outline-none"
                     >
                       <ArrowLeft size={12} className="text-tanaw-sky" />
@@ -594,7 +716,7 @@ export function AdminEnterpriseMap() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.22, delay: Math.min(index * 0.025, 0.12), ease: "easeOut" }}
                           >
-                            <EnterpriseMapCard enterprise={enterprise} selected={selectedEnterpriseId === enterprise.id} onClick={() => setSelectedEnterpriseId(enterprise.id)} />
+                            <EnterpriseMapCard enterprise={enterprise} selected={selectedEnterpriseId === enterprise.id} onClick={() => selectEnterprise(enterprise)} />
                           </motion.div>
                         ))}
                         {selectedBarangayUnpinnedEnterprises.map((enterprise) => (
@@ -647,8 +769,7 @@ export function AdminEnterpriseMap() {
                             enterprise={enterprise}
                             selected={selectedEnterpriseId === enterprise.id}
                             onClick={() => {
-                              selectBarangay(enterprise.barangay);
-                              setSelectedEnterpriseId(enterprise.id);
+                              selectEnterprise(enterprise);
                             }}
                           />
                         ))}
@@ -711,7 +832,7 @@ export function AdminEnterpriseMap() {
             enterprise={selectedEnterprise}
             onClose={closeEnterpriseDetails}
             onOpenInsights={() => {
-              setInsightEnterpriseId(selectedEnterprise.id);
+              dispatchMapInteraction({ type: "show-enterprise-insights", enterpriseId: selectedEnterprise.id });
               setIsInsightsOpen(true);
               closeEnterpriseDetails();
             }}
@@ -744,9 +865,7 @@ function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapE
 
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/15 pt-2 font-mono text-[10px]">
         <span className="truncate text-white/70">
-          {enterprise.cameraMonitoring
-            ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras`
-            : "No camera telemetry"}
+          {enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras` : "No camera telemetry"}
         </span>
         <span className={`justify-self-end rounded border px-1.5 py-0.5 font-sans text-[8px] font-black tracking-wider uppercase ${getOccupancyBadgeClass(enterprise.occupancyStatus)}`}>
           {enterprise.occupancyStatus}
@@ -782,6 +901,19 @@ function LegendItem({ color, label }: { color: string; label: string }) {
       {label}
     </span>
   );
+}
+
+function createEnterpriseMarkerIcon(enterprise: MapEnterprise, color: string, mapTheme: LeafletMapTheme) {
+  const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
+  const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
+  const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
+
+  return L.divIcon({
+    className: enterprise.occupancyStatus === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -10],
+    html: `<span style="background-color:${color};width:20px;height:20px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:0 0 0 4px ${occupancyRingColor},${markerShadow};"></span>`,
+  });
 }
 
 function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) {

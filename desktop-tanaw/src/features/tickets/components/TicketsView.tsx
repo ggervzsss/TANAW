@@ -21,7 +21,6 @@ import {
   sortSupportTickets,
   type SupportTicket,
   type SupportTicketAttachment,
-  type SupportTicketCategory,
   type SupportTicketDetail,
   type SupportTicketPriority,
   type SupportTicketSort,
@@ -35,8 +34,13 @@ import {
   ticketFormFieldOrder,
   validateTicketForm,
 } from "./ticket-form-validation";
+import {
+  clearHiddenTicketFields,
+  getSupportTicketCategoryConfig,
+  supportTicketCategories,
+  ticketCategoryPayloadFields,
+} from "./ticket-category-config";
 
-const categories: SupportTicketCategory[] = ["Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const priorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
 const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const allowedImageExtensions = new Set(["png", "jpg", "jpeg", "webp"]);
@@ -102,6 +106,9 @@ export function TicketsView() {
   const enterpriseName = user?.enterpriseName ?? user?.displayName ?? "Enterprise Account";
   const openTicketCount = useMemo(() => tickets.filter((ticket) => ticket.status !== "Resolved").length, [tickets]);
   const sortedTickets = useMemo(() => sortSupportTickets(tickets, ticketSort), [ticketSort, tickets]);
+  const categoryFieldConfig = isSupportTicketCategory(form.category)
+    ? getSupportTicketCategoryConfig(form.category)
+    : null;
 
   const refreshTickets = useCallback(async () => {
     setIsLoading(true);
@@ -176,9 +183,9 @@ export function TicketsView() {
     setIsSubmitting(true);
     setError("");
     try {
+      const categoryFields = ticketCategoryPayloadFields(form.category, form);
       const ticket = await createSupportTicket({
-        affectedArea: form.affectedArea.trim(),
-        cameraNode: trimOptional(form.cameraNode),
+        ...categoryFields,
         category: form.category,
         description: form.description.trim(),
         priority: form.priority,
@@ -270,11 +277,24 @@ export function TicketsView() {
                 name="category"
                 label="Category"
                 value={form.category}
-                options={categories}
+                options={[...supportTicketCategories]}
                 onChange={(value) => {
                   setError("");
                   clearFieldError("category");
-                  setForm((current) => ({ ...current, category: value }));
+                  if (!isSupportTicketCategory(value)) {
+                    setForm((current) => ({ ...current, category: value }));
+                    return;
+                  }
+                  setFieldErrors((current) => ({
+                    ...current,
+                    affectedArea: undefined,
+                    category: undefined,
+                  }));
+                  setForm((current) => ({
+                    ...current,
+                    ...clearHiddenTicketFields(value, current),
+                    category: value,
+                  }));
                 }}
                 error={fieldErrors.category}
               />
@@ -305,20 +325,42 @@ export function TicketsView() {
               error={fieldErrors.subject}
             />
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <InputField
-                name="affectedArea"
-                label="Affected Area"
-                value={form.affectedArea}
-                placeholder="Lobby, reports, account"
-                onChange={(value) => {
-                  clearFieldError("affectedArea");
-                  setForm((current) => ({ ...current, affectedArea: value }));
-                }}
-                error={fieldErrors.affectedArea}
-              />
-              <InputField name="cameraNode" label="Camera" value={form.cameraNode} placeholder="Optional camera name" onChange={(value) => setForm((current) => ({ ...current, cameraNode: value }))} />
-            </div>
+            {categoryFieldConfig &&
+              (categoryFieldConfig.showAffectedArea || categoryFieldConfig.showCamera) && (
+                <div
+                  className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+                  aria-live="polite"
+                >
+                  {categoryFieldConfig.showAffectedArea && (
+                    <InputField
+                      name="affectedArea"
+                      label={
+                        categoryFieldConfig.affectedAreaRequired
+                          ? "Affected Area *"
+                          : "Affected Area"
+                      }
+                      value={form.affectedArea}
+                      placeholder="Lobby, service area, or workflow"
+                      onChange={(value) => {
+                        clearFieldError("affectedArea");
+                        setForm((current) => ({ ...current, affectedArea: value }));
+                      }}
+                      error={fieldErrors.affectedArea}
+                    />
+                  )}
+                  {categoryFieldConfig.showCamera && (
+                    <InputField
+                      name="cameraNode"
+                      label="Camera"
+                      value={form.cameraNode}
+                      placeholder="Optional camera name"
+                      onChange={(value) =>
+                        setForm((current) => ({ ...current, cameraNode: value }))
+                      }
+                    />
+                  )}
+                </div>
+              )}
 
             <label data-field-name="description" className="block scroll-mt-28">
               <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Description</span>
@@ -674,8 +716,8 @@ function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, onTicket
                     <DetailTile label="Enterprise ID" value={ticket.enterpriseId} mono />
                     <DetailTile label="Category" value={ticket.category} />
                     <DetailTile label="Submitted" value={formatTicketTime(ticket.createdAt, timeFormat)} />
-                    <DetailTile label="Affected Area" value={ticket.affectedArea ?? "Not specified"} />
-                    <DetailTile label="Camera" value={ticket.cameraNode ?? "Not specified"} />
+                    {ticket.affectedArea ? <DetailTile label="Affected Area" value={ticket.affectedArea} /> : null}
+                    {ticket.cameraNode ? <DetailTile label="Camera" value={ticket.cameraNode} /> : null}
                   </section>
 
                   <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-[#0f172a]">
@@ -995,11 +1037,6 @@ function readAsDataUrl(file: File) {
     reader.onerror = () => reject(new Error("Unable to read image file."));
     reader.readAsDataURL(file);
   });
-}
-
-function trimOptional(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
 }
 
 function formatTicketTime(value: string, timeFormat: SystemTimeFormat) {
