@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import type { LatLng, LatLngBounds, LatLngExpression, Map as LeafletMap, Point, PointExpression } from "leaflet";
 import { describe, expect, it, vi, type Mock } from "vitest";
-import { calculateAdaptiveMapDuration, MapMotionController, resolveMapCameraPosition, type ResolvedMapCameraTarget } from "./mapCamera";
+import { calculateAdaptiveMapDuration, getDefaultCitywideCamera, MapMotionController, resolveMapCameraPosition, type ResolvedMapCameraTarget } from "./mapCamera";
 
 type MapMock = LeafletMap & {
   fitBounds: Mock;
@@ -123,6 +123,18 @@ describe("map camera target resolution", () => {
     expect(pacitaBounds.toBBoxString()).toBe(before);
   });
 
+  it("uses one closer directory-aware camera definition for every citywide target", () => {
+    const map = createMap();
+    const canonical = getDefaultCitywideCamera(map, citywideBounds, false);
+    const resolved = resolveMapCameraPosition(map, { type: "citywide", bounds: citywideBounds }, false);
+    const paddedBounds = (map.getBoundsZoom as Mock).mock.calls.at(-1)?.[0] as LatLngBounds;
+
+    expect(canonical).toEqual(resolved);
+    expect(canonical).not.toBeNull();
+    expect(canonical!.center.lng).toBeLessThan(citywideBounds.getCenter().lng);
+    expect(paddedBounds.getNorth() - paddedBounds.getSouth()).toBeCloseTo((citywideBounds.getNorth() - citywideBounds.getSouth()) * 1.08, 8);
+  });
+
   it("ignores invalid replacement bounds without issuing a camera command", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
@@ -165,8 +177,8 @@ describe("native Leaflet camera controller", () => {
 
     controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false });
 
-    expect(map.flyTo).toHaveBeenCalledTimes(1);
-    expect(map.flyTo).toHaveBeenCalledWith(
+    expect(map.setView).toHaveBeenCalledTimes(1);
+    expect(map.setView).toHaveBeenCalledWith(
       resolved.center,
       resolved.zoom,
       expect.objectContaining({
@@ -176,7 +188,7 @@ describe("native Leaflet camera controller", () => {
     );
     expect(map.flyToBounds).not.toHaveBeenCalled();
     expect(map.fitBounds).not.toHaveBeenCalled();
-    expect(map.setView).not.toHaveBeenCalled();
+    expect(map.flyTo).not.toHaveBeenCalled();
     expect(map.stop).not.toHaveBeenCalled();
   });
 
@@ -191,8 +203,8 @@ describe("native Leaflet camera controller", () => {
     controller.setTarget(langgam, { directoryCollapsed: false, reducedMotion: false });
 
     expect(controller.getSnapshot()).toMatchObject({ revision: 2, target: { type: "barangay" } });
-    expect(map.flyTo).toHaveBeenCalledTimes(2);
-    expect(map.flyTo).toHaveBeenLastCalledWith(langgamPosition.center, langgamPosition.zoom, expect.anything());
+    expect(map.setView).toHaveBeenCalledTimes(2);
+    expect(map.setView).toHaveBeenLastCalledWith(langgamPosition.center, langgamPosition.zoom, expect.anything());
   });
 
   it("keeps Pacita as the only final target after the screenshot regression sequence", () => {
@@ -210,8 +222,9 @@ describe("native Leaflet camera controller", () => {
     sequence.forEach((target) => controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false }));
 
     expect(controller.getSnapshot()).toMatchObject({ revision: 5, target: { type: "barangay" } });
-    expect(map.flyTo).toHaveBeenCalledTimes(5);
-    expect(map.flyTo).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
+    expect(map.setView).toHaveBeenCalledTimes(5);
+    expect(map.setView).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
+    expect(map.flyTo).not.toHaveBeenCalled();
     expect(map.flyToBounds).not.toHaveBeenCalled();
   });
 
@@ -224,7 +237,22 @@ describe("native Leaflet camera controller", () => {
     controller.setTarget({ type: "barangay", bounds: pacitaBounds }, { directoryCollapsed: false, reducedMotion: false });
 
     expect(controller.getSnapshot().revision).toBe(2);
-    expect(map.flyTo).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
+    expect(map.setView).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
+    expect(map.flyTo).not.toHaveBeenCalled();
+  });
+
+  it("initializes the citywide camera once without exposing a provisional viewport", () => {
+    const map = createMap();
+    const controller = new MapMotionController(map);
+    const target = { type: "citywide", bounds: citywideBounds } as const;
+    const resolved = getDefaultCitywideCamera(map, citywideBounds, false)!;
+
+    controller.setTarget(target, { directoryCollapsed: false, immediate: true });
+
+    expect(controller.getSnapshot()).toMatchObject({ durationMs: 0, revision: 1, target: resolved });
+    expect(map.setView).toHaveBeenCalledTimes(1);
+    expect(map.setView).toHaveBeenCalledWith(resolved.center, resolved.zoom, { animate: false });
+    expect(map.flyTo).not.toHaveBeenCalled();
   });
 
   it("uses an immediate native setView for reduced motion", () => {
@@ -259,6 +287,7 @@ describe("geographic layer integrity safeguards", () => {
     expect(cameraSource).not.toContain("requestAnimationFrame");
     expect(cameraSource).not.toMatch(/\._move(?:Start|End)?\(/);
     expect(cameraSource).not.toContain("latLngToContainerPoint");
+    expect(cameraSource).not.toContain("this.map.flyTo(");
   });
 
   it("does not add positional transitions to Leaflet panes, paths, markers, or popups", () => {
@@ -272,13 +301,21 @@ describe("geographic layer integrity safeguards", () => {
     expect(geographicTransitionRule![1]).not.toContain("transform");
   });
 
-  it("keeps invalidateSize limited to the real directory layout change", () => {
+  it("does not invalidate a map whose absolute directory overlay never changes its dimensions", () => {
     const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
 
-    expect(componentSource.match(/invalidateSize/g)).toHaveLength(1);
-    expect(componentSource).toContain("}, [isDirectoryCollapsed]);");
+    expect(componentSource).not.toContain("invalidateSize");
     expect(componentSource).not.toContain("isAnimating");
     expect(componentSource).not.toContain("isTransitioning");
+  });
+
+  it("keeps the map hidden until the canonical initial camera has been applied", () => {
+    const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+
+    expect(componentSource).not.toContain("sanPedroFallbackCenter");
+    expect(componentSource).not.toContain("sanPedroRelaxedFallbackBounds");
+    expect(componentSource).toContain("initializedMapInstanceRef.current !== map");
+    expect(componentSource).toContain('visibility: isInitialCameraReady ? "visible" : "hidden"');
   });
 
   it("creates the GeoJSON layer only when boundary data changes", () => {

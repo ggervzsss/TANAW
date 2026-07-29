@@ -1,6 +1,8 @@
 import type { LatLng, LatLngBounds, LatLngExpression, Map as LeafletMap, Point } from "leaflet";
 
 const DIRECTORY_BREAKPOINT_PX = 820;
+const DEFAULT_CITYWIDE_BOUNDS_PADDING = 0.04;
+const DEFAULT_CITYWIDE_MAX_ZOOM = 14.35;
 const PROJECTION_ZOOM = 18;
 
 export type ResolvedMapCameraTarget = { type: "citywide"; bounds: LatLngBounds } | { type: "barangay"; bounds: LatLngBounds } | { type: "enterprise"; center: LatLngExpression; zoom: number };
@@ -44,11 +46,30 @@ export function resolveMapCameraPosition(map: LeafletMap, target: ResolvedMapCam
 
   if (!target.bounds.isValid()) return null;
 
+  if (target.type === "citywide") {
+    return getDefaultCitywideCamera(map, target.bounds, directoryCollapsed);
+  }
+
+  return resolveBoundsCameraPosition(map, target, directoryCollapsed, 0.22, 14.35);
+}
+
+export function getDefaultCitywideCamera(map: LeafletMap, bounds: LatLngBounds, directoryCollapsed: boolean): ResolvedMapCameraPosition | null {
+  if (!bounds.isValid()) return null;
+
+  return resolveBoundsCameraPosition(map, { type: "citywide", bounds }, directoryCollapsed, DEFAULT_CITYWIDE_BOUNDS_PADDING, DEFAULT_CITYWIDE_MAX_ZOOM);
+}
+
+function resolveBoundsCameraPosition(
+  map: LeafletMap,
+  target: Extract<ResolvedMapCameraTarget, { type: "citywide" | "barangay" }>,
+  directoryCollapsed: boolean,
+  boundsPadding: number,
+  maxZoom: number,
+): ResolvedMapCameraPosition {
   const hasDirectoryOffset = !directoryCollapsed && map.getSize().x >= DIRECTORY_BREAKPOINT_PX;
   const paddingTopLeft: [number, number] = hasDirectoryOffset ? [420, target.type === "citywide" ? 48 : 52] : [42, 42];
   const paddingBottomRight: [number, number] = target.type === "citywide" ? [48, 48] : [56, 56];
-  const paddedBounds = target.bounds.pad(target.type === "citywide" ? 0.18 : 0.22);
-  const maxZoom = target.type === "citywide" ? 13.45 : 14.35;
+  const paddedBounds = target.bounds.pad(boundsPadding);
   const totalPadding = [paddingTopLeft[0] + paddingBottomRight[0], paddingTopLeft[1] + paddingBottomRight[1]] as unknown as Point;
   const zoom = clamp(map.getBoundsZoom(paddedBounds, false, totalPadding), map.getMinZoom(), Math.min(map.getMaxZoom(), maxZoom));
 
@@ -81,25 +102,28 @@ export class MapMotionController {
     const targetPosition = resolveMapCameraPosition(this.map, target, options.directoryCollapsed);
     if (!targetPosition) return this.revision;
 
-    const currentCenter = this.map.getCenter();
-    const currentZoom = this.map.getZoom();
-    const distancePx = this.map.project(currentCenter, currentZoom).distanceTo(this.map.project(targetPosition.center, currentZoom));
-    const durationMs = calculateAdaptiveMapDuration(distancePx, targetPosition.zoom - currentZoom, targetPosition.type);
     const reducedMotion = options.reducedMotion ?? prefersReducedMapMotion();
     const nextRevision = ++this.revision;
 
-    this.durationMs = durationMs;
     this.target = targetPosition;
 
     if (options.immediate === true || reducedMotion) {
+      this.durationMs = 0;
       this.map.setView(targetPosition.center, targetPosition.zoom, { animate: false });
       return nextRevision;
     }
 
-    // Leaflet flyTo cancels its own obsolete fly frame before starting the
-    // replacement transition. Keeping that lifecycle native guarantees that
-    // tiles, SVG paths, markers, tooltips, and popups share one pane transform.
-    this.map.flyTo(targetPosition.center, targetPosition.zoom, {
+    const currentCenter = this.map.getCenter();
+    const currentZoom = this.map.getZoom();
+    const distancePx = this.map.project(currentCenter, currentZoom).distanceTo(this.map.project(targetPosition.center, currentZoom));
+    const durationMs = calculateAdaptiveMapDuration(distancePx, targetPosition.zoom - currentZoom, targetPosition.type);
+    this.durationMs = durationMs;
+
+    // setView keeps the zoom bounded between the current and target values.
+    // Unlike flyTo, it cannot create a lower-zoom flight arc before returning
+    // to the citywide target, and Leaflet still moves every geographic pane
+    // through the same native camera lifecycle.
+    this.map.setView(targetPosition.center, targetPosition.zoom, {
       animate: true,
       duration: durationMs / 1000,
       easeLinearity: 0.25,

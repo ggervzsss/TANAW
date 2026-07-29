@@ -34,8 +34,6 @@ import {
   mountLeafletThemeLayer,
   normalizeBarangayName,
   normalizeGeoJson,
-  sanPedroFallbackCenter,
-  sanPedroRelaxedFallbackBounds,
   SAN_PEDRO_BARANGAYS_URL,
   shouldClearBarangayFromMapClick,
   type GeoJsonFeatureCollection,
@@ -58,12 +56,13 @@ export function AdminEnterpriseMap() {
   const mapMotionControllerRef = useRef<MapMotionController | null>(null);
   const markersRef = useRef<Record<string, L.Marker>>({});
   const selectedBarangayNameRef = useRef<string | null>(null);
-  const hasInitialOverviewFitRef = useRef(false);
+  const initializedMapInstanceRef = useRef<L.Map | null>(null);
   const lastCameraCommandKeyRef = useRef<string | null>(null);
 
   const [boundary, setBoundary] = useState<GeoJsonFeatureCollection | null>(null);
   const [isBoundaryLoading, setIsBoundaryLoading] = useState(true);
   const [isBoundaryError, setIsBoundaryError] = useState(false);
+  const [isInitialCameraReady, setIsInitialCameraReady] = useState(false);
   const [isDirectoryCollapsed, setIsDirectoryCollapsed] = useState(false);
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [mapInteractionState, dispatchMapInteraction] = useReducer(mapInteractionReducer, initialMapInteractionState);
@@ -273,15 +272,12 @@ export function AdminEnterpriseMap() {
   }, [applyBoundarySelection, selectedBarangayName]);
 
   useEffect(() => {
-    if (mapRef.current) return undefined;
+    if (!boundary || mapRef.current) return undefined;
 
     const map = L.map(mapContainerId, {
-      center: sanPedroFallbackCenter,
-      maxBounds: sanPedroRelaxedFallbackBounds,
       maxBoundsViscosity: 0.35,
       maxZoom: 18,
       minZoom: 11.2,
-      zoom: 11.65,
       zoomControl: false,
     });
     mapRef.current = map;
@@ -306,10 +302,12 @@ export function AdminEnterpriseMap() {
       boundaryLayerRef.current?.remove();
       mapMotionControllerRef.current?.dispose();
       mapMotionControllerRef.current = null;
+      initializedMapInstanceRef.current = null;
+      lastCameraCommandKeyRef.current = null;
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [boundary]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -442,8 +440,7 @@ export function AdminEnterpriseMap() {
       commandKey = `citywide:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
       if (lastCameraCommandKeyRef.current === commandKey) return;
 
-      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, immediate: !hasInitialOverviewFitRef.current });
-      hasInitialOverviewFitRef.current = true;
+      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, immediate: initializedMapInstanceRef.current !== map });
     } else if (cameraTarget.type === "barangay") {
       const targetLayer = findBoundaryLayerByName(cameraTarget.barangayName);
       if (!targetLayer || !(targetLayer instanceof L.Polygon)) return;
@@ -453,7 +450,6 @@ export function AdminEnterpriseMap() {
       if (lastCameraCommandKeyRef.current === commandKey) return;
 
       motionController.setTarget({ type: "barangay", bounds }, { directoryCollapsed: isDirectoryCollapsed });
-      hasInitialOverviewFitRef.current = true;
     } else {
       const enterprise = mapEnterprises.find((item) => item.id === cameraTarget.enterpriseId);
       if (!enterprise) return;
@@ -461,23 +457,14 @@ export function AdminEnterpriseMap() {
       if (lastCameraCommandKeyRef.current === commandKey) return;
 
       motionController.setTarget({ type: "enterprise", center: [enterprise.lat, enterprise.lng], zoom: 16 }, { directoryCollapsed: isDirectoryCollapsed });
-      hasInitialOverviewFitRef.current = true;
     }
 
+    if (initializedMapInstanceRef.current !== map) {
+      initializedMapInstanceRef.current = map;
+      setIsInitialCameraReady(true);
+    }
     lastCameraCommandKeyRef.current = commandKey;
   }, [boundary, cameraTarget, findBoundaryLayerByName, isDirectoryCollapsed, mapEnterprises]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return undefined;
-
-    const timer = window.setTimeout(() => {
-      map.invalidateSize({ pan: false });
-    }, 240);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [isDirectoryCollapsed]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -525,7 +512,7 @@ export function AdminEnterpriseMap() {
   return (
     <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <div id={mapContainerId} className="h-full w-full" />
+        <div id={mapContainerId} className="h-full w-full" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
       </div>
 
       <AnimatePresence>
