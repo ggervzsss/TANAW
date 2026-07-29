@@ -23,7 +23,7 @@ from app.core.security import (
 from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.schemas import PasswordChangeRequest
-from app.features.accounts.service import change_account_password
+from app.features.accounts.service import change_account_password, to_auth_user
 from app.features.auth.schemas import ForgotPasswordResetRequest
 from app.features.auth.service import (
     LOGIN_ATTEMPT_LIMIT,
@@ -172,6 +172,41 @@ async def test_password_change_revokes_sessions_and_recovery_challenges() -> Non
     db.execute.assert_awaited_once()
     db.commit.assert_awaited_once()
     db.refresh.assert_awaited_once_with(account)
+
+
+@pytest.mark.asyncio
+async def test_password_change_rejects_an_incorrect_current_password_without_writes() -> None:
+    account = _account()
+    original_hash = hash_password("Existing secure passphrase")
+    account.password_hash = original_hash
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    changed = await change_account_password(
+        db,
+        account,
+        "Incorrect secure passphrase",
+        "Replacement secure passphrase",
+    )
+
+    assert changed is False
+    assert account.password_hash == original_hash
+    db.execute.assert_not_awaited()
+    db.commit.assert_not_awaited()
+    db.refresh.assert_not_awaited()
+
+
+def test_auth_user_response_excludes_password_material() -> None:
+    account = _account()
+    account.id = "account-1"
+    account.password_hash = hash_password("Existing secure passphrase")
+
+    payload = to_auth_user(account).model_dump(by_alias=True)
+
+    assert all("password" not in key.lower() for key in payload)
+    assert account.password_hash not in payload.values()
 
 
 def test_third_failed_login_locks_account_for_five_minutes() -> None:

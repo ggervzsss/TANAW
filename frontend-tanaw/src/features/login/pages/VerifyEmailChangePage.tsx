@@ -1,19 +1,14 @@
-import { type CSSProperties, useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, MailCheck, MapPin, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import { AuthThemeToggle } from "../components";
+import { AuthThemeToggle, LoginBackground } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { type EmailChangeVerificationResult, verifyAccountEmailChange } from "../services";
-import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
+import { SAN_PEDRO_SEAL } from "../utils";
 
 type VerificationView = "verifying" | "invalid" | "verified";
-
-const authBackgroundImageStyle = {
-  "--tanaw-auth-day-image": `url(${SAN_PEDRO_GATEWAY_IMAGE})`,
-  "--tanaw-auth-night-image": `url(${SAN_PEDRO_GATEWAY_NIGHT_IMAGE})`,
-} as CSSProperties;
 
 export function VerifyEmailChangePage() {
   const [token] = useState(readEmailChangeToken);
@@ -21,6 +16,7 @@ export function VerifyEmailChangePage() {
   const [result, setResult] = useState<EmailChangeVerificationResult | null>(null);
   const [message, setMessage] = useState(token ? "" : "This verification link is missing its security token.");
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLElement>();
+  const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   useLayoutEffect(() => {
     if (!window.location.hash) return;
@@ -51,8 +47,9 @@ export function VerifyEmailChangePage() {
       ref={stageRef}
       className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
       style={stageGlowStyle}
+      data-auth-background-ready={isBackgroundReady}
     >
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
+      <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
@@ -125,7 +122,9 @@ function VerifiedState({ result }: { result: EmailChangeVerificationResult }) {
         <CheckCircle2 className="h-7 w-7" aria-hidden="true" />
       </span>
       <h2 className="mt-5 font-['Montserrat'] text-xl font-extrabold">Email ownership verified</h2>
-      <p className="mt-3 text-sm leading-6 font-medium text-(--tanaw-muted)">Thank you, {result.displayName}. Ownership of <strong className="text-(--tanaw-text)">{result.requestedEmail}</strong> is confirmed.</p>
+      <p className="mt-3 text-sm leading-6 font-medium text-(--tanaw-muted)">
+        Thank you, {result.displayName}. Ownership of <strong className="text-(--tanaw-text)">{result.requestedEmail}</strong> is confirmed.
+      </p>
       <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm leading-6 text-amber-900">
         <MailCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <p>Your current sign-in email remains active until TANAW IT reviews and approves the request. Both addresses will be notified after approval.</p>

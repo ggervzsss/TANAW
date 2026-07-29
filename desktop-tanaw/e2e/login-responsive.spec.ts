@@ -68,6 +68,58 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
   await expect(identifierShell).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
+test("prepares both Enterprise login backgrounds before revealing the renderer", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("tanaw-enterprise-theme", "dark");
+    window.tanawStartup = {
+      ready: () => {
+        const stage = document.querySelector<HTMLElement>("[data-auth-background-ready]");
+        const images = Array.from(document.querySelectorAll<HTMLImageElement>("[data-auth-background-theme]"));
+        window.sessionStorage.setItem(
+          "tanaw-e2e-renderer-ready",
+          JSON.stringify({
+            backgroundReady: stage?.dataset.authBackgroundReady === "true",
+            imagesReady: images.length === 2 && images.every((image) => image.complete && image.naturalWidth > 0),
+          }),
+        );
+      },
+    };
+  });
+  await page.goto("/#/login");
+
+  const stage = page.locator("[data-auth-background-ready]");
+  const card = page.locator(".tanaw-auth-card");
+  await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
+  await expect(card).toBeVisible();
+  await expect(page.locator("[data-auth-background-theme]")).toHaveCount(2);
+  expect(
+    await page.locator("[data-auth-background-theme]").evaluateAll((images) =>
+      images.every((image) => {
+        const element = image as HTMLImageElement;
+        return element.complete && element.naturalWidth > 0 && element.naturalHeight > 0;
+      }),
+    ),
+  ).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const value = window.sessionStorage.getItem("tanaw-e2e-renderer-ready");
+        return value ? (JSON.parse(value) as { backgroundReady: boolean; imagesReady: boolean }) : null;
+      }),
+    )
+    .toEqual({ backgroundReady: true, imagesReady: true });
+
+  const before = await card.boundingBox();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("[data-auth-background-theme='light']")).toHaveCSS("opacity", "1");
+  await expect(page.locator("[data-auth-background-theme='dark']")).toHaveCSS("opacity", "0");
+  expect(await card.boundingBox()).toEqual(before);
+
+  await page.reload();
+  await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
+  await expect(card).toBeVisible();
+});
+
 test("keeps the theme through Enterprise authentication and renders the Portal label as static text", async ({ page }) => {
   let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));

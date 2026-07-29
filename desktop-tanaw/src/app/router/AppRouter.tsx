@@ -16,21 +16,52 @@ type RequireAuthProps = {
 
 let rendererReadySignaled = false;
 
+function waitForCriticalAuthBackground() {
+  const loginStage = document.querySelector<HTMLElement>("[data-auth-background-ready]");
+  if (!loginStage || loginStage.dataset.authBackgroundReady === "true") {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (loginStage.dataset.authBackgroundReady !== "true") return;
+      observer.disconnect();
+      window.clearTimeout(timeout);
+      resolve();
+    });
+    const timeout = window.setTimeout(() => {
+      observer.disconnect();
+      resolve();
+    }, 10_000);
+    observer.observe(loginStage, {
+      attributeFilter: ["data-auth-background-ready"],
+      attributes: true,
+    });
+  });
+}
+
 function RendererReadyBoundary({ children }: RequireAuthProps) {
   useEffect(() => {
     if (rendererReadySignaled) return;
 
+    let firstFrame: number | null = null;
     let secondFrame: number | null = null;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        if (rendererReadySignaled) return;
-        rendererReadySignaled = true;
-        window.tanawStartup?.ready();
+    let disposed = false;
+
+    void waitForCriticalAuthBackground().then(() => {
+      if (disposed) return;
+      firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          if (disposed || rendererReadySignaled) return;
+          rendererReadySignaled = true;
+          window.tanawStartup?.ready();
+        });
       });
     });
 
     return () => {
-      window.cancelAnimationFrame(firstFrame);
+      disposed = true;
+      if (firstFrame !== null) window.cancelAnimationFrame(firstFrame);
       if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
     };
   }, []);

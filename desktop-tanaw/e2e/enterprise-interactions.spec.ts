@@ -114,6 +114,57 @@ test("reveals and focuses the first invalid Support Ticket field", async ({ page
   await expect(page.getByText("Enter the affected area.", { exact: true })).toBeVisible();
 });
 
+test("keeps Enterprise password inputs empty and reveals only manually entered text", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route("**/auth/change-password", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      currentPassword: "Current enterprise passphrase 2026",
+      newPassword: "Replacement enterprise passphrase 2026",
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ token: "enterprise-updated-token", user: enterpriseUser }),
+    });
+  });
+  await signIn(page);
+  await page.goto("/#/enterprise/security");
+
+  const currentPassword = page.getByPlaceholder("Enter your current password");
+  const newPassword = page.getByPlaceholder("Use a long password");
+  const confirmation = page.getByPlaceholder("Repeat the password");
+  const currentToggle = page.getByRole("button", { name: "Show current password" });
+  await expect(currentPassword).toHaveValue("");
+  await expect(newPassword).toHaveValue("");
+  await expect(confirmation).toHaveValue("");
+  await expect(currentPassword).toHaveAttribute("autocomplete", "new-password");
+  await expect(currentPassword).toHaveAttribute("readonly", "");
+  await expect(currentPassword).toHaveAttribute("data-1p-ignore", "true");
+  await expect(currentToggle).toBeDisabled();
+
+  await currentPassword.focus();
+  await expect(currentPassword).not.toHaveAttribute("readonly", "");
+  await currentPassword.fill("Current enterprise passphrase 2026");
+  await expect(currentToggle).toBeEnabled();
+  await currentToggle.click();
+  await expect(currentPassword).toHaveAttribute("type", "text");
+  await expect(currentPassword).toHaveValue("Current enterprise passphrase 2026");
+  await page.getByRole("button", { name: "Hide current password" }).click();
+  await newPassword.fill("Replacement enterprise passphrase 2026");
+  await confirmation.fill("Replacement enterprise passphrase 2026");
+  await page.getByRole("button", { name: "Update Password" }).click();
+  await expect(page.getByText("Password updated.")).toBeVisible();
+  await expect(currentPassword).toHaveValue("");
+  await expect(newPassword).toHaveValue("");
+  await expect(confirmation).toHaveValue("");
+
+  await page.goto("/#/enterprise/dashboard");
+  await page.goto("/#/enterprise/security");
+  await expect(page.getByPlaceholder("Enter your current password")).toHaveValue("");
+  await expect(page.getByPlaceholder("Use a long password")).toHaveValue("");
+  await expect(page.getByPlaceholder("Repeat the password")).toHaveValue("");
+});
+
 test("keeps resolved Support Ticket history visible and closes the composer", async ({ page }) => {
   const resolvedTicket = {
     id: "ticket-resolved",

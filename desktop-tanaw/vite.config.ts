@@ -8,6 +8,7 @@ const rendererOnly = process.env.TANAW_RENDERER_ONLY === "true";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: "./",
   server: {
     host: "127.0.0.1",
     port: 5174,

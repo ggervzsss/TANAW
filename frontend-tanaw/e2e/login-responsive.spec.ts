@@ -77,6 +77,36 @@ test("uses application-controlled login input states in dark and light mode", as
   await expect(page.getByLabel("Email", { exact: true }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
+test("prepares complete light and dark login backgrounds before revealing the page", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
+  await page.goto("/login");
+
+  const stage = page.locator("[data-auth-background-ready]");
+  const card = page.locator(".tanaw-auth-card");
+  await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
+  await expect(card).toBeVisible();
+  await expect(page.locator("[data-auth-background-theme]")).toHaveCount(2);
+  expect(
+    await page.locator("[data-auth-background-theme]").evaluateAll((images) =>
+      images.every((image) => {
+        const element = image as HTMLImageElement;
+        return element.complete && element.naturalWidth > 0 && element.naturalHeight > 0;
+      }),
+    ),
+  ).toBe(true);
+
+  const before = await card.boundingBox();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("[data-auth-background-theme='light']")).toHaveCSS("opacity", "1");
+  await expect(page.locator("[data-auth-background-theme='dark']")).toHaveCSS("opacity", "0");
+  const after = await card.boundingBox();
+  expect(after).toEqual(before);
+
+  await page.reload();
+  await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
+  await expect(card).toBeVisible();
+});
+
 test("keeps an explicit login theme through authentication, reload, and logout", async ({ page }) => {
   let synchronizedTheme = "";
   let signedIn = false;

@@ -1,12 +1,12 @@
-import { type CSSProperties, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import { motion } from "motion/react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
-import { AuthParticles, AuthThemeToggle, LoginForm } from "../components";
+import { AuthParticles, AuthThemeToggle, LoginBackground, LoginForm } from "../components";
 import { useAuthStageGlow, useLogin } from "../hooks";
-import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
+import { SAN_PEDRO_SEAL } from "../utils";
 
 function SampaguitaIcon({ className = "" }: { className?: string }) {
   return (
@@ -21,16 +21,12 @@ function SampaguitaIcon({ className = "" }: { className?: string }) {
   );
 }
 
-const authBackgroundImageStyle = {
-  "--tanaw-auth-day-image": `url(${SAN_PEDRO_GATEWAY_IMAGE})`,
-  "--tanaw-auth-night-image": `url(${SAN_PEDRO_GATEWAY_NIGHT_IMAGE})`,
-} as CSSProperties;
-
 export function LoginPage() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const { clearLoginMessage, handleLoginSubmit, lockoutSeconds, loginMessage } = useLogin();
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLElement>();
+  const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   useEffect(() => {
     if (user?.role === "enterprise") {
@@ -47,8 +43,13 @@ export function LoginPage() {
   }
 
   return (
-    <section ref={stageRef} className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)" style={stageGlowStyle}>
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
+    <section
+      ref={stageRef}
+      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
+      style={stageGlowStyle}
+      data-auth-background-ready={isBackgroundReady}
+    >
+      <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />

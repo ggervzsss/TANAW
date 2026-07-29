@@ -1083,14 +1083,13 @@ html.dark .tanaw-toast--error .tanaw-toast__icon {
   mask-repeat: no-repeat;
 }
 
-.tanaw-login-photo::before,
-.tanaw-login-photo::after {
-  content: "";
+.tanaw-login-photo__image {
   position: absolute;
   inset: 0;
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center center;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
   transform: translateZ(0);
   transition:
     opacity 280ms ease,
@@ -1098,16 +1097,26 @@ html.dark .tanaw-toast--error .tanaw-toast__icon {
   will-change: opacity;
 }
 
-.tanaw-login-photo::before {
-  background-image: var(--tanaw-auth-day-image);
+.tanaw-login-photo__image--day {
   filter: saturate(0.96) contrast(0.96) brightness(0.9);
+  opacity: 0;
+}
+
+.tanaw-login-photo__image--night {
+  filter: saturate(1.06) contrast(1.03) brightness(0.92);
+  opacity: 0;
+}
+
+.tanaw-login-photo[data-ready="true"] .tanaw-login-photo__image--day {
   opacity: 1;
 }
 
-.tanaw-login-photo::after {
-  background-image: var(--tanaw-auth-night-image, var(--tanaw-auth-day-image));
-  filter: saturate(1.06) contrast(1.03) brightness(0.92);
+.tanaw-auth-stage[data-auth-background-ready="false"] > :not(.tanaw-login-photo) {
   opacity: 0;
+}
+
+.tanaw-auth-stage[data-auth-background-ready="true"] > :not(.tanaw-login-photo) {
+  transition: opacity 220ms ease;
 }
 
 .tanaw-login-color-grade {
@@ -1130,11 +1139,11 @@ html.dark .tanaw-toast--error .tanaw-toast__icon {
     opacity 280ms ease;
 }
 
-html.dark .tanaw-login-photo::before {
+html.dark .tanaw-login-photo[data-ready="true"] .tanaw-login-photo__image--day {
   opacity: 0;
 }
 
-html.dark .tanaw-login-photo::after {
+html.dark .tanaw-login-photo[data-ready="true"] .tanaw-login-photo__image--night {
   opacity: 1;
 }
 
@@ -1767,8 +1776,7 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
     transition: none;
   }
 
-  .tanaw-login-photo::before,
-  .tanaw-login-photo::after,
+  .tanaw-login-photo__image,
   .tanaw-login-color-grade,
   .tanaw-login-edge-blur,
   .tanaw-auth-stage,
@@ -1777,6 +1785,10 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-auth-reset-callout,
   .tanaw-auth-theme-toggle,
   .tanaw-auth-theme-toggle__icon {
+    transition: none;
+  }
+
+  .tanaw-auth-stage[data-auth-background-ready="true"] > :not(.tanaw-login-photo) {
     transition: none;
   }
 }

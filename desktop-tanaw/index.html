@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <meta name="theme-color" content="#065f46" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TANAW</title>
@@ -43,7 +43,7 @@
         position: absolute;
         inset: -12vmax;
         z-index: 0;
-        background: url("/media/loading-page-poster.jpg") center / cover no-repeat;
+        background: url("./media/loading-page-poster.jpg") center / cover no-repeat;
         opacity: 0.22;
         filter: blur(32px) saturate(0.86);
         transform: scale(1.04);
@@ -68,7 +68,7 @@
         position: absolute;
         inset: 0;
         z-index: 1;
-        background: url("/media/loading-page-poster.jpg") center / cover no-repeat;
+        background: url("./media/loading-page-poster.jpg") center / cover no-repeat;
       }
 
       .tanaw-boot-card video {
@@ -151,8 +151,8 @@
     <div id="root">
       <div class="tanaw-boot-splash" aria-label="TANAW loading">
         <div class="tanaw-boot-card">
-          <video autoplay loop muted playsinline poster="/media/loading-page-poster.jpg" aria-label="TANAW startup splash" onerror="document.documentElement.dataset.bootVideoState = 'fallback'">
-            <source src="/media/loading-page.mp4" type="video/mp4" />
+          <video autoplay loop muted playsinline poster="./media/loading-page-poster.jpg" aria-label="TANAW startup splash" onerror="document.documentElement.dataset.bootVideoState = 'fallback'">
+            <source src="./media/loading-page.mp4" type="video/mp4" />
           </video>
           <div class="tanaw-boot-active-loader" aria-hidden="true"></div>
         </div>

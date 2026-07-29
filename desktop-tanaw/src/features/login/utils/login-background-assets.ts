@@ -1,14 +1,11 @@
-export const SAN_PEDRO_SEAL = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
-
-export const SAN_PEDRO_GATEWAY_IMAGE = "/images/dsc00386.jpg";
-
-export const SAN_PEDRO_GATEWAY_NIGHT_IMAGE = "/images/dsc00386-night.jpg";
+export const CITY_HALL_DAY_IMAGE = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
+export const CITY_HALL_NIGHT_IMAGE = `${import.meta.env.BASE_URL}images/dsc00386-night.jpg`;
 
 let backgroundPreloadPromise: Promise<void> | null = null;
 
 export function preloadLoginBackgroundImages() {
   if (typeof Image === "undefined") return Promise.resolve();
-  backgroundPreloadPromise ??= Promise.all([preloadImage(SAN_PEDRO_GATEWAY_IMAGE), preloadImage(SAN_PEDRO_GATEWAY_NIGHT_IMAGE)]).then(() => undefined);
+  backgroundPreloadPromise ??= Promise.all([preloadImage(CITY_HALL_DAY_IMAGE), preloadImage(CITY_HALL_NIGHT_IMAGE)]).then(() => undefined);
   return backgroundPreloadPromise;
 }
 

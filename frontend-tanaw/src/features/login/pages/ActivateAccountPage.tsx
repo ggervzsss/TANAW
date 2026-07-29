@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
@@ -9,10 +9,10 @@ import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidFi
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { PASSWORD_INPUT_MAX_CODE_UNITS, PASSWORD_MIN_LENGTH, normalizePassword, validatePasswordPolicy } from "@/shared/utils/passwordPolicy";
-import { AuthParticles, AuthThemeToggle } from "../components";
+import { AuthParticles, AuthThemeToggle, LoginBackground } from "../components";
 import { useAuthStageGlow } from "../hooks";
 import { completeAccountActivation, type AccountActivationDetails, validateAccountActivation } from "../services";
-import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE, SAN_PEDRO_SEAL } from "../utils";
+import { SAN_PEDRO_SEAL } from "../utils";
 
 type ActivationView = "validating" | "ready" | "invalid" | "success";
 
@@ -22,11 +22,6 @@ type PasswordValues = {
 };
 
 type PasswordErrors = Partial<Record<keyof PasswordValues, string>>;
-
-const authBackgroundImageStyle = {
-  "--tanaw-auth-day-image": `url(${SAN_PEDRO_GATEWAY_IMAGE})`,
-  "--tanaw-auth-night-image": `url(${SAN_PEDRO_GATEWAY_NIGHT_IMAGE})`,
-} as CSSProperties;
 
 export function ActivateAccountPage() {
   const clearLocalSession = useAuthStore((state) => state.logout);
@@ -39,6 +34,7 @@ export function ActivateAccountPage() {
   const [errors, setErrors] = useState<PasswordErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLElement>();
+  const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   useEffect(() => {
     if (!window.location.hash) return;
@@ -79,7 +75,10 @@ export function ActivateAccountPage() {
     setErrors(nextErrors);
     setPageMessage("");
     if (Object.keys(nextErrors).length > 0) {
-      focusFirstInvalidField(event.currentTarget, ["newPassword", "confirmPassword"].filter((fieldName) => nextErrors[fieldName as keyof PasswordErrors]));
+      focusFirstInvalidField(
+        event.currentTarget,
+        ["newPassword", "confirmPassword"].filter((fieldName) => nextErrors[fieldName as keyof PasswordErrors]),
+      );
       return;
     }
     if (!activationToken) return;
@@ -98,8 +97,13 @@ export function ActivateAccountPage() {
   };
 
   return (
-    <section ref={stageRef} className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)" style={stageGlowStyle}>
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-full lg:w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
+    <section
+      ref={stageRef}
+      className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
+      style={stageGlowStyle}
+      data-auth-background-ready={isBackgroundReady}
+    >
+      <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />

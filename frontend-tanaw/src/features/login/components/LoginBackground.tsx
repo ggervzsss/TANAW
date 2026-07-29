@@ -1,10 +1,62 @@
-import { CITY_HALL_IMAGE } from "../utils/loginAssets";
+import { useRef, useState, type SyntheticEvent } from "react";
+import { SAN_PEDRO_GATEWAY_IMAGE, SAN_PEDRO_GATEWAY_NIGHT_IMAGE } from "../utils/loginAssets";
 
-export function LoginBackground() {
+type LoginBackgroundProps = {
+  className?: string;
+  onReady: () => void;
+};
+
+export function LoginBackground({ className = "", onReady }: LoginBackgroundProps) {
+  const [isReady, setIsReady] = useState(false);
+  const hasSignaledReady = useRef(false);
+  const preparedThemes = useRef(new Set<string>());
+
+  const handleLoad = async (event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    await image.decode().catch(() => undefined);
+    markThemePrepared(image.dataset.authBackgroundTheme);
+  };
+
+  const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
+    markThemePrepared(event.currentTarget.dataset.authBackgroundTheme);
+  };
+
+  const markThemePrepared = (theme: string | undefined) => {
+    if (theme) preparedThemes.current.add(theme);
+    if (preparedThemes.current.size === 2) markReady();
+  };
+
+  const markReady = () => {
+    if (hasSignaledReady.current) return;
+    hasSignaledReady.current = true;
+    setIsReady(true);
+    onReady();
+  };
+
   return (
-    <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-      <img src={CITY_HALL_IMAGE} alt="" className="h-full w-full object-cover object-center" />
-      <div className="absolute inset-0 bg-[rgba(5,91,37,0.85)] mix-blend-multiply" />
+    <div className={`tanaw-login-photo ${className}`} data-ready={isReady} aria-hidden="true">
+      <img
+        src={SAN_PEDRO_GATEWAY_IMAGE}
+        alt=""
+        className="tanaw-login-photo__image tanaw-login-photo__image--day"
+        data-auth-background-theme="light"
+        decoding="sync"
+        fetchPriority="high"
+        loading="eager"
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+      <img
+        src={SAN_PEDRO_GATEWAY_NIGHT_IMAGE}
+        alt=""
+        className="tanaw-login-photo__image tanaw-login-photo__image--night"
+        data-auth-background-theme="dark"
+        decoding="sync"
+        fetchPriority="high"
+        loading="eager"
+        onLoad={handleLoad}
+        onError={handleError}
+      />
     </div>
   );
 }

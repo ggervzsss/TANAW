@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, useMemo, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, type SyntheticEvent, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, LockKeyhole, MapPin, UserRound } from "lucide-react";
@@ -12,16 +12,9 @@ import { isRememberEnabled, useAuthStore } from "../stores/auth-store";
 import { AuthThemeToggle } from "./AuthThemeToggle";
 import { PasswordRecoveryDialog } from "./PasswordRecoveryDialog";
 import { SupportRequestDialog } from "./SupportRequestDialog";
-
-const cityHallDayImage = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
-const cityHallNightImage = `${import.meta.env.BASE_URL}images/dsc00386-night.png`;
+import { CITY_HALL_DAY_IMAGE, CITY_HALL_NIGHT_IMAGE } from "../utils/login-background-assets";
 
 const citySeal = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
-
-const authBackgroundImageStyle = {
-  "--tanaw-auth-day-image": `url("${cityHallDayImage}")`,
-  "--tanaw-auth-night-image": `url("${cityHallNightImage}")`,
-} as CSSProperties;
 
 type FormErrors = Partial<Record<keyof LoginFormValues, string>>;
 type DialogMode = "recovery" | "support" | null;
@@ -43,6 +36,61 @@ function SampaguitaIcon({ className = "" }: { className?: string }) {
       <path d="M23.1 23C27.5 24.8 31.7 23.9 34.6 22.7C31.6 21 27.6 19.9 23.1 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="20" cy="21" r="2.4" fill="currentColor" />
     </svg>
+  );
+}
+
+function CriticalLoginBackground({ onReady }: { onReady: () => void }) {
+  const [isReady, setIsReady] = useState(false);
+  const hasSignaledReady = useRef(false);
+  const preparedThemes = useRef(new Set<string>());
+
+  const markReady = () => {
+    if (hasSignaledReady.current) return;
+    hasSignaledReady.current = true;
+    setIsReady(true);
+    onReady();
+  };
+
+  const handleLoad = async (event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    await image.decode().catch(() => undefined);
+    markThemePrepared(image.dataset.authBackgroundTheme);
+  };
+
+  const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
+    markThemePrepared(event.currentTarget.dataset.authBackgroundTheme);
+  };
+
+  const markThemePrepared = (theme: string | undefined) => {
+    if (theme) preparedThemes.current.add(theme);
+    if (preparedThemes.current.size === 2) markReady();
+  };
+
+  return (
+    <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" data-ready={isReady} aria-hidden="true">
+      <img
+        src={CITY_HALL_DAY_IMAGE}
+        alt=""
+        className="tanaw-login-photo__image tanaw-login-photo__image--day"
+        data-auth-background-theme="light"
+        decoding="sync"
+        fetchPriority="high"
+        loading="eager"
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+      <img
+        src={CITY_HALL_NIGHT_IMAGE}
+        alt=""
+        className="tanaw-login-photo__image tanaw-login-photo__image--night"
+        data-auth-background-theme="dark"
+        decoding="sync"
+        fetchPriority="high"
+        loading="eager"
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+    </div>
   );
 }
 
@@ -76,6 +124,7 @@ export function LoginPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [activeDialog, setActiveDialog] = useState<DialogMode>(null);
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLDivElement>();
+  const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   if (isAuthenticated) {
     return <Navigate to={routePaths.enterpriseDashboard} replace />;
@@ -116,8 +165,9 @@ export function LoginPage() {
       ref={stageRef}
       className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
       style={stageGlowStyle}
+      data-auth-background-ready={isBackgroundReady}
     >
-      <div className="tanaw-login-photo absolute inset-y-0 left-0 w-[82%]" style={authBackgroundImageStyle} aria-hidden="true" />
+      <CriticalLoginBackground onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
       <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />

@@ -1,11 +1,11 @@
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { normalizePassword, validatePasswordPolicy } from "../../../utils/password-policy";
 import { changePassword } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { ActiveSessionsPanel } from "./ActiveSessionsPanel";
-import { CredentialControl } from "./CredentialControl";
+import { CredentialControl, type PasswordChangeValues } from "./CredentialControl";
 
 export function SecurityView() {
   const queryClient = useQueryClient();
@@ -13,22 +13,19 @@ export function SecurityView() {
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const [isPasswordSuccess, setIsPasswordSuccess] = useState(false);
 
-  const handlePasswordUpdate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const currentPassword = String(formData.get("currentPassword") ?? "");
-    const newPassword = String(formData.get("newPassword") ?? "");
-    const confirmPassword = String(formData.get("confirmPassword") ?? "");
-
+  const handlePasswordUpdate = async ({ confirmPassword, currentPassword, newPassword }: PasswordChangeValues) => {
+    if (!currentPassword) {
+      notifyError("Enter your current password.");
+      return false;
+    }
     if (normalizePassword(newPassword) !== normalizePassword(confirmPassword)) {
       notifyError("New passwords do not match.");
-      return;
+      return false;
     }
     const policyError = validatePasswordPolicy(newPassword);
     if (policyError) {
       notifyError(policyError);
-      return;
+      return false;
     }
 
     setIsPasswordLoading(true);
@@ -39,9 +36,10 @@ export function SecurityView() {
       setIsPasswordSuccess(true);
       notifySuccess("Password updated.");
       window.setTimeout(() => setIsPasswordSuccess(false), 3000);
-      form.reset();
+      return true;
     } catch {
       notifyError("Unable to update password. Check your current password and try again.");
+      return false;
     } finally {
       setIsPasswordLoading(false);
     }

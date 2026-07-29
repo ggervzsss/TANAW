@@ -152,16 +152,27 @@ test("keeps Password Settings blank, theme-correct, resettable, and uses the sha
   await expect(currentPassword).toHaveValue("");
   await expect(newPassword).toHaveValue("");
   await expect(confirmation).toHaveValue("");
-  await expect(currentPassword).toHaveAttribute("autocomplete", "off");
+  await expect(currentPassword).toHaveAttribute("autocomplete", "new-password");
   await expect(newPassword).toHaveAttribute("autocomplete", "new-password");
   await expect(confirmation).toHaveAttribute("autocomplete", "new-password");
+  await expect(currentPassword).toHaveAttribute("readonly", "");
+  await expect(currentPassword).toHaveAttribute("data-1p-ignore", "true");
+  const currentPasswordToggle = page.getByRole("button", { name: "Show current password" });
+  await expect(currentPasswordToggle).toBeDisabled();
   await expect(currentPassword).not.toHaveCSS("background-color", "rgb(255, 255, 0)");
 
   await page.getByRole("button", { name: "Update Password" }).click();
   await expect(currentPassword).toBeFocused();
   await expect(page.getByText("Enter your current password.")).toBeVisible();
 
+  await currentPassword.focus();
+  await expect(currentPassword).not.toHaveAttribute("readonly", "");
   await currentPassword.fill("Current secure passphrase 2026");
+  await expect(currentPasswordToggle).toBeEnabled();
+  await currentPasswordToggle.click();
+  await expect(currentPassword).toHaveAttribute("type", "text");
+  await expect(currentPassword).toHaveValue("Current secure passphrase 2026");
+  await page.getByRole("button", { name: "Hide current password" }).click();
   await newPassword.fill("Replacement secure passphrase 2026");
   await confirmation.fill("Replacement secure passphrase 2026");
   await page.getByRole("button", { name: "Update Password" }).click();
