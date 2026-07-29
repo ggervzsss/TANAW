@@ -64,7 +64,7 @@ export function ITLguAccountsPage() {
     <PageMotion>
       <PageHeader title="LGU Accounts" description="Create personnel accounts, send secure activation links, and manage access status." />
 
-      <LguAccountsMetrics accounts={accounts} />
+      <LguAccountsMetrics accounts={accounts} isLoading={accountsQuery.isLoading} />
 
       <Panel className="mt-6 overflow-hidden">
         <LguAccountsToolbar query={query} role={role} status={status} onQueryChange={setQuery} onRoleChange={setRole} onStatusChange={setStatus} onCreate={() => setCreateOpen(true)} />

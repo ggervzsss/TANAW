@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MetricCard } from "@/shared/components/cards";
+import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
@@ -79,27 +79,29 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
   const tickets = ticketsQuery.data ?? EMPTY_SUPPORT_TICKETS;
   const filteredTickets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return sortRecommendedSupportTickets(tickets.filter((ticket) => {
-      const searchable = [
-        ticket.code,
-        ticket.enterpriseName,
-        ticket.enterpriseId,
-        ticket.subject,
-        ticket.description,
-        ticket.category,
-        ticket.priority,
-        ticket.status,
-        ticket.affectedArea ?? "",
-        ticket.cameraNode ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
-      const matchesStatus = statusFilter === "All Statuses" || ticketStatusLabel(ticket.status) === statusFilter;
-      const matchesPriority = priorityFilter === "All Priorities" || ticket.priority === priorityFilter;
-      const matchesCategory = categoryFilter === "All Categories" || ticket.category === categoryFilter;
-      return matchesQuery && matchesStatus && matchesPriority && matchesCategory;
-    }));
+    return sortRecommendedSupportTickets(
+      tickets.filter((ticket) => {
+        const searchable = [
+          ticket.code,
+          ticket.enterpriseName,
+          ticket.enterpriseId,
+          ticket.subject,
+          ticket.description,
+          ticket.category,
+          ticket.priority,
+          ticket.status,
+          ticket.affectedArea ?? "",
+          ticket.cameraNode ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
+        const matchesStatus = statusFilter === "All Statuses" || ticketStatusLabel(ticket.status) === statusFilter;
+        const matchesPriority = priorityFilter === "All Priorities" || ticket.priority === priorityFilter;
+        const matchesCategory = categoryFilter === "All Categories" || ticket.category === categoryFilter;
+        return matchesQuery && matchesStatus && matchesPriority && matchesCategory;
+      }),
+    );
   }, [categoryFilter, priorityFilter, query, statusFilter, tickets]);
 
   const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved");
@@ -132,9 +134,7 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
       {!embedded && (
         <PageHeader
           title="Support Requests"
-          description={
-            isItResponder ? "Help enterprises with questions and technical problems." : "Read-only supervision for enterprise requests, IT responses, and request status."
-          }
+          description={isItResponder ? "Help enterprises with questions and technical problems." : "Read-only supervision for enterprise requests, IT responses, and request status."}
         />
       )}
 
@@ -144,12 +144,15 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
         </div>
       )}
 
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <MetricCard label="Open Requests" value={activeTickets.length} foot="New or being handled" color="#065f46" icon={TicketCheck} />
-        <MetricCard label="High Priority" value={urgentTickets.length} foot="High or urgent queue" color="#b45309" footClassName="text-amber-700" icon={AlertCircle} />
-        <MetricCard label="Working on It" value={inReviewTickets.length} foot="Currently handled by IT" color="#2563eb" footClassName="text-blue-700" icon={Clock3} />
-        <MetricCard label="With Photos" value={ticketsWithAttachments.length} foot="Attachment-backed tickets" color="#0f766e" icon={ImageIcon} />
-      </section>
+      <UnifiedMetricsHeader
+        ariaLabel="Support request summary"
+        metrics={[
+          { id: "open", title: "Open Requests", value: activeTickets.length, description: "New or being handled", tone: "success", icon: TicketCheck, isLoading: ticketsQuery.isLoading },
+          { id: "priority", title: "High Priority", value: urgentTickets.length, description: "High or urgent queue", tone: "warning", icon: AlertCircle, isLoading: ticketsQuery.isLoading },
+          { id: "working", title: "Working on It", value: inReviewTickets.length, description: "Currently handled by IT", tone: "info", icon: Clock3, isLoading: ticketsQuery.isLoading },
+          { id: "photos", title: "With Photos", value: ticketsWithAttachments.length, description: "Attachment-backed tickets", tone: "teal", icon: ImageIcon, isLoading: ticketsQuery.isLoading },
+        ]}
+      />
 
       <Panel className="tanaw-data-panel mt-6 overflow-hidden">
         <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
@@ -449,10 +452,19 @@ export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mo
                 >
                   <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
                   {ticket.messages.map((message) => (
-                    <ConversationItem key={message.id} authorName={message.authorName} authorRole={message.authorRole} createdAt={message.createdAt} message={message.message} timeFormat={timeFormat} />
+                    <ConversationItem
+                      key={message.id}
+                      authorName={message.authorName}
+                      authorRole={message.authorRole}
+                      createdAt={message.createdAt}
+                      message={message.message}
+                      timeFormat={timeFormat}
+                    />
                   ))}
                 </div>
-                <p className="sr-only" aria-live="polite">{announcement}</p>
+                <p className="sr-only" aria-live="polite">
+                  {announcement}
+                </p>
                 {hasNewMessage && (
                   <button
                     type="button"
@@ -607,19 +619,7 @@ function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
   return [attachment.id ?? "", attachment.url ?? "", attachment.fileName, attachment.mediaType, attachment.sizeBytes, attachment.dataUrl?.length ?? 0].join(":");
 }
 
-function ConversationItem({
-  authorName,
-  authorRole,
-  createdAt,
-  message,
-  timeFormat,
-}: {
-  authorName: string;
-  authorRole: string;
-  createdAt: string;
-  message: string;
-  timeFormat: SystemTimeFormat;
-}) {
+function ConversationItem({ authorName, authorRole, createdAt, message, timeFormat }: { authorName: string; authorRole: string; createdAt: string; message: string; timeFormat: SystemTimeFormat }) {
   const isRequester = authorRole === "enterprise" || authorRole === "requester";
   return (
     <article

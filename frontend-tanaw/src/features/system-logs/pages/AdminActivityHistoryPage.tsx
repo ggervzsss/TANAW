@@ -1,12 +1,12 @@
 import { Activity, CalendarDays, FileCheck2, Search, ShieldAlert, TicketCheck, UserCheck } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
-import { MetricCard } from "@/shared/components/cards";
+import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion, stagger } from "@/shared/components/ui";
+import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
 import { useActivityLogs } from "@/shared/hooks/useActivityLogs";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { SystemLog } from "@/shared/types";
@@ -48,12 +48,23 @@ export function AdminActivityHistoryPage() {
     <PageMotion className="tanaw-data-page pb-12">
       <PageHeader title="Activity History" description="Review important report, Admin, account, issue, and security activity across TANAW." />
 
-      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
-        <MetricCard label="Today" value={todayCount} foot="Activity recorded today" color="#2563eb" icon={CalendarDays} />
-        <MetricCard label="Report Updates" value={reportCount} foot="Staff reporting activity" color="#0f766e" icon={FileCheck2} />
-        <MetricCard label="Admin Activity" value={adminCount} foot="Actions by Admin accounts" color="#065f46" icon={UserCheck} />
-        <MetricCard label="Important Updates" value={importantCount} foot="Issues and security records" color="#b45309" footClassName="text-amber-700" icon={ShieldAlert} />
-      </motion.section>
+      <UnifiedMetricsHeader
+        ariaLabel="Activity history summary"
+        metrics={[
+          { id: "today", title: "Today", value: todayCount, description: "Activity recorded today", tone: "info", icon: CalendarDays, isLoading },
+          { id: "report-updates", title: "Report Updates", value: reportCount, description: "Staff reporting activity", tone: "teal", icon: FileCheck2, isLoading },
+          { id: "admin-activity", title: "Admin Activity", value: adminCount, description: "Actions by Admin accounts", tone: "success", icon: UserCheck, isLoading },
+          {
+            id: "important-updates",
+            title: "Important Updates",
+            value: importantCount,
+            description: "Issues and security records",
+            tone: "warning",
+            icon: ShieldAlert,
+            isLoading,
+          },
+        ]}
+      />
 
       <Panel className="tanaw-data-panel mt-6 overflow-hidden">
         <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
@@ -170,9 +181,7 @@ function ActivityDetailsModal({ activity, onClose }: { activity: SystemLog; onCl
 
 export function AdminActivityDetailFields({ activity }: { activity: SystemLog }) {
   const { timeFormat } = useSystemDisplayPreferences();
-  const expandableValue = (value: string, label: string) => (
-    <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />
-  );
+  const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />;
 
   return (
     <div className="tanaw-detail-grid grid gap-4 md:grid-cols-2">

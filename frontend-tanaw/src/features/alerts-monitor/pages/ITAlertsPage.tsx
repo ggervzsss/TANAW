@@ -1,9 +1,9 @@
 import { AlertTriangle, Bell, CheckCircle2, Clock3, Search } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MetricCard } from "@/shared/components/cards";
+import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
@@ -39,7 +39,7 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const { timeFormat } = useSystemDisplayPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { alerts: allAlerts } = useAlerts();
+  const { alerts: allAlerts, isLoading } = useAlerts();
   const alerts = allAlerts.filter((alert) => alert.owner === "IT");
   const statusMutation = useMutation({
     mutationFn: ({ alertId, status }: { alertId: string; status: PriorityAlertStatus }) => updateAlertStatus(alertId, status),
@@ -97,12 +97,15 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
     <PageMotion>
       {!embedded && <PageHeader title="Technical Issues" description="Problems with cameras, desktop applications, data updates, sign-ins, and account access that may need IT action." />}
 
-      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <MetricCard label="Needs Attention" value={activeAlerts.length} foot="Open technical issues" color="#dc2626" footClassName="text-red-600" icon={Bell} />
-        <MetricCard label="Urgent" value={urgentAlerts.length} foot="Needs immediate IT action" color="#b91c1c" footClassName="text-red-600" icon={AlertTriangle} />
-        <MetricCard label="Working on It" value={inReviewAlerts.length} foot="Currently being handled" color="#ca8a04" footClassName="text-yellow-700" icon={Clock3} />
-        <MetricCard label="Resolved" value={resolvedAlerts.length} foot="Fixed by IT" color="#065f46" icon={CheckCircle2} />
-      </motion.section>
+      <UnifiedMetricsHeader
+        ariaLabel="Technical issue summary"
+        metrics={[
+          { id: "needs-attention", title: "Needs Attention", value: activeAlerts.length, description: "Open technical issues", tone: "danger", icon: Bell, isLoading },
+          { id: "urgent", title: "Urgent", value: urgentAlerts.length, description: "Needs immediate IT action", tone: "danger", icon: AlertTriangle, isLoading },
+          { id: "working", title: "Working on It", value: inReviewAlerts.length, description: "Currently being handled", tone: "warning", icon: Clock3, isLoading },
+          { id: "resolved", title: "Resolved", value: resolvedAlerts.length, description: "Fixed by IT", tone: "success", icon: CheckCircle2, isLoading },
+        ]}
+      />
 
       <Panel className="mt-6 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">

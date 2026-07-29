@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Activity, ClipboardCheck, Users } from "lucide-react";
-import { motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { MetricCard } from "@/shared/components/cards";
+import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { EmptyState, FilterSelect, PageMotion, stagger } from "@/shared/components/ui";
+import { EmptyState, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise } from "@/shared/types";
@@ -137,30 +136,42 @@ export function StaffAnalyticsPage() {
     <PageMotion className="tanaw-staff-dashboard pb-12">
       <PageHeader title="Dashboard" description="Compare enterprise performance to identify discrepancies before consolidation." />
 
-      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4" variants={stagger}>
-        <MetricCard
-          color="#065f46"
-          label="Total Aggregated Entries"
-          value={sumMetric(activeReports, "entry")}
-          foot={getTrendLabel(activeReports, comparisonPeriod)}
-          footClassName="text-tgreen-light"
-          icon={Activity}
-        />
-        <MetricCard color="#2563eb" label="Est. Unique People" value={sumMetric(activeReports, "unique")} foot="From reporting submissions" icon={Users} />
-        <MetricCard
-          color="#f59e0b"
-          label="Reports Compliance"
-          value={`${submittedRows.length} / ${totalReports}`}
-          foot={`${submissionRate}% Submission Rate`}
-          footClassName="text-yellow-600"
-          icon={ClipboardCheck}
-        />
-        <div className="tanaw-dashboard-panel flex flex-col justify-between rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div>
-            <span className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Reporting Period</span>
-            <p className="mt-1 text-[11px] leading-snug text-gray-500">Filter comparative data and live update history by calendar month.</p>
-          </div>
-          <div className="mt-4">
+      <UnifiedMetricsHeader
+        ariaLabel="Staff reporting overview"
+        metrics={[
+          {
+            id: "entries",
+            title: "Total Aggregated Entries",
+            value: sumMetric(activeReports, "entry"),
+            description: getTrendLabel(activeReports, comparisonPeriod),
+            tone: "success",
+            icon: Activity,
+            isLoading: reportsQuery.isLoading,
+          },
+          {
+            id: "unique",
+            title: "Est. Unique People",
+            value: sumMetric(activeReports, "unique"),
+            description: "From reporting submissions",
+            tone: "info",
+            icon: Users,
+            isLoading: reportsQuery.isLoading,
+          },
+          {
+            id: "compliance",
+            title: "Reports Compliance",
+            value: `${submittedRows.length} / ${totalReports}`,
+            description: `${submissionRate}% Submission Rate`,
+            tone: "warning",
+            icon: ClipboardCheck,
+            isLoading: reportEnterprisesQuery.isLoading || reportsQuery.isLoading,
+          },
+        ]}
+        controlSegment={{
+          id: "reporting-period",
+          title: "Reporting Period",
+          description: "Filter comparative data and live update history by calendar month.",
+          content: (
             <FilterSelect
               value={activePeriod?.key ?? ""}
               onChange={setSelectedPeriodKey}
@@ -168,9 +179,9 @@ export function StaffAnalyticsPage() {
               ariaLabel="Reporting period"
               className="w-full"
             />
-          </div>
-        </div>
-      </motion.section>
+          ),
+        }}
+      />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="tanaw-dashboard-panel col-span-2 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

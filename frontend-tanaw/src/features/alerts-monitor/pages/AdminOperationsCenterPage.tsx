@@ -1,13 +1,13 @@
 import { AlertTriangle, Bell, Building2, CheckCircle2, Clock3, MapPinned, Search, TicketCheck, UserRoundCog } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { Link, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
 import { PriorityBadge, TicketDetailsModal, TicketStatusBadge } from "@/features/support-tickets";
-import { MetricCard } from "@/shared/components/cards";
+import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { alertsQueryKey, useAlerts } from "@/shared/hooks/useAlerts";
@@ -119,12 +119,47 @@ export function AdminOperationsCenterPage() {
         }
       />
 
-      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <MetricCard label="Needs Attention" value={activeSituations.length} foot="Current Admin situations" color="#dc2626" footClassName="text-red-600" icon={Bell} />
-        <MetricCard label="Busy Establishments" value={busyEstablishments.length} foot="Higher activity than usual" color="#b45309" footClassName="text-amber-700" icon={Building2} />
-        <MetricCard label="Escalated Support" value={activeSupportRequests.length} foot="High or urgent requests" color="#2563eb" footClassName="text-blue-700" icon={TicketCheck} />
-        <MetricCard label="Account Requests" value={pendingAccountRequests} foot="Waiting for IT review" color="#0f766e" icon={UserRoundCog} />
-      </motion.section>
+      <UnifiedMetricsHeader
+        ariaLabel="Operations Center summary"
+        metrics={[
+          {
+            id: "needs-attention",
+            title: "Needs Attention",
+            value: activeSituations.length,
+            description: "Current Admin situations",
+            tone: "danger",
+            icon: Bell,
+            isLoading: alertsLoading,
+          },
+          {
+            id: "busy-establishments",
+            title: "Busy Establishments",
+            value: busyEstablishments.length,
+            description: "Higher activity than usual",
+            tone: "warning",
+            icon: Building2,
+            isLoading: alertsLoading,
+          },
+          {
+            id: "escalated-support",
+            title: "Escalated Support",
+            value: activeSupportRequests.length,
+            description: "High or urgent requests",
+            tone: "info",
+            icon: TicketCheck,
+            isLoading: supportTicketsQuery.isLoading,
+          },
+          {
+            id: "account-requests",
+            title: "Account Requests",
+            value: pendingAccountRequests,
+            description: "Waiting for IT review",
+            tone: "teal",
+            icon: UserRoundCog,
+            isLoading: enterpriseAccountsQuery.isLoading,
+          },
+        ]}
+      />
 
       <Panel className="tanaw-data-panel mt-6 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 p-3">

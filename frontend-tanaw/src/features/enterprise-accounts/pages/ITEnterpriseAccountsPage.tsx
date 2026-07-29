@@ -32,7 +32,7 @@ export function ITEnterpriseAccountsPage() {
     <PageMotion>
       <PageHeader title="Enterprise Accounts" description="Register establishments, send secure activation links, and manage account access." />
 
-      <EnterpriseAccountsMetrics accounts={accounts} />
+      <EnterpriseAccountsMetrics accounts={accounts} isLoading={accountsQuery.isLoading} />
       <EnterpriseProfileRequestsPanel accounts={accounts} canResolve onAccountUpdated={handleEnterpriseUpdated} />
 
       <Panel className="mt-6 overflow-hidden">

@@ -1924,6 +1924,133 @@ html.dark .enterprise-shell .sticky.top-0.bg-gray-50 {
   color: var(--enterprise-muted) !important;
 }
 
+.tanaw-unified-metrics__accent {
+  background: linear-gradient(90deg, #1b4332 0%, #c5a047 50%, #5a8c46 100%);
+}
+
+.tanaw-unified-metrics__hover {
+  background: linear-gradient(115deg, transparent 8%, rgb(27 67 50 / 0.018) 28%, rgb(52 168 83 / 0.075) 50%, rgb(90 140 70 / 0.035) 72%, transparent 92%);
+  background-position: 100% 0;
+  background-size: 220% 100%;
+  opacity: 0;
+  transition:
+    opacity 420ms ease,
+    background-position 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tanaw-unified-metrics__segment {
+  transition:
+    background-color 420ms ease,
+    box-shadow 420ms ease;
+}
+
+.tanaw-unified-metrics__value,
+.tanaw-unified-metrics__icon {
+  transition:
+    color 420ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tanaw-unified-metrics__segment:hover,
+.tanaw-unified-metrics__segment:focus-visible,
+.tanaw-unified-metrics__segment:focus-within {
+  box-shadow:
+    inset 0 0 0 1px rgb(27 67 50 / 0.08),
+    inset 0 10px 28px rgb(27 67 50 / 0.025);
+}
+
+.tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__hover,
+.tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__hover,
+.tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__hover {
+  background-position: 0 0;
+  opacity: 1;
+}
+
+.tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__value,
+.tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__value,
+.tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__value {
+  color: color-mix(in srgb, currentColor 76%, #1b4332);
+}
+
+.tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__icon,
+.tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__icon,
+.tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__icon {
+  transform: translateY(-2px);
+}
+
+.tanaw-unified-metrics__scroller {
+  scrollbar-color: rgb(100 116 139 / 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(100 116 139 / 0.42);
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105 / 0.62);
+}
+
+html.dark .tanaw-unified-metrics__hover {
+  background: linear-gradient(115deg, transparent 8%, rgb(52 211 153 / 0.018) 28%, rgb(52 211 153 / 0.085) 50%, rgb(167 243 208 / 0.035) 72%, transparent 92%);
+}
+
+html.dark .tanaw-unified-metrics__segment:hover,
+html.dark .tanaw-unified-metrics__segment:focus-visible,
+html.dark .tanaw-unified-metrics__segment:focus-within {
+  box-shadow:
+    inset 0 0 0 1px rgb(52 211 153 / 0.12),
+    inset 0 10px 30px rgb(52 211 153 / 0.035);
+}
+
+html.dark .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__value,
+html.dark .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__value,
+html.dark .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__value {
+  color: color-mix(in srgb, currentColor 80%, #a7f3d0);
+}
+
+html.dark .tanaw-unified-metrics__scroller {
+  scrollbar-color: rgb(148 163 184 / 0.42) transparent;
+}
+
+html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.42);
+}
+
+html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
+  background: rgb(186 200 216 / 0.62);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-unified-metrics__hover,
+  .tanaw-unified-metrics__value,
+  .tanaw-unified-metrics__icon,
+  .tanaw-unified-metrics__segment {
+    transition-duration: 120ms;
+  }
+
+  .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__hover,
+  .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__hover,
+  .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__hover {
+    background-position: 50% 0;
+  }
+
+  .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__icon,
+  .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__icon,
+  .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__icon {
+    transform: none;
+  }
+}
+
 .enterprise-shell .tanaw-enterprise-card {
   box-shadow: var(--tanaw-shadow-soft);
 }

@@ -1,13 +1,12 @@
 import { AlertTriangle, Building2, CheckCircle2, ChevronRight, Inbox, TicketCheck, UserRoundCog, Users, WifiOff } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { isEmailProblem } from "@/features/email-deliveries";
-import { MetricCard } from "@/shared/components/cards";
+import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
-import { PageMotion, stagger } from "@/shared/components/ui";
+import { PageMotion } from "@/shared/components/ui";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
 import { listEmailDeliveries, listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
@@ -35,13 +34,56 @@ export function ITDashboardPage() {
     <PageMotion className="pb-12">
       <PageHeader title="Overview" description="A simple view of the technical work that needs attention now." />
 
-      <motion.section className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4" variants={stagger}>
-        <MetricCard label="Urgent Issues" value={isLoading ? "..." : urgentIssues.length} foot="Needs immediate action" color="#b91c1c" footClassName="text-red-600" icon={AlertTriangle} />
-        <MetricCard label="Desktop Apps" value={operationalSummaryQuery.isLoading && !summary ? "..." : unavailableDesktopApps} foot="Offline or delayed" color="#b45309" footClassName="text-amber-700" icon={WifiOff} />
-        <MetricCard label="Support Requests" value={supportTicketsQuery.isLoading ? "..." : openSupportRequests.length} foot="Open enterprise requests" color="#2563eb" footClassName="text-blue-700" icon={TicketCheck} />
-        <MetricCard label="Account Requests" value={enterpriseAccountsQuery.isLoading ? "..." : pendingAccountRequests} foot="Waiting for IT review" color="#0f766e" icon={UserRoundCog} />
-        <MetricCard label="Email Problems" value={emailDeliveriesQuery.isLoading ? "..." : emailProblems.length} foot="Failed or uncertain" color="#7c3aed" icon={Inbox} />
-      </motion.section>
+      <UnifiedMetricsHeader
+        ariaLabel="IT operations overview"
+        metrics={[
+          {
+            id: "urgent-issues",
+            title: "Urgent Issues",
+            value: urgentIssues.length,
+            description: "Needs immediate action",
+            tone: "danger",
+            icon: AlertTriangle,
+            isLoading,
+          },
+          {
+            id: "desktop-apps",
+            title: "Desktop Apps",
+            value: unavailableDesktopApps,
+            description: "Offline or delayed",
+            tone: "warning",
+            icon: WifiOff,
+            isLoading: operationalSummaryQuery.isLoading && !summary,
+          },
+          {
+            id: "support-requests",
+            title: "Support Requests",
+            value: openSupportRequests.length,
+            description: "Open enterprise requests",
+            tone: "info",
+            icon: TicketCheck,
+            isLoading: supportTicketsQuery.isLoading,
+          },
+          {
+            id: "account-requests",
+            title: "Account Requests",
+            value: pendingAccountRequests,
+            description: "Waiting for IT review",
+            tone: "teal",
+            icon: UserRoundCog,
+            isLoading: enterpriseAccountsQuery.isLoading,
+          },
+          {
+            id: "email-problems",
+            title: "Email Problems",
+            value: emailProblems.length,
+            description: "Failed or uncertain",
+            tone: "purple",
+            icon: Inbox,
+            isLoading: emailDeliveriesQuery.isLoading,
+          },
+        ]}
+      />
 
       <div className="mt-7 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.7fr)]">
         <Panel className="overflow-hidden">
@@ -59,11 +101,21 @@ export function ITDashboardPage() {
               icon={AlertTriangle}
               label="Technical Issues"
               count={itIssues.length}
-              description={urgentIssues.length > 0 ? `${urgentIssues.length} urgent ${urgentIssues.length === 1 ? "issue needs" : "issues need"} immediate attention.` : "Camera, desktop application, and data update problems."}
+              description={
+                urgentIssues.length > 0
+                  ? `${urgentIssues.length} urgent ${urgentIssues.length === 1 ? "issue needs" : "issues need"} immediate attention.`
+                  : "Camera, desktop application, and data update problems."
+              }
               href={`${routes.it.workCenter}?view=issues`}
               urgent={urgentIssues.length > 0}
             />
-            <WorkItem icon={TicketCheck} label="Support Requests" count={openSupportRequests.length} description="Questions and problems sent by enterprises." href={`${routes.it.workCenter}?view=support`} />
+            <WorkItem
+              icon={TicketCheck}
+              label="Support Requests"
+              count={openSupportRequests.length}
+              description="Questions and problems sent by enterprises."
+              href={`${routes.it.workCenter}?view=support`}
+            />
             <WorkItem icon={UserRoundCog} label="Account Requests" count={pendingAccountRequests} description="Enterprise details waiting for review." href={`${routes.it.workCenter}?view=accounts`} />
             <WorkItem icon={Inbox} label="Email Problems" count={emailProblems.length} description="Emails that failed or need a provider check." href={`${routes.it.workCenter}?view=email`} />
           </div>
