@@ -169,6 +169,9 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   const initial = await readMapGeometry(page);
   expectCanonicalCitywideFraming(initial);
   await expect(page.getByRole("combobox", { name: "Select barangay" })).toContainText("All Barangays");
+  await expect(page.getByText("No Barangay Selected")).toHaveCount(0);
+  await expect(page.getByText("All Enterprises", { exact: true })).toBeVisible();
+  await expect(page.locator(".tanaw-map-directory__list").first()).toHaveCSS("scrollbar-width", "thin");
 
   await page.getByRole("link", { name: "Activity History" }).click();
   await expect(page).toHaveURL(/\/admin\/activity-history$/);
@@ -193,7 +196,10 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   await page.getByRole("option", { name: /Barangay San Antonio/ }).click();
   await expect(barangaySelect).toContainText("Barangay San Antonio");
   await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Back to Barangay Directory" }).click();
+  const backToDirectory = page.getByRole("button", { name: "Back to Barangay Directory" });
+  await expect(backToDirectory).toContainText("All Barangays");
+  await expect(page.getByRole("heading", { name: "Barangay San Antonio" })).toBeVisible();
+  await backToDirectory.click();
   await expect(barangaySelect).toContainText("All Barangays");
   await page.waitForTimeout(900);
   expectSameCamera(await readMapGeometry(page), initial);
@@ -240,7 +246,8 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   const sampledWidths = await sampledWidthsPromise;
 
   await expect(barangaySelect).toContainText("All Barangays");
-  await expect(page.getByText("No Barangay Selected")).toBeVisible();
+  await expect(page.getByText("No Barangay Selected")).toHaveCount(0);
+  await expect(page.getByText("All Enterprises", { exact: true })).toBeVisible();
   const reset = await readMapGeometry(page);
   expectSameCamera(reset, initial);
   expect(Math.min(...sampledWidths)).toBeGreaterThanOrEqual(reset.boundary.width * 0.98);

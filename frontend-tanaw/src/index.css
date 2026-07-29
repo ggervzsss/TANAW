@@ -2031,6 +2031,46 @@ html.dark .tanaw-map-directory__card {
     inset 0 1px 0 rgb(255 255 255 / 0.025);
 }
 
+.tanaw-map-directory__list {
+  scrollbar-color: rgb(148 163 184 / 0.58) rgb(2 6 23 / 0.16);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.tanaw-map-directory__list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.tanaw-map-directory__list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgb(2 6 23 / 0.16);
+}
+
+.tanaw-map-directory__list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.58);
+}
+
+.tanaw-map-directory__list::-webkit-scrollbar-thumb:hover {
+  background: rgb(186 200 216 / 0.78);
+}
+
+html.dark .tanaw-map-directory__list {
+  scrollbar-color: rgb(148 163 184 / 0.48) rgb(2 6 23 / 0.24);
+}
+
+html.dark .tanaw-map-directory__list::-webkit-scrollbar-track {
+  background: rgb(2 6 23 / 0.24);
+}
+
+html.dark .tanaw-map-directory__list::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.48);
+}
+
+html.dark .tanaw-map-directory__list::-webkit-scrollbar-thumb:hover {
+  background: rgb(186 200 216 / 0.7);
+}
+
 #admin-enterprise-map .tanaw-boundary-path {
   transition:
     fill-opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),

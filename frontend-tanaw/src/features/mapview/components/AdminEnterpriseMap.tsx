@@ -639,40 +639,39 @@ export function AdminEnterpriseMap() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.24, ease: "easeOut" }}
-                    className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3"
+                    className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden p-3"
                   >
-                    <button
-                      type="button"
-                      onClick={() => clearBarangaySelection("back")}
-                      className="focus:ring-tanaw-sky flex shrink-0 items-center gap-2 rounded-lg border border-white/15 bg-slate-950/35 px-3 py-2 text-left text-[9px] font-black tracking-widest text-white/75 uppercase transition hover:border-white/25 hover:bg-slate-950/50 hover:text-white focus:ring-2 focus:outline-none"
-                    >
-                      <ArrowLeft size={12} className="text-tanaw-sky" />
-                      Back to Barangay Directory
-                    </button>
-
                     {/* Selected Barangay Info */}
-                    <div className="tanaw-map-directory__card shrink-0 rounded-xl border border-slate-400/25 bg-[#15233a]/82 p-3.5 shadow-sm shadow-black/20">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-sm font-black tracking-wide text-white uppercase">Barangay {selectedBarangayName}</h3>
-                          <p className="mt-1 text-[9px] font-bold tracking-widest text-white/65 uppercase">Enterprises within this barangay</p>
-                        </div>
+                    <div className="tanaw-map-directory__card shrink-0 rounded-xl border border-slate-400/25 bg-[#15233a]/82 p-3 shadow-sm shadow-black/20">
+                      <div className="mb-2.5 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          aria-label="Back to Barangay Directory"
+                          title="Return to all barangays"
+                          onClick={() => clearBarangaySelection("back")}
+                          className="focus:ring-tanaw-sky inline-flex min-h-7 items-center gap-1.5 rounded-md border border-white/15 bg-slate-950/35 px-2 py-1 text-[9px] font-black tracking-widest text-white/75 uppercase transition hover:border-emerald-300/35 hover:bg-slate-950/55 hover:text-white focus:ring-2 focus:outline-none"
+                        >
+                          <ArrowLeft size={12} className="text-tanaw-sky shrink-0" />
+                          All Barangays
+                        </button>
                         <span className="shrink-0 rounded border border-white/15 bg-black/35 px-2 py-1 font-mono text-[9px] font-black tracking-widest text-white uppercase">
                           {selectedBarangayEnterprises.length + selectedBarangayUnpinnedEnterprises.length}
                         </span>
                       </div>
+                      <h3 className="text-sm leading-tight font-black tracking-wide text-white uppercase">Barangay {selectedBarangayName}</h3>
+                      <p className="mt-1 text-[9px] font-bold tracking-widest text-white/65 uppercase">Enterprises within this barangay</p>
                     </div>
 
                     {/* Dedicated Enterprise List section at the bottom */}
-                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3.5 shadow-sm shadow-black/20">
-                      <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
-                        <h3 className="flex items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
+                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3 shadow-sm shadow-black/20">
+                      <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2">
+                        <h3 className="flex min-w-0 items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
                           <Building2 size={13} className="text-tanaw-sky" />
                           Enterprises within this Barangay
                         </h3>
-                        <span className="text-[9px] font-bold tracking-widest text-white/65 uppercase">{selectedBarangayEnterprises.length + selectedBarangayUnpinnedEnterprises.length}</span>
+                        <span className="shrink-0 text-[9px] font-bold tracking-widest text-white/65 uppercase">{selectedBarangayEnterprises.length + selectedBarangayUnpinnedEnterprises.length}</span>
                       </div>
-                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                      <div className="tanaw-map-directory__list min-h-0 flex-1 space-y-2 overflow-y-auto pr-1.5">
                         {selectedBarangayEnterprises.map((enterprise, index) => (
                           <motion.div
                             key={enterprise.id}
@@ -691,7 +690,7 @@ export function AdminEnterpriseMap() {
                             initial={{ opacity: 0, y: 5 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.22, ease: "easeOut" }}
-                            className="rounded-lg border border-white/15 bg-black/20 p-6 text-center text-[10px] font-bold tracking-widest text-white/65 uppercase"
+                            className="rounded-lg border border-white/15 bg-black/20 p-4 text-center text-[10px] leading-relaxed font-bold tracking-widest text-white/65 uppercase"
                           >
                             {enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError ? "Unable to load enterprise registry." : "No registered enterprises found for this barangay yet."}
                           </motion.div>
@@ -706,27 +705,20 @@ export function AdminEnterpriseMap() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.22, ease: "easeOut" }}
-                    className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3"
+                    className="flex min-h-0 flex-1 flex-col overflow-hidden p-3"
                   >
-                    {/* Prompt card */}
-                    <div className="tanaw-map-directory__card shrink-0 rounded-xl border border-slate-400/25 bg-[#15233a]/82 p-3.5 text-center shadow-sm shadow-black/20">
-                      <MapPin size={18} className="text-tanaw-sky mx-auto mb-1.5 animate-bounce" style={{ animationDuration: "3s" }} />
-                      <h4 className="text-[10px] font-black tracking-widest text-white uppercase">No Barangay Selected</h4>
-                      <p className="mt-1 text-[9px] leading-normal font-bold tracking-widest text-white/65 uppercase">Click a barangay boundary on the map or use the dropdown above to filter.</p>
-                    </div>
-
                     {/* Dedicated Enterprise List section showing all enterprises */}
-                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3.5 shadow-sm shadow-black/20">
-                      <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
-                        <h3 className="flex items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
+                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3 shadow-sm shadow-black/20">
+                      <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2">
+                        <h3 className="flex min-w-0 items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
                           <Building2 size={13} className="text-tanaw-sky" />
                           All Enterprises
                         </h3>
-                        <span className="text-[9px] font-bold tracking-widest text-white/65 uppercase">
+                        <span className="shrink-0 text-right text-[9px] leading-tight font-bold tracking-widest text-white/65 uppercase">
                           {unpinnedEnterpriseCount > 0 ? `${mapEnterprises.length} pinned / ${unpinnedEnterpriseCount} unpinned` : enterpriseAccounts.length}
                         </span>
                       </div>
-                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                      <div className="tanaw-map-directory__list min-h-0 flex-1 space-y-2 overflow-y-auto pr-1.5">
                         {mapEnterprises.map((enterprise) => (
                           <EnterpriseMapCard
                             key={enterprise.id}
@@ -741,7 +733,7 @@ export function AdminEnterpriseMap() {
                           <UnpinnedEnterpriseCard key={enterprise.id} enterprise={enterprise} />
                         ))}
                         {enterpriseAccounts.length === 0 && (
-                          <div className="rounded-lg border border-white/15 bg-black/20 p-6 text-center text-[10px] font-bold tracking-widest text-white/65 uppercase">
+                          <div className="rounded-lg border border-white/15 bg-black/20 p-4 text-center text-[10px] leading-relaxed font-bold tracking-widest text-white/65 uppercase">
                             {enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError ? (
                               <div className="flex flex-col items-center gap-3">
                                 <span>Unable to load enterprise registry.</span>
@@ -812,7 +804,7 @@ function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapE
     <button
       type="button"
       onClick={onClick}
-      className={`focus:ring-tanaw-sky w-full rounded-lg border p-3 text-left shadow-sm shadow-black/15 transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/10 focus:ring-2 focus:outline-none ${selected ? "border-tanaw-sky/60 bg-tanaw-sky/15" : "border-white/15 bg-slate-950/35"}`}
+      className={`focus:ring-tanaw-sky w-full rounded-lg border p-2.5 text-left shadow-sm shadow-black/15 transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/10 focus:ring-2 focus:outline-none ${selected ? "border-tanaw-sky/60 bg-tanaw-sky/15" : "border-white/15 bg-slate-950/35"}`}
     >
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -822,12 +814,14 @@ function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapE
             <span className="truncate">{enterprise.fullAddress}</span>
           </div>
         </div>
-        <span className={`flex shrink-0 items-center rounded border px-1.5 py-0.5 text-[9px] font-black tracking-widest uppercase ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}`}>
+        <span
+          className={`flex max-w-[46%] shrink-0 items-center justify-center rounded border px-1.5 py-0.5 text-center text-[9px] leading-tight font-black tracking-widest uppercase ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}`}
+        >
           {enterprise.monitoringStatus}
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/15 pt-2 font-mono text-[10px]">
+      <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-white/15 pt-2 font-mono text-[10px]">
         <span className="truncate text-white/70">
           {enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras` : "No camera telemetry"}
         </span>
@@ -871,7 +865,7 @@ function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) 
   const statusLabel = enterprise.latitude === null || enterprise.longitude === null ? "Not Pinned" : "Needs Correction";
 
   return (
-    <div className="w-full rounded-lg border border-dashed border-white/15 bg-slate-950/25 p-3 text-left shadow-sm shadow-black/15">
+    <div className="w-full rounded-lg border border-dashed border-white/15 bg-slate-950/25 p-2.5 text-left shadow-sm shadow-black/15">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
@@ -880,12 +874,12 @@ function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) 
             <span className="truncate">{enterprise.address ?? "Address not provided"}</span>
           </div>
         </div>
-        <span className="flex shrink-0 items-center rounded border border-amber-400/30 bg-amber-900/35 px-1.5 py-0.5 text-[9px] font-black tracking-widest text-amber-100 uppercase">
+        <span className="flex max-w-[46%] shrink-0 items-center justify-center rounded border border-amber-400/30 bg-amber-900/35 px-1.5 py-0.5 text-center text-[9px] leading-tight font-black tracking-widest text-amber-100 uppercase">
           {statusLabel}
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/15 pt-2 font-mono text-[10px]">
+      <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-white/15 pt-2 font-mono text-[10px]">
         <span className="truncate text-white/70">{enterprise.category ?? "Uncategorized"}</span>
         <span className="truncate text-right font-bold text-white">{enterprise.barangay ?? "Unassigned"}</span>
       </div>
