@@ -15,14 +15,20 @@ export function AuthSessionManager() {
       try {
         const stored = await window.tanawAuthSession?.load();
         savedSession = readStoredSession(stored);
-        const session = await restoreSession(savedSession?.token);
+        if (!savedSession || !isRememberEnabled()) {
+          void window.tanawAuthSession?.clear();
+          if (!disposed) markAnonymous();
+          return;
+        }
+
+        const session = await restoreSession(savedSession.token);
         if (!disposed) setSession(session);
       } catch (error) {
         if (savedSession && isRememberEnabled() && isBackendUnavailable(error)) {
           if (!disposed) setSession(savedSession);
           return;
         }
-        await window.tanawAuthSession?.clear();
+        void window.tanawAuthSession?.clear();
         if (!disposed) markAnonymous();
       }
     })();

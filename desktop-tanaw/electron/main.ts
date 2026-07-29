@@ -8,14 +8,10 @@ import path from "node:path";
 import { getMlServiceCommand } from "./ml-service-command";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
 import { classifyMlServiceStderr } from "./ml-service-log";
-import {
-  buildWindowsListenerPidScript,
-  buildWindowsTerminateTreeArgs,
-  shouldTerminateExternalService,
-  waitForListenerRelease,
-} from "./ml-service-process";
+import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "./ml-service-process";
 import { createDisplayScaleController } from "./display-scale";
 import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
+import { createStartupTransitionController, DEV_STARTUP_READY_FALLBACK_MS, type StartupRevealReason, type StartupTransitionController } from "./startup-transition";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopBuild = getDesktopBuildFingerprint();
@@ -33,6 +29,7 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+let splashWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let mlServiceProcess: ChildProcess | null = null;
 let mlServiceError: string | null = null;
@@ -40,14 +37,16 @@ let mlServiceConnectedExternally = false;
 let isQuitting = false;
 let mlServiceShutdownComplete = false;
 let mlServiceShutdownPromise: Promise<void> | null = null;
+let startupTransition: StartupTransitionController | null = null;
 
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const CAMERA_CREDENTIAL_STORE_FILE = "camera-credentials.json";
 const AUTH_SESSION_STORE_FILE = "auth-session.json";
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
-const SPLASH_MIN_DISPLAY_MS = 1400;
 const ML_SERVICE_STARTUP_TIMEOUT_MS = 20_000;
+const MAIN_WINDOW_BACKGROUND_COLOR = "#f4f8f5";
+const SPLASH_WINDOW_BACKGROUND_COLOR = "#f7f7f3";
 const execFileAsync = promisify(execFile);
 
 type CameraCredentialRecord = {
@@ -684,6 +683,13 @@ function registerAuthSessionIpc() {
   ipcMain.handle("auth-session:clear", () => clearAuthSession());
 }
 
+function registerStartupIpc() {
+  ipcMain.on("startup:renderer-ready", (event) => {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
+    startupTransition?.markRendererReady();
+  });
+}
+
 function createTray() {
   if (tray) return;
 
@@ -758,6 +764,14 @@ function showMainWindow() {
     return;
   }
 
+  if (startupTransition && !startupTransition.hasRevealed()) {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.show();
+      splashWindow.focus();
+    }
+    return;
+  }
+
   win.show();
   if (win.isMinimized()) {
     win.restore();
@@ -765,34 +779,45 @@ function showMainWindow() {
   win.focus();
 }
 
-function loadSplashScreen() {
-  if (!win || win.isDestroyed()) {
-    return false;
-  }
-  const splashPath = path.join(process.env.VITE_PUBLIC, "splash.html");
-  if (!existsSync(splashPath)) {
-    return false;
-  }
-
-  void win.loadFile(splashPath).catch((error) => {
-    if (isNavigationAbort(error)) {
-      return;
-    }
-    console.error("[tanaw] Splash screen could not be loaded.", error);
-    loadMainWindowContent();
-  });
-  return true;
+function getSplashPath() {
+  return path.join(process.env.VITE_PUBLIC, "splash.html");
 }
 
-async function waitForSplashMinimumDisplay(startedAt: number | null) {
-  if (!startedAt) {
-    return;
-  }
+function createSplashWindow() {
+  const splashPath = getSplashPath();
+  if (!existsSync(splashPath)) return false;
 
-  const remainingMs = SPLASH_MIN_DISPLAY_MS - (Date.now() - startedAt);
-  if (remainingMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, remainingMs));
-  }
+  const splash = new BrowserWindow({
+    backgroundColor: SPLASH_WINDOW_BACKGROUND_COLOR,
+    height: 900,
+    icon: getWindowIcon(),
+    minHeight: 500,
+    minWidth: 800,
+    show: false,
+    title: "TANAW",
+    width: 1440,
+  });
+  splashWindow = splash;
+
+  splash.once("ready-to-show", () => {
+    if (splash.isDestroyed() || startupTransition?.hasRevealed()) return;
+    splash.maximize();
+    splash.show();
+    startupTransition?.markSplashVisible();
+  });
+  splash.on("closed", () => {
+    if (splashWindow === splash) splashWindow = null;
+    startupTransition?.skipSplash();
+  });
+
+  void splash.loadFile(splashPath).catch((error) => {
+    if (!isNavigationAbort(error)) {
+      console.error("[tanaw] Splash screen could not be loaded.", error);
+    }
+    startupTransition?.skipSplash();
+    if (!splash.isDestroyed()) splash.destroy();
+  });
+  return true;
 }
 
 function loadMainWindowContent() {
@@ -819,14 +844,34 @@ function isNavigationAbort(error: unknown) {
 }
 
 function showWindowWhenReady() {
-  if (!win || win.isDestroyed()) {
+  if (startupTransition?.hasRevealed()) {
+    win?.maximize();
+    showMainWindow();
     return;
   }
-
-  win.show();
+  startupTransition?.markMainReady();
 }
 
-function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
+function revealMainWindow(reason: StartupRevealReason) {
+  if (!win || win.isDestroyed()) return;
+
+  if (reason === "fallback") {
+    console.warn("[tanaw] Renderer readiness timed out; revealing the main window using the startup fallback.");
+  }
+
+  win.maximize();
+  win.show();
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.focus();
+
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.destroy();
+  }
+}
+
+function createWindow() {
   if (win && !win.isDestroyed()) {
     showMainWindow();
     return;
@@ -837,6 +882,7 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     height: 900,
     minWidth: 800,
     minHeight: 500,
+    backgroundColor: MAIN_WINDOW_BACKGROUND_COLOR,
     icon: getWindowIcon(),
     show: false,
     title: "TANAW Enterprise Desktop",
@@ -886,7 +932,6 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
   });
   displayScaleController.start();
   targetWebContents.once("destroyed", () => displayScaleController.dispose());
-  win.maximize();
 
   win.once("ready-to-show", showWindowWhenReady);
 
@@ -906,14 +951,15 @@ function createWindow({ showSplash = false }: { showSplash?: boolean } = {}) {
     win = null;
   });
 
-  if (showSplash && loadSplashScreen()) {
-    return;
-  }
   loadMainWindowContent();
 }
 
 async function quitApplication() {
   isQuitting = true;
+  startupTransition?.dispose();
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.destroy();
+  }
   await shutdownMlServiceForQuit();
   mlServiceShutdownComplete = true;
   if (win && !win.isDestroyed()) {
@@ -964,21 +1010,29 @@ if (gotSingleInstanceLock) {
     showMainWindow();
   });
 
-  app.whenReady().then(async () => {
-    let splashStartedAt: number | null = null;
-
+  app.whenReady().then(() => {
     registerMlServiceIpc();
     registerCameraCredentialIpc();
     registerAuthSessionIpc();
+    registerStartupIpc();
     createTray();
-    createWindow({ showSplash: true });
-    splashStartedAt = Date.now();
-    await startMlService();
-    await waitForSplashMinimumDisplay(splashStartedAt);
-    if (!win || win.isDestroyed()) {
-      createWindow();
-    } else {
-      loadMainWindowContent();
+
+    const waitForSplash = existsSync(getSplashPath());
+    startupTransition = createStartupTransitionController({
+      fallbackMs: VITE_DEV_SERVER_URL ? DEV_STARTUP_READY_FALLBACK_MS : undefined,
+      onReveal: revealMainWindow,
+      waitForSplash,
+    });
+
+    if (waitForSplash && !createSplashWindow()) {
+      startupTransition.skipSplash();
     }
+    createWindow();
+
+    void startMlService().catch((error) => {
+      mlServiceError = error instanceof Error ? error.message : String(error);
+      console.error("[tanaw] ML service could not be initialized in the background.", error);
+      updateTrayMenu();
+    });
   });
 }

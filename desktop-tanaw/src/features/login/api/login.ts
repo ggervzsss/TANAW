@@ -1,6 +1,9 @@
 import { staffApi } from "../../../lib/axios";
 import type { LoginFormValues } from "../schemas/login-schema";
 import type { LoginResponse } from "../types";
+
+const SESSION_RESTORE_TIMEOUT_MS = 3500;
+
 function normalizeSession(response: LoginResponse): LoginResponse {
   return {
     ...response,
@@ -80,7 +83,14 @@ export async function logout() {
   await staffApi.post("/auth/logout");
 }
 
-export async function restoreSession(token?: string) {
-  const response = await staffApi.post<LoginResponse>("/auth/session", {}, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+export async function restoreSession(token: string) {
+  const response = await staffApi.post<LoginResponse>(
+    "/auth/session",
+    {},
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: SESSION_RESTORE_TIMEOUT_MS,
+    },
+  );
   return normalizeSession(response.data);
 }

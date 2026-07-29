@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import { routePaths } from "./routePaths";
@@ -13,6 +13,30 @@ const EnterpriseShell = lazy(() => import("../layouts/EnterpriseShell").then((mo
 type RequireAuthProps = {
   children: ReactNode;
 };
+
+let rendererReadySignaled = false;
+
+function RendererReadyBoundary({ children }: RequireAuthProps) {
+  useEffect(() => {
+    if (rendererReadySignaled) return;
+
+    let secondFrame: number | null = null;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (rendererReadySignaled) return;
+        rendererReadySignaled = true;
+        window.tanawStartup?.ready();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
+    };
+  }, []);
+
+  return children;
+}
 
 function RequireAuth({ children }: RequireAuthProps) {
   const location = useLocation();
@@ -41,12 +65,21 @@ export function AppRouter() {
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
         <Route path={routePaths.home} element={<Navigate to={routePaths.enterpriseDashboard} replace />} />
-        <Route path={routePaths.login} element={<LoginPage />} />
+        <Route
+          path={routePaths.login}
+          element={
+            <RendererReadyBoundary>
+              <LoginPage />
+            </RendererReadyBoundary>
+          }
+        />
         <Route
           path={routePaths.enterprise}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="dashboard" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="dashboard" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -54,7 +87,9 @@ export function AppRouter() {
           path={routePaths.enterpriseDashboard}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="dashboard" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="dashboard" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -62,7 +97,9 @@ export function AppRouter() {
           path={routePaths.enterpriseCameras}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="cameras" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="cameras" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -70,7 +107,9 @@ export function AppRouter() {
           path={routePaths.enterpriseReports}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="reports" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="reports" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -78,7 +117,9 @@ export function AppRouter() {
           path={routePaths.enterpriseProfile}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="profile" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="profile" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -86,7 +127,9 @@ export function AppRouter() {
           path={routePaths.enterpriseSecurity}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="security" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="security" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -94,7 +137,9 @@ export function AppRouter() {
           path={routePaths.enterpriseNotifications}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="notifications" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="notifications" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />
@@ -102,7 +147,9 @@ export function AppRouter() {
           path={routePaths.enterpriseTickets}
           element={
             <RequireAuth>
-              <EnterpriseShell initialView="tickets" />
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="tickets" />
+              </RendererReadyBoundary>
             </RequireAuth>
           }
         />

@@ -11,6 +11,20 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5174,
+    warmup: {
+      clientFiles: [
+        "./index.html",
+        "./src/main.tsx",
+        "./src/index.css",
+        "./src/App.tsx",
+        "./src/app/providers/AppProviders.tsx",
+        "./src/app/router/AppRouter.tsx",
+        "./src/features/login/components/LoginPage.tsx",
+      ],
+    },
+    watch: {
+      ignored: ["**/.uv-cache/**", "**/.venv/**", "**/dist/**", "**/dist-electron/**", "**/ml-service/**", "**/playwright-report/**", "**/release/**", "**/test-results/**"],
+    },
   },
   plugins: [
     react(),

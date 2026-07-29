@@ -22,19 +22,8 @@ contextBridge.exposeInMainWorld("tanawCameraCredentials", {
   remove(scope: string, cameraId: number) {
     return ipcRenderer.invoke("camera-credentials:remove", scope, cameraId);
   },
-  request(
-    scope: string,
-    cameraId: number,
-    operation: "start" | "test",
-    payload: Record<string, unknown>,
-  ) {
-    return ipcRenderer.invoke(
-      "camera-credentials:request",
-      scope,
-      cameraId,
-      operation,
-      payload,
-    );
+  request(scope: string, cameraId: number, operation: "start" | "test", payload: Record<string, unknown>) {
+    return ipcRenderer.invoke("camera-credentials:request", scope, cameraId, operation, payload);
   },
 });
 
@@ -47,5 +36,11 @@ contextBridge.exposeInMainWorld("tanawAuthSession", {
   },
   clear() {
     return ipcRenderer.invoke("auth-session:clear");
+  },
+});
+
+contextBridge.exposeInMainWorld("tanawStartup", {
+  ready() {
+    ipcRenderer.send("startup:renderer-ready");
   },
 });
