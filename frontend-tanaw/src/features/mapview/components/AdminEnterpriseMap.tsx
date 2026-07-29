@@ -483,61 +483,38 @@ export function AdminEnterpriseMap() {
     const map = mapRef.current;
     if (!map) return;
 
-    const enterpriseIds = new Set(mapEnterprises.map((enterprise) => enterprise.id));
+    Object.values(markersRef.current).forEach((marker) => marker.remove());
+    markersRef.current = {};
 
-    Object.entries(markersRef.current).forEach(([enterpriseId, marker]) => {
-      if (enterpriseIds.has(enterpriseId)) return;
-
-      marker.remove();
-      delete markersRef.current[enterpriseId];
-    });
-
-    mapEnterprises.forEach((enterprise) => {
+    visibleEnterprises.forEach((enterprise) => {
       const color = getMonitoringStatusColor(enterprise.monitoringStatus);
-      let marker = markersRef.current[enterprise.id];
+      const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
+      const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
+      const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
+      const marker = L.marker([enterprise.lat, enterprise.lng], {
+        icon: L.divIcon({
+          className: enterprise.occupancyStatus === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
+          iconAnchor: [12, 12],
+          popupAnchor: [0, -10],
+          html: `<span style="background-color:${color};width:20px;height:20px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:0 0 0 4px ${occupancyRingColor},${markerShadow};"></span>`,
+        }),
+      }).addTo(map);
 
-      if (marker) {
-        marker.setLatLng([enterprise.lat, enterprise.lng]);
-        marker.setIcon(createEnterpriseMarkerIcon(enterprise, color, mapTheme));
-        marker.setTooltipContent(createTooltipHtml(enterprise, color));
-        marker.setPopupContent(createPopupHtml(enterprise, color));
-      } else {
-        marker = L.marker([enterprise.lat, enterprise.lng], {
-          icon: createEnterpriseMarkerIcon(enterprise, color, mapTheme),
-        });
-        marker.bindTooltip(createTooltipHtml(enterprise, color), {
-          direction: "top",
-          offset: [0, -10],
-          opacity: 0.95,
-        });
-        marker.bindPopup(createPopupHtml(enterprise, color), {
-          closeButton: false,
-        });
-        markersRef.current[enterprise.id] = marker;
-      }
-
-      marker.off("click");
+      marker.bindTooltip(createTooltipHtml(enterprise, color), {
+        direction: "top",
+        offset: [0, -10],
+        opacity: 0.95,
+      });
+      marker.bindPopup(createPopupHtml(enterprise, color), {
+        closeButton: false,
+      });
       marker.on("click", (event: L.LeafletMouseEvent) => {
         L.DomEvent.stopPropagation(event.originalEvent);
         selectEnterprise(enterprise);
       });
+      markersRef.current[enterprise.id] = marker;
     });
-  }, [mapEnterprises, mapTheme, selectEnterprise]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const visibleEnterpriseIds = new Set(visibleEnterprises.map((enterprise) => enterprise.id));
-    Object.entries(markersRef.current).forEach(([enterpriseId, marker]) => {
-      if (visibleEnterpriseIds.has(enterpriseId)) {
-        if (!map.hasLayer(marker)) marker.addTo(map);
-        return;
-      }
-
-      if (map.hasLayer(marker)) marker.remove();
-    });
-  }, [visibleEnterprises]);
+  }, [mapTheme, selectEnterprise, visibleEnterprises]);
 
   useEffect(() => {
     if (!selectedEnterpriseId || !mapRef.current || !markersRef.current[selectedEnterpriseId]) return;
@@ -901,19 +878,6 @@ function LegendItem({ color, label }: { color: string; label: string }) {
       {label}
     </span>
   );
-}
-
-function createEnterpriseMarkerIcon(enterprise: MapEnterprise, color: string, mapTheme: LeafletMapTheme) {
-  const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
-  const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
-  const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
-
-  return L.divIcon({
-    className: enterprise.occupancyStatus === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -10],
-    html: `<span style="background-color:${color};width:20px;height:20px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:0 0 0 4px ${occupancyRingColor},${markerShadow};"></span>`,
-  });
 }
 
 function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) {

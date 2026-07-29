@@ -3,12 +3,6 @@ import type { LatLng, LatLngBounds, LatLngExpression, Map as LeafletMap, Point }
 const DIRECTORY_BREAKPOINT_PX = 820;
 const PROJECTION_ZOOM = 18;
 
-type LeafletFrameMap = LeafletMap & {
-  _move(center: LatLngExpression, zoom: number, data?: { flyTo?: boolean }): LeafletMap;
-  _moveEnd(zoomChanged?: boolean): LeafletMap;
-  _moveStart(zoomChanged?: boolean, noMoveStart?: boolean): LeafletMap;
-};
-
 export type ResolvedMapCameraTarget = { type: "citywide"; bounds: LatLngBounds } | { type: "barangay"; bounds: LatLngBounds } | { type: "enterprise"; center: LatLngExpression; zoom: number };
 
 export type MapCameraTransitionOptions = {
@@ -66,19 +60,15 @@ export function resolveMapCameraPosition(map: LeafletMap, target: ResolvedMapCam
 }
 
 export class MapMotionController {
-  private animationFrameId: number | null = null;
-  private animationStartedAt = 0;
   private constraintsKey: string | null = null;
   private disposed = false;
   private durationMs = 0;
-  private isMoving = false;
   private revision = 0;
-  private segmentStart: ResolvedMapCameraPosition | null = null;
   private target: ResolvedMapCameraPosition | null = null;
-  private readonly map: LeafletFrameMap;
+  private readonly map: LeafletMap;
 
   constructor(map: LeafletMap) {
-    this.map = map as LeafletFrameMap;
+    this.map = map;
   }
 
   setTarget(target: ResolvedMapCameraTarget, options: MapCameraTransitionOptions) {
@@ -102,26 +92,18 @@ export class MapMotionController {
     this.target = targetPosition;
 
     if (options.immediate === true || reducedMotion) {
-      this.cancelScheduledFrame();
-      this.isMoving = false;
       this.map.setView(targetPosition.center, targetPosition.zoom, { animate: false });
       return nextRevision;
     }
 
-    this.cancelScheduledFrame();
-    this.segmentStart = {
-      center: this.map.getCenter(),
-      type: targetPosition.type,
-      zoom: this.map.getZoom(),
-    };
-    this.animationStartedAt = performance.now();
-
-    if (!this.isMoving) {
-      this.map._moveStart(true);
-      this.isMoving = true;
-    }
-
-    this.animationFrameId = window.requestAnimationFrame(this.renderFrame);
+    // Leaflet flyTo cancels its own obsolete fly frame before starting the
+    // replacement transition. Keeping that lifecycle native guarantees that
+    // tiles, SVG paths, markers, tooltips, and popups share one pane transform.
+    this.map.flyTo(targetPosition.center, targetPosition.zoom, {
+      animate: true,
+      duration: durationMs / 1000,
+      easeLinearity: 0.25,
+    });
     return nextRevision;
   }
 
@@ -135,10 +117,7 @@ export class MapMotionController {
 
   dispose() {
     this.disposed = true;
-    this.cancelScheduledFrame();
     this.target = null;
-    this.segmentStart = null;
-    this.isMoving = false;
   }
 
   private configureCitywideConstraints(bounds: LatLngBounds) {
@@ -151,42 +130,6 @@ export class MapMotionController {
     this.map.setMinZoom(Math.max(11.2, this.map.getBoundsZoom(minZoomReferenceBounds, true) - 0.72));
     this.constraintsKey = key;
   }
-
-  private cancelScheduledFrame() {
-    if (this.animationFrameId === null) return;
-
-    window.cancelAnimationFrame(this.animationFrameId);
-    this.animationFrameId = null;
-  }
-
-  private readonly renderFrame = (timestamp: number) => {
-    if (this.disposed || !this.segmentStart || !this.target) return;
-
-    const progress = clamp((timestamp - this.animationStartedAt) / this.durationMs, 0, 1);
-    const easedProgress = easeOutCubic(progress);
-    const startPoint = this.map.project(this.segmentStart.center, PROJECTION_ZOOM);
-    const targetPoint = this.map.project(this.target.center, PROJECTION_ZOOM);
-    const center = this.map.unproject(
-      [startPoint.x + (targetPoint.x - startPoint.x) * easedProgress, startPoint.y + (targetPoint.y - startPoint.y) * easedProgress],
-      PROJECTION_ZOOM,
-    );
-    const zoom = this.segmentStart.zoom + (this.target.zoom - this.segmentStart.zoom) * easedProgress;
-
-    // This is the same frame metadata Leaflet's native flyTo uses. It keeps
-    // GridLayer, SVG, marker, tooltip, and popup panes on one geographic frame
-    // while the bounded zoom interpolation avoids flyTo's wide zoom-out arc.
-    this.map._move(center, zoom, { flyTo: true });
-
-    if (progress < 1) {
-      this.animationFrameId = window.requestAnimationFrame(this.renderFrame);
-      return;
-    }
-
-    this.animationFrameId = null;
-    this.segmentStart = null;
-    this.isMoving = false;
-    this.map._moveEnd(true);
-  };
 }
 
 function getPaddedBoundsCenter(map: LeafletMap, bounds: LatLngBounds, zoom: number, paddingTopLeft: [number, number], paddingBottomRight: [number, number]) {
@@ -201,8 +144,4 @@ function getPaddedBoundsCenter(map: LeafletMap, bounds: LatLngBounds, zoom: numb
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
-}
-
-function easeOutCubic(progress: number) {
-  return 1 - (1 - progress) ** 3;
 }

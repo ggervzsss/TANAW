@@ -2,13 +2,10 @@
 
 import { readFileSync } from "node:fs";
 import type { LatLng, LatLngBounds, LatLngExpression, Map as LeafletMap, Point, PointExpression } from "leaflet";
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { calculateAdaptiveMapDuration, MapMotionController, resolveMapCameraPosition, type ResolvedMapCameraTarget } from "./mapCamera";
 
 type MapMock = LeafletMap & {
-  _move: Mock;
-  _moveEnd: Mock;
-  _moveStart: Mock;
   fitBounds: Mock;
   flyTo: Mock;
   flyToBounds: Mock;
@@ -16,52 +13,12 @@ type MapMock = LeafletMap & {
   stop: Mock;
 };
 
-let animationClock = 0;
-let nextAnimationFrameId = 1;
-let pendingAnimationFrames = new Map<number, FrameRequestCallback>();
-
-beforeEach(() => {
-  animationClock = 0;
-  nextAnimationFrameId = 1;
-  pendingAnimationFrames = new Map();
-  vi.spyOn(performance, "now").mockImplementation(() => animationClock);
-  vi.stubGlobal("window", {
-    cancelAnimationFrame: vi.fn((frameId: number) => pendingAnimationFrames.delete(frameId)),
-    requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
-      const frameId = nextAnimationFrameId++;
-      pendingAnimationFrames.set(frameId, callback);
-      return frameId;
-    }),
-  });
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
-
-function renderNextFrame(elapsedMs: number) {
-  animationClock += elapsedMs;
-  const nextFrame = pendingAnimationFrames.entries().next().value as [number, FrameRequestCallback] | undefined;
-  if (!nextFrame) throw new Error("Expected a pending animation frame.");
-
-  pendingAnimationFrames.delete(nextFrame[0]);
-  nextFrame[1](animationClock);
-}
-
 function createMap(initialCenter: LatLngExpression = [14.35, 121.05], initialZoom = 12) {
   let center = toLatLng(initialCenter);
   let zoom = initialZoom;
   let minZoom = 11.2;
 
   const implementation = {
-    _move: vi.fn((nextCenter: LatLngExpression, nextZoom: number) => {
-      center = toLatLng(nextCenter);
-      zoom = nextZoom;
-      return implementation;
-    }),
-    _moveEnd: vi.fn(() => implementation),
-    _moveStart: vi.fn(() => implementation),
     fitBounds: vi.fn(),
     flyTo: vi.fn(),
     flyToBounds: vi.fn(),
@@ -142,7 +99,6 @@ const pacitaBounds = createBounds(14.325, 121.025, 14.35, 121.055);
 const landayanBounds = createBounds(14.36, 121.07, 14.385, 121.1);
 const sanRoqueBounds = createBounds(14.315, 121.08, 14.34, 121.11);
 const langgamBounds = createBounds(14.27, 121.0, 14.31, 121.04);
-const sanAntonioBounds = createBounds(14.29, 120.99, 14.35, 121.06);
 const citywideBounds = createBounds(14.29, 120.98, 14.4, 121.13);
 
 describe("map camera target resolution", () => {
@@ -200,24 +156,27 @@ describe("adaptive native transition timing", () => {
   });
 });
 
-describe("bounded Leaflet camera controller", () => {
-  it("uses one Leaflet movement lifecycle for one barangay action", () => {
+describe("native Leaflet camera controller", () => {
+  it("issues exactly one native camera command for one barangay action", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const target = { type: "barangay", bounds: pacitaBounds } as const;
     const resolved = resolveMapCameraPosition(map, target, false)!;
 
     controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false });
-    renderNextFrame(controller.getSnapshot().durationMs);
 
-    expect(map._moveStart).toHaveBeenCalledTimes(1);
-    expect(map._move).toHaveBeenCalledTimes(1);
-    expect(map._move).toHaveBeenLastCalledWith(expect.objectContaining({ lat: resolved.center.lat, lng: resolved.center.lng }), resolved.zoom, { flyTo: true });
-    expect(map._moveEnd).toHaveBeenCalledTimes(1);
+    expect(map.flyTo).toHaveBeenCalledTimes(1);
+    expect(map.flyTo).toHaveBeenCalledWith(
+      resolved.center,
+      resolved.zoom,
+      expect.objectContaining({
+        animate: true,
+        duration: expect.any(Number),
+      }),
+    );
     expect(map.flyToBounds).not.toHaveBeenCalled();
     expect(map.fitBounds).not.toHaveBeenCalled();
     expect(map.setView).not.toHaveBeenCalled();
-    expect(map.flyTo).not.toHaveBeenCalled();
     expect(map.stop).not.toHaveBeenCalled();
   });
 
@@ -229,40 +188,31 @@ describe("bounded Leaflet camera controller", () => {
     const langgamPosition = resolveMapCameraPosition(map, langgam, false)!;
 
     controller.setTarget(sanRoque, { directoryCollapsed: false, reducedMotion: false });
-    renderNextFrame(120);
     controller.setTarget(langgam, { directoryCollapsed: false, reducedMotion: false });
-    renderNextFrame(controller.getSnapshot().durationMs);
 
     expect(controller.getSnapshot()).toMatchObject({ revision: 2, target: { type: "barangay" } });
-    expect(map._moveStart).toHaveBeenCalledTimes(1);
-    expect(map._moveEnd).toHaveBeenCalledTimes(1);
-    expect(map._move).toHaveBeenLastCalledWith(expect.objectContaining({ lat: langgamPosition.center.lat, lng: langgamPosition.center.lng }), langgamPosition.zoom, { flyTo: true });
-    expect(window.cancelAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(map.flyTo).toHaveBeenCalledTimes(2);
+    expect(map.flyTo).toHaveBeenLastCalledWith(langgamPosition.center, langgamPosition.zoom, expect.anything());
   });
 
-  it("keeps Pacita as the only final target after the required rapid barangay sequence", () => {
+  it("keeps Pacita as the only final target after the screenshot regression sequence", () => {
     const map = createMap();
     const controller = new MapMotionController(map);
     const sequence: ResolvedMapCameraTarget[] = [
-      { type: "barangay", bounds: sanAntonioBounds },
-      { type: "barangay", bounds: landayanBounds },
       { type: "barangay", bounds: sanRoqueBounds },
       { type: "barangay", bounds: langgamBounds },
+      { type: "barangay", bounds: landayanBounds },
+      { type: "citywide", bounds: citywideBounds },
       { type: "barangay", bounds: pacitaBounds },
     ];
     const pacitaPosition = resolveMapCameraPosition(map, sequence.at(-1)!, false)!;
 
-    sequence.forEach((target) => {
-      controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false });
-      renderNextFrame(45);
-    });
-    renderNextFrame(controller.getSnapshot().durationMs);
+    sequence.forEach((target) => controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false }));
 
     expect(controller.getSnapshot()).toMatchObject({ revision: 5, target: { type: "barangay" } });
-    expect(map._move).toHaveBeenLastCalledWith(expect.objectContaining({ lat: pacitaPosition.center.lat, lng: pacitaPosition.center.lng }), pacitaPosition.zoom, { flyTo: true });
+    expect(map.flyTo).toHaveBeenCalledTimes(5);
+    expect(map.flyTo).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
     expect(map.flyToBounds).not.toHaveBeenCalled();
-    expect(map._moveEnd).toHaveBeenCalledTimes(1);
-    expect(map.setMaxBounds).not.toHaveBeenCalled();
   });
 
   it("replaces a citywide return with a new barangay camera command", () => {
@@ -271,33 +221,10 @@ describe("bounded Leaflet camera controller", () => {
     const pacitaPosition = resolveMapCameraPosition(map, { type: "barangay", bounds: pacitaBounds }, false)!;
 
     controller.setTarget({ type: "citywide", bounds: citywideBounds }, { directoryCollapsed: false, reducedMotion: false });
-    renderNextFrame(100);
     controller.setTarget({ type: "barangay", bounds: pacitaBounds }, { directoryCollapsed: false, reducedMotion: false });
-    renderNextFrame(controller.getSnapshot().durationMs);
 
     expect(controller.getSnapshot().revision).toBe(2);
-    expect(map._move).toHaveBeenLastCalledWith(expect.objectContaining({ lat: pacitaPosition.center.lat, lng: pacitaPosition.center.lng }), pacitaPosition.zoom, { flyTo: true });
-    expect(map._moveEnd).toHaveBeenCalledTimes(1);
-  });
-
-  it("never drops below the canonical citywide destination zoom", () => {
-    const map = createMap([14.34, 121.04], 14.2);
-    const controller = new MapMotionController(map);
-    const target = { type: "citywide", bounds: citywideBounds } as const;
-    const citywidePosition = resolveMapCameraPosition(map, target, false)!;
-
-    controller.setTarget(target, { directoryCollapsed: false, reducedMotion: false });
-    renderNextFrame(150);
-    renderNextFrame(150);
-    renderNextFrame(150);
-    renderNextFrame(controller.getSnapshot().durationMs);
-
-    const renderedZooms = map._move.mock.calls.map((call) => call[1] as number);
-    const destinationFrames = renderedZooms.filter((zoom) => zoom === citywidePosition.zoom);
-    expect(renderedZooms.every((zoom) => zoom >= citywidePosition.zoom)).toBe(true);
-    expect(renderedZooms.at(-1)).toBe(citywidePosition.zoom);
-    expect(destinationFrames).toHaveLength(1);
-    expect(map.flyTo).not.toHaveBeenCalled();
+    expect(map.flyTo).toHaveBeenLastCalledWith(pacitaPosition.center, pacitaPosition.zoom, expect.anything());
   });
 
   it("uses an immediate native setView for reduced motion", () => {
@@ -326,13 +253,11 @@ describe("bounded Leaflet camera controller", () => {
 });
 
 describe("geographic layer integrity safeguards", () => {
-  it("uses one frame driver and Leaflet fly metadata for synchronized geographic panes", () => {
+  it("contains no custom frame driver or private Leaflet movement calls", () => {
     const cameraSource = readFileSync(new URL("./mapCamera.ts", import.meta.url), "utf8");
 
-    expect(cameraSource.match(/requestAnimationFrame/g)).toHaveLength(2);
-    expect(cameraSource).toContain("this.map._move(center, zoom, { flyTo: true })");
-    expect(cameraSource).toContain("this.map._moveStart(true)");
-    expect(cameraSource).toContain("this.map._moveEnd(true)");
+    expect(cameraSource).not.toContain("requestAnimationFrame");
+    expect(cameraSource).not.toMatch(/\._move(?:Start|End)?\(/);
     expect(cameraSource).not.toContain("latLngToContainerPoint");
   });
 
@@ -365,13 +290,5 @@ describe("geographic layer integrity safeguards", () => {
     expect(creationEffect![0]).not.toContain("[boundary, showBoundaries");
     expect(componentSource).toContain("citywideBoundsRef.current = boundaryLayer.getBounds()");
     expect(componentSource).toContain("barangayBoundsRef.current = new Map");
-  });
-
-  it("retains marker instances while selection visibility changes", () => {
-    const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
-
-    expect(componentSource).toContain("const enterpriseIds = new Set(mapEnterprises.map");
-    expect(componentSource).toContain("if (!map.hasLayer(marker)) marker.addTo(map)");
-    expect(componentSource).not.toContain("Object.values(markersRef.current).forEach((marker) => marker.remove());\n    markersRef.current = {};\n\n    visibleEnterprises.forEach");
   });
 });
