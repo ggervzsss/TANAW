@@ -35,7 +35,7 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
   }));
   const chartData = data.filter((slice) => slice.value > 0);
   const hasData = chartData.length > 0;
-  const activeSlice = activeIndex === null ? null : chartData[activeIndex] ?? null;
+  const activeSlice = activeIndex === null ? null : (chartData[activeIndex] ?? null);
 
   return (
     <Card className="flex flex-col border border-gray-200 p-5 shadow-sm transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] dark:border-(--enterprise-border-soft)">
@@ -56,7 +56,7 @@ export function DemographicsBreakdownChart({ report }: DemographicsBreakdownChar
 
       {hasData ? (
         <div className="grid flex-1 gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="relative min-h-72">
+          <div className="tanaw-demographics-chart relative min-h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

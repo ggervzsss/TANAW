@@ -32,6 +32,39 @@ const summary = {
   period: "2026-07",
 };
 
+const historyPoint = (label: string, currentOccupancy: number, peakOccupancy: number) => ({
+  label,
+  visitors: 0,
+  entries: currentOccupancy,
+  exits: 0,
+  current_occupancy: currentOccupancy,
+  peak_occupancy: peakOccupancy,
+});
+
+const localReport = {
+  report_id: "REP-PEAK-001",
+  period: "July 2026",
+  submitted_at: "2026-07-29T08:00:00Z",
+  entries: 60,
+  exits: 50,
+  peak_occupancy: 18,
+  unique_count: 40,
+  notes: null,
+  sync_status: "submitted",
+  payload: {
+    status: "Submitted",
+    metrics: { entries: 60, exits: 50, peak: 18, unique: 40 },
+    demo: {
+      thisProvMale: "10",
+      thisProvFemale: "10",
+      otherProvMale: "6",
+      otherProvFemale: "6",
+      foreignMale: "4",
+      foreignFemale: "4",
+    },
+  },
+};
+
 async function signIn(page: Page) {
   let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
@@ -60,10 +93,23 @@ async function signIn(page: Page) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ hourly_density: [], historical: { Today: [], Week: [], Month: [] } }),
+        body: JSON.stringify({
+          hourly_density: [],
+          historical: {
+            Today: [
+              historyPoint("09:00", 18, 99),
+              historyPoint("10:00", 12, 99),
+            ],
+            Week: [
+              historyPoint("Fri", 98, 99),
+              historyPoint("Sat", 79, 99),
+            ],
+            Month: [historyPoint("Jul 14", 99, 99)],
+          },
+        }),
       });
     }
-    if (pathname === "/reports/local") return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+    if (pathname === "/reports/local") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([localReport]) });
     return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Unavailable in unified metrics acceptance test" }) });
   });
 
@@ -90,6 +136,47 @@ test("renders the Enterprise analytics metrics as one responsive dark-mode heade
   await expect(header.getByText("12", { exact: true })).toBeVisible();
   await expect(header.getByText("457", { exact: true })).toBeVisible();
   await expect(header).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(header.locator("[data-metrics-accent]")).toHaveCSS("background-image", "linear-gradient(90deg, rgb(63, 118, 91), rgb(210, 179, 90), rgb(120, 173, 101))");
+  await expect(header.getByText("457", { exact: true })).toHaveCSS("color", "rgb(120, 215, 173)");
+
+  await expect(page.getByText("Peak reference 98", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak", { exact: true })).toBeVisible();
+  await expect(page.locator(".recharts-reference-line-line")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(page.getByText("Peak reference 18", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak reference 98", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Utilization 67%", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await expect(page.getByText("Peak reference 99", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak reference 18", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByRole("button", { name: "Week", exact: true }).click();
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await page.getByRole("button", { name: "Week", exact: true }).click();
+
+  await expect(page.getByText("Peak reference 98", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peak reference 18", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
+
+  const donutSegment = page.locator(".tanaw-demographics-chart .recharts-sector").first();
+  await donutSegment.hover();
+  await expect(page.locator(".tanaw-demographics-chart").getByRole("status")).toBeVisible();
+  await donutSegment.click();
+  const mouseFocusOutline = await page.locator(".tanaw-demographics-chart").evaluate((chart) => {
+    const focused = chart.querySelector(":focus");
+    return focused ? getComputedStyle(focused).outlineStyle : "none";
+  });
+  expect(mouseFocusOutline).toBe("none");
 
   const firstSegment = header.locator("[data-metric-segment]").first().locator(".tanaw-unified-metrics__segment");
   const beforeHover = await firstSegment.boundingBox();
@@ -117,5 +204,6 @@ test("renders the Enterprise analytics metrics as one responsive dark-mode heade
   });
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(header).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(header.locator("[data-metrics-accent]")).toHaveCSS("background-image", "linear-gradient(90deg, rgb(27, 67, 50), rgb(197, 160, 71), rgb(90, 140, 70))");
   await expect(page.getByText("Historical Visitor Trends", { exact: true })).toBeVisible();
 });

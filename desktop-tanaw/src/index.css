@@ -1940,6 +1940,31 @@ html.dark .enterprise-shell .sticky.top-0.bg-gray-50 {
   background: linear-gradient(90deg, #1b4332 0%, #c5a047 50%, #5a8c46 100%);
 }
 
+html.dark .tanaw-unified-metrics__accent {
+  background: linear-gradient(90deg, #3f765b 0%, #d2b35a 50%, #78ad65 100%);
+}
+
+html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-detail {
+  color: #8fdcba !important;
+}
+
+html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-value {
+  color: #78d7ad !important;
+}
+
+html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-dot {
+  background-color: #65cfa3 !important;
+}
+
+.tanaw-demographics-chart :where(.recharts-wrapper, .recharts-surface):focus:not(:focus-visible) {
+  outline: none;
+}
+
+.tanaw-demographics-chart :where(.recharts-wrapper, .recharts-surface):focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 2px;
+}
+
 .tanaw-unified-metrics__hover {
   background: linear-gradient(115deg, transparent 8%, rgb(27 67 50 / 0.018) 28%, rgb(52 168 83 / 0.075) 50%, rgb(90 140 70 / 0.035) 72%, transparent 92%);
   background-position: 100% 0;

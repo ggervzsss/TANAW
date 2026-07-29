@@ -44,10 +44,12 @@ export function ModalFrame({ title, children, onClose, maxWidthClassName = "max-
         >
           <div className="from-tanaw-green to-tanaw-lime h-1.5 bg-linear-to-r via-[#d9b44a]" />
           <header className="relative flex items-start justify-between gap-4 border-b border-emerald-100/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_54%,rgba(255,251,235,0.78)_100%)] px-6 py-5 max-sm:px-5 dark:border-slate-600 dark:bg-[linear-gradient(135deg,#0f2d3c_0%,#172033_54%,#312638_100%)]">
-            <span className="pointer-events-none absolute bottom-0 left-6 h-px w-24 bg-[#d9b44a]/70" aria-hidden="true" />
             <div className="min-w-0">
               {eyebrow && <p className="mb-1 font-mono text-[10px] font-bold tracking-[0.18em] text-emerald-700/80 uppercase dark:text-emerald-200/90">{eyebrow}</p>}
-              <h2 className="text-tanaw-navy text-xl leading-tight font-bold tracking-tight dark:text-white">{title}</h2>
+              <div className="relative w-fit max-w-full">
+                <h2 className="text-tanaw-navy text-xl leading-tight font-bold tracking-tight wrap-break-word dark:text-white">{title}</h2>
+                <span className="pointer-events-none absolute -bottom-2 left-0 block h-px w-full bg-[#d9b44a]/70" aria-hidden="true" data-modal-title-accent />
+              </div>
             </div>
             <button
               type="button"

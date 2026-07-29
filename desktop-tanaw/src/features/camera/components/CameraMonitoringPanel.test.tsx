@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import { EMPTY_ML_COUNTS } from "../services/ml-service";
+import { EMPTY_ML_COUNTS, type MlHealth, type MlServiceStatus } from "../services/ml-service";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
 import type { CameraPreviewState } from "./CameraVideoPreview";
 
@@ -13,6 +13,7 @@ describe("CameraMonitoringPanel", () => {
         counts={EMPTY_ML_COUNTS}
         health={null}
         serviceStatus={null}
+        serviceError={null}
         error={null}
         isRestartingService={false}
         isStarting={false}
@@ -29,9 +30,47 @@ describe("CameraMonitoringPanel", () => {
     expect(markup).toContain("SYSTEM STATUS &amp; CONTROLS");
     expect(markup.indexOf("Live Metrics")).toBeLessThan(markup.indexOf("SYSTEM STATUS &amp; CONTROLS"));
     expect(markup.indexOf("SYSTEM STATUS &amp; CONTROLS")).toBeLessThan(markup.indexOf("ML Service Offline"));
-    expect(markup).toContain("Service");
+    expect(markup).not.toMatch(/> Service<\/button>/);
     expect(markup).toContain("Test");
     expect(markup).toContain("Start");
+    expect(markup).not.toContain("Profile pending");
+    expect(markup).not.toContain("FPS adaptive");
+    expect(markup).not.toContain("Frame Telemetry Idle");
+  });
+
+  it("shows Service only for an ML service failure and hides it after recovery", () => {
+    const failedMarkup = renderPanel({
+      serviceError: "ML service exited unexpectedly.",
+      serviceStatus: { ...baseServiceStatus, error: "ML service exited unexpectedly.", running: false },
+    });
+    expect(failedMarkup).toMatch(/> Service<\/button>/);
+    expect(failedMarkup).toMatch(/> Test<\/button>/);
+    expect(failedMarkup).toMatch(/> Start<\/button>/);
+
+    const recoveredMarkup = renderPanel({
+      health: { status: "ok", running: false } as MlHealth,
+      serviceStatus: { ...baseServiceStatus, running: true },
+    });
+    expect(recoveredMarkup).not.toMatch(/> Service<\/button>/);
+    expect(recoveredMarkup).toMatch(/> Test<\/button>/);
+    expect(recoveredMarkup).toMatch(/> Start<\/button>/);
+
+    const uncheckedStoppedMarkup = renderPanel({
+      serviceStatus: baseServiceStatus,
+    });
+    expect(uncheckedStoppedMarkup).not.toMatch(/> Service<\/button>/);
+  });
+
+  it("does not show Service for an ordinary camera-stream error", () => {
+    const markup = renderPanel({
+      activeCam: { ...camera, status: "failed" },
+      error: "RTSP camera stream could not be opened.",
+      health: { status: "ok", running: false } as MlHealth,
+      serviceStatus: { ...baseServiceStatus, running: true },
+    });
+
+    expect(markup).toContain("Camera Failed");
+    expect(markup).not.toMatch(/> Service<\/button>/);
   });
 
   it("keeps the camera in a starting state while an accepted start initializes", () => {
@@ -91,21 +130,28 @@ function renderPanel({
   activeCam = camera,
   counts = EMPTY_ML_COUNTS,
   error = null,
+  health = null,
   isStarting = false,
   previewState = "connecting",
+  serviceError = null,
+  serviceStatus = null,
 }: {
   activeCam?: Camera;
   counts?: typeof EMPTY_ML_COUNTS;
   error?: string | null;
+  health?: MlHealth | null;
   isStarting?: boolean;
   previewState?: CameraPreviewState;
+  serviceError?: string | null;
+  serviceStatus?: MlServiceStatus | null;
 }) {
   return renderToStaticMarkup(
     <CameraMonitoringPanel
       activeCam={activeCam}
       counts={counts}
-      health={null}
-      serviceStatus={null}
+      health={health}
+      serviceStatus={serviceStatus}
+      serviceError={serviceError}
       error={error}
       isRestartingService={false}
       isStarting={isStarting}
@@ -119,6 +165,16 @@ function renderPanel({
     />,
   );
 }
+
+const baseServiceStatus: MlServiceStatus = {
+  baseUrl: "http://127.0.0.1:8765",
+  desktopBuild: "test",
+  desktopVersion: "test",
+  error: null,
+  packaged: false,
+  pid: 123,
+  running: false,
+};
 
 const camera: Camera = {
   id: 1,

@@ -167,20 +167,29 @@ export function AdminEnterpriseMap() {
     }) as (L.Path & { feature?: GeoJSON.Feature }) | undefined;
   }, []);
 
+  const closeBoundaryTooltips = useCallback(() => {
+    boundaryLayerRef.current?.eachLayer((boundaryLayer) => {
+      boundaryLayer.closeTooltip();
+    });
+  }, []);
+
   const selectBarangay = useCallback(
     (barangayName: string, layer?: L.Path) => {
       const targetLayer = layer ?? findBoundaryLayerByName(barangayName);
+      closeBoundaryTooltips();
       selectedBarangayNameRef.current = barangayName;
       dispatchMapInteraction({ type: "select-barangay", barangayName });
       applyBoundarySelection(barangayName);
       mapRef.current?.closePopup();
       targetLayer?.openTooltip();
     },
-    [applyBoundarySelection, findBoundaryLayerByName],
+    [applyBoundarySelection, closeBoundaryTooltips, findBoundaryLayerByName],
   );
 
   const selectEnterprise = useCallback(
     (enterprise: MapEnterprise) => {
+      const targetLayer = findBoundaryLayerByName(enterprise.barangay);
+      closeBoundaryTooltips();
       selectedBarangayNameRef.current = enterprise.barangay;
       dispatchMapInteraction({
         type: "select-enterprise",
@@ -188,18 +197,20 @@ export function AdminEnterpriseMap() {
         enterpriseId: enterprise.id,
       });
       applyBoundarySelection(enterprise.barangay);
+      targetLayer?.openTooltip();
     },
-    [applyBoundarySelection],
+    [applyBoundarySelection, closeBoundaryTooltips, findBoundaryLayerByName],
   );
 
   const clearBarangaySelection = useCallback(
     (reason: MapDeselectReason) => {
+      closeBoundaryTooltips();
       selectedBarangayNameRef.current = null;
       dispatchMapInteraction({ type: "clear-barangay", reason });
       applyBoundarySelection(null);
       mapRef.current?.closePopup();
     },
-    [applyBoundarySelection],
+    [applyBoundarySelection, closeBoundaryTooltips],
   );
 
   const closeEnterpriseDetails = useCallback(() => {
@@ -390,6 +401,16 @@ export function AdminEnterpriseMap() {
     }
 
     applyBoundarySelectionRef.current(selectedBarangayNameRef.current);
+    if (selectedBarangayNameRef.current) {
+      const selectedKey = normalizeBarangayName(selectedBarangayNameRef.current);
+      boundaryLayer
+        .getLayers()
+        .find((layer) => {
+          if (!("feature" in layer)) return false;
+          return normalizeBarangayName(getBarangayLabel(layer.feature as GeoJSON.Feature | undefined)) === selectedKey;
+        })
+        ?.openTooltip();
+    }
 
     return () => {
       boundaryLayer.remove();

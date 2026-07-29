@@ -4,6 +4,7 @@ import { Card } from "../../../components/Card";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { TrendFilter } from "../types/dashboard";
 import type { LocalHistoricalMetricsPoint, LocalMetricsSummary } from "../../camera/services/ml-service";
+import { getPeriodPeakReference } from "../utils/trendMetrics";
 
 const trendOptions: TrendFilter[] = ["Today", "Week", "Month"];
 const entrySeriesColor = "#065f46";
@@ -26,7 +27,7 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
     peak_occupancy: Math.max(0, point.peak_occupancy ?? 0),
   }));
   const hasSeriesData = chartData.some((point) => point.entry_flow > 0 || point.live_occupancy > 0);
-  const peakReference = Math.max(summary?.peak_occupancy ?? 0, ...chartData.map((point) => point.peak_occupancy));
+  const peakReference = getPeriodPeakReference(data);
   const currentOccupancy = summary?.current_occupancy ?? 0;
   const utilizationRate = peakReference > 0 ? Math.round((currentOccupancy / peakReference) * 100) : 0;
 
@@ -85,7 +86,7 @@ export function HistoricalTrendChart({ data, summary, trendFilter, onTrendFilter
       <div className="h-96 min-h-96 w-full">
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
+            <ComposedChart key={trendFilter} data={chartData} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="dashboardEntryTrend" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={entrySeriesColor} stopOpacity={0.24} />

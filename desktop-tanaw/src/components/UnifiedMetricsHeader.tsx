@@ -63,10 +63,10 @@ const toneClasses: Record<
     value: "text-violet-700 dark:text-violet-200",
   },
   success: {
-    description: "text-emerald-700 dark:text-emerald-300",
-    dot: "bg-emerald-500 dark:bg-emerald-400",
-    icon: "text-emerald-700 dark:text-emerald-300",
-    value: "text-emerald-800 dark:text-emerald-200",
+    description: "tanaw-unified-metrics__success-detail text-emerald-700",
+    dot: "tanaw-unified-metrics__success-dot bg-emerald-500",
+    icon: "tanaw-unified-metrics__success-detail text-emerald-700",
+    value: "tanaw-unified-metrics__success-value text-emerald-800",
   },
   teal: {
     description: "text-teal-700 dark:text-teal-300",

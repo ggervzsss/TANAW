@@ -221,23 +221,29 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(dialog.getByText("RTSP Camera Configuration", { exact: true })).toBeVisible();
-  await dialog.getByText("Password", { exact: true }).locator("..").locator("input").fill("secret-camera-password");
+  await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("secret-camera-password");
   await dialog.getByRole("button", { name: "Show password" }).click();
-  await expect(dialog.getByText("Password", { exact: true }).locator("..").locator("input")).toHaveAttribute("type", "text");
+  await expect(dialog.getByRole("textbox", { name: "Password", exact: true })).toHaveAttribute("type", "text");
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await addCamera.click();
   dialog = page.getByRole("dialog", { name: "Add Camera" });
   await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await dialog.getByText("Camera Name", { exact: true }).locator("..").locator("input").fill("Entrance");
-  await dialog.getByText("Assigned Zone", { exact: true }).locator("..").locator("input").fill("Lobby");
-  await dialog.getByText("Camera IP / Host", { exact: true }).locator("..").locator("input").fill("127.0.0.1");
+  await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill("Entrance");
+  await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Lobby");
+  await dialog.getByPlaceholder("192.168.1.9").fill("127.0.0.1");
+  await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
+  await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("camera-password");
   await dialog.getByRole("button", { name: "Save Configuration" }).click();
 
   const controlsHeading = page.getByText("SYSTEM STATUS & CONTROLS", { exact: true });
   await expect(controlsHeading).toBeVisible();
   await expect(page.getByText("Camera Connection", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stream Protocol", { exact: true })).toBeVisible();
+  await expect(page.getByText("Profile pending", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("FPS adaptive", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("Frame Telemetry Idle", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Service", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();

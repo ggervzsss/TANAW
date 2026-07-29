@@ -808,6 +808,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
             isStopping={activeAction === "stopping"}
             isTesting={activeAction === "testing"}
             serviceStatus={serviceStatus}
+            serviceError={serviceError}
             streamUrl={streamUrl}
             warnings={warnings}
             onCancelEdit={() => setIsEditMode(false)}

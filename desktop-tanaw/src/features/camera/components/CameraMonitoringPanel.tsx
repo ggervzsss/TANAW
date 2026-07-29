@@ -1,4 +1,5 @@
 import { Activity, AlertTriangle, CheckCircle, CircleAlert, LogIn, LogOut, Play, RefreshCw, Square, Users, Wifi } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
@@ -10,6 +11,7 @@ type CameraMonitoringPanelProps = {
   counts: MlCounts;
   health: MlHealth | null;
   serviceStatus: MlServiceStatus | null;
+  serviceError: string | null;
   error: string | null;
   isRestartingService: boolean;
   isStarting: boolean;
@@ -27,6 +29,7 @@ export function CameraMonitoringPanel({
   counts,
   health,
   serviceStatus,
+  serviceError,
   error,
   isRestartingService,
   isStarting,
@@ -42,12 +45,8 @@ export function CameraMonitoringPanel({
   const serviceOnline = health?.status === "ok";
   const serviceLabel = serviceOnline ? (health.running ? "ML Service Running" : "ML Service Ready") : "ML Service Offline";
   const cameraState = getCameraState(activeCam, counts, isStarting);
-  const frameFreshness = formatFrameFreshness(health, counts.running);
-  const displayedFrameIsFresh =
-    previewState === "live" && frameFreshness.tone !== "error";
-  const streamVerified = counts.running
-    ? displayedFrameIsFresh
-    : activeCam.status === "online";
+  const displayedFrameIsFresh = previewState === "live" && hasFreshPreviewFrame(health);
+  const streamVerified = counts.running ? displayedFrameIsFresh : activeCam.status === "online";
   const streamLabel = streamVerified
     ? counts.running
       ? "Live Preview Verified"
@@ -55,12 +54,12 @@ export function CameraMonitoringPanel({
     : counts.running && previewState === "failed"
       ? "Live Preview Unavailable"
       : counts.running && previewState !== "live"
-      ? "Restoring Live Preview"
-      : "Stream Needs Check";
+        ? "Restoring Live Preview"
+        : "Stream Needs Check";
   const estimatedUniqueCount = health?.estimated_unique_count ?? health?.confirmed_unique_count ?? 0;
   const pendingUniqueEntries = health?.pending_unique_entries ?? 0;
   const modelStatus = formatModelStatus(health);
-  const performanceStatus = formatPerformanceStatus(health);
+  const hasActiveModel = Boolean(health?.model_ready && (health.selected_model || health.model_name));
   const isProcessRunning = counts.running && !isStarting;
   const ProcessIcon = isProcessRunning ? Square : Play;
   const processButtonLabel = isProcessRunning ? (isStopping ? "Stopping..." : "Stop") : isStarting ? "Starting..." : "Start";
@@ -69,14 +68,12 @@ export function CameraMonitoringPanel({
     ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
     : "bg-[#065f46] text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
   const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
-  const serviceIssue = serviceStatus?.error ? getUserFacingIssueMessage(serviceStatus.error) : null;
+  const serviceIssueSource = serviceStatus?.error ?? serviceError;
+  const serviceIssue = serviceIssueSource ? getUserFacingIssueMessage(serviceIssueSource) : null;
+  const serviceNeedsRecovery = Boolean(!serviceOnline && (serviceStatus?.error || serviceError));
   const cameraIssueSource = error ?? health?.error ?? counts.error;
   const cameraIssue = cameraIssueSource ? getUserFacingIssueMessage(cameraIssueSource) : null;
   const fallbackIssue = health?.fallback_reason ? "AI fallback mode is active. Visitor counts may be less accurate." : null;
-  const frameIssue =
-    frameFreshness.tone === "error"
-      ? "The latest camera frame is stale. Check the stream connection and camera processing status."
-      : null;
 
   return (
     <div className="space-y-3">
@@ -125,21 +122,15 @@ export function CameraMonitoringPanel({
             tooltip="Shows whether the selected camera is processing, ready, stopped, or unavailable."
           />
           <StatusRow icon={CheckCircle} label={streamLabel} tone={streamVerified ? "ok" : "neutral"} tooltip="Shows whether the stream configuration has been verified." />
-          <StatusRow
-            icon={Activity}
-            issue={fallbackIssue ? { message: fallbackIssue, tone: "warning" } : null}
-            label={modelStatus}
-            tone={health?.model_ready ? "ok" : "neutral"}
-            tooltip="Shows the active detector model, runtime, and tracker selected by TANAW."
-          />
-          <StatusRow icon={Activity} label={performanceStatus} tone="neutral" tooltip="Shows current detector latency and analytics throughput." />
-          <StatusRow
-            icon={Activity}
-            issue={frameIssue ? { message: frameIssue, tone: "error" } : null}
-            label={frameFreshness.label}
-            tone={frameFreshness.tone}
-            tooltip="Compares the age of the latest captured, processed, and preview frames to identify pipeline or display stalls."
-          />
+          {hasActiveModel ? (
+            <StatusRow
+              icon={Activity}
+              issue={fallbackIssue ? { message: fallbackIssue, tone: "warning" } : null}
+              label={modelStatus}
+              tone="ok"
+              tooltip="Shows the active detector model, runtime, and tracker selected by TANAW."
+            />
+          ) : null}
         </div>
         <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400">
           Desktop {serviceStatus?.desktopVersion ?? "unknown"} ({serviceStatus?.packaged ? "packaged" : "development"}) · ML {health?.service_version ?? "unknown"} · API{" "}
@@ -149,28 +140,46 @@ export function CameraMonitoringPanel({
           Desktop build: {serviceStatus?.desktopBuild ?? "unknown"}
         </p>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <InfoTooltip content="Refreshes or checks the local service connection." focusable={false}>
-            <button
-              type="button"
-              onClick={onRestartService}
-              disabled={isRestartingService}
-              className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-gray-200 bg-white px-2 py-2 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={14} className={isRestartingService ? "animate-spin" : ""} /> Service
-            </button>
-          </InfoTooltip>
-          <InfoTooltip content="Tests the selected camera stream configuration." focusable={false}>
-            <button
-              type="button"
-              onClick={onTestConnection}
-              disabled={isTesting || isProcessingThisCamera}
-              className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-[#065f46]/30 bg-white px-2 py-2 text-[11px] font-bold text-[#065f46] transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
-            </button>
-          </InfoTooltip>
-          <InfoTooltip content={processButtonTooltip} focusable={false} className="col-span-2">
+        <div className="mt-3 space-y-2">
+          <motion.div
+            className="grid"
+            initial={false}
+            animate={{
+              columnGap: serviceNeedsRecovery ? 8 : 0,
+              gridTemplateColumns: serviceNeedsRecovery ? "minmax(0, 1fr) minmax(0, 1fr)" : "0fr minmax(0, 1fr)",
+            }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <div className="min-w-0 overflow-hidden">
+              <AnimatePresence initial={false}>
+                {serviceNeedsRecovery ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.14 }}>
+                    <InfoTooltip content="Restarts the local ML service after a service failure." focusable={false}>
+                      <button
+                        type="button"
+                        onClick={onRestartService}
+                        disabled={isRestartingService}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-gray-200 bg-white px-2 py-2 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <RefreshCw size={14} className={isRestartingService ? "animate-spin" : ""} /> Service
+                      </button>
+                    </InfoTooltip>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+            <InfoTooltip content="Tests the selected camera stream configuration." focusable={false}>
+              <button
+                type="button"
+                onClick={onTestConnection}
+                disabled={isTesting || isProcessingThisCamera}
+                className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-[#065f46]/30 bg-white px-2 py-2 text-[11px] font-bold text-[#065f46] transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
+              </button>
+            </InfoTooltip>
+          </motion.div>
+          <InfoTooltip content={processButtonTooltip} focusable={false}>
             <button
               type="button"
               onClick={isProcessRunning ? onStopProcessing : onStartProcessing}
@@ -279,34 +288,19 @@ function getCameraState(activeCam: Camera, counts: MlCounts, isStarting: boolean
 }
 
 function formatModelStatus(health: MlHealth | null) {
-  const profile = formatProfile(health?.effective_processing_profile ?? health?.processing_profile);
-  const model = formatModelName(health?.selected_model ?? health?.model_name);
-  const runtime = (health?.selected_runtime ?? "runtime").toUpperCase();
-  const tracker = formatTracker(health?.effective_tracker);
-  return `${profile} / ${model} / ${runtime} / ${tracker}`;
+  const profile = health?.effective_processing_profile ?? health?.processing_profile;
+  const model = health?.selected_model ?? health?.model_name;
+  return [profile ? formatProfile(profile) : null, model ? formatModelName(model) : null, health?.selected_runtime?.toUpperCase() ?? null, formatTracker(health?.effective_tracker)]
+    .filter((part): part is string => Boolean(part))
+    .join(" / ");
 }
 
-function formatPerformanceStatus(health: MlHealth | null) {
-  const fps = typeof health?.analytics_fps === "number" ? `${health.analytics_fps.toFixed(1)} FPS` : "FPS adaptive";
-  const p95 = typeof health?.detector_p95_ms === "number" ? `${Math.round(health.detector_p95_ms)} ms p95` : "p95 pending";
-  return `${fps} / ${p95}`;
-}
-
-function formatFrameFreshness(health: MlHealth | null, isRunning: boolean): { label: string; tone: "ok" | "neutral" | "error" } {
-  if (!isRunning) return { label: "Frame Telemetry Idle", tone: "neutral" };
+function hasFreshPreviewFrame(health: MlHealth | null) {
   const ages = [health?.raw_frame_stale_ms, health?.processed_frame_stale_ms, health?.stream_frame_stale_ms].filter((age): age is number => typeof age === "number");
-  if (ages.length === 0) return { label: "Frame Freshness Pending", tone: "neutral" };
-  const staleMs = Math.max(...ages);
-  if (staleMs >= 3000) return { label: `Frame Stale ${formatFrameAge(staleMs)}`, tone: "error" };
-  if (staleMs >= 1000) return { label: `Frame Delayed ${formatFrameAge(staleMs)}`, tone: "neutral" };
-  return { label: `Frame Fresh ${formatFrameAge(staleMs)}`, tone: "ok" };
+  return ages.length === 0 || Math.max(...ages) < 3000;
 }
 
-function formatFrameAge(ageMs: number) {
-  return ageMs >= 1000 ? `${(ageMs / 1000).toFixed(1)} s` : `${Math.round(ageMs)} ms`;
-}
-
-function formatProfile(profile: string | null | undefined) {
+function formatProfile(profile: string) {
   const labels: Record<string, string> = {
     auto: "Auto",
     balanced: "Balanced",
@@ -314,16 +308,15 @@ function formatProfile(profile: string | null | undefined) {
     emergency: "Emergency",
     high_accuracy: "High Accuracy",
   };
-  return labels[profile ?? ""] ?? "Profile pending";
+  return labels[profile] ?? profile.replace(/_/g, " ");
 }
 
-function formatModelName(model: string | null | undefined) {
-  if (!model) return "Model pending";
+function formatModelName(model: string) {
   return model.toUpperCase();
 }
 
 function formatTracker(tracker: string | null | undefined) {
   if (tracker === "botsort") return "BoT-SORT";
   if (tracker === "bytetrack") return "ByteTrack";
-  return "Tracker auto";
+  return tracker;
 }

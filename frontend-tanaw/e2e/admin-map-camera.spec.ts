@@ -262,3 +262,19 @@ test("keeps the canonical citywide framing at laptop size in dark mode", async (
   expectCanonicalCitywideFraming(await readMapGeometry(page));
   await expect(page.locator("html")).toHaveClass(/dark/);
 });
+
+test("keeps only the latest barangay tooltip while rapidly switching selections", async ({ page }) => {
+  await configureAdminMapSession(page);
+
+  const barangaySelect = page.getByRole("combobox", { name: "Select barangay" });
+  for (const barangay of ["San Antonio", "Landayan", "Pacita I"]) {
+    await barangaySelect.click();
+    await page.getByRole("option", { name: new RegExp(`^Barangay ${barangay} \\d+$`) }).click();
+  }
+
+  const visibleBoundaryTooltips = page.locator("#admin-enterprise-map .leaflet-tooltip");
+  await expect(visibleBoundaryTooltips).toHaveCount(1);
+  await expect(visibleBoundaryTooltips).toContainText("Pacita I");
+  await expect(visibleBoundaryTooltips).not.toContainText("San Antonio");
+  await expect(visibleBoundaryTooltips).not.toContainText("Landayan");
+});

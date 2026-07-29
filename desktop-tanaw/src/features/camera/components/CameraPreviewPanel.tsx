@@ -26,6 +26,7 @@ type CameraPreviewPanelProps = {
   isStopping: boolean;
   isTesting: boolean;
   serviceStatus: MlServiceStatus | null;
+  serviceError: string | null;
   streamUrl: string;
   warnings: string[];
   onCancelEdit: () => void;
@@ -55,6 +56,7 @@ export function CameraPreviewPanel({
   isStopping,
   isTesting,
   serviceStatus,
+  serviceError,
   streamUrl,
   warnings,
   onCancelEdit,
@@ -154,6 +156,7 @@ export function CameraPreviewPanel({
             isTesting={isTesting}
             previewState={previewState}
             serviceStatus={serviceStatus}
+            serviceError={serviceError}
             onRestartService={onRestartService}
             onStartProcessing={onStartProcessing}
             onStopProcessing={onStopProcessing}

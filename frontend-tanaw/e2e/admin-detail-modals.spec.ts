@@ -20,7 +20,8 @@ const adminUser = {
 };
 
 const longActor = "A deliberately long administrator display name that must remain safely contained inside its detail card without overlapping adjacent content";
-const longSummary = "This deliberately long summary verifies that the balanced detail layout remains readable, wraps safely, and exposes an accessible disclosure only when the value exceeds the configured display threshold.";
+const longSummary =
+  "This deliberately long summary verifies that the balanced detail layout remains readable, wraps safely, and exposes an accessible disclosure only when the value exceeds the configured display threshold.";
 const log = {
   id: "LOG-LAYOUT-0001",
   timestamp: "2026-07-18T10:00:00Z",
@@ -51,9 +52,7 @@ const alert = {
 
 async function restoreAdminSession(page: Page) {
   await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "dark"));
-  await page.route("**/auth/session", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "admin-detail-token", user: adminUser }) }),
-  );
+  await page.route("**/auth/session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "admin-detail-token", user: adminUser }) }));
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(adminUser) }));
   await page.route("**/auth/preferences", (route) => {
     const body = route.request().method() === "PATCH" ? route.request().postDataJSON() : { theme: "dark" };
@@ -74,6 +73,23 @@ async function expectSameRow(left: Locator, right: Locator) {
   expect(Math.abs(leftBox!.y - rightBox!.y)).toBeLessThan(2);
 }
 
+async function expectTitleSizedAccent(dialog: Locator, title: string) {
+  await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
+  const boxes = await dialog.locator("[data-modal-title-accent]").evaluate((accent) => {
+    const titleWrapper = accent.parentElement;
+    if (!titleWrapper) throw new Error("Modal title wrapper is missing.");
+    const accentBox = accent.getBoundingClientRect();
+    const titleWrapperBox = titleWrapper.getBoundingClientRect();
+    return {
+      accent: { width: accentBox.width, x: accentBox.x },
+      titleWrapper: { width: titleWrapperBox.width, x: titleWrapperBox.x },
+    };
+  });
+  expect(boxes.accent.x).toBeCloseTo(boxes.titleWrapper.x, 0);
+  expect(boxes.accent.width).toBeCloseTo(boxes.titleWrapper.width, 0);
+  return boxes.accent.width;
+}
+
 test("balances Admin log and alert details with accessible long-text disclosures", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await restoreAdminSession(page);
@@ -83,6 +99,7 @@ test("balances Admin log and alert details with accessible long-text disclosures
   const logDialog = page.getByRole("dialog", { name: "Activity Details" });
   await expect(logDialog).toBeVisible();
   await expect(logDialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  const activityAccentWidth = await expectTitleSizedAccent(logDialog, "Activity Details");
   await expectSameRow(logDialog.getByText("Affected Item", { exact: true }).locator(".."), logDialog.getByText("Details", { exact: true }).locator(".."));
 
   const actorDisclosure = logDialog.getByText("Performed By", { exact: true }).locator("..").getByRole("button");
@@ -98,6 +115,8 @@ test("balances Admin log and alert details with accessible long-text disclosures
   await page.goto(`/admin/operations?view=situations&alert=${alert.id}`);
   const alertDialog = page.getByRole("dialog", { name: "Maintenance Request" });
   await expect(alertDialog).toBeVisible();
+  const alertAccentWidth = await expectTitleSizedAccent(alertDialog, "Maintenance Request");
+  expect(alertAccentWidth).toBeGreaterThan(activityAccentWidth);
   await expectSameRow(alertDialog.getByText("What Happened", { exact: true }).locator(".."), alertDialog.getByText("Suggested Response", { exact: true }).locator(".."));
   await expect(alertDialog.getByText(longSummary, { exact: true })).toBeVisible();
 

@@ -9,6 +9,7 @@ type CameraReadOnlyDetailsProps = {
 
 export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps) {
   const verified = ["online", "running"].includes(activeCam.status);
+  const streamProtocol = getStreamProtocol(activeCam.rtsp);
 
   return (
     <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
@@ -33,10 +34,15 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
           <DetailRow label="Counting Area" value={activeCam.zone} tooltip="The area monitored by this camera." />
           <DetailRow label="Counting Direction" value="Entry / Exit Lines" tooltip="Lines used to count entering and exiting visitors." />
           <DetailRow label="Counting Mode" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="The visitor-counting mode selected for this camera." />
+          {streamProtocol ? <DetailRow label="Stream Protocol" value={streamProtocol} tooltip="The protocol configured in this camera's stream address." /> : null}
         </div>
       </div>
     </section>
   );
+}
+
+function getStreamProtocol(streamAddress: string) {
+  return /^([a-z][a-z\d+.-]*):\/\//i.exec(streamAddress)?.[1]?.toUpperCase() ?? null;
 }
 
 function formatProcessingProfile(profile: Camera["processingProfile"]) {
