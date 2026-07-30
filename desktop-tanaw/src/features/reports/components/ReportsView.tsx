@@ -21,6 +21,7 @@ import { DESKTOP_REPORT_SYNC_EVENT, getDesktopSamplePreparation, prepareDesktopS
 import { downloadDotReportPdf } from "../utils/pdf";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { formatReportingPeriodLabel, isSameReportingMonth, reportingMonthKey, shouldPrepareDraftPeriod } from "../utils/reporting-period";
+import { sortReportLedgerRows } from "../utils/report-ledger";
 import { notifyError } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
@@ -685,7 +686,7 @@ function buildLedgerRows({
     })),
   );
 
-  return rows;
+  return sortReportLedgerRows(rows);
 }
 
 function reportFromPendingCounts(counts: BackendSamplePreparationCounts): ReportRecord {

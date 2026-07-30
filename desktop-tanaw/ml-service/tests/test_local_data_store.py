@@ -756,6 +756,8 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(summary["unique_count"], 24)
             self.assertEqual(summary["unsubmitted_events"], 71)
             self.assertEqual(summary["period"], "June 2026")
+            self.assertEqual(summary["current_occupancy"], 0)
+            self.assertEqual(summary["peak_occupancy"], 12)
             self.assertTrue(summary["prepared"])
             self.assertEqual(store.list_report_submissions(), [])
 
@@ -771,6 +773,9 @@ class LocalDataStoreTest(unittest.TestCase):
             )
             self.assertFalse(repeated["prepared"])
             self.assertEqual(repeated["total_events"], 71)
+
+            store.append_count_event(_event("entry", entry=41, exit=31, occupancy=10))
+            self.assertEqual(store.metrics_summary()["current_occupancy"], 1)
 
     def test_prepared_counts_allow_next_period_after_submission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

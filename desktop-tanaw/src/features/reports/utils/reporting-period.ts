@@ -24,6 +24,12 @@ export function reportingMonthKey(value: string) {
   return `${reportingMonth.year}-${String(reportingMonth.monthIndex + 1).padStart(2, "0")}`;
 }
 
+export function reportingMonthSortValue(value: string) {
+  const reportingMonth = parseReportingMonth(value);
+  if (!reportingMonth) return Number.NEGATIVE_INFINITY;
+  return reportingMonth.year * 12 + reportingMonth.monthIndex;
+}
+
 function parseReportingMonth(value: string) {
   const normalizedValue = value.trim();
   const monthYearMatch = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/.exec(normalizedValue);
