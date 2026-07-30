@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from hashlib import sha256
 
+from app.core.date_time import PHILIPPINE_TIME_ZONE
+
 SAMPLE_ACCOUNT_EMAILS = (
     "it.operations@tanaw.test",
     "system.admin@tanaw.test",
@@ -22,10 +24,18 @@ def sample_dataset_marker_email() -> str:
     return SAMPLE_ACCOUNT_EMAILS[0]
 
 
-def prepared_counts(enterprise_id: str) -> list[dict[str, int | str]]:
-    current = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    previous = _add_months(current, -1)
-    return [_counts_for_period(enterprise_id, month) for month in (previous, current)]
+def prepared_counts(
+    enterprise_id: str, reference: datetime | None = None
+) -> list[dict[str, int | str]]:
+    current = (
+        (reference or datetime.now(UTC))
+        .astimezone(PHILIPPINE_TIME_ZONE)
+        .replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    )
+    return [
+        _counts_for_period(enterprise_id, _add_months(current, month_offset))
+        for month_offset in range(-4, 0)
+    ]
 
 
 def prepared_report_id(enterprise_id: str, period: str) -> str:

@@ -1485,6 +1485,19 @@ class LocalDataStore:
                 """,
                 rows,
             )
+            prepared_at = _utc_now()
+            connection.execute(
+                """
+                insert into enterprise_occupancy_state (
+                    singleton_id, current_occupancy, peak_occupancy, updated_at
+                ) values (1, 0, ?, ?)
+                on conflict(singleton_id) do update set
+                    current_occupancy = 0,
+                    peak_occupancy = max(peak_occupancy, excluded.peak_occupancy),
+                    updated_at = excluded.updated_at
+                """,
+                (peak_limit, prepared_at),
+            )
         return {
             **self.metrics_summary(include_submitted=False),
             "prepared": True,

@@ -482,7 +482,7 @@ async def create_admin_visitor_history(
                     received_at=captured_at,
                     entries=entries,
                     exits=exits,
-                    current_occupancy=occupancy,
+                    current_occupancy=0 if is_current else occupancy,
                     peak_occupancy=max(occupancy, normal_level + 8),
                     unique_count=unique_count,
                     confirmed_unique_count=round(unique_count * 0.86),
@@ -1371,11 +1371,8 @@ def should_skip_target_report(
     enterprise_profile_id: str,
     target_enterprise_profile_id: str,
 ) -> bool:
-    previous_month = add_months(current_month, -1)
-    return enterprise_profile_id == target_enterprise_profile_id and month_start in {
-        previous_month,
-        current_month,
-    }
+    pending_months = {add_months(current_month, offset) for offset in range(-4, 0)}
+    return enterprise_profile_id == target_enterprise_profile_id and month_start in pending_months
 
 
 def seeded_review_status(month_start: datetime, current_month: datetime) -> str:
