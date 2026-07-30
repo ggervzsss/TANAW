@@ -307,7 +307,11 @@ async def generate_sample_data(
     notifications = await create_staff_report_notifications(
         db, accounts["lgu"], reports["staffNotificationReports"]
     )
-    final_reports = await create_final_reports(db, reports)
+    final_reports = await create_final_reports(
+        db,
+        reports,
+        expected_enterprise_ids={enterprise.id for enterprise in enterprises},
+    )
     logs = await create_activity_logs(db, reports, final_reports)
 
     counts = {
@@ -482,7 +486,7 @@ async def create_admin_visitor_history(
                     received_at=captured_at,
                     entries=entries,
                     exits=exits,
-                    current_occupancy=occupancy,
+                    current_occupancy=0 if is_current else occupancy,
                     peak_occupancy=max(occupancy, normal_level + 8),
                     unique_count=unique_count,
                     confirmed_unique_count=round(unique_count * 0.86),
@@ -1145,7 +1149,11 @@ def split_gender(total: int, male_percent: int) -> tuple[int, int]:
     return male, total - male
 
 
-async def create_final_reports(db: AsyncSession, history: dict) -> list[FinalReport]:
+async def create_final_reports(
+    db: AsyncSession,
+    history: dict,
+    expected_enterprise_ids: set[str],
+) -> list[FinalReport]:
     reports_by_period: dict[str, list[EnterpriseReportSubmission]] = {}
     for report in history["reports"]:
         if report.review_status == "Consolidated":
@@ -1155,6 +1163,9 @@ async def create_final_reports(db: AsyncSession, history: dict) -> list[FinalRep
 
     final_reports: list[FinalReport] = []
     for period, reports in sorted(reports_by_period.items()):
+        submitted_enterprise_ids = {report.enterprise_profile_id for report in reports}
+        if submitted_enterprise_ids != expected_enterprise_ids:
+            continue
         final_report = FinalReport(
             id=sample_uuid("final-report", period),
             report_code=f"{SAMPLE_FINAL_REPORT_PREFIX}{period.replace(' ', '-').upper()}",
@@ -1371,18 +1382,15 @@ def should_skip_target_report(
     enterprise_profile_id: str,
     target_enterprise_profile_id: str,
 ) -> bool:
-    previous_month = add_months(current_month, -1)
-    return enterprise_profile_id == target_enterprise_profile_id and month_start in {
-        previous_month,
-        current_month,
-    }
+    unsubmitted_months = {add_months(current_month, offset) for offset in range(-4, 1)}
+    return (
+        enterprise_profile_id == target_enterprise_profile_id and month_start in unsubmitted_months
+    )
 
 
 def seeded_review_status(month_start: datetime, current_month: datetime) -> str:
-    previous_month = add_months(current_month, -1)
-    return (
-        "Ready to Consolidate" if month_start in {previous_month, current_month} else "Consolidated"
-    )
+    open_months = {add_months(current_month, offset) for offset in range(-4, 1)}
+    return "Ready to Consolidate" if month_start in open_months else "Consolidated"
 
 
 def affected_row_count(result: Any) -> int:
