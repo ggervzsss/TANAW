@@ -32,6 +32,7 @@ from app.features.sample_data.cli import (
     AdminVisitorScenario,
     build_demographic_breakdown,
     create_admin_visitor_history,
+    create_final_reports,
     create_portal_workflow_data,
     create_staff_report_notifications,
     prepare_staff_notification_reports,
@@ -141,7 +142,7 @@ def test_generated_account_content_has_no_mock_label() -> None:
     assert validate_password_policy(TEST_ACCOUNT_PASSWORD) == TEST_ACCOUNT_PASSWORD
 
 
-def test_target_enterprise_is_missing_for_four_completed_months() -> None:
+def test_target_enterprise_is_missing_for_four_completed_months_and_current_month() -> None:
     older_month = datetime(2026, 2, 1, tzinfo=UTC)
     pending_months = [datetime(2026, month, 1, tzinfo=UTC) for month in range(3, 7)]
     current_month = datetime(2026, 7, 1, tzinfo=UTC)
@@ -152,9 +153,12 @@ def test_target_enterprise_is_missing_for_four_completed_months() -> None:
         for month in pending_months
     )
     assert not should_skip_target_report(current_month, current_month, "supporting", "target")
-    assert not should_skip_target_report(current_month, current_month, "target", "target")
+    assert should_skip_target_report(current_month, current_month, "target", "target")
     assert seeded_review_status(older_month, current_month) == "Consolidated"
-    assert seeded_review_status(pending_months[-1], current_month) == "Ready to Consolidate"
+    assert all(
+        seeded_review_status(month, current_month) == "Ready to Consolidate"
+        for month in pending_months
+    )
     assert seeded_review_status(current_month, current_month) == "Ready to Consolidate"
 
 
@@ -193,6 +197,29 @@ async def test_latest_sample_telemetry_starts_with_zero_live_occupancy() -> None
     assert latest.current_occupancy == 0
     assert latest.entries - latest.exits == scenario.current_visitors
     assert latest.peak_occupancy >= scenario.current_visitors
+
+
+@pytest.mark.asyncio
+async def test_sample_final_reports_require_every_participating_enterprise() -> None:
+    complete_period_reports = [
+        _consolidated_report("REP-FEB-1", "enterprise-1", datetime(2026, 2, 18, tzinfo=UTC)),
+        _consolidated_report("REP-FEB-2", "enterprise-2", datetime(2026, 2, 19, tzinfo=UTC)),
+    ]
+    incomplete_period_reports = [
+        _consolidated_report("REP-MAR-2", "enterprise-2", datetime(2026, 3, 19, tzinfo=UTC))
+    ]
+    db = MagicMock()
+    db.flush = AsyncMock()
+
+    final_reports = await create_final_reports(
+        db,
+        {"reports": [*complete_period_reports, *incomplete_period_reports]},
+        expected_enterprise_ids={"enterprise-1", "enterprise-2"},
+    )
+
+    assert [report.period for report in final_reports] == ["February 2026"]
+    assert final_reports[0].enterprise_count == 2
+    assert final_reports[0].total_unique == 160
 
 
 def test_seeded_demographics_match_unique_visitor_count() -> None:
@@ -387,3 +414,16 @@ def _report(report_id: str, submitted_at: datetime) -> EnterpriseReportSubmissio
         sync_status="synced",
         payload_json=json.dumps({"status": "Submitted"}),
     )
+
+
+def _consolidated_report(
+    report_id: str,
+    enterprise_profile_id: str,
+    submitted_at: datetime,
+) -> EnterpriseReportSubmission:
+    report = _report(report_id, submitted_at)
+    report.enterprise_profile_id = enterprise_profile_id
+    report.enterprise_name = enterprise_profile_id
+    report.period = submitted_at.strftime("%B %Y")
+    report.review_status = "Consolidated"
+    return report
