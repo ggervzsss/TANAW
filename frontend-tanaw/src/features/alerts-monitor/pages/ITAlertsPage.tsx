@@ -9,7 +9,7 @@ import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
 import { alertsQueryKey, useAlerts } from "@/shared/hooks/useAlerts";
 import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
-import { updateAlertStatus } from "@/shared/services/alerts";
+import { sortRecommendedPriorityAlerts, updateAlertStatus } from "@/shared/services/alerts";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import type { PriorityAlert, PriorityAlertStatus, PriorityAlertType, TechnicalIssueUrgency } from "@/shared/types";
@@ -40,10 +40,22 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
   const { timeFormat } = useSystemDisplayPreferences();
   const [searchParams, setSearchParams] = useSearchParams();
   const { alerts: allAlerts, isLoading } = useAlerts();
-  const alerts = allAlerts.filter((alert) => alert.owner === "IT");
+  const alerts = useMemo(() => allAlerts.filter((alert) => alert.owner === "IT"), [allAlerts]);
   const statusMutation = useMutation({
     mutationFn: ({ alertId, status }: { alertId: string; status: PriorityAlertStatus }) => updateAlertStatus(alertId, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: alertsQueryKey }),
+    onMutate: async ({ alertId, status }) => {
+      await queryClient.cancelQueries({ queryKey: alertsQueryKey });
+      const previousAlerts = queryClient.getQueryData<PriorityAlert[]>(alertsQueryKey);
+      queryClient.setQueryData<PriorityAlert[]>(alertsQueryKey, (current = []) => current.map((alert) => (alert.id === alertId ? { ...alert, status } : alert)));
+      return { previousAlerts };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousAlerts) queryClient.setQueryData(alertsQueryKey, context.previousAlerts);
+    },
+    onSuccess: (updatedAlert) => {
+      queryClient.setQueryData<PriorityAlert[]>(alertsQueryKey, (current = []) => current.map((alert) => (alert.id === updatedAlert.id ? updatedAlert : alert)));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: alertsQueryKey }),
   });
   const [filters, setFilters] = useScopedPageState<TechnicalIssueFilters>({
     initialValue: initialFilters,
@@ -57,16 +69,18 @@ export function ITAlertsPage({ embedded = false }: { embedded?: boolean }) {
 
   const filteredAlerts = useMemo(() => {
     const normalizedQuery = filters.query.trim().toLowerCase();
-    return alerts.filter((alert) => {
-      const searchable = [alert.id, alert.type, alert.urgency, alert.enterprise ?? "", alert.requester, alert.summary, alert.requiredAction, alert.status, alert.resolutionMode]
-        .join(" ")
-        .toLowerCase();
-      const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
-      const matchesUrgency = filters.urgency === "All Urgencies" || alert.urgency === filters.urgency;
-      const matchesStatus = filters.status === "All Statuses" || itIssueStatusLabel(alert.status) === filters.status;
-      const matchesType = filters.type === "All Types" || alert.type === filters.type;
-      return matchesQuery && matchesUrgency && matchesStatus && matchesType;
-    });
+    return sortRecommendedPriorityAlerts(
+      alerts.filter((alert) => {
+        const searchable = [alert.id, alert.type, alert.urgency, alert.enterprise ?? "", alert.requester, alert.summary, alert.requiredAction, alert.status, alert.resolutionMode]
+          .join(" ")
+          .toLowerCase();
+        const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
+        const matchesUrgency = filters.urgency === "All Urgencies" || alert.urgency === filters.urgency;
+        const matchesStatus = filters.status === "All Statuses" || itIssueStatusLabel(alert.status) === filters.status;
+        const matchesType = filters.type === "All Types" || alert.type === filters.type;
+        return matchesQuery && matchesUrgency && matchesStatus && matchesType;
+      }),
+    );
   }, [alerts, filters]);
 
   const activeAlerts = alerts.filter((alert) => alert.status !== "Resolved");
