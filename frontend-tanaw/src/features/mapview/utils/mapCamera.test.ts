@@ -311,10 +311,12 @@ describe("geographic layer integrity safeguards", () => {
 
   it("keeps the map hidden until the canonical initial camera has been applied", () => {
     const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+    const cameraHookSource = readFileSync(new URL("../hooks/useMapCameraSync.ts", import.meta.url), "utf8");
 
     expect(componentSource).not.toContain("sanPedroFallbackCenter");
     expect(componentSource).not.toContain("sanPedroRelaxedFallbackBounds");
-    expect(componentSource).toContain("initializedMapInstanceRef.current !== map");
+    expect(componentSource).toContain("useMapCameraSync({");
+    expect(cameraHookSource).toContain("initializedMapInstanceRef.current !== map");
     expect(componentSource).toContain('visibility: isInitialCameraReady ? "visible" : "hidden"');
   });
 

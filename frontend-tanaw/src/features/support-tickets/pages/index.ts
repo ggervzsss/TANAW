@@ -1,6 +1,1 @@
-export {
-  PriorityBadge,
-  SupportTicketsPage,
-  TicketDetailsModal,
-  TicketStatusBadge,
-} from "./SupportTicketsPage";
+export { SupportTicketsPage } from "./SupportTicketsPage";

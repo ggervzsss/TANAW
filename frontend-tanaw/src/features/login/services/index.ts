@@ -1,4 +1,4 @@
-export { completeAccountActivation, loginService, logoutService, restoreSessionService, validateAccountActivation } from "./loginService";
+export { completeAccountActivation, loginService, validateAccountActivation } from "./loginService";
 export type { AccountActivationDetails, LoginCredentials, LoginServiceResponse } from "./loginService";
 export { verifyAccountEmailChange } from "./emailChangeService";
 export type { EmailChangeVerificationResult } from "./emailChangeService";

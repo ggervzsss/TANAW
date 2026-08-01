@@ -1,10 +1,9 @@
 import { type FormEvent, useMemo, useState } from "react";
-import { AlertTriangle, Building2, CheckCircle2, KeyRound, MapPin, Pencil, UserCheck, XCircle } from "lucide-react";
+import { AlertTriangle, Building2, KeyRound, MapPin, Pencil, UserCheck, XCircle } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
 import toast from "react-hot-toast/headless";
-import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField, type DropdownOption } from "@/shared/components/ui";
-import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
+import { ModalFrame } from "@/shared/components/ui";
 import { type AccountSummary, type UpdateEnterpriseAccountPayload, resendAccountActivation, updateAccountStatus, updateEnterpriseAccount } from "@/shared/services/accountManagement";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
@@ -13,20 +12,20 @@ import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import type { BarangayPointResolution } from "@/features/mapview/utils";
 import type { LocationDraft } from "../types";
-import { LocationPicker } from "./LocationPicker";
 import {
-  normalizeEmail,
-  PERSON_NAME_MAX_LENGTH,
-  formatPersonName,
-  normalizePhilippineContactNumber,
-  normalizeMiddleInitial,
-  parsePersonName,
-  toPhilippineLocalDigits,
-  validateEmail,
-  validateMiddleInitial,
-  validatePersonName,
-  validatePhilippineContactNumber,
-} from "@/shared/utils/accountValidation";
+  createEnterpriseEditForm,
+  getEnterpriseChanges,
+  getInitialEnterpriseLocation,
+  getInvalidEnterpriseFieldNames,
+  sanPedroBarangayValues,
+  toUpdateEnterprisePayload,
+  validateEnterpriseForm,
+  type EnterpriseFormErrors,
+  type EnterpriseFormState,
+} from "../model";
+import { EnterpriseAccountFields } from "./EnterpriseAccountFields";
+import { ConfirmEnterpriseActivationModal, ConfirmEnterpriseStatusModal, EnterpriseChangesConfirmation } from "./EnterpriseAccountConfirmations";
+import { LocationPicker } from "./LocationPicker";
 
 type EnterpriseDetailsModalProps = {
   enterprise: AccountSummary;
@@ -34,20 +33,6 @@ type EnterpriseDetailsModalProps = {
   onEnterpriseUpdated: (enterprise: AccountSummary) => void;
 };
 
-type EnterpriseEditState = {
-  enterpriseName: string;
-  category: string;
-  managerFirstName: string;
-  managerMiddleInitial: string;
-  managerLastName: string;
-  email: string;
-  phoneLocal: string;
-  barangay: string;
-  address: string;
-  buildingCapacity: string;
-};
-
-type EnterpriseEditErrors = Partial<Record<keyof EnterpriseEditState, string>>;
 type ConfirmMode = null | "activation" | "save" | "status";
 
 type PendingSave = {
@@ -55,31 +40,16 @@ type PendingSave = {
   changes: string[];
 };
 
-const enterpriseCategoryValues = new Set<string>(enterpriseCategories.map((category) => category.value));
-const sanPedroBarangayValues = new Set<string>(sanPedroBarangays);
-const enterpriseEditFieldOrder: readonly (keyof EnterpriseEditState)[] = [
-  "enterpriseName",
-  "category",
-  "managerFirstName",
-  "managerMiddleInitial",
-  "managerLastName",
-  "email",
-  "phoneLocal",
-  "buildingCapacity",
-  "barangay",
-  "address",
-];
-
 export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdated }: EnterpriseDetailsModalProps) {
   const queryClient = useQueryClient();
   const focusFirstInvalidField = useFocusFirstInvalidField();
   const { timeFormat } = useSystemDisplayPreferences();
   const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<EnterpriseEditState>(() => getInitialForm(enterprise));
-  const [location, setLocation] = useState<LocationDraft | null>(() => getInitialLocation(enterprise));
+  const [form, setForm] = useState<EnterpriseFormState>(() => createEnterpriseEditForm(enterprise));
+  const [location, setLocation] = useState<LocationDraft | null>(() => getInitialEnterpriseLocation(enterprise));
   const [detectedBarangay, setDetectedBarangay] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<EnterpriseEditErrors>({});
+  const [errors, setErrors] = useState<EnterpriseFormErrors>({});
   const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const nextStatus = enterprise.status === "active" ? "inactive" : "active";
@@ -96,8 +66,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
           : []),
       ]);
       onEnterpriseUpdated(updatedEnterprise);
-      setForm(getInitialForm(updatedEnterprise));
-      setLocation(getInitialLocation(updatedEnterprise));
+      setForm(createEnterpriseEditForm(updatedEnterprise));
+      setLocation(getInitialEnterpriseLocation(updatedEnterprise));
       setDetectedBarangay(null);
       setLocationError(null);
       setConfirmMode(null);
@@ -165,12 +135,12 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
 
   const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextErrors = validateEnterpriseEditForm(form);
+    const nextErrors = validateEnterpriseForm(form);
     setErrors(nextErrors);
     setConfirmMode(null);
     setPendingSave(null);
     if (Object.keys(nextErrors).length > 0) {
-      focusFirstInvalidField(event.currentTarget, getInvalidEnterpriseEditFieldNames(nextErrors));
+      focusFirstInvalidField(event.currentTarget, getInvalidEnterpriseFieldNames(nextErrors));
       return;
     }
     if (location && detectedBarangay && detectedBarangay !== form.barangay) {
@@ -179,18 +149,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
       return;
     }
 
-    const normalizedPhone = form.phoneLocal ? normalizePhilippineContactNumber(`+63${form.phoneLocal}`) : "";
-    const payload: UpdateEnterpriseAccountPayload = {
-      enterpriseName: form.enterpriseName.trim(),
-      category: form.category,
-      managerName: formatPersonName({ firstName: form.managerFirstName, middleInitial: form.managerMiddleInitial, lastName: form.managerLastName }),
-      email: normalizeEmail(form.email),
-      contactNumber: normalizedPhone || undefined,
-      barangay: form.barangay,
-      address: form.address.trim(),
-      buildingCapacity: Number(form.buildingCapacity),
-      ...(location ? { latitude: location.latitude, longitude: location.longitude } : {}),
-    };
+    const payload = toUpdateEnterprisePayload(form, location);
     const changes = getEnterpriseChanges(enterprise, payload);
     if (changes.length === 0) {
       toast("No enterprise changes to save.");
@@ -271,76 +230,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
           ) : (
             <form onSubmit={handleEditSubmit} noValidate className="space-y-5">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <FormField
-                  name="enterpriseName"
-                  label="Enterprise Name"
-                  value={form.enterpriseName}
-                  onChange={(value) => updateField("enterpriseName", value)}
-                  error={errors.enterpriseName}
-                  required
-                />
-                <SearchableDropdownField
-                  name="category"
-                  label="Enterprise Type / Category"
-                  options={enterpriseCategories.map((category): DropdownOption => [category.value, category.label])}
-                  value={form.category}
-                  onChange={(value) => updateField("category", value)}
-                  error={errors.category}
-                  required
-                />
-                <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
-                  <FormField
-                    name="managerFirstName"
-                    label="Contact First Name"
-                    value={form.managerFirstName}
-                    onChange={(value) => updateField("managerFirstName", value)}
-                    error={errors.managerFirstName}
-                    required
-                    autoComplete="given-name"
-                    maxLength={PERSON_NAME_MAX_LENGTH}
-                  />
-                  <FormField
-                    name="managerMiddleInitial"
-                    label="Middle Initial"
-                    value={form.managerMiddleInitial}
-                    onChange={(value) => updateField("managerMiddleInitial", normalizeMiddleInitial(value))}
-                    error={errors.managerMiddleInitial}
-                    autoComplete="additional-name"
-                    maxLength={1}
-                    helperText="Optional"
-                  />
-                  <FormField
-                    name="managerLastName"
-                    label="Contact Last Name"
-                    value={form.managerLastName}
-                    onChange={(value) => updateField("managerLastName", value)}
-                    error={errors.managerLastName}
-                    required
-                    autoComplete="family-name"
-                    maxLength={PERSON_NAME_MAX_LENGTH}
-                  />
-                </div>
-                <FormField name="email" label="Contact Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} error={errors.email} required autoComplete="email" />
-                <ContactNumberField name="contactNumber" label="Contact Number" value={form.phoneLocal} onChange={(value) => updateField("phoneLocal", value)} error={errors.phoneLocal} />
-                <FormField
-                  name="buildingCapacity"
-                  label="Building Capacity"
-                  type="number"
-                  value={form.buildingCapacity}
-                  onChange={(value) => updateField("buildingCapacity", value)}
-                  error={errors.buildingCapacity}
-                  required
-                />
-                <SearchableDropdownField
-                  name="barangay"
-                  label="Barangay"
-                  options={sanPedroBarangays.map((item): DropdownOption => [item, item])}
-                  value={form.barangay}
-                  onChange={(value) => updateField("barangay", value)}
-                  error={errors.barangay}
-                  required
-                />
-                <FormField name="address" label="Block / Lot / Street" value={form.address} onChange={(value) => updateField("address", value)} error={errors.address} required />
+                <EnterpriseAccountFields mode="edit" form={form} errors={errors} onChange={updateField} />
                 <section
                   data-field-name="location"
                   tabIndex={-1}
@@ -379,7 +269,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
               </div>
 
               {confirmMode === "save" && pendingSave && (
-                <ConfirmationPanel
+                <EnterpriseChangesConfirmation
                   title="Are you sure you want to save these enterprise account changes?"
                   changes={pendingSave.changes}
                   confirmLabel="Confirm Save"
@@ -397,8 +287,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
                   type="button"
                   onClick={() => {
                     setIsEditing(false);
-                    setForm(getInitialForm(enterprise));
-                    setLocation(getInitialLocation(enterprise));
+                    setForm(createEnterpriseEditForm(enterprise));
+                    setLocation(getInitialEnterpriseLocation(enterprise));
                     setDetectedBarangay(null);
                     setLocationError(null);
                     setErrors({});
@@ -445,7 +335,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
     </>
   );
 
-  function updateField<FieldName extends keyof EnterpriseEditState>(field: FieldName, value: EnterpriseEditState[FieldName]) {
+  function updateField<FieldName extends keyof EnterpriseFormState>(field: FieldName, value: EnterpriseFormState[FieldName]) {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setConfirmMode(null);
@@ -473,116 +363,6 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onEnterpriseUpdate
   }
 }
 
-function ConfirmEnterpriseActivationModal({ enterprise, isPending, onClose, onConfirm }: { enterprise: AccountSummary; isPending: boolean; onClose: () => void; onConfirm: () => void }) {
-  const enterpriseName = enterprise.enterpriseName ?? enterprise.displayName;
-
-  return (
-    <ModalFrame title="Resend Activation Email" onClose={onClose} maxWidthClassName="max-w-lg">
-      <div className="space-y-5">
-        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
-            <KeyRound size={20} />
-          </span>
-          <div>
-            <p className="font-bold">This will issue a new activation link.</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
-              Any previous activation link for {enterpriseName} will stop working. TANAW will email a new single-use link so the enterprise user can create their password securely.
-            </p>
-          </div>
-        </div>
-        <EnterpriseActionAccountSummary enterprise={enterprise} />
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:ring-4 focus:ring-slate-200 focus:outline-none"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={onConfirm}
-            className="rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-amber-900/15 transition hover:-translate-y-0.5 hover:bg-amber-700 focus:ring-4 focus:ring-amber-200 focus:outline-none disabled:translate-y-0 disabled:opacity-70"
-          >
-            {isPending ? "Sending..." : "Resend Activation Email"}
-          </button>
-        </div>
-      </div>
-    </ModalFrame>
-  );
-}
-
-function ConfirmEnterpriseStatusModal({
-  enterprise,
-  nextStatus,
-  isPending,
-  onClose,
-  onConfirm,
-}: {
-  enterprise: AccountSummary;
-  nextStatus: AccountSummary["status"];
-  isPending: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const enterpriseName = enterprise.enterpriseName ?? enterprise.displayName;
-  const isDeactivating = nextStatus === "inactive";
-  const actionLabel = isDeactivating ? "Deactivate Enterprise" : "Reactivate Enterprise";
-
-  return (
-    <ModalFrame title={actionLabel} onClose={onClose} maxWidthClassName="max-w-lg">
-      <div className="space-y-5">
-        <div className="tanaw-warning-panel flex gap-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 dark:border-amber-300/30 dark:bg-[#261f16] dark:text-amber-100">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-1 dark:ring-amber-300/20">
-            <AlertTriangle size={20} />
-          </span>
-          <div>
-            <p className="font-bold">{isDeactivating ? "This enterprise account will lose TANAW access." : "This enterprise account will regain TANAW access."}</p>
-            <p className="mt-1 text-sm leading-relaxed text-amber-900/80 dark:text-amber-50/85">
-              {isDeactivating
-                ? `${enterpriseName} will not be able to sign in until the account is reactivated.`
-                : enterprise.isActivated
-                  ? `${enterpriseName} will regain access using the existing account password.`
-                  : `${enterpriseName} will be enabled again, and TANAW will send a new activation email to the registered address.`}
-            </p>
-          </div>
-        </div>
-        <EnterpriseActionAccountSummary enterprise={enterprise} />
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 focus:ring-4 focus:ring-slate-200 focus:outline-none"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={isPending}
-            onClick={onConfirm}
-            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 focus:ring-4 focus:outline-none disabled:translate-y-0 disabled:opacity-70 ${
-              isDeactivating ? "bg-red-600 shadow-red-900/15 hover:bg-red-700 focus:ring-red-200" : "bg-tanaw-green focus:ring-tanaw-green/20 shadow-emerald-900/15 hover:bg-[#044a1e]"
-            }`}
-          >
-            {isPending ? "Updating..." : actionLabel}
-          </button>
-        </div>
-      </div>
-    </ModalFrame>
-  );
-}
-
-function EnterpriseActionAccountSummary({ enterprise }: { enterprise: AccountSummary }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-600 dark:bg-[#0c1728]">
-      <p className="text-xs font-bold tracking-wide text-slate-500 uppercase">Enterprise</p>
-      <p className="mt-1 font-bold text-slate-900 dark:text-slate-100">{enterprise.enterpriseName ?? enterprise.displayName}</p>
-      <p className="text-sm text-slate-600 dark:text-slate-300">{enterprise.email}</p>
-    </div>
-  );
-}
-
 function DetailCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -592,140 +372,11 @@ function DetailCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ConfirmationPanel({
-  title,
-  changes,
-  confirmLabel,
-  isPending,
-  onCancel,
-  onConfirm,
-}: {
-  title: string;
-  changes: string[];
-  confirmLabel: string;
-  isPending: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-      <div className="flex gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-        <div className="min-w-0 flex-1">
-          <p className="font-black text-amber-950">{title}</p>
-          <ul className="mt-2 space-y-1 text-sm text-amber-900">
-            {changes.map((change) => (
-              <li key={change} className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{change}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button type="button" onClick={onCancel} className="rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100">
-              Cancel
-            </button>
-            <button type="button" disabled={isPending} onClick={onConfirm} className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-700 disabled:opacity-70">
-              {isPending ? "Working..." : confirmLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function getInitialForm(enterprise: AccountSummary): EnterpriseEditState {
-  const managerName = parsePersonName(enterprise.managerName ?? "");
-  return {
-    enterpriseName: enterprise.enterpriseName ?? enterprise.displayName,
-    category: enterprise.category ?? "",
-    managerFirstName: managerName.firstName,
-    managerMiddleInitial: managerName.middleInitial,
-    managerLastName: managerName.lastName,
-    email: enterprise.email,
-    phoneLocal: enterprise.phone ? toPhilippineLocalDigits(enterprise.phone) : "",
-    barangay: enterprise.barangay ?? "",
-    address: enterprise.address ?? "",
-    buildingCapacity: String(enterprise.buildingCapacity),
-  };
-}
-
-function validateEnterpriseEditForm(form: EnterpriseEditState) {
-  const errors: EnterpriseEditErrors = {};
-  const enterpriseName = form.enterpriseName.trim();
-  const managerFirstNameError = validatePersonName(form.managerFirstName, "First name");
-  const managerMiddleInitialError = validateMiddleInitial(form.managerMiddleInitial);
-  const managerLastNameError = validatePersonName(form.managerLastName, "Last name");
-  const emailError = validateEmail(form.email);
-  const phoneError = validatePhilippineContactNumber(form.phoneLocal ? `+63${form.phoneLocal}` : "", false);
-
-  if (!enterpriseName) errors.enterpriseName = "Enterprise name is required.";
-  if (enterpriseName && enterpriseName.length < 2) errors.enterpriseName = "Enterprise name must be at least 2 characters.";
-  if (!enterpriseCategoryValues.has(form.category)) errors.category = "Choose a valid enterprise type.";
-  if (managerFirstNameError) errors.managerFirstName = managerFirstNameError;
-  if (managerMiddleInitialError) errors.managerMiddleInitial = managerMiddleInitialError;
-  if (managerLastNameError) errors.managerLastName = managerLastNameError;
-  if (emailError) errors.email = emailError;
-  if (phoneError) errors.phoneLocal = phoneError;
-  if (!sanPedroBarangayValues.has(form.barangay)) errors.barangay = "Choose a valid barangay.";
-  if (!form.address.trim()) errors.address = "Address is required.";
-  const capacityError = validateBuildingCapacity(form.buildingCapacity);
-  if (capacityError) errors.buildingCapacity = capacityError;
-
-  return errors;
-}
-
-function validateBuildingCapacity(value: string) {
-  const capacity = Number(value);
-  if (!value.trim()) return "Building capacity is required.";
-  if (!Number.isInteger(capacity)) return "Building capacity must be a whole number.";
-  if (capacity < 1) return "Building capacity must be at least 1.";
-  if (capacity > 100000) return "Building capacity cannot exceed 100,000.";
-  return null;
-}
-
-function getInvalidEnterpriseEditFieldNames(errors: EnterpriseEditErrors) {
-  return enterpriseEditFieldOrder.filter((fieldName) => errors[fieldName]).map((fieldName) => (fieldName === "phoneLocal" ? "contactNumber" : fieldName));
-}
-
-function getEnterpriseChanges(enterprise: AccountSummary, payload: UpdateEnterpriseAccountPayload) {
-  const changes: string[] = [];
-  if ((enterprise.enterpriseName ?? enterprise.displayName) !== payload.enterpriseName)
-    changes.push(`Enterprise name: ${enterprise.enterpriseName ?? enterprise.displayName} -> ${payload.enterpriseName}`);
-  if ((enterprise.category ?? "") !== payload.category) changes.push(`Category: ${enterprise.category ?? "Not provided"} -> ${payload.category}`);
-  if ((enterprise.managerName ?? "") !== payload.managerName) changes.push(`Contact person: ${enterprise.managerName ?? "Not provided"} -> ${payload.managerName}`);
-  if (enterprise.email !== payload.email) changes.push(`Email: ${enterprise.email} -> ${payload.email}`);
-  if ((enterprise.phone ?? "") !== (payload.contactNumber ?? "")) changes.push(`Contact number: ${enterprise.phone ?? "Not provided"} -> ${payload.contactNumber ?? "Not provided"}`);
-  if ((enterprise.barangay ?? "") !== payload.barangay) changes.push(`Barangay: ${enterprise.barangay ?? "Not provided"} -> ${payload.barangay}`);
-  if ((enterprise.address ?? "") !== payload.address) changes.push("Registered address will be updated.");
-  if (enterprise.buildingCapacity !== payload.buildingCapacity) changes.push(`Building capacity: ${enterprise.buildingCapacity} -> ${payload.buildingCapacity}`);
-  if (
-    payload.latitude !== undefined &&
-    payload.longitude !== undefined &&
-    (enterprise.latitude !== payload.latitude || enterprise.longitude !== payload.longitude)
-  ) {
-    changes.push(
-      `Map location: ${
-        enterprise.latitude !== null && enterprise.longitude !== null
-          ? `${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}`
-          : "Not pinned"
-      } -> ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)}`,
-    );
-  }
-  return changes;
-}
-
-function getInitialLocation(enterprise: AccountSummary): LocationDraft | null {
-  if (enterprise.latitude === null || enterprise.longitude === null) return null;
-  return { latitude: enterprise.latitude, longitude: enterprise.longitude };
-}
-
 function LocationDetail({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-[#121c31]">
       <dt className="text-[10px] font-black tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</dt>
-      <dd className="mt-1 wrap-break-word font-bold text-slate-800 dark:text-slate-100">{value}</dd>
+      <dd className="mt-1 font-bold wrap-break-word text-slate-800 dark:text-slate-100">{value}</dd>
     </div>
   );
 }

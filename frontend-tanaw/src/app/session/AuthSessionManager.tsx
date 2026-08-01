@@ -1,9 +1,9 @@
 import { useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";
-import { restoreSessionService } from "@/features/login/services";
+import { useAuthStore } from "@/app/store/authStore";
 import { queryClient } from "@/shared/lib/queryClient";
+import { restoreSession } from "@/shared/services/sessionService";
 import { subscribeToSessionEvents } from "@/shared/utils/sessionSync";
 
 export function AuthSessionManager() {
@@ -20,7 +20,7 @@ export function AuthSessionManager() {
 
   useEffect(() => {
     let disposed = false;
-    void restoreSessionService()
+    void restoreSession()
       .then((session) => {
         if (!disposed) setSession(session);
       })

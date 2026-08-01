@@ -1,132 +1,56 @@
-import { AlertCircle, Clock3, Eye, ImageIcon, MessageSquare, Paperclip, RefreshCw, Search, Send, ShieldCheck, TicketCheck } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Clock3, ImageIcon, TicketCheck } from "lucide-react";
 import { AnimatePresence } from "motion/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
-import { Panel } from "@/shared/components/panel";
-import { DetailField, EmptyState, ExpandableTableText, FilterSelect, ModalFrame, PageMotion } from "@/shared/components/ui";
+import { PageMotion } from "@/shared/components/ui";
 import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
-import {
-  fetchSupportTicketAttachmentBlob,
-  canReplyToSupportTicket,
-  getSupportTicket,
-  isSafeSupportTicketImage,
-  listSupportTickets,
-  replyToSupportTicket,
-  sortRecommendedSupportTickets,
-  supportTicketsQueryKey,
-  updateSupportTicketStatus,
-  type SupportTicket,
-  type SupportTicketAttachment,
-  type SupportTicketCategory,
-  type SupportTicketPriority,
-  type SupportTicketStatus,
-} from "@/shared/services/supportTickets";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
-import { getApiErrorMessage } from "@/shared/utils/apiErrors";
+import { listSupportTickets, supportTicketsQueryKey, type SupportTicket } from "@/shared/services/supportTickets";
+import { SupportTicketFilters, SupportTicketsTable, TicketDetailsModal } from "../components";
+import { filterSupportTickets, initialTicketFilters, isTicketFilterState } from "../model";
 
 type SupportTicketsPageProps = {
   mode: "admin" | "it";
   embedded?: boolean;
 };
 
-type StatusFilter = "All Statuses" | "Open" | "Working on It" | "Resolved";
-type PriorityFilter = "All Priorities" | SupportTicketPriority;
-type CategoryFilter = "All Categories" | SupportTicketCategory;
-
-const statuses: StatusFilter[] = ["All Statuses", "Open", "Working on It", "Resolved"];
-const priorities: PriorityFilter[] = ["All Priorities", "Urgent", "High", "Normal", "Low"];
-const categories: CategoryFilter[] = ["All Categories", "Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 const EMPTY_SUPPORT_TICKETS: SupportTicket[] = [];
-
-type TicketFilterState = {
-  category: CategoryFilter;
-  priority: PriorityFilter;
-  query: string;
-  status: StatusFilter;
-};
-
-const INITIAL_TICKET_FILTERS: TicketFilterState = {
-  category: "All Categories",
-  priority: "All Priorities",
-  query: "",
-  status: "All Statuses",
-};
 
 export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPageProps) {
   const { timeFormat } = useSystemDisplayPreferences();
   const [filters, setFilters] = useScopedPageState({
-    initialValue: INITIAL_TICKET_FILTERS,
+    initialValue: initialTicketFilters,
     isValid: isTicketFilterState,
     namespace: `${mode}-ticket-filters`,
     version: 1,
   });
-  const query = filters.query;
-  const statusFilter = filters.status;
-  const priorityFilter = filters.priority;
-  const categoryFilter = filters.category;
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const isItResponder = mode === "it";
-  const ticketsQuery = useQuery({
-    queryKey: supportTicketsQueryKey,
-    queryFn: listSupportTickets,
-  });
-
+  const ticketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
   const tickets = ticketsQuery.data ?? EMPTY_SUPPORT_TICKETS;
-  const filteredTickets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return sortRecommendedSupportTickets(
-      tickets.filter((ticket) => {
-        const searchable = [
-          ticket.code,
-          ticket.enterpriseName,
-          ticket.enterpriseId,
-          ticket.subject,
-          ticket.description,
-          ticket.category,
-          ticket.priority,
-          ticket.status,
-          ticket.affectedArea ?? "",
-          ticket.cameraNode ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
-        const matchesStatus = statusFilter === "All Statuses" || ticketStatusLabel(ticket.status) === statusFilter;
-        const matchesPriority = priorityFilter === "All Priorities" || ticket.priority === priorityFilter;
-        const matchesCategory = categoryFilter === "All Categories" || ticket.category === categoryFilter;
-        return matchesQuery && matchesStatus && matchesPriority && matchesCategory;
-      }),
-    );
-  }, [categoryFilter, priorityFilter, query, statusFilter, tickets]);
-
-  const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved");
-  const urgentTickets = tickets.filter((ticket) => ticket.priority === "Urgent" || ticket.priority === "High");
-  const inReviewTickets = tickets.filter((ticket) => ticket.status === "In Review");
-  const ticketsWithAttachments = tickets.filter((ticket) => ticket.attachments.length > 0);
+  const filteredTickets = useMemo(() => filterSupportTickets(tickets, filters), [filters, tickets]);
+  const isItResponder = mode === "it";
   const routeTicketId = searchParams.get("ticket");
   const activeTicketId = routeTicketId ?? selectedTicketId;
 
-  const openTicketDetails = (ticketId: string) => {
-    setSelectedTicketId(ticketId);
+  const clearRouteTicket = () => {
     if (!routeTicketId) return;
-
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("ticket");
     setSearchParams(nextParams, { replace: true });
   };
 
+  const openTicketDetails = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    clearRouteTicket();
+  };
+
   const closeTicketDetails = () => {
     setSelectedTicketId(null);
-    if (!routeTicketId) return;
-
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete("ticket");
-    setSearchParams(nextParams, { replace: true });
+    clearRouteTicket();
   };
 
   return (
@@ -144,543 +68,36 @@ export function SupportTicketsPage({ mode, embedded = false }: SupportTicketsPag
         </div>
       )}
 
-      <UnifiedMetricsHeader
-        ariaLabel="Support request summary"
-        metrics={[
-          { id: "open", title: "Open Requests", value: activeTickets.length, description: "New or being handled", tone: "success", icon: TicketCheck, isLoading: ticketsQuery.isLoading },
-          { id: "priority", title: "High Priority", value: urgentTickets.length, description: "High or urgent queue", tone: "warning", icon: AlertCircle, isLoading: ticketsQuery.isLoading },
-          { id: "working", title: "Working on It", value: inReviewTickets.length, description: "Currently handled by IT", tone: "info", icon: Clock3, isLoading: ticketsQuery.isLoading },
-          { id: "photos", title: "With Photos", value: ticketsWithAttachments.length, description: "Attachment-backed tickets", tone: "teal", icon: ImageIcon, isLoading: ticketsQuery.isLoading },
-        ]}
+      <SupportTicketMetrics isLoading={ticketsQuery.isLoading} tickets={tickets} />
+      <SupportTicketsTable
+        isItResponder={isItResponder}
+        isLoading={ticketsQuery.isLoading}
+        onOpenTicket={openTicketDetails}
+        tickets={filteredTickets}
+        timeFormat={timeFormat}
+        toolbar={<SupportTicketFilters filters={filters} onChange={setFilters} />}
       />
-
-      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
-        <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
-          <div className="relative min-w-65 flex-1">
-            <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
-            <input
-              value={query}
-              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-              placeholder="Search ticket ID, enterprise, subject, category, or status"
-              className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
-            />
-          </div>
-          <FilterSelect value={statusFilter} onChange={(value) => setFilters((current) => ({ ...current, status: value as StatusFilter }))} options={statuses} />
-          <FilterSelect value={priorityFilter} onChange={(value) => setFilters((current) => ({ ...current, priority: value as PriorityFilter }))} options={priorities} />
-          <FilterSelect value={categoryFilter} onChange={(value) => setFilters((current) => ({ ...current, category: value as CategoryFilter }))} options={categories} />
-        </div>
-
-        <div className="tanaw-data-table overflow-x-auto">
-          <table className="w-full min-w-260 table-fixed text-left text-sm">
-            <colgroup>
-              <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className="w-[24%]" />
-              <col className="w-[12%]" />
-              <col className="w-[12%]" />
-              <col className="w-[10%]" />
-              <col className="w-[12%]" />
-            </colgroup>
-            <thead className="tanaw-data-table-head bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
-              <tr>
-                {["Ticket ID", "Enterprise", "Subject", "Category", "Priority", "Status", "Submitted"].map((heading) => (
-                  <th key={heading} className="px-4 py-4 whitespace-nowrap">
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="tanaw-data-table-body divide-y divide-gray-100 text-gray-800">
-              {filteredTickets.map((ticket) => (
-                <tr key={ticket.id} onClick={() => openTicketDetails(ticket.id)} className="tanaw-data-table-row tanaw-interactive-row group cursor-pointer">
-                  <td className="px-4 py-4 align-top font-mono text-xs font-bold text-emerald-700">{ticket.code}</td>
-                  <td className="px-4 py-4 align-top">
-                    <ExpandableTableText
-                      primary={ticket.enterpriseName}
-                      secondary={ticket.enterpriseId}
-                      ariaLabel="ticket enterprise and ID"
-                      className="font-bold text-gray-950"
-                      secondaryClassName="font-mono text-[10px] font-semibold text-gray-500"
-                    />
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <ExpandableTableText
-                      primary={ticket.subject}
-                      secondary={ticket.description}
-                      ariaLabel="ticket subject and description"
-                      className="font-bold text-gray-950"
-                      secondaryClassName="text-xs leading-relaxed text-gray-500"
-                      twoLines
-                    />
-                    {ticket.attachments.length > 0 && (
-                      <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-                        <Paperclip size={11} />
-                        {ticket.attachments.length} photo{ticket.attachments.length === 1 ? "" : "s"}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <CategoryBadge category={ticket.category} />
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <PriorityBadge priority={ticket.priority} />
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <TicketStatusBadge status={ticket.status} />
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <p className="text-[11px] font-bold text-gray-500 uppercase">{formatTicketTime(ticket.createdAt, timeFormat)}</p>
-                    <button type="button" className="mt-2 inline-flex items-center gap-1 text-[10px] font-black tracking-wide text-emerald-700 uppercase">
-                      <Eye size={12} />
-                      Inspect
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filteredTickets.length === 0 && (
-                <tr>
-                  <td colSpan={7}>
-                    <EmptyState
-                      icon={TicketCheck}
-                      title={ticketsQuery.isLoading ? "Loading support tickets" : "No support tickets"}
-                      description={ticketsQuery.isLoading ? "Fetching enterprise ticket records." : "Enterprise-submitted tickets will appear here for review."}
-                    />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
-          <span>Showing {filteredTickets.length} tickets</span>
-          <span>{isItResponder ? "IT response queue" : "Read-only supervision"}</span>
-        </div>
-      </Panel>
 
       <AnimatePresence>{activeTicketId && <TicketDetailsModal mode={mode} ticketId={activeTicketId} timeFormat={timeFormat} onClose={closeTicketDetails} />}</AnimatePresence>
     </PageMotion>
   );
 }
 
-function isTicketFilterState(value: unknown): value is TicketFilterState {
-  if (!value || typeof value !== "object") return false;
-  const filters = value as Partial<TicketFilterState>;
-  return (
-    typeof filters.query === "string" &&
-    filters.query.length <= 200 &&
-    statuses.includes(filters.status as StatusFilter) &&
-    priorities.includes(filters.priority as PriorityFilter) &&
-    categories.includes(filters.category as CategoryFilter)
-  );
-}
-
-export function TicketDetailsModal({ mode, ticketId, timeFormat, onClose }: { mode: "admin" | "it"; ticketId: string; timeFormat: SystemTimeFormat; onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const [reply, setReply] = useState("");
-  const [replyError, setReplyError] = useState("");
-  const [previewAttachment, setPreviewAttachment] = useState<SupportTicketAttachment | null>(null);
-  const [hasNewMessage, setHasNewMessage] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
-  const conversationRef = useRef<HTMLDivElement>(null);
-  const wasNearBottomRef = useRef(true);
-  const previousMessageIdRef = useRef<string | null>(null);
-  const isItResponder = mode === "it";
-  const detailQuery = useQuery({
-    queryKey: [...supportTicketsQueryKey, ticketId],
-    queryFn: () => getSupportTicket(ticketId),
-  });
-  const ticket = detailQuery.data;
-  const latestMessage = ticket?.messages.at(-1);
-
-  useEffect(() => {
-    const messageId = latestMessage?.id ?? null;
-    if (!ticket || messageId === previousMessageIdRef.current) return;
-    const isInitialLoad = previousMessageIdRef.current === null;
-    previousMessageIdRef.current = messageId;
-    const conversation = conversationRef.current;
-    if (!conversation) return;
-    if (isInitialLoad || wasNearBottomRef.current) {
-      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-      window.requestAnimationFrame(() => conversation.scrollTo({ top: conversation.scrollHeight, behavior }));
-      setHasNewMessage(false);
-    } else {
-      setHasNewMessage(true);
-    }
-    if (!isInitialLoad && latestMessage) {
-      setAnnouncement(`New support ticket reply from ${latestMessage.authorName}`);
-    }
-  }, [latestMessage, ticket]);
-  const replyMutation = useMutation({
-    mutationFn: (message: string) => replyToSupportTicket(ticketId, message),
-    onSuccess: (detail) => {
-      queryClient.setQueryData([...supportTicketsQueryKey, ticketId], detail);
-      void queryClient.invalidateQueries({ queryKey: supportTicketsQueryKey });
-      setReply("");
-      setReplyError("");
-    },
-    onError: (error) => setReplyError(getApiErrorMessage(error, "Unable to send reply. Please try again.")),
-  });
-  const statusMutation = useMutation({
-    mutationFn: (status: SupportTicketStatus) => updateSupportTicketStatus(ticketId, status),
-    onSuccess: (detail) => {
-      queryClient.setQueryData([...supportTicketsQueryKey, ticketId], detail);
-      void queryClient.invalidateQueries({ queryKey: supportTicketsQueryKey });
-    },
-  });
-
-  const handleReplySubmit = () => {
-    const trimmed = reply.trim();
-    if (!trimmed) {
-      setReplyError("Enter a response before sending.");
-      return;
-    }
-    replyMutation.mutate(trimmed);
-  };
+function SupportTicketMetrics({ isLoading, tickets }: { isLoading: boolean; tickets: SupportTicket[] }) {
+  const activeTickets = tickets.filter((ticket) => ticket.status !== "Resolved");
+  const urgentTickets = tickets.filter((ticket) => ticket.priority === "Urgent" || ticket.priority === "High");
+  const inReviewTickets = tickets.filter((ticket) => ticket.status === "In Review");
+  const ticketsWithAttachments = tickets.filter((ticket) => ticket.attachments.length > 0);
 
   return (
-    <>
-      <ModalFrame title={ticket?.subject ?? "Support Request Details"} eyebrow={ticket?.code ?? "Support Requests"} onClose={onClose} maxWidthClassName="max-w-6xl">
-        {!ticket && (
-          <EmptyState
-            icon={detailQuery.isLoading ? RefreshCw : AlertCircle}
-            title={detailQuery.isLoading ? "Loading request details" : "Request unavailable"}
-            description={detailQuery.isLoading ? "Fetching support request data." : "This request could not be loaded."}
-          />
-        )}
-
-        {ticket && (
-          <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-5">
-              <div className="rounded-3xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 via-white to-amber-50/60 p-5 dark:border-emerald-300/20 dark:from-[#0f2d3c] dark:via-[#172033] dark:to-[#312638]">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-xs font-bold tracking-wide text-emerald-700">{ticket.code}</p>
-                    <h3 className="mt-1 text-xl font-black text-slate-950">{ticket.subject}</h3>
-                    <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">{ticket.description}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <TicketStatusBadge status={ticket.status} />
-                    <PriorityBadge priority={ticket.priority} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <DetailField label="Requester" value={ticket.enterpriseName} />
-                <DetailField label="Account ID" value={ticket.enterpriseId} />
-                <DetailField label="Category" value={<CategoryBadge category={ticket.category} />} />
-                <DetailField label="Submitted" value={formatTicketTime(ticket.createdAt, timeFormat)} />
-                {ticket.affectedArea ? <DetailField label="Affected Area" value={ticket.affectedArea} /> : null}
-                {ticket.cameraNode ? <DetailField label="Camera" value={ticket.cameraNode} /> : null}
-              </div>
-
-              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <div className="flex items-center justify-between gap-3">
-                  <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
-                    <Paperclip size={16} className="text-emerald-700" />
-                    Photos
-                  </h4>
-                  <span className="text-[11px] font-bold text-slate-400 uppercase">{ticket.attachments.length} attached</span>
-                </div>
-                {ticket.attachments.length > 0 ? (
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {ticket.attachments.map((attachment, index) => (
-                      <button
-                        key={attachment.id ?? `${attachment.fileName}-${index}`}
-                        type="button"
-                        onClick={() => setPreviewAttachment(attachment)}
-                        className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-700 dark:bg-[#0f172a] dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10"
-                      >
-                        <TicketAttachmentImage attachment={attachment} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-slate-200" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold text-slate-950">{attachment.fileName}</span>
-                          <span className="mt-1 block text-[11px] font-semibold text-slate-500">{formatFileSize(attachment.sizeBytes)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500">No photos were attached to this request.</p>
-                )}
-              </section>
-            </div>
-
-            <div className="space-y-5">
-              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <div className="flex items-center justify-between gap-3">
-                  <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
-                    <ShieldCheck size={16} className="text-emerald-700" />
-                    Request Status
-                  </h4>
-                  {!isItResponder && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700 uppercase">Read-only</span>}
-                </div>
-                {isItResponder ? (
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    {(["Open", "In Review", "Resolved"] as SupportTicketStatus[]).map((statusOption) => (
-                      <button
-                        key={statusOption}
-                        type="button"
-                        disabled={ticket.status === statusOption || statusMutation.isPending}
-                        onClick={() => statusMutation.mutate(statusOption)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 uppercase transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-[#172033] dark:text-slate-200 dark:hover:border-emerald-300/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
-                      >
-                        {ticketStatusLabel(statusOption)}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800 dark:border-indigo-300/25 dark:bg-indigo-500/10 dark:text-indigo-200">
-                    Admin supervision can inspect this ticket and communication history. IT personnel handle responses and workflow changes.
-                  </p>
-                )}
-              </section>
-
-              <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm dark:border-emerald-300/20 dark:bg-[#121c31]">
-                <h4 className="flex items-center gap-2 text-sm font-black tracking-wide text-slate-950 uppercase">
-                  <MessageSquare size={16} className="text-emerald-700" />
-                  Conversation
-                </h4>
-                <div
-                  ref={conversationRef}
-                  onScroll={(event) => {
-                    const target = event.currentTarget;
-                    wasNearBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 72;
-                    if (wasNearBottomRef.current) setHasNewMessage(false);
-                  }}
-                  className="mt-4 max-h-80 space-y-3 overflow-y-auto overscroll-contain pr-1"
-                >
-                  <ConversationItem authorName={ticket.submittedBy} authorRole="requester" createdAt={ticket.createdAt} message={ticket.description} timeFormat={timeFormat} />
-                  {ticket.messages.map((message) => (
-                    <ConversationItem
-                      key={message.id}
-                      authorName={message.authorName}
-                      authorRole={message.authorRole}
-                      createdAt={message.createdAt}
-                      message={message.message}
-                      timeFormat={timeFormat}
-                    />
-                  ))}
-                </div>
-                <p className="sr-only" aria-live="polite">
-                  {announcement}
-                </p>
-                {hasNewMessage && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const conversation = conversationRef.current;
-                      if (!conversation) return;
-                      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-                      conversation.scrollTo({ top: conversation.scrollHeight, behavior });
-                      wasNearBottomRef.current = true;
-                      setHasNewMessage(false);
-                    }}
-                    className="mt-3 w-full rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-200"
-                  >
-                    New message
-                  </button>
-                )}
-
-                {!canReplyToSupportTicket(ticket) ? (
-                  <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-300/25 dark:bg-emerald-500/10 dark:text-emerald-100">
-                    This ticket is resolved. The conversation is now closed.
-                    {isItResponder ? " Reopen the ticket to continue the conversation." : ""}
-                  </div>
-                ) : isItResponder ? (
-                  <div className="mt-4 border-t border-slate-100 pt-4">
-                    <label className="block">
-                      <span className="mb-2 block text-[11px] font-black tracking-wide text-slate-500 uppercase">IT Response</span>
-                      <textarea
-                        value={reply}
-                        onChange={(event) => {
-                          setReply(event.target.value);
-                          setReplyError("");
-                        }}
-                        rows={4}
-                        placeholder="Write a response for the requester..."
-                        className="w-full resize-none rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-950 transition outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
-                      />
-                    </label>
-                    {replyError && <p className="mt-2 text-xs font-bold text-red-700">{replyError}</p>}
-                    <button
-                      type="button"
-                      onClick={handleReplySubmit}
-                      disabled={replyMutation.isPending}
-                      className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-700/60"
-                    >
-                      {replyMutation.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
-                      {replyMutation.isPending ? "Sending..." : "Send Reply"}
-                    </button>
-                  </div>
-                ) : null}
-              </section>
-            </div>
-          </div>
-        )}
-      </ModalFrame>
-
-      <AnimatePresence>
-        {previewAttachment && (
-          <ModalFrame title={previewAttachment.fileName} eyebrow="Ticket Photo" onClose={() => setPreviewAttachment(null)} maxWidthClassName="max-w-4xl">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
-              <TicketAttachmentImage attachment={previewAttachment} alt={previewAttachment.fileName} className="max-h-[70vh] w-full rounded-2xl object-contain" isFullPreview />
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-xs font-semibold text-slate-500">
-                <span className="truncate">{previewAttachment.fileName}</span>
-                <span>{formatFileSize(previewAttachment.sizeBytes)}</span>
-              </div>
-            </div>
-          </ModalFrame>
-        )}
-      </AnimatePresence>
-    </>
+    <UnifiedMetricsHeader
+      ariaLabel="Support request summary"
+      metrics={[
+        { id: "open", title: "Open Requests", value: activeTickets.length, description: "New or being handled", tone: "success", icon: TicketCheck, isLoading },
+        { id: "priority", title: "High Priority", value: urgentTickets.length, description: "High or urgent queue", tone: "warning", icon: AlertCircle, isLoading },
+        { id: "working", title: "Working on It", value: inReviewTickets.length, description: "Currently handled by IT", tone: "info", icon: Clock3, isLoading },
+        { id: "photos", title: "With Photos", value: ticketsWithAttachments.length, description: "Attachment-backed tickets", tone: "teal", icon: ImageIcon, isLoading },
+      ]}
+    />
   );
-}
-
-function TicketAttachmentImage({ alt, attachment, className, isFullPreview = false }: { alt: string; attachment: SupportTicketAttachment; className: string; isFullPreview?: boolean }) {
-  const { error, imageUrl, isLoading } = useTicketAttachmentImageUrl(attachment);
-  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
-  const renderError = imageUrl && failedImageUrl === imageUrl ? "Image could not be rendered" : "";
-
-  if (!isSafeSupportTicketImage(attachment)) {
-    return <AttachmentImageFallback className={className} isFullPreview={isFullPreview} message="Unsupported image type" />;
-  }
-
-  if (error || renderError) {
-    return <AttachmentImageFallback className={className} isFullPreview={isFullPreview} message={renderError || error || "Image could not be loaded"} />;
-  }
-
-  if (isLoading || !imageUrl) {
-    return <AttachmentImageFallback className={className} icon="loading" isFullPreview={isFullPreview} message="Loading image" />;
-  }
-
-  return <img src={imageUrl} alt={alt} className={className} onError={() => setFailedImageUrl(imageUrl)} />;
-}
-
-function AttachmentImageFallback({ className, icon = "error", isFullPreview, message }: { className: string; icon?: "error" | "loading"; isFullPreview: boolean; message: string }) {
-  return (
-    <div
-      className={`${className} flex ${isFullPreview ? "min-h-72" : ""} items-center justify-center border border-dashed border-slate-200 bg-white text-center text-slate-500 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-300`}
-    >
-      <span className="flex max-w-full flex-col items-center gap-2 px-3">
-        {icon === "loading" ? <RefreshCw size={isFullPreview ? 28 : 18} className="animate-spin text-emerald-700" /> : <ImageIcon size={isFullPreview ? 30 : 18} className="text-slate-400" />}
-        {isFullPreview && <span className="text-sm font-semibold">{message}</span>}
-      </span>
-    </div>
-  );
-}
-
-function useTicketAttachmentImageUrl(attachment: SupportTicketAttachment) {
-  const attachmentKey = getAttachmentPreviewKey(attachment);
-  const [state, setState] = useState<{ attachmentKey: string; error: string; imageUrl: string | null; isLoading: boolean }>({
-    attachmentKey: "",
-    error: "",
-    imageUrl: null,
-    isLoading: false,
-  });
-
-  useEffect(() => {
-    let disposed = false;
-    let objectUrl: string | null = null;
-
-    if (!isSafeSupportTicketImage(attachment)) {
-      return undefined;
-    }
-
-    void fetchSupportTicketAttachmentBlob(attachment)
-      .then((blob) => {
-        if (disposed) return;
-        objectUrl = URL.createObjectURL(blob);
-        setState({ attachmentKey, error: "", imageUrl: objectUrl, isLoading: false });
-      })
-      .catch((error: unknown) => {
-        if (disposed) return;
-        setState({ attachmentKey, error: error instanceof Error ? error.message : "Image could not be loaded", imageUrl: null, isLoading: false });
-      });
-
-    return () => {
-      disposed = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [attachment, attachmentKey]);
-
-  if (!isSafeSupportTicketImage(attachment)) {
-    return { error: "Unsupported image type", imageUrl: null, isLoading: false };
-  }
-
-  if (state.attachmentKey !== attachmentKey) {
-    return { error: "", imageUrl: null, isLoading: true };
-  }
-
-  return state;
-}
-
-function getAttachmentPreviewKey(attachment: SupportTicketAttachment) {
-  return [attachment.id ?? "", attachment.url ?? "", attachment.fileName, attachment.mediaType, attachment.sizeBytes, attachment.dataUrl?.length ?? 0].join(":");
-}
-
-function ConversationItem({ authorName, authorRole, createdAt, message, timeFormat }: { authorName: string; authorRole: string; createdAt: string; message: string; timeFormat: SystemTimeFormat }) {
-  const isRequester = authorRole === "enterprise" || authorRole === "requester";
-  return (
-    <article
-      className={`rounded-2xl border p-3 ${isRequester ? "border-emerald-100 bg-emerald-50/70 dark:border-emerald-300/20 dark:bg-emerald-500/10" : "border-blue-100 bg-blue-50/70 dark:border-blue-300/20 dark:bg-blue-500/10"}`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-black text-slate-950">{authorName}</p>
-        <p className="text-[10px] font-bold tracking-wide text-slate-500 uppercase">
-          {authorRoleLabel(authorRole)} / {formatTicketTime(createdAt, timeFormat)}
-        </p>
-      </div>
-      <p className="mt-2 text-sm leading-relaxed text-slate-700">{message}</p>
-    </article>
-  );
-}
-
-export function TicketStatusBadge({ status }: { status: SupportTicketStatus }) {
-  const classes: Record<SupportTicketStatus, string> = {
-    Open: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-300/30 dark:bg-blue-500/15 dark:text-blue-200",
-    "In Review": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/15 dark:text-amber-200",
-    Resolved: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/15 dark:text-emerald-200",
-  };
-  return <span className={`rounded-full border px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{ticketStatusLabel(status)}</span>;
-}
-
-function ticketStatusLabel(status: SupportTicketStatus) {
-  return status === "In Review" ? "Working on It" : status;
-}
-
-export function PriorityBadge({ priority }: { priority: SupportTicketPriority }) {
-  const classes: Record<SupportTicketPriority, string> = {
-    Urgent: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
-    High: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
-    Normal: "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-600",
-    Low: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20",
-  };
-  return <span className={`rounded-full px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap uppercase ring-1 ${classes[priority]}`}>{priority}</span>;
-}
-
-function CategoryBadge({ category }: { category: SupportTicketCategory }) {
-  return (
-    <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black tracking-wide whitespace-nowrap text-emerald-700 uppercase ring-1 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20">
-      {category}
-    </span>
-  );
-}
-
-function authorRoleLabel(role: string) {
-  if (role === "it") return "IT Personnel";
-  if (role === "admin") return "Admin";
-  if (role === "staff") return "Staff";
-  if (role === "enterprise") return "Enterprise";
-  if (role === "requester") return "Requester";
-  return role;
-}
-
-function formatTicketTime(value: string, timeFormat: SystemTimeFormat) {
-  return formatPhilippineDateTime(value, timeFormat);
-}
-
-function formatFileSize(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024)).toLocaleString()} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

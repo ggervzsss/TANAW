@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
-import { logoutService } from "@/features/login/services";
+import { logoutSession } from "@/shared/services/sessionService";
 import { getRoleProfilePath, getRoleSecurityPath } from "../../utils";
 import type { UserRole } from "../../types/role.types";
 import { roleAccessLabel } from "./navigation";
@@ -47,7 +47,7 @@ export function GlobalHeader({ role }: GlobalHeaderProps) {
   const handleLogout = async () => {
     setShowProfileMenu(false);
     try {
-      await logoutService();
+      await logoutSession();
     } catch {
       toast.error("Logout log was not recorded, but your local session was cleared.");
     } finally {

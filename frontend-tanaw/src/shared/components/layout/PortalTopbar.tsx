@@ -6,19 +6,17 @@ import toast from "react-hot-toast/headless";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";
-import { logoutService } from "@/features/login/services";
+import { logoutSession } from "@/shared/services/sessionService";
 import { CITY_SEAL } from "../../constants/branding";
 import { usePortalNotifications } from "../../hooks/usePortalNotifications";
-import { getAccountPreferences, updateAccountPreferences } from "../../services/accountManagement";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "../../utils/routeUtils";
-import { applyThemePreference, chooseAuthenticatedThemePreference, getStoredThemePreference, getStoredThemePreferenceOrNull, persistThemePreference, resolveThemePreference } from "../../utils/theme";
-import type { ResolvedTheme, ThemePreference } from "../../utils/theme";
 import type { UserRole } from "../../types/role.types";
 import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
 import type { NavigationItem } from "./navigation";
 import { roleAccessLabel, roleNavigation, rolePortalLabel } from "./navigation";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "../../utils/sessionSync";
+import { usePortalThemePreference } from "./hooks/usePortalThemePreference";
 
 type PortalTopbarProps = {
   role: UserRole;
@@ -50,16 +48,10 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemePreference>(getStoredThemePreference);
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveThemePreference(getStoredThemePreference()));
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const { resolvedTheme, toggleTheme } = usePortalThemePreference();
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const navMenuRef = useRef<HTMLDivElement>(null);
-  const skipNextThemeSaveRef = useRef(true);
-  const storedThemeAtMountRef = useRef<ThemePreference | null>(getStoredThemePreferenceOrNull());
-  const themeRef = useRef(theme);
-  const userSelectedThemeRef = useRef(false);
   const { isLoading: isLoadingNotifications, markAllAsRead, markAsRead, notifications, unreadCount, viewAllPath } = usePortalNotifications(role);
 
   useEffect(() => {
@@ -91,7 +83,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const handleLogout = async () => {
     setShowProfileMenu(false);
     try {
-      await logoutService();
+      await logoutSession();
     } catch {
       toast.error("Logout log was not recorded, but your local session was cleared.");
     } finally {
@@ -133,65 +125,6 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
       navigate(viewAllPath);
     }
   };
-
-  const toggleTheme = () => {
-    userSelectedThemeRef.current = true;
-    setTheme((currentTheme) => (resolveThemePreference(currentTheme) === "dark" ? "light" : "dark"));
-  };
-
-  useEffect(() => {
-    let disposed = false;
-    void getAccountPreferences()
-      .then((preferences) => {
-        if (disposed) return;
-
-        const localPreference = userSelectedThemeRef.current ? themeRef.current : storedThemeAtMountRef.current;
-        const nextTheme = chooseAuthenticatedThemePreference(localPreference, preferences.theme);
-        if (nextTheme !== themeRef.current) {
-          themeRef.current = nextTheme;
-          setTheme(nextTheme);
-        }
-        persistThemePreference(nextTheme);
-        if (preferences.theme !== nextTheme) {
-          void updateAccountPreferences(nextTheme).catch(() => undefined);
-        }
-        setPreferencesLoaded(true);
-      })
-      .catch(() => {
-        if (!disposed) {
-          setPreferencesLoaded(true);
-        }
-      });
-
-    return () => {
-      disposed = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    themeRef.current = theme;
-    const applyTheme = () => {
-      setResolvedTheme(applyThemePreference(theme));
-    };
-
-    persistThemePreference(theme);
-    applyTheme();
-
-    if (theme !== "system") return undefined;
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    mediaQuery.addEventListener("change", applyTheme);
-    return () => mediaQuery.removeEventListener("change", applyTheme);
-  }, [theme]);
-
-  useEffect(() => {
-    if (!preferencesLoaded) return;
-    if (skipNextThemeSaveRef.current) {
-      skipNextThemeSaveRef.current = false;
-      return;
-    }
-    void updateAccountPreferences(theme).catch(() => toast.error("Unable to save theme preference."));
-  }, [preferencesLoaded, theme]);
 
   useEffect(() => {
     if (!showProfileMenu) return undefined;
