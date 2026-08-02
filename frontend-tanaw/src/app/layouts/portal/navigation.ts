@@ -1,7 +1,7 @@
 import { BarChart3, Bell, Building2, FileCheck2, FileText, Layers, LayoutDashboard, MapPinned, Settings, Users, Wrench } from "lucide-react";
 import type { ComponentType } from "react";
 import { routes } from "@/app/routers/routes";
-import type { UserRole } from "../../types/role.types";
+import type { UserRole } from "@/shared/types/role.types";
 
 export type NavigationItem = {
   id: string;
@@ -90,18 +90,4 @@ export const roleNavigation: Record<UserRole, NavigationItem[]> = {
     },
   ],
   enterprise: [],
-};
-
-export const rolePortalLabel: Record<UserRole, string> = {
-  admin: "Admin Portal",
-  staff: "Staff Portal",
-  it: "IT Portal",
-  enterprise: "Enterprise Portal",
-};
-
-export const roleAccessLabel: Record<UserRole, string> = {
-  admin: "Administrator Account",
-  staff: "LGU Staff Account",
-  it: "IT Personnel Account",
-  enterprise: "Enterprise Account",
 };

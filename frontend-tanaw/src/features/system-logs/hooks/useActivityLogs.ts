@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/app/store/authStore";
-import { listActivityLogs } from "../services/activityLogs";
+import { listActivityLogs } from "../services/activityLogService";
 
 export const activityLogsQueryKey = ["activity-logs"];
 

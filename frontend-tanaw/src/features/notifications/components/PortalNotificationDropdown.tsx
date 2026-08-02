@@ -1,6 +1,8 @@
-import { AlertCircle, AlertTriangle, Bell, CheckCheck, CheckCircle2, Clock3, Inbox, ShieldAlert } from "lucide-react";
+import { Bell, CheckCheck, Clock3, Inbox } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type { PortalNotification, PortalNotificationTone } from "@/shared/hooks/usePortalNotifications";
+import type { PortalNotification } from "../hooks/usePortalNotifications";
+import { notificationToneClasses } from "../model";
+import { NotificationIcon } from "./NotificationIcon";
 
 type PortalNotificationDropdownProps = {
   isOpen: boolean;
@@ -13,33 +15,6 @@ type PortalNotificationDropdownProps = {
   onToggle: () => void;
   onViewAll: () => void;
   triggerClassName?: string;
-};
-
-const toneClasses: Record<PortalNotificationTone, { icon: string; badge: string; dot: string; accent: string }> = {
-  critical: {
-    icon: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
-    badge: "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/20",
-    dot: "bg-red-600",
-    accent: "from-red-50 dark:from-red-950/35",
-  },
-  warning: {
-    icon: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
-    badge: "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-300/20",
-    dot: "bg-amber-500",
-    accent: "from-amber-50 dark:from-amber-950/35",
-  },
-  success: {
-    icon: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-300/20",
-    dot: "bg-emerald-600",
-    accent: "from-emerald-50 dark:from-emerald-950/35",
-  },
-  info: {
-    icon: "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-300/20",
-    badge: "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-300/20",
-    dot: "bg-sky-600",
-    accent: "from-sky-50 dark:from-sky-950/35",
-  },
 };
 
 export function PortalNotificationDropdown({
@@ -106,11 +81,11 @@ export function PortalNotificationDropdown({
                   key={notification.id}
                   type="button"
                   onClick={() => onSelectNotification(notification)}
-                  className={`group flex w-full gap-3 border-b border-slate-100 bg-linear-to-r ${toneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 dark:border-slate-700 dark:to-[#121c31] dark:hover:bg-emerald-500/10 ${
+                  className={`group flex w-full gap-3 border-b border-slate-100 bg-linear-to-r ${notificationToneClasses[notification.tone].accent} to-white px-5 py-4 text-left transition hover:bg-emerald-50/70 dark:border-slate-700 dark:to-[#121c31] dark:hover:bg-emerald-500/10 ${
                     notification.read ? "opacity-75" : ""
                   }`}
                 >
-                  <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ring-1 ${toneClasses[notification.tone].icon}`}>
+                  <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ring-1 ${notificationToneClasses[notification.tone].icon}`}>
                     <NotificationIcon tone={notification.tone} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -120,14 +95,14 @@ export function PortalNotificationDropdown({
                       >
                         {notification.title}
                       </span>
-                      {!notification.read && <span className={`h-2 w-2 shrink-0 rounded-full ${toneClasses[notification.tone].dot}`} />}
+                      {!notification.read && <span className={`h-2 w-2 shrink-0 rounded-full ${notificationToneClasses[notification.tone].dot}`} />}
                     </span>
                     <span className="mt-1 line-clamp-2 block text-xs leading-relaxed font-medium text-slate-600">{notification.message}</span>
                     <span className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black tracking-wide text-slate-400 uppercase">
                       <span>{notification.source}</span>
                       <span className="h-1 w-1 rounded-full bg-slate-300" />
                       <span>{notification.time}</span>
-                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 ring-1 ${toneClasses[notification.tone].badge}`}>{notification.statusLabel}</span>}
+                      {notification.statusLabel && <span className={`rounded-full px-2 py-0.5 ring-1 ${notificationToneClasses[notification.tone].badge}`}>{notification.statusLabel}</span>}
                     </span>
                   </span>
                 </button>
@@ -139,9 +114,7 @@ export function PortalNotificationDropdown({
                     {isLoading ? <Clock3 size={20} /> : <Inbox size={20} />}
                   </div>
                   <p className="mt-4 text-sm font-black text-slate-900">{isLoading ? "Loading notifications" : "No notifications"}</p>
-                  <p className="mt-1 max-w-68 text-xs leading-relaxed text-slate-500">
-                    {isLoading ? "Checking TANAW activity sources." : "New activity relevant to your account will appear here."}
-                  </p>
+                  <p className="mt-1 max-w-68 text-xs leading-relaxed text-slate-500">{isLoading ? "Checking TANAW activity sources." : "New activity relevant to your account will appear here."}</p>
                 </div>
               )}
             </div>
@@ -161,11 +134,4 @@ export function PortalNotificationDropdown({
       </AnimatePresence>
     </>
   );
-}
-
-function NotificationIcon({ tone }: { tone: PortalNotificationTone }) {
-  if (tone === "critical") return <ShieldAlert size={17} />;
-  if (tone === "warning") return <AlertTriangle size={17} />;
-  if (tone === "success") return <CheckCircle2 size={17} />;
-  return <AlertCircle size={17} />;
 }

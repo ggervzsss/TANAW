@@ -4,9 +4,9 @@ import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
-import { getCurrentUser } from "../../services/accountManagement";
-import type { UserRole } from "../../types/role.types";
-import { createPageStateKey, readPageState, writePageState } from "../../utils/pageState";
+import { getCurrentUser } from "@/shared/services/accountManagement";
+import type { UserRole } from "@/shared/types/role.types";
+import { createPageStateKey, readPageState, writePageState } from "@/shared/utils/pageState";
 import { PortalTopbar } from "./PortalTopbar";
 
 type AccountLayoutProps = {
@@ -50,15 +50,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     .filter(Boolean)
     .join(" ");
   const mainContentClassName = isMapView ? "flex h-full min-h-0 w-full flex-col" : "mx-auto w-full max-w-470";
-  const scrollStateKey = useMemo(
-    () =>
-      createPageStateKey(
-        { portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" },
-        pathname,
-        "scroll",
-      ),
-    [pathname, role, user?.id, user?.role],
-  );
+  const scrollStateKey = useMemo(() => createPageStateKey({ portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" }, pathname, "scroll"), [pathname, role, user?.id, user?.role]);
 
   const currentUserQuery = useQuery({
     queryKey: ["current-user", token],
@@ -148,12 +140,12 @@ export function AccountLayout({ role }: AccountLayoutProps) {
 function isScrollPosition(value: unknown): value is { mainTop: number; windowTop: number } {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      "mainTop" in value &&
-      "windowTop" in value &&
-      typeof value.mainTop === "number" &&
-      typeof value.windowTop === "number" &&
-      Number.isFinite(value.mainTop) &&
-      Number.isFinite(value.windowTop),
+    typeof value === "object" &&
+    "mainTop" in value &&
+    "windowTop" in value &&
+    typeof value.mainTop === "number" &&
+    typeof value.windowTop === "number" &&
+    Number.isFinite(value.mainTop) &&
+    Number.isFinite(value.windowTop),
   );
 }

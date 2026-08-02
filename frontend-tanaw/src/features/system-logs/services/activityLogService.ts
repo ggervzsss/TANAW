@@ -1,5 +1,5 @@
-import { apiClient } from "../lib/apiClient";
-import type { SystemLog } from "../types";
+import { apiClient } from "@/shared/lib/apiClient";
+import type { SystemLog } from "@/shared/types";
 
 export type PurgeExpiredActivityLogsResponse = {
   deletedCount: number;

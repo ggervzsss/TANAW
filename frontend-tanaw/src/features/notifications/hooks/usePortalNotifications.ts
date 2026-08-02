@@ -168,9 +168,7 @@ export function getBackendNotificationTargetPath(role: UserRole, notification: B
     if (text.includes("support") || text.includes("ticket")) {
       return adminOperationsPath("support", "ticket", notification.sourceId);
     }
-    return text.includes("security") || text.includes("profile") || text.includes("password")
-      ? routes.admin.activityHistory
-      : routes.admin.operations;
+    return text.includes("security") || text.includes("profile") || text.includes("password") ? routes.admin.activityHistory : routes.admin.operations;
   }
   if (role === "it") {
     if (notification.sourceType === "operational.alert") return itWorkCenterPath("issues", "alert", notification.sourceId);

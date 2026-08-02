@@ -2,12 +2,12 @@ import { UserRoundCog } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
-import { isEmailProblem, ITEmailDeliveriesPage } from "@/features/email-deliveries";
+import { emailDeliveriesQueryKey, isEmailProblem, ITEmailDeliveriesPage, listEmailDeliveries } from "@/features/email-deliveries";
 import { SupportTicketsPage } from "@/features/support-tickets";
 import { PageHeader } from "@/shared/components/layout";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { useAlerts } from "@/shared/hooks/useAlerts";
-import { type AccountSummary, listEmailDeliveries, listEnterpriseAccounts } from "@/shared/services/accountManagement";
+import { type AccountSummary, listEnterpriseAccounts } from "@/shared/services/accountManagement";
 import { type SupportTicket, listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
 import { ITAlertsPage } from "./ITAlertsPage";
 
@@ -30,7 +30,7 @@ export function ITWorkCenterPage() {
   const { alerts } = useAlerts();
   const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
   const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
-  const emailDeliveriesQuery = useQuery({ queryKey: ["email-deliveries"], queryFn: listEmailDeliveries });
+  const emailDeliveriesQuery = useQuery({ queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries });
 
   const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ACCOUNTS;
   const supportTickets = supportTicketsQuery.data ?? EMPTY_TICKETS;

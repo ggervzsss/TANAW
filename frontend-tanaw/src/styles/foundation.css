@@ -1,0 +1,338 @@
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-400-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-500-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-600-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-700-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Bai Jamjuree";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/bai-jamjuree-700-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/montserrat-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fonts/montserrat-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme {
+  --color-tanaw-green: #055b25;
+  --color-tanaw-lime: #45a549;
+  --color-tanaw-navy: #2a3063;
+  --color-tanaw-yellow: #ffd200;
+  --color-tanaw-red: #a40e0e;
+  --color-tanaw-orange: #ff6204;
+  --color-tanaw-blue: #2d5eff;
+  --color-tanaw-sky: #a0bbff;
+  --color-tanaw-gray: #e5e5e5;
+  --color-tanaw-peach: #f5d2bd;
+  --color-tgreen-dark: #065f46;
+  --color-tgreen-light: #10b981;
+  --color-tgreen-brand: #065f46;
+  --color-tgreen-brandHover: #044a36;
+  --color-charcoal-800: #1f2937;
+  --color-charcoal-900: #111827;
+  --color-charcoal-950: #030712;
+  --color-tblue-dark: #1e3a8a;
+  --color-tblue-base: #2563eb;
+  --color-tblue-light: #93c5fd;
+  --color-tred: #dc2626;
+  --color-tyellow: #f59e0b;
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
+  --shadow-panel: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+:root {
+  --tanaw-green: #064e2f;
+  --tanaw-green-dark: #033d24;
+  --tanaw-green-soft: #0f6b43;
+  --tanaw-gold: #d7b35a;
+  --tanaw-bg: #f7f7f3;
+  --tanaw-card: #ffffff;
+  --tanaw-text: #10241b;
+  --tanaw-muted: #6b7280;
+  --tanaw-border: #d8ded8;
+  --tanaw-error: #dc2626;
+  --tanaw-page-bg: #f8f9fa;
+  --tanaw-page-bg-gradient: linear-gradient(135deg, rgb(241 245 249), rgb(229 231 235));
+  --tanaw-surface: #ffffff;
+  --tanaw-surface-raised: #ffffff;
+  --tanaw-surface-inset: #f3f6f4;
+  --tanaw-surface-muted: #f8fafc;
+  --tanaw-surface-subtle: #f1f5f9;
+  --tanaw-surface-strong: #e2e8f0;
+  --tanaw-control-bg: #ffffff;
+  --tanaw-control-hover: #f8fafc;
+  --tanaw-control-focus: #ffffff;
+  --tanaw-interactive-hover-bg: #f0fdf4;
+  --tanaw-interactive-hover-border: rgb(5 150 105 / 0.28);
+  --tanaw-interactive-selected-bg: #ecfdf5;
+  --tanaw-interactive-active-bg: #dcfce7;
+  --tanaw-interactive-pressed-bg: #d1fae5;
+  --tanaw-interactive-disabled-bg: #f1f5f9;
+  --tanaw-interactive-disabled-text: #94a3b8;
+  --tanaw-secondary-text: #64748b;
+  --tanaw-muted-text: #7b8794;
+  --tanaw-border-subtle: rgb(71 85 105 / 0.18);
+  --tanaw-border-strong: rgb(71 85 105 / 0.3);
+  --tanaw-focus-ring: #0f766e;
+  --tanaw-success-surface: #ecfdf5;
+  --tanaw-warning-surface: #fffbeb;
+  --tanaw-danger-surface: #fef2f2;
+  --tanaw-information-surface: #eff6ff;
+  --tanaw-shadow-soft: 0 12px 30px rgb(15 23 42 / 0.08);
+  --tanaw-shadow-raised: 0 18px 42px rgb(15 23 42 / 0.12);
+  --tanaw-chart-grid: #d9e0e5;
+  --tanaw-chart-axis: #64748b;
+  --tanaw-chart-tooltip-bg: #ffffff;
+  --tanaw-chart-tooltip-text: #1f2937;
+  --tanaw-dark-surface: #121c31;
+  --tanaw-dark-surface-muted: #0f172a;
+  --tanaw-dark-surface-subtle: #172033;
+  --tanaw-dark-border: #334155;
+  --tanaw-topbar-height: 5.5rem;
+  color-scheme: light;
+}
+
+html.dark {
+  --tanaw-green: #34d399;
+  --tanaw-green-dark: #10b981;
+  --tanaw-green-soft: #6ee7b7;
+  --tanaw-gold: #fcd34d;
+  --tanaw-bg: #0b141d;
+  --tanaw-card: #151f2b;
+  --tanaw-text: #f1f5f4;
+  --tanaw-muted: #aab5bf;
+  --tanaw-border: rgb(174 188 201 / 0.22);
+  --tanaw-error: #f87171;
+  --tanaw-page-bg: #0b141d;
+  --tanaw-page-bg-gradient: radial-gradient(circle at 12% 0%, rgb(31 71 60 / 0.1), transparent 35rem), linear-gradient(145deg, #0b141d 0%, #0e1721 54%, #101923 100%);
+  --tanaw-surface: #151f2b;
+  --tanaw-surface-raised: #192531;
+  --tanaw-surface-inset: #101923;
+  --tanaw-surface-muted: #111b25;
+  --tanaw-surface-subtle: #1a2633;
+  --tanaw-surface-strong: #1d2b38;
+  --tanaw-control-bg: #192633;
+  --tanaw-control-hover: #202e3c;
+  --tanaw-control-focus: #1d2b39;
+  --tanaw-interactive-hover-bg: #1b302f;
+  --tanaw-interactive-hover-border: rgb(52 211 153 / 0.26);
+  --tanaw-interactive-selected-bg: #17382f;
+  --tanaw-interactive-active-bg: #1d4438;
+  --tanaw-interactive-pressed-bg: #153329;
+  --tanaw-interactive-disabled-bg: #131d27;
+  --tanaw-interactive-disabled-text: #71808d;
+  --tanaw-secondary-text: #b8c2cb;
+  --tanaw-muted-text: #8f9daa;
+  --tanaw-border-subtle: rgb(174 188 201 / 0.16);
+  --tanaw-border-strong: rgb(174 188 201 / 0.28);
+  --tanaw-focus-ring: #5eead4;
+  --tanaw-success-surface: rgb(6 78 59 / 0.28);
+  --tanaw-warning-surface: rgb(120 74 15 / 0.24);
+  --tanaw-danger-surface: rgb(127 29 29 / 0.24);
+  --tanaw-information-surface: rgb(30 64 112 / 0.24);
+  --tanaw-shadow-soft: 0 14px 34px rgb(0 0 0 / 0.2);
+  --tanaw-shadow-raised: 0 20px 48px rgb(0 0 0 / 0.25);
+  --tanaw-chart-grid: rgb(174 188 201 / 0.13);
+  --tanaw-chart-axis: #9ba8b5;
+  --tanaw-chart-tooltip-bg: #1b2834;
+  --tanaw-chart-tooltip-text: #eef3f2;
+  --tanaw-dark-surface: #151f2b;
+  --tanaw-dark-surface-muted: #101923;
+  --tanaw-dark-surface-subtle: #1a2633;
+  --tanaw-dark-border: rgb(174 188 201 / 0.2);
+  color-scheme: dark;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --tanaw-topbar-height: 4.5rem;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    min-width: 320px;
+    background: var(--tanaw-page-bg-gradient);
+    font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
+    color: var(--tanaw-text);
+    transition:
+      background-color 180ms ease,
+      color 180ms ease;
+  }
+
+  :where(
+    a[href],
+    button:not(:disabled),
+    input[type="button"]:not(:disabled),
+    input[type="checkbox"]:not(:disabled),
+    input[type="color"]:not(:disabled),
+    input[type="file"]:not(:disabled),
+    input[type="radio"]:not(:disabled),
+    input[type="range"]:not(:disabled),
+    input[type="reset"]:not(:disabled),
+    input[type="submit"]:not(:disabled),
+    label[for],
+    select:not(:disabled),
+    summary,
+    [role="button"]:not([aria-disabled="true"]),
+    [data-clickable="true"]:not([aria-disabled="true"])
+  ) {
+    cursor: pointer;
+  }
+
+  :where(
+    button:disabled,
+    input[type="button"]:disabled,
+    input[type="checkbox"]:disabled,
+    input[type="color"]:disabled,
+    input[type="file"]:disabled,
+    input[type="radio"]:disabled,
+    input[type="range"]:disabled,
+    input[type="reset"]:disabled,
+    input[type="submit"]:disabled,
+    select:disabled,
+    [aria-disabled="true"]
+  ) {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  .profile-menu-button {
+    @apply flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .profile-menu-button:hover,
+  .profile-menu-button:focus-visible {
+    background: var(--tanaw-control-hover);
+  }
+
+  .profile-menu-danger {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 64%, transparent);
+    color: #b91c1c;
+  }
+
+  .profile-menu-danger:hover,
+  .profile-menu-danger:focus-visible {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 92%, var(--tanaw-surface));
+    color: #991b1b;
+  }
+
+  .profile-menu-danger:active {
+    background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, #fecaca);
+  }
+
+  .profile-menu-danger:disabled {
+    background: transparent;
+    color: var(--tanaw-interactive-disabled-text);
+  }
+}
+
+html.dark .profile-menu-danger {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 52%, transparent);
+  color: #fca5a5;
+}
+
+html.dark .profile-menu-danger:hover,
+html.dark .profile-menu-danger:focus-visible {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 82%, var(--tanaw-surface));
+  color: #fecaca;
+}
+
+html.dark .profile-menu-danger:active {
+  background: color-mix(in srgb, var(--tanaw-danger-surface) 90%, #3f1d24);
+}

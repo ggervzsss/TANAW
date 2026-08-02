@@ -3,7 +3,7 @@ import { type ChangeEvent, type FormEvent, useMemo, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
-import { roleAccessLabel, rolePortalLabel } from "@/shared/components/layout/navigation";
+import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
 import { Panel, PanelHeader } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { updateCurrentProfile } from "@/shared/services/accountManagement";

@@ -1,8 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SystemLog } from "@/shared/types";
-import { AdminActivityDetailFields } from "./AdminActivityHistoryPage";
-import { ActivityDetailFields } from "./ITSystemLogsPage";
+import { ActivityDetailFields, AdminActivityDetailFields } from "../components";
 
 const logWithMetadata: SystemLog = {
   id: "log-1",

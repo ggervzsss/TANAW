@@ -7,15 +7,15 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";
 import { logoutSession } from "@/shared/services/sessionService";
-import { CITY_SEAL } from "../../constants/branding";
-import { usePortalNotifications } from "../../hooks/usePortalNotifications";
-import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "../../utils/routeUtils";
-import type { UserRole } from "../../types/role.types";
-import { PortalNotificationDropdown } from "./PortalNotificationDropdown";
+import { CITY_SEAL } from "@/shared/constants/branding";
+import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
+import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
+import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "@/shared/utils/routeUtils";
+import type { UserRole } from "@/shared/types/role.types";
 import type { NavigationItem } from "./navigation";
-import { roleAccessLabel, roleNavigation, rolePortalLabel } from "./navigation";
+import { roleNavigation } from "./navigation";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
-import { publishSessionEvent } from "../../utils/sessionSync";
+import { publishSessionEvent } from "@/shared/utils/sessionSync";
 import { usePortalThemePreference } from "./hooks/usePortalThemePreference";
 
 type PortalTopbarProps = {

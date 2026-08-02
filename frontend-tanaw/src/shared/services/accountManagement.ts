@@ -53,25 +53,6 @@ export type DevDelivery = {
   createdAt: string;
 };
 
-export type EmailDelivery = {
-  id: string;
-  purpose: string;
-  recipient: string;
-  provider: string;
-  status: "queued" | "processing" | "retry_scheduled" | "accepted" | "recorded" | "terminal_failed" | "cancelled" | "expired" | "reconciliation_required";
-  attemptCount: number;
-  maxAttempts: number;
-  manualRetryCount: number;
-  nextAttemptAt: string | null;
-  providerMessageId: string | null;
-  errorCode: string | null;
-  failureReason: string | null;
-  outcomeUncertain: boolean;
-  canRetry: boolean;
-  createdAt: string;
-  acceptedAt: string | null;
-};
-
 export type CreateLguAccountPayload = {
   firstName: string;
   lastName: string;
@@ -169,16 +150,6 @@ export async function updateAccountStatus(accountId: string, status: "active" | 
 
 export async function listDevDeliveries() {
   const response = await apiClient.get<DevDelivery[]>("/dev/deliveries");
-  return response.data;
-}
-
-export async function listEmailDeliveries() {
-  const response = await apiClient.get<EmailDelivery[]>("/mail/deliveries");
-  return response.data;
-}
-
-export async function retryEmailDelivery(deliveryId: string) {
-  const response = await apiClient.post<EmailDelivery>(`/mail/deliveries/${deliveryId}/retry`);
   return response.data;
 }
 

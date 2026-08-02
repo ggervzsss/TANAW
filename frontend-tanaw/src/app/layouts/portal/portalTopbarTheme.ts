@@ -1,4 +1,4 @@
-import type { ResolvedTheme } from "../../utils/theme";
+import type { ResolvedTheme } from "@/shared/utils/theme";
 
 export function getPortalTopbarThemeClasses(resolvedTheme: ResolvedTheme) {
   const isDark = resolvedTheme === "dark";
