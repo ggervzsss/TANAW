@@ -20,6 +20,7 @@ const staffUser = {
 };
 
 const desktopViewports = [
+  { width: 1280, height: 640 },
   { width: 1280, height: 720 },
   { width: 1366, height: 768 },
   { width: 1440, height: 900 },
@@ -45,8 +46,111 @@ test("keeps the shared portal login card controlled across desktop viewports", a
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThanOrEqual(2);
     await expect(hero).toBeVisible();
   }
+});
+
+test("centers every standalone authentication card when it fits", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.route("**/auth/account-activation/validate", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        displayName: "Responsive Test User",
+        role: "staff",
+        expiresAt: "2030-01-01T00:00:00Z",
+      }),
+    }),
+  );
+
+  const authPages = [
+    { path: "/login", readyText: "TANAW PORTAL" },
+    {
+      path: "/activate-account#token=activation-token-with-more-than-twenty-characters",
+      readyText: "Welcome, Responsive Test User",
+    },
+    { path: "/verify-email-change", readyText: "Verification link unavailable" },
+    { path: "/activate-account", readyText: "Activation link unavailable" },
+  ];
+
+  for (const viewport of [
+    { width: 1280, height: 640 },
+    { width: 1366, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const authPage of authPages) {
+      await page.goto(authPage.path);
+      await expect(page.getByText(authPage.readyText, { exact: false }).first()).toBeVisible();
+
+      const card = page.locator(".tanaw-auth-card");
+      const box = await card.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+      expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThanOrEqual(4);
+    }
+  }
+});
+
+test("keeps login recovery and support dialogs centered and scrollable", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.goto("/login");
+
+  for (const dialogTrigger of ["Forgot password?", "Contact support"]) {
+    await page.getByRole("button", { name: dialogTrigger }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await dialog.boundingBox();
+        return box ? Math.abs(box.y + box.height / 2 - 320) : Number.POSITIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(2);
+
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(640);
+
+    await page.getByRole("button", { name: /Close (password recovery|contact support)/ }).click();
+    await expect(dialog).toBeHidden();
+  }
+});
+
+test("keeps authentication actions reachable on compact mobile viewports", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.goto("/login");
+
+  const loginCard = await page.locator(".tanaw-auth-card").boundingBox();
+  expect(loginCard).not.toBeNull();
+  expect(loginCard!.y).toBeGreaterThanOrEqual(0);
+  expect(loginCard!.y + loginCard!.height).toBeLessThanOrEqual(640);
+  expect(Math.abs(loginCard!.y + loginCard!.height / 2 - 320)).toBeLessThanOrEqual(4);
+
+  await page.route("**/auth/account-activation/validate", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        displayName: "Responsive Test User",
+        role: "staff",
+        expiresAt: "2030-01-01T00:00:00Z",
+      }),
+    }),
+  );
+  await page.goto("/activate-account#token=activation-token-with-more-than-twenty-characters");
+  await expect(page.getByText("Welcome, Responsive Test User")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(640);
+
+  const activationAction = page.getByRole("button", { name: "Activate Account" });
+  await activationAction.scrollIntoViewIfNeeded();
+  await expect(activationAction).toBeVisible();
+  const actionBox = await activationAction.boundingBox();
+  expect(actionBox).not.toBeNull();
+  expect(actionBox!.y + actionBox!.height).toBeLessThanOrEqual(640);
 });
 
 test("uses application-controlled login input states in dark and light mode", async ({ page }) => {

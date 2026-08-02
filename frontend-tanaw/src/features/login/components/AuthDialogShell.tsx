@@ -55,7 +55,7 @@ export function AuthDialogShell({ children, kind, onClose }: { children: ReactNo
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(3,20,12,0.54)] px-5 py-6 backdrop-blur-md sm:items-center sm:py-8"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[rgba(3,20,12,0.54)] px-5 py-6 backdrop-blur-md"
       role="presentation"
       onMouseDown={onClose}
       onPointerMove={(event) => event.stopPropagation()}
@@ -65,7 +65,7 @@ export function AuthDialogShell({ children, kind, onClose }: { children: ReactNo
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="my-auto max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 text-(--tanaw-text) shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
+        className="max-h-[calc(100svh-3rem)] w-full max-w-md overflow-y-auto rounded-[36px] border border-white/80 bg-white p-6 text-(--tanaw-text) shadow-[0_34px_100px_rgba(0,0,0,0.28)] ring-1 ring-black/3 sm:p-8 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100 dark:shadow-[0_34px_100px_rgba(0,0,0,0.52)] dark:ring-white/8"
         initial={reduceMotion ? false : { opacity: 0, y: 16, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: reduceMotion ? 0 : 0.22, ease: "easeOut" }}

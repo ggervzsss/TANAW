@@ -403,10 +403,6 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 }
 
 @media (max-height: 760px) {
-  .tanaw-auth-shell {
-    align-items: safe start;
-  }
-
   .tanaw-auth-hero {
     min-height: min(34rem, calc(100svh - 2rem));
   }
