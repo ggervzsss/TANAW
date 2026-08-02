@@ -6,11 +6,7 @@ import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAl
 import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
-import {
-  listNotifications,
-  updateNotificationRead,
-  type BackendNotification,
-} from "../../features/notifications/services/notifications";
+import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
 import { useRealtimeEvent } from "../../features/realtime/realtime-context";
 import { notifySuccess } from "../../features/toasts/services/toast-service";
 import { usePersistentIssue } from "../../features/toasts/services/persistent-issue";
@@ -19,10 +15,10 @@ import { useDesktopCloudSync } from "../../features/sync/hooks/useDesktopCloudSy
 import { useSystemDisplayPreferences } from "../../features/preferences/system-display-preferences";
 import { EMPTY_CAMERAS, EMPTY_REPORTS } from "../../lib/operationalDefaults";
 import type { Camera as EnterpriseCamera, EnterpriseNotification, EnterpriseView, ReportRecord, ThemePreference } from "../../types/enterprise";
-import { formatPhilippineDateTime, type SystemTimeFormat } from "../../utils/date-time";
 import { routePaths } from "../router/routePaths";
 import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
+import { buildEnterpriseNotifications, readStoredNotificationIds, upsertBackendNotification, writeStoredNotificationIds } from "../../features/notifications/model/enterprise-notifications";
 
 const CameraManagementView = lazy(() =>
   import("../../features/camera/components/CameraManagementView").then((module) => ({
@@ -100,12 +96,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const initials = getInitials(displayName);
   const enterpriseCameraStorageKey = useMemo(() => getEnterpriseCameraStorageKey(user), [user]);
   const scrollStateKey = useMemo(
-    () =>
-      createPageStateKey(
-        { portal: "desktop", role: user?.role ?? "enterprise", userId: user?.id ?? "anonymous" },
-        viewRouteById[activeView],
-        "scroll",
-      ),
+    () => createPageStateKey({ portal: "desktop", role: user?.role ?? "enterprise", userId: user?.id ?? "anonymous" }, viewRouteById[activeView], "scroll"),
     [activeView, user?.id, user?.role],
   );
 
@@ -135,11 +126,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   }, [notificationStorageKey]);
 
   useEffect(() => {
-    if (
-      currentUserQuery.isError &&
-      isAxiosError(currentUserQuery.error) &&
-      (currentUserQuery.error.response?.status === 401 || currentUserQuery.error.response?.status === 403)
-    ) {
+    if (currentUserQuery.isError && isAxiosError(currentUserQuery.error) && (currentUserQuery.error.response?.status === 401 || currentUserQuery.error.response?.status === 403)) {
       logout();
       navigate(routePaths.login, { replace: true });
     }
@@ -215,11 +202,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
       .catch((error: unknown) => {
         if (!disposed) {
           setMlContextReady(false);
-          setMlContextError(
-            error instanceof Error
-              ? error.message
-              : "TANAW could not initialize the local camera service.",
-          );
+          setMlContextError(error instanceof Error ? error.message : "TANAW could not initialize the local camera service.");
         }
       });
 
@@ -372,187 +355,6 @@ function EnterpriseViewLoadingFallback() {
       Loading view…
     </div>
   );
-}
-
-function buildEnterpriseNotifications(
-  reportsHistory: ReportRecord[],
-  readNotificationIds: Set<number>,
-  backendNotifications: BackendNotification[],
-  timeFormat: SystemTimeFormat,
-) {
-  const persistedNotifications = backendNotifications.map((notification) => backendNotificationToEnterpriseNotification(notification, readNotificationIds, timeFormat));
-  return [...persistedNotifications, ...reportsHistory.flatMap((report) => buildReportNotifications(report, timeFormat))]
-    .sort((left, right) => getNotificationSortValue(right) - getNotificationSortValue(left))
-    .map((notification) => ({
-      ...notification,
-      read: notification.read || readNotificationIds.has(notification.id),
-    }));
-}
-
-function backendNotificationToEnterpriseNotification(
-  notification: BackendNotification,
-  readNotificationIds: Set<number>,
-  timeFormat: SystemTimeFormat,
-): EnterpriseNotification {
-  const id = stableNotificationId(`backend-notification:${notification.id}`);
-  return {
-    id,
-    backendId: notification.id,
-    type: notificationTypeFromSeverity(notification.severity),
-    message: `${notification.title}: ${notification.message}`,
-    time: formatNotificationDate(notification.createdAt, timeFormat),
-    sortTime: toTimestamp(notification.createdAt),
-    read: Boolean(notification.readAt) || readNotificationIds.has(id),
-    target: notificationTarget(notification),
-  };
-}
-
-function buildReportNotifications(report: ReportRecord, timeFormat: SystemTimeFormat): EnterpriseNotification[] {
-  const notifications: EnterpriseNotification[] = [];
-  const deadline = getReportDeadline(report);
-  const isSubmitted = ["Submitted", "Resubmitted", "Consolidated"].includes(report.status);
-
-  if (deadline && !isSubmitted) {
-    const deadlineDate = Date.parse(deadline);
-    if (Number.isFinite(deadlineDate)) {
-      const daysUntilDeadline = Math.ceil((deadlineDate - Date.now()) / 86_400_000);
-      if (daysUntilDeadline < 0) {
-        notifications.push(createReportNotification(report, "critical", `${report.id} is overdue for ${formatNotificationDate(deadline, timeFormat)}.`, timeFormat, deadline));
-      } else if (daysUntilDeadline <= 3) {
-        notifications.push(
-          createReportNotification(
-            report,
-            "warning",
-            `${report.id} is due ${daysUntilDeadline === 0 ? "today" : `in ${daysUntilDeadline} day${daysUntilDeadline === 1 ? "" : "s"}`}.`,
-            timeFormat,
-            deadline,
-          ),
-        );
-      }
-    }
-  }
-
-  if (report.status === "Returned for Revision") {
-    notifications.push(
-      createReportNotification(
-        report,
-        "warning",
-        `${report.id} was returned for revision. ${report.remarks ?? "Please review the report remarks."}`,
-        timeFormat,
-        getLatestAuditTime(report),
-      ),
-    );
-  }
-
-  if (report.status === "Draft") {
-    notifications.push(createReportNotification(report, "warning", `${report.id} is still a draft for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)));
-  }
-
-  if (report.status === "Submitted" || report.status === "Resubmitted") {
-    notifications.push(
-      createReportNotification(report, "success", `${report.id} was ${report.status.toLowerCase()} for ${report.period ?? report.date}.`, timeFormat, getLatestAuditTime(report)),
-    );
-  }
-
-  return notifications;
-}
-
-function createReportNotification(
-  report: ReportRecord,
-  type: EnterpriseNotification["type"],
-  message: string,
-  timeFormat: SystemTimeFormat,
-  timeSource?: string,
-): EnterpriseNotification {
-  const source = `report:${report.id}:${report.status}:${timeSource ?? report.date}`;
-  return {
-    id: stableNotificationId(source),
-    type,
-    message,
-    time: formatNotificationDate(timeSource ?? report.date, timeFormat),
-    sortTime: toTimestamp(timeSource ?? report.date),
-    read: false,
-    target: "reports",
-  };
-}
-
-function notificationTypeFromSeverity(severity: BackendNotification["severity"]) {
-  if (severity === "Critical") return "critical";
-  if (severity === "Warning") return "warning";
-  if (severity === "Success") return "success";
-  return "info";
-}
-
-function notificationTarget(notification: BackendNotification): EnterpriseView {
-  const text = `${notification.type} ${notification.sourceType ?? ""} ${notification.title}`.toLowerCase();
-  if (text.includes("profile")) {
-    return "profile";
-  }
-  if (text.includes("password") || text.includes("security")) {
-    return "security";
-  }
-  if (text.includes("camera") || text.includes("gateway") || text.includes("sync") || text.includes("threshold")) {
-    return "cameras";
-  }
-  if (text.includes("support") || text.includes("ticket")) {
-    return "tickets";
-  }
-  return "reports";
-}
-
-function getReportDeadline(report: ReportRecord) {
-  return report.submissionDeadline ?? report.deadline ?? report.dueDate ?? null;
-}
-
-function getLatestAuditTime(report: ReportRecord) {
-  const auditTrail = report.auditTrail ?? [];
-  return auditTrail.length > 0 ? auditTrail[auditTrail.length - 1].time : report.date;
-}
-
-function getNotificationSortValue(notification: EnterpriseNotification) {
-  return notification.sortTime ?? notification.id;
-}
-
-function formatNotificationDate(value: string, timeFormat: SystemTimeFormat) {
-  return formatPhilippineDateTime(value, timeFormat);
-}
-
-function toTimestamp(value: string) {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function stableNotificationId(value: string) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function upsertBackendNotification(notifications: BackendNotification[], nextNotification: BackendNotification) {
-  if (notifications.some((notification) => notification.id === nextNotification.id)) {
-    return notifications.map((notification) => (notification.id === nextNotification.id ? nextNotification : notification));
-  }
-  return [nextNotification, ...notifications].slice(0, 100);
-}
-
-function readStoredNotificationIds(key: string) {
-  if (typeof window === "undefined") return new Set<number>();
-
-  try {
-    const stored = window.localStorage.getItem(key);
-    const parsed = stored ? (JSON.parse(stored) as unknown) : [];
-    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is number => typeof item === "number") : []);
-  } catch {
-    return new Set<number>();
-  }
-}
-
-function writeStoredNotificationIds(key: string, ids: Set<number>) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(Array.from(ids).slice(-500)));
 }
 
 function getInitials(value: string) {

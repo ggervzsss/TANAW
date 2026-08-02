@@ -1,248 +1,57 @@
-import { type ChangeEvent, type DragEvent, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Eye, LifeBuoy, Paperclip, RefreshCw, Send, TicketCheck, UploadCloud, X } from "lucide-react";
 import { Card } from "../../../components/Card";
 import { ExpandableText } from "../../../components/ExpandableText";
 import { SelectDropdown } from "../../../components/SelectDropdown";
-import { useAuthStore } from "../../login/stores/auth-store";
-import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
-import { useRealtimeEvent } from "../../realtime/realtime-context";
-import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
-import { focusFirstInvalidField } from "../../../utils/focus-first-invalid-field";
-import { useScopedPageState } from "../../../hooks/useScopedPageState";
-import {
-  createSupportTicket,
-  getSupportTicket,
-  listSupportTickets,
-  sortSupportTickets,
-  type SupportTicket,
-  type SupportTicketAttachment,
-  type SupportTicketDetail,
-  type SupportTicketPriority,
-  type SupportTicketSort,
-} from "../services/tickets";
+import type { SupportTicketSort } from "../services/tickets";
 import { PhotoPreviewModal, TicketDetailModal } from "./TicketDetailModal";
 import { TicketBadge, TicketStatusBadge } from "./TicketPresentation";
-import { formatFileSize, formatTicketTime, getTicketRequestError } from "../utils/ticket-presentation";
-import {
-  type TicketFormErrors,
-  type TicketFormField,
-  type TicketFormState,
-  isSupportTicketCategory,
-  isSupportTicketPriority,
-  ticketFormFieldOrder,
-  validateTicketForm,
-} from "./ticket-form-validation";
-import { clearHiddenTicketFields, getSupportTicketCategoryConfig, supportTicketCategories, ticketCategoryPayloadFields } from "./ticket-category-config";
-
-const priorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
-const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
-const allowedImageExtensions = new Set(["png", "jpg", "jpeg", "webp"]);
-const maxPhotoBytes = 5 * 1024 * 1024;
-const maxPhotoCount = 5;
-const EMPTY_PHOTOS: SupportTicketAttachment[] = [];
-
-const emptyForm: TicketFormState = {
-  affectedArea: "",
-  cameraNode: "",
-  category: "Camera Issue",
-  description: "",
-  priority: "Normal",
-  subject: "",
-};
-const initialTicketSort: SupportTicketSort = "recommended";
-const ticketSortOptions: [SupportTicketSort, string][] = [
-  ["recommended", "Recommended"],
-  ["newest", "Newest first"],
-  ["oldest", "Oldest first"],
-  ["priority-high", "Priority: Urgent to Low"],
-  ["priority-low", "Priority: Low to Urgent"],
-  ["status", "Status"],
-  ["recently-updated", "Recently updated"],
-];
+import { formatFileSize, formatTicketTime } from "../utils/ticket-presentation";
+import { isSupportTicketCategory } from "./ticket-form-validation";
+import { clearHiddenTicketFields, supportTicketCategories } from "./ticket-category-config";
+import { InputField, SelectField, TicketFieldError, TicketPanelHeader } from "./TicketFormFields";
+import { maxTicketPhotoCount, ticketPriorities, ticketSortOptions } from "../model/ticket-draft";
+import { useTicketsWorkspace } from "../hooks/useTicketsWorkspace";
+import { ticketFieldClassName } from "../utils/ticket-form-style";
 
 export function TicketsView() {
-  const user = useAuthStore((state) => state.user);
-  const { timeFormat } = useSystemDisplayPreferences();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [form, setForm, clearFormDraft] = useScopedPageState({
-    initialValue: emptyForm,
-    isValid: isTicketFormState,
-    namespace: "support-ticket-draft",
-    version: 1,
-  });
-  const [photos, setPhotos, clearPhotoDraft] = useScopedPageState({
-    initialValue: EMPTY_PHOTOS,
-    isValid: isTicketPhotoDraft,
-    namespace: "support-ticket-photos",
-    storage: "memory",
-    version: 1,
-  });
-  const [ticketSort, setTicketSort] = useScopedPageState({
-    initialValue: initialTicketSort,
-    isValid: isSupportTicketSort,
-    namespace: "support-ticket-sort",
-    version: 1,
-  });
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<TicketFormErrors>({});
-  const [photoError, setPhotoError] = useState("");
-  const [isDragActive, setIsDragActive] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-  const [selectedTicket, setSelectedTicket] = useState<SupportTicketDetail | null>(null);
-  const [selectedTicketError, setSelectedTicketError] = useState("");
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [previewPhoto, setPreviewPhoto] = useState<SupportTicketAttachment | null>(null);
-  const enterpriseName = user?.enterpriseName ?? user?.displayName ?? "Enterprise Account";
-  const openTicketCount = useMemo(() => tickets.filter((ticket) => ticket.status !== "Resolved").length, [tickets]);
-  const sortedTickets = useMemo(() => sortSupportTickets(tickets, ticketSort), [ticketSort, tickets]);
-  const categoryFieldConfig = isSupportTicketCategory(form.category) ? getSupportTicketCategoryConfig(form.category) : null;
-
-  const refreshTickets = useCallback(async () => {
-    setIsLoading(true);
-    setError("");
-    try {
-      setTickets(await listSupportTickets());
-    } catch (requestError) {
-      setError(getTicketRequestError(requestError, "Unable to load support tickets."));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshTickets();
-  }, [refreshTickets]);
-
-  useRealtimeEvent((event) => {
-    if (!event.event_type.startsWith("support_ticket.")) return;
-    void listSupportTickets()
-      .then(setTickets)
-      .catch(() => undefined);
-    if (selectedTicketId && (!event.scope.ticket_id || event.scope.ticket_id === selectedTicketId)) {
-      void getSupportTicket(selectedTicketId)
-        .then(setSelectedTicket)
-        .catch(() => undefined);
-    }
-  });
-
-  useEffect(() => {
-    if (!selectedTicketId) {
-      setSelectedTicket(null);
-      setSelectedTicketError("");
-      return undefined;
-    }
-
-    let disposed = false;
-    setIsDetailLoading(true);
-    setSelectedTicketError("");
-    void getSupportTicket(selectedTicketId)
-      .then((ticket) => {
-        if (!disposed) setSelectedTicket(ticket);
-      })
-      .catch((requestError) => {
-        if (!disposed) {
-          setSelectedTicket(null);
-          setSelectedTicketError(getTicketRequestError(requestError, "Unable to load ticket details."));
-        }
-      })
-      .finally(() => {
-        if (!disposed) setIsDetailLoading(false);
-      });
-
-    return () => {
-      disposed = true;
-    };
-  }, [selectedTicketId]);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const nextErrors = validateTicketForm(form);
-    setFieldErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      setError("");
-      notifyError("Please correct the highlighted ticket fields.");
-      window.requestAnimationFrame(() =>
-        focusFirstInvalidField(
-          formElement,
-          ticketFormFieldOrder.filter((field) => nextErrors[field]),
-        ),
-      );
-      return;
-    }
-    if (!isSupportTicketCategory(form.category) || !isSupportTicketPriority(form.priority)) return;
-
-    setIsSubmitting(true);
-    setError("");
-    try {
-      const categoryFields = ticketCategoryPayloadFields(form.category, form);
-      const ticket = await createSupportTicket({
-        ...categoryFields,
-        category: form.category,
-        description: form.description.trim(),
-        priority: form.priority,
-        subject: form.subject.trim(),
-        attachments: photos,
-      });
-      setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
-      clearFormDraft();
-      clearPhotoDraft();
-      setFieldErrors({});
-      setPhotoError("");
-      notifySuccess(`Ticket ${ticket.code} submitted.`);
-    } catch (requestError) {
-      const message = getTicketRequestError(requestError, "Unable to submit support ticket.");
-      setError(message);
-      notifyError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleSelectedFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
-    if (files.length === 0) return;
-
-    if (photos.length + files.length > maxPhotoCount) {
-      showPhotoError(`You can attach up to ${maxPhotoCount} photos.`);
-      return;
-    }
-
-    try {
-      const nextPhotos = await Promise.all(files.map(readTicketPhoto));
-      setPhotos((current) => [...current, ...nextPhotos]);
-      setPhotoError("");
-    } catch (fileError) {
-      showPhotoError(fileError instanceof Error ? fileError.message : "Unable to attach photo.");
-    }
-  }
-
-  function handlePhotoInputChange(event: ChangeEvent<HTMLInputElement>) {
-    void handleSelectedFiles(event.target.files ?? []);
-    event.target.value = "";
-  }
-
-  function handleDrop(event: DragEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    setIsDragActive(false);
-    void handleSelectedFiles(event.dataTransfer.files);
-  }
-
-  function clearFieldError(field: TicketFormField) {
-    setFieldErrors((current) => ({ ...current, [field]: undefined }));
-  }
-
-  function showPhotoError(message: string) {
-    setPhotoError(message);
-    setError("");
-    notifyError(message);
-    const formElement = formRef.current;
-    if (formElement) window.requestAnimationFrame(() => focusFirstInvalidField(formElement, ["attachments"]));
-  }
+  const {
+    categoryFieldConfig,
+    clearFieldError,
+    enterpriseName,
+    error,
+    fieldErrors,
+    fileInputRef,
+    form,
+    formRef,
+    handleDrop,
+    handlePhotoInputChange,
+    handleSubmit,
+    isDetailLoading,
+    isDragActive,
+    isLoading,
+    isSubmitting,
+    openTicketCount,
+    photoError,
+    photos,
+    previewPhoto,
+    selectedTicket,
+    selectedTicketError,
+    selectedTicketId,
+    setError,
+    setFieldErrors,
+    setForm,
+    setIsDragActive,
+    setPhotos,
+    setPreviewPhoto,
+    setSelectedTicket,
+    setSelectedTicketId,
+    setTicketSort,
+    setTickets,
+    sortedTickets,
+    ticketSort,
+    tickets,
+    timeFormat,
+  } = useTicketsWorkspace();
 
   return (
     <div className="animate-in fade-in mx-auto w-full max-w-330 space-y-6 pt-2 font-['Inter'] duration-500">
@@ -298,7 +107,7 @@ export function TicketsView() {
                 name="priority"
                 label="Priority"
                 value={form.priority}
-                options={priorities}
+                options={ticketPriorities}
                 onChange={(value) => {
                   setError("");
                   clearFieldError("priority");
@@ -359,19 +168,19 @@ export function TicketsView() {
                 }}
                 rows={6}
                 placeholder="Describe what happened, when it started, and any affected workflows."
-                className={fieldClassName("resize-none")}
+                className={ticketFieldClassName("resize-none")}
                 aria-invalid={Boolean(fieldErrors.description)}
                 aria-describedby={fieldErrors.description ? "ticket-description-error" : undefined}
                 data-form-error-focus
               />
-              {fieldErrors.description ? <FieldError id="ticket-description-error" message={fieldErrors.description} /> : null}
+              {fieldErrors.description ? <TicketFieldError id="ticket-description-error" message={fieldErrors.description} /> : null}
             </label>
 
             <div data-field-name="attachments" className="scroll-mt-28">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">Attach Photos</span>
                 <span className="text-[11px] font-semibold text-gray-400 dark:text-slate-300">
-                  {photos.length}/{maxPhotoCount} photos
+                  {photos.length}/{maxTicketPhotoCount} photos
                 </span>
               </div>
               <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple onChange={handlePhotoInputChange} className="sr-only" />
@@ -398,7 +207,7 @@ export function TicketsView() {
                 <span className="mt-2 text-sm font-bold">Upload or drop photos</span>
                 <span className="mt-1 text-xs font-medium">PNG, JPG, JPEG, or WebP. Max 5 MB each.</span>
               </button>
-              {photoError ? <FieldError id="ticket-attachments-error" message={photoError} /> : null}
+              {photoError ? <TicketFieldError id="ticket-attachments-error" message={photoError} /> : null}
               {photos.length > 0 && (
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {photos.map((photo, index) => (
@@ -531,168 +340,4 @@ export function TicketsView() {
       {previewPhoto && <PhotoPreviewModal photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />}
     </div>
   );
-}
-
-type TicketPanelHeaderProps = {
-  actions?: ReactNode;
-  icon: ReactNode;
-  subtitle: string;
-  title: string;
-};
-
-function TicketPanelHeader({ actions, icon, subtitle, title }: TicketPanelHeaderProps) {
-  return (
-    <div className="enterprise-ticket-panel-header border-b border-emerald-100 px-6 py-5 dark:border-slate-600">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/12 dark:text-emerald-200 dark:ring-emerald-300/20">
-            {icon}
-          </span>
-          <div>
-            <h3 className="text-sm font-black tracking-wide text-[#111827] uppercase dark:text-white">{title}</h3>
-            <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-slate-200">{subtitle}</p>
-          </div>
-        </div>
-        {actions}
-      </div>
-    </div>
-  );
-}
-
-type InputFieldProps = {
-  error?: string;
-  label: string;
-  name: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  value: string;
-};
-
-function InputField({ error, label, name, onChange, placeholder, value }: InputFieldProps) {
-  const errorId = `ticket-${name}-error`;
-  return (
-    <label data-field-name={name} className="block scroll-mt-28">
-      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
-      <input
-        type="text"
-        name={name}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className={fieldClassName()}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? errorId : undefined}
-        data-form-error-focus
-      />
-      {error ? <FieldError id={errorId} message={error} /> : null}
-    </label>
-  );
-}
-
-type SelectFieldProps = {
-  error?: string;
-  label: string;
-  name: string;
-  onChange: (value: string) => void;
-  options: string[];
-  value: string;
-};
-
-function SelectField({ error, label, name, onChange, options, value }: SelectFieldProps) {
-  const errorId = `ticket-${name}-error`;
-  return (
-    <div data-field-name={name} className="block scroll-mt-28">
-      <span className="mb-2 block text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-slate-200">{label}</span>
-      <SelectDropdown value={value} onChange={onChange} options={options} ariaLabel={label} ariaInvalid={Boolean(error)} ariaDescribedBy={error ? errorId : undefined} focusOnFormError />
-      {error ? <FieldError id={errorId} message={error} /> : null}
-    </div>
-  );
-}
-
-function FieldError({ id, message }: { id: string; message: string }) {
-  return (
-    <p id={id} role="alert" className="mt-1.5 text-xs font-semibold text-red-700 dark:text-red-200">
-      {message}
-    </p>
-  );
-}
-
-function fieldClassName(extra = "") {
-  return `w-full rounded-2xl border border-gray-200 bg-white p-3.5 text-sm text-[#111827] shadow-sm outline-none transition-colors focus:border-[#065f46] focus:ring-2 focus:ring-[#065f46]/12 dark:border-slate-600 dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-400 dark:focus:border-emerald-300/70 ${extra}`;
-}
-
-async function readTicketPhoto(file: File): Promise<SupportTicketAttachment> {
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!allowedImageTypes.has(file.type) || !allowedImageExtensions.has(extension)) {
-    throw new Error("Only image files are allowed.");
-  }
-  if (file.size > maxPhotoBytes) {
-    throw new Error("Each photo must be under 5 MB.");
-  }
-
-  const dataUrl = await readAsDataUrl(file);
-  if (!/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) {
-    throw new Error("Only image files are allowed.");
-  }
-
-  return {
-    dataUrl,
-    fileName: file.name.replace(/\\/g, "/").split("/").pop() || "ticket-photo",
-    mediaType: file.type as SupportTicketAttachment["mediaType"],
-    sizeBytes: file.size,
-  };
-}
-
-function readAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-      } else {
-        reject(new Error("Unable to read image file."));
-      }
-    };
-    reader.onerror = () => reject(new Error("Unable to read image file."));
-    reader.readAsDataURL(file);
-  });
-}
-
-function isTicketFormState(value: unknown): value is TicketFormState {
-  if (!value || typeof value !== "object") return false;
-  const form = value as Partial<TicketFormState>;
-  return (
-    typeof form.affectedArea === "string" &&
-    typeof form.cameraNode === "string" &&
-    typeof form.category === "string" &&
-    isSupportTicketCategory(form.category) &&
-    typeof form.description === "string" &&
-    typeof form.priority === "string" &&
-    isSupportTicketPriority(form.priority) &&
-    typeof form.subject === "string"
-  );
-}
-
-function isTicketPhotoDraft(value: unknown): value is SupportTicketAttachment[] {
-  return (
-    Array.isArray(value) &&
-    value.length <= maxPhotoCount &&
-    value.every((photo) =>
-      Boolean(
-        photo &&
-        typeof photo === "object" &&
-        "dataUrl" in photo &&
-        typeof photo.dataUrl === "string" &&
-        photo.dataUrl.startsWith("data:image/") &&
-        "fileName" in photo &&
-        typeof photo.fileName === "string" &&
-        "sizeBytes" in photo &&
-        typeof photo.sizeBytes === "number",
-      ),
-    )
-  );
-}
-
-function isSupportTicketSort(value: unknown): value is SupportTicketSort {
-  return ticketSortOptions.some(([sort]) => sort === value);
 }
