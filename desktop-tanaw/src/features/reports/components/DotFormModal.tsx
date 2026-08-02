@@ -35,7 +35,7 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/80 p-4 font-['Inter'] backdrop-blur-md sm:p-8 print:block print:bg-white print:p-0" onPointerDown={onClose}>
+      <div className="fixed inset-0 z-1100 flex items-center justify-center bg-[#111827]/80 p-4 font-sans backdrop-blur-md sm:p-8 print:block print:bg-white print:p-0" onPointerDown={onClose}>
         <div
           role="dialog"
           aria-modal="true"

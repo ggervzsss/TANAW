@@ -1,5 +1,5 @@
 import type { SupportTicketAttachment, SupportTicketPriority, SupportTicketSort } from "../services/tickets";
-import { isSupportTicketCategory, isSupportTicketPriority, type TicketFormState } from "../components/ticket-form-validation";
+import { isSupportTicketCategory, isSupportTicketPriority, type TicketFormState } from "./ticket-form-validation";
 
 export const ticketPriorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
 export const maxTicketPhotoCount = 5;

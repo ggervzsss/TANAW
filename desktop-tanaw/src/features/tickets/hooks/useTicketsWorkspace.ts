@@ -7,8 +7,8 @@ import { focusFirstInvalidField } from "../../../utils/focus-first-invalid-field
 import { useScopedPageState } from "../../../hooks/useScopedPageState";
 import { createSupportTicket, getSupportTicket, listSupportTickets, sortSupportTickets, type SupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
 import { getTicketRequestError } from "../utils/ticket-presentation";
-import { type TicketFormErrors, type TicketFormField, isSupportTicketCategory, isSupportTicketPriority, ticketFormFieldOrder, validateTicketForm } from "../components/ticket-form-validation";
-import { getSupportTicketCategoryConfig, ticketCategoryPayloadFields } from "../components/ticket-category-config";
+import { type TicketFormErrors, type TicketFormField, isSupportTicketCategory, isSupportTicketPriority, ticketFormFieldOrder, validateTicketForm } from "../model/ticket-form-validation";
+import { getSupportTicketCategoryConfig, ticketCategoryPayloadFields } from "../model/ticket-category-config";
 import { emptyTicketForm, emptyTicketPhotos, initialTicketSort, isSupportTicketSort, isTicketFormState, isTicketPhotoDraft, maxTicketPhotoCount, readTicketPhoto } from "../model/ticket-draft";
 
 export function useTicketsWorkspace() {

@@ -551,9 +551,10 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                 manager._active_session = session
 
             frame = np.zeros((200, 200, 3), dtype=np.uint8)
-            first = manager._detect_and_count(session, frame, 0.35)[0]
-            pending = manager._detect_and_count(session, frame, 0.35)[0]
-            entry = manager._detect_and_count(session, frame, 0.35)[0]
+            with patch("app.camera.camera_manager.time.monotonic", side_effect=[10.0, 10.1, 10.2]):
+                first = manager._detect_and_count(session, frame, 0.35)[0]
+                pending = manager._detect_and_count(session, frame, 0.35)[0]
+                entry = manager._detect_and_count(session, frame, 0.35)[0]
 
             self.assertEqual([first.track_id, pending.track_id, entry.track_id], [12, 8, 14])
             self.assertIsNone(first.direction)

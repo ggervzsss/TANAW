@@ -21,12 +21,10 @@ import { formatPhilippineDateTime } from "../../../utils/date-time";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import {
   buildLedgerRows,
-  clearLegacyBrowserDemographicDrafts,
   demoFromPayload,
   draftLedgerKey,
   emptyDemo,
   findPreviousDemo,
-  getCurrentReportingPeriod,
   getDemographicDraftKey,
   historyLedgerKey,
   isPreparedMetrics,
@@ -34,16 +32,16 @@ import {
   metricsFromPendingCounts,
   metricsFromReport,
   metricsFromSummary,
-  persistDemographicDraft,
-  prepareNextWorkspaceMetrics,
   reportFromCloudSubmission,
   reportFromLocalSubmission,
-  syncSubmittedReportToCloud,
   upsertReport,
   validateDemographicAllocation,
   validateReportDraft,
 } from "../model/report-workspace";
-import type { ReportLedgerRow } from "../components/ReportLedgerTable";
+import { getCurrentReportingPeriod } from "../model/reporting-calendar";
+import { clearLegacyBrowserDemographicDrafts, persistDemographicDraft, prepareNextWorkspaceMetrics, syncSubmittedReportToCloud } from "../services/report-workspace";
+import type { ReportLedgerRow } from "../model/report-ledger";
+import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
 
 type ReportsWorkspaceOptions = {
   enterpriseName: string;
@@ -64,7 +62,7 @@ const DEMOGRAPHIC_DRAFT_SAVE_DELAY_MS = 300;
 
 export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: ReportsWorkspaceOptions) {
   const { timeFormat } = useSystemDisplayPreferences();
-  const currentReportingPeriod = useMemo(() => getCurrentReportingPeriod(), []);
+  const currentReportingPeriod = useCurrentReportingPeriod();
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
   const [period, setPeriod] = useState<SystemLogPeriod>(currentReportingPeriod);

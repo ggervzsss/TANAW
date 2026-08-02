@@ -1,13 +1,15 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator
+import os
+import secrets
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from app.camera.auth import redact_stream_credentials
 from app.camera.pipeline_manager import (
@@ -28,6 +30,9 @@ from app.config.camera_config import (
     EnterpriseContextRequest,
     EnterpriseContextResponse,
     HealthResponse,
+    SessionResponse,
+)
+from app.config.report_config import (
     MetricsHistoryResponse,
     MetricsSummaryResponse,
     OccupancyCorrectionRequest,
@@ -40,17 +45,21 @@ from app.config.camera_config import (
     ReportSubmissionResponse,
     SamplePrepareRequest,
     SamplePrepareResponse,
-    SessionResponse,
     SyncMarkResponse,
 )
 from app.runtime.hardware import get_runtime_capabilities
-from app.storage.local_data_store import LocalDatabaseResetRequiredError
+from app.storage.local_data_schema import LocalDatabaseResetRequiredError
 
 CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.2.0"
 API_CONTRACT_VERSION = 9
+ML_SERVICE_TOKEN = os.environ.get("TANAW_ML_SERVICE_TOKEN", "")
+
+
+def has_valid_desktop_access_token(supplied_token: str, expected_token: str) -> bool:
+    return not expected_token or secrets.compare_digest(supplied_token, expected_token)
 
 
 class CameraApiError(RuntimeError):
@@ -86,6 +95,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_desktop_access_token(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    if request.method != "OPTIONS" and ML_SERVICE_TOKEN:
+        supplied_token = request.headers.get("X-TANAW-ML-Token", "")
+        if not has_valid_desktop_access_token(supplied_token, ML_SERVICE_TOKEN):
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "code": "unauthorized",
+                    "message": "A valid desktop service token is required.",
+                },
+            )
+    return await call_next(request)
 
 
 @app.exception_handler(LocalDatabaseResetRequiredError)
@@ -334,6 +361,11 @@ def prepare_sample_counts(payload: SamplePrepareRequest) -> SamplePrepareRespons
 
 @app.websocket("/camera/ws")
 async def camera_state_websocket(websocket: WebSocket) -> None:
+    if not has_valid_desktop_access_token(
+        websocket.query_params.get("access_token", ""), ML_SERVICE_TOKEN
+    ):
+        await websocket.close(code=1008, reason="A valid desktop service token is required.")
+        return
     await websocket.accept()
     last_payload: str | None = None
     last_send_at = monotonic()

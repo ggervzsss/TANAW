@@ -1,7 +1,7 @@
 [project]
 name = "ml-service"
 version = "0.1.0"
-description = "Add your description here"
+description = "Local camera analytics, counting, and reporting service for TANAW Desktop"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -36,9 +36,11 @@ explicit = true
 [dependency-groups]
 dev = [
     "mypy>=2.1.0",
+    "pytest>=9.1.1",
     "pyright>=1.1.410",
     "ruff>=0.15.18",
 ]
+
 export = [
     "gdown>=6.1.0",
     "onnx>=1.21.0",
@@ -46,6 +48,10 @@ export = [
     "tensorboard>=2.21.0",
     "torchreid>=0.2.5",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100

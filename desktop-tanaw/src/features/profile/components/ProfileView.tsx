@@ -102,7 +102,7 @@ export function ProfileView() {
   };
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-260 space-y-6 pt-2 font-['Inter'] duration-500">
+    <div className="animate-in fade-in mx-auto w-full max-w-260 space-y-6 pt-2 font-sans duration-500">
       <div className="mx-auto w-full">
         <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Account</p>
         <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Enterprise Profile</h2>

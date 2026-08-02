@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import type { Camera, CameraStatus } from "../../../types/enterprise";
-import { createBackoffPoller } from "../../../utils/backoff-poller";
-import { createReconnectingWebSocket } from "../../../utils/reconnecting-websocket";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
 import { validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
@@ -28,7 +26,6 @@ import {
   EMPTY_ML_COUNTS,
   EMPTY_ML_DETECTIONS,
   getMlCameraStates,
-  getMlCameraWebSocketUrl,
   getMlHealth,
   getMlServiceStatus,
   getPreviewStreamUrl,
@@ -40,9 +37,11 @@ import {
   testCameraConnection,
   updateCameraCountingConfig,
 } from "../services/ml-service";
-import { MlServiceRequestError, type MlCameraLiveEnvelope, type MlCameraLiveState, type MlCameraStates, type MlHealth, type MlServiceStatus } from "../services/ml-service";
+import { MlServiceRequestError, type MlCameraLiveState, type MlCameraStates, type MlHealth, type MlServiceStatus } from "../services/ml-service";
 import { deleteCameraCredential, getCameraPasswordReplacement, loadCameraCredentialMetadata, saveCameraCredential, type CameraCredentialMetadataRecords } from "../services/camera-credentials";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
+import { useCameraRuntimeUpdates } from "./useCameraRuntimeUpdates";
+import { CAMERA_START_SETTLE_TIMEOUT_MESSAGE, CAMERA_START_SETTLE_TIMEOUT_MS, useCameraStartDeadlineMonitor } from "./useCameraStartDeadlineMonitor";
 
 type CameraManagementOptions = {
   cameras: Camera[];
@@ -77,20 +76,13 @@ const emptyCameraForm: CameraFormValues = {
   zone: "",
 };
 
-const ML_STATUS_FALLBACK_INTERVAL_MS = 10_000;
-const ML_STATES_FALLBACK_INTERVAL_MS = 2_500;
-const CAMERA_START_SETTLE_TIMEOUT_MS = 90_000;
-const CAMERA_START_SETTLE_TIMEOUT_MESSAGE = "Camera startup did not reach a running state within 90 seconds.";
-
 export function useCameraManagement({ cameras, setCameras, storageKey }: CameraManagementOptions) {
   const [activeCamId, setActiveCamId] = useState<number | null>(cameras[0]?.id ?? null);
   const activeCamIdRef = useRef(activeCamId);
-  activeCamIdRef.current = activeCamId;
   const [cameraStates, setCameraStates] = useState<Record<number, MlCameraLiveState>>({});
   const [cameraErrors, setCameraErrors] = useState<Record<number, string | null>>({});
   const [cameraActions, setCameraActions] = useState<Record<number, CameraAction | undefined>>({});
   const cameraActionsRef = useRef(cameraActions);
-  cameraActionsRef.current = cameraActions;
   const cameraStartDeadlinesRef = useRef<Record<number, number>>({});
   const cameraPreviewReadyRef = useRef<Record<number, boolean>>({});
   const cameraUpdateGateRef = useRef(createCameraUpdateGate());
@@ -109,14 +101,12 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const [serviceHealth, setServiceHealth] = useState<MlHealth | null>(null);
   const [serviceError, setServiceError] = useState<string | null>(null);
   const [configurationError, setConfigurationError] = useState<string | null>(null);
-  const [isMlLiveConnected, setIsMlLiveConnected] = useState(false);
   const [isRestartingService, setIsRestartingService] = useState(false);
   const servicePidRef = useRef<number | null>(null);
 
   const activeCam = cameras.find((camera) => camera.id === activeCamId);
   const activeCameraIds = useMemo(() => new Set(cameras.map((camera) => camera.id)), [cameras]);
   const activeCameraIdsRef = useRef(activeCameraIds);
-  activeCameraIdsRef.current = activeCameraIds;
   const activeState = activeCam ? cameraStates[activeCam.id] : undefined;
   const counts = activeState?.counts ?? EMPTY_ML_COUNTS;
   const detections = activeState?.detections ?? EMPTY_ML_DETECTIONS;
@@ -133,6 +123,16 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const streamUrl = useMemo(() => getPreviewStreamUrl(mlBaseUrl, activeCam, streamVersion, previewIsReady), [activeCam, mlBaseUrl, previewIsReady, streamVersion]);
   const newCameraIpConflict = useMemo(() => findCameraIpConflict(cameras, newCam.cameraHost), [cameras, newCam.cameraHost]);
   const editedCameraIpConflict = useMemo(() => (editForm ? findCameraIpConflict(cameras, editForm.cameraHost ?? "", editForm.id) : undefined), [cameras, editForm]);
+
+  useEffect(() => {
+    activeCamIdRef.current = activeCamId;
+  }, [activeCamId]);
+  useEffect(() => {
+    cameraActionsRef.current = cameraActions;
+  }, [cameraActions]);
+  useEffect(() => {
+    activeCameraIdsRef.current = activeCameraIds;
+  }, [activeCameraIds]);
 
   const updateCameraStatus = useCallback(
     (cameraId: number, status: CameraStatus) => {
@@ -355,71 +355,9 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     if (activeCam && !isEditMode) setEditForm({ ...structuredClone(activeCam), password: undefined });
   }, [activeCam, isEditMode]);
 
-  useEffect(() => {
-    const connection = createReconnectingWebSocket({
-      url: getMlCameraWebSocketUrl(mlBaseUrl),
-      onOpen: () => {
-        setIsMlLiveConnected(true);
-      },
-      onMessage: (event) => {
-        try {
-          const envelope = JSON.parse(event.data) as MlCameraLiveEnvelope;
-          if (envelope.type === "camera.states") applyCameraStates(envelope.data);
-        } catch {
-          // Ignore malformed local service messages and wait for the next state frame.
-        }
-      },
-      onClose: () => {
-        setIsMlLiveConnected(false);
-      },
-    });
+  useCameraRuntimeUpdates({ applyCameraStates, baseUrl: mlBaseUrl, refreshCameraStates, refreshServiceStatus: refreshMlStatus });
 
-    return () => {
-      setIsMlLiveConnected(false);
-      connection.dispose();
-    };
-  }, [applyCameraStates, mlBaseUrl]);
-
-  useEffect(() => {
-    void refreshMlStatus();
-    const intervalId = window.setInterval(() => void refreshMlStatus(), ML_STATUS_FALLBACK_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [refreshMlStatus]);
-
-  useEffect(() => {
-    if (isMlLiveConnected) return undefined;
-    const poller = createBackoffPoller({
-      task: refreshCameraStates,
-      successDelayMs: ML_STATES_FALLBACK_INTERVAL_MS,
-      maxFailureDelayMs: 30_000,
-    });
-    return () => poller.dispose();
-  }, [isMlLiveConnected, refreshCameraStates]);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      const now = Date.now();
-      const expiredIds = Object.entries(cameraStartDeadlinesRef.current)
-        .filter(([, deadline]) => now >= deadline)
-        .map(([cameraId]) => Number(cameraId));
-      if (expiredIds.length === 0) return;
-      const expiredSet = new Set(expiredIds);
-      for (const cameraId of expiredIds) delete cameraStartDeadlinesRef.current[cameraId];
-      setCameraActions((current) => {
-        const next = { ...current };
-        for (const cameraId of expiredIds) delete next[cameraId];
-        cameraActionsRef.current = next;
-        return next;
-      });
-      setCameraErrors((current) => {
-        const next = { ...current };
-        for (const cameraId of expiredIds) next[cameraId] = CAMERA_START_SETTLE_TIMEOUT_MESSAGE;
-        return next;
-      });
-      setCameras((current) => updateCamerasWhenChanged(current, (camera) => (expiredSet.has(camera.id) ? { ...camera, status: "error" } : camera)));
-    }, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [setCameras]);
+  useCameraStartDeadlineMonitor({ cameraActionsRef, cameraStartDeadlinesRef, setCameraActions, setCameraErrors, setCameras });
 
   const handleSave = async () => {
     if (!editForm || !activeCam) return;

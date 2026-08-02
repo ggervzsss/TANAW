@@ -2,10 +2,21 @@ import unittest
 from tempfile import TemporaryDirectory
 
 from app.camera.pipeline_manager import CameraPipelineRegistry
-from app.main import API_CONTRACT_VERSION, SERVICE_VERSION, app, build_health_payload
+from app.main import (
+    API_CONTRACT_VERSION,
+    SERVICE_VERSION,
+    app,
+    build_health_payload,
+    has_valid_desktop_access_token,
+)
 
 
 class ApiContractTest(unittest.TestCase):
+    def test_desktop_token_validation_is_constant_time_and_opt_in(self) -> None:
+        self.assertTrue(has_valid_desktop_access_token("", ""))
+        self.assertTrue(has_valid_desktop_access_token("launch-secret", "launch-secret"))
+        self.assertFalse(has_valid_desktop_access_token("wrong", "launch-secret"))
+
     def test_multi_camera_runtime_routes_are_registered(self) -> None:
         http_routes = {
             (method, path)

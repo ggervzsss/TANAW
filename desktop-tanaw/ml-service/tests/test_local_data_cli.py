@@ -2,7 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.storage.local_data_store import LOCAL_SCHEMA_VERSION, LocalDataStore
+from app.storage.local_data_schema import LOCAL_SCHEMA_VERSION
+from app.storage.local_data_store import LocalDataStore
 from app.tools.local_data_cli import clear_local_data, inspect_local_data
 
 

@@ -1,21 +1,13 @@
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import {
-  DEFAULT_ML_SERVICE_BASE_URL,
-  deleteLocalReportDraft,
-  getMlServiceStatus,
-  saveLocalReportDraft,
-  type LocalMetricsSummary,
-  type LocalReportSubmissionRecord,
-} from "../../camera/services/ml-service";
-import { prepareDesktopSampleCounts, syncDesktopReportSubmission, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
+import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../../camera/services/ml-service";
+import type { BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
 import type { EnterpriseIntakeReport } from "../services/report-history";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 import { sortReportLedgerRows } from "../utils/report-ledger";
-import type { ReportLedgerRow } from "../components/ReportLedgerTable";
+import type { ReportLedgerRow } from "./report-ledger";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
-
-const LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX = "tanaw-desktop-report-demographics:";
+import { getCurrentReportingPeriod, getReportingPeriodSubmissionError } from "./reporting-calendar";
 
 export function validateReportDraft(
   metrics: Metrics,
@@ -74,37 +66,6 @@ export function isPreparedMetrics(value: unknown): value is LocalMetricsSummary 
 
 export function getDemographicDraftKey(activeReportId: string | null, period: string) {
   return activeReportId ? `report:${activeReportId}` : `period:${period || getCurrentReportingPeriod()}`;
-}
-
-export async function persistDemographicDraft(draftKey: string, period: string, reportId: string | null, demo: DemoBreakdown) {
-  try {
-    const status = await getMlServiceStatus();
-    const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-    if (Object.values(demo).every((value) => value.trim() === "")) {
-      await deleteLocalReportDraft(baseUrl, draftKey);
-      return;
-    }
-    await saveLocalReportDraft(baseUrl, draftKey, {
-      period,
-      reportId,
-      reportPayload: { demo, version: 1 },
-    });
-  } catch {
-    // Local draft persistence is best-effort and must not block report editing.
-  }
-}
-
-export function clearLegacyBrowserDemographicDrafts() {
-  try {
-    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-      const key = window.localStorage.key(index);
-      if (key?.startsWith(LEGACY_DEMOGRAPHIC_DRAFT_STORAGE_PREFIX)) {
-        window.localStorage.removeItem(key);
-      }
-    }
-  } catch {
-    // Obsolete draft cleanup must not affect the rest of the reports workspace.
-  }
 }
 
 export function buildLedgerRows({
@@ -276,24 +237,6 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
   };
 }
 
-export async function syncSubmittedReportToCloud(reportId: string) {
-  try {
-    await syncDesktopReportSubmission(reportId);
-    return null;
-  } catch (error) {
-    return error instanceof Error ? error.message : "The backend could not be reached.";
-  }
-}
-
-export async function prepareNextWorkspaceMetrics() {
-  try {
-    const prepared = await prepareDesktopSampleCounts();
-    return isPreparedMetrics(prepared) ? prepared : null;
-  } catch {
-    return null;
-  }
-}
-
 export function mergeReportHistory(localReports: ReportRecord[], cloudReports: ReportRecord[]) {
   const reportsById = new Map<string, ReportRecord>();
 
@@ -424,106 +367,3 @@ function nonNegativeInteger(value: unknown) {
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
   return null;
 }
-
-export function getCurrentReportingPeriod() {
-  const now = new Date();
-  return reportingPeriodLabel(now);
-}
-
-function reportingPeriodLabel(value: Date) {
-  const reportingValue = reportingDate(value);
-  return `${monthName(reportingValue.monthIndex)} ${reportingValue.year}`;
-}
-
-function getReportingPeriodSubmissionError(period: string, now = new Date()) {
-  const periodEnd = reportingPeriodEndDate(period);
-  if (!periodEnd) {
-    return "Reporting period must use the Month YYYY format, for example June 2026.";
-  }
-
-  const opensOn = addCalendarDays(periodEnd, 1);
-  if (calendarDateKey(reportingDate(now)) >= calendarDateKey(opensOn)) return null;
-
-  return `Submission opens on ${formatCalendarDate(opensOn)} after the ${monthName(periodEnd.monthIndex)} ${periodEnd.year} reporting period closes.`;
-}
-
-function reportingPeriodEndDate(value: string): CalendarDate | null {
-  const normalizedValue = value.trim();
-  const monthYearMatch = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})$/.exec(normalizedValue);
-  if (monthYearMatch) {
-    const monthIndex = monthIndexFromLabel(monthYearMatch[1]);
-    const year = Number(monthYearMatch[2]);
-    if (monthIndex === null || !Number.isInteger(year)) return null;
-    return { day: lastDayOfMonth(year, monthIndex), monthIndex, year };
-  }
-
-  return null;
-}
-
-type CalendarDate = {
-  day: number;
-  monthIndex: number;
-  year: number;
-};
-
-function monthIndexFromLabel(monthLabel: string): number | null {
-  const monthIndex = MONTH_INDEX_BY_LABEL[monthLabel.slice(0, 3).toLowerCase()];
-  return typeof monthIndex === "number" ? monthIndex : null;
-}
-
-function lastDayOfMonth(year: number, monthIndex: number) {
-  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-}
-
-function addCalendarDays(value: CalendarDate, days: number): CalendarDate {
-  const date = new Date(Date.UTC(value.year, value.monthIndex, value.day + days));
-  return {
-    day: date.getUTCDate(),
-    monthIndex: date.getUTCMonth(),
-    year: date.getUTCFullYear(),
-  };
-}
-
-function reportingDate(value: Date): CalendarDate {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: REPORTING_TIME_ZONE,
-    year: "numeric",
-  }).formatToParts(value);
-  const partValue = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-  return {
-    day: partValue("day"),
-    monthIndex: partValue("month") - 1,
-    year: partValue("year"),
-  };
-}
-
-function calendarDateKey(value: CalendarDate) {
-  return value.year * 10_000 + (value.monthIndex + 1) * 100 + value.day;
-}
-
-function formatCalendarDate(value: CalendarDate) {
-  return `${monthName(value.monthIndex, "short")} ${value.day}, ${value.year}`;
-}
-
-function monthName(monthIndex: number, format: "short" | "long" = "long") {
-  return new Intl.DateTimeFormat("en-US", { month: format, timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 1)));
-}
-
-const REPORTING_TIME_ZONE = "Asia/Manila";
-
-const MONTH_INDEX_BY_LABEL: Partial<Record<string, number>> = {
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  may: 4,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11,
-};

@@ -6,12 +6,12 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.config.camera_config import reporting_period_submission_error
-from app.storage.local_data_store import (
+from app.config.report_config import reporting_period_submission_error
+from app.storage.local_data_schema import (
     LOCAL_SCHEMA_VERSION,
     LocalDatabaseResetRequiredError,
-    LocalDataStore,
 )
+from app.storage.local_data_store import LocalDataStore
 
 
 class LocalDataStoreTest(unittest.TestCase):

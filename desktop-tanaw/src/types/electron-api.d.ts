@@ -1,4 +1,5 @@
 type MlServiceStatus = {
+  accessToken?: string;
   baseUrl: string;
   desktopBuild: string;
   desktopVersion: string;

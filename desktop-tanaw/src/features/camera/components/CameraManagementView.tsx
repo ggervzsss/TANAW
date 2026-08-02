@@ -58,7 +58,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
   } = useCameraManagement({ cameras, setCameras, storageKey });
 
   return (
-    <div className="animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-['Inter'] duration-500">
+    <div className="animate-in fade-in flex h-full min-h-0 flex-col overflow-hidden font-sans duration-500">
       {showAddModal && (
         <CameraAddModal
           newCam={newCam}

@@ -6,8 +6,8 @@ import type { SupportTicketSort } from "../services/tickets";
 import { PhotoPreviewModal, TicketDetailModal } from "./TicketDetailModal";
 import { TicketBadge, TicketStatusBadge } from "./TicketPresentation";
 import { formatFileSize, formatTicketTime } from "../utils/ticket-presentation";
-import { isSupportTicketCategory } from "./ticket-form-validation";
-import { clearHiddenTicketFields, supportTicketCategories } from "./ticket-category-config";
+import { isSupportTicketCategory } from "../model/ticket-form-validation";
+import { clearHiddenTicketFields, supportTicketCategories } from "../model/ticket-category-config";
 import { InputField, SelectField, TicketFieldError, TicketPanelHeader } from "./TicketFormFields";
 import { maxTicketPhotoCount, ticketPriorities, ticketSortOptions } from "../model/ticket-draft";
 import { useTicketsWorkspace } from "../hooks/useTicketsWorkspace";
@@ -54,7 +54,7 @@ export function TicketsView() {
   } = useTicketsWorkspace();
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-330 space-y-6 pt-2 font-['Inter'] duration-500">
+    <div className="animate-in fade-in mx-auto w-full max-w-330 space-y-6 pt-2 font-sans duration-500">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Support</p>

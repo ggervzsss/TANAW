@@ -20,6 +20,35 @@ const electronViewports = [
   { width: 1920, height: 1080 },
 ];
 
+test("loads the original TANAW typefaces from bundled assets", async ({ page }) => {
+  const requestedFontUrls: string[] = [];
+  page.on("request", (request) => {
+    if (request.resourceType() === "font") requestedFontUrls.push(request.url());
+  });
+
+  await page.goto("/#/login");
+
+  const typography = await page.evaluate(async () => {
+    await Promise.all([document.fonts.load('400 16px "Inter"', "TANAW"), document.fonts.load('500 16px "Montserrat"', "TANAW"), document.fonts.load('600 16px "Bai Jamjuree"', "TANAW")]);
+
+    const stage = document.querySelector<HTMLElement>(".tanaw-auth-stage");
+    const heading = document.querySelector<HTMLElement>(".tanaw-auth-brand-title");
+    return {
+      baiJamjureeLoaded: document.fonts.check('600 16px "Bai Jamjuree"', "TANAW"),
+      headingFamily: heading ? window.getComputedStyle(heading).fontFamily : "",
+      interLoaded: document.fonts.check('400 16px "Inter"', "TANAW"),
+      montserratLoaded: document.fonts.check('500 16px "Montserrat"', "TANAW"),
+      stageFamily: stage ? window.getComputedStyle(stage).fontFamily : "",
+    };
+  });
+
+  expect(typography).toMatchObject({ baiJamjureeLoaded: true, interLoaded: true, montserratLoaded: true });
+  expect(typography.headingFamily).toContain("Bai Jamjuree");
+  expect(typography.stageFamily).toContain("Inter");
+  expect(requestedFontUrls.length).toBeGreaterThanOrEqual(3);
+  expect(requestedFontUrls.every((url) => new URL(url).pathname.startsWith("/fonts/"))).toBe(true);
+});
+
 test("keeps the Enterprise card usable at supported Electron window sizes", async ({ page }) => {
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
 
@@ -36,6 +65,7 @@ test("keeps the Enterprise card usable at supported Electron window sizes", asyn
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThanOrEqual(2);
     await expect(page.getByRole("heading", { name: "TANAW PORTAL" })).toBeVisible();
     const heroHeading = page.getByRole("heading", { name: "Enterprise Portal", includeHidden: true });
     if (viewport.width <= 960) {

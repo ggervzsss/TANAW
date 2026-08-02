@@ -42,7 +42,7 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
   } = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
 
   return (
-    <div className="animate-in fade-in space-y-6 font-['Inter'] duration-500">
+    <div className="animate-in fade-in space-y-6 font-sans duration-500">
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}

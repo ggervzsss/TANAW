@@ -6,17 +6,9 @@ import { ExpandableText } from "../../../components/ExpandableText";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import type { ReportRecord } from "../../../types/enterprise";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
+import type { ReportLedgerRow } from "../model/report-ledger";
 
-export type ReportLedgerRowKind = "current" | "pending" | "history";
-
-export type ReportLedgerRow = {
-  key: string;
-  kind: ReportLedgerRowKind;
-  report: ReportRecord;
-  reportLabel: string;
-  reportDescription: string;
-  statusLabel: string;
-};
+export type { ReportLedgerRow } from "../model/report-ledger";
 
 type ReportLedgerTableProps = {
   activeLedgerKey: string;

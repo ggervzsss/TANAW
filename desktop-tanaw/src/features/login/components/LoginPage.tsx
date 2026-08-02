@@ -13,8 +13,7 @@ import { AuthThemeToggle } from "./AuthThemeToggle";
 import { PasswordRecoveryDialog } from "./PasswordRecoveryDialog";
 import { SupportRequestDialog } from "./SupportRequestDialog";
 import { CITY_HALL_DAY_IMAGE, CITY_HALL_NIGHT_IMAGE } from "../utils/login-background-assets";
-
-const citySeal = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
+import { SAN_PEDRO_SEAL_IMAGE } from "../../../lib/assets";
 
 type FormErrors = Partial<Record<keyof LoginFormValues, string>>;
 type DialogMode = "recovery" | "support" | null;
@@ -220,7 +219,7 @@ export function LoginPage() {
       >
         <div className="tanaw-auth-card-header mb-8">
           <div className="flex items-center gap-6">
-            <img src={citySeal} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-20 w-20 object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)]" />
+            <img src={SAN_PEDRO_SEAL_IMAGE} alt="City of San Pedro seal" className="tanaw-auth-brand-seal h-20 w-20 object-contain drop-shadow-[0_12px_18px_rgba(3,61,36,0.08)]" />
             <div>
               <h2 className="tanaw-auth-brand-title font-display text-[2rem] leading-tight font-extrabold text-(--tanaw-green)">TANAW PORTAL</h2>
               <p className="tanaw-auth-brand-subtitle mt-2 text-base font-medium text-(--tanaw-muted)">Enterprise Tourism Management</p>

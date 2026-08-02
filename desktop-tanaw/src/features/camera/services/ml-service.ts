@@ -24,6 +24,7 @@ import {
 export * from "./ml-service.types";
 
 export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
+let mlServiceAccessToken: string | undefined;
 
 export const EMPTY_ML_COUNTS: MlCounts = {
   entry: 0,
@@ -47,7 +48,9 @@ export const EMPTY_ML_DETECTIONS: MlDetections = {
 export async function getMlServiceStatus(): Promise<MlServiceStatus> {
   if (window.tanawMlService) {
     try {
-      return await window.tanawMlService.getStatus();
+      const status = await window.tanawMlService.getStatus();
+      mlServiceAccessToken = status.accessToken;
+      return status;
     } catch {
       return {
         baseUrl: DEFAULT_ML_SERVICE_BASE_URL,
@@ -77,7 +80,9 @@ export async function restartMlService(): Promise<MlServiceStatus> {
     };
   }
 
-  return window.tanawMlService.restart();
+  const status = await window.tanawMlService.restart();
+  mlServiceAccessToken = status.accessToken;
+  return status;
 }
 
 export async function getMlHealth(baseUrl: string): Promise<MlHealth> {
@@ -342,12 +347,14 @@ export async function stopCameraProcessing(baseUrl: string, cameraId: number): P
 
 export function getStreamUrl(baseUrl: string, cameraId: number, version: number, overlay = true) {
   const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
+  if (mlServiceAccessToken) params.set("access_token", mlServiceAccessToken);
   return `${baseUrl}/camera/${cameraId}/stream?${params.toString()}`;
 }
 
 export function getMlCameraWebSocketUrl(baseUrl: string) {
   const url = new URL("/camera/ws", baseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  if (mlServiceAccessToken) url.searchParams.set("access_token", mlServiceAccessToken);
   return url.toString();
 }
 
@@ -430,6 +437,7 @@ function buildHeaders(init: RequestInit) {
   if (hasJsonBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  if (mlServiceAccessToken) headers.set("X-TANAW-ML-Token", mlServiceAccessToken);
 
   return headers;
 }

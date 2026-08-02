@@ -10,16 +10,15 @@ from uuid import uuid4
 os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "16")
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 
-import cv2
 import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
+from app.camera.frame_renderer import CameraFrameRenderer, DisplayTrack, NormalizedPath
 from app.camera.stream_reader import open_capture, validate_stream
 from app.config.camera_config import (
     CameraCountingConfigUpdate,
     CameraStartRequest,
     RegionOfInterest,
-    TripwireLine,
 )
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
@@ -36,8 +35,6 @@ from app.runtime.hardware import get_runtime_capabilities
 from app.storage.session_store import SessionStore
 from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
 
-NormalizedPath = tuple[tuple[float, float], ...]
-
 logger = logging.getLogger(__name__)
 RECONNECT_MAX_DELAY_SECONDS = 15.0
 FAST_REID_RESULT_MAX_AGE_SECONDS = 2.5
@@ -53,28 +50,6 @@ class RuntimeState:
     running: bool = False
     status: str = "stopped"
     error: str | None = None
-
-
-@dataclass(frozen=True)
-class DisplayTrack:
-    track_id: int
-    source_track_id: int
-    bbox: tuple[int, int, int, int]
-    confidence: float
-    centroid: tuple[int, int]
-    trigger_point: tuple[int, int]
-    direction: str | None = None
-    visitor_id: str | None = None
-    is_unique_entry: bool | None = None
-    reid_score: float | None = None
-    reid_decision: str | None = None
-    identity_confidence: str | None = None
-    inside_roi: bool | None = None
-    counting_eligible: bool | None = None
-    identity_state: str | None = None
-    identity_score: float | None = None
-    identity_source: str | None = None
-    counting_debug: dict[str, Any] | None = None
 
 
 DisplayFrameSnapshot = tuple[
@@ -113,6 +88,7 @@ class CameraProcessingManager:
     def __init__(self, app_data_dir: str | None = None, camera_id: int | None = None) -> None:
         self._app_data_dir = app_data_dir
         self._camera_id_scope = camera_id
+        self._frame_renderer = CameraFrameRenderer()
         self._lock = threading.RLock()
         self._counting_lock = threading.RLock()
         self._active_session: ProcessingSession | None = None
@@ -251,7 +227,7 @@ class CameraProcessingManager:
         with self._raw_frame_condition:
             self._config = config
             self._state = RuntimeState(running=True, status="starting", error=None)
-            self._latest_jpeg = self._build_status_frame("Checking camera stream...")
+            self._latest_jpeg = self._frame_renderer.build_status_frame("Checking camera stream...")
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             self._persist_session_locked()
@@ -261,7 +237,7 @@ class CameraProcessingManager:
         if not ok:
             with self._raw_frame_condition:
                 self._state = RuntimeState(running=False, status="failed", error=message)
-                self._latest_jpeg = self._build_status_frame(message)
+                self._latest_jpeg = self._frame_renderer.build_status_frame(message)
                 self._latest_stream_jpeg = self._latest_jpeg
                 self._latest_stream_frame_id += 1
                 self._persist_session_locked()
@@ -279,8 +255,8 @@ class CameraProcessingManager:
             self._config = config
             self._counter = TripwireCounter(
                 tripwire_position=config.tripwire_position,
-                entry_line=self._normalized_line(config.entry_line),
-                exit_line=self._normalized_line(config.exit_line),
+                entry_line=self._frame_renderer.normalized_line(config.entry_line),
+                exit_line=self._frame_renderer.normalized_line(config.exit_line),
                 reverse_direction=config.reverse_direction,
                 event_cooldown_frames=_seconds_to_frames(
                     config.event_cooldown_seconds, processing_fps
@@ -322,7 +298,7 @@ class CameraProcessingManager:
             self._processing_frame_age_ms = None
             self._processing_frames_skipped = 0
             self._reid_results_stale = 0
-            self._latest_jpeg = self._build_status_frame("Initializing ML model...")
+            self._latest_jpeg = self._frame_renderer.build_status_frame("Initializing ML model...")
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             # Starting is an active lifecycle state. Publishing it before model
@@ -341,7 +317,7 @@ class CameraProcessingManager:
             safe_message = redact_stream_credentials(f"Unable to initialize ML model: {exc}")
             with self._raw_frame_condition:
                 self._state = RuntimeState(running=False, status="failed", error=safe_message)
-                self._latest_jpeg = self._build_status_frame(safe_message)
+                self._latest_jpeg = self._frame_renderer.build_status_frame(safe_message)
                 self._latest_stream_jpeg = self._latest_jpeg
                 self._latest_stream_frame_id += 1
                 self._persist_session_locked()
@@ -363,7 +339,9 @@ class CameraProcessingManager:
             self._counting_track_resolver.reset()
             self._active_session = session
             self._config = config
-            self._latest_jpeg = self._build_status_frame("Starting camera processing...")
+            self._latest_jpeg = self._frame_renderer.build_status_frame(
+                "Starting camera processing..."
+            )
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id = 0
             self._state = RuntimeState(running=True, status="connecting", error=None)
@@ -407,8 +385,8 @@ class CameraProcessingManager:
                         "Camera processing must be running to update Tripwire settings."
                     )
 
-                entry_line = self._normalized_line(update.entry_line)
-                exit_line = self._normalized_line(update.exit_line)
+                entry_line = self._frame_renderer.normalized_line(update.entry_line)
+                exit_line = self._frame_renderer.normalized_line(update.exit_line)
                 if entry_line is None or exit_line is None:
                     raise ValueError("Both entry and exit Tripwire paths are required.")
 
@@ -482,7 +460,9 @@ class CameraProcessingManager:
             self._latest_processed_frame_id = 0
             self._latest_tracks = []
             self._pending_entry_events.clear()
-            self._latest_jpeg = self._build_status_frame("Camera processing stopped.")
+            self._latest_jpeg = self._frame_renderer.build_status_frame(
+                "Camera processing stopped."
+            )
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             self._state.running = False
@@ -829,7 +809,7 @@ class CameraProcessingManager:
             if self._latest_jpeg is not None:
                 return self._latest_jpeg, last_frame_id
 
-        return self._build_status_frame("No camera stream available."), last_frame_id
+        return self._frame_renderer.build_status_frame("No camera stream available."), last_frame_id
 
     def _wait_for_clean_stream_frame(
         self, last_frame_id: int, timeout: float = 1.0
@@ -851,10 +831,10 @@ class CameraProcessingManager:
                 fallback = self._latest_jpeg
 
         if frame is not None:
-            return self._encode_frame(frame), frame_id
+            return self._frame_renderer.encode_frame(frame), frame_id
         if fallback is not None:
             return fallback, last_frame_id
-        return self._build_status_frame("No camera stream available."), last_frame_id
+        return self._frame_renderer.build_status_frame("No camera stream available."), last_frame_id
 
     def _capture_loop(self, session: ProcessingSession) -> None:
         config = session.config
@@ -892,7 +872,9 @@ class CameraProcessingManager:
 
                         failed_reads = 0
                         reconnect_attempt = 0
-                        frame = self._resize_for_processing(frame, self._max_frame_width(config))
+                        frame = self._frame_renderer.resize_for_processing(
+                            frame, self._max_frame_width(config)
+                        )
                         self._publish_raw_frame(session, frame)
             except Exception as exc:
                 reconnect_message = redact_stream_credentials(str(exc))
@@ -912,7 +894,9 @@ class CameraProcessingManager:
                 return
             safe_message = redact_stream_credentials(message)
             self._state = RuntimeState(running=True, status="reconnecting", error=safe_message)
-            self._latest_jpeg = self._build_status_frame("Reconnecting camera stream...")
+            self._latest_jpeg = self._frame_renderer.build_status_frame(
+                "Reconnecting camera stream..."
+            )
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             self._persist_session_locked()
@@ -1042,10 +1026,10 @@ class CameraProcessingManager:
                 ) = frame_snapshot
 
                 started_at = time.monotonic()
-                display_frame = self._render_display_frame(
+                display_frame = self._frame_renderer.render_display_frame(
                     frame, tracks, tripwire_position, entry_line, exit_line, roi, reverse_direction
                 )
-                encoded = self._encode_frame(display_frame)
+                encoded = self._frame_renderer.encode_frame(display_frame)
 
                 with self._raw_frame_condition:
                     if not self._is_current_session_locked(session):
@@ -1581,236 +1565,6 @@ class CameraProcessingManager:
             return None
         return frame[y1:y2, x1:x2].copy()
 
-    def _render_display_frame(
-        self,
-        frame: np.ndarray,
-        tracks: list[DisplayTrack],
-        tripwire_position: float,
-        entry_line: NormalizedPath | None,
-        exit_line: NormalizedPath | None,
-        roi: RegionOfInterest,
-        reverse_direction: bool,
-    ) -> np.ndarray:
-        height, width = frame.shape[:2]
-        self._draw_roi(frame, roi, width, height)
-        if entry_line is not None or exit_line is not None:
-            self._draw_tripwire_line(frame, entry_line, width, height, "ENTRY", (74, 222, 128))
-            self._draw_tripwire_line(frame, exit_line, width, height, "EXIT", (248, 113, 113))
-        else:
-            line_x = int(width * tripwire_position)
-
-            cv2.line(frame, (line_x, 0), (line_x, height), (59, 130, 246), 2)
-            if reverse_direction:
-                cv2.putText(
-                    frame,
-                    "ENTRY",
-                    (max(8, line_x - 70), 22),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.48,
-                    (74, 222, 128),
-                    1,
-                    cv2.LINE_AA,
-                )
-                cv2.putText(
-                    frame,
-                    "EXIT",
-                    (line_x + 10, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.48,
-                    (248, 113, 113),
-                    1,
-                    cv2.LINE_AA,
-                )
-            else:
-                cv2.putText(
-                    frame,
-                    "EXIT",
-                    (max(8, line_x - 54), 22),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.48,
-                    (248, 113, 113),
-                    1,
-                    cv2.LINE_AA,
-                )
-                cv2.putText(
-                    frame,
-                    "ENTRY",
-                    (line_x + 10, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.48,
-                    (74, 222, 128),
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        for track in tracks:
-            x1, y1, x2, y2 = track.bbox
-            color = (
-                (74, 222, 128)
-                if track.direction == "entry"
-                else (248, 113, 113)
-                if track.direction == "exit"
-                else (34, 197, 94)
-            )
-
-            self._draw_track_box(frame, (x1, y1, x2, y2), color)
-            cv2.circle(frame, track.trigger_point, 4, (34, 211, 238), -1)
-            if track.track_id > 0:
-                source_suffix = (
-                    f" | src {track.source_track_id}"
-                    if track.source_track_id != track.track_id
-                    else ""
-                )
-                label = f"#{track.track_id}{source_suffix}"
-            else:
-                label = "Person"
-            self._draw_track_label(frame, x1, y1, f"{label} | {track.confidence * 100:.0f}%", color)
-
-        return frame
-
-    def _draw_track_box(
-        self, frame: np.ndarray, bbox: tuple[int, int, int, int], color: tuple[int, int, int]
-    ) -> None:
-        frame_height, frame_width = frame.shape[:2]
-        x1, y1, x2, y2 = bbox
-        left = max(0, min(frame_width - 1, min(x1, x2)))
-        top = max(0, min(frame_height - 1, min(y1, y2)))
-        right = max(0, min(frame_width - 1, max(x1, x2)))
-        bottom = max(0, min(frame_height - 1, max(y1, y2)))
-        if right <= left or bottom <= top:
-            return
-
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (left, top), (right, bottom), color, -1)
-        cv2.addWeighted(overlay, 0.07, frame, 0.93, 0, frame)
-
-        shadow = (15, 23, 42)
-        cv2.rectangle(frame, (left, top), (right, bottom), shadow, 1)
-
-        width = right - left
-        height = bottom - top
-        corner = max(10, min(28, int(min(width, height) * 0.28)))
-        thickness = 2
-        line_type = cv2.LINE_AA
-
-        cv2.line(frame, (left, top), (left + corner, top), color, thickness, line_type)
-        cv2.line(frame, (left, top), (left, top + corner), color, thickness, line_type)
-        cv2.line(frame, (right, top), (right - corner, top), color, thickness, line_type)
-        cv2.line(frame, (right, top), (right, top + corner), color, thickness, line_type)
-        cv2.line(frame, (left, bottom), (left + corner, bottom), color, thickness, line_type)
-        cv2.line(frame, (left, bottom), (left, bottom - corner), color, thickness, line_type)
-        cv2.line(frame, (right, bottom), (right - corner, bottom), color, thickness, line_type)
-        cv2.line(frame, (right, bottom), (right, bottom - corner), color, thickness, line_type)
-
-    def _draw_track_label(
-        self, frame: np.ndarray, x: int, y: int, label: str, color: tuple[int, int, int]
-    ) -> None:
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.38
-        thickness = 1
-        padding_x = 5
-        padding_y = 3
-        text_size, baseline = cv2.getTextSize(label, font, font_scale, thickness)
-        text_width, text_height = text_size
-        label_width = text_width + padding_x * 2
-        label_height = text_height + padding_y * 2 + baseline
-
-        frame_height, frame_width = frame.shape[:2]
-        left = max(0, min(x, frame_width - label_width - 1))
-        top = y - label_height - 3
-        if top < 0:
-            top = min(frame_height - label_height - 1, y + 3)
-        top = max(0, top)
-        right = min(frame_width - 1, left + label_width)
-        bottom = min(frame_height - 1, top + label_height)
-
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (left, top), (right, bottom), (15, 23, 42), -1)
-        cv2.addWeighted(overlay, 0.78, frame, 0.22, 0, frame)
-        cv2.rectangle(frame, (left, top), (right, bottom), color, 1)
-        cv2.rectangle(frame, (left, top), (min(right, left + 3), bottom), color, -1)
-        cv2.putText(
-            frame,
-            label,
-            (left + padding_x, bottom - padding_y - baseline),
-            font,
-            font_scale,
-            (255, 255, 255),
-            thickness,
-            cv2.LINE_AA,
-        )
-
-    def _draw_roi(
-        self, frame: np.ndarray, roi: RegionOfInterest, frame_width: int, frame_height: int
-    ) -> None:
-        x1 = int(roi.left * frame_width)
-        y1 = int(roi.top * frame_height)
-        x2 = int((roi.left + roi.width) * frame_width)
-        y2 = int((roi.top + roi.height) * frame_height)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (59, 130, 246), 2)
-        cv2.putText(
-            frame,
-            "ROI",
-            (x1 + 6, max(18, y1 - 6)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            (59, 130, 246),
-            1,
-            cv2.LINE_AA,
-        )
-
-    def _draw_tripwire_line(
-        self,
-        frame: np.ndarray,
-        line: NormalizedPath | None,
-        frame_width: int,
-        frame_height: int,
-        label: str,
-        color: tuple[int, int, int],
-    ) -> None:
-        if line is None:
-            return
-
-        points = [(int(x * frame_width), int(y * frame_height)) for x, y in line]
-        if len(points) < 2:
-            return
-
-        for start, end in zip(points, points[1:], strict=False):
-            cv2.line(frame, start, end, color, 2)
-        cv2.circle(frame, points[0], 4, color, -1)
-        cv2.circle(frame, points[-1], 4, color, -1)
-        cv2.putText(
-            frame,
-            label,
-            (points[0][0] + 6, max(18, points[0][1] - 6)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            color,
-            1,
-            cv2.LINE_AA,
-        )
-
-    def _normalized_line(self, line: TripwireLine | None) -> NormalizedPath | None:
-        if line is None:
-            return None
-
-        points = line.sampled_points or line.points or [line.start, line.end]
-        return tuple((point.x, point.y) for point in points)
-
-    def _resize_for_processing(self, frame: np.ndarray, max_width: int) -> np.ndarray:
-        height, width = frame.shape[:2]
-        if width <= max_width:
-            return frame
-
-        scale = max_width / width
-        return cv2.resize(frame, (max_width, int(height * scale)), interpolation=cv2.INTER_AREA)
-
-    def _encode_frame(self, frame: np.ndarray) -> bytes:
-        ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
-        if not ok:
-            raise RuntimeError("Failed to encode processed frame.")
-        return buffer.tobytes()
-
     def _is_current_session(self, session: ProcessingSession) -> bool:
         with self._lock:
             return self._is_current_session_locked(session)
@@ -1825,39 +1579,13 @@ class CameraProcessingManager:
 
             safe_message = redact_stream_credentials(message)
             self._state = RuntimeState(running=False, status="failed", error=safe_message)
-            self._latest_jpeg = self._build_status_frame(safe_message)
+            self._latest_jpeg = self._frame_renderer.build_status_frame(safe_message)
             self._latest_stream_jpeg = self._latest_jpeg
             self._latest_stream_frame_id += 1
             session.stop_event.set()
             self._active_session = None
             self._persist_session_locked()
             self._raw_frame_condition.notify_all()
-
-    def _build_status_frame(self, message: str) -> bytes:
-        frame = np.zeros((540, 960, 3), dtype=np.uint8)
-        frame[:] = (17, 24, 39)
-        cv2.line(frame, (480, 0), (480, 540), (59, 130, 246), 2)
-        cv2.putText(
-            frame,
-            "TANAW ML Camera Service",
-            (270, 236),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.85,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame,
-            message[:72],
-            (90, 288),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (203, 213, 225),
-            2,
-            cv2.LINE_AA,
-        )
-        return self._encode_frame(frame)
 
     def _persist_count_event(
         self,

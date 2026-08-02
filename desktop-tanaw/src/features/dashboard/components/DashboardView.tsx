@@ -95,7 +95,7 @@ export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
   };
 
   return (
-    <div className="animate-in fade-in space-y-6 font-['Inter'] duration-500">
+    <div className="animate-in fade-in space-y-6 font-sans duration-500">
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}

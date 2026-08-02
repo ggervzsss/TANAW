@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import {
-  replaceLocalCameras,
-  testCameraConnection,
-  updateCameraCountingConfig,
-} from "./ml-service";
+import { getMlHealth, getMlServiceStatus, replaceLocalCameras, testCameraConnection, updateCameraCountingConfig } from "./ml-service";
 
 describe("secure camera service requests", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -23,6 +19,38 @@ describe("secure camera service requests", () => {
     expect(payload).not.toHaveProperty("password");
     expect(payload).not.toHaveProperty("username");
     expect(payload.stream_url).toBe("rtsp://192.168.1.9/stream2");
+  });
+
+  it("adds the per-launch desktop token to local service requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("window", {
+      clearTimeout,
+      setTimeout,
+      tanawMlService: {
+        getStatus: vi.fn().mockResolvedValue({
+          accessToken: "launch-secret",
+          baseUrl: "http://127.0.0.1:8765",
+          desktopBuild: "development",
+          desktopVersion: "test",
+          error: null,
+          packaged: false,
+          pid: 123,
+          running: true,
+        }),
+      },
+    });
+
+    await getMlServiceStatus();
+    await getMlHealth("http://127.0.0.1:8765");
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(request.headers).get("X-TANAW-ML-Token")).toBe("launch-secret");
   });
 });
 
@@ -134,13 +162,7 @@ describe("camera configuration write boundary", () => {
       setTimeout,
     });
 
-    await expect(
-      updateCameraCountingConfig(
-        "http://127.0.0.1:8765",
-        camera(),
-        { requireActiveWorker: true },
-      ),
-    ).rejects.toMatchObject({
+    await expect(updateCameraCountingConfig("http://127.0.0.1:8765", camera(), { requireActiveWorker: true })).rejects.toMatchObject({
       code: "route_unavailable",
       status: 404,
     });

@@ -1,5 +1,6 @@
-export const CITY_HALL_DAY_IMAGE = `${import.meta.env.BASE_URL}images/dsc00386.jpg`;
-export const CITY_HALL_NIGHT_IMAGE = `${import.meta.env.BASE_URL}images/dsc00386-night.jpg`;
+import { CITY_HALL_DAY_IMAGE, CITY_HALL_NIGHT_IMAGE } from "../../../lib/assets";
+
+export { CITY_HALL_DAY_IMAGE, CITY_HALL_NIGHT_IMAGE };
 
 let backgroundPreloadPromise: Promise<void> | null = null;
 
