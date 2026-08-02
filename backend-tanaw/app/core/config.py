@@ -88,12 +88,6 @@ class Settings(BaseSettings):
     account_email_change_retention_days: int = Field(default=180, ge=30, le=3650)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
-    realtime_enabled: bool = True
-    realtime_heartbeat_seconds: int = Field(default=30, ge=10, le=120)
-    realtime_outbox_poll_seconds: float = Field(default=0.5, ge=0.05, le=10.0)
-    realtime_outbox_batch_size: int = Field(default=100, ge=1, le=500)
-    realtime_broker_reconnect_seconds: float = Field(default=1.0, ge=0.1, le=60.0)
-
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", populate_by_name=True
     )
