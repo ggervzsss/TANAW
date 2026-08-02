@@ -6,18 +6,9 @@ export type SupportTicketCategoryConfig = {
   showCamera: boolean;
 };
 
-export const supportTicketCategories: readonly SupportTicketCategory[] = [
-  "Camera Issue",
-  "Report Concern",
-  "Maintenance",
-  "Account & Security",
-  "Other",
-];
+export const supportTicketCategories: readonly SupportTicketCategory[] = ["Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"];
 
-const categoryConfig: Record<
-  SupportTicketCategory,
-  SupportTicketCategoryConfig
-> = {
+const categoryConfig: Record<SupportTicketCategory, SupportTicketCategoryConfig> = {
   "Camera Issue": {
     affectedAreaRequired: true,
     showAffectedArea: true,
@@ -45,16 +36,11 @@ const categoryConfig: Record<
   },
 };
 
-export function getSupportTicketCategoryConfig(
-  category: SupportTicketCategory,
-) {
+export function getSupportTicketCategoryConfig(category: SupportTicketCategory) {
   return categoryConfig[category];
 }
 
-export function clearHiddenTicketFields(
-  category: SupportTicketCategory,
-  fields: { affectedArea: string; cameraNode: string },
-) {
+export function clearHiddenTicketFields(category: SupportTicketCategory, fields: { affectedArea: string; cameraNode: string }) {
   const config = getSupportTicketCategoryConfig(category);
   return {
     affectedArea: config.showAffectedArea ? fields.affectedArea : "",
@@ -62,19 +48,12 @@ export function clearHiddenTicketFields(
   };
 }
 
-export function ticketCategoryPayloadFields(
-  category: SupportTicketCategory,
-  fields: { affectedArea: string; cameraNode: string },
-) {
+export function ticketCategoryPayloadFields(category: SupportTicketCategory, fields: { affectedArea: string; cameraNode: string }) {
   const config = getSupportTicketCategoryConfig(category);
   const normalized = clearHiddenTicketFields(category, fields);
   return {
-    affectedArea: config.showAffectedArea
-      ? trimOptional(normalized.affectedArea)
-      : undefined,
-    cameraNode: config.showCamera
-      ? trimOptional(normalized.cameraNode)
-      : undefined,
+    affectedArea: config.showAffectedArea ? trimOptional(normalized.affectedArea) : undefined,
+    cameraNode: config.showCamera ? trimOptional(normalized.cameraNode) : undefined,
   };
 }
 

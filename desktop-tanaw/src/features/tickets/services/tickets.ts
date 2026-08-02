@@ -45,14 +45,7 @@ export type SupportTicketDetail = SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
-export type SupportTicketSort =
-  | "recommended"
-  | "newest"
-  | "oldest"
-  | "priority-high"
-  | "priority-low"
-  | "status"
-  | "recently-updated";
+export type SupportTicketSort = "recommended" | "newest" | "oldest" | "priority-high" | "priority-low" | "status" | "recently-updated";
 
 const priorityRank: Record<SupportTicketPriority, number> = {
   Urgent: 0,
@@ -148,12 +141,7 @@ function compareRecommended(left: SupportTicket, right: SupportTicket) {
     const statusDifference = workflowRank[left.status] - workflowRank[right.status];
     if (statusDifference !== 0) return statusDifference;
   }
-  return (
-    compareTimestamp(
-      right.status === "Resolved" ? right.updatedAt : right.createdAt,
-      left.status === "Resolved" ? left.updatedAt : left.createdAt,
-    ) || stableTicketOrder(left, right)
-  );
+  return compareTimestamp(right.status === "Resolved" ? right.updatedAt : right.createdAt, left.status === "Resolved" ? left.updatedAt : left.createdAt) || stableTicketOrder(left, right);
 }
 
 function compareTimestamp(left: string, right: string) {

@@ -15,14 +15,8 @@ describe("enterprise support ticket sorting", () => {
   });
 
   it("orders resolved tickets by update time without reapplying their old priority", () => {
-    const resolved = [
-      ticket("resolved-new-low", "Low", "Resolved", "2026-07-24T06:00:00Z"),
-      ticket("resolved-old-urgent", "Urgent", "Resolved", "2026-07-24T01:00:00Z"),
-    ];
-    expect(sortSupportTickets(resolved, "recommended").map((item) => item.id)).toEqual([
-      "resolved-new-low",
-      "resolved-old-urgent",
-    ]);
+    const resolved = [ticket("resolved-new-low", "Low", "Resolved", "2026-07-24T06:00:00Z"), ticket("resolved-old-urgent", "Urgent", "Resolved", "2026-07-24T01:00:00Z")];
+    expect(sortSupportTickets(resolved, "recommended").map((item) => item.id)).toEqual(["resolved-new-low", "resolved-old-urgent"]);
   });
 
   it("supports chronological, priority, status, and update options without mutating records", () => {

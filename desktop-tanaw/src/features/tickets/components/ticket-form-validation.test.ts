@@ -21,12 +21,7 @@ describe("support ticket form validation", () => {
       subject: " ",
     });
 
-    expect(ticketFormFieldOrder.filter((field) => errors[field])).toEqual([
-      "category",
-      "priority",
-      "subject",
-      "description",
-    ]);
+    expect(ticketFormFieldOrder.filter((field) => errors[field])).toEqual(["category", "priority", "subject", "description"]);
   });
 
   it("keeps camera optional and accepts a complete ticket", () => {
@@ -59,9 +54,7 @@ describe("support ticket form validation", () => {
 
   it("keeps affected area required for camera, maintenance, and other concerns", () => {
     for (const category of ["Camera Issue", "Maintenance", "Other"]) {
-      expect(
-        validateTicketForm({ ...validForm, affectedArea: "", category }).affectedArea,
-      ).toBe("Enter the affected area.");
+      expect(validateTicketForm({ ...validForm, affectedArea: "", category }).affectedArea).toBe("Enter the affected area.");
     }
   });
 });

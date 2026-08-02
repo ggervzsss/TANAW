@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildWindowsListenerPidScript,
-  buildWindowsTerminateTreeArgs,
-  shouldTerminateExternalService,
-  waitForListenerRelease,
-} from "./ml-service-process";
+import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "./ml-service-process";
 
 describe("Windows ML listener discovery", () => {
   it("terminates the listener pipeline before emitting its PID", () => {

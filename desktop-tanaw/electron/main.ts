@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, safeStorage, screen, Tray } from "electron";
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { app, BrowserWindow, Menu, nativeImage, screen, Tray } from "electron";
+import { existsSync, statSync } from "node:fs";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -10,8 +10,9 @@ import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-
 import { classifyMlServiceStderr } from "./ml-service-log";
 import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "./ml-service-process";
 import { createDisplayScaleController } from "./display-scale";
-import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "./camera-credential-validation";
 import { createStartupTransitionController, DEV_STARTUP_READY_FALLBACK_MS, type StartupRevealReason, type StartupTransitionController } from "./startup-transition";
+import { getCameraCredential, normalizeCameraCredentialId } from "./stores/camera-credential-store";
+import { registerIpcHandlers } from "./ipc/register-ipc-handlers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopBuild = getDesktopBuildFingerprint();
@@ -41,42 +42,11 @@ let startupTransition: StartupTransitionController | null = null;
 
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
 const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
-const CAMERA_CREDENTIAL_STORE_FILE = "camera-credentials.json";
-const AUTH_SESSION_STORE_FILE = "auth-session.json";
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const ML_SERVICE_STARTUP_TIMEOUT_MS = 20_000;
 const MAIN_WINDOW_BACKGROUND_COLOR = "#f4f8f5";
 const SPLASH_WINDOW_BACKGROUND_COLOR = "#f7f7f3";
 const execFileAsync = promisify(execFile);
-
-type CameraCredentialRecord = {
-  password: string;
-  username: string;
-};
-
-type CameraCredentialRecords = Record<string, CameraCredentialRecord>;
-type CameraCredentialStore = Record<string, CameraCredentialRecords>;
-type CameraCredentialMetadata = {
-  passwordConfigured: boolean;
-  username?: string;
-};
-
-type CameraCredentialStoreFile = {
-  encoding: "safeStorage";
-  payload: string;
-  version: 1;
-};
-
-type StoredAuthSession = {
-  token: string;
-  user: Record<string, unknown>;
-};
-
-type AuthSessionStoreFile = {
-  encoding: "safeStorage";
-  payload: string;
-  version: 1;
-};
 
 if (process.platform === "linux") {
   // TANAW's camera analysis runs in the Python ML service. Electron only renders
@@ -305,87 +275,13 @@ async function stopCameraProcessingFromTray() {
   }
 }
 
-function getCameraCredentialStorePath() {
-  return path.join(app.getPath("userData"), CAMERA_CREDENTIAL_STORE_FILE);
-}
-
-function loadCameraCredentialStore(): CameraCredentialStore {
-  const storePath = getCameraCredentialStorePath();
-  if (!existsSync(storePath)) {
-    return {};
-  }
-
-  try {
-    const raw = JSON.parse(readFileSync(storePath, "utf8")) as unknown;
-    if (!isObjectRecord(raw) || raw.version !== 1) {
-      return {};
-    }
-
-    if (raw.encoding === "safeStorage" && typeof raw.payload === "string") {
-      if (!safeStorage.isEncryptionAvailable()) {
-        return {};
-      }
-      const decrypted = safeStorage.decryptString(Buffer.from(raw.payload, "base64"));
-      return normalizeCredentialStore(JSON.parse(decrypted) as unknown);
-    }
-  } catch {
-    return {};
-  }
-
-  return {};
-}
-
-function saveCameraCredentialStore(store: CameraCredentialStore) {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("Secure camera credential storage is unavailable.");
-  }
-  const storePath = getCameraCredentialStorePath();
-  mkdirSync(path.dirname(storePath), { recursive: true });
-
-  const payload: CameraCredentialStoreFile = {
-    encoding: "safeStorage",
-    payload: safeStorage.encryptString(JSON.stringify(store)).toString("base64"),
-    version: 1,
-  };
-
-  writeFileSync(storePath, JSON.stringify(payload), { encoding: "utf8", mode: 0o600 });
-}
-
-function loadCameraCredentials(scopeInput: unknown): Record<string, CameraCredentialMetadata> {
-  const scope = normalizeCredentialScope(scopeInput);
-  const store = loadCameraCredentialStore();
-  return toCredentialMetadata(store[scope] ?? {});
-}
-
-function saveCameraCredential(scopeInput: unknown, cameraIdInput: unknown, credentialInput: unknown): CameraCredentialMetadata {
-  const scope = normalizeCredentialScope(scopeInput);
-  const cameraId = normalizeCameraCredentialId(cameraIdInput);
-  const store = loadCameraCredentialStore();
-  const current = store[scope]?.[cameraId];
-  const credential = resolveCameraCredential(credentialInput, current);
-  store[scope] = { ...store[scope], [cameraId]: credential };
-  saveCameraCredentialStore(store);
-  return { passwordConfigured: true, username: credential.username };
-}
-
-function removeCameraCredential(scopeInput: unknown, cameraIdInput: unknown) {
-  const scope = normalizeCredentialScope(scopeInput);
-  const cameraId = normalizeCameraCredentialId(cameraIdInput);
-  const store = loadCameraCredentialStore();
-  if (!store[scope]?.[cameraId]) return;
-  delete store[scope][cameraId];
-  if (Object.keys(store[scope]).length === 0) delete store[scope];
-  saveCameraCredentialStore(store);
-}
-
 async function requestCameraWithCredentials(scopeInput: unknown, cameraIdInput: unknown, operationInput: unknown, payloadInput: unknown) {
-  const scope = normalizeCredentialScope(scopeInput);
   const cameraId = normalizeCameraCredentialId(cameraIdInput);
   const operation = operationInput === "test" || operationInput === "start" ? operationInput : null;
   if (!operation || !isObjectRecord(payloadInput)) {
     throw new Error("Unsupported secure camera request.");
   }
-  const credentials = loadCameraCredentialStore()[scope]?.[cameraId];
+  const credentials = getCameraCredential(scopeInput, cameraIdInput);
   if (!credentials?.username) {
     throw new Error("Enter the camera username.");
   }
@@ -410,102 +306,6 @@ async function requestCameraWithCredentials(scopeInput: unknown, cameraIdInput: 
     throw new Error(`Camera ${operation} request failed (${response.status}).`);
   }
   return response.json() as Promise<unknown>;
-}
-
-function getAuthSessionStorePath() {
-  return path.join(app.getPath("userData"), AUTH_SESSION_STORE_FILE);
-}
-
-function loadAuthSession(): StoredAuthSession | null {
-  const storePath = getAuthSessionStorePath();
-  if (!existsSync(storePath) || !safeStorage.isEncryptionAvailable()) return null;
-
-  try {
-    const raw = JSON.parse(readFileSync(storePath, "utf8")) as unknown;
-    if (!isObjectRecord(raw) || raw.version !== 1 || raw.encoding !== "safeStorage" || typeof raw.payload !== "string") return null;
-    return normalizeAuthSession(JSON.parse(safeStorage.decryptString(Buffer.from(raw.payload, "base64"))) as unknown);
-  } catch {
-    return null;
-  }
-}
-
-function saveAuthSession(sessionInput: unknown) {
-  const session = normalizeAuthSession(sessionInput);
-  if (!session || !safeStorage.isEncryptionAvailable()) return false;
-
-  const storePath = getAuthSessionStorePath();
-  mkdirSync(path.dirname(storePath), { recursive: true });
-  const payload: AuthSessionStoreFile = {
-    encoding: "safeStorage",
-    payload: safeStorage.encryptString(JSON.stringify(session)).toString("base64"),
-    version: 1,
-  };
-  writeFileSync(storePath, JSON.stringify(payload), { encoding: "utf8", mode: 0o600 });
-  return true;
-}
-
-function clearAuthSession() {
-  const storePath = getAuthSessionStorePath();
-  if (existsSync(storePath)) unlinkSync(storePath);
-}
-
-function normalizeAuthSession(value: unknown): StoredAuthSession | null {
-  if (!isObjectRecord(value) || typeof value.token !== "string" || !value.token || !isObjectRecord(value.user)) return null;
-  return { token: value.token, user: value.user };
-}
-
-function normalizeCredentialScope(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error("Camera credential scope is required.");
-  }
-  return value.trim().slice(0, 240);
-}
-
-function normalizeCameraCredentialId(value: unknown) {
-  const cameraId = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : Number.NaN;
-  if (!Number.isSafeInteger(cameraId) || cameraId < 0) {
-    throw new Error("A valid camera ID is required.");
-  }
-  return String(cameraId);
-}
-
-function toCredentialMetadata(records: CameraCredentialRecords): Record<string, CameraCredentialMetadata> {
-  return Object.fromEntries(Object.entries(records).map(([cameraId, record]) => [cameraId, { passwordConfigured: Boolean(record.password), username: record.username }]));
-}
-
-function normalizeCredentialStore(value: unknown): CameraCredentialStore {
-  if (!isObjectRecord(value)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .map(([scope, records]) => [normalizeCredentialScope(scope), normalizeCredentialRecords(records)] as const)
-      .filter(([, records]) => Object.keys(records).length > 0),
-  );
-}
-
-function normalizeCredentialRecords(value: unknown): CameraCredentialRecords {
-  if (!isObjectRecord(value)) {
-    return {};
-  }
-
-  const records: CameraCredentialRecords = {};
-  for (const [cameraId, record] of Object.entries(value)) {
-    if (!/^\d+$/.test(cameraId) || !isObjectRecord(record)) {
-      continue;
-    }
-
-    const username = normalizeCameraUsername(record.username);
-    const password = normalizeCameraPassword(record.password);
-    if (Boolean(username) !== Boolean(password)) {
-      throw new Error(`Camera ${cameraId} requires both username and password credentials.`);
-    }
-    if (username && password) {
-      records[cameraId] = { password, username };
-    }
-  }
-  return records;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -653,40 +453,6 @@ function waitForProcessExit(process: ChildProcess, timeoutMs: number) {
 
     process.once("exit", handleExit);
     process.once("error", handleError);
-  });
-}
-
-function registerMlServiceIpc() {
-  ipcMain.handle("ml-service:get-status", () => getMlServiceStatusPayload());
-
-  ipcMain.handle("ml-service:restart", async () => {
-    await restartMlService();
-    return getMlServiceStatusPayload();
-  });
-
-  ipcMain.handle("ml-service:stop-camera", async () => {
-    await stopCameraProcessingFromTray();
-    return getMlServiceStatusPayload();
-  });
-}
-
-function registerCameraCredentialIpc() {
-  ipcMain.handle("camera-credentials:load", (_event, scope: unknown) => loadCameraCredentials(scope));
-  ipcMain.handle("camera-credentials:save", (_event, scope: unknown, cameraId: unknown, credential: unknown) => saveCameraCredential(scope, cameraId, credential));
-  ipcMain.handle("camera-credentials:remove", (_event, scope: unknown, cameraId: unknown) => removeCameraCredential(scope, cameraId));
-  ipcMain.handle("camera-credentials:request", (_event, scope: unknown, cameraId: unknown, operation: unknown, payload: unknown) => requestCameraWithCredentials(scope, cameraId, operation, payload));
-}
-
-function registerAuthSessionIpc() {
-  ipcMain.handle("auth-session:load", () => loadAuthSession());
-  ipcMain.handle("auth-session:save", (_event, session: unknown) => saveAuthSession(session));
-  ipcMain.handle("auth-session:clear", () => clearAuthSession());
-}
-
-function registerStartupIpc() {
-  ipcMain.on("startup:renderer-ready", (event) => {
-    if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
-    startupTransition?.markRendererReady();
   });
 }
 
@@ -1011,10 +777,14 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
-    registerMlServiceIpc();
-    registerCameraCredentialIpc();
-    registerAuthSessionIpc();
-    registerStartupIpc();
+    registerIpcHandlers({
+      getMlServiceStatus: getMlServiceStatusPayload,
+      isMainRenderer: (sender) => Boolean(win && !win.isDestroyed() && sender === win.webContents),
+      markRendererReady: () => startupTransition?.markRendererReady(),
+      requestCamera: requestCameraWithCredentials,
+      restartMlService,
+      stopCamera: stopCameraProcessingFromTray,
+    });
     createTray();
 
     const waitForSplash = existsSync(getSplashPath());

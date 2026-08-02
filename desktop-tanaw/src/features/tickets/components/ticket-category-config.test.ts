@@ -1,20 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  clearHiddenTicketFields,
-  getSupportTicketCategoryConfig,
-  supportTicketCategories,
-  ticketCategoryPayloadFields,
-} from "./ticket-category-config";
+import { clearHiddenTicketFields, getSupportTicketCategoryConfig, supportTicketCategories, ticketCategoryPayloadFields } from "./ticket-category-config";
 
 describe("support ticket category field policy", () => {
   it("maps every supported category intentionally", () => {
-    expect(supportTicketCategories).toEqual([
-      "Camera Issue",
-      "Report Concern",
-      "Maintenance",
-      "Account & Security",
-      "Other",
-    ]);
+    expect(supportTicketCategories).toEqual(["Camera Issue", "Report Concern", "Maintenance", "Account & Security", "Other"]);
     expect(getSupportTicketCategoryConfig("Camera Issue")).toEqual({
       affectedAreaRequired: true,
       showAffectedArea: true,

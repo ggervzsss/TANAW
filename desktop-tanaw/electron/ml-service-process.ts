@@ -14,11 +14,7 @@ export function buildWindowsTerminateTreeArgs(pid: number) {
   return ["/PID", String(pid), "/T", "/F"];
 }
 
-export async function waitForListenerRelease(
-  findListenerPid: () => Promise<number | null>,
-  timeoutMs: number,
-  pollIntervalMs = 150,
-) {
+export async function waitForListenerRelease(findListenerPid: () => Promise<number | null>, timeoutMs: number, pollIntervalMs = 150) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if ((await findListenerPid()) === null) {
@@ -29,9 +25,6 @@ export async function waitForListenerRelease(
   return false;
 }
 
-export function shouldTerminateExternalService(
-  connectedExternally: boolean,
-  hasManagedProcess: boolean,
-) {
+export function shouldTerminateExternalService(connectedExternally: boolean, hasManagedProcess: boolean) {
   return connectedExternally && !hasManagedProcess;
 }

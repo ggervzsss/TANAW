@@ -1,8 +1,5 @@
 import type { SupportTicketCategory, SupportTicketPriority } from "../services/tickets";
-import {
-  getSupportTicketCategoryConfig,
-  supportTicketCategories,
-} from "./ticket-category-config";
+import { getSupportTicketCategoryConfig, supportTicketCategories } from "./ticket-category-config";
 
 export type TicketFormState = {
   affectedArea: string;
@@ -35,11 +32,7 @@ export function validateTicketForm(form: TicketFormState): TicketFormErrors {
   if (!isSupportTicketPriority(form.priority)) errors.priority = "Select a valid ticket priority.";
   if (!form.subject.trim()) errors.subject = "Enter a ticket subject.";
   else if (form.subject.trim().length < 3) errors.subject = "Ticket subject must be at least 3 characters.";
-  if (
-    isSupportTicketCategory(form.category) &&
-    getSupportTicketCategoryConfig(form.category).affectedAreaRequired &&
-    !form.affectedArea.trim()
-  ) {
+  if (isSupportTicketCategory(form.category) && getSupportTicketCategoryConfig(form.category).affectedAreaRequired && !form.affectedArea.trim()) {
     errors.affectedArea = "Enter the affected area.";
   }
   if (!form.description.trim()) errors.description = "Enter a ticket description.";
