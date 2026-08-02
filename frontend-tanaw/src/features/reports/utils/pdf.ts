@@ -1,13 +1,12 @@
 import type { FinalReport, FinalReportSource, IntakeReport } from "@/shared/types";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 import { getDotDemographics } from "./dotDemographics";
+import { buildPdfDocument, downloadPdfDocument } from "./pdfDocument";
+import { escapePdfText, sanitizePdfText, wrappedPdfLines } from "./pdfText";
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
 const MARGIN = 36;
-const FONT_ID = 3;
-const BOLD_FONT_ID = 4;
-
 type PdfCommand = string;
 
 type PdfPalette = {
@@ -91,7 +90,7 @@ const DOT_HEADER_HEIGHT = 62;
 
 export function downloadIntakeReportPdf(report: IntakeReport, timeFormat: SystemTimeFormat = "12-hour") {
   const pdf = createIntakeReportPdf(report, timeFormat);
-  downloadPdf(pdf, `${report.code}.pdf`);
+  downloadPdfDocument(pdf, `${report.code}.pdf`);
 }
 
 export function createIntakeReportPdf(report: IntakeReport, timeFormat: SystemTimeFormat = "12-hour") {
@@ -134,7 +133,7 @@ export function createIntakeReportPdf(report: IntakeReport, timeFormat: SystemTi
   detailY -= 20;
   drawText(commands, `Entries: ${formatNumber(report.metrics.entry)}   Exits: ${formatNumber(report.metrics.exit)}   Peak Occupancy: ${report.metrics.peak}`, MARGIN, detailY, 9);
   detailY -= 20;
-  const remarkLines = wrappedLines(`Remarks: ${report.remarks || report.notes || "None recorded."}`, PAGE_WIDTH - MARGIN * 2, 9);
+  const remarkLines = wrappedPdfLines(`Remarks: ${report.remarks || report.notes || "None recorded."}`, PAGE_WIDTH - MARGIN * 2, 9);
   const firstPageRemarkCapacity = Math.max(1, Math.floor((detailY - 58) / 11) + 1);
   const firstPageRemarks = remarkLines.slice(0, firstPageRemarkCapacity);
   firstPageRemarks.forEach((line, index) => drawText(commands, line, MARGIN, detailY - index * 11, 9));
@@ -157,12 +156,12 @@ export function createIntakeReportPdf(report: IntakeReport, timeFormat: SystemTi
   }
   pages.forEach((page, index) => drawText(page, `Page ${index + 1} of ${pages.length}`, PAGE_WIDTH - MARGIN - 58, 18, 8, false, "right", 58));
 
-  return buildPdf(pages.map((page) => page.join("\n")));
+  return buildPdfDocument(pages.map((page) => page.join("\n")));
 }
 
 export function downloadFinalReportPdf(report: FinalReport) {
   const pdf = createFinalReportPdf(report);
-  downloadPdf(pdf, `${report.id}.pdf`);
+  downloadPdfDocument(pdf, `${report.id}.pdf`);
 }
 
 export function createFinalReportPdf(report: FinalReport) {
@@ -202,7 +201,7 @@ export function createFinalReportPdf(report: FinalReport) {
     pages.push(commands.join("\n"));
   }
 
-  return buildPdf(pages);
+  return buildPdfDocument(pages);
 }
 
 function buildFinalReportSourceRow(source: FinalReportSource, period: string): TableCell[] {
@@ -280,7 +279,7 @@ function createTableRows(rows: TableCell[][], total = false): TableRow[] {
   return rows.map((cells) => {
     const lineCount = cells.reduce((maximum, cell, index) => {
       const column = DOT_COLUMNS[index];
-      return Math.max(maximum, wrappedLines(formatCell(cell.value), column.width - 8, 7).length);
+      return Math.max(maximum, wrappedPdfLines(formatCell(cell.value), column.width - 8, 7).length);
     }, 1);
     return { cells, height: Math.max(25, lineCount * 9 + 8), total };
   });
@@ -345,7 +344,7 @@ function drawMetadata(commands: PdfCommand[], rows: [string, string][], startY =
 
   for (let index = 0; index < rows.length; index += 2) {
     const pair = rows.slice(index, index + 2);
-    const lineCounts = pair.map(([, value], pairIndex) => wrappedLines(value, valueWidths[pairIndex], 9).length);
+    const lineCounts = pair.map(([, value], pairIndex) => wrappedPdfLines(value, valueWidths[pairIndex], 9).length);
     const rowHeight = 18 + Math.max(...lineCounts) * 11;
 
     pair.forEach(([label, value], pairIndex) => {
@@ -364,14 +363,14 @@ function measureMetadataBottom(rows: [string, string][], startY: number) {
   let y = startY;
   for (let index = 0; index < rows.length; index += 2) {
     const pair = rows.slice(index, index + 2);
-    const lineCounts = pair.map(([, value], pairIndex) => wrappedLines(value, valueWidths[pairIndex], 9).length);
+    const lineCounts = pair.map(([, value], pairIndex) => wrappedPdfLines(value, valueWidths[pairIndex], 9).length);
     y -= 18 + Math.max(...lineCounts) * 11;
   }
   return y;
 }
 
 function measureWrappedBottom(text: string, y: number, maxWidth: number, size: number) {
-  return y - wrappedLines(text, maxWidth, size).length * (size + 2);
+  return y - wrappedPdfLines(text, maxWidth, size).length * (size + 2);
 }
 
 function drawDotTable(commands: PdfCommand[], topY: number, rows: TableRow[]) {
@@ -412,7 +411,7 @@ function drawDotTable(commands: PdfCommand[], topY: number, rows: TableRow[]) {
       const column = DOT_COLUMNS[cellIndex];
       if (cell.tone) drawFilledRect(commands, cellX, y, column.width, row.height, cell.tone);
       drawRect(commands, cellX, y, column.width, row.height);
-      const lines = wrappedLines(formatCell(cell.value), column.width - 8, 7);
+      const lines = wrappedPdfLines(formatCell(cell.value), column.width - 8, 7);
       const textTop = y + row.height / 2 + (lines.length * 9) / 2 - 7;
       drawWrappedText(commands, formatCell(cell.value), cellX + 4, textTop, column.width - 8, 7, cell.bold, cell.align ?? column.align ?? "center");
       cellX += column.width;
@@ -436,7 +435,7 @@ function drawHeaderCell(
   const y = topY - height;
   drawFilledRect(commands, x, y, width, height, tone);
   drawRect(commands, x, y, width, height);
-  const lines = wrappedLines(label, width - 8, 7);
+  const lines = wrappedPdfLines(label, width - 8, 7);
   const textTop = y + height / 2 + (lines.length * 9) / 2 - 7;
   drawWrappedText(commands, label, x + 4, textTop, width - 8, 7, true, align);
 }
@@ -464,11 +463,11 @@ function drawText(commands: PdfCommand[], text: string, x: number, y: number, si
   const sanitized = sanitizePdfText(text);
   const width = Math.min(maxWidth || Number.POSITIVE_INFINITY, sanitized.length * size * 0.52);
   const textX = align === "right" ? x + maxWidth - width : align === "center" ? x + (maxWidth - width) / 2 : x;
-  commands.push(`BT /F${bold ? 2 : 1} ${size} Tf ${rgbFill(palette.text)} ${textX} ${y} Td (${escapePdf(sanitized)}) Tj ET`);
+  commands.push(`BT /F${bold ? 2 : 1} ${size} Tf ${rgbFill(palette.text)} ${textX} ${y} Td (${escapePdfText(sanitized)}) Tj ET`);
 }
 
 function drawWrappedText(commands: PdfCommand[], text: string, x: number, y: number, maxWidth: number, size: number, bold = false, align: "left" | "right" | "center" = "left") {
-  const lines = wrappedLines(text, maxWidth, size);
+  const lines = wrappedPdfLines(text, maxWidth, size);
   lines.forEach((line, index) => {
     const lineWidth = Math.min(maxWidth, line.length * size * 0.52);
     const offset = align === "right" ? maxWidth - lineWidth : align === "center" ? (maxWidth - lineWidth) / 2 : 0;
@@ -491,113 +490,11 @@ function drawFilledRect(commands: PdfCommand[], x: number, y: number, width: num
   commands.push(`${rgbFill(fill)} ${x} ${y} ${width} ${height} re f`);
 }
 
-function downloadPdf(pdf: string, fileName: string) {
-  const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = safeFileName(fileName);
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-function buildPdf(pages: string[]) {
-  const objects: string[] = [];
-  const pageObjectIds: number[] = [];
-  const catalogId = 1;
-  const pagesId = 2;
-
-  objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
-  objects[FONT_ID - 1] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
-  objects[BOLD_FONT_ID - 1] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
-
-  pages.forEach((content, index) => {
-    const pageObjectId = BOLD_FONT_ID + 1 + index * 2;
-    const contentObjectId = pageObjectId + 1;
-    pageObjectIds.push(pageObjectId);
-    objects[pageObjectId - 1] =
-      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${FONT_ID} 0 R /F2 ${BOLD_FONT_ID} 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
-    objects[contentObjectId - 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
-  });
-
-  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageObjectIds.length} >>`;
-
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  pdf += offsets
-    .slice(1)
-    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
-    .join("");
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return pdf;
-}
-
-function wrapText(text: string, maxChars: number) {
-  return text.split("\n").flatMap((line) => {
-    const lines: string[] = [];
-    let remaining = line.trim();
-
-    while (remaining.length > maxChars) {
-      const candidate = remaining.slice(0, maxChars);
-      const whitespaceBreak = candidate.search(/\s+\S*$/);
-      const hyphenBreak = candidate.lastIndexOf("-") + 1;
-      const breakIndex = Math.max(whitespaceBreak, hyphenBreak);
-
-      if (breakIndex > 0) {
-        lines.push(remaining.slice(0, breakIndex).trimEnd());
-        remaining = remaining.slice(breakIndex).trimStart();
-      } else {
-        lines.push(remaining.slice(0, maxChars));
-        remaining = remaining.slice(maxChars);
-      }
-    }
-
-    if (remaining) lines.push(remaining);
-    return lines.length ? lines : [""];
-  });
-}
-
-function wrappedLines(text: string, maxWidth: number, size: number) {
-  const approximateChars = Math.max(4, Math.floor(maxWidth / (size * 0.52)));
-  return wrapText(sanitizePdfText(text), approximateChars);
-}
-
-function escapePdf(value: string) {
-  return Array.from(sanitizePdfText(value), (character) => {
-    if (character === "\\") return "\\\\";
-    if (character === "(") return "\\(";
-    if (character === ")") return "\\)";
-    const code = character.charCodeAt(0);
-    return code > 0x7e ? `\\${code.toString(8).padStart(3, "0")}` : character;
-  }).join("");
-}
-
-function sanitizePdfText(value: string) {
-  return value
-    .replace(/[‘’‚‛]/g, "'")
-    .replace(/[“”„‟]/g, '"')
-    .replace(/[–—]/g, "-")
-    .replace(/…/g, "...")
-    .normalize("NFC")
-    .replace(/[^\x20-\x7E\xA0-\xFF\n]/g, "?");
-}
-
 export function formatReportSubmittedDate(value: string, timeFormat: SystemTimeFormat = "12-hour") {
   if (!/^\d{4}-\d{2}-\d{2}T/.test(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return `${formatPhilippineDateTime(date, timeFormat)} Philippine Time`;
-}
-
-function safeFileName(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 function sumWidths(columns: TableColumn[]) {

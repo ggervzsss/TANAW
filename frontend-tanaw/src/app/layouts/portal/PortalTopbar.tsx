@@ -1,9 +1,9 @@
-import { ChevronDown, LogOut, Menu, Moon, Settings, Shield, Sun, TicketCheck, User, Users, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, Shield, Sun, TicketCheck, User, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
 import { routes } from "@/app/routers/routes";
 import { logoutSession } from "@/shared/services/sessionService";
@@ -12,11 +12,11 @@ import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels"
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "@/shared/utils/routeUtils";
 import type { UserRole } from "@/shared/types/role.types";
-import type { NavigationItem } from "./navigation";
-import { roleNavigation } from "./navigation";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "@/shared/utils/sessionSync";
 import { usePortalThemePreference } from "./hooks/usePortalThemePreference";
+import { DesktopPortalNavigation, MobilePortalNavigation } from "./PortalNavigation";
+import { getPortalNavigation, getTopbarEntries } from "./portalNavigationModel";
 
 type PortalTopbarProps = {
   role: UserRole;
@@ -181,72 +181,11 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [openMenuId, showProfileMenu, showMobileNav, showNotifications]);
 
-  const navigation = useMemo(() => {
-    const items = roleNavigation[role] ?? [];
-    if (role !== "it" || showDevLog) return items;
-    return items.filter((item) => item.id !== "dev-log");
-  }, [role, showDevLog]);
-
-  type TopbarEntry = { type: "link"; item: NavigationItem } | { type: "menu"; id: string; label: string; icon: NavigationItem["icon"]; children: NavigationItem[] };
-
-  const topbarItems = useMemo<TopbarEntry[]>(() => {
-    if (role !== "it") {
-      return navigation.map((item) => ({ type: "link", item }));
-    }
-
-    const getItem = (id: string) => navigation.find((entry) => entry.id === id);
-    const dashboard = getItem("dashboard");
-    const workCenter = getItem("work-center");
-    const lguAccounts = getItem("lgu-accounts");
-    const enterpriseAccounts = getItem("enterprise-accounts");
-    const systemLogs = getItem("system-logs");
-    const systemSettings = getItem("system-settings");
-    const devLog = getItem("dev-log");
-
-    const items: TopbarEntry[] = [];
-
-    if (dashboard) {
-      items.push({ type: "link", item: dashboard });
-    }
-
-    if (workCenter) {
-      items.push({ type: "link", item: workCenter });
-    }
-
-    const accountChildren = [lguAccounts, enterpriseAccounts].filter(Boolean) as NavigationItem[];
-    if (accountChildren.length) {
-      items.push({
-        type: "menu",
-        id: "accounts",
-        label: "Accounts",
-        icon: Users,
-        children: accountChildren,
-      });
-    }
-
-    const systemChildren = [systemLogs, systemSettings, devLog].filter(Boolean) as NavigationItem[];
-    if (systemChildren.length) {
-      items.push({
-        type: "menu",
-        id: "system",
-        label: "System",
-        icon: Settings,
-        children: systemChildren,
-      });
-    }
-
-    return items;
-  }, [navigation, role]);
+  const navigation = useMemo(() => getPortalNavigation(role, showDevLog), [role, showDevLog]);
+  const topbarItems = useMemo(() => getTopbarEntries(role, navigation), [navigation, role]);
 
   const isDarkTopbar = resolvedTheme === "dark";
   const topbarThemeClasses = getPortalTopbarThemeClasses(resolvedTheme);
-  const navPillBase = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-[color,background-color,box-shadow,transform] duration-200 max-2xl:px-3.5";
-  const navPillActive = isDarkTopbar
-    ? "bg-emerald-300/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.46)] ring-1 ring-emerald-100/14"
-    : "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
-  const navPillInactive = isDarkTopbar
-    ? "text-white/72 hover:-translate-y-0.5 hover:bg-white/7 hover:text-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.38)]"
-    : "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
   const topbarIconButton = isDarkTopbar
     ? "border-emerald-100/14 bg-black/18 text-white/88 hover:border-emerald-100/24 hover:bg-emerald-200/9"
     : "border-emerald-100/28 bg-white/8 text-white hover:bg-white/[0.14]";
@@ -284,76 +223,9 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
 
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
-          <nav ref={navMenuRef} className="hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4" aria-label={`${rolePortalLabel[role]} navigation`}>
-            {topbarItems.map((entry) => {
-              if (entry.type === "link") {
-                const Icon = entry.item.icon;
-                return (
-                  <NavLink
-                    key={entry.item.id}
-                    to={entry.item.path}
-                    onClick={() => setOpenMenuId(null)}
-                    className={({ isActive }) => [navPillBase, isActive ? navPillActive : navPillInactive].join(" ")}
-                  >
-                    <Icon size={16} className="shrink-0" />
-                    {entry.item.label}
-                  </NavLink>
-                );
-              }
-
-              const isMenuActive = entry.children.some((child) => pathname.startsWith(child.path));
-              const isMenuOpen = openMenuId === entry.id;
-              const MenuIcon = entry.icon;
-
-              return (
-                <div key={entry.id} className="relative">
-                  <button
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={isMenuOpen}
-                    onClick={() => setOpenMenuId((current) => (current === entry.id ? null : entry.id))}
-                    className={[navPillBase, isMenuActive || isMenuOpen ? navPillActive : navPillInactive].join(" ")}
-                  >
-                    <MenuIcon size={16} className="shrink-0" />
-                    {entry.label}
-                    <ChevronDown size={14} className={`ml-1 transition-transform duration-200 ${isMenuOpen ? "rotate-180" : ""}`} />
-                  </button>
-
-                  <AnimatePresence>
-                    {isMenuOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
-                        className="absolute top-full left-0 z-1001 mt-4 w-64 overflow-hidden rounded-2xl border border-white/80 bg-white p-2.5 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/5"
-                      >
-                        {entry.children.map((child) => {
-                          const ChildIcon = child.icon;
-                          return (
-                            <NavLink
-                              key={child.id}
-                              to={child.path}
-                              onClick={() => setOpenMenuId(null)}
-                              className={({ isActive }) =>
-                                [
-                                  "flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-semibold transition",
-                                  isActive ? "bg-tanaw-green/10 text-tanaw-green" : "hover:text-tanaw-green text-slate-700 hover:bg-slate-50",
-                                ].join(" ")
-                              }
-                            >
-                              <ChildIcon size={15} className="shrink-0" />
-                              {child.label}
-                            </NavLink>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
-          </nav>
+          <div ref={navMenuRef}>
+            <DesktopPortalNavigation entries={topbarItems} isDark={isDarkTopbar} openMenuId={openMenuId} pathname={pathname} role={role} onMenuChange={setOpenMenuId} />
+          </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-2">
             <button
@@ -458,72 +330,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
         </div>
       </div>
 
-      <AnimatePresence>
-        {showMobileNav && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className={`border-t px-6 pb-4 max-sm:px-4 ${isDarkTopbar ? "border-emerald-100/10 bg-[#04110f]/98" : "bg-tanaw-green/95 border-white/10"}`}
-          >
-            <nav className="grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
-              {topbarItems.map((entry) => {
-                if (entry.type === "link") {
-                  const Icon = entry.item.icon;
-                  return (
-                    <NavLink
-                      key={entry.item.id}
-                      to={entry.item.path}
-                      onClick={() => setShowMobileNav(false)}
-                      className={({ isActive }) =>
-                        [
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow]",
-                          isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white",
-                        ].join(" ")
-                      }
-                    >
-                      <Icon size={16} className="shrink-0" />
-                      {entry.item.label}
-                    </NavLink>
-                  );
-                }
-
-                const MenuIcon = entry.icon;
-                return (
-                  <div key={entry.id} className="space-y-2">
-                    <div className="flex items-center gap-2 px-3 text-[11px] font-semibold tracking-[0.2em] text-white/60 uppercase">
-                      <MenuIcon size={14} />
-                      {entry.label}
-                    </div>
-                    <div className="grid gap-2">
-                      {entry.children.map((child) => {
-                        const ChildIcon = child.icon;
-                        return (
-                          <NavLink
-                            key={child.id}
-                            to={child.path}
-                            onClick={() => setShowMobileNav(false)}
-                            className={({ isActive }) =>
-                              [
-                                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow]",
-                                isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white",
-                              ].join(" ")
-                            }
-                          >
-                            <ChildIcon size={15} className="shrink-0" />
-                            {child.label}
-                          </NavLink>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence>{showMobileNav && <MobilePortalNavigation entries={topbarItems} isDark={isDarkTopbar} role={role} onNavigate={() => setShowMobileNav(false)} />}</AnimatePresence>
     </div>
   );
 }

@@ -31,9 +31,7 @@ export function AuthDialogShell({ children, kind, onClose }: { children: ReactNo
       if (event.key !== "Tab") return;
 
       const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-        ),
+        dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'),
       ).filter((element) => element.getClientRects().length > 0);
       if (focusable.length === 0) return;
       const first = focusable[0];

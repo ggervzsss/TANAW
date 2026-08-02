@@ -62,7 +62,12 @@ export function StaffFinalReportsAuditPage() {
               className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
             />
           </div>
-          <FilterSelect value={monthFilter} onChange={setMonthFilter} options={["All", ...availableMonths].map((month) => [month, month === "All" ? "All Months" : month] as const)} ariaLabel="Report month" />
+          <FilterSelect
+            value={monthFilter}
+            onChange={setMonthFilter}
+            options={["All", ...availableMonths].map((month) => [month, month === "All" ? "All Months" : month] as const)}
+            ariaLabel="Report month"
+          />
           <FilterSelect value={yearFilter} onChange={setYearFilter} options={["All", ...availableYears].map((year) => [year, year === "All" ? "All Years" : year] as const)} ariaLabel="Report year" />
         </div>
 
