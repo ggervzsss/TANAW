@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
-import { getAccountPreferences, updateAccountPreferences } from "@/shared/services/accountManagement";
+import { getAccountPreferences, updateAccountPreferences } from "@/shared/services/accountService";
 import {
   applyThemePreference,
   chooseAuthenticatedThemePreference,

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { getBarangayLabel, getEnterprisesByBarangay, getFeatureValue, isBoundaryPolygonFeature, isPointInsideSanPedro, normalizeBarangayName, type GeoJsonFeatureCollection } from "../utils";
 

@@ -14,16 +14,6 @@ type SearchableDropdownFieldProps = {
 
 export function SearchableDropdownField({ name, label, options, value, onChange, required = false, error }: SearchableDropdownFieldProps) {
   return (
-    <SelectDropdown
-      name={name}
-      label={label}
-      options={options}
-      value={value}
-      onChange={onChange}
-      required={required}
-      error={error}
-      searchable
-      searchPlaceholder={`Search ${label.toLowerCase()}...`}
-    />
+    <SelectDropdown name={name} label={label} options={options} value={value} onChange={onChange} required={required} error={error} searchable searchPlaceholder={`Search ${label.toLowerCase()}...`} />
   );
 }

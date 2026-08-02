@@ -25,14 +25,7 @@ describe("recommended technical issue ordering", () => {
       alert("resolved-new", "Normal", "Resolved", "2026-07-29T08:00:00Z"),
     ];
 
-    expect(sortRecommendedPriorityAlerts(alerts).map((item) => item.id)).toEqual([
-      "urgent-new-new-a",
-      "urgent-new-new-b",
-      "urgent-new-old",
-      "urgent-in-review",
-      "resolved-new",
-      "resolved-old",
-    ]);
+    expect(sortRecommendedPriorityAlerts(alerts).map((item) => item.id)).toEqual(["urgent-new-new-a", "urgent-new-new-b", "urgent-new-old", "urgent-in-review", "resolved-new", "resolved-old"]);
   });
 });
 

@@ -4,8 +4,9 @@ import { AnimatePresence } from "motion/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast/headless";
 import type { BarangayPointResolution } from "@/features/mapview/utils";
+import { devDeliveriesQueryKey } from "@/features/dev-log";
 import { ModalFrame } from "@/shared/components/ui";
-import { createEnterpriseAccount } from "@/shared/services/accountManagement";
+import { createEnterpriseAccount, enterpriseAccountsQueryKey } from "../services";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import type { LocationDraft } from "../types";
@@ -43,8 +44,8 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
     mutationFn: createEnterpriseAccount,
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] }),
-        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: enterpriseAccountsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: devDeliveriesQueryKey }),
         queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
       ]);
       toast.success("Enterprise account created; activation email queued");

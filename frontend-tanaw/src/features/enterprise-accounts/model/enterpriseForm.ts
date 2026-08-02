@@ -1,5 +1,6 @@
 import { enterpriseCategories, sanPedroBarangays } from "@/shared/data/enterpriseOptions";
-import type { AccountSummary, CreateEnterpriseAccountPayload, UpdateEnterpriseAccountPayload } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
+import type { CreateEnterpriseAccountPayload, UpdateEnterpriseAccountPayload } from "../services";
 import {
   formatPersonName,
   normalizeEmail,

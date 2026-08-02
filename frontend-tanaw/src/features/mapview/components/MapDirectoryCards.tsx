@@ -1,6 +1,6 @@
 import { Activity, Building2, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { getDarkMonitoringBadgeClass, getOccupancyBadgeClass } from "../utils";
 

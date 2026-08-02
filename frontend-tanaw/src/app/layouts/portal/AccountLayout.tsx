@@ -4,7 +4,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
-import { getCurrentUser } from "@/shared/services/accountManagement";
+import { currentUserQueryKey, getCurrentUser } from "@/shared/services/accountService";
 import type { UserRole } from "@/shared/types/role.types";
 import { createPageStateKey, readPageState, writePageState } from "@/shared/utils/pageState";
 import { PortalTopbar } from "./PortalTopbar";
@@ -53,7 +53,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
   const scrollStateKey = useMemo(() => createPageStateKey({ portal: "web", role: user?.role ?? role, userId: user?.id ?? "anonymous" }, pathname, "scroll"), [pathname, role, user?.id, user?.role]);
 
   const currentUserQuery = useQuery({
-    queryKey: ["current-user", token],
+    queryKey: [...currentUserQueryKey, token],
     queryFn: getCurrentUser,
     enabled: Boolean(token),
     staleTime: 60_000,

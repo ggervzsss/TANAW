@@ -1,7 +1,7 @@
 import { AlertTriangle, CheckCircle2, KeyRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { ModalFrame } from "@/shared/components/ui";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 
 type ConfirmationProps = {
   enterprise: AccountSummary;

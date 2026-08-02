@@ -3,9 +3,9 @@ import { AnimatePresence } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useAuthStore } from "@/app/store/authStore";
+import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
-import { listEnterpriseAccounts, type AccountSummary } from "@/shared/services/accountManagement";
-import type { MapEnterprise, VisitorInsightRange } from "@/shared/types";
+import type { AccountSummary, MapEnterprise, VisitorInsightRange } from "@/shared/types";
 import {
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
@@ -56,7 +56,7 @@ export function AdminEnterpriseMap() {
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
   const { cameraTarget, insightEnterpriseId, selectedBarangayName, selectedEnterpriseId } = mapInteractionState;
   const token = useAuthStore((state) => state.token);
-  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
+  const enterpriseAccountsQuery = useQuery({ queryKey: [...enterpriseAccountsQueryKey, token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
   const mapEnterprisesQuery = useOperationalMapEnterprises();
   const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ENTERPRISE_ACCOUNTS;
   const rawMapEnterprises = mapEnterprisesQuery.data ?? EMPTY_MAP_ENTERPRISES;

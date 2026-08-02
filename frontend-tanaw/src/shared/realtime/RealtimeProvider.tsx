@@ -4,12 +4,7 @@ import { WifiOff } from "lucide-react";
 import { useAuthStore } from "@/app/store/authStore";
 import { getWebSocketUrl } from "@/shared/config/api.config";
 import { resynchronizeActiveRealtimeQueries, routeRealtimeEvent } from "./eventRouter";
-import {
-  isRealtimeEnvelope,
-  realtimeOrderingKey,
-  type RealtimeConnectionState,
-  type RealtimeEnvelope,
-} from "./types";
+import { isRealtimeEnvelope, realtimeOrderingKey, type RealtimeConnectionState, type RealtimeEnvelope } from "./types";
 
 const MAX_DEDUPLICATION_EVENTS = 2_048;
 const MAX_RECONNECT_DELAY_MS = 30_000;

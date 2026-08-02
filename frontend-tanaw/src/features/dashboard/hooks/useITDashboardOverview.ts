@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
 import { emailDeliveriesQueryKey, listEmailDeliveries } from "@/features/email-deliveries";
-import { listEnterpriseAccounts, listLguAccounts } from "@/shared/services/accountManagement";
+import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
+import { lguAccountsQueryKey, listLguAccounts } from "@/features/lgu-accounts";
 import { listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
 import { buildDashboardOverview, type DashboardOverview } from "../model";
 
@@ -11,8 +12,8 @@ const EMPTY_LIST: never[] = [];
 export function useITDashboardOverview(): DashboardOverview {
   const { alerts, isLoading: alertsLoading } = useAlerts();
   const operationalSummaryQuery = useOperationalSummary();
-  const lguAccountsQuery = useQuery({ queryKey: ["lgu-accounts"], queryFn: listLguAccounts });
-  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
+  const lguAccountsQuery = useQuery({ queryKey: lguAccountsQueryKey, queryFn: listLguAccounts });
+  const enterpriseAccountsQuery = useQuery({ queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts });
   const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
   const emailDeliveriesQuery = useQuery({ queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries });
 

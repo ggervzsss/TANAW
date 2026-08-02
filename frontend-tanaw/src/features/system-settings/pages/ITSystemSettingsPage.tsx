@@ -7,7 +7,7 @@ import { ModalFrame, PageMotion } from "@/shared/components/ui";
 import { SettingsDetailPanel } from "../components";
 import { settingSections } from "../data";
 import type { SettingField, SettingValue } from "../types";
-import { getSystemSettings, updateSystemSettings } from "@/shared/services/accountManagement";
+import { getSystemSettings, updateSystemSettings } from "@/shared/services/systemSettingsService";
 import { activityLogsQueryKey } from "@/features/system-logs/hooks";
 import { purgeExpiredActivityLogs } from "@/features/system-logs/services";
 import { systemSettingsQueryKey, useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
@@ -32,7 +32,7 @@ export function ITSystemSettingsPage() {
     onSuccess: ({ deletedCount }) => {
       setIsPurgeConfirmOpen(false);
       toast.success(`Deleted ${deletedCount} old activity ${deletedCount === 1 ? "entry" : "entries"}.`);
-      void queryClient.invalidateQueries({ queryKey: ["system-settings"] });
+      void queryClient.invalidateQueries({ queryKey: systemSettingsQueryKey });
       return queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
     },
     onError: () => toast.error("Unable to delete old activity."),

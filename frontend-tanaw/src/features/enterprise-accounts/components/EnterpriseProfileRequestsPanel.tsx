@@ -1,12 +1,9 @@
 import { Check, Clock, Mail, Phone, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast/headless";
-import {
-  type AccountProfileChangeRequest,
-  type AccountSummary,
-  resolveAccountEmailChangeRequest,
-  resolveEnterpriseProfileChangeRequest,
-} from "@/shared/services/accountManagement";
+import { resolveAccountEmailChangeRequest } from "@/shared/services/accountService";
+import type { AccountProfileChangeRequest, AccountSummary } from "@/shared/types";
+import { enterpriseAccountsQueryKey, resolveEnterpriseProfileChangeRequest } from "../services";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
@@ -36,16 +33,14 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
 
   const resolutionMutation = useMutation({
     mutationFn: ({ enterprise, request, action }: ResolutionPayload) =>
-      request.type === "businessEmail"
-        ? resolveAccountEmailChangeRequest(enterprise.id, action)
-        : resolveEnterpriseProfileChangeRequest(enterprise.id, request.type, action),
+      request.type === "businessEmail" ? resolveAccountEmailChangeRequest(enterprise.id, action) : resolveEnterpriseProfileChangeRequest(enterprise.id, request.type, action),
     onSuccess: async (updatedEnterprise, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] });
+      await queryClient.invalidateQueries({ queryKey: enterpriseAccountsQueryKey });
       onAccountUpdated(updatedEnterprise);
       toast.success(`${variables.request.label} request ${variables.action === "approve" ? "approved" : "declined"}.`);
     },
     onError: async (error) => {
-      await queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] });
+      await queryClient.invalidateQueries({ queryKey: enterpriseAccountsQueryKey });
       toast.error(getApiErrorMessage(error, "Unable to resolve profile change request."));
     },
   });
@@ -127,7 +122,9 @@ export function EnterpriseProfileRequestsPanel({ accounts, canResolve, onAccount
 
 function ValueBlock({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 ${highlight ? "border-emerald-200 bg-emerald-50/70 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-400/8 dark:text-emerald-200" : "border-(--tanaw-border-subtle) bg-(--tanaw-surface-inset) text-(--tanaw-secondary-text)"}`}>
+    <div
+      className={`rounded-lg border px-3 py-2 ${highlight ? "border-emerald-200 bg-emerald-50/70 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-400/8 dark:text-emerald-200" : "border-(--tanaw-border-subtle) bg-(--tanaw-surface-inset) text-(--tanaw-secondary-text)"}`}
+    >
       <p className="text-[10px] font-black tracking-wide uppercase">{label}</p>
       <p className="mt-1 font-mono text-xs font-bold wrap-break-word">{value || "Not provided"}</p>
     </div>
@@ -144,7 +141,9 @@ function RequestStatusBadge({ request }: { request: AccountProfileChangeRequest 
   const verified = request.status === "verified";
   const expired = request.status === "expired";
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${verified ? "bg-emerald-100 text-emerald-700" : expired ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}>
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${verified ? "bg-emerald-100 text-emerald-700" : expired ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}
+    >
       {labels[request.status]}
     </span>
   );

@@ -1,4 +1,5 @@
-import type { AccountSummary, UpdateLguAccountPayload } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
+import type { UpdateLguAccountPayload } from "../services";
 import {
   composeApiPersonName,
   normalizeEmail,

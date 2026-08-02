@@ -131,19 +131,6 @@
   text-transform: uppercase;
 }
 
-.tanaw-map-tooltip__meter {
-  height: 4px;
-  margin-top: 5px;
-  overflow: hidden;
-  background: #e5e5e5;
-  border-radius: 2px;
-}
-
-.tanaw-map-tooltip__meter-fill {
-  height: 100%;
-  border-radius: 2px;
-}
-
 .tanaw-map-popup {
   min-width: 190px;
   padding: 2px;
@@ -194,10 +181,6 @@
 .tanaw-leaflet-map--dark .tanaw-map-tooltip__meta,
 .tanaw-leaflet-map--dark .tanaw-map-popup__meta {
   color: #94a3b8;
-}
-
-.tanaw-leaflet-map--dark .tanaw-map-tooltip__meter {
-  background: #334155;
 }
 
 .tanaw-leaflet-map--dark .tanaw-map-popup__badge {

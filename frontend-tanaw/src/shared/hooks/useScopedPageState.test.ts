@@ -6,8 +6,7 @@ describe("scoped page state", () => {
 
   const scope = { portal: "web", role: "staff", userId: "user-1" };
   const key = createPageStateKey(scope, "/staff/batch-reports", "filters");
-  const isFilters = (value: unknown): value is { month: string } =>
-    Boolean(value && typeof value === "object" && "month" in value && typeof value.month === "string");
+  const isFilters = (value: unknown): value is { month: string } => Boolean(value && typeof value === "object" && "month" in value && typeof value.month === "string");
 
   it("restores only compatible versioned state", () => {
     writePageState(key, 1, { month: "June" }, "memory");
@@ -49,8 +48,7 @@ describe("scoped page state", () => {
 
   it("refuses sensitive field names", () => {
     const sensitiveKey = createPageStateKey(scope, "/account", "draft");
-    const isSensitive = (value: unknown): value is { password: string } =>
-      Boolean(value && typeof value === "object" && "password" in value);
+    const isSensitive = (value: unknown): value is { password: string } => Boolean(value && typeof value === "object" && "password" in value);
     writePageState(sensitiveKey, 1, { password: "must-not-persist" }, "memory");
     expect(readPageState(sensitiveKey, 1, isSensitive, "memory")).toBeNull();
   });

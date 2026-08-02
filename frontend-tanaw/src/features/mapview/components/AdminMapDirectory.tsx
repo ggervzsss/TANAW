@@ -1,7 +1,7 @@
 import { ArrowLeft, Map as MapIcon, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { SelectDropdown, type SelectDropdownOption } from "@/shared/components/ui";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
 import { normalizeBarangayName, type MapDeselectReason } from "../utils";
 import { DirectoryEmptyMessage, EnterpriseList, EnterpriseMapCard, MonitoringLegend, UnpinnedEnterpriseCard } from "./MapDirectoryCards";

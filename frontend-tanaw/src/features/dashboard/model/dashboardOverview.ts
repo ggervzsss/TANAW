@@ -1,5 +1,5 @@
 import { isEmailProblem, type EmailDelivery } from "@/features/email-deliveries";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import type { SupportTicket } from "@/shared/services/supportTickets";
 import type { OperationalSummary, PriorityAlert } from "@/shared/types";
 

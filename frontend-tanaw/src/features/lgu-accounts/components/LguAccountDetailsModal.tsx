@@ -4,7 +4,11 @@ import toast from "react-hot-toast/headless";
 import { ModalFrame } from "@/shared/components/ui";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import { type AccountSummary, type UpdateLguAccountPayload, resolveAccountEmailChangeRequest, updateLguAccount } from "@/shared/services/accountManagement";
+import { devDeliveriesQueryKey } from "@/features/dev-log";
+import { emailDeliveriesQueryKey } from "@/features/email-deliveries";
+import { resolveAccountEmailChangeRequest } from "@/shared/services/accountService";
+import type { AccountSummary } from "@/shared/types";
+import { type UpdateLguAccountPayload, lguAccountsQueryKey, updateLguAccount } from "../services";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { createLguUpdatePayload, getInitialLguEditState, getInvalidLguEditFieldNames, getLguChanges, type LguEditErrors, type LguEditState, type PendingLguSave, validateLguEditForm } from "../model";
@@ -37,8 +41,8 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
       const activationQueued = !account.isActivated && updatedAccount.status === "active" && payload.email !== account.email;
       const verificationQueued = account.isActivated && payload.email !== account.email && updatedAccount.profileChangeRequests.some((request) => request.type === "businessEmail");
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        ...(activationQueued || verificationQueued ? [queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })] : []),
+        queryClient.invalidateQueries({ queryKey: lguAccountsQueryKey }),
+        ...(activationQueued || verificationQueued ? [queryClient.invalidateQueries({ queryKey: devDeliveriesQueryKey }), queryClient.invalidateQueries({ queryKey: emailDeliveriesQueryKey })] : []),
       ]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialLguEditState(updatedAccount));
@@ -52,13 +56,13 @@ export function LguAccountDetailsModal({ account, onClose, onAccountUpdated, onR
   const emailResolutionMutation = useMutation({
     mutationFn: (action: "approve" | "decline") => resolveAccountEmailChangeRequest(account.id, action),
     onSuccess: async (updatedAccount, action) => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }), queryClient.invalidateQueries({ queryKey: ["email-deliveries"] })]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: lguAccountsQueryKey }), queryClient.invalidateQueries({ queryKey: emailDeliveriesQueryKey })]);
       onAccountUpdated(updatedAccount);
       setForm(getInitialLguEditState(updatedAccount));
       toast.success(`Email change request ${action === "approve" ? "approved" : "declined"}.`);
     },
     onError: async (error) => {
-      await queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] });
+      await queryClient.invalidateQueries({ queryKey: lguAccountsQueryKey });
       toast.error(getApiErrorMessage(error, "Unable to resolve email change request"));
     },
   });

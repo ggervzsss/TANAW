@@ -1,5 +1,5 @@
 import { CheckCircle2, KeyRound, Mail, Pencil, ShieldCheck, UserCheck, XCircle } from "lucide-react";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { canDeactivateAccount } from "@/shared/utils/accountState";
 import type { LguStatusFilter } from "../types";
 import { lguRoleLabel } from "../utils";

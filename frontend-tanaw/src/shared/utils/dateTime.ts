@@ -12,11 +12,7 @@ export function resolveSystemTimeFormat(value: unknown): SystemTimeFormat {
   return value === "24-hour" ? "24-hour" : "12-hour";
 }
 
-export function formatPhilippineDateTime(
-  value: string | number | Date | null | undefined,
-  timeFormat: SystemTimeFormat,
-  options: DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" },
-) {
+export function formatPhilippineDateTime(value: string | number | Date | null | undefined, timeFormat: SystemTimeFormat, options: DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" }) {
   if (value === null || value === undefined || value === "") return "Date unavailable";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "Date unavailable";

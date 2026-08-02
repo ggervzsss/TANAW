@@ -5,13 +5,14 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
+import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { TicketDetailsModal } from "@/features/support-tickets";
 import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { useAlerts } from "@/shared/hooks/useAlerts";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import { type AccountSummary, listEnterpriseAccounts } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { type SupportTicket, listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { AdminSituationDetailsModal, SituationTable, SupportRequestTable } from "../components";
@@ -30,7 +31,7 @@ export function AdminOperationsCenterPage() {
   const linkedTicketId = searchParams.get("ticket");
 
   const enterpriseAccountsQuery = useQuery({
-    queryKey: ["enterprise-accounts"],
+    queryKey: enterpriseAccountsQueryKey,
     queryFn: listEnterpriseAccounts,
   });
   const supportTicketsQuery = useQuery({

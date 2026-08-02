@@ -1,4 +1,4 @@
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import type { EnterpriseStatusFilter, LocationDraft } from "../types";
 
 export function filterEnterpriseAccounts(accounts: AccountSummary[], query: string, status: EnterpriseStatusFilter, barangay: string) {

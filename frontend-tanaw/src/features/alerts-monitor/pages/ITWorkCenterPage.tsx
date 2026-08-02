@@ -2,12 +2,13 @@ import { UserRoundCog } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
+import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { emailDeliveriesQueryKey, isEmailProblem, ITEmailDeliveriesPage, listEmailDeliveries } from "@/features/email-deliveries";
 import { SupportTicketsPage } from "@/features/support-tickets";
 import { PageHeader } from "@/shared/components/layout";
 import { EmptyState, PageMotion } from "@/shared/components/ui";
 import { useAlerts } from "@/shared/hooks/useAlerts";
-import { type AccountSummary, listEnterpriseAccounts } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { type SupportTicket, listSupportTickets, supportTicketsQueryKey } from "@/shared/services/supportTickets";
 import { ITAlertsPage } from "./ITAlertsPage";
 
@@ -28,7 +29,7 @@ export function ITWorkCenterPage() {
   const view = parseWorkCenterView(searchParams.get("view"));
   const highlightedAccountId = searchParams.get("account");
   const { alerts } = useAlerts();
-  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
+  const enterpriseAccountsQuery = useQuery({ queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts });
   const supportTicketsQuery = useQuery({ queryKey: supportTicketsQueryKey, queryFn: listSupportTickets });
   const emailDeliveriesQuery = useQuery({ queryKey: emailDeliveriesQueryKey, queryFn: listEmailDeliveries });
 
@@ -80,7 +81,7 @@ export function ITWorkCenterPage() {
             accounts={enterpriseAccounts}
             canResolve
             highlightedAccountId={highlightedAccountId}
-            onAccountUpdated={() => void queryClient.invalidateQueries({ queryKey: ["enterprise-accounts"] })}
+            onAccountUpdated={() => void queryClient.invalidateQueries({ queryKey: enterpriseAccountsQueryKey })}
           />
         ) : (
           <div className="rounded-2xl border border-slate-200 bg-white">

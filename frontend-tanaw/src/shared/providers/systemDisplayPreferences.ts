@@ -5,7 +5,7 @@ export type SystemDisplayPreferences = {
   timeFormat: SystemTimeFormat;
 };
 
-export const systemSettingsQueryKey = ["system-settings"] as const;
+export { systemSettingsQueryKey } from "../services/systemSettingsService";
 
 export const SystemDisplayPreferencesContext = createContext<SystemDisplayPreferences>({
   timeFormat: "12-hour",

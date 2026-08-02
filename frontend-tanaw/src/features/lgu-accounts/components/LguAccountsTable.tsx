@@ -1,7 +1,7 @@
 import { Users } from "lucide-react";
 import { EmptyState, ExpandableTableText, StatusBadge } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { lguRoleLabel } from "../utils";
 

@@ -168,11 +168,6 @@ html.dark .tanaw-auth-card {
   margin-bottom: clamp(1.15rem, 3.2svh, 2rem);
 }
 
-.tanaw-auth-reset-header {
-  margin-bottom: clamp(1rem, 3svh, 1.75rem);
-  padding-top: clamp(1rem, 2.3svh, 1.25rem);
-}
-
 .tanaw-auth-brand-seal {
   width: clamp(4rem, 9svh, 5.375rem);
   height: clamp(4rem, 9svh, 5.375rem);
@@ -322,15 +317,6 @@ html.dark .tanaw-auth-card {
   height: clamp(2.5rem, 5.4svh, 3rem);
 }
 
-.tanaw-auth-reset-callout {
-  margin-bottom: clamp(1rem, 2.8svh, 1.5rem);
-  padding: clamp(0.9rem, 2.3svh, 1rem);
-  transition:
-    background-color 220ms ease,
-    border-color 220ms ease,
-    color 220ms ease;
-}
-
 .tanaw-auth-theme-toggle {
   position: fixed;
   top: clamp(0.875rem, 2vw, 1.5rem);
@@ -457,13 +443,8 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
     padding: 1.25rem 1.5rem;
   }
 
-  .tanaw-auth-card-header,
-  .tanaw-auth-reset-header {
+  .tanaw-auth-card-header {
     margin-bottom: 0.9rem;
-  }
-
-  .tanaw-auth-reset-header {
-    padding-top: 0.75rem;
   }
 
   .tanaw-auth-brand-seal {
@@ -494,11 +475,6 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-auth-support-icon {
     width: 2.25rem;
     height: 2.25rem;
-  }
-
-  .tanaw-auth-reset-callout {
-    margin-bottom: 0.85rem;
-    padding: 0.85rem;
   }
 }
 
@@ -710,7 +686,6 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   .tanaw-auth-stage,
   .tanaw-auth-card,
   .tanaw-auth-field,
-  .tanaw-auth-reset-callout,
   .tanaw-auth-theme-toggle,
   .tanaw-auth-theme-toggle__icon {
     transition: none;
