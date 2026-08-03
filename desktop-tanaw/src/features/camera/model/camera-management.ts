@@ -103,14 +103,16 @@ export function redactCameraForStorage(camera: Camera): Camera {
     ...camera,
     password: undefined,
     rtsp: stripStreamCredentials(camera.rtsp),
-    status:
-      camera.status === "starting" || camera.status === "connecting" || camera.status === "degraded" || camera.status === "reconnecting"
-        ? "running"
-        : camera.status === "failed"
-          ? "error"
-          : camera.status,
+    // Runtime state is reported separately by the ML service. Keeping it out of
+    // the stored profile prevents status polling from looking like a camera
+    // configuration edit and issuing a write during model warm-up.
+    status: "stopped",
     username: undefined,
   };
+}
+
+export function getCameraStorageFingerprint(cameras: Camera[]) {
+  return JSON.stringify(cameras.map(redactCameraForStorage));
 }
 
 export function applyStoredCameraMetadata(camera: Camera, credentials: CameraCredentialMetadataRecords): Camera {

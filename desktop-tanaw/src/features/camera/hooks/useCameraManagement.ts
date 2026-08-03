@@ -55,6 +55,7 @@ import {
   DEFAULT_COUNTING_CONFIDENCE,
   DEFAULT_ROI,
   DEFAULT_TRACKING_CONFIDENCE,
+  getCameraStorageFingerprint,
   getDefaultTripwires,
   getTripwireSaveErrorMessage,
   isRuntimeStatus,
@@ -104,6 +105,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const [configurationError, setConfigurationError] = useState<string | null>(null);
   const [isRestartingService, setIsRestartingService] = useState(false);
   const servicePidRef = useRef<number | null>(null);
+  const cameraProfilesForStorageRef = useRef<Camera[]>([]);
+  const lastPersistedCameraFingerprintRef = useRef<string | null>(null);
 
   const activeCam = cameras.find((camera) => camera.id === activeCamId);
   const activeCameraIds = useMemo(() => new Set(cameras.map((camera) => camera.id)), [cameras]);
@@ -120,6 +123,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const mlBaseUrl = serviceStatus?.baseUrl ?? DEFAULT_ML_SERVICE_BASE_URL;
   const streamVersion = activeCam ? (streamVersions[activeCam.id] ?? 0) : 0;
   const configuredCameraLimit = serviceHealth?.max_configured_cameras ?? DEFAULT_ENTERPRISE_CAMERA_LIMIT;
+  const cameraStorageFingerprint = getCameraStorageFingerprint(cameras);
+  cameraProfilesForStorageRef.current = cameras.map(redactCameraForStorage);
   const previewIsReady = !isActiveCameraStarting && isCameraPreviewReady(activeState);
   const streamUrl = useMemo(() => getPreviewStreamUrl(mlBaseUrl, activeCam, streamVersion, previewIsReady), [activeCam, mlBaseUrl, previewIsReady, streamVersion]);
   const newCameraIpConflict = useMemo(() => findCameraIpConflict(cameras, newCam.cameraHost), [cameras, newCam.cameraHost]);
@@ -309,6 +314,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     cameraPreviewReadyRef.current = {};
     setPendingCameraIds(new Set());
     setCredentialMetadata({});
+    lastPersistedCameraFingerprintRef.current = null;
 
     const hydrateCameras = async () => {
       try {
@@ -316,12 +322,14 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
         const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
         const [saved, credentials] = await Promise.all([listLocalCameras(baseUrl), loadCameraCredentialMetadata(storageKey)]);
         const normalized = saved.map((camera) => applyStoredCameraMetadata(normalizeCamera(camera), credentials));
+        const normalizedFingerprint = getCameraStorageFingerprint(normalized);
         const legacyConflict = normalized.find((camera, index) => Boolean(findCameraIpConflict(normalized.slice(0, index), camera.cameraHost ?? "")));
         if (!disposed) {
           servicePidRef.current = status.pid;
           setServiceStatus(status);
           setCredentialMetadata(credentials);
           setCameras(normalized);
+          lastPersistedCameraFingerprintRef.current = normalizedFingerprint;
           setActiveCamId(normalized[0]?.id ?? null);
           setHydratedFromStorage(true);
           if (legacyConflict) {
@@ -346,10 +354,15 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
 
   useEffect(() => {
     if (!hydratedFromStorage) return;
-    void replaceLocalCameras(mlBaseUrl, cameras.map(redactCameraForStorage))
-      .then(() => setConfigurationError(null))
+    if (lastPersistedCameraFingerprintRef.current === cameraStorageFingerprint) return;
+    const profiles = cameraProfilesForStorageRef.current;
+    void replaceLocalCameras(mlBaseUrl, profiles)
+      .then(() => {
+        lastPersistedCameraFingerprintRef.current = cameraStorageFingerprint;
+        setConfigurationError(null);
+      })
       .catch((error: unknown) => setConfigurationError(toErrorMessage(error)));
-  }, [cameras, hydratedFromStorage, mlBaseUrl]);
+  }, [cameraStorageFingerprint, hydratedFromStorage, mlBaseUrl]);
 
   useEffect(() => {
     if (activeCamId !== null && cameras.some((camera) => camera.id === activeCamId)) return;
@@ -422,6 +435,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       } else {
         await replaceLocalCameras(mlBaseUrl, savedCameras.map(redactCameraForStorage));
       }
+      lastPersistedCameraFingerprintRef.current = getCameraStorageFingerprint(savedCameras);
       setCameras((current) => current.map((camera) => (camera.id === cameraId ? (shouldUpdateCounting ? mergeConfirmedCameraCountingConfig(camera, savedCamera.config) : savedCamera) : camera)));
       setCameraError(savedCamera.id, null);
       if (!shouldRestart) {
