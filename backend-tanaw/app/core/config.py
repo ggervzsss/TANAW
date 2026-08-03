@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     email_delivery_mode: str = "log"
     resend_api_key: SecretStr | None = None
+    geoapify_api_key: SecretStr | None = None
     resend_api_base_url: str = "https://api.resend.com"
     email_from_name: str = "TANAW"
     email_from_address: EmailStr = "onboarding@resend.dev"
@@ -116,6 +117,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "resend_api_key",
+        "geoapify_api_key",
         "email_secret_derivation_key",
         "email_test_recipient",
         "bootstrap_it_username",
@@ -129,7 +131,10 @@ class Settings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def normalize_optional_email_setting(cls, value: object) -> object:
+    def normalize_optional_setting(cls, value: object) -> object:
+        if isinstance(value, SecretStr):
+            normalized_secret = value.get_secret_value().strip()
+            return SecretStr(normalized_secret) if normalized_secret else None
         if not isinstance(value, str):
             return value
         normalized = value.strip()

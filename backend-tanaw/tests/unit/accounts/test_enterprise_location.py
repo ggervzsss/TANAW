@@ -51,11 +51,11 @@ def test_manual_coordinates_must_match_the_selected_barangay() -> None:
     assert not barangay_matches_location("Poblacion", payload.latitude, payload.longitude)
 
 
-def test_geocoding_api_and_persistence_fields_are_removed() -> None:
+def test_location_search_does_not_add_geocoding_persistence_fields() -> None:
     paths = app.openapi()["paths"]
     account_columns = Account.__table__.columns
 
-    assert "/accounts/enterprises/geocode" not in paths
+    assert "/accounts/enterprises/location-suggestions" in paths
     assert "/accounts/enterprises/reverse-geocode" not in paths
     assert "location_source" not in account_columns
     assert "location_confidence" not in account_columns

@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -12,6 +12,11 @@ from app.features.accounts.api_helpers import (
     sync_pending_account_activation,
 )
 from app.features.accounts.dependencies import require_roles
+from app.features.accounts.location_search import LocationSearchError
+from app.features.accounts.location_search_runtime import (
+    LocationSearchNotConfiguredError,
+    get_location_search_client,
+)
 from app.features.accounts.location_validation import (
     barangay_for_location,
     barangay_matches_location,
@@ -22,6 +27,7 @@ from app.features.accounts.schemas import (
     AccountSummary,
     EnterpriseAccountCreate,
     EnterpriseAccountUpdate,
+    EnterpriseLocationSuggestion,
 )
 from app.features.accounts.service import (
     create_account_with_activation,
@@ -44,6 +50,34 @@ ITAccount = Annotated[Account, Depends(require_roles({"it"}))]
 EnterpriseReadAccount = Annotated[Account, Depends(require_roles({"it", "admin"}))]
 
 router = APIRouter(prefix="/accounts", tags=["enterprise accounts"])
+
+
+@router.get(
+    "/enterprises/location-suggestions",
+    response_model=list[EnterpriseLocationSuggestion],
+)
+async def search_enterprise_locations(
+    _: ITAccount,
+    query: Annotated[str, Query(min_length=2, max_length=120)],
+) -> list[EnterpriseLocationSuggestion]:
+    try:
+        client = get_location_search_client()
+        return await client.autocomplete(query)
+    except LocationSearchNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Location search is not configured. Place the marker manually instead.",
+        ) from exc
+    except LocationSearchError as exc:
+        response_status = (
+            status.HTTP_429_TOO_MANY_REQUESTS
+            if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+            else status.HTTP_502_BAD_GATEWAY
+        )
+        raise HTTPException(
+            status_code=response_status,
+            detail="Location suggestions are temporarily unavailable. Place the marker manually instead.",
+        ) from exc
 
 
 @router.get("/enterprises", response_model=list[AccountSummary])

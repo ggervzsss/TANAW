@@ -194,6 +194,16 @@ class EnterpriseAccountCreate(BaseModel):
         return f"{address}, {SAN_PEDRO_ADDRESS_SUFFIX}"
 
 
+class EnterpriseLocationSuggestion(BaseModel):
+    placeId: str
+    name: str
+    formattedAddress: str
+    addressLine: str
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    barangay: str | None = None
+
+
 class AccountSummary(BaseModel):
     id: str
     email: str

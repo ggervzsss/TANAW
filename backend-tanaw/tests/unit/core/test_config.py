@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+from pydantic import SecretStr
 
 from app.core.config import Settings
 
@@ -51,6 +52,12 @@ def test_email_delivery_defaults_to_safe_local_logging() -> None:
 
     assert settings.email_delivery_mode == "log"
     assert settings.resend_api_key is None
+
+
+def test_blank_geoapify_key_disables_location_search() -> None:
+    settings = Settings(geoapify_api_key=SecretStr("  "))
+
+    assert settings.geoapify_api_key is None
 
 
 def test_invalid_email_delivery_mode_is_rejected() -> None:

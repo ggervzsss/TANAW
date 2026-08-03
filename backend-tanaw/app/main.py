@@ -12,6 +12,10 @@ from app.core.config import Settings, get_settings
 from app.core.http_security import apply_security_headers
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
+from app.features.accounts.location_search_runtime import (
+    close_location_search_runtime,
+    initialize_location_search_runtime,
+)
 from app.features.accounts.seed import seed_default_accounts
 from app.features.mail.runtime import close_email_runtime, initialize_email_runtime
 from app.features.mail.worker import start_email_outbox_worker, stop_email_outbox_worker
@@ -36,6 +40,7 @@ def create_lifespan(
             await seed_default_accounts(session)
 
         await initialize_email_runtime(settings)
+        await initialize_location_search_runtime(settings)
         await start_email_outbox_worker(settings)
         await start_retention_cleanup_worker(settings)
         await start_realtime_runtime(settings)
@@ -46,6 +51,7 @@ def create_lifespan(
             await stop_retention_cleanup_worker()
             await stop_email_outbox_worker()
             await close_email_runtime()
+            await close_location_search_runtime()
 
     return lifespan
 

@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Any
 
 SAN_PEDRO_BOUNDS = {
-    "min_lat": 14.235,
-    "max_lat": 14.418,
-    "min_lng": 120.945,
-    "max_lng": 121.131,
+    "min_lat": 14.3215296,
+    "max_lat": 14.3804682,
+    "min_lng": 121.0054681,
+    "max_lng": 121.0762775,
 }
 
 

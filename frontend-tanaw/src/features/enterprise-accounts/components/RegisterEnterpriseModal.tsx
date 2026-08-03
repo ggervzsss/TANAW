@@ -9,7 +9,7 @@ import { ModalFrame } from "@/shared/components/ui";
 import { createEnterpriseAccount, enterpriseAccountsQueryKey } from "../services";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
-import type { LocationDraft } from "../types";
+import type { EnterpriseLocationSuggestion, LocationDraft } from "../types";
 import { getLocationSummary } from "../utils";
 import {
   createEmptyEnterpriseForm,
@@ -120,6 +120,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
                 onBoundaryDetection={applyBoundaryDetection}
                 onChange={applySelectedLocation}
                 onReject={handleLocationRejected}
+                onSearchResultSelect={applySearchResult}
               />
               <LocationStatusPanel
                 address={form.address}
@@ -170,6 +171,7 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
             onChange={applySelectedLocation}
             onClose={() => setIsFullMapOpen(false)}
             onReject={handleLocationRejected}
+            onSearchResultSelect={applySearchResult}
             onToggleBoundaries={() => setShowBoundaries((current) => !current)}
           />
         )}
@@ -208,6 +210,11 @@ export function RegisterEnterpriseModal({ onClose }: RegisterEnterpriseModalProp
   function handleLocationRejected(message: string) {
     setLocationError(message);
     toast.error(message);
+  }
+
+  function applySearchResult(suggestion: EnterpriseLocationSuggestion) {
+    updateField("address", suggestion.addressLine);
+    setLocationNotice(`Location selected from search: ${suggestion.name}. Drag the marker if the exact entrance needs adjustment.`);
   }
 }
 

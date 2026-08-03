@@ -1,6 +1,7 @@
 import { queryKeys } from "@/shared/constants/queryKeys";
 import { apiClient } from "@/shared/lib/apiClient";
 import type { AccountSummary, ProfileChangeRequestType } from "@/shared/types";
+import type { EnterpriseLocationSuggestion } from "../types";
 
 export type CreateEnterpriseAccountPayload = {
   enterpriseName: string;
@@ -43,6 +44,14 @@ export async function createEnterpriseAccount(payload: CreateEnterpriseAccountPa
 
 export async function updateEnterpriseAccount(accountId: string, payload: UpdateEnterpriseAccountPayload) {
   const response = await apiClient.patch<AccountSummary>(`/accounts/enterprises/${accountId}`, payload);
+  return response.data;
+}
+
+export async function searchEnterpriseLocations(query: string, signal?: AbortSignal) {
+  const response = await apiClient.get<EnterpriseLocationSuggestion[]>("/accounts/enterprises/location-suggestions", {
+    params: { query },
+    signal,
+  });
   return response.data;
 }
 

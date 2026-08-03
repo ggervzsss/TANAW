@@ -74,6 +74,7 @@ export function EnterpriseDetailsEditForm(props: Props) {
             onBoundaryDetection={onBoundaryDetection}
             onChange={onLocationChange}
             onReject={onLocationReject}
+            onSearchResultSelect={(suggestion) => onFieldChange("address", suggestion.addressLine)}
           />
           <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
             <LocationDetail label="Detected Barangay" value={detectedBarangay ?? (location ? "Detecting boundary..." : "No pin selected")} />

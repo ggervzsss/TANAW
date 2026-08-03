@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Layers, MapPin, X } from "lucide-react";
 import { motion } from "motion/react";
 import type { BarangayPointResolution } from "@/features/mapview/utils";
 import { ModalPortal } from "@/shared/components/ui";
-import type { LocationDraft } from "../types";
+import type { EnterpriseLocationSuggestion, LocationDraft } from "../types";
 import { LocationPicker } from "./LocationPicker";
 
 type FullMapViewProps = LocationStatusProps & {
@@ -11,6 +11,7 @@ type FullMapViewProps = LocationStatusProps & {
   onChange: (location: LocationDraft, barangayDetection?: BarangayPointResolution) => void;
   onClose: () => void;
   onReject: (message: string) => void;
+  onSearchResultSelect: (suggestion: EnterpriseLocationSuggestion) => void;
   onToggleBoundaries: () => void;
 };
 
@@ -35,6 +36,7 @@ export function EnterpriseFullMapView({
   onChange,
   onClose,
   onReject,
+  onSearchResultSelect,
   onToggleBoundaries,
 }: FullMapViewProps) {
   return (
@@ -87,6 +89,7 @@ export function EnterpriseFullMapView({
               onBoundaryDetection={onBoundaryDetection}
               onChange={onChange}
               onReject={onReject}
+              onSearchResultSelect={onSearchResultSelect}
             />
             <div className="flex min-h-0 flex-col gap-3">
               <LocationStatusPanel address={address} barangay={barangay} detectedBarangay={detectedBarangay} location={location} locationError={locationError} locationNotice={locationNotice} />

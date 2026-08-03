@@ -20,7 +20,8 @@ import {
   type GeoJsonFeatureCollection,
   type LeafletMapTheme,
 } from "@/features/mapview/utils";
-import type { LocationDraft } from "../types";
+import type { EnterpriseLocationSuggestion, LocationDraft } from "../types";
+import { LocationSearch } from "./LocationSearch";
 
 const defaultMapContainerId = "enterprise-location-picker";
 
@@ -33,6 +34,7 @@ type LocationPickerProps = {
   onBoundaryDetection?: (location: LocationDraft, barangayDetection: BarangayPointResolution) => void;
   onChange: (location: LocationDraft, barangayDetection?: BarangayPointResolution) => void;
   onReject?: (message: string) => void;
+  onSearchResultSelect?: (suggestion: EnterpriseLocationSuggestion) => void;
 };
 
 export function LocationPicker({
@@ -44,6 +46,7 @@ export function LocationPicker({
   onBoundaryDetection,
   onChange,
   onReject,
+  onSearchResultSelect,
 }: LocationPickerProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -51,7 +54,7 @@ export function LocationPicker({
   const latestLocationRef = useRef<LocationDraft | null>(location);
   const boundaryRef = useRef<GeoJsonFeatureCollection | null>(null);
   const lastBoundaryDetectionKeyRef = useRef("");
-  const selectLocationRef = useRef<(latitude: number, longitude: number) => void>(() => {});
+  const selectLocationRef = useRef<(latitude: number, longitude: number) => boolean>(() => false);
   const [boundary, setBoundary] = useState<GeoJsonFeatureCollection | null>(null);
   const [isBoundaryLoading, setIsBoundaryLoading] = useState(true);
   const [isBoundaryError, setIsBoundaryError] = useState(false);
@@ -93,7 +96,7 @@ export function LocationPicker({
       if (!isPointInsideSanPedro(loadedBoundary, latitude, longitude)) {
         restoreMarkerAfterRejectedMove();
         onReject?.("Choose a location inside San Pedro, Laguna.");
-        return;
+        return false;
       }
 
       const barangayDetection = getBarangayPointResolution(loadedBoundary, latitude, longitude);
@@ -104,6 +107,7 @@ export function LocationPicker({
         },
         barangayDetection,
       );
+      return true;
     },
     [onChange, onReject, restoreMarkerAfterRejectedMove],
   );
@@ -269,6 +273,14 @@ export function LocationPicker({
 
   return (
     <div className="h-fit self-start overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100 shadow-sm ring-1 ring-white dark:border-emerald-300/20 dark:bg-slate-900 dark:ring-white/8">
+      <div className="border-b border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-[#121c31]">
+        <LocationSearch
+          inputId={`${mapId}-search`}
+          onSelect={(suggestion) => {
+            if (selectLocation(suggestion.latitude, suggestion.longitude)) onSearchResultSelect?.(suggestion);
+          }}
+        />
+      </div>
       <div id={mapId} className={`${mapHeightClassName} w-full`} />
       <div className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 dark:border-slate-700 dark:bg-[#121c31] dark:text-slate-300">
         <MapPin size={14} className="text-tgreen-dark shrink-0" />
