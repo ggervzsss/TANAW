@@ -54,13 +54,60 @@ WebSocket-driven client invalidations converge on the same queue.
 
 Operational technical-issue responses expose canonical urgency as `Normal`,
 `Important`, or `Urgent`; the shared response also preserves operational
-severity for non-technical consumers and notification/log behavior. General LGU and enterprise update schemas reject lifecycle
-fields, so activation and deactivation can only use the dedicated status
-endpoint. Enterprise location edits require a latitude/longitude pair inside
-the San Pedro boundary and reject a selected barangay that does not match the
-authoritative polygon. Successful profile updates retain the existing
-`enterprise.updated` invalidation and record coordinate changes in the audit
-metadata.
+severity for non-technical consumers and notification/log behavior. General LGU
+and enterprise update schemas reject lifecycle fields, so activation and
+deactivation can only use the dedicated status endpoint. Enterprise location
+edits require a latitude/longitude pair inside the San Pedro boundary and reject
+a selected barangay that does not match the authoritative polygon. Successful
+profile updates retain the existing `enterprise.updated` invalidation and record
+coordinate changes in the audit metadata.
+
+## Architecture
+
+The backend is a modular FastAPI monolith. Each business capability owns its
+routes, transport contracts, persistence models, application operations, and
+domain policies. The codebase intentionally avoids global `routers/`,
+`schemas/`, and `services/` directories because those layouts scatter a single
+capability across the repository.
+
+The capability boundaries are:
+
+- `accounts` and `auth` form the identity context;
+- `reporting` owns report intake, reporting periods, review rules, and final
+  report consolidation;
+- `monitoring` owns telemetry, visitor insights, and operational alerts;
+- `support` owns tickets and their conversation lifecycle;
+- `notifications` owns in-application notifications;
+- `dashboard` provides read-only application queries that combine reporting
+  and monitoring projections; and
+- `mail`, `realtime`, `maintenance`, and `activity_logs` provide supporting and
+  infrastructure-facing capabilities.
+
+HTTP routers validate transport input, resolve authentication, invoke
+application operations, and translate errors. Domain-policy modules do not
+import FastAPI or SQLAlchemy. SQLAlchemy models retain the established table
+names so code organization changes do not alter the database contract.
+
+### Transactions
+
+The FastAPI database dependency provides one unit of work per HTTP request. A
+successful request commits once and a failed request rolls back. Lower-level
+application operations flush changes so multi-step workflows remain atomic.
+Background workers own explicit transactions because they run outside the
+request dependency. Security workflows that must retain rejected-attempt
+counters before returning an error also own their required transaction.
+
+### Dependency direction
+
+Domain policies are dependency-free. Routers depend on application operations;
+application operations use persistence models and supporting adapters. Code
+belongs in `core` only when it is genuinely domain-neutral. New work must not
+recreate a generic catch-all feature such as the former `operational` package.
+
+`app.main.create_app` is the composition root and accepts settings, an engine,
+and a session factory for isolated integration tests. Automated rules in
+`tests/architecture` guard these boundaries, prevent oversized feature modules,
+and keep framework dependencies out of domain policies.
 
 ## Project Structure
 
@@ -73,11 +120,17 @@ app/
     accounts/          # LGU/enterprise accounts, dependencies, services, APIs
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
+    dashboard/         # Cross-capability read-only dashboard queries
     mail/              # Outbound Resend delivery and email templates
+    maintenance/       # Retention cleanup and background maintenance
+    monitoring/        # Telemetry, visitor insights, and operational alerts
+    notifications/     # In-application notification lifecycle
+    realtime/          # Transactional outbox and WebSocket delivery
+    reporting/         # Intake, review, reporting periods, and final reports
     sample_data/       # Development-only sample-data tooling
-    operational/       # Telemetry, sync, intake reports, and final reports
+    support/           # Support tickets and conversation lifecycle
 alembic/               # Database migration files
-tests/                 # Backend unit and integration tests
+tests/                 # Unit, integration, and architecture boundary tests
 main.py                # FastAPI application entry point
 ```
 

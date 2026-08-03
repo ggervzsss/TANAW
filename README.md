@@ -150,8 +150,15 @@ TANAW/
 │   │       ├── accounts/       # LGU/enterprise accounts and bootstrap seed
 │   │       ├── activity_logs/  # Audit and operational activity
 │   │       ├── auth/           # Login, logout, password, and recovery flows
+│   │       ├── dashboard/      # Cross-capability dashboard queries
+│   │       ├── mail/           # Transactional email delivery
+│   │       ├── maintenance/    # Retention and background maintenance
+│   │       ├── monitoring/     # Telemetry, visitor insights, and alerts
+│   │       ├── notifications/  # In-application notifications
+│   │       ├── realtime/       # Outbox and WebSocket delivery
+│   │       ├── reporting/      # Intake, review, and final reports
 │   │       ├── sample_data/    # Development sample-data CLI
-│   │       └── operational/    # Telemetry, reports, sync, and final reports
+│   │       └── support/        # Support tickets and conversations
 │   ├── alembic/                # Database migrations
 │   └── tests/
 ├── frontend-tanaw/             # LGU role-based React web portal
