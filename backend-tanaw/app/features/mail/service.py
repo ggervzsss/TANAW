@@ -158,7 +158,7 @@ async def retry_terminal_email(db: AsyncSession, outbox_id: str) -> EmailOutbox:
     outbox.lock_expires_at = None
     outbox.last_error_code = None
     outbox.last_error_message = None
-    await db.commit()
+    await db.flush()
     await db.refresh(outbox)
     return outbox
 

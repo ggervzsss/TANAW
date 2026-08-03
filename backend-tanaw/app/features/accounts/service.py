@@ -308,7 +308,7 @@ async def get_account_by_id(
 
 async def invalidate_account_tokens(db: AsyncSession, account: Account) -> None:
     account.token_invalid_before = datetime.now(UTC)
-    await db.commit()
+    await db.flush()
 
 
 def account_role_from_value(value: str) -> AccountRole:
@@ -384,7 +384,7 @@ async def create_account_with_activation(
     db.add(account)
     await db.flush()
     await issue_account_activation(db, account, lock_account=False)
-    await db.commit()
+    await db.flush()
     await db.refresh(account)
     return account
 
@@ -401,6 +401,6 @@ async def change_account_password(
     account.password_changed_at = now
     account.token_invalid_before = now
     await invalidate_password_reset_challenges(db, account.id, invalidated_at=now)
-    await db.commit()
+    await db.flush()
     await db.refresh(account)
     return True

@@ -100,9 +100,39 @@ async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> A
         metadata_json=json.dumps(payload.metadata) if payload.metadata else None,
     )
     db.add(log)
-    await db.commit()
+    await db.flush()
     await db.refresh(log)
     return to_activity_log_summary(log)
+
+
+async def record_activity_log(
+    db: AsyncSession,
+    *,
+    category: str,
+    severity: str,
+    actor: str,
+    actor_role: str,
+    action: str,
+    target: str,
+    summary: str,
+    source_id: str,
+    metadata: dict[str, str | int | float | bool | None] | None = None,
+) -> None:
+    """Record a user-facing activity without exposing transport schemas to callers."""
+    await create_activity_log(
+        db,
+        ActivityLogCreate(
+            category=category,  # type: ignore[arg-type]
+            severity=severity,  # type: ignore[arg-type]
+            actor=actor,
+            actorRole=actor_role,  # type: ignore[arg-type]
+            action=action,
+            target=target,
+            summary=summary,
+            sourceId=source_id,
+            metadata=metadata,
+        ),
+    )
 
 
 async def get_activity_log_retention_days(db: AsyncSession) -> int:
@@ -120,7 +150,6 @@ async def purge_expired_activity_logs(
         CursorResult[Any],
         await db.execute(delete(ActivityLog).where(ActivityLog.timestamp < cutoff)),
     )
-    await db.commit()
     return result.rowcount or 0
 
 
