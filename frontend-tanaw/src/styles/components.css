@@ -618,12 +618,12 @@ html.dark .tanaw-activation-banner__copy {
 
 @media (hover: hover) {
   .tanaw-interactive-row:not([aria-disabled="true"], [data-disabled="true"]):hover,
-  .profile-menu-button:not(:disabled):hover {
+  .profile-menu-button:not(.profile-menu-danger):not(:disabled):hover {
     background-color: var(--tanaw-interactive-hover-bg);
     border-color: var(--tanaw-interactive-hover-border);
   }
 
-  .profile-menu-button:not(:disabled):hover {
+  .profile-menu-button:not(.profile-menu-danger):not(:disabled):hover {
     color: var(--tanaw-green);
   }
 

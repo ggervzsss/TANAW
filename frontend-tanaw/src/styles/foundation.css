@@ -302,7 +302,7 @@ html.dark {
   }
 
   .profile-menu-danger {
-    background: color-mix(in srgb, var(--tanaw-danger-surface) 64%, transparent);
+    background: transparent;
     color: #b91c1c;
   }
 
@@ -323,7 +323,7 @@ html.dark {
 }
 
 html.dark .profile-menu-danger {
-  background: color-mix(in srgb, var(--tanaw-danger-surface) 52%, transparent);
+  background: transparent;
   color: #fca5a5;
 }
 
