@@ -1,6 +1,9 @@
 # TANAW Enterprise Desktop
 
-Cloud-backed tickets and notifications use the shared authenticated `/realtime/ws` provider. Camera and local ML-service transports remain independent. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+Cloud-backed tickets and notifications use the shared authenticated
+`/realtime/ws` provider. Camera and local ML-service transports remain
+independent. See the root
+[realtime architecture](../README.md#realtime-architecture).
 
 Electron, React, TypeScript, Vite, and local FastAPI ML service for
 enterprise-side camera monitoring, local counting, local report drafting, cloud

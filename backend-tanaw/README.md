@@ -1,6 +1,8 @@
 # TANAW Backend
 
-The API exposes the canonical authenticated application gateway at `/realtime/ws` and readiness at `/ready/realtime`. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+The API exposes the canonical authenticated application gateway at
+`/realtime/ws` and readiness at `/ready/realtime`. See the root
+[realtime architecture](../README.md#realtime-architecture).
 
 FastAPI backend for TANAW authentication, account management, enterprise
 operational sync, report review, final-report consolidation, activity logging,

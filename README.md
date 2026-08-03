@@ -1,7 +1,5 @@
 # TANAW
 
-See [Realtime architecture](docs/REALTIME_ARCHITECTURE.md) for the authenticated cross-client event pipeline, deployment proxy requirements, recovery behavior, and validation commands.
-
 TANAW is a tourism monitoring, enterprise reporting, and LGU operations platform
 for the City of San Pedro, Laguna. It connects participating enterprises to the
 city through a local desktop application that can count visitors from CCTV/IP
@@ -23,6 +21,7 @@ Want only the commands needed to test the system? Use the
 - [TL;DR test guide](./TLDR.md)
 - [What TANAW provides](#what-tanaw-provides)
 - [Architecture](#architecture)
+- [Realtime architecture](#realtime-architecture)
 - [Technology stack](#technology-stack)
 - [Project structure](#project-structure)
 - [Prerequisites](#prerequisites)
@@ -107,6 +106,24 @@ The main data flow is:
 Raw camera video is not uploaded to PostgreSQL. ReID processing and temporary
 appearance metadata stay on the enterprise device. Live frames remain in
 memory and are not stored as SQLite rows.
+
+## Realtime architecture
+
+TANAW uses one authenticated application WebSocket endpoint at
+`/realtime/ws`. The web and desktop clients load their initial state through
+REST, then use this connection for change notifications. Camera streams and the
+desktop ML-service transport remain separate local channels.
+
+The backend writes application events to the realtime outbox in the same
+database transaction as the related state change. The realtime runtime claims
+committed events and publishes them to authenticated clients. Clients recover
+from disconnects by reconnecting and refreshing the affected REST resources,
+so correctness does not depend on receiving every WebSocket message.
+
+Deployments must proxy WebSocket upgrades for `/realtime/ws` and expose
+`/ready/realtime` for readiness checks. Runtime timing and retention values are
+application defaults in the codebase; environment configuration is reserved
+for deployment-specific connection, credential, and API settings.
 
 ## Technology stack
 
