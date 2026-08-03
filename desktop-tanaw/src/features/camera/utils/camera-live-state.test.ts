@@ -5,6 +5,7 @@ import {
   isAcceptedCameraStartSettled,
   isCameraPreviewReady,
   isCameraStartOutcomeUncertain,
+  isTransientCameraStartupPollError,
   mergeCameraStates,
 } from "./camera-live-state";
 
@@ -105,6 +106,14 @@ describe("camera startup and preview recovery", () => {
 
     const running = state(101, 0);
     expect(isCameraPreviewReady(running)).toBe(true);
+  });
+
+  it("does not surface a background poll timeout while an accepted startup is pending", () => {
+    const timeout = new Error("The ML service did not respond in time.");
+
+    expect(isTransientCameraStartupPollError(timeout, true)).toBe(true);
+    expect(isTransientCameraStartupPollError(timeout, false)).toBe(false);
+    expect(isTransientCameraStartupPollError(new Error("The ML service exited unexpectedly."), true)).toBe(false);
   });
 });
 

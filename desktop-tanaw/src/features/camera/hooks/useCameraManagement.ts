@@ -9,6 +9,7 @@ import {
   isAcceptedCameraStartSettled,
   isCameraPreviewReady,
   isCameraStartOutcomeUncertain,
+  isTransientCameraStartupPollError,
   mergeCameraStates,
 } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
@@ -114,7 +115,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const activeAction = activeCam ? cameraActions[activeCam.id] : undefined;
   const isActiveCameraSaving = activeAction === "saving";
   const isActiveCameraStarting = Boolean(activeCam && (isStartAction(activeAction) || pendingCameraIds.has(activeCam.id)));
-  const monitoringError = activeCam ? (activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError ?? serviceError) : (configurationError ?? serviceError);
+  const monitoringError = activeCam ? (activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError) : configurationError;
   const warnings = isEditMode && editForm ? getValidationWarnings(editForm.config) : getValidationWarnings(activeCam?.config);
   const mlBaseUrl = serviceStatus?.baseUrl ?? DEFAULT_ML_SERVICE_BASE_URL;
   const streamVersion = activeCam ? (streamVersions[activeCam.id] ?? 0) : 0;
@@ -163,6 +164,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       cameraPreviewReadyRef.current[cameraId] = false;
       setCameraAction(cameraId, "requesting-start");
       setCameraError(cameraId, null);
+      setServiceError(null);
       updateCameraStatus(cameraId, "starting");
     },
     [setCameraAction, setCameraError, updateCameraStatus],
@@ -276,6 +278,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       setServiceHealth(await getMlHealth(nextStatus.baseUrl));
       setServiceError(null);
     } catch (error) {
+      if (isTransientCameraStartupPollError(error, Object.values(cameraActionsRef.current).some(isStartAction))) return;
       setServiceHealth(null);
       setServiceError(toErrorMessage(error));
     }
@@ -286,7 +289,9 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       applyCameraStates(await getMlCameraStates(mlBaseUrl));
       setServiceError(null);
     } catch (error) {
-      setServiceError(toErrorMessage(error));
+      if (!isTransientCameraStartupPollError(error, Object.values(cameraActionsRef.current).some(isStartAction))) {
+        setServiceError(toErrorMessage(error));
+      }
       throw error;
     }
   }, [applyCameraStates, mlBaseUrl]);
