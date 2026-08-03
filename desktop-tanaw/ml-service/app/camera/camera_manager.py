@@ -2,9 +2,8 @@ import logging
 import os
 import threading
 import time
-from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "16")
@@ -13,14 +12,30 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
-from app.camera.frame_renderer import CameraFrameRenderer, DisplayTrack, NormalizedPath
+from app.camera.contracts import CameraCounts, CameraSessionState
+from app.camera.frame_geometry import crop_track, track_inside_roi
+from app.camera.frame_renderer import CameraFrameRenderer, DisplayTrack
+from app.camera.models import (
+    CameraStreamUnavailableError,
+    DisplayFrameSnapshot,
+    PendingEntryEvent,
+    ProcessingSession,
+    RuntimeState,
+)
+from app.camera.runtime_math import age_ms as _age_ms
+from app.camera.runtime_math import counting_debug as _counting_debug
+from app.camera.runtime_math import fast_reid_enabled as _fast_reid_enabled
+from app.camera.runtime_math import max_frame_width as _max_frame_width
+from app.camera.runtime_math import processing_fps as _processing_fps
+from app.camera.runtime_math import quality_reid_enabled as _quality_reid_enabled
+from app.camera.runtime_math import resolve_reid_mode as _resolve_reid_mode
+from app.camera.runtime_math import safe_int as _safe_int
+from app.camera.runtime_math import seconds_to_frames as _seconds_to_frames
 from app.camera.stream_reader import open_capture, validate_stream
 from app.config.camera_config import (
     CameraCountingConfigUpdate,
     CameraStartRequest,
-    RegionOfInterest,
 )
-from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import YoloPersonTracker
 from app.identity import UniqueVisitorRegistry, VisitorDecision
@@ -39,49 +54,6 @@ logger = logging.getLogger(__name__)
 RECONNECT_MAX_DELAY_SECONDS = 15.0
 FAST_REID_RESULT_MAX_AGE_SECONDS = 2.5
 QUALITY_REID_RESULT_MAX_AGE_SECONDS = 6.0
-
-
-class CameraStreamUnavailableError(ValueError):
-    pass
-
-
-@dataclass
-class RuntimeState:
-    running: bool = False
-    status: str = "stopped"
-    error: str | None = None
-
-
-DisplayFrameSnapshot = tuple[
-    np.ndarray,
-    int,
-    list[DisplayTrack],
-    float,
-    NormalizedPath | None,
-    NormalizedPath | None,
-    RegionOfInterest,
-    bool,
-    int,
-    int,
-    int,
-]
-
-
-@dataclass
-class ProcessingSession:
-    session_id: int
-    config: CameraStartRequest
-    stop_event: threading.Event
-    event_scope: str = ""
-
-
-@dataclass(frozen=True)
-class PendingEntryEvent:
-    session_id: int
-    track: ResolvedTrack
-    direction: str
-    created_at: float
-    expires_at: float
 
 
 class CameraProcessingManager:
@@ -146,6 +118,7 @@ class CameraProcessingManager:
         self._reid_results_stale = 0
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
+        self._closed = False
 
     @property
     def running(self) -> bool:
@@ -219,6 +192,8 @@ class CameraProcessingManager:
         }
 
     def start(self, config: CameraStartRequest) -> None:
+        if self._closed:
+            raise RuntimeError("This camera processing manager has been closed.")
         if config.camera_id is None:
             raise ValueError("Camera ID is required to start camera processing.")
         if self._camera_id_scope is not None and config.camera_id != self._camera_id_scope:
@@ -251,7 +226,9 @@ class CameraProcessingManager:
                 config.processing_profile, config.runtime_backend, config.tracker_profile
             )
             self._configure_reid_locked(config)
-            processing_fps = self._processing_fps(config)
+            processing_fps = _processing_fps(
+                config.processing_fps, self._tracker.target_processing_fps
+            )
             self._config = config
             self._counter = TripwireCounter(
                 tripwire_position=config.tripwire_position,
@@ -309,9 +286,9 @@ class CameraProcessingManager:
 
         try:
             self._tracker.warmup()
-            if self._fast_reid_enabled():
+            if _fast_reid_enabled(self._effective_reid_mode):
                 self._reidentifier.warmup()
-            if self._quality_reid_enabled():
+            if _quality_reid_enabled(self._effective_reid_mode):
                 self._quality_reidentifier.warmup()
         except Exception as exc:
             safe_message = redact_stream_credentials(f"Unable to initialize ML model: {exc}")
@@ -471,7 +448,17 @@ class CameraProcessingManager:
             if self._enterprise_id is not None or self._config is not None:
                 self._persist_session_locked()
 
-    def counts(self) -> dict[str, int | str | bool | None]:
+    def close(self) -> None:
+        """Permanently dispose this pipeline and its background workers."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+        self.stop()
+        self._reid_worker.close()
+        self._quality_reid_worker.close()
+
+    def counts(self) -> CameraCounts:
         with self._lock:
             snapshot = self._counter.counts.as_dict()
             running = self._state.running
@@ -480,12 +467,10 @@ class CameraProcessingManager:
             has_enterprise_context = self._enterprise_id is not None
         if has_enterprise_context:
             snapshot["occupancy"] = self._session_store.enterprise_occupancy()
-        return {
-            **snapshot,
-            "running": running,
-            "status": status,
-            "error": error,
-        }
+        return cast(
+            CameraCounts,
+            {**snapshot, "running": running, "status": status, "error": error},
+        )
 
     def detections(
         self,
@@ -529,33 +514,27 @@ class CameraProcessingManager:
                 ],
             }
 
-    def session(self) -> dict:
+    def session(self) -> CameraSessionState:
         with self._lock:
             counts = self.counts()
-            return {
-                "running": self._state.running,
-                "status": self._state.status,
-                "error": redact_stream_credentials(self._state.error)
-                if self._state.error
-                else None,
-                "camera_id": self._config.camera_id if self._config else None,
-                "camera_name": self._config.camera_name if self._config else None,
-                "camera_config": self._public_config_dump() if self._config else None,
-                "counts": counts,
-                "updated_at": self._session_updated_at,
-            }
-
-    def list_camera_profiles(self) -> list[dict]:
-        return self._session_store.list_camera_profiles()
-
-    def replace_camera_profiles(self, cameras: list[dict]) -> list[dict]:
-        return self._session_store.replace_camera_profiles(cameras)
+            return cast(
+                CameraSessionState,
+                {
+                    "running": self._state.running,
+                    "status": self._state.status,
+                    "error": redact_stream_credentials(self._state.error)
+                    if self._state.error
+                    else None,
+                    "camera_id": self._config.camera_id if self._config else None,
+                    "camera_name": self._config.camera_name if self._config else None,
+                    "camera_config": self._public_config_dump() if self._config else None,
+                    "counts": counts,
+                    "updated_at": self._session_updated_at,
+                },
+            )
 
     def metrics_summary(self, include_submitted: bool = False) -> dict:
         return self._session_store.metrics_summary(include_submitted=include_submitted)
-
-    def metrics_history(self, include_submitted: bool = False) -> dict:
-        return self._session_store.metrics_history(include_submitted=include_submitted)
 
     def record_occupancy_correction(
         self,
@@ -653,56 +632,6 @@ class CameraProcessingManager:
             "reid_model_availability": get_reid_model_availability(),
             "runtime_capabilities": get_runtime_capabilities(),
         }
-
-    def record_report_submission(
-        self,
-        report_id: str,
-        period: str,
-        notes: str | None = None,
-        payload: dict | None = None,
-        metrics: dict | None = None,
-    ) -> dict:
-        submission = self._session_store.record_report_submission(
-            report_id=report_id,
-            period=period,
-            notes=notes,
-            payload=payload,
-            metrics=metrics,
-        )
-        self._visitor_registry.cleanup_expired()
-        return submission
-
-    def list_report_submissions(self, limit: int = 100) -> list[dict]:
-        return self._session_store.list_report_submissions(limit=limit)
-
-    def get_report_draft(self, draft_key: str) -> dict | None:
-        return self._session_store.get_report_draft(draft_key)
-
-    def save_report_draft(
-        self,
-        draft_key: str,
-        period: str,
-        payload: dict,
-        report_id: str | None = None,
-    ) -> dict:
-        return self._session_store.save_report_draft(
-            draft_key=draft_key,
-            period=period,
-            payload=payload,
-            report_id=report_id,
-        )
-
-    def delete_report_draft(self, draft_key: str) -> bool:
-        return self._session_store.delete_report_draft(draft_key)
-
-    def mark_report_synced(self, report_id: str) -> bool:
-        return self._session_store.mark_report_synced(report_id)
-
-    def purge_report_raw_events(self, report_id: str) -> dict:
-        return self._session_store.purge_report_raw_events(report_id)
-
-    def mark_events_synced(self) -> int:
-        return self._session_store.mark_events_synced()
 
     def prepare_sample_counts(
         self,
@@ -873,7 +802,7 @@ class CameraProcessingManager:
                         failed_reads = 0
                         reconnect_attempt = 0
                         frame = self._frame_renderer.resize_for_processing(
-                            frame, self._max_frame_width(config)
+                            frame, _max_frame_width(config.max_frame_width, self._effective_profile)
                         )
                         self._publish_raw_frame(session, frame)
             except Exception as exc:
@@ -935,7 +864,9 @@ class CameraProcessingManager:
             return
 
         last_processed_frame_id = 0
-        frame_interval = 1.0 / self._processing_fps(config)
+        frame_interval = 1.0 / _processing_fps(
+            config.processing_fps, self._tracker.target_processing_fps
+        )
         last_cleanup_at = time.monotonic()
 
         try:
@@ -1159,20 +1090,20 @@ class CameraProcessingManager:
                 return []
             counting_confidence_passed = track.confidence >= counting_confidence
 
-            inside_roi = self._track_inside_roi(
+            inside_roi = track_inside_roi(
                 track.counting_point,
                 track.centroid,
                 track.bbox,
                 frame_width,
                 frame_height,
-                session.config,
+                session.config.roi,
             )
             if not counting_confidence_passed:
                 continue
 
             counting_eligible = inside_roi and counting_confidence_passed
             counting_track_id = counting_track_ids.get(track.source_track_id, track.source_track_id)
-            if counting_eligible and self._reid_sampling_enabled(session.config):
+            if counting_eligible and _fast_reid_enabled(self._effective_reid_mode):
                 self._schedule_track_embedding(
                     session, frame, track, frame_width, frame_height, now
                 )
@@ -1223,7 +1154,8 @@ class CameraProcessingManager:
                     identity_state=track.identity_state,
                     identity_score=track.identity_score,
                     identity_source=track.identity_source,
-                    counting_debug=self._counting_debug(
+                    counting_debug=_counting_debug(
+                        self._counter.debug_state(counting_track_id),
                         counting_track_id,
                         inside_roi=inside_roi,
                         counting_confidence_passed=counting_confidence_passed,
@@ -1236,13 +1168,13 @@ class CameraProcessingManager:
         for source_track in source_tracks:
             if source_track.track_id > 0 or source_track.confidence < counting_confidence:
                 continue
-            inside_roi = self._track_inside_roi(
+            inside_roi = track_inside_roi(
                 source_track.counting_point,
                 source_track.centroid,
                 source_track.bbox,
                 frame_width,
                 frame_height,
-                session.config,
+                session.config.roi,
             )
             display_tracks.append(
                 DisplayTrack(
@@ -1264,60 +1196,6 @@ class CameraProcessingManager:
 
         return display_tracks
 
-    def _point_inside_roi(
-        self, point: Centroid, frame_width: int, frame_height: int, config: CameraStartRequest
-    ) -> bool:
-        roi = config.roi
-        x = point.x / max(frame_width, 1)
-        y = point.y / max(frame_height, 1)
-        return roi.left <= x <= roi.left + roi.width and roi.top <= y <= roi.top + roi.height
-
-    def _track_inside_roi(
-        self,
-        counting_point: Centroid,
-        centroid: Centroid,
-        bbox: tuple[int, int, int, int],
-        frame_width: int,
-        frame_height: int,
-        config: CameraStartRequest,
-    ) -> bool:
-        return (
-            self._point_inside_roi(counting_point, frame_width, frame_height, config)
-            or self._point_inside_roi(centroid, frame_width, frame_height, config)
-            or self._bbox_overlaps_roi(bbox, frame_width, frame_height, config)
-        )
-
-    def _bbox_overlaps_roi(
-        self,
-        bbox: tuple[int, int, int, int],
-        frame_width: int,
-        frame_height: int,
-        config: CameraStartRequest,
-    ) -> bool:
-        x1, y1, x2, y2 = bbox
-        box_left = max(0.0, float(min(x1, x2)))
-        box_top = max(0.0, float(min(y1, y2)))
-        box_right = min(float(frame_width), float(max(x1, x2)))
-        box_bottom = min(float(frame_height), float(max(y1, y2)))
-        box_area = max(0.0, box_right - box_left) * max(0.0, box_bottom - box_top)
-        if box_area <= 0:
-            return False
-
-        roi = config.roi
-        roi_left = roi.left * frame_width
-        roi_top = roi.top * frame_height
-        roi_right = (roi.left + roi.width) * frame_width
-        roi_bottom = (roi.top + roi.height) * frame_height
-        overlap_left = max(box_left, roi_left)
-        overlap_top = max(box_top, roi_top)
-        overlap_right = min(box_right, roi_right)
-        overlap_bottom = min(box_bottom, roi_bottom)
-        overlap_area = max(0.0, overlap_right - overlap_left) * max(
-            0.0, overlap_bottom - overlap_top
-        )
-
-        return overlap_area / box_area >= 0.25
-
     def _schedule_track_embedding(
         self,
         session: ProcessingSession,
@@ -1328,19 +1206,18 @@ class CameraProcessingManager:
         now: float,
     ) -> None:
         frame_index = self._counter.frame_index
-        sample_fast = self._fast_reid_enabled() and self._appearance_buffer.should_sample(
+        sample_fast = _fast_reid_enabled(
+            self._effective_reid_mode
+        ) and self._appearance_buffer.should_sample(track, frame_width, frame_height, frame_index)
+        sample_quality = _quality_reid_enabled(
+            self._effective_reid_mode
+        ) and self._quality_appearance_buffer.should_sample(
             track, frame_width, frame_height, frame_index
-        )
-        sample_quality = (
-            self._quality_reid_enabled()
-            and self._quality_appearance_buffer.should_sample(
-                track, frame_width, frame_height, frame_index
-            )
         )
         if not sample_fast and not sample_quality:
             return
 
-        crop = self._crop_track(frame, track.bbox)
+        crop = crop_track(frame, track.bbox)
         if crop is None:
             return
 
@@ -1405,7 +1282,7 @@ class CameraProcessingManager:
         if session.config.unique_counting_mode == "entry_only":
             return self._degraded_unique_entry_decision("entry_only")
 
-        if not self._fast_reid_enabled():
+        if not _fast_reid_enabled(self._effective_reid_mode):
             return self._degraded_unique_entry_decision("reid_off")
 
         if self._track_has_reid_consensus(track.track_id):
@@ -1554,17 +1431,6 @@ class CameraProcessingManager:
             },
         )
 
-    def _crop_track(self, frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:
-        frame_height, frame_width = frame.shape[:2]
-        x1, y1, x2, y2 = bbox
-        x1 = max(0, min(frame_width - 1, x1))
-        y1 = max(0, min(frame_height - 1, y1))
-        x2 = max(0, min(frame_width, x2))
-        y2 = max(0, min(frame_height, y2))
-        if x2 <= x1 or y2 <= y1:
-            return None
-        return frame[y1:y2, x1:x2].copy()
-
     def _is_current_session(self, session: ProcessingSession) -> bool:
         with self._lock:
             return self._is_current_session_locked(session)
@@ -1696,22 +1562,9 @@ class CameraProcessingManager:
             if isinstance(payload.get("error"), str) or payload.get("error") is None:
                 self._state.error = payload.get("error")
 
-    def _processing_fps(self, config: CameraStartRequest) -> float:
-        if config.processing_fps is not None:
-            return max(config.processing_fps, 1.0)
-        if self._tracker.target_processing_fps is not None:
-            return self._tracker.target_processing_fps
-        return 8.0
-
-    def _max_frame_width(self, config: CameraStartRequest) -> int:
-        if config.max_frame_width is not None:
-            return config.max_frame_width
-        if self._effective_profile in {"balanced", "high_accuracy"}:
-            return 960
-        return 640
-
     def _configure_reid_locked(self, config: CameraStartRequest) -> None:
-        self._effective_reid_mode = self._resolve_reid_mode(config.reid_mode)
+        processing_profile = getattr(self._tracker, "effective_profile", self._effective_profile)
+        self._effective_reid_mode = _resolve_reid_mode(config.reid_mode, processing_profile)
         fast_profile = get_reid_model_profile("fast")
         quality_profile = get_reid_model_profile("quality")
         if (
@@ -1731,63 +1584,3 @@ class CameraProcessingManager:
             model_name=self._reidentifier.model_name,
             quality_model_name=self._quality_reidentifier.model_name,
         )
-
-    def _resolve_reid_mode(self, requested_mode: str) -> str:
-        if requested_mode in {"off", "fast", "quality"}:
-            return requested_mode
-
-        profile_config = getattr(self._tracker, "effective_profile", self._effective_profile)
-        if profile_config == "high_accuracy":
-            return "quality"
-        if profile_config == "balanced":
-            return "fast"
-        return "off"
-
-    def _fast_reid_enabled(self) -> bool:
-        return self._effective_reid_mode in {"fast", "quality"}
-
-    def _quality_reid_enabled(self) -> bool:
-        return self._effective_reid_mode == "quality"
-
-    def _reid_sampling_enabled(self, config: CameraStartRequest) -> bool:
-        return self._fast_reid_enabled()
-
-    def _counting_debug(
-        self,
-        track_id: int,
-        *,
-        inside_roi: bool,
-        counting_confidence_passed: bool,
-        tracking_confidence: float,
-        counting_confidence: float,
-    ) -> dict[str, Any]:
-        debug = self._counter.debug_state(track_id) or {}
-        reason = "eligible"
-        if not counting_confidence_passed:
-            reason = "below_counting_confidence"
-        elif not inside_roi:
-            reason = "outside_roi"
-
-        return {
-            **debug,
-            "counting_track_id": track_id,
-            "roi_passed": inside_roi,
-            "counting_confidence_passed": counting_confidence_passed,
-            "tracking_confidence": tracking_confidence,
-            "counting_confidence": counting_confidence,
-            "reason": debug.get("last_reason") or reason,
-        }
-
-
-def _safe_int(value: Any) -> int:
-    return value if isinstance(value, int) else 0
-
-
-def _age_ms(now: float, observed_at: float | None) -> float | None:
-    if observed_at is None:
-        return None
-    return max(0.0, (now - observed_at) * 1000.0)
-
-
-def _seconds_to_frames(seconds: float, processing_fps: float) -> int:
-    return max(1, int(round(seconds * max(processing_fps, 1.0))))

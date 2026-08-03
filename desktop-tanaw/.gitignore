@@ -38,3 +38,4 @@ __pycache__/
 
 # Local ML model downloads and exports
 ml-service/models/
+ml-service/build/

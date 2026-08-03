@@ -38,7 +38,9 @@ class LocalDataStoreTest(unittest.TestCase):
                 }
 
             self.assertIn("camera_profiles", tables)
-            self.assertIn("active_monitoring_state", tables)
+            self.assertIn("camera_monitoring_states", tables)
+            self.assertNotIn("active_monitoring_state", tables)
+            self.assertNotIn("count_snapshots", tables)
             self.assertIn("enterprise_occupancy_state", tables)
             self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
             self.assertNotIn("camera_type", camera_columns)
@@ -131,6 +133,55 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
             self.assertEqual(identity, ("confirmed", None))
             self.assertEqual(prototype_count, (1,))
+
+    def test_schema_one_rtsp_profile_and_monitoring_state_survive_full_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store._database_path.parent.mkdir(parents=True)
+            with closing(sqlite3.connect(store._database_path)) as connection:
+                connection.executescript(
+                    """
+                    create table schema_metadata (
+                        singleton_id integer primary key, schema_version integer, applied_at text
+                    );
+                    insert into schema_metadata values (1, 1, '2026-01-01T00:00:00+00:00');
+                    create table camera_profiles (
+                        camera_id integer primary key, name text not null, zone text not null,
+                        status text not null, camera_type text not null, stream_url text not null,
+                        purpose text not null, resolution text not null, fps real not null,
+                        processing_profile text not null, tracking_confidence real,
+                        counting_confidence real not null, reid_mode text,
+                        unique_counting_mode text, config_json text not null,
+                        payload_json text not null, created_at text not null, updated_at text not null
+                    );
+                    insert into camera_profiles values (
+                        11, 'Legacy Entrance', 'Lobby', 'stopped', 'RTSP_CCTV',
+                        'rtsp://192.168.1.11/stream2', 'entry_exit', '1080p', 24,
+                        'balanced', 0.2, 0.35, 'auto', 'estimated_reid', '{}',
+                        '{"id":11,"name":"Legacy Entrance","zone":"Lobby","status":"stopped","rtsp":"rtsp://192.168.1.11/stream2","processingProfile":"balanced","trackingConfidence":0.2,"confidence":0.35,"reidMode":"auto","uniqueCountingMode":"estimated_reid","config":{}}',
+                        '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'
+                    );
+                    create table active_monitoring_state (
+                        singleton_id integer primary key, camera_id integer,
+                        camera_name_snapshot text, running integer, status text, error text,
+                        started_at text, entry_count integer, exit_count integer,
+                        occupancy_count integer, camera_config_json text, updated_at text
+                    );
+                    insert into active_monitoring_state values (
+                        1, 11, 'Legacy Entrance', 0, 'stopped', null, null, 7, 2, 5,
+                        '{}', '2026-01-01T00:00:00+00:00'
+                    );
+                    """
+                )
+
+            profiles = store.list_camera_profiles()
+            state = store.load_monitoring_state(11)
+
+            self.assertEqual(profiles[0]["name"], "Legacy Entrance")
+            self.assertEqual(profiles[0]["cameraHost"], "192.168.1.11")
+            self.assertEqual(profiles[0]["rtspStream"], "stream2")
+            assert state is not None
+            self.assertEqual(state["counts"]["occupancy"], 5)
 
     def test_schema_five_migration_reclassifies_unsubmitted_ambiguous_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -243,7 +294,6 @@ class LocalDataStoreTest(unittest.TestCase):
             with closing(sqlite3.connect(store._database_path)) as connection:
                 for table in (
                     "count_events",
-                    "count_snapshots",
                     "report_submissions",
                     "occupancy_corrections",
                 ):
@@ -990,17 +1040,23 @@ class LocalDataStoreTest(unittest.TestCase):
 
             self.assertEqual(first.enterprise_occupancy(), 20)
 
-    def test_older_schema_requires_an_explicit_full_reset(self) -> None:
+    def test_older_versioned_schema_is_upgraded_without_losing_events(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            original.metrics_summary()
+            original.append_count_event({**_event("entry", 1, 0, 1, True), "event_id": "kept"})
             with closing(sqlite3.connect(original._database_path)) as connection:
                 connection.execute("update schema_metadata set schema_version = 3")
                 connection.commit()
 
-            incompatible = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "incompatible"):
-                incompatible.metrics_summary()
+            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            summary = migrated.metrics_summary()
+            with closing(sqlite3.connect(migrated._database_path)) as connection:
+                version = connection.execute(
+                    "select schema_version from schema_metadata where singleton_id = 1"
+                ).fetchone()
+
+            self.assertEqual(summary["entries"], 1)
+            self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
 
     def test_report_camera_breakdown_survives_raw_event_purge(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

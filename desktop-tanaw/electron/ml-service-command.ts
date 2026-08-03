@@ -14,14 +14,22 @@ type MlServiceCommandOptions = {
 };
 
 export function getMlServiceCommand({ isPackaged, platform = process.platform, serviceDir, pathExists = existsSync }: MlServiceCommandOptions): MlServiceCommand {
-  const venvPython = platform === "win32" ? path.join(serviceDir, ".venv", "Scripts", "python.exe") : path.join(serviceDir, ".venv", "bin", "python");
+  const packagedExecutable = path.join(
+    serviceDir,
+    "runtime",
+    platform === "win32" ? "tanaw-ml-service.exe" : "tanaw-ml-service",
+  );
 
-  // Development must go through uv so an existing but stale .venv is
-  // synchronized with uv.lock before the service starts. Packaged builds may
-  // ship a prepared runtime, which remains the preferred production path.
-  if (isPackaged && pathExists(venvPython)) {
-    return { command: venvPython, args: ["main.py"] };
+  if (isPackaged) {
+    if (!pathExists(packagedExecutable)) {
+      throw new Error(
+        `The bundled ML runtime is missing at ${packagedExecutable}. Rebuild the installer with npm run dist.`,
+      );
+    }
+    return { command: packagedExecutable, args: [] };
   }
 
+  // Development uses the lockfile-managed environment. Production never
+  // reaches this external-tool path.
   return { command: "uv", args: ["run", "--frozen", "python", "main.py"] };
 }

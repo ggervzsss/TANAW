@@ -24,7 +24,6 @@ import {
 export * from "./ml-service.types";
 
 export const DEFAULT_ML_SERVICE_BASE_URL = import.meta.env.VITE_ML_SERVICE_URL ?? "http://127.0.0.1:8765";
-let mlServiceAccessToken: string | undefined;
 
 export const EMPTY_ML_COUNTS: MlCounts = {
   entry: 0,
@@ -49,7 +48,6 @@ export async function getMlServiceStatus(): Promise<MlServiceStatus> {
   if (window.tanawMlService) {
     try {
       const status = await window.tanawMlService.getStatus();
-      mlServiceAccessToken = status.accessToken;
       return status;
     } catch {
       return {
@@ -81,7 +79,6 @@ export async function restartMlService(): Promise<MlServiceStatus> {
   }
 
   const status = await window.tanawMlService.restart();
-  mlServiceAccessToken = status.accessToken;
   return status;
 }
 
@@ -251,7 +248,7 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
     stream_url: camera.rtsp,
   };
   if (credentialScope && window.tanawCameraCredentials) {
-    return window.tanawCameraCredentials.request(credentialScope, camera.id, "test", payload) as Promise<CameraTestResult>;
+    return window.tanawCameraCredentials.request(camera.id, "test", payload) as Promise<CameraTestResult>;
   }
   return requestJson<CameraTestResult>(
     `${baseUrl}/camera/test`,
@@ -296,7 +293,7 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     unique_counting_mode: camera.uniqueCountingMode ?? "estimated_reid",
   };
   if (credentialScope && window.tanawCameraCredentials) {
-    return window.tanawCameraCredentials.request(credentialScope, camera.id, "start", payload) as Promise<{ message: string }>;
+    return window.tanawCameraCredentials.request(camera.id, "start", payload) as Promise<{ message: string }>;
   }
   return requestJson<{ message: string }>(
     `${baseUrl}/camera/start`,
@@ -347,14 +344,13 @@ export async function stopCameraProcessing(baseUrl: string, cameraId: number): P
 
 export function getStreamUrl(baseUrl: string, cameraId: number, version: number, overlay = true) {
   const params = new URLSearchParams({ overlay: overlay ? "1" : "0", v: String(version) });
-  if (mlServiceAccessToken) params.set("access_token", mlServiceAccessToken);
+  if (window.tanawMlService) return `tanaw-ml://service/camera/${cameraId}/stream?${params.toString()}`;
   return `${baseUrl}/camera/${cameraId}/stream?${params.toString()}`;
 }
 
 export function getMlCameraWebSocketUrl(baseUrl: string) {
   const url = new URL("/camera/ws", baseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  if (mlServiceAccessToken) url.searchParams.set("access_token", mlServiceAccessToken);
   return url.toString();
 }
 
@@ -399,6 +395,30 @@ function queryFromOptions(options: { includeSubmitted?: boolean }) {
 }
 
 async function requestJson<T>(url: string, init: RequestInit, timeoutMs: number): Promise<T> {
+  if (window.tanawMlService) {
+    try {
+      const response = await window.tanawMlService.request({
+        body: typeof init.body === "string" ? init.body : undefined,
+        method: init.method ?? "GET",
+        timeoutMs,
+        url,
+      });
+      if (!response.ok) {
+        throw await getRequestError(
+          new Response(response.body, { status: response.status, statusText: response.statusText }),
+          url,
+        );
+      }
+      return JSON.parse(response.body) as T;
+    } catch (error) {
+      if (error instanceof MlServiceRequestError) throw error;
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("timeout") || message.includes("timed out") || message.includes("aborted")) {
+        throw new MlServiceRequestError("request_timeout", "The ML service did not respond in time.");
+      }
+      throw new MlServiceRequestError("service_unavailable", "The local ML service is unavailable.");
+    }
+  }
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -437,8 +457,6 @@ function buildHeaders(init: RequestInit) {
   if (hasJsonBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (mlServiceAccessToken) headers.set("X-TANAW-ML-Token", mlServiceAccessToken);
-
   return headers;
 }
 

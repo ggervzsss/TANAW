@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { getMlServiceCommand } from "../ml-service-command";
+import { validateMlServiceRequest } from "../ml-service-request-policy";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "../ml-service-contract";
 import { classifyMlServiceStderr } from "../ml-service-log";
 import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "../ml-service-process";
 import { getCameraCredential, normalizeCameraCredentialId } from "../stores/camera-credential-store";
+import { SerializedOperationQueue } from "./serialized-operation-queue";
 
 const desktopBuild = getDesktopBuildFingerprint();
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
@@ -18,6 +20,7 @@ const mlServiceUrl = `http://127.0.0.1:${mlServicePort}`;
 const mlServiceAccessToken = randomBytes(32).toString("hex");
 const ML_SERVICE_STARTUP_TIMEOUT_MS = 20_000;
 const execFileAsync = promisify(execFile);
+const lifecycleOperations = new SerializedOperationQueue();
 
 let mlServiceProcess: ChildProcess | null = null;
 let mlServiceError: string | null = null;
@@ -41,7 +44,11 @@ function getMlServiceDir() {
   return path.join(process.resourcesPath, "ml-service");
 }
 
-export async function startMlService() {
+export function startMlService() {
+  return lifecycleOperations.run(startMlServiceUnlocked);
+}
+
+async function startMlServiceUnlocked() {
   if (isMlServiceRunning()) {
     return;
   }
@@ -86,6 +93,7 @@ export async function startMlService() {
       PYTHONUNBUFFERED: "1",
       TANAW_APP_DATA_DIR: app.getPath("userData"),
       TANAW_ML_SERVICE_HOST: process.env["TANAW_ML_SERVICE_HOST"] ?? "127.0.0.1",
+      TANAW_ML_MODEL_DIR: path.join(serviceDir, "models"),
       TANAW_ML_SERVICE_PORT: String(mlServicePort),
       TANAW_ML_SERVICE_TOKEN: mlServiceAccessToken,
     },
@@ -172,7 +180,6 @@ export function isMlServiceRunning() {
 export async function getMlServiceStatusPayload() {
   return {
     baseUrl: mlServiceUrl,
-    accessToken: mlServiceAccessToken,
     desktopBuild,
     desktopVersion: app.getVersion(),
     error: mlServiceError,
@@ -180,6 +187,41 @@ export async function getMlServiceStatusPayload() {
     pid: mlServiceProcess?.pid ?? (mlServiceConnectedExternally ? await findMlServiceListenerPid() : null),
     running: isMlServiceRunning(),
   };
+}
+
+export async function proxyMlServiceJsonRequest(requestInput: unknown) {
+  const { body, method, timeoutMs, url } = validateMlServiceRequest(requestInput, mlServiceUrl);
+  const response = await fetch(url, {
+    body,
+    cache: "no-store",
+    headers: mlServiceHeaders(body ? { "Content-Type": "application/json" } : undefined),
+    method,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return {
+    body: await response.text(),
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+  };
+}
+
+export async function proxyMlServiceStream(request: Request) {
+  const source = new URL(request.url);
+  const match = /^\/camera\/(\d+)\/stream$/.exec(source.pathname);
+  if (!match) return new Response("Not found", { status: 404 });
+  const upstream = new URL(`/camera/${match[1]}/stream`, mlServiceUrl);
+  upstream.search = source.search;
+  const response = await fetch(upstream, {
+    cache: "no-store",
+    headers: mlServiceHeaders(),
+    signal: request.signal,
+  });
+  return new Response(response.body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
 }
 
 function getDesktopBuildFingerprint() {
@@ -293,13 +335,17 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function restartMlService() {
+  return lifecycleOperations.run(restartMlServiceUnlocked);
+}
+
+async function restartMlServiceUnlocked() {
   if (mlServiceConnectedExternally && !mlServiceProcess) {
     await stopExternalMlService(3000);
   } else {
     await stopMlService(3000);
   }
 
-  await startMlService();
+  await startMlServiceUnlocked();
 }
 
 async function stopExternalMlService(waitMs = 0) {
@@ -445,7 +491,11 @@ export function recordMlServiceError(error: unknown) {
   notifyStatusChange();
 }
 
-export async function shutdownMlService() {
+export function shutdownMlService() {
+  return lifecycleOperations.run(shutdownMlServiceUnlocked);
+}
+
+async function shutdownMlServiceUnlocked() {
   if (isMlServiceRunning()) {
     await stopCameraProcessingFromTray();
   }

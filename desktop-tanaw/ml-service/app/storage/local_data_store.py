@@ -1,38 +1,34 @@
 import json
 import logging
-import os
 import random
 import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from app.config.report_config import reporting_period_key
-from app.storage.local_data_schema import initialize_local_database
 from app.storage.local_data_serialization import (
     _camera_breakdown_row,
     _format_day_label,
     _format_hour_label,
     _format_month_day_label,
-    _load_json_object,
     _MetricsBucket,
     _normalize_datetime,
-    _normalized_camera_profile,
     _parse_recorded_at,
     _period_for_payload_rows,
-    _report_draft_row,
     _report_submission_row,
     _safe_float,
     _safe_int,
-    _safe_scope,
     _submitted_filter_sql,
     _summary_with_report_metrics,
     _trend_point,
     _utc_now,
 )
+from app.storage.local_database import LocalDatabase
+from app.storage.repositories.camera_repository import CameraRepository
+from app.storage.repositories.report_draft_repository import ReportDraftRepository
+from app.storage.repositories.visitor_identity_repository import VisitorIdentityRepository
 
 logger = logging.getLogger(__name__)
 
@@ -40,220 +36,30 @@ logger = logging.getLogger(__name__)
 class LocalDataStore:
     def __init__(self, app_data_dir: str | None = None, enterprise_id: str | None = None) -> None:
         self._enterprise_id = enterprise_id
-        base_dir = app_data_dir or os.environ.get("TANAW_APP_DATA_DIR")
-        if base_dir:
-            root = Path(base_dir) / "ml-service"
-        else:
-            root = Path.home() / ".tanaw" / "ml-service"
-
-        self._root = root / "enterprises" / _safe_scope(enterprise_id) if enterprise_id else root
-
-        self._database_path = self._root / "tanaw_desktop.sqlite3"
-        self._retired_database_path = self._root / "tanaw_metrics.sqlite3"
-        self._initialized = False
+        self._database = LocalDatabase(app_data_dir, enterprise_id)
+        self._cameras = CameraRepository(self._database)
+        self._report_drafts = ReportDraftRepository(self._database)
+        self._visitor_identities = VisitorIdentityRepository(self._database)
+        self._root = self._database.root
+        self._database_path = self._database.path
+        self._retired_database_path = self._database.retired_path
 
     def load_monitoring_state(self, camera_id: int | None = None) -> dict[str, Any] | None:
-        with self._connection() as connection:
-            where_clause = "where camera_id = ?" if camera_id is not None else ""
-            parameters: tuple[Any, ...] = (camera_id,) if camera_id is not None else ()
-            row = connection.execute(
-                f"""
-                select
-                    camera_id,
-                    camera_name_snapshot,
-                    running,
-                    status,
-                    error,
-                    started_at,
-                    entry_count,
-                    exit_count,
-                    occupancy_count,
-                    camera_config_json,
-                    updated_at
-                from camera_monitoring_states
-                {where_clause}
-                order by updated_at desc
-                limit 1
-                """,
-                parameters,
-            ).fetchone()
-        if row is None:
-            return None
-
-        camera_config = _load_json_object(row["camera_config_json"])
-        return {
-            "running": bool(row["running"]),
-            "status": row["status"],
-            "error": row["error"],
-            "camera_id": row["camera_id"],
-            "camera_name": row["camera_name_snapshot"],
-            "camera_config": camera_config,
-            "counts": {
-                "entry": _safe_int(row["entry_count"]),
-                "exit": _safe_int(row["exit_count"]),
-                "occupancy": _safe_int(row["occupancy_count"]),
-                "running": bool(row["running"]),
-                "status": row["status"],
-                "started_at": row["started_at"],
-                "error": row["error"],
-            },
-            "updated_at": row["updated_at"],
-        }
+        return self._cameras.load_monitoring_state(camera_id)
 
     def list_monitoring_states(self) -> list[dict[str, Any]]:
-        with self._connection() as connection:
-            camera_ids = [
-                int(row["camera_id"])
-                for row in connection.execute(
-                    "select camera_id from camera_monitoring_states order by camera_id"
-                ).fetchall()
-            ]
-        return [
-            state for camera_id in camera_ids if (state := self.load_monitoring_state(camera_id))
-        ]
+        return self._cameras.list_monitoring_states()
 
     def save_monitoring_state(
         self, payload: dict[str, Any], updated_at: str | None = None
     ) -> dict[str, Any]:
-        updated_at = updated_at or _utc_now()
-        raw_counts = payload.get("counts")
-        counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
-        camera_config = payload.get("camera_config")
-        config_payload = camera_config if isinstance(camera_config, dict) else {}
-        camera_id = payload.get("camera_id")
-        if isinstance(camera_id, bool) or not isinstance(camera_id, int) or camera_id <= 0:
-            raise ValueError("Camera ID is required when saving camera monitoring state.")
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into camera_monitoring_states (
-                    camera_id,
-                    camera_name_snapshot,
-                    running,
-                    status,
-                    error,
-                    started_at,
-                    entry_count,
-                    exit_count,
-                    occupancy_count,
-                    camera_config_json,
-                    updated_at
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict(camera_id) do update set
-                    camera_name_snapshot = excluded.camera_name_snapshot,
-                    running = excluded.running,
-                    status = excluded.status,
-                    error = excluded.error,
-                    started_at = excluded.started_at,
-                    entry_count = excluded.entry_count,
-                    exit_count = excluded.exit_count,
-                    occupancy_count = excluded.occupancy_count,
-                    camera_config_json = excluded.camera_config_json,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    camera_id,
-                    payload.get("camera_name"),
-                    int(bool(payload.get("running"))),
-                    str(payload.get("status") or "stopped"),
-                    payload.get("error"),
-                    counts.get("started_at"),
-                    _safe_int(counts.get("entry")),
-                    _safe_int(counts.get("exit")),
-                    _safe_int(counts.get("occupancy")),
-                    json.dumps(config_payload, sort_keys=True),
-                    updated_at,
-                ),
-            )
-        return {**payload, "updated_at": updated_at}
+        return self._cameras.save_monitoring_state(payload, updated_at)
 
     def list_camera_profiles(self) -> list[dict[str, Any]]:
-        with self._connection() as connection:
-            rows = connection.execute(
-                """
-                select payload_json
-                from camera_profiles
-                order by created_at asc, camera_id asc
-                """
-            ).fetchall()
-        return [_load_json_object(row["payload_json"]) for row in rows]
+        return self._cameras.list_profiles()
 
     def replace_camera_profiles(self, cameras: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        normalized = [_normalized_camera_profile(camera) for camera in cameras]
-        camera_ids = [int(camera["id"]) for camera in normalized]
-        if len(camera_ids) != len(set(camera_ids)):
-            raise ValueError("Camera IDs must be unique.")
-
-        updated_at = _utc_now()
-        with self._connection() as connection:
-            if camera_ids:
-                placeholders = ", ".join("?" for _ in camera_ids)
-                connection.execute(
-                    f"delete from camera_profiles where camera_id not in ({placeholders})",
-                    camera_ids,
-                )
-            else:
-                connection.execute("delete from camera_profiles")
-
-            for camera in normalized:
-                connection.execute(
-                    """
-                    insert into camera_profiles (
-                        camera_id,
-                        name,
-                        zone,
-                        status,
-                        camera_host,
-                        rtsp_stream,
-                        stream_url,
-                        processing_profile,
-                        tracking_confidence,
-                        counting_confidence,
-                        reid_mode,
-                        unique_counting_mode,
-                        config_json,
-                        payload_json,
-                        created_at,
-                        updated_at
-                    )
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    on conflict(camera_id) do update set
-                        name = excluded.name,
-                        zone = excluded.zone,
-                        status = excluded.status,
-                        camera_host = excluded.camera_host,
-                        rtsp_stream = excluded.rtsp_stream,
-                        stream_url = excluded.stream_url,
-                        processing_profile = excluded.processing_profile,
-                        tracking_confidence = excluded.tracking_confidence,
-                        counting_confidence = excluded.counting_confidence,
-                        reid_mode = excluded.reid_mode,
-                        unique_counting_mode = excluded.unique_counting_mode,
-                        config_json = excluded.config_json,
-                        payload_json = excluded.payload_json,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        camera["id"],
-                        camera["name"],
-                        camera["zone"],
-                        camera["status"],
-                        camera.get("cameraHost"),
-                        camera.get("rtspStream"),
-                        camera["rtsp"],
-                        camera["processingProfile"],
-                        camera.get("trackingConfidence"),
-                        camera["confidence"],
-                        camera.get("reidMode"),
-                        camera.get("uniqueCountingMode"),
-                        json.dumps(camera["config"], sort_keys=True),
-                        json.dumps(camera, sort_keys=True),
-                        updated_at,
-                        updated_at,
-                    ),
-                )
-        return normalized
+        return self._cameras.replace_profiles(cameras)
 
     def append_count_event(self, payload: dict[str, Any], recorded_at: str | None = None) -> str:
         supplied_event_id = payload.get("event_id")
@@ -358,50 +164,19 @@ class LocalDataStore:
         canonical_visitor_id: str | None = None,
         recorded_at: str | None = None,
     ) -> None:
-        recorded_at = recorded_at or _utc_now()
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into visitor_identities (
-                    visitor_id,
-                    business_date,
-                    camera_id,
-                    first_seen_at,
-                    last_seen_at,
-                    representative_embedding,
-                    embedding_dim,
-                    embedding_count,
-                    model_name,
-                    expires_at,
-                    identity_status,
-                    canonical_visitor_id
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict(visitor_id) do update set
-                    last_seen_at = excluded.last_seen_at,
-                    representative_embedding = excluded.representative_embedding,
-                    embedding_dim = excluded.embedding_dim,
-                    embedding_count = excluded.embedding_count,
-                    model_name = excluded.model_name,
-                    expires_at = excluded.expires_at,
-                    identity_status = excluded.identity_status,
-                    canonical_visitor_id = excluded.canonical_visitor_id
-                """,
-                (
-                    visitor_id,
-                    business_date,
-                    camera_id,
-                    recorded_at,
-                    recorded_at,
-                    embedding,
-                    embedding_dim,
-                    embedding_count,
-                    model_name,
-                    expires_at,
-                    identity_status,
-                    canonical_visitor_id,
-                ),
-            )
+        self._visitor_identities.upsert_identity(
+            visitor_id=visitor_id,
+            business_date=business_date,
+            camera_id=camera_id,
+            embedding=embedding,
+            embedding_dim=embedding_dim,
+            embedding_count=embedding_count,
+            model_name=model_name,
+            expires_at=expires_at,
+            identity_status=identity_status,
+            canonical_visitor_id=canonical_visitor_id,
+            recorded_at=recorded_at,
+        )
 
     def upsert_visitor_identity_prototype(
         self,
@@ -414,36 +189,15 @@ class LocalDataStore:
         embedding_count: int,
         recorded_at: str | None = None,
     ) -> None:
-        recorded_at = recorded_at or _utc_now()
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into visitor_identity_prototypes (
-                    visitor_id,
-                    model_name,
-                    prototype_index,
-                    representative_embedding,
-                    embedding_dim,
-                    embedding_count,
-                    updated_at
-                )
-                values (?, ?, ?, ?, ?, ?, ?)
-                on conflict(visitor_id, model_name, prototype_index) do update set
-                    representative_embedding = excluded.representative_embedding,
-                    embedding_dim = excluded.embedding_dim,
-                    embedding_count = excluded.embedding_count,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    visitor_id,
-                    model_name,
-                    prototype_index,
-                    embedding,
-                    embedding_dim,
-                    embedding_count,
-                    recorded_at,
-                ),
-            )
+        self._visitor_identities.upsert_prototype(
+            visitor_id=visitor_id,
+            model_name=model_name,
+            prototype_index=prototype_index,
+            embedding=embedding,
+            embedding_dim=embedding_dim,
+            embedding_count=embedding_count,
+            recorded_at=recorded_at,
+        )
 
     def resolve_visitor_identity(
         self,
@@ -453,27 +207,12 @@ class LocalDataStore:
         canonical_visitor_id: str | None = None,
         recorded_at: str | None = None,
     ) -> None:
-        if identity_status not in {"confirmed", "provisional", "merged"}:
-            raise ValueError(f"Unsupported visitor identity status: {identity_status}")
-        if identity_status == "merged" and not canonical_visitor_id:
-            raise ValueError("Merged visitor identities require a canonical visitor ID.")
-
-        with self._connection() as connection:
-            connection.execute(
-                """
-                update visitor_identities
-                set identity_status = ?,
-                    canonical_visitor_id = ?,
-                    last_seen_at = ?
-                where visitor_id = ?
-                """,
-                (
-                    identity_status,
-                    canonical_visitor_id,
-                    recorded_at or _utc_now(),
-                    visitor_id,
-                ),
-            )
+        self._visitor_identities.resolve(
+            visitor_id,
+            identity_status=identity_status,
+            canonical_visitor_id=canonical_visitor_id,
+            recorded_at=recorded_at,
+        )
 
     def restore_visitor_identity(
         self,
@@ -481,124 +220,12 @@ class LocalDataStore:
         *,
         recorded_at: str | None = None,
     ) -> bool:
-        recorded_at = recorded_at or _utc_now()
-        with self._connection() as connection:
-            restored = connection.execute(
-                """
-                update visitor_identities
-                set identity_status = 'confirmed',
-                    canonical_visitor_id = null,
-                    last_seen_at = ?
-                where visitor_id = ?
-                    and identity_status = 'merged'
-                """,
-                (recorded_at, visitor_id),
-            ).rowcount
-            if not restored:
-                return False
-
-            event = connection.execute(
-                """
-                select id, payload_json
-                from count_events
-                where visitor_id = ?
-                    and direction = 'entry'
-                    and submitted_report_id is null
-                order by recorded_at asc
-                limit 1
-                """,
-                (visitor_id,),
-            ).fetchone()
-            if event is not None:
-                payload = _load_json_object(event["payload_json"])
-                payload.update(
-                    {
-                        "identity_confidence": "high",
-                        "is_unique_entry": True,
-                        "reid_decision": "merge_rolled_back",
-                    }
-                )
-                connection.execute(
-                    """
-                    update count_events
-                    set is_unique_entry = 1,
-                        reid_decision = 'merge_rolled_back',
-                        identity_confidence = 'high',
-                        payload_json = ?,
-                        synced_at = null
-                    where id = ?
-                    """,
-                    (json.dumps(payload, sort_keys=True), event["id"]),
-                )
-
-            sighting = connection.execute(
-                """
-                select sighting_id
-                from visitor_sightings
-                where visitor_id = ?
-                    and direction = 'entry'
-                order by recorded_at asc
-                limit 1
-                """,
-                (visitor_id,),
-            ).fetchone()
-            if sighting is not None:
-                connection.execute(
-                    """
-                    update visitor_sightings
-                    set reid_decision = 'merge_rolled_back',
-                        identity_confidence = 'high'
-                    where sighting_id = ?
-                    """,
-                    (sighting["sighting_id"],),
-                )
-        return True
+        return self._visitor_identities.restore(visitor_id, recorded_at=recorded_at)
 
     def append_visitor_sighting(
         self, payload: dict[str, Any], recorded_at: str | None = None
     ) -> str:
-        sighting_id = str(uuid4())
-        recorded_at = recorded_at or _utc_now()
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into visitor_sightings (
-                    sighting_id,
-                    visitor_id,
-                    recorded_at,
-                    business_date,
-                    camera_id,
-                    track_id,
-                    direction,
-                    reid_score,
-                    reid_decision,
-                    identity_confidence,
-                    detection_confidence,
-                    bbox_json,
-                    payload_json
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    sighting_id,
-                    payload["visitor_id"],
-                    recorded_at,
-                    payload["business_date"],
-                    payload.get("camera_id"),
-                    payload.get("track_id"),
-                    payload.get("direction"),
-                    _safe_float(payload.get("reid_score")),
-                    payload["reid_decision"],
-                    payload["identity_confidence"],
-                    _safe_float(payload.get("detection_confidence")),
-                    json.dumps(payload.get("bbox"), sort_keys=True)
-                    if payload.get("bbox") is not None
-                    else None,
-                    json.dumps(payload, sort_keys=True),
-                ),
-            )
-
-        return sighting_id
+        return self._visitor_identities.append_sighting(payload, recorded_at)
 
     def upsert_visitor_model_embedding(
         self,
@@ -610,65 +237,19 @@ class LocalDataStore:
         embedding_count: int,
         recorded_at: str | None = None,
     ) -> None:
-        recorded_at = recorded_at or _utc_now()
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into visitor_model_embeddings (
-                    visitor_id,
-                    model_name,
-                    representative_embedding,
-                    embedding_dim,
-                    embedding_count,
-                    updated_at
-                )
-                values (?, ?, ?, ?, ?, ?)
-                on conflict(visitor_id, model_name) do update set
-                    representative_embedding = excluded.representative_embedding,
-                    embedding_dim = excluded.embedding_dim,
-                    embedding_count = excluded.embedding_count,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    visitor_id,
-                    model_name,
-                    embedding,
-                    embedding_dim,
-                    embedding_count,
-                    recorded_at,
-                ),
-            )
+        self._visitor_identities.upsert_model_embedding(
+            visitor_id=visitor_id,
+            model_name=model_name,
+            embedding=embedding,
+            embedding_dim=embedding_dim,
+            embedding_count=embedding_count,
+            recorded_at=recorded_at,
+        )
 
     def load_active_visitor_identities(
         self, business_date: str, now: str | None = None
     ) -> list[dict[str, Any]]:
-        now = now or _utc_now()
-        with self._connection() as connection:
-            rows = connection.execute(
-                """
-                select
-                    visitor_id,
-                    business_date,
-                    camera_id,
-                    first_seen_at,
-                    last_seen_at,
-                    representative_embedding,
-                    embedding_dim,
-                    embedding_count,
-                    model_name,
-                    expires_at,
-                    identity_status,
-                    canonical_visitor_id
-                from visitor_identities
-                where business_date = ?
-                    and expires_at > ?
-                    and identity_status != 'merged'
-                order by last_seen_at desc
-                """,
-                (business_date, now),
-            ).fetchall()
-
-        return [dict(row) for row in rows]
+        return self._visitor_identities.load_active_identities(business_date, now)
 
     def load_active_visitor_identity_prototypes(
         self,
@@ -676,33 +257,7 @@ class LocalDataStore:
         model_name: str,
         now: str | None = None,
     ) -> list[dict[str, Any]]:
-        now = now or _utc_now()
-        with self._connection() as connection:
-            rows = connection.execute(
-                """
-                select
-                    prototypes.visitor_id,
-                    identities.business_date,
-                    identities.camera_id,
-                    prototypes.model_name,
-                    prototypes.prototype_index,
-                    prototypes.representative_embedding,
-                    prototypes.embedding_dim,
-                    prototypes.embedding_count,
-                    identities.expires_at
-                from visitor_identity_prototypes as prototypes
-                join visitor_identities as identities
-                    on identities.visitor_id = prototypes.visitor_id
-                where identities.business_date = ?
-                    and identities.expires_at > ?
-                    and identities.identity_status != 'merged'
-                    and prototypes.model_name = ?
-                order by prototypes.visitor_id, prototypes.prototype_index
-                """,
-                (business_date, now, model_name),
-            ).fetchall()
-
-        return [dict(row) for row in rows]
+        return self._visitor_identities.load_active_prototypes(business_date, model_name, now)
 
     def load_active_visitor_model_embeddings(
         self,
@@ -710,97 +265,10 @@ class LocalDataStore:
         model_name: str,
         now: str | None = None,
     ) -> list[dict[str, Any]]:
-        now = now or _utc_now()
-        with self._connection() as connection:
-            rows = connection.execute(
-                """
-                select
-                    embeddings.visitor_id,
-                    identities.business_date,
-                    identities.camera_id,
-                    embeddings.representative_embedding,
-                    embeddings.embedding_dim,
-                    embeddings.embedding_count,
-                    embeddings.model_name,
-                    identities.expires_at
-                from visitor_model_embeddings as embeddings
-                join visitor_identities as identities
-                    on identities.visitor_id = embeddings.visitor_id
-                where identities.business_date = ?
-                    and identities.expires_at > ?
-                    and identities.identity_status != 'merged'
-                    and embeddings.model_name = ?
-                order by embeddings.updated_at desc
-                """,
-                (business_date, now, model_name),
-            ).fetchall()
-
-        return [dict(row) for row in rows]
+        return self._visitor_identities.load_active_model_embeddings(business_date, model_name, now)
 
     def cleanup_expired_visitor_metadata(self, now: str | None = None) -> int:
-        now = now or _utc_now()
-        with self._connection() as connection:
-            visitor_ids = [
-                row["visitor_id"]
-                for row in connection.execute(
-                    """
-                    select visitor_id
-                    from visitor_identities
-                    where expires_at <= ?
-                    """,
-                    (now,),
-                ).fetchall()
-            ]
-            if not visitor_ids:
-                return 0
-
-            placeholders = ",".join("?" for _ in visitor_ids)
-            connection.execute(
-                f"delete from visitor_sightings where visitor_id in ({placeholders})", visitor_ids
-            )
-            connection.execute(
-                f"delete from visitor_identities where visitor_id in ({placeholders})", visitor_ids
-            )
-
-        return len(visitor_ids)
-
-    def save_count_snapshot(self, payload: dict[str, Any], recorded_at: str | None = None) -> None:
-        raw_counts = payload.get("counts")
-        counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
-        recorded_at = recorded_at or _utc_now()
-
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into count_snapshots (
-                    recorded_at,
-                    enterprise_id,
-                    camera_id,
-                    camera_name,
-                    entry_count,
-                    exit_count,
-                    occupancy_count,
-                    running,
-                    status,
-                    error,
-                    payload_json
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    recorded_at,
-                    payload.get("enterprise_id", self._enterprise_id),
-                    payload.get("camera_id"),
-                    payload.get("camera_name"),
-                    _safe_int(counts.get("entry")),
-                    _safe_int(counts.get("exit")),
-                    _safe_int(counts.get("occupancy")),
-                    1 if payload.get("running") else 0,
-                    payload.get("status"),
-                    payload.get("error"),
-                    json.dumps(payload, sort_keys=True),
-                ),
-            )
+        return self._visitor_identities.cleanup_expired(now)
 
     def record_occupancy_correction(
         self,
@@ -1588,16 +1056,7 @@ class LocalDataStore:
         ]
 
     def get_report_draft(self, draft_key: str) -> dict[str, Any] | None:
-        with self._connection() as connection:
-            row = connection.execute(
-                """
-                select draft_key, period, report_id, payload_json, updated_at
-                from report_drafts
-                where draft_key = ?
-                """,
-                (draft_key,),
-            ).fetchone()
-        return _report_draft_row(row) if row is not None else None
+        return self._report_drafts.get(draft_key)
 
     def save_report_draft(
         self,
@@ -1606,60 +1065,13 @@ class LocalDataStore:
         payload: dict[str, Any],
         report_id: str | None = None,
     ) -> dict[str, Any]:
-        updated_at = _utc_now()
-        with self._connection() as connection:
-            connection.execute(
-                """
-                insert into report_drafts (
-                    draft_key,
-                    period,
-                    report_id,
-                    payload_json,
-                    updated_at
-                )
-                values (?, ?, ?, ?, ?)
-                on conflict(draft_key) do update set
-                    period = excluded.period,
-                    report_id = excluded.report_id,
-                    payload_json = excluded.payload_json,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    draft_key,
-                    period,
-                    report_id,
-                    json.dumps(payload, sort_keys=True),
-                    updated_at,
-                ),
-            )
-        return {
-            "draft_key": draft_key,
-            "period": period,
-            "report_id": report_id,
-            "payload": payload,
-            "updated_at": updated_at,
-        }
+        return self._report_drafts.save(draft_key, period, payload, report_id)
 
     def delete_report_draft(self, draft_key: str) -> bool:
-        with self._connection() as connection:
-            cursor = connection.execute(
-                "delete from report_drafts where draft_key = ?",
-                (draft_key,),
-            )
-        return cursor.rowcount > 0
+        return self._report_drafts.delete(draft_key)
 
-    @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
-        self._initialize()
-        connection = sqlite3.connect(self._database_path)
-        connection.row_factory = sqlite3.Row
-        try:
-            connection.execute("pragma foreign_keys = on")
-            connection.execute("pragma busy_timeout = 5000")
-            yield connection
-            connection.commit()
-        finally:
-            connection.close()
+    def _connection(self) -> AbstractContextManager[sqlite3.Connection]:
+        return self._database.connection()
 
     def _ensure_enterprise_occupancy_state(self, connection: sqlite3.Connection) -> int:
         row = connection.execute(
@@ -1696,14 +1108,3 @@ class LocalDataStore:
             "select current_occupancy from enterprise_occupancy_state where singleton_id = 1"
         ).fetchone()
         return max(0, _safe_int(persisted["current_occupancy"] if persisted else None))
-
-    def _initialize(self) -> None:
-        if self._initialized:
-            return
-        initialize_local_database(
-            self._root,
-            self._database_path,
-            self._retired_database_path,
-            self._enterprise_id,
-        )
-        self._initialized = True

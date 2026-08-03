@@ -1,12 +1,13 @@
 import { ipcMain, type WebContents } from "electron";
-import { clearAuthSession, loadAuthSession, saveAuthSession } from "../stores/auth-session-store";
+import { cameraCredentialScopeForCurrentSession, clearAuthSession, loadAuthSession, saveAuthSession } from "../stores/auth-session-store";
 import { loadCameraCredentials, removeCameraCredential, saveCameraCredential } from "../stores/camera-credential-store";
 
 type IpcHandlerDependencies = {
   getMlServiceStatus: () => unknown | Promise<unknown>;
   isMainRenderer: (sender: WebContents) => boolean;
   markRendererReady: () => void;
-  requestCamera: (scope: unknown, cameraId: unknown, operation: unknown, payload: unknown) => Promise<unknown>;
+  requestMlService: (request: unknown) => Promise<unknown>;
+  requestCamera: (scope: string, cameraId: unknown, operation: unknown, payload: unknown) => Promise<unknown>;
   restartMlService: () => Promise<void>;
   stopCamera: () => Promise<void>;
 };
@@ -32,31 +33,35 @@ export function registerIpcHandlers(dependencies: IpcHandlerDependencies) {
     await dependencies.stopCamera();
     return dependencies.getMlServiceStatus();
   });
+  ipcMain.handle("ml-service:request", (event, request: unknown) => {
+    requireMainRenderer(event.sender);
+    return dependencies.requestMlService(request);
+  });
 
-  ipcMain.handle("camera-credentials:load", (event, scope: unknown) => {
+  ipcMain.handle("camera-credentials:load", (event) => {
     requireMainRenderer(event.sender);
-    return loadCameraCredentials(scope);
+    return loadCameraCredentials(cameraCredentialScopeForCurrentSession());
   });
-  ipcMain.handle("camera-credentials:save", (event, scope: unknown, cameraId: unknown, credential: unknown) => {
+  ipcMain.handle("camera-credentials:save", (event, cameraId: unknown, credential: unknown) => {
     requireMainRenderer(event.sender);
-    return saveCameraCredential(scope, cameraId, credential);
+    return saveCameraCredential(cameraCredentialScopeForCurrentSession(), cameraId, credential);
   });
-  ipcMain.handle("camera-credentials:remove", (event, scope: unknown, cameraId: unknown) => {
+  ipcMain.handle("camera-credentials:remove", (event, cameraId: unknown) => {
     requireMainRenderer(event.sender);
-    return removeCameraCredential(scope, cameraId);
+    return removeCameraCredential(cameraCredentialScopeForCurrentSession(), cameraId);
   });
-  ipcMain.handle("camera-credentials:request", (event, scope: unknown, cameraId: unknown, operation: unknown, payload: unknown) => {
+  ipcMain.handle("camera-credentials:request", (event, cameraId: unknown, operation: unknown, payload: unknown) => {
     requireMainRenderer(event.sender);
-    return dependencies.requestCamera(scope, cameraId, operation, payload);
+    return dependencies.requestCamera(cameraCredentialScopeForCurrentSession(), cameraId, operation, payload);
   });
 
   ipcMain.handle("auth-session:load", (event) => {
     requireMainRenderer(event.sender);
     return loadAuthSession();
   });
-  ipcMain.handle("auth-session:save", (event, session: unknown) => {
+  ipcMain.handle("auth-session:save", (event, session: unknown, persist: unknown) => {
     requireMainRenderer(event.sender);
-    return saveAuthSession(session);
+    return saveAuthSession(session, persist === true);
   });
   ipcMain.handle("auth-session:clear", (event) => {
     requireMainRenderer(event.sender);

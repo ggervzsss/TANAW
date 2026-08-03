@@ -17,6 +17,10 @@ export function useCameraRuntimeUpdates({ applyCameraStates, baseUrl, refreshCam
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
   useEffect(() => {
+    if (window.tanawMlService) {
+      setIsLiveConnected(false);
+      return undefined;
+    }
     const connection = createReconnectingWebSocket({
       url: getMlCameraWebSocketUrl(baseUrl),
       onOpen: () => setIsLiveConnected(true),

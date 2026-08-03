@@ -4,9 +4,11 @@ import logging
 import os
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from app.camera.camera_manager import CameraProcessingManager
+from app.camera.contracts import CountingConfigResult, EnterpriseBinding
+from app.camera.local_operations_service import LocalOperationsService
 from app.config.camera_config import (
     CameraCountingConfigUpdate,
     CameraStartRequest,
@@ -52,7 +54,7 @@ class CameraPipelineRegistry:
         max_configured_cameras: int = DEFAULT_MAX_CONFIGURED_CAMERAS,
         max_concurrent_cameras: int | None = None,
         pipeline_factory: Callable[..., CameraProcessingManager] = CameraProcessingManager,
-        reporting_manager: CameraProcessingManager | None = None,
+        reporting_manager: LocalOperationsService | None = None,
     ) -> None:
         self._app_data_dir = app_data_dir
         if not 1 <= max_configured_cameras <= DEFAULT_MAX_CONFIGURED_CAMERAS:
@@ -69,7 +71,7 @@ class CameraPipelineRegistry:
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
         self._pipeline_factory = pipeline_factory
-        self._reporting = reporting_manager or CameraProcessingManager(app_data_dir)
+        self._reporting = reporting_manager or LocalOperationsService(app_data_dir)
 
     @property
     def max_concurrent_cameras(self) -> int:
@@ -79,7 +81,9 @@ class CameraPipelineRegistry:
     def max_configured_cameras(self) -> int:
         return self._max_configured_cameras
 
-    def bind_enterprise(self, enterprise_id: str, enterprise_name: str | None = None) -> dict:
+    def bind_enterprise(
+        self, enterprise_id: str, enterprise_name: str | None = None
+    ) -> EnterpriseBinding:
         normalized_id = enterprise_id.strip()
         normalized_name = enterprise_name.strip() if enterprise_name else None
         if not normalized_id:
@@ -98,29 +102,28 @@ class CameraPipelineRegistry:
                         "session_restored": False,
                     }
 
-            self._stop_all_locked()
-            context = self._reporting.bind_enterprise(
-                normalized_id, normalized_name, restore_session=False
-            )
+            self._dispose_all_locked()
+            context = self._reporting.bind_enterprise(normalized_id, normalized_name)
             with self._lock:
                 self._enterprise_id = normalized_id
                 self._enterprise_name = normalized_name
                 self._pipelines.clear()
                 self._config_fingerprints.clear()
             logger.info("Bound camera registry to enterprise %s.", normalized_id)
-            return {
-                **context,
-                "session_restored": False,
-            }
+            return cast(
+                EnterpriseBinding,
+                {
+                    **context,
+                    "session_restored": False,
+                },
+            )
 
     def test_connection(self, payload: CameraTestRequest) -> tuple[bool, str]:
         logger.info(
             "Camera stream test started.",
             extra={"enterprise_id": self._enterprise_id, "camera_id": payload.camera_id},
         )
-        result = self._reporting.test_connection(
-            payload.stream_url, payload.username, payload.password
-        )
+        result = self._reporting.test_connection(payload)
         logger.log(
             logging.INFO if result[0] else logging.WARNING,
             "Camera stream test succeeded." if result[0] else "Camera stream test failed.",
@@ -294,6 +297,26 @@ class CameraPipelineRegistry:
             self._config_fingerprints.clear()
         return stopped
 
+    def _dispose_all_locked(self) -> int:
+        with self._lock:
+            self._pending_starts.clear()
+            pipelines = list(self._pipelines.items())
+            self._pipelines.clear()
+            self._config_fingerprints.clear()
+        stopped = 0
+        for camera_id, pipeline in pipelines:
+            if pipeline.running:
+                stopped += 1
+            pipeline.close()
+            logger.info("Disposed processing pipeline for camera %s.", camera_id)
+        return stopped
+
+    def close(self) -> None:
+        """Dispose every camera and reporting worker during service shutdown."""
+        with self._lifecycle_lock:
+            self._dispose_all_locked()
+            self._reporting.close()
+
     def pipeline(self, camera_id: int) -> CameraProcessingManager | None:
         with self._lock:
             return self._pipelines.get(camera_id)
@@ -306,7 +329,7 @@ class CameraPipelineRegistry:
 
     def update_counting_config(
         self, camera_id: int, update: CameraCountingConfigUpdate
-    ) -> dict[str, object]:
+    ) -> CountingConfigResult:
         with self._lifecycle_lock:
             previous_profiles = self._reporting.list_camera_profiles()
             found_profile = False
@@ -361,11 +384,14 @@ class CameraPipelineRegistry:
                 "Updated counting geometry without restarting the camera pipeline.",
                 extra={"enterprise_id": self._enterprise_id, "camera_id": camera_id},
             )
-            return {
-                **result,
-                "persisted": True,
-                "worker_applied": True,
-            }
+            return cast(
+                CountingConfigResult,
+                {
+                    **result,
+                    "persisted": True,
+                    "worker_applied": True,
+                },
+            )
 
     def _camera_state(self, camera_id: int, enterprise_occupancy: int) -> dict[str, Any]:
         pipeline = self.require_pipeline(camera_id)
@@ -449,9 +475,12 @@ class CameraPipelineRegistry:
                     camera_id for camera_id in self._pipelines if camera_id not in retained_ids
                 ]
             for camera_id in removed_ids:
-                self.stop(camera_id)
                 with self._lock:
-                    self._pipelines.pop(camera_id, None)
+                    pipeline = self._pipelines.pop(camera_id, None)
+                    self._pending_starts.pop(camera_id, None)
+                    self._config_fingerprints.pop(camera_id, None)
+                if pipeline is not None:
+                    pipeline.close()
             for camera_id in sorted(retained_ids - previous_ids):
                 logger.info(
                     "Camera configuration created.",

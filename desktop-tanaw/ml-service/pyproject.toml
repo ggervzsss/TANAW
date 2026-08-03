@@ -1,6 +1,6 @@
 [project]
 name = "ml-service"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local camera analytics, counting, and reporting service for TANAW Desktop"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,14 +23,21 @@ dependencies = [
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'win32'" },
 ]
 torchvision = [
     { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform != 'win32'" },
 ]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [dependency-groups]
@@ -39,6 +46,11 @@ dev = [
     "pytest>=9.1.1",
     "pyright>=1.1.410",
     "ruff>=0.15.18",
+    "httpx2>=2.9.1",
+]
+
+packaging = [
+    "pyinstaller>=6.19.0",
 ]
 
 export = [
@@ -64,6 +76,7 @@ ignore = ["B008"]
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "."
+exclude = "^(build|dist)/"
 explicit_package_bases = true
 check_untyped_defs = true
 disallow_incomplete_defs = true

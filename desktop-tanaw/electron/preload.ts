@@ -10,20 +10,23 @@ contextBridge.exposeInMainWorld("tanawMlService", {
   stopCamera() {
     return ipcRenderer.invoke("ml-service:stop-camera");
   },
+  request(request: { body?: string; method: string; timeoutMs: number; url: string }) {
+    return ipcRenderer.invoke("ml-service:request", request);
+  },
 });
 
 contextBridge.exposeInMainWorld("tanawCameraCredentials", {
-  load(scope: string) {
-    return ipcRenderer.invoke("camera-credentials:load", scope);
+  load() {
+    return ipcRenderer.invoke("camera-credentials:load");
   },
-  save(scope: string, cameraId: number, credential: { password?: string; username: string }) {
-    return ipcRenderer.invoke("camera-credentials:save", scope, cameraId, credential);
+  save(cameraId: number, credential: { password?: string; username: string }) {
+    return ipcRenderer.invoke("camera-credentials:save", cameraId, credential);
   },
-  remove(scope: string, cameraId: number) {
-    return ipcRenderer.invoke("camera-credentials:remove", scope, cameraId);
+  remove(cameraId: number) {
+    return ipcRenderer.invoke("camera-credentials:remove", cameraId);
   },
-  request(scope: string, cameraId: number, operation: "start" | "test", payload: Record<string, unknown>) {
-    return ipcRenderer.invoke("camera-credentials:request", scope, cameraId, operation, payload);
+  request(cameraId: number, operation: "start" | "test", payload: Record<string, unknown>) {
+    return ipcRenderer.invoke("camera-credentials:request", cameraId, operation, payload);
   },
 });
 
@@ -31,8 +34,8 @@ contextBridge.exposeInMainWorld("tanawAuthSession", {
   load() {
     return ipcRenderer.invoke("auth-session:load");
   },
-  save(session: unknown) {
-    return ipcRenderer.invoke("auth-session:save", session);
+  save(session: unknown, persist: boolean) {
+    return ipcRenderer.invoke("auth-session:save", session, persist);
   },
   clear() {
     return ipcRenderer.invoke("auth-session:clear");

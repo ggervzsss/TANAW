@@ -1,7 +1,7 @@
-import { app, safeStorage } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { app } from "electron";
 import path from "node:path";
 import { normalizeCameraPassword, normalizeCameraUsername, resolveCameraCredential } from "../camera-credential-validation";
+import { readSecureJson, writeSecureJson } from "./secure-json-store";
 
 const STORE_FILE = "camera-credentials.json";
 
@@ -52,20 +52,11 @@ function storePath() {
 }
 
 function loadStore(): CameraCredentialStore {
-  if (!existsSync(storePath())) return {};
-  try {
-    const raw = JSON.parse(readFileSync(storePath(), "utf8")) as unknown;
-    if (!isRecord(raw) || raw.version !== 1 || raw.encoding !== "safeStorage" || typeof raw.payload !== "string" || !safeStorage.isEncryptionAvailable()) return {};
-    return normalizeStore(JSON.parse(safeStorage.decryptString(Buffer.from(raw.payload, "base64"))) as unknown);
-  } catch {
-    return {};
-  }
+  return normalizeStore(readSecureJson(storePath()));
 }
 
 function saveStore(store: CameraCredentialStore) {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure camera credential storage is unavailable.");
-  mkdirSync(path.dirname(storePath()), { recursive: true });
-  writeFileSync(storePath(), JSON.stringify({ encoding: "safeStorage", payload: safeStorage.encryptString(JSON.stringify(store)).toString("base64"), version: 1 }), { encoding: "utf8", mode: 0o600 });
+  writeSecureJson(storePath(), store);
 }
 
 function normalizeCredentialScope(value: unknown) {

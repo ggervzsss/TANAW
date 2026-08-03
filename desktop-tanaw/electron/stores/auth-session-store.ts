@@ -1,33 +1,33 @@
-import { app, safeStorage } from "electron";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { app } from "electron";
+import { existsSync, unlinkSync } from "node:fs";
 import path from "node:path";
+import { cameraCredentialScopeForUser } from "../camera-credential-scope";
+import { readSecureJson, writeSecureJson } from "./secure-json-store";
 
 const STORE_FILE = "auth-session.json";
 type StoredAuthSession = { token: string; user: Record<string, unknown> };
+let currentAuthSession: StoredAuthSession | null = null;
 
 export function loadAuthSession(): StoredAuthSession | null {
-  if (!existsSync(storePath()) || !safeStorage.isEncryptionAvailable()) return null;
-  try {
-    const raw = JSON.parse(readFileSync(storePath(), "utf8")) as unknown;
-    if (!isRecord(raw) || raw.version !== 1 || raw.encoding !== "safeStorage" || typeof raw.payload !== "string") return null;
-    return normalizeSession(JSON.parse(safeStorage.decryptString(Buffer.from(raw.payload, "base64"))) as unknown);
-  } catch {
-    return null;
-  }
+  if (currentAuthSession) return currentAuthSession;
+  currentAuthSession = normalizeSession(readSecureJson(storePath()));
+  return currentAuthSession;
 }
 
-export function saveAuthSession(sessionInput: unknown) {
+export function saveAuthSession(sessionInput: unknown, persist = true) {
   const session = normalizeSession(sessionInput);
-  if (!session || !safeStorage.isEncryptionAvailable()) return false;
-  mkdirSync(path.dirname(storePath()), { recursive: true });
-  writeFileSync(storePath(), JSON.stringify({ encoding: "safeStorage", payload: safeStorage.encryptString(JSON.stringify(session)).toString("base64"), version: 1 }), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  if (!session) return false;
+  currentAuthSession = session;
+  if (persist) {
+    writeSecureJson(storePath(), session);
+  } else if (existsSync(storePath())) {
+    unlinkSync(storePath());
+  }
   return true;
 }
 
 export function clearAuthSession() {
+  currentAuthSession = null;
   if (existsSync(storePath())) unlinkSync(storePath());
 }
 
@@ -38,6 +38,11 @@ function storePath() {
 function normalizeSession(value: unknown): StoredAuthSession | null {
   if (!isRecord(value) || typeof value.token !== "string" || !value.token || !isRecord(value.user)) return null;
   return { token: value.token, user: value.user };
+}
+
+export function cameraCredentialScopeForCurrentSession() {
+  const session = currentAuthSession ?? loadAuthSession();
+  return cameraCredentialScopeForUser(session?.user);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

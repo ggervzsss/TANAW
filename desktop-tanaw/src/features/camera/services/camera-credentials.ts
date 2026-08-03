@@ -14,7 +14,7 @@ const memoryCredentials = new Map<string, Record<string, CameraCredentialSecret>
 
 export async function loadCameraCredentialMetadata(scope: string): Promise<CameraCredentialMetadataRecords> {
   if (window.tanawCameraCredentials) {
-    return normalizeCredentialMetadata(await window.tanawCameraCredentials.load(scope));
+    return normalizeCredentialMetadata(await window.tanawCameraCredentials.load());
   }
   return toMetadata(memoryCredentials.get(scope) ?? {});
 }
@@ -26,7 +26,7 @@ export async function saveCameraCredential(
 ): Promise<CameraCredentialMetadata> {
   if (window.tanawCameraCredentials) {
     return normalizeCredentialMetadataRecord(
-      await window.tanawCameraCredentials.save(scope, cameraId, credential),
+      await window.tanawCameraCredentials.save(cameraId, credential),
     );
   }
 
@@ -44,7 +44,7 @@ export async function saveCameraCredential(
 
 export async function deleteCameraCredential(scope: string, cameraId: number): Promise<void> {
   if (window.tanawCameraCredentials) {
-    await window.tanawCameraCredentials.remove(scope, cameraId);
+    await window.tanawCameraCredentials.remove(cameraId);
     return;
   }
 

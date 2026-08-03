@@ -4,6 +4,7 @@ import unittest
 from typing import Any, cast
 
 from app.camera.camera_manager import CameraProcessingManager
+from app.camera.contracts import CameraCounts, CameraSessionState
 from app.camera.pipeline_manager import (
     CameraCapacityError,
     CameraConfigurationCapacityError,
@@ -20,6 +21,7 @@ class FakePipeline(CameraProcessingManager):
         self.running_value = False
         self.start_calls = 0
         self.stop_calls = 0
+        self.close_calls = 0
         self.counting_update_calls = 0
         self.config: CameraStartRequest | None = None
         self.enterprise_id: str | None = None
@@ -54,6 +56,10 @@ class FakePipeline(CameraProcessingManager):
         self.stop_calls += 1
         self.running_value = False
 
+    def close(self) -> None:
+        self.close_calls += 1
+        self.stop()
+
     def update_counting_config(self, update: CameraCountingConfigUpdate) -> dict[str, object]:
         self.counting_update_calls += 1
         return {
@@ -63,7 +69,7 @@ class FakePipeline(CameraProcessingManager):
             "stream_frame_id": 10,
         }
 
-    def counts(self) -> dict:
+    def counts(self) -> CameraCounts:
         return {
             "entry": self.camera_id or 0,
             "exit": 0,
@@ -77,7 +83,7 @@ class FakePipeline(CameraProcessingManager):
     def detections(self) -> dict:
         return {"running": self.running_value, "status": "running", "tracks": []}
 
-    def session(self) -> dict:
+    def session(self) -> CameraSessionState:
         return {
             "running": self.running_value,
             "status": "running",
@@ -519,7 +525,23 @@ class CameraPipelineRegistryTest(unittest.TestCase):
             registry.bind_enterprise("second@example.test")
             self.assertFalse(first.running)
             self.assertFalse(second.running)
+            self.assertEqual(cast(FakePipeline, first).close_calls, 1)
+            self.assertEqual(cast(FakePipeline, second).close_calls, 1)
             self.assertEqual(registry.camera_states()["cameras"], [])
+
+    def test_removing_camera_profile_disposes_pipeline_workers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            registry = CameraPipelineRegistry(directory, pipeline_factory=FakePipeline)
+            registry.bind_enterprise("enterprise@example.test")
+            registry.replace_camera_profiles([_profile(1)])
+            registry.start(_config(1))
+            pipeline = cast(FakePipeline, registry.require_pipeline(1))
+
+            registry.replace_camera_profiles([])
+
+            self.assertEqual(pipeline.close_calls, 1)
+            with self.assertRaises(KeyError):
+                registry.require_pipeline(1)
 
     def test_enterprise_occupancy_is_projected_identically_to_every_camera(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

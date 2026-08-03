@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeImage, Tray } from "electron";
+import { app, BrowserWindow, Menu, nativeImage, protocol, Tray } from "electron";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -8,6 +8,8 @@ import { registerIpcHandlers } from "./ipc/register-ipc-handlers";
 import {
   getMlServiceSnapshot,
   getMlServiceStatusPayload,
+  proxyMlServiceJsonRequest,
+  proxyMlServiceStream,
   recordMlServiceError,
   requestCameraWithCredentials,
   restartMlService,
@@ -54,6 +56,10 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 }
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: "tanaw-ml", privileges: { bypassCSP: false, secure: true, standard: true, stream: true, supportFetchAPI: true } },
+]);
 
 function createTray() {
   if (tray) return;
@@ -331,11 +337,13 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    protocol.handle("tanaw-ml", proxyMlServiceStream);
     registerIpcHandlers({
       getMlServiceStatus: getMlServiceStatusPayload,
       isMainRenderer: (sender) => Boolean(win && !win.isDestroyed() && sender === win.webContents),
       markRendererReady: () => startupTransition?.markRendererReady(),
       requestCamera: requestCameraWithCredentials,
+      requestMlService: proxyMlServiceJsonRequest,
       restartMlService,
       stopCamera: stopCameraProcessingFromTray,
     });

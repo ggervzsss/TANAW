@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import { getMlHealth, getMlServiceStatus, replaceLocalCameras, testCameraConnection, updateCameraCountingConfig } from "./ml-service";
+import { getMlHealth, getMlServiceStatus, getStreamUrl, replaceLocalCameras, testCameraConnection, updateCameraCountingConfig } from "./ml-service";
 
 describe("secure camera service requests", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -14,27 +14,25 @@ describe("secure camera service requests", () => {
     await testCameraConnection("http://127.0.0.1:8765", camera(), "enterprise:1");
 
     expect(request).toHaveBeenCalledOnce();
-    const payload = request.mock.calls[0]?.[3] as Record<string, unknown>;
+    const payload = request.mock.calls[0]?.[2] as Record<string, unknown>;
     expect(payload).not.toHaveProperty("camera_type");
     expect(payload).not.toHaveProperty("password");
     expect(payload).not.toHaveProperty("username");
     expect(payload.stream_url).toBe("rtsp://192.168.1.9/stream2");
   });
 
-  it("adds the per-launch desktop token to local service requests", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ status: "ok" }), {
-        headers: { "Content-Type": "application/json" },
-        status: 200,
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("keeps the per-launch token in Electron and proxies local service requests", async () => {
+    const request = vi.fn().mockResolvedValue({
+      body: JSON.stringify({ status: "ok" }),
+      ok: true,
+      status: 200,
+      statusText: "OK",
+    });
     vi.stubGlobal("window", {
       clearTimeout,
       setTimeout,
       tanawMlService: {
         getStatus: vi.fn().mockResolvedValue({
-          accessToken: "launch-secret",
           baseUrl: "http://127.0.0.1:8765",
           desktopBuild: "development",
           desktopVersion: "test",
@@ -43,14 +41,29 @@ describe("secure camera service requests", () => {
           pid: 123,
           running: true,
         }),
+        request,
       },
     });
 
     await getMlServiceStatus();
     await getMlHealth("http://127.0.0.1:8765");
 
-    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(new Headers(request.headers).get("X-TANAW-ML-Token")).toBe("launch-secret");
+    expect(request).toHaveBeenCalledWith({
+      body: undefined,
+      method: "GET",
+      timeoutMs: 2500,
+      url: "http://127.0.0.1:8765/health",
+    });
+    expect(JSON.stringify(await getMlServiceStatus())).not.toContain("launch-secret");
+  });
+
+  it("uses the token-hiding Electron stream protocol", () => {
+    vi.stubGlobal("window", { tanawMlService: {} });
+
+    const streamUrl = getStreamUrl("http://127.0.0.1:8765", 42, 3, false);
+
+    expect(streamUrl).toBe("tanaw-ml://service/camera/42/stream?overlay=0&v=3");
+    expect(streamUrl).not.toContain("access_token");
   });
 });
 

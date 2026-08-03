@@ -11,9 +11,14 @@
   files: ["dist", "dist-electron"],
   extraResources: [
     {
-      from: "ml-service",
-      to: "ml-service",
-      filter: ["**/*.py", "pyproject.toml", "uv.lock", ".python-version", "README.md", "models/**"],
+      from: "ml-service/dist/tanaw-ml-service",
+      to: "ml-service/runtime",
+      filter: ["**/*"],
+    },
+    {
+      from: "ml-service/models",
+      to: "ml-service/models",
+      filter: ["**/*"],
     },
   ],
   mac: {
