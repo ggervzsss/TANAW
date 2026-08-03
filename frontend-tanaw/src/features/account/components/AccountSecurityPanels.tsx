@@ -1,4 +1,4 @@
-import { Check, Key, Monitor, MonitorSmartphone, RefreshCw } from "lucide-react";
+import { Check, Key, RefreshCw } from "lucide-react";
 import type { FormEvent, RefObject } from "react";
 import { PasswordMatchIndicator, PasswordRequirements } from "@/shared/components/PasswordRequirements";
 import { Panel, PanelHeader } from "@/shared/components/panel";
@@ -89,37 +89,6 @@ export function PasswordChangePanel(props: PasswordChangePanelProps) {
           </button>
         </div>
       </form>
-    </Panel>
-  );
-}
-
-export function ActiveSessionsPanel() {
-  return (
-    <Panel className="overflow-hidden">
-      <PanelHeader title="Active Sessions" icon={MonitorSmartphone} />
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-160 text-left text-sm">
-          <thead className="bg-slate-50 text-[10px] font-black tracking-widest text-slate-500 uppercase">
-            <tr>
-              {["Device", "Location", "Last Active", "IP Address"].map((label) => (
-                <th key={label} className="border-b border-slate-200 p-3">
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            <tr>
-              <td className="flex items-center gap-2 p-3 font-semibold text-slate-900">
-                <Monitor size={15} className="text-tanaw-green" /> Workstation Browser (Current)
-              </td>
-              <td className="p-3 font-medium text-slate-600">Current device</td>
-              <td className="p-3 text-xs font-bold text-emerald-600">Active Now</td>
-              <td className="p-3 font-mono text-xs text-slate-500">Unavailable</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </Panel>
   );
 }

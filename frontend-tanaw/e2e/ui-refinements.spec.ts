@@ -180,7 +180,6 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   await expect(currentPassword).toHaveValue("");
   await expect(newPassword).toHaveValue("");
   await expect(confirmation).toHaveValue("");
-  await expect(page.getByText("Workstation Browser (Current)")).toBeVisible();
 
   await page.goto("/staff/analytics");
   await page.goto("/staff/security");

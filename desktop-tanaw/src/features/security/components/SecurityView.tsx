@@ -4,7 +4,6 @@ import { normalizePassword, validatePasswordPolicy } from "../../../utils/passwo
 import { changePassword } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
-import { ActiveSessionsPanel } from "./ActiveSessionsPanel";
 import { CredentialControl, type PasswordChangeValues } from "./CredentialControl";
 
 export function SecurityView() {
@@ -53,10 +52,7 @@ export function SecurityView() {
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">Update your enterprise account password.</p>
       </div>
 
-      <div className="space-y-6">
-        <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
-        <ActiveSessionsPanel />
-      </div>
+      <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
     </div>
   );
 }
