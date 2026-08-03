@@ -123,8 +123,8 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
           aria-controls={listboxId}
           aria-expanded={showPanel}
           aria-activedescendant={showPanel && activeSuggestion ? `${listboxId}-${activeSuggestion.placeId}` : undefined}
-          placeholder="Try “Archie's Event Place” or a street address"
-          className="focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-10 text-sm text-slate-800 shadow-sm outline-none transition focus:ring-4 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100"
+          placeholder="Enter a landmark, street, or address"
+          className="focus:border-tanaw-green focus:ring-tanaw-green/15 w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-10 pl-10 text-sm text-slate-800 shadow-sm transition outline-none focus:ring-4 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-100"
           onChange={(event) => {
             const nextQuery = event.target.value;
             selectedQueryRef.current = "";
@@ -174,7 +174,11 @@ export function LocationSearch({ inputId, onSelect }: LocationSearchProps) {
       </p>
 
       {showPanel ? (
-        <div id={listboxId} role="listbox" className="absolute top-full right-0 left-0 mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600 dark:bg-[#121c31]">
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute top-full right-0 left-0 mt-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-600 dark:bg-[#121c31]"
+        >
           {error ? (
             <div role="status" className="flex items-start gap-2 px-3 py-2.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
               <AlertCircle size={15} className="mt-0.5 shrink-0" />
