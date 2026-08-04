@@ -439,13 +439,18 @@ npm run dist
 Build artifacts are written under `desktop-tanaw/release/`.
 
 The current installer build includes the TANAW desktop code and ML service
-source, but local model artifacts are not committed to Git. A build machine
-must run the model setup command first if installer packaging should include
-those assets. It does not bundle a standalone Python runtime and installed
-Python packages. A machine running that development installer still needs
-Python 3.12 or newer and uv available. Group members cloning the repository
-should use `npm run dev`, which uses the `.venv` created by
-`uv sync --directory ml-service --frozen`.
+runtime, but local model artifacts are not committed to Git. A build machine
+must run the model setup commands before packaging. The distribution workflow
+uses PyInstaller to bundle Python and the locked ML dependencies, verifies the
+standalone runtime, and copies the model assets into the installer. Installed
+computers do not need Python or `uv`; development still uses the `.venv` created
+by `uv sync --directory ml-service --frozen`.
+
+Create Windows installers on Windows x64 so PyInstaller and native ML
+dependencies match the target operating system. Before `npm run dist`, set the
+public HTTPS `VITE_API_BASE_URL` in the build environment. Development remains
+on the local Vite and backend addresses. See the desktop README for the complete
+Windows distribution checklist.
 
 ## Bootstrap and development accounts
 
@@ -689,7 +694,7 @@ The backend production template contains only deployment-specific values:
 | `TANAW_ENV`                                      | Enables production validation                      |
 | `DATABASE_URL`                                   | Managed PostgreSQL connection URL                  |
 | `JWT_SECRET_KEY`                                 | Token-signing secret                               |
-| `CORS_ORIGINS`                                   | Authorized public frontend origin                  |
+| `CORS_ORIGINS`                                   | Authorized web and packaged desktop origins        |
 | `FRONTEND_PUBLIC_URL`                            | Public URL used in transactional links             |
 | `BOOTSTRAP_IT_USERNAME`, `BOOTSTRAP_IT_PASSWORD` | One-time credentials for an empty database         |
 | `EMAIL_DELIVERY_MODE`                            | Selects production Resend delivery                 |

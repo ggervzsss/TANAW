@@ -1,10 +1,11 @@
-import { app, BrowserWindow, Menu, nativeImage, protocol, Tray } from "electron";
+import { app, BrowserWindow, Menu, nativeImage, net, protocol, Tray } from "electron";
 import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 import { createStartupTransitionController, DEV_STARTUP_READY_FALLBACK_MS, type StartupRevealReason, type StartupTransitionController } from "./startup-transition";
 import { registerIpcHandlers } from "./ipc/register-ipc-handlers";
+import { PACKAGED_RENDERER_ENTRY_URL, resolvePackagedRendererAsset } from "./renderer-protocol";
 import {
   getMlServiceSnapshot,
   getMlServiceStatusPayload,
@@ -58,6 +59,7 @@ if (!gotSingleInstanceLock) {
 }
 
 protocol.registerSchemesAsPrivileged([
+  { scheme: "tanaw-app", privileges: { codeCache: true, corsEnabled: true, secure: true, standard: true, supportFetchAPI: true } },
   { scheme: "tanaw-ml", privileges: { bypassCSP: false, secure: true, standard: true, stream: true, supportFetchAPI: true } },
 ]);
 
@@ -197,7 +199,7 @@ function loadMainWindowContent() {
     return;
   }
 
-  const loadPromise = VITE_DEV_SERVER_URL ? win.loadURL(VITE_DEV_SERVER_URL) : win.loadFile(path.join(RENDERER_DIST, "index.html"));
+  const loadPromise = win.loadURL(VITE_DEV_SERVER_URL ?? PACKAGED_RENDERER_ENTRY_URL);
   void loadPromise.catch((error) => {
     if (isNavigationAbort(error)) {
       return;
@@ -337,6 +339,15 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    if (!VITE_DEV_SERVER_URL) {
+      protocol.handle("tanaw-app", (request) => {
+        if (request.method !== "GET") {
+          return new Response("Method not allowed", { status: 405 });
+        }
+        const assetPath = resolvePackagedRendererAsset(request.url, RENDERER_DIST);
+        return assetPath ? net.fetch(pathToFileURL(assetPath).toString()) : new Response("Not found", { status: 404 });
+      });
+    }
     protocol.handle("tanaw-ml", proxyMlServiceStream);
     registerIpcHandlers({
       getMlServiceStatus: getMlServiceStatusPayload,

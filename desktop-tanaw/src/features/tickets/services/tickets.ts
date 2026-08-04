@@ -1,4 +1,4 @@
-import { staffApi } from "../../../lib/axios";
+import { API_BASE_URL, staffApi } from "../../../lib/axios";
 
 export type SupportTicketCategory = "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
 export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
@@ -103,7 +103,7 @@ export function getSupportTicketAttachmentUrl(attachment: SupportTicketAttachmen
     return attachment.dataUrl;
   }
   if (attachment.url) {
-    const baseUrl = staffApi.defaults.baseURL ?? "http://localhost:8000";
+    const baseUrl = staffApi.defaults.baseURL ?? API_BASE_URL;
     return attachment.url.startsWith("http") ? attachment.url : new URL(attachment.url, baseUrl).toString();
   }
   return "";

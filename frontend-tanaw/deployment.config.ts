@@ -1,6 +1,7 @@
 import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
 
 export const LOCAL_API_BASE_URL = "http://localhost:8000";
+export const TANAW_DESKTOP_ORIGIN = "tanaw-app://desktop";
 
 export interface ApiBaseUrlOptions {
   publicDeployment: boolean;
@@ -100,6 +101,9 @@ export function validateCoordinatedDeployment(input: CoordinatedDeploymentInput)
 function normalizeCorsOrigin(value: string): string {
   if (value === "*") {
     throw new Error("CORS_ORIGINS cannot contain a wildcard in production.");
+  }
+  if (value === TANAW_DESKTOP_ORIGIN) {
+    return value;
   }
   const url = new URL(normalizeHttpUrl(value, "CORS_ORIGINS", true));
   if (url.pathname !== "/") {

@@ -11,7 +11,10 @@
   "scripts": {
     "dev": "node scripts/with-electron-env.cjs vite --host 127.0.0.1",
     "build": "tsc && vite build",
-    "dist": "npm run build && npm run ml:bundle && electron-builder",
+    "dist": "node scripts/run-distribution-build.mjs",
+    "deployment:validate": "node scripts/validate-deployment-config.ts",
+    "renderer:verify": "node scripts/verify-renderer-build.mjs",
+    "builder": "electron-builder",
     "start": "node scripts/with-electron-env.cjs electron .",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 && npm run lint:tailwind",
     "lint:tailwind": "node scripts/lint-tailwind-canonical.mjs",
