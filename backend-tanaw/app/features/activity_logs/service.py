@@ -9,9 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.models import Account, AccountRole, SystemConfiguration
 from app.features.activity_logs.models import ActivityLog
-from app.features.activity_logs.schemas import ActivityLogCreate, ActivityLogSummary
+from app.features.activity_logs.schemas import (
+    ActivityLogActorRole,
+    ActivityLogCreate,
+    ActivityLogSummary,
+)
 
-ROLE_LABELS = {
+ROLE_LABELS: dict[AccountRole, ActivityLogActorRole] = {
     AccountRole.ADMIN: "Admin",
     AccountRole.IT: "IT Personnel",
     AccountRole.STAFF: "LGU Staff",
@@ -40,8 +44,12 @@ ADMIN_IT_ACTIVITY_ACTIONS = frozenset(
 )
 
 
-def get_actor_role_label(account: Account) -> str:
-    return ROLE_LABELS[account.role]
+def get_actor_role_label_for_role(role: AccountRole) -> ActivityLogActorRole:
+    return ROLE_LABELS[role]
+
+
+def get_actor_role_label(account: Account) -> ActivityLogActorRole:
+    return get_actor_role_label_for_role(account.role)
 
 
 def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.features.activity_logs.service import (
     get_actor_role_label,
+    get_actor_role_label_for_role,
 )
 from app.features.activity_logs.service import (
     record_activity_log as record_auth_log,
@@ -110,7 +111,7 @@ async def verify_email_change_link(
         category="System",
         severity="Success",
         actor=verification.display_name,
-        actor_role="Account Email Owner",
+        actor_role=get_actor_role_label_for_role(verification.account_role),
         action="Verify Proposed Account Email",
         target=verification.requested_email,
         summary=f"{verification.display_name} verified ownership of a proposed email address.",
