@@ -24,7 +24,7 @@ from app.features.mail.service import (
     RESEND_IDEMPOTENCY_WINDOW,
 )
 from app.features.mail.templates import EmailContent
-from app.features.operational.service import (
+from app.features.notifications.service import (
     create_role_notifications,
     mark_source_notifications_read,
 )
@@ -439,6 +439,7 @@ async def _notify_it_email_problem(db: AsyncSession, outbox: EmailOutbox) -> Non
             source_id=outbox.id,
             replace_existing_for_source=True,
         )
+        await db.commit()
     except Exception:
         await db.rollback()
         logger.exception("Failed to notify IT about email delivery outbox_id=%s", outbox.id)
@@ -447,6 +448,7 @@ async def _notify_it_email_problem(db: AsyncSession, outbox: EmailOutbox) -> Non
 async def _mark_email_problem_resolved(db: AsyncSession, outbox_id: str) -> None:
     try:
         await mark_source_notifications_read(db, source_type="email.delivery", source_id=outbox_id)
+        await db.commit()
     except Exception:
         await db.rollback()
         logger.exception("Failed to close IT email notification outbox_id=%s", outbox_id)

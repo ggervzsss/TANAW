@@ -1,5 +1,6 @@
-import type { AuthUser, UserRole } from "@/shared/types/role.types";
+import type { UserRole } from "@/shared/types/role.types";
 import { apiClient } from "@/shared/lib/apiClient";
+import type { SessionResponse } from "@/shared/services/sessionService";
 
 export type LoginCredentials = {
   clientId: string;
@@ -7,10 +8,7 @@ export type LoginCredentials = {
   rememberMe?: boolean;
 };
 
-export type LoginServiceResponse = {
-  user: AuthUser;
-  token: string;
-};
+export type LoginServiceResponse = SessionResponse;
 
 export type AccountActivationDetails = {
   displayName: string;
@@ -26,15 +24,6 @@ export async function loginService(_credentials: LoginCredentials): Promise<Logi
     rememberMe: _credentials.rememberMe ?? false,
   });
 
-  return response.data;
-}
-
-export async function logoutService(): Promise<void> {
-  await apiClient.post("/auth/logout");
-}
-
-export async function restoreSessionService(): Promise<LoginServiceResponse> {
-  const response = await apiClient.post<LoginServiceResponse>("/auth/session");
   return response.data;
 }
 

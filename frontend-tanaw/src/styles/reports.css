@@ -1,0 +1,89 @@
+.dot-table th,
+.dot-table td {
+  border: 1px solid currentColor;
+  padding: 4px;
+  text-align: center;
+}
+
+.tanaw-document-preview {
+  color-scheme: light;
+}
+
+.tanaw-document-preview .dot-table {
+  color: inherit;
+}
+
+.tanaw-official-report-table :where(th, td) {
+  background-color: transparent;
+}
+
+.tanaw-official-report-table thead :where(th) {
+  background-color: #e9eef3;
+}
+
+.tanaw-official-report-table .tanaw-report-code-cell {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.tanaw-official-report-table .tanaw-report-total-cell {
+  background-color: #e8edf3;
+  font-weight: 700;
+}
+
+.tanaw-official-report-table .tanaw-report-final-total-cell {
+  background-color: #d4dde8;
+  font-weight: 800;
+}
+
+.tanaw-official-report-table .tanaw-report-consolidated-row > * {
+  background-color: #dfe6ee;
+}
+
+.tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
+  background-color: #d4dde8;
+}
+
+.tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
+  background-color: #c4d0dd;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table :where(tbody th, tbody td) {
+  background-color: transparent;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table thead :where(th) {
+  background-color: #19263a;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-total-cell {
+  background-color: #202f43;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-final-total-cell {
+  background-color: #2a3d55;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > * {
+  background-color: #24344a;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-total-cell {
+  background-color: #2a3d55;
+}
+
+html.dark .tanaw-document-preview .tanaw-official-report-table .tanaw-report-consolidated-row > .tanaw-report-final-total-cell {
+  background-color: #344a64;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

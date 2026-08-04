@@ -5,6 +5,7 @@ import { NotificationDropdown } from "../../features/notifications/components/No
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
 import { getEnterpriseTopbarControlClasses } from "./enterpriseTopbarTheme";
+import { SAN_PEDRO_SEAL_IMAGE } from "../../lib/assets";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -31,12 +32,14 @@ const enterpriseNavigation = [
 ] as const satisfies { id: EnterpriseView; label: string; icon: typeof LayoutDashboard }[];
 
 export function EnterpriseBrand({ onDashboard }: { onDashboard: () => void }) {
-  const sealUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Seal_of_San_Pedro%2C_Laguna.png/1280px-Seal_of_San_Pedro%2C_Laguna.png";
-
   return (
     <div className="flex shrink-0 items-center gap-4">
       <button type="button" onClick={onDashboard} aria-label="Open TANAW dashboard" className="flex items-center gap-4">
-        <img src={sealUrl} alt="San Pedro Seal" className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10" />
+        <img
+          src={SAN_PEDRO_SEAL_IMAGE}
+          alt="San Pedro Seal"
+          className="h-12 w-12 rounded-full border border-white/25 bg-white/12 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.26)] max-sm:h-10 max-sm:w-10"
+        />
         <span className="font-display text-2xl font-bold tracking-wide drop-shadow-sm max-sm:text-lg">TANAW</span>
       </button>
       <span className="h-9 w-px bg-white/18 max-sm:h-7" aria-hidden="true" />

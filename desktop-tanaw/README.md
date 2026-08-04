@@ -1,6 +1,9 @@
 # TANAW Enterprise Desktop
 
-Cloud-backed tickets and notifications use the shared authenticated `/realtime/ws` provider. Camera and local ML-service transports remain independent. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+Cloud-backed tickets and notifications use the shared authenticated
+`/realtime/ws` provider. Camera and local ML-service transports remain
+independent. See the root
+[realtime architecture](../README.md#realtime-architecture).
 
 Electron, React, TypeScript, Vite, and local FastAPI ML service for
 enterprise-side camera monitoring, local counting, local report drafting, cloud
@@ -71,9 +74,9 @@ connect to it and reports conflicts in the camera panel.
 
 In development, Electron launches the service through `uv run --frozen` so an
 existing `.venv` is synchronized with `ml-service/uv.lock` before Python
-starts. Packaged builds still prefer a prepared runtime under the packaged ML
-service directory when one is present, with the locked `uv` environment as the
-existing fallback.
+starts. Packaged builds require and launch the standalone PyInstaller runtime
+under the packaged ML service directory. Installed computers do not need
+Python or `uv`.
 
 Override the ML port only when needed:
 
@@ -120,8 +123,58 @@ npm run type
 npm run preview:web
 ```
 
-`npm run dev` starts the Vite/Electron development flow. `npm run dist` builds
-the renderer and packages the Electron app.
+`npm run dev` starts the Vite/Electron development flow. It retains the local
+API fallback and is unaffected by production packaging configuration.
+
+`npm run dist` is the guarded distribution workflow. It requires a public
+HTTPS `VITE_API_BASE_URL`, builds and verifies the renderer, creates and smoke
+tests the standalone ML runtime, then invokes Electron Builder. Do not use it
+for an ordinary local preview.
+
+## Windows Distribution Build
+
+Build the Windows installer on a Windows 10 or 11 x64 computer. PyInstaller
+produces a runtime for the operating system on which it runs, so a Linux ML
+runtime cannot be reused in a Windows installer.
+
+Prepare a fresh Windows build machine:
+
+```powershell
+npm ci
+uv sync --directory ml-service --frozen
+npm run models:setup
+npm run models:setup:openvino
+npm run models:setup:reid
+```
+
+Set the public backend URL only for the distribution command:
+
+```powershell
+$env:VITE_API_BASE_URL = "https://api.your-domain.example"
+npm run deployment:validate
+npm run dist
+Remove-Item Env:VITE_API_BASE_URL
+```
+
+Alternatively, copy `.env.production.example` to the ignored
+`desktop-tanaw/.env.production.local` file and fill in the same value. Vite
+embeds this public API address in the renderer; it is not a secret and cannot be
+changed in an already-built installer.
+
+Packaged windows use the secure `tanaw-app://desktop` renderer origin. Add that
+exact origin to the backend together with the public web portal origin:
+
+```text
+CORS_ORIGINS=https://portal.your-domain.example,tanaw-app://desktop
+```
+
+Keep `FRONTEND_PUBLIC_URL` set to the web portal URL used in activation and
+email-verification links. Do not place database credentials, JWT secrets,
+Resend credentials, or other backend secrets in a desktop Vite environment.
+
+The resulting NSIS installer is written under `release/`. Before distribution,
+install it on a clean Windows x64 computer without Node.js, Python, or `uv` and
+verify login, backend synchronization, camera startup, and local ML health.
 
 ## Detector Model Setup
 
@@ -591,6 +644,12 @@ ml-service/app/detection/ # YOLO detector and tracker configuration
 ml-service/app/storage/   # Local ledger persistence
 ml-service/scripts/       # Model setup, replay, and evaluation helpers
 ```
+
+## Bundled Asset Sources
+
+- `public/images/san-pedro-seal.png` is the City of San Pedro seal published by the City Government of San Pedro and listed by Wikimedia Commons as a Philippine government public-domain work: <https://commons.wikimedia.org/wiki/File:Seal_of_San_Pedro,_Laguna.png>.
+- `public/images/camera-placeholder-city-hall.jpg` is the San Pedro City Hall photograph by Wikimedia Commons user Judgefloro, dedicated to the public domain under CC0 1.0: <https://commons.wikimedia.org/wiki/File:6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg>.
+- `public/fonts/` contains the Latin webfont files used by the desktop renderer: Inter, Montserrat, and Bai Jamjuree from Google Fonts. They are bundled so typography remains unchanged when the desktop app is offline. Each family retains its SIL Open Font License file in the same directory: <https://fonts.google.com/>.
 
 ## Important Boundaries
 

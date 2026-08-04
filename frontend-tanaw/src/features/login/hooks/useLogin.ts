@@ -2,6 +2,7 @@ import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { currentUserQueryKey } from "@/shared/services/accountService";
 import toast from "react-hot-toast/headless";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
@@ -31,7 +32,7 @@ export function useLogin() {
 
     try {
       const session = await loginService({ clientId, encryptionKey, rememberMe });
-      queryClient.removeQueries({ queryKey: ["current-user"] });
+      queryClient.removeQueries({ queryKey: currentUserQueryKey });
       setSession(session, rememberMe);
       toast.success("Login successful");
       navigate(getRoleDashboardPath(session.user.role), { replace: true });

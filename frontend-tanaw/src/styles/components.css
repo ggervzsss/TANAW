@@ -1,0 +1,740 @@
+.tanaw-modal-action-panel {
+  border-color: color-mix(in srgb, #059669 24%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-success-surface) 66%, var(--tanaw-surface));
+  box-shadow: var(--tanaw-shadow-soft);
+}
+
+.tanaw-modal-action-panel__title {
+  color: var(--tanaw-text);
+}
+
+.tanaw-modal-action-panel__copy {
+  color: var(--tanaw-secondary-text);
+}
+
+html.dark .tanaw-modal-action-panel {
+  border-color: color-mix(in srgb, #34d399 22%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-success-surface) 38%, var(--tanaw-surface-inset));
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.18);
+}
+
+.tanaw-request-queue {
+  border-color: color-mix(in srgb, #d97706 22%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-warning-surface) 46%, var(--tanaw-surface));
+}
+
+html.dark .tanaw-request-queue {
+  border-color: color-mix(in srgb, #fbbf24 18%, var(--tanaw-border-subtle));
+  background: color-mix(in srgb, var(--tanaw-warning-surface) 24%, var(--tanaw-surface));
+}
+
+.tanaw-detail-grid > * {
+  min-width: 0;
+}
+
+.tanaw-sensitive-input:-webkit-autofill,
+.tanaw-sensitive-input:-webkit-autofill:hover,
+.tanaw-sensitive-input:-webkit-autofill:focus,
+.tanaw-sensitive-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--tanaw-control-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tanaw-control-bg) inset !important;
+  -webkit-text-fill-color: var(--tanaw-text) !important;
+  caret-color: var(--tanaw-text);
+}
+
+@layer utilities {
+  html.dark :where(.dark\:bg-\[\#121c31\]) {
+    background-color: var(--tanaw-surface) !important;
+  }
+
+  html.dark :where(.dark\:bg-\[\#0f172a\]) {
+    background-color: var(--tanaw-surface-inset) !important;
+  }
+
+  html.dark :where(.dark\:bg-\[\#172033\]) {
+    background-color: var(--tanaw-surface-raised) !important;
+  }
+
+  html.dark :where(.dark\:bg-\[\#261f16\]) {
+    background-color: var(--tanaw-warning-surface) !important;
+  }
+
+  html.dark :where(.dark\:bg-\[\#0d2428\]) {
+    background-color: var(--tanaw-success-surface) !important;
+  }
+
+  html.dark :where(.bg-\[\#f8f9fa\], .bg-\[\#f8faf8\], .bg-slate-50, .bg-gray-50) {
+    background-color: var(--tanaw-surface-muted);
+  }
+
+  html.dark :where(.bg-white, .bg-white\/96, .bg-white\/95, .bg-white\/90, .bg-white\/86, .bg-white\/80, .bg-white\/70, .bg-white\/60, .bg-white\/50) {
+    background-color: color-mix(in srgb, var(--tanaw-surface) 96%, transparent);
+  }
+
+  html.dark :where(.bg-slate-100, .bg-gray-100) {
+    background-color: var(--tanaw-surface-subtle);
+  }
+
+  html.dark :where(.bg-slate-200, .bg-gray-200, .disabled\:bg-gray-100:disabled, .disabled\:bg-slate-200:disabled) {
+    background-color: var(--tanaw-surface-strong);
+  }
+
+  html.dark :where(.bg-emerald-50, .bg-tgreen-dark\/5, .bg-tgreen-dark\/6, .bg-tgreen-dark\/10) {
+    background-color: rgb(16 185 129 / 0.14);
+  }
+
+  html.dark :where(.bg-emerald-100) {
+    background-color: rgb(16 185 129 / 0.22);
+  }
+
+  html.dark :where(.bg-blue-50, .bg-sky-50) {
+    background-color: rgb(59 130 246 / 0.14);
+  }
+
+  html.dark :where(.bg-indigo-50, .bg-violet-50) {
+    background-color: rgb(129 140 248 / 0.14);
+  }
+
+  html.dark :where(.bg-teal-50) {
+    background-color: rgb(20 184 166 / 0.14);
+  }
+
+  html.dark :where(.bg-amber-50, .bg-yellow-50, .bg-amber-50\/70, .bg-amber-50\/80) {
+    background-color: rgb(245 158 11 / 0.15);
+  }
+
+  html.dark :where(.bg-amber-100, .bg-yellow-100) {
+    background-color: rgb(245 158 11 / 0.22);
+  }
+
+  html.dark :where(.bg-red-50, .bg-red-50\/80) {
+    background-color: rgb(239 68 68 / 0.14);
+  }
+
+  html.dark :where(.bg-red-100) {
+    background-color: rgb(239 68 68 / 0.22);
+  }
+
+  html.dark :where(.border-gray-100, .border-gray-200, .border-gray-300, .border-slate-100, .border-slate-200, .border-slate-300, .border-white\/70, .border-white\/80, .border-white\/85) {
+    border-color: var(--tanaw-border-subtle);
+  }
+
+  html.dark :where(.border-emerald-100, .border-emerald-200) {
+    border-color: rgb(52 211 153 / 0.26);
+  }
+
+  html.dark :where(.border-blue-200, .border-sky-100) {
+    border-color: rgb(96 165 250 / 0.28);
+  }
+
+  html.dark :where(.border-indigo-200, .border-violet-200) {
+    border-color: rgb(129 140 248 / 0.3);
+  }
+
+  html.dark :where(.border-teal-200) {
+    border-color: rgb(45 212 191 / 0.3);
+  }
+
+  html.dark :where(.border-amber-100, .border-amber-200, .border-yellow-200) {
+    border-color: rgb(251 191 36 / 0.32);
+  }
+
+  html.dark :where(.border-red-200, .border-red-300) {
+    border-color: rgb(248 113 113 / 0.32);
+  }
+
+  html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not(:last-child),
+  html.dark :where(.divide-gray-100, .divide-gray-200, .divide-slate-100, .divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--tanaw-border-subtle);
+  }
+
+  html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not(:last-child),
+  html.dark :where(tbody.divide-gray-100, tbody.divide-gray-200, tbody.divide-slate-100, tbody.divide-slate-200) > :not([hidden]) ~ :not([hidden]) {
+    border-color: color-mix(in srgb, var(--tanaw-border-subtle) 72%, transparent);
+  }
+
+  html.dark :where(.ring-white, .ring-slate-900\/4, .ring-slate-900\/5, .ring-emerald-950\/5, .ring-emerald-950\/6, .ring-black\/3, .ring-black\/4, .ring-black\/5) {
+    --tw-ring-color: rgb(255 255 255 / 0.08);
+  }
+
+  html.dark :where(.text-tanaw-navy, .text-charcoal-800, .text-gray-950, .text-gray-900, .text-slate-950, .text-slate-900) {
+    color: var(--tanaw-text);
+  }
+
+  html.dark :where(.text-gray-800, .text-slate-800, .text-gray-700, .text-slate-700, .text-gray-600, .text-slate-600) {
+    color: var(--tanaw-secondary-text);
+  }
+
+  html.dark :where(.text-gray-500, .text-slate-500, .text-gray-400, .text-slate-400, .disabled\:text-gray-400:disabled, .disabled\:text-slate-300:disabled) {
+    color: var(--tanaw-secondary-text);
+  }
+
+  html.dark :where(.text-tgreen-dark, .text-tanaw-green, .text-emerald-900, .text-emerald-800, .text-emerald-700, .text-emerald-600) {
+    color: #6ee7b7;
+  }
+
+  html.dark :where(.text-blue-700, .text-sky-700) {
+    color: #93c5fd;
+  }
+
+  html.dark :where(.text-indigo-700, .text-violet-700) {
+    color: #a5b4fc;
+  }
+
+  html.dark :where(.text-teal-700) {
+    color: #5eead4;
+  }
+
+  html.dark :where(.text-amber-950, .text-amber-900, .text-amber-800, .text-amber-700, .text-yellow-700, .text-yellow-600) {
+    color: #fcd34d;
+  }
+
+  html.dark :where(.text-red-800, .text-red-700, .text-red-600, .text-tanaw-red) {
+    color: #fca5a5;
+  }
+
+  html.dark :where(.placeholder\:text-slate-400::placeholder, .placeholder\:text-gray-400::placeholder, input::placeholder, textarea::placeholder) {
+    color: var(--tanaw-muted-text);
+  }
+
+  html.dark :where(.hover\:bg-gray-50:hover, .hover\:bg-slate-50:hover, .focus\:bg-gray-50:focus, .focus\:bg-slate-50:focus) {
+    background-color: var(--tanaw-control-hover);
+  }
+
+  html.dark :where(.hover\:bg-gray-100:hover, .hover\:bg-slate-100:hover) {
+    background-color: var(--tanaw-control-hover);
+  }
+
+  html.dark :where(.hover\:bg-emerald-50:hover, .hover\:bg-emerald-50\/70:hover, .hover\:bg-tgreen-dark\/5:hover, .hover\:bg-tgreen-dark\/6:hover, .focus\:bg-tgreen-dark\/6:focus) {
+    background-color: rgb(16 185 129 / 0.14);
+  }
+
+  html.dark :where(.hover\:bg-red-50:hover) {
+    background-color: rgb(239 68 68 / 0.14);
+  }
+
+  html.dark :where(.hover\:text-tanaw-green:hover, .hover\:text-tgreen-dark:hover, .hover\:text-emerald-700:hover) {
+    color: #6ee7b7;
+  }
+
+  html.dark :where(.hover\:text-red-700:hover) {
+    color: #fca5a5;
+  }
+
+  html.dark :where(.from-slate-50, .from-gray-50) {
+    --tw-gradient-from: #172033;
+  }
+
+  html.dark :where(.from-emerald-50) {
+    --tw-gradient-from: #0f2d3c;
+  }
+
+  html.dark :where(.from-amber-50) {
+    --tw-gradient-from: #312638;
+  }
+
+  html.dark :where(.via-white) {
+    --tw-gradient-via: #172033;
+  }
+
+  html.dark :where(.to-white) {
+    --tw-gradient-to: #121c31;
+  }
+
+  html.dark :where(.to-amber-50, .to-amber-50\/70, .to-amber-50\/80) {
+    --tw-gradient-to: #312638;
+  }
+
+  html.dark :where(input, textarea, select) {
+    color-scheme: dark;
+  }
+
+  html.dark :where(.tanaw-document-preview) {
+    background-color: #0b1220 !important;
+    color: #e8eef7 !important;
+    color-scheme: dark;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-white) {
+    background-color: #111b2f;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-50, .tanaw-document-preview .bg-slate-50) {
+    background-color: #172238;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-100, .tanaw-document-preview .bg-slate-100) {
+    background-color: #1d2a42;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-200, .tanaw-document-preview .bg-slate-200) {
+    background-color: #263650;
+  }
+
+  html.dark :where(.tanaw-document-preview .bg-gray-300) {
+    background-color: #344762;
+  }
+
+  html.dark :where(.tanaw-document-preview .border-gray-200, .tanaw-document-preview .border-slate-200) {
+    border-color: #52647c;
+  }
+
+  html.dark :where(.tanaw-document-preview .divide-gray-100, .tanaw-document-preview .divide-slate-100) > :not([hidden]) ~ :not([hidden]) {
+    border-color: #42536a;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-900, .tanaw-document-preview .text-slate-900) {
+    color: #f8fafc;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-800, .tanaw-document-preview .text-slate-800) {
+    color: #edf2f7;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-700, .tanaw-document-preview .text-slate-700) {
+    color: #d7e0ec;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-600, .tanaw-document-preview .text-slate-600) {
+    color: #b9c7d8;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-gray-500, .tanaw-document-preview .text-slate-500) {
+    color: #91a4ba;
+  }
+
+  html.dark :where(.tanaw-document-preview .text-black) {
+    color: #f8fafc;
+  }
+
+  html.dark :where(.tanaw-document-preview .border-black) {
+    border-color: #64748b;
+  }
+}
+
+html.dark .it-portal-main {
+  background: var(--tanaw-page-bg-gradient);
+}
+
+.tanaw-unified-metrics,
+.tanaw-data-panel,
+.tanaw-data-toolbar,
+.tanaw-data-search,
+.tanaw-data-table-head,
+.tanaw-data-table-row,
+.tanaw-data-footer {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+
+.tanaw-unified-metrics__accent {
+  background: linear-gradient(90deg, #1b4332 0%, #c5a047 50%, #5a8c46 100%);
+}
+
+html.dark .tanaw-unified-metrics__accent {
+  background: linear-gradient(90deg, #3f765b 0%, #d2b35a 50%, #78ad65 100%);
+}
+
+html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-detail {
+  color: #8fdcba !important;
+}
+
+html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-value {
+  color: #78d7ad !important;
+}
+
+html.dark .tanaw-unified-metrics .tanaw-unified-metrics__success-dot {
+  background-color: #65cfa3 !important;
+}
+
+.tanaw-unified-metrics__hover {
+  background: linear-gradient(115deg, transparent 8%, rgb(27 67 50 / 0.018) 28%, rgb(52 168 83 / 0.075) 50%, rgb(90 140 70 / 0.035) 72%, transparent 92%);
+  background-position: 100% 0;
+  background-size: 220% 100%;
+  opacity: 0;
+  transition:
+    opacity 420ms ease,
+    background-position 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tanaw-unified-metrics__segment {
+  transition:
+    background-color 420ms ease,
+    box-shadow 420ms ease;
+}
+
+.tanaw-unified-metrics__value,
+.tanaw-unified-metrics__icon {
+  transition:
+    color 420ms ease,
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tanaw-unified-metrics__segment:hover,
+.tanaw-unified-metrics__segment:focus-visible,
+.tanaw-unified-metrics__segment:focus-within {
+  box-shadow:
+    inset 0 0 0 1px rgb(27 67 50 / 0.08),
+    inset 0 10px 28px rgb(27 67 50 / 0.025);
+}
+
+.tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__hover,
+.tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__hover,
+.tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__hover {
+  background-position: 0 0;
+  opacity: 1;
+}
+
+.tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__value,
+.tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__value,
+.tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__value {
+  color: color-mix(in srgb, currentColor 76%, #1b4332);
+}
+
+.tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__icon,
+.tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__icon,
+.tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__icon {
+  transform: translateY(-2px);
+}
+
+.tanaw-unified-metrics__scroller {
+  scrollbar-color: rgb(100 116 139 / 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(100 116 139 / 0.42);
+}
+
+.tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105 / 0.62);
+}
+
+html.dark .tanaw-unified-metrics__hover {
+  background: linear-gradient(115deg, transparent 8%, rgb(52 211 153 / 0.018) 28%, rgb(52 211 153 / 0.085) 50%, rgb(167 243 208 / 0.035) 72%, transparent 92%);
+}
+
+html.dark .tanaw-unified-metrics__segment:hover,
+html.dark .tanaw-unified-metrics__segment:focus-visible,
+html.dark .tanaw-unified-metrics__segment:focus-within {
+  box-shadow:
+    inset 0 0 0 1px rgb(52 211 153 / 0.12),
+    inset 0 10px 30px rgb(52 211 153 / 0.035);
+}
+
+html.dark .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__value,
+html.dark .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__value,
+html.dark .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__value {
+  color: color-mix(in srgb, currentColor 80%, #a7f3d0);
+}
+
+html.dark .tanaw-unified-metrics__scroller {
+  scrollbar-color: rgb(148 163 184 / 0.42) transparent;
+}
+
+html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.42);
+}
+
+html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
+  background: rgb(186 200 216 / 0.62);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tanaw-unified-metrics__hover,
+  .tanaw-unified-metrics__value,
+  .tanaw-unified-metrics__icon,
+  .tanaw-unified-metrics__segment {
+    transition-duration: 120ms;
+  }
+
+  .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__hover,
+  .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__hover,
+  .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__hover {
+    background-position: 50% 0;
+  }
+
+  .tanaw-unified-metrics__segment:hover .tanaw-unified-metrics__icon,
+  .tanaw-unified-metrics__segment:focus-visible .tanaw-unified-metrics__icon,
+  .tanaw-unified-metrics__segment:focus-within .tanaw-unified-metrics__icon {
+    transform: none;
+  }
+}
+
+html.dark .tanaw-data-page .tanaw-data-panel {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface);
+  box-shadow: var(--tanaw-shadow-soft);
+}
+
+html.dark .tanaw-data-page .tanaw-data-toolbar {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-inset);
+}
+
+html.dark .tanaw-data-page .tanaw-data-search,
+html.dark .tanaw-data-page .tanaw-data-filter {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-control-bg);
+  color: var(--tanaw-text);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.025);
+}
+
+html.dark .tanaw-data-page .tanaw-data-search:hover,
+html.dark .tanaw-data-page .tanaw-data-filter:hover {
+  border-color: var(--tanaw-border-strong);
+  background: var(--tanaw-control-hover);
+}
+
+html.dark .tanaw-data-page .tanaw-data-search:focus,
+html.dark .tanaw-data-page .tanaw-data-filter:focus {
+  border-color: rgb(52 211 153 / 0.72);
+  background: var(--tanaw-control-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(52 211 153 / 0.13);
+}
+
+html.dark .tanaw-data-page .tanaw-data-table {
+  background: var(--tanaw-surface);
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-head {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-subtle);
+  color: var(--tanaw-secondary-text);
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-body {
+  color: #d5dde2;
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-row {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface);
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-row:hover {
+  background: var(--tanaw-control-hover);
+}
+
+html.dark .tanaw-data-page .tanaw-data-footer {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-inset);
+  color: var(--tanaw-muted);
+}
+
+html.dark .tanaw-data-page .tanaw-data-empty-icon {
+  border: 1px solid rgb(52 211 153 / 0.18);
+  background: rgb(16 185 129 / 0.1);
+  color: #6ee7b7;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.2);
+}
+
+.tanaw-dashboard-panel,
+.tanaw-dashboard-inset,
+.tanaw-information-banner,
+.tanaw-activation-banner {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+
+html.dark .tanaw-dashboard-panel {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface);
+  box-shadow: var(--tanaw-shadow-soft);
+}
+
+html.dark .tanaw-dashboard-inset {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-inset);
+}
+
+html.dark .tanaw-information-banner,
+html.dark .tanaw-activation-banner {
+  border-color: rgb(52 211 153 / 0.26);
+  background: linear-gradient(135deg, rgb(6 78 59 / 0.24), rgb(16 25 35 / 0.94));
+  color: #d8f7ea;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+html.dark .tanaw-activation-banner :where(.tanaw-activation-banner__icon, .tanaw-activation-banner__label) {
+  color: #79e7bd;
+}
+
+html.dark .tanaw-activation-banner__title {
+  color: var(--tanaw-text);
+}
+
+html.dark .tanaw-activation-banner__copy {
+  color: #bfe8d6;
+}
+
+:where(a[href], button, input, select, textarea, summary, [role="button"]):focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 3px;
+}
+
+.tanaw-interactive-row {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.tanaw-interactive-row:is([aria-selected="true"], [data-selected="true"]) {
+  background-color: var(--tanaw-interactive-selected-bg);
+  border-color: var(--tanaw-interactive-hover-border);
+}
+
+.tanaw-interactive-row:is([aria-current="page"], [data-active="true"]) {
+  background-color: var(--tanaw-interactive-active-bg);
+  border-color: var(--tanaw-interactive-hover-border);
+}
+
+.tanaw-interactive-row:is([aria-disabled="true"], [data-disabled="true"]) {
+  background-color: var(--tanaw-interactive-disabled-bg);
+  color: var(--tanaw-interactive-disabled-text);
+  cursor: not-allowed;
+}
+
+.tanaw-interactive-row:not([aria-disabled="true"], [data-disabled="true"]):active {
+  background-color: var(--tanaw-interactive-pressed-bg);
+}
+
+@media (hover: hover) {
+  .tanaw-interactive-row:not([aria-disabled="true"], [data-disabled="true"]):hover,
+  .profile-menu-button:not(.profile-menu-danger):not(:disabled):hover {
+    background-color: var(--tanaw-interactive-hover-bg);
+    border-color: var(--tanaw-interactive-hover-border);
+  }
+
+  .profile-menu-button:not(.profile-menu-danger):not(:disabled):hover {
+    color: var(--tanaw-green);
+  }
+
+  .tanaw-interactive-row:hover .tanaw-work-item-icon {
+    background-color: var(--tanaw-interactive-active-bg);
+    color: var(--tanaw-green);
+  }
+}
+
+.tanaw-toast-viewport {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  max-width: 100vw;
+  pointer-events: none;
+}
+
+.tanaw-toast {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.625rem !important;
+  box-sizing: border-box !important;
+  width: fit-content !important;
+  min-width: min(17rem, calc(100vw - 2rem)) !important;
+  max-width: min(26rem, calc(100vw - 2rem)) !important;
+  padding: 0.75rem 1rem 0.75rem 0.875rem !important;
+  border: 1px solid rgb(6 78 47 / 0.16) !important;
+  border-left: 4px solid #16a34a !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.98) 0%, rgb(244 251 246 / 0.98) 58%, rgb(255 250 235 / 0.98) 100%) !important;
+  color: var(--tanaw-text) !important;
+  font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  box-shadow:
+    0 18px 38px rgb(3 20 12 / 0.18),
+    0 2px 6px rgb(3 20 12 / 0.06) !important;
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  animation: tanaw-toast-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tanaw-toast--error {
+  border-color: rgb(164 14 14 / 0.18) !important;
+  border-left-color: #a40e0e !important;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.98) 0%, rgb(255 245 245 / 0.98) 58%, rgb(255 250 235 / 0.96) 100%) !important;
+}
+
+.tanaw-toast__icon {
+  display: inline-flex;
+  color: #16a34a;
+  flex: none !important;
+}
+
+.tanaw-toast--error .tanaw-toast__icon {
+  color: #a40e0e;
+}
+
+.tanaw-toast__message {
+  min-width: 0 !important;
+  margin: 0 !important;
+  justify-content: flex-start !important;
+  color: inherit !important;
+  text-align: left !important;
+}
+
+.tanaw-toast--leaving {
+  opacity: 0;
+  transform: translateY(-0.5rem) scale(0.98);
+}
+
+@keyframes tanaw-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.75rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+html.dark .tanaw-toast {
+  border-color: rgb(110 231 183 / 0.24) !important;
+  border-left-color: #34d399 !important;
+  background: linear-gradient(135deg, rgb(22 32 51 / 0.98) 0%, rgb(13 20 36 / 0.98) 58%, rgb(53 43 24 / 0.95) 100%) !important;
+  color: #f8fafc !important;
+  box-shadow:
+    0 22px 50px rgb(0 0 0 / 0.48),
+    0 1px 0 rgb(255 255 255 / 0.04) inset !important;
+}
+
+html.dark .tanaw-toast--error {
+  border-color: rgb(248 113 113 / 0.26) !important;
+  border-left-color: #f87171 !important;
+  background: linear-gradient(135deg, rgb(39 25 32 / 0.98) 0%, rgb(69 10 10 / 0.86) 58%, rgb(53 43 24 / 0.9) 100%) !important;
+}
+
+html.dark .tanaw-toast__icon {
+  color: #34d399;
+}
+
+html.dark .tanaw-toast--error .tanaw-toast__icon {
+  color: #f87171;
+}

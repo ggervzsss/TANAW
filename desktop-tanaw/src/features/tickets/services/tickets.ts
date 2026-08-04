@@ -1,4 +1,4 @@
-import { staffApi } from "../../../lib/axios";
+import { API_BASE_URL, staffApi } from "../../../lib/axios";
 
 export type SupportTicketCategory = "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
 export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
@@ -45,14 +45,7 @@ export type SupportTicketDetail = SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
-export type SupportTicketSort =
-  | "recommended"
-  | "newest"
-  | "oldest"
-  | "priority-high"
-  | "priority-low"
-  | "status"
-  | "recently-updated";
+export type SupportTicketSort = "recommended" | "newest" | "oldest" | "priority-high" | "priority-low" | "status" | "recently-updated";
 
 const priorityRank: Record<SupportTicketPriority, number> = {
   Urgent: 0,
@@ -110,7 +103,7 @@ export function getSupportTicketAttachmentUrl(attachment: SupportTicketAttachmen
     return attachment.dataUrl;
   }
   if (attachment.url) {
-    const baseUrl = staffApi.defaults.baseURL ?? "http://localhost:8000";
+    const baseUrl = staffApi.defaults.baseURL ?? API_BASE_URL;
     return attachment.url.startsWith("http") ? attachment.url : new URL(attachment.url, baseUrl).toString();
   }
   return "";
@@ -148,12 +141,7 @@ function compareRecommended(left: SupportTicket, right: SupportTicket) {
     const statusDifference = workflowRank[left.status] - workflowRank[right.status];
     if (statusDifference !== 0) return statusDifference;
   }
-  return (
-    compareTimestamp(
-      right.status === "Resolved" ? right.updatedAt : right.createdAt,
-      left.status === "Resolved" ? left.updatedAt : left.createdAt,
-    ) || stableTicketOrder(left, right)
-  );
+  return compareTimestamp(right.status === "Resolved" ? right.updatedAt : right.createdAt, left.status === "Resolved" ? left.updatedAt : left.createdAt) || stableTicketOrder(left, right);
 }
 
 function compareTimestamp(left: string, right: string) {

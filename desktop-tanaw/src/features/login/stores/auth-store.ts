@@ -26,11 +26,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   isAuthenticated: false,
   setSession: (session, remember) => {
     if (remember !== undefined) localStorage.setItem(REMEMBER_STORAGE_KEY, String(remember));
-    if (remember ?? isRememberEnabled()) {
-      void window.tanawAuthSession?.save(session);
-    } else {
-      void window.tanawAuthSession?.clear();
-    }
+    const persist = remember ?? isRememberEnabled();
+    void window.tanawAuthSession?.save(session, persist).catch(() => undefined);
     set({ token: session.token, user: session.user, status: "authenticated", isAuthenticated: true });
   },
   updateUser: (user) => set({ user, status: "authenticated", isAuthenticated: true }),

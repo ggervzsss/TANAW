@@ -1,1 +1,2 @@
-export { AccountProfilePage, AccountSecurityPage } from "./AccountPages";
+export { AccountProfilePage } from "./AccountProfilePage";
+export { AccountSecurityPage } from "./AccountSecurityPage";

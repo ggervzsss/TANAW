@@ -10,13 +10,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.security import decode_access_token
 from app.core.websocket_auth import receive_websocket_bearer_token
 from app.db.session import AsyncSessionLocal
 from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.accounts.service import get_account_by_id
+from app.features.realtime.constants import REALTIME_HEARTBEAT_SECONDS
 from app.features.realtime.contracts import RealtimeHeartbeat, RealtimeReady
 from app.features.realtime.manager import RealtimeIdentity, realtime_manager
 from app.features.realtime.models import RealtimeOutbox
@@ -26,10 +26,6 @@ router = APIRouter(prefix="/realtime", tags=["realtime"])
 
 @router.websocket("/ws")
 async def realtime_websocket(websocket: WebSocket) -> None:
-    settings = get_settings()
-    if not settings.realtime_enabled:
-        await websocket.close(code=1013)
-        return
     token = await receive_websocket_bearer_token(websocket, None)
     if token is None:
         return
@@ -54,7 +50,7 @@ async def realtime_websocket(websocket: WebSocket) -> None:
         websocket,
         RealtimeReady(
             latest_sequence=latest_sequence,
-            heartbeat_seconds=settings.realtime_heartbeat_seconds,
+            heartbeat_seconds=REALTIME_HEARTBEAT_SECONDS,
         ).model_dump(mode="json"),
     )
 
@@ -67,7 +63,7 @@ async def realtime_websocket(websocket: WebSocket) -> None:
             active_receive_task = receive_task
             completed, _ = await asyncio.wait(
                 {active_receive_task},
-                timeout=settings.realtime_heartbeat_seconds,
+                timeout=REALTIME_HEARTBEAT_SECONDS,
             )
             if completed:
                 try:

@@ -1,7 +1,7 @@
 [project]
 name = "backend-tanaw"
 version = "0.1.0"
-description = "Add your description here"
+description = "TANAW FastAPI backend for tourism operations, reporting, and realtime delivery"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -40,7 +40,12 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
 pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
 
 [tool.ruff]
 line-length = 100

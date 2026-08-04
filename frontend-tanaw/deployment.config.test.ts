@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
-import { LOCAL_API_BASE_URL, buildContentSecurityPolicy, resolveApiBaseUrl, validateCoordinatedDeployment } from "./deployment.config";
+import { LOCAL_API_BASE_URL, TANAW_DESKTOP_ORIGIN, buildContentSecurityPolicy, resolveApiBaseUrl, validateCoordinatedDeployment } from "./deployment.config";
 
 type VercelHeaderRule = {
   source: string;
@@ -40,6 +40,23 @@ describe("deployment origin configuration", () => {
     expect(policy).toContain("connect-src 'self' https://api.tanaw-sanpedro.ph wss://api.tanaw-sanpedro.ph");
     expect(policy).not.toContain("onrender.com");
     expect(policy).not.toContain("vercel.app");
+  });
+
+  it("allows only TANAW's registered desktop origin alongside public web origins", () => {
+    const config = validateCoordinatedDeployment({
+      apiBaseUrl: "https://api.tanaw-sanpedro.ph",
+      frontendPublicUrl: "https://tanaw-sanpedro.ph",
+      corsOrigins: `https://tanaw-sanpedro.ph,${TANAW_DESKTOP_ORIGIN}`,
+    });
+
+    expect(config.corsOrigins).toEqual(["https://tanaw-sanpedro.ph", TANAW_DESKTOP_ORIGIN]);
+    expect(() =>
+      validateCoordinatedDeployment({
+        apiBaseUrl: "https://api.tanaw-sanpedro.ph",
+        frontendPublicUrl: "https://tanaw-sanpedro.ph",
+        corsOrigins: "https://tanaw-sanpedro.ph,unknown-app://desktop",
+      }),
+    ).toThrow("HTTP or HTTPS");
   });
 
   it("uses a local API only outside a public deployment", () => {

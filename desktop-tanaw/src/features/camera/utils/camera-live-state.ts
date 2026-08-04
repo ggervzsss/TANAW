@@ -37,6 +37,10 @@ export function isCameraStartOutcomeUncertain(error: unknown) {
   return isRequestTimeoutMessage(message);
 }
 
+export function isTransientCameraStartupPollError(error: unknown, cameraStartIsPending: boolean) {
+  return cameraStartIsPending && isCameraStartOutcomeUncertain(error);
+}
+
 export function clearRecoveredCameraRequestErrors(current: Record<number, string | null>, states: readonly MlCameraLiveState[]) {
   let next = current;
   for (const state of states) {

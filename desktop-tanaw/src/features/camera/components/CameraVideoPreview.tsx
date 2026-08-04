@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Camera } from "../../../types/enterprise";
 import type { MlCounts, MlDetections, MlHealth } from "../services/ml-service";
-import {
-  canRetryPreview,
-  getPreviewRetryDelayMs,
-  hasRenderablePreviewFrame,
-  isCurrentPreviewRequest,
-  withPreviewRetryVersion,
-} from "../utils/camera-preview-recovery";
+import { canRetryPreview, getPreviewRetryDelayMs, hasRenderablePreviewFrame, isCurrentPreviewRequest, withPreviewRetryVersion } from "../utils/camera-preview-recovery";
 import { CameraOverlayConfig } from "./CameraOverlayConfig";
+import { CAMERA_PLACEHOLDER_CITY_HALL_IMAGE } from "../../../lib/assets";
 
 type CameraVideoPreviewProps = {
   activeCam: Camera;
@@ -159,15 +154,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
           className="absolute inset-0 h-full w-full object-contain"
           draggable={false}
           onError={(event) => {
-            if (
-              !isCurrentPreviewRequest(
-                previewSourceRef.current,
-                streamUrl,
-                previewImageRef.current,
-                event.currentTarget,
-              )
-            )
-              return;
+            if (!isCurrentPreviewRequest(previewSourceRef.current, streamUrl, previewImageRef.current, event.currentTarget)) return;
             if (connectWatchdogRef.current !== null) {
               window.clearTimeout(connectWatchdogRef.current);
               connectWatchdogRef.current = null;
@@ -175,15 +162,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
             schedulePreviewRetry();
           }}
           onLoad={(event) => {
-            if (
-              !isCurrentPreviewRequest(
-                previewSourceRef.current,
-                streamUrl,
-                previewImageRef.current,
-                event.currentTarget,
-              )
-            )
-              return;
+            if (!isCurrentPreviewRequest(previewSourceRef.current, streamUrl, previewImageRef.current, event.currentTarget)) return;
             if (connectWatchdogRef.current !== null) {
               window.clearTimeout(connectWatchdogRef.current);
               connectWatchdogRef.current = null;
@@ -194,7 +173,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
       ) : isStarting ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black text-sm font-bold tracking-wider text-emerald-300 uppercase">Starting camera stream…</div>
       ) : activeCam.status === "online" || activeCam.status === "untested" || activeCam.status === "stopped" ? (
-        <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg/1280px-6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg')] bg-cover bg-center opacity-40"></div>
+        <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url("${CAMERA_PLACEHOLDER_CITY_HALL_IMAGE}")` }} />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-black text-sm font-bold tracking-wider text-red-500 uppercase">Stream Offline</div>
       )}
@@ -282,11 +261,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
           <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
             <span
               className={`flex items-center gap-1 rounded-full border bg-black/60 px-2 py-1 text-[10px] font-bold shadow-sm backdrop-blur-sm ${
-                previewState === "live"
-                  ? "border-green-500/50 text-green-400"
-                  : previewState === "failed"
-                    ? "border-red-400/50 text-red-200"
-                    : "border-amber-400/50 text-amber-200"
+                previewState === "live" ? "border-green-500/50 text-green-400" : previewState === "failed" ? "border-red-400/50 text-red-200" : "border-amber-400/50 text-amber-200"
               }`}
             >
               <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${previewState === "live" ? "bg-green-400" : "bg-amber-300"}`}></span>

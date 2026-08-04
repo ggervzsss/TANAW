@@ -9,6 +9,11 @@ from sqlalchemy import select, text
 
 from app.core.config import Settings
 from app.db.session import AsyncSessionLocal
+from app.features.realtime.constants import (
+    REALTIME_BROKER_RECONNECT_SECONDS,
+    REALTIME_OUTBOX_BATCH_SIZE,
+    REALTIME_OUTBOX_POLL_SECONDS,
+)
 from app.features.realtime.contracts import RealtimeActor, RealtimeEnvelope, RealtimeScope
 from app.features.realtime.manager import realtime_manager
 from app.features.realtime.models import RealtimeOutbox
@@ -29,8 +34,6 @@ class RealtimeRuntime:
 
     @property
     def ready(self) -> bool:
-        if not self._settings.realtime_enabled:
-            return True
         connection = self._subscriber_connection
         return bool(
             self._worker_task is not None
@@ -48,8 +51,6 @@ class RealtimeRuntime:
 
     async def start(self) -> None:
         await self.stop()
-        if not self._settings.realtime_enabled:
-            return
         stop_event = asyncio.Event()
         self._stop_event = stop_event
         self._subscriber_task = asyncio.create_task(
@@ -85,7 +86,7 @@ class RealtimeRuntime:
             except Exception:
                 logger.exception("Realtime outbox batch failed.")
                 processed = 0
-            timeout = 0.05 if processed else self._settings.realtime_outbox_poll_seconds
+            timeout = 0.05 if processed else REALTIME_OUTBOX_POLL_SECONDS
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=timeout)
             except TimeoutError:
@@ -99,7 +100,7 @@ class RealtimeRuntime:
                         select(RealtimeOutbox)
                         .where(RealtimeOutbox.published_at.is_(None))
                         .order_by(RealtimeOutbox.sequence.asc())
-                        .limit(self._settings.realtime_outbox_batch_size)
+                        .limit(REALTIME_OUTBOX_BATCH_SIZE)
                         .with_for_update(skip_locked=True)
                     )
                 ).all()
@@ -137,7 +138,7 @@ class RealtimeRuntime:
             try:
                 await asyncio.wait_for(
                     stop_event.wait(),
-                    timeout=self._settings.realtime_broker_reconnect_seconds,
+                    timeout=REALTIME_BROKER_RECONNECT_SECONDS,
                 )
             except TimeoutError:
                 pass

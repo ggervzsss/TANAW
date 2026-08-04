@@ -5,8 +5,9 @@ import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
 import { sanPedroBarangays } from "@/shared/data/enterpriseOptions";
-import { type AccountSummary, listEnterpriseAccounts } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { EnterpriseAccountsMetrics, EnterpriseAccountsTable, EnterpriseAccountsToolbar, EnterpriseDetailsModal, EnterpriseProfileRequestsPanel, RegisterEnterpriseModal } from "../components";
+import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "../services";
 import type { EnterpriseStatusFilter } from "../types";
 import { filterEnterpriseAccounts } from "../utils";
 
@@ -19,7 +20,7 @@ export function ITEnterpriseAccountsPage() {
   const [selectedEnterprise, setSelectedEnterprise] = useState<AccountSummary | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
 
-  const accountsQuery = useQuery({ queryKey: ["enterprise-accounts"], queryFn: listEnterpriseAccounts });
+  const accountsQuery = useQuery({ queryKey: enterpriseAccountsQueryKey, queryFn: listEnterpriseAccounts });
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
   const currentSelectedEnterprise = selectedEnterprise ? (accounts.find((account) => account.id === selectedEnterprise.id) ?? selectedEnterprise) : null;
   const barangays = ["All Barangays", ...sanPedroBarangays];

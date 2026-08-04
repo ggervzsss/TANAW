@@ -4,7 +4,6 @@ import { normalizePassword, validatePasswordPolicy } from "../../../utils/passwo
 import { changePassword } from "../../login/api/login";
 import { useAuthStore } from "../../login/stores/auth-store";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
-import { ActiveSessionsPanel } from "./ActiveSessionsPanel";
 import { CredentialControl, type PasswordChangeValues } from "./CredentialControl";
 
 export function SecurityView() {
@@ -46,17 +45,14 @@ export function SecurityView() {
   };
 
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-290 space-y-6 pt-2 font-['Inter'] duration-500">
+    <div className="animate-in fade-in mx-auto w-full max-w-290 space-y-6 pt-2 font-sans duration-500">
       <div className="mx-auto w-full">
         <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Controls</p>
         <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Password Settings</h2>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">Update your enterprise account password.</p>
       </div>
 
-      <div className="space-y-6">
-        <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
-        <ActiveSessionsPanel />
-      </div>
+      <CredentialControl isLoading={isPasswordLoading} isSuccess={isPasswordSuccess} onSubmit={handlePasswordUpdate} />
     </div>
   );
 }

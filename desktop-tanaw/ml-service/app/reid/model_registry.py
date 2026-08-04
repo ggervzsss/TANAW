@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from app.runtime.assets import model_directory
+
 ReIdModelKey = Literal["fast", "quality"]
 ReIdReplayMode = Literal["off", "fast", "quality"]
 
@@ -17,8 +19,7 @@ class ReIdModelProfile:
     role: str
 
     def path(self, service_root: Path | None = None) -> Path:
-        root = service_root or Path(__file__).resolve().parents[2]
-        return root / "models" / self.filename
+        return (service_root / "models" if service_root else model_directory()) / self.filename
 
 
 REID_MODEL_PROFILES: dict[ReIdModelKey, ReIdModelProfile] = {

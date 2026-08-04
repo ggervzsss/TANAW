@@ -1,6 +1,6 @@
 import { Building2, UserCheck, Users, XCircle } from "lucide-react";
 import { UnifiedMetricsHeader } from "@/shared/components/cards";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 
 type EnterpriseAccountsMetricsProps = {
   accounts: AccountSummary[];

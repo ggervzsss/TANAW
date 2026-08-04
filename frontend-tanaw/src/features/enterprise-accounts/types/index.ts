@@ -1,1 +1,1 @@
-export type { EnterpriseStatusFilter, LocationDraft } from "./enterpriseAccounts.types";
+export type { EnterpriseLocationSuggestion, EnterpriseStatusFilter, LocationDraft } from "./enterpriseAccounts.types";

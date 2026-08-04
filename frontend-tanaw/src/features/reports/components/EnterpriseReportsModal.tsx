@@ -82,7 +82,9 @@ function ReportSection({ title, reports, empty, onOpenReport }: { title: string;
     <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-[#0f172a]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-xs font-bold tracking-[0.18em] text-slate-500 uppercase">{title}</h3>
-        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:bg-[#121c31] dark:text-emerald-200 dark:ring-emerald-300/20">{reports.length} records</span>
+        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:bg-[#121c31] dark:text-emerald-200 dark:ring-emerald-300/20">
+          {reports.length} records
+        </span>
       </div>
       <div className="space-y-3">
         {reports.map((report) => (

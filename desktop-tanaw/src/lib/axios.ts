@@ -1,8 +1,10 @@
 import axios from "axios";
 import { useAuthStore } from "../features/login/stores/auth-store";
 
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+
 export const staffApi = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",

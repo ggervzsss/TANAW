@@ -54,7 +54,7 @@ async def purge_expired_logs(
             category="IT Activity",
             severity="Warning" if deleted_count else "Info",
             actor=account.display_name,
-            actorRole=get_actor_role_label(account),  # type: ignore[arg-type]
+            actorRole=get_actor_role_label(account),
             action="Delete Old Activity",
             target="System Activity",
             summary=(

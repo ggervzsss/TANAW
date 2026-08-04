@@ -1,242 +1,70 @@
 import { AnimatePresence } from "motion/react";
-import axios from "axios";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast/headless";
-import { useSearchParams } from "react-router-dom";
-import { useAuthStore } from "@/app/store/authStore";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { PageMotion } from "@/shared/components/ui";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
-import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
-import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
-import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
 import { BatchReportsMetrics, BatchReportsStatusNotice, BatchReportsTable, BatchReportsToolbar, EnterpriseReportsModal, ReportActionConfirmDialog, ReportReviewModal } from "../components";
-import { getAvailableMonths, getAvailableYears, getCurrentSubmissionPeriod, getDefaultSubmissionPeriod, getEnterpriseReportRows, reportMatchesPeriod } from "../utils";
-
-const EMPTY_REPORT_ENTERPRISES: ReportEnterprise[] = [];
-const EMPTY_REPORTS: IntakeReport[] = [];
-const ALL_BARANGAYS_FILTER = "all";
-const MONTHS = new Set(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]);
-
-type BatchReportsPageState = {
-  barangay: string;
-  month: string;
-  query: string;
-  year: string;
-};
+import { useBatchReportsPage } from "../hooks";
+import { ALL_BARANGAYS_FILTER } from "../model";
 
 export function StaffBatchReportsPage() {
-  const authUser = useAuthStore((state) => state.user);
-  const queryClient = useQueryClient();
-  const reportEnterprisesQuery = useQuery({ queryKey: ["report-enterprises"], queryFn: listReportEnterprises });
-  const reportsQuery = useOperationalReports();
-  const reportEnterprises = reportEnterprisesQuery.data ?? EMPTY_REPORT_ENTERPRISES;
-  const reports = reportsQuery.data ?? EMPTY_REPORTS;
-  const currentPeriod = getCurrentSubmissionPeriod();
-  const defaultPeriod = getDefaultSubmissionPeriod(reports, currentPeriod);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [hasInitialUrlState] = useState(() => hasBatchReportsUrlState(searchParams));
-  const [initialPageState] = useState<BatchReportsPageState>(() =>
-    parseBatchReportsUrlState(searchParams, {
-      barangay: ALL_BARANGAYS_FILTER,
-      month: defaultPeriod.month,
-      query: "",
-      year: defaultPeriod.year,
-    }),
-  );
-  const [pageState, setPageState] = useScopedPageState({
-    initialValue: initialPageState,
-    isValid: isBatchReportsPageState,
-    namespace: "filters",
-    preferInitial: hasInitialUrlState,
-    version: 1,
-  });
-  const query = pageState.query;
-  const barangayFilter = pageState.barangay;
-  const monthFilter = pageState.month;
-  const yearFilter = pageState.year;
-  const [selectedEnterprise, setSelectedEnterprise] = useState<ReportEnterprise | null>(null);
-  const [selectedReport, setSelectedReport] = useState<IntakeReport | null>(null);
-  const [isGenerateConfirmOpen, setIsGenerateConfirmOpen] = useState(false);
-  const initializedUrlRef = useRef(false);
-  const [firstPageState] = useState(pageState);
-
-  useEffect(() => {
-    if (!initializedUrlRef.current) {
-      initializedUrlRef.current = true;
-      const initialParams = batchReportsSearchParams(firstPageState);
-      if (initialParams.toString() !== searchParams.toString()) setSearchParams(initialParams, { replace: true });
-      return;
-    }
-    setPageState((current) => {
-      const urlState = parseBatchReportsUrlState(searchParams, current);
-      return sameBatchReportsPageState(urlState, current) ? current : urlState;
-    });
-  }, [firstPageState, searchParams, setPageState, setSearchParams]);
-
-  const updatePageState = (patch: Partial<BatchReportsPageState>) => {
-    const nextState = { ...pageState, ...patch };
-    setPageState(nextState);
-    setSearchParams(batchReportsSearchParams(nextState), { replace: true });
-  };
-
-  const availableMonths = useMemo(() => getAvailableMonths(reports, currentPeriod), [currentPeriod, reports]);
-  const availableYears = useMemo(() => getAvailableYears(reports, currentPeriod), [currentPeriod, reports]);
-  const availableBarangays = useMemo(
-    () => Array.from(new Set(reportEnterprises.map((enterprise) => enterprise.barangay).filter(Boolean))).sort((left, right) => left.localeCompare(right)),
-    [reportEnterprises],
-  );
-  const selectedReportEnterprises = useMemo(
-    () => (barangayFilter === ALL_BARANGAYS_FILTER ? reportEnterprises : reportEnterprises.filter((enterprise) => enterprise.barangay === barangayFilter)),
-    [barangayFilter, reportEnterprises],
-  );
-  const selectedEnterpriseIds = useMemo(() => new Set(selectedReportEnterprises.map((enterprise) => enterprise.id)), [selectedReportEnterprises]);
-  const reportsForSelectedBarangay = useMemo(
-    () => (barangayFilter === ALL_BARANGAYS_FILTER ? reports : reports.filter((report) => selectedEnterpriseIds.has(report.enterpriseId))),
-    [barangayFilter, reports, selectedEnterpriseIds],
-  );
-  const filteredByPeriod = useMemo(() => reportsForSelectedBarangay.filter((report) => reportMatchesPeriod(report, monthFilter, yearFilter)), [reportsForSelectedBarangay, monthFilter, yearFilter]);
-  const nonPeriodReports = useMemo(
-    () => reportsForSelectedBarangay.filter((report) => !filteredByPeriod.includes(report) || report.status === "Consolidated"),
-    [reportsForSelectedBarangay, filteredByPeriod],
-  );
-  const readyReports = filteredByPeriod.filter((report) => report.status === "Ready to Consolidate");
-  const enterpriseRows = useMemo(
-    () => getEnterpriseReportRows(selectedReportEnterprises, filteredByPeriod, nonPeriodReports, query),
-    [filteredByPeriod, nonPeriodReports, query, selectedReportEnterprises],
-  );
-  const missingReports = enterpriseRows.filter((row) => row.status === "Missing");
-  const allReady =
-    selectedReportEnterprises.length > 0 &&
-    selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Ready to Consolidate");
-  const allConsolidated =
-    selectedReportEnterprises.length > 0 && selectedReportEnterprises.every((enterprise) => filteredByPeriod.find((report) => report.enterpriseId === enterprise.id)?.status === "Consolidated");
-
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ report, status, remarks }: { report: IntakeReport; status: Extract<ReportStatus, "Ready to Consolidate" | "Returned">; remarks: string }) =>
-      updateIntakeReportStatus(report.id, { status, remarks }),
-    onSuccess: (updatedReport) => {
-      queryClient.setQueryData<IntakeReport[]>(operationalReportsQueryKey, (current = []) => current.map((report) => (report.id === updatedReport.id ? updatedReport : report)));
-      void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
-      setSelectedReport(null);
-      toast.success(`${updatedReport.code} updated to ${updatedReport.status}.`);
-    },
-    onError: (error) => {
-      toast.error(apiErrorMessage(error, "Report status could not be updated. Refresh the report list and try again."));
-    },
-  });
-
-  const consolidateMutation = useMutation({
-    mutationFn: async () => {
-      if (!allReady || readyReports.length === 0) throw new Error("No ready reports available for consolidation.");
-      return createFinalReport({
-        reportIds: readyReports.map((report) => report.id),
-        preparedBy: authUser?.displayName ?? "LGU Staff",
-      });
-    },
-    onSuccess: (finalReport) => {
-      void queryClient.invalidateQueries({ queryKey: operationalReportsQueryKey });
-      void queryClient.invalidateQueries({ queryKey: operationalFinalReportsQueryKey });
-      setIsGenerateConfirmOpen(false);
-      toast.success(`${finalReport.id} generated for Final Reports Audit.`);
-    },
-    onError: (error) => {
-      toast.error(apiErrorMessage(error, "Final report could not be generated."));
-    },
-  });
-
-  const handleGenerate = () => {
-    if (!allReady || consolidateMutation.isPending) return;
-    setIsGenerateConfirmOpen(true);
-  };
-
-  const confirmGenerate = () => {
-    if (!allReady || consolidateMutation.isPending) return;
-    consolidateMutation.mutate();
-  };
-
-  const handleAccept = (report: IntakeReport, remarks: string) => {
-    if (report.status !== "Pending Review") {
-      toast.error("Only reports pending review can be accepted.");
-      return;
-    }
-    updateStatusMutation.mutate({
-      report,
-      status: "Ready to Consolidate",
-      remarks: remarks.trim() || "Accepted for consolidation.",
-    });
-  };
-
-  const handleReturn = (report: IntakeReport, remarks: string) => {
-    if (report.status !== "Pending Review") {
-      toast.error("Only reports pending review can be returned.");
-      return;
-    }
-    updateStatusMutation.mutate({
-      report,
-      status: "Returned",
-      remarks: remarks.trim() || "Returned for revision after staff review.",
-    });
-  };
-
-  const isLoadingRows = reportEnterprisesQuery.isLoading || reportsQuery.isLoading;
-  const loadError = reportEnterprisesQuery.isError || reportsQuery.isError;
+  const batch = useBatchReportsPage();
+  const { barangay, month, query, year } = batch.pageState;
 
   return (
     <PageMotion>
       <PageHeader title="Batch Reports" description="Enterprise-level compliance review before DOT report consolidation." />
-
-      {loadError && <p className="mb-4 text-sm font-semibold text-red-600">Report intake data could not be loaded from the backend. Refresh or check the API connection.</p>}
-
+      {batch.loadError && <p className="mb-4 text-sm font-semibold text-red-600">Report intake data could not be loaded from the backend. Refresh or check the API connection.</p>}
       <BatchReportsMetrics
-        reportEnterprises={selectedReportEnterprises}
-        readyReports={readyReports}
-        missingReports={missingReports}
-        archivedReports={nonPeriodReports}
-        isLoadingRegistry={isLoadingRows}
+        reportEnterprises={batch.selectedReportEnterprises}
+        readyReports={batch.readyReports}
+        missingReports={batch.missingReports}
+        archivedReports={batch.nonPeriodReports}
+        isLoadingRegistry={batch.isLoadingRows}
       />
-
       <Panel className="mt-6 overflow-hidden">
         <BatchReportsToolbar
           query={query}
-          barangayFilter={barangayFilter}
-          monthFilter={monthFilter}
-          yearFilter={yearFilter}
-          availableBarangays={availableBarangays}
-          availableMonths={availableMonths}
-          availableYears={availableYears}
-          allReady={allReady && !consolidateMutation.isPending}
-          onQueryChange={(query) => updatePageState({ query })}
-          onBarangayChange={(barangay) => updatePageState({ barangay })}
-          onMonthChange={(month) => updatePageState({ month })}
-          onYearChange={(year) => updatePageState({ year })}
-          onGenerate={handleGenerate}
+          barangayFilter={barangay}
+          monthFilter={month}
+          yearFilter={year}
+          availableBarangays={batch.availableBarangays}
+          availableMonths={batch.availableMonths}
+          availableYears={batch.availableYears}
+          allReady={batch.allReady && !batch.consolidateMutation.isPending}
+          onQueryChange={(value) => batch.updatePageState({ query: value })}
+          onBarangayChange={(value) => batch.updatePageState({ barangay: value })}
+          onMonthChange={(value) => batch.updatePageState({ month: value })}
+          onYearChange={(value) => batch.updatePageState({ year: value })}
+          onGenerate={() => batch.setIsGenerateConfirmOpen(true)}
         />
         <BatchReportsStatusNotice
-          allConsolidated={allConsolidated}
-          allReady={allReady}
-          filteredReportCount={filteredByPeriod.length}
-          readyReportCount={readyReports.length}
-          enterpriseCount={selectedReportEnterprises.length}
+          allConsolidated={batch.allConsolidated}
+          allReady={batch.allReady}
+          filteredReportCount={batch.filteredByPeriod.length}
+          readyReportCount={batch.readyReports.length}
+          enterpriseCount={batch.selectedReportEnterprises.length}
         />
-        <BatchReportsTable rows={enterpriseRows} isLoading={isLoadingRows} onSelectEnterprise={setSelectedEnterprise} />
+        <BatchReportsTable rows={batch.enterpriseRows} isLoading={batch.isLoadingRows} onSelectEnterprise={batch.setSelectedEnterprise} />
       </Panel>
-
       <AnimatePresence>
-        {selectedEnterprise && (
+        {batch.selectedEnterprise && (
           <EnterpriseReportsModal
-            enterprise={selectedEnterprise}
-            reports={reports.filter((report) => report.enterpriseId === selectedEnterprise.id)}
-            onClose={() => setSelectedEnterprise(null)}
-            onOpenReport={setSelectedReport}
+            enterprise={batch.selectedEnterprise}
+            reports={batch.reports.filter((report) => report.enterpriseId === batch.selectedEnterprise?.id)}
+            onClose={() => batch.setSelectedEnterprise(null)}
+            onOpenReport={batch.setSelectedReport}
           />
         )}
-        {selectedReport && (
-          <ReportReviewModal report={selectedReport} isUpdating={updateStatusMutation.isPending} onClose={() => setSelectedReport(null)} onAccept={handleAccept} onReturn={handleReturn} />
+        {batch.selectedReport && (
+          <ReportReviewModal
+            report={batch.selectedReport}
+            isUpdating={batch.updateStatusMutation.isPending}
+            onClose={() => batch.setSelectedReport(null)}
+            onAccept={(report, remarks) => batch.reviewReport(report, remarks, "Ready to Consolidate")}
+            onReturn={(report, remarks) => batch.reviewReport(report, remarks, "Returned")}
+          />
         )}
-        {isGenerateConfirmOpen && (
+        {batch.isGenerateConfirmOpen && (
           <ReportActionConfirmDialog
             title="Generate Final Report?"
             eyebrow="Final batch report"
@@ -244,70 +72,19 @@ export function StaffBatchReportsPage() {
             tone="emerald"
             confirmLabel="Generate Final Report"
             pendingLabel="Generating..."
-            isPending={consolidateMutation.isPending}
-            isConfirmDisabled={!allReady || readyReports.length === 0}
-            onCancel={() => setIsGenerateConfirmOpen(false)}
-            onConfirm={confirmGenerate}
+            isPending={batch.consolidateMutation.isPending}
+            isConfirmDisabled={!batch.allReady || !batch.readyReports.length}
+            onCancel={() => batch.setIsGenerateConfirmOpen(false)}
+            onConfirm={() => batch.consolidateMutation.mutate()}
             details={[
-              { label: "Period", value: `${monthFilter} ${yearFilter}` },
-              { label: "Scope", value: barangayFilter === ALL_BARANGAYS_FILTER ? "All barangays" : barangayFilter },
-              { label: "Reports", value: `${readyReports.length} ready submissions` },
-              { label: "Enterprises", value: `${selectedReportEnterprises.length} covered enterprises` },
+              { label: "Period", value: `${month} ${year}` },
+              { label: "Scope", value: barangay === ALL_BARANGAYS_FILTER ? "All barangays" : barangay },
+              { label: "Reports", value: `${batch.readyReports.length} ready submissions` },
+              { label: "Enterprises", value: `${batch.selectedReportEnterprises.length} covered enterprises` },
             ]}
           />
         )}
       </AnimatePresence>
     </PageMotion>
   );
-}
-
-function hasBatchReportsUrlState(searchParams: URLSearchParams) {
-  return ["q", "barangay", "month", "year"].some((key) => searchParams.has(key));
-}
-
-function parseBatchReportsUrlState(searchParams: URLSearchParams, fallback: BatchReportsPageState): BatchReportsPageState {
-  const month = searchParams.get("month");
-  const year = searchParams.get("year");
-  return {
-    barangay: searchParams.get("barangay")?.trim() || fallback.barangay,
-    month: month && MONTHS.has(month) ? month : fallback.month,
-    query: searchParams.get("q") ?? fallback.query,
-    year: year && /^\d{4}$/.test(year) ? year : fallback.year,
-  };
-}
-
-function batchReportsSearchParams(state: BatchReportsPageState) {
-  const searchParams = new URLSearchParams();
-  if (state.query) searchParams.set("q", state.query);
-  if (state.barangay !== ALL_BARANGAYS_FILTER) searchParams.set("barangay", state.barangay);
-  searchParams.set("month", state.month);
-  searchParams.set("year", state.year);
-  return searchParams;
-}
-
-function isBatchReportsPageState(value: unknown): value is BatchReportsPageState {
-  if (!value || typeof value !== "object") return false;
-  const state = value as Partial<BatchReportsPageState>;
-  return (
-    typeof state.query === "string" &&
-    state.query.length <= 200 &&
-    typeof state.barangay === "string" &&
-    state.barangay.length <= 120 &&
-    typeof state.month === "string" &&
-    MONTHS.has(state.month) &&
-    typeof state.year === "string" &&
-    /^\d{4}$/.test(state.year)
-  );
-}
-
-function sameBatchReportsPageState(left: BatchReportsPageState, right: BatchReportsPageState) {
-  return left.query === right.query && left.barangay === right.barangay && left.month === right.month && left.year === right.year;
-}
-
-function apiErrorMessage(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error)) {
-    const detail = error.response?.data && typeof error.response.data === "object" ? (error.response.data as { detail?: unknown }).detail : null;
-    if (typeof detail === "string" && detail.trim()) return detail;
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
 }

@@ -1,6 +1,6 @@
 import { Building2 } from "lucide-react";
 import { EmptyState, ExpandableTableText, StatusBadge } from "@/shared/components/ui";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 

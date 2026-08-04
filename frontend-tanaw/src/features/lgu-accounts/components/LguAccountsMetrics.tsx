@@ -1,6 +1,6 @@
 import { KeyRound, Shield, UserCheck, Users } from "lucide-react";
 import { UnifiedMetricsHeader } from "@/shared/components/cards";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 
 type LguAccountsMetricsProps = {
   accounts: AccountSummary[];

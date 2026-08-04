@@ -1,38 +1,11 @@
-import { Bell } from "lucide-react";
-import { DetailField, EmptyState, ExpandableTableText, ModalFrame } from "@/shared/components/ui";
+import { DetailField, ExpandableTableText, ModalFrame } from "@/shared/components/ui";
 import type { AlertSeverity, PriorityAlert, PriorityAlertResolutionMode, TechnicalIssueUrgency } from "@/shared/types";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 
-type PriorityAlertListItemProps = {
-  alert: PriorityAlert;
-  onOpen: (alert: PriorityAlert) => void;
-};
-
-export function PriorityAlertListItem({ alert, onOpen }: PriorityAlertListItemProps) {
-  const { timeFormat } = useSystemDisplayPreferences();
-  return (
-    <article className="tanaw-interactive-row cursor-pointer px-6 py-4" onClick={() => onOpen(alert)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <UrgencyBadge urgency={alert.urgency} />
-        <ResolutionBadge mode={alert.resolutionMode} />
-      </div>
-      <p className="text-charcoal-800 mt-3 mb-1 text-sm font-semibold dark:text-slate-100">{alert.summary}</p>
-      <p className="m-0 text-xs leading-relaxed text-gray-500 dark:text-slate-300">{alert.requiredAction}</p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold tracking-wide text-gray-400 uppercase dark:text-slate-400">
-        <span>{alert.type}</span>
-        <span>{alert.enterprise ?? alert.requester}</span>
-        <time dateTime={alert.time}>{formatPhilippineDateTime(alert.time, timeFormat)}</time>
-      </div>
-    </article>
-  );
-}
-
 export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; onClose: () => void }) {
   const { timeFormat } = useSystemDisplayPreferences();
-  const expandableValue = (value: string, label: string) => (
-    <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />
-  );
+  const expandableValue = (value: string, label: string) => <ExpandableTableText primary={value} ariaLabel={label} twoLines className="leading-relaxed font-semibold" />;
 
   return (
     <ModalFrame title="Technical Issue Details" eyebrow={alert.id} onClose={onClose}>
@@ -48,24 +21,6 @@ export function AlertDetailsModal({ alert, onClose }: { alert: PriorityAlert; on
         <div className="md:col-span-2">
           <DetailField label="What to Do" value={expandableValue(alert.requiredAction, "required action")} />
         </div>
-      </div>
-    </ModalFrame>
-  );
-}
-
-export function AllAlertsModal({ alerts, onClose, onSelectAlert }: { alerts: PriorityAlert[]; onClose: () => void; onSelectAlert: (alert: PriorityAlert) => void }) {
-  return (
-    <ModalFrame title="All Priority Alerts" onClose={onClose} maxWidthClassName="max-w-4xl">
-      <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-slate-200">
-        {alerts.length === 0 && <AlertEmptyState />}
-        {alerts.map((alert) => (
-          <div key={alert.id} className="relative">
-            <PriorityAlertListItem alert={alert} onOpen={onSelectAlert} />
-            <div className="absolute right-6 bottom-4">
-              <AlertStatusBadge status={alert.status} />
-            </div>
-          </div>
-        ))}
       </div>
     </ModalFrame>
   );
@@ -115,8 +70,4 @@ export function AlertStatusBadge({ status, label }: { status: PriorityAlert["sta
   };
   const resolvedLabel = label ?? (status === "New" ? "Needs Attention" : status === "In Review" ? "Working on It" : "Resolved");
   return <span className={`rounded border px-2.5 py-1 text-[10px] font-bold tracking-wide whitespace-nowrap uppercase ${classes[status]}`}>{resolvedLabel}</span>;
-}
-
-function AlertEmptyState() {
-  return <EmptyState icon={Bell} title="No alerts" description="There are currently no priority alerts." />;
 }

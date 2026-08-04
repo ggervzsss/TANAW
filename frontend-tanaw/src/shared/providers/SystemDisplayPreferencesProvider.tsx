@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAuthStore } from "@/app/store/authStore";
-import { getSystemSettings } from "../services/accountManagement";
+import { getSystemSettings } from "../services/systemSettingsService";
 import { resolveSystemTimeFormat } from "../utils/dateTime";
 import { systemSettingsQueryKey, SystemDisplayPreferencesContext } from "./systemDisplayPreferences";
 
