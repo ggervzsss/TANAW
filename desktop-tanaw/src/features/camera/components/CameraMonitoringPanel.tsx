@@ -77,10 +77,12 @@ export function CameraMonitoringPanel({
 
   return (
     <div className="space-y-3">
-      <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
+      <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase">Live Metrics</h4>
-          <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-bold text-gray-500">{counts.status}</span>
+          <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[9px] font-bold tracking-wide text-gray-500 uppercase dark:border-white/9 dark:bg-white/4 dark:text-slate-400">
+            {counts.status}
+          </span>
         </div>
         <div className="grid auto-rows-fr grid-cols-2 gap-2">
           <MetricBox icon={LogIn} label="Entry" value={counts.entry} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
@@ -95,7 +97,7 @@ export function CameraMonitoringPanel({
           />
         </div>
         {pendingUniqueEntries > 0 ? (
-          <div className="mt-2 flex items-start gap-2 rounded-sm border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800">
+          <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/8 dark:text-amber-200">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <span>
               {pendingUniqueEntries} provisional {pendingUniqueEntries === 1 ? "identity is" : "identities are"} excluded from the visitor estimate pending a stronger match.
@@ -104,7 +106,7 @@ export function CameraMonitoringPanel({
         ) : null}
       </section>
 
-      <section className="rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
+      <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
         <h4 className="mb-3 text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">SYSTEM STATUS &amp; CONTROLS</h4>
         <div className="space-y-2">
           <StatusRow
@@ -132,11 +134,11 @@ export function CameraMonitoringPanel({
             />
           ) : null}
         </div>
-        <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400">
+        <p className="mt-2 text-[9px] font-semibold tracking-wide text-gray-400 dark:text-slate-500">
           Desktop {serviceStatus?.desktopVersion ?? "unknown"} ({serviceStatus?.packaged ? "packaged" : "development"}) · ML {health?.service_version ?? "unknown"} · API{" "}
           {health?.api_contract_version ?? "unknown"}
         </p>
-        <p className="truncate text-[9px] font-medium text-gray-400" title={serviceStatus?.desktopBuild}>
+        <p className="truncate text-[9px] font-medium text-gray-400 dark:text-slate-500" title={serviceStatus?.desktopBuild}>
           Desktop build: {serviceStatus?.desktopBuild ?? "unknown"}
         </p>
 
@@ -159,7 +161,7 @@ export function CameraMonitoringPanel({
                         type="button"
                         onClick={onRestartService}
                         disabled={isRestartingService}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-gray-200 bg-white px-2 py-2 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-[11px] font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/3 dark:text-slate-300 dark:hover:bg-white/6"
                       >
                         <RefreshCw size={14} className={isRestartingService ? "animate-spin" : ""} /> Service
                       </button>
@@ -173,7 +175,7 @@ export function CameraMonitoringPanel({
                 type="button"
                 onClick={onTestConnection}
                 disabled={isTesting || isProcessingThisCamera}
-                className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-[#065f46]/30 bg-white px-2 py-2 text-[11px] font-bold text-[#065f46] transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#065f46]/30 bg-white px-2 py-2.5 text-[11px] font-bold text-[#065f46] transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-300/20 dark:bg-emerald-300/5 dark:text-emerald-300 dark:hover:bg-emerald-300/10"
               >
                 <Wifi size={14} /> {isTesting ? "Testing..." : "Test"}
               </button>
@@ -185,7 +187,7 @@ export function CameraMonitoringPanel({
               onClick={isProcessRunning ? onStopProcessing : onStartProcessing}
               disabled={processButtonDisabled}
               aria-pressed={isProcessRunning}
-              className={`flex w-full items-center justify-center gap-1.5 rounded-sm px-2 py-2 text-[11px] font-bold transition-colors disabled:cursor-not-allowed ${processButtonClassName}`}
+              className={`flex w-full items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11px] font-bold transition-colors disabled:cursor-not-allowed ${processButtonClassName}`}
             >
               <ProcessIcon size={14} /> {processButtonLabel}
             </button>
@@ -214,7 +216,9 @@ function MetricBox({ icon: Icon, label, tone, tooltip, value }: MetricBoxProps) 
 
   return (
     <InfoTooltip content={tooltip} className="h-full" focusable={false}>
-      <div className={`flex h-full min-h-21 flex-col rounded-sm border p-2.5 transition-transform duration-150 group-hover:-translate-y-0.5 group-focus:-translate-y-0.5 ${toneClass}`}>
+      <div
+        className={`flex h-full min-h-22 flex-col rounded-xl border p-3 transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md group-focus:-translate-y-0.5 ${toneClass}`}
+      >
         <div className="flex min-h-7 items-start justify-between gap-2">
           <span className="text-[9px] leading-tight font-bold tracking-wider uppercase">{label}</span>
           <Icon size={13} className="shrink-0" />
@@ -238,13 +242,13 @@ type StatusRowProps = {
 
 function StatusRow({ icon: Icon, issue, label, tone, tooltip }: StatusRowProps) {
   const toneClass = {
-    error: "border-red-200 bg-red-50 text-red-700",
-    neutral: "border-gray-200 bg-gray-50 text-gray-600",
-    ok: "border-emerald-200 bg-emerald-50 text-[#065f46]",
+    error: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/22 dark:bg-red-400/9 dark:text-red-200",
+    neutral: "border-gray-200 bg-gray-50 text-gray-600 dark:border-white/8 dark:bg-white/3 dark:text-slate-300",
+    ok: "border-emerald-200 bg-emerald-50 text-[#065f46] dark:border-emerald-400/22 dark:bg-emerald-400/9 dark:text-emerald-300",
   }[tone];
 
   return (
-    <div className={`flex items-center justify-between gap-3 rounded-sm border px-3 py-2 text-[11px] font-bold transition-colors ${toneClass}`}>
+    <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-[11px] font-bold transition-colors ${toneClass}`}>
       <InfoTooltip content={tooltip} focusable={false} className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
           <Icon size={14} className="shrink-0" />

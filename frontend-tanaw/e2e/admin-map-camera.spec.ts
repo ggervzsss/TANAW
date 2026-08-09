@@ -173,11 +173,21 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   await expect(page.getByText("All Enterprises", { exact: true })).toBeVisible();
   await expect(page.locator(".tanaw-map-directory__list").first()).toHaveCSS("scrollbar-width", "thin");
 
-  await page.getByRole("link", { name: "Activity History" }).click();
+  const activityHistoryLink = page.getByRole("link", { name: "Activity History" });
+  await activityHistoryLink.hover();
+  await activityHistoryLink.click();
   await expect(page).toHaveURL(/\/admin\/activity-history$/);
-  await page.getByRole("link", { name: "Map View" }).click();
+  await expect(activityHistoryLink).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Activity History" })).toBeVisible();
+  await expect(page.getByText("Loading TANAW workspace…")).toHaveCount(0);
+
+  const mapViewLink = page.getByRole("link", { name: "Map View" });
+  await mapViewLink.hover();
+  await mapViewLink.click();
   await expect(page).toHaveURL(/\/admin\/mapview$/);
+  await expect(mapViewLink).toHaveAttribute("aria-current", "page");
   await waitForMapReady(page);
+  await expect(page.getByText("Loading TANAW workspace…")).toHaveCount(0);
   expectSameCamera(await readMapGeometry(page), initial);
 
   await page.getByRole("link", { name: "Operations Center" }).click();

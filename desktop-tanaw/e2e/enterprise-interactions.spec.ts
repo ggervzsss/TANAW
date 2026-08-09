@@ -280,4 +280,35 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
 
   await minimized.click();
   await expect(page.getByRole("button", { name: "Move tripwire toolbar" })).toBeVisible();
+
+  await page.setViewportSize({ width: 800, height: 500 });
+  await expect(page.getByRole("heading", { name: "Camera Setup" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Camera", exact: true })).toBeVisible();
+  await page.getByText("SYSTEM STATUS & CONTROLS", { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test("keeps pending business-email information readable in both themes", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page);
+  await page.route("**/auth/profile/business-email-change", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ requestedEmail: "proposed-enterprise@example.test", status: "pending" }),
+    }),
+  );
+  await page.goto("/#/enterprise/profile");
+
+  const pendingCard = page.locator(".enterprise-profile-pending-email");
+  await expect(pendingCard).toBeVisible();
+  await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).toHaveCSS("color", "rgb(255, 248, 232)");
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__copy")).toHaveCSS("color", "rgb(216, 222, 232)");
+  await expect(page.getByRole("button", { name: "Cancel request" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", "rgb(255, 248, 232)");
+  await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
 });

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -19,42 +19,17 @@ import { routePaths } from "../router/routePaths";
 import { createPageStateKey, readPageState, writePageState } from "../../utils/page-state";
 import { EnterpriseTopbar } from "./EnterpriseTopbar";
 import { buildEnterpriseNotifications, readStoredNotificationIds, upsertBackendNotification, writeStoredNotificationIds } from "../../features/notifications/model/enterprise-notifications";
-
-const CameraManagementView = lazy(() =>
-  import("../../features/camera/components/CameraManagementView").then((module) => ({
-    default: module.CameraManagementView,
-  })),
-);
-const DashboardView = lazy(() =>
-  import("../../features/dashboard/components/DashboardView").then((module) => ({
-    default: module.DashboardView,
-  })),
-);
-const NotificationsView = lazy(() =>
-  import("../../features/notifications/components/NotificationsView").then((module) => ({
-    default: module.NotificationsView,
-  })),
-);
-const ProfileView = lazy(() =>
-  import("../../features/profile/components/ProfileView").then((module) => ({
-    default: module.ProfileView,
-  })),
-);
-const ReportsView = lazy(() =>
-  import("../../features/reports/components/ReportsView").then((module) => ({
-    default: module.ReportsView,
-  })),
-);
-const SecurityView = lazy(() =>
-  import("../../features/security/components/SecurityView").then((module) => ({
-    default: module.SecurityView,
-  })),
-);
-const TicketsView = lazy(() =>
-  import("../../features/tickets/components/TicketsView").then((module) => ({
-    default: module.TicketsView,
-  })),
-);
+import {
+  CameraManagementView,
+  DashboardView,
+  NotificationsView,
+  ProfileView,
+  ReportsView,
+  SecurityView,
+  TicketsView,
+  preloadEnterpriseView,
+  scheduleEnterpriseViewPreload,
+} from "../router/enterprise-view-modules";
 
 type EnterpriseShellProps = {
   initialView?: EnterpriseView;
@@ -151,6 +126,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     setActiveView(initialView);
   }, [initialView]);
 
+  useEffect(() => scheduleEnterpriseViewPreload(activeView), [activeView]);
+
   useEffect(() => {
     setCameras(EMPTY_CAMERAS);
     setReportsHistory(EMPTY_REPORTS);
@@ -238,6 +215,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const navigateToView = (view: EnterpriseView) => {
     setActiveView(view);
     setIsNotificationsOpen(false);
+    void preloadEnterpriseView(view);
     navigate(viewRouteById[view]);
   };
 
@@ -295,6 +273,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         onLogout={handleLogout}
         onMarkAllRead={() => markNotificationsRead(notifications)}
         onNavigate={navigateToView}
+        onNavigateIntent={(view) => void preloadEnterpriseView(view)}
         onNotificationSelect={(notification) => {
           markNotificationsRead([notification]);
           navigateToView(notification.target);

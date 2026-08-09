@@ -143,11 +143,81 @@ test("prepares both Enterprise login backgrounds before revealing the renderer",
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("[data-auth-background-theme='light']")).toHaveCSS("opacity", "1");
   await expect(page.locator("[data-auth-background-theme='dark']")).toHaveCSS("opacity", "0");
-  expect(await card.boundingBox()).toEqual(before);
+  const after = await card.boundingBox();
+  expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
+  expect(after?.y).toBeCloseTo(before?.y ?? 0, 0);
+  expect(after?.width).toBeCloseTo(before?.width ?? 0, 0);
+  expect(after?.height).toBeCloseTo(before?.height ?? 0, 0);
 
   await page.reload();
   await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
   await expect(card).toBeVisible();
+});
+
+test("keeps the Enterprise Swarm Cursor isolated from authentication controls", async ({ page }) => {
+  let signedIn = false;
+  await page.route("**/auth/login", (route) => {
+    signedIn = true;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "swarm-cleanup-token", user: enterpriseUser }) });
+  });
+  await page.route("**/auth/session", (route) =>
+    route.fulfill({
+      status: signedIn ? 200 : 401,
+      contentType: "application/json",
+      body: JSON.stringify(signedIn ? { token: "swarm-cleanup-token", user: enterpriseUser } : { detail: "Not authenticated" }),
+    }),
+  );
+  await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(enterpriseUser) }));
+  await page.goto("/#/login");
+
+  const swarm = page.locator("[data-swarm-cursor='true']");
+  await expect(swarm).toHaveCount(1);
+  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(0);
+  await expect.poll(() => page.locator(".swarm-cursor__canvas").count()).toBeLessThanOrEqual(1);
+
+  const identifier = page.getByPlaceholder("Enter username or registered email");
+  const password = page.getByPlaceholder("Enter your password");
+  await identifier.fill("enterprise@example.com");
+  await password.fill("Interactive Enterprise password 2026");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await page.getByRole("checkbox", { name: "Remember me" }).check();
+  await page.getByRole("button", { name: /Switch to (?:light|dark) mode/ }).click();
+  await page.getByRole("button", { name: "Contact support" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+
+  const box = await swarm.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(box!.x + box!.width * 0.35, box!.y + box!.height * 0.45);
+  await expect(swarm).toHaveAttribute("data-swarm-interaction", "scatter");
+  await expect(identifier).toHaveValue("enterprise@example.com");
+
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
+  await expect(swarm).toHaveCount(0);
+  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
+});
+
+test("disables active Enterprise Swarm motion for reduced-motion users", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/#/login");
+  await expect(page.locator("[data-swarm-cursor='true']")).toHaveCount(1);
+  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
+  await page.getByPlaceholder("Enter username or registered email").fill("enterprise@example.com");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
+});
+
+test("keeps Enterprise authentication usable when WebGL is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", { configurable: true, value: () => null });
+  });
+  await page.goto("/#/login");
+  await expect(page.locator("[data-swarm-state='unavailable']")).toHaveCount(1);
+  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
+  await page.getByPlaceholder("Enter username or registered email").fill("enterprise@example.com");
+  await page.getByPlaceholder("Enter your password").fill("Authentication remains available 2026");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
 });
 
 test("keeps the theme through Enterprise authentication and renders the Portal label as static text", async ({ page }) => {

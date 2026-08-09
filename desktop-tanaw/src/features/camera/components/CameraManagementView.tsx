@@ -91,12 +91,12 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         </ConfirmationDialog>
       )}
 
-      <div className="mb-3 shrink-0">
-        <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-white">Camera Setup</h2>
+      <div className="mb-4 shrink-0 px-1">
+        <h2 className="truncate text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Camera Setup</h2>
         <p className="truncate text-xs font-medium text-gray-500 dark:text-slate-400">Local CCTV stream verification, AI counting, and tripwire calibration.</p>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(210px,240px)_minmax(0,1fr)] gap-4 max-lg:grid-cols-[minmax(190px,220px)_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(190px,230px)_minmax(0,1fr)] gap-4 max-[900px]:grid-cols-[176px_minmax(0,1fr)] max-[900px]:gap-3">
         <div className="min-h-0 flex-1">
           <CameraList
             cameras={cameras}

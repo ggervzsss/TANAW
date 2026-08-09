@@ -10,7 +10,6 @@ import { logoutSession } from "@/shared/services/sessionService";
 import { CITY_SEAL } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
-import { currentUserQueryKey } from "@/shared/services/accountService";
 import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "@/shared/utils/routeUtils";
 import type { UserRole } from "@/shared/types/role.types";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
@@ -88,7 +87,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
     } catch {
       toast.error("Logout log was not recorded, but your local session was cleared.");
     } finally {
-      queryClient.removeQueries({ queryKey: currentUserQueryKey });
+      queryClient.clear();
       logout();
       publishSessionEvent({ type: "logout", occurredAt: Date.now() });
       toast.success("Logout complete");

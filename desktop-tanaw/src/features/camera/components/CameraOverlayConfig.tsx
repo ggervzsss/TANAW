@@ -260,14 +260,14 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
             height: `${config.roi.height}%`,
           }}
         >
-          <span className="absolute right-1 bottom-1 rounded-sm bg-white/90 px-1 text-[9px] font-bold text-[#2d5eff] shadow-sm">ROI</span>
+          <span className="absolute right-1 bottom-1 rounded-lg bg-white/90 px-1 text-[9px] font-bold text-[#2d5eff] shadow-sm">ROI</span>
         </div>
       )}
 
       {canEdit && (
         <div
           ref={toolbarRef}
-          className="pointer-events-auto absolute top-0 left-0 z-20 max-w-[calc(100%-1rem)] rounded-sm border border-white/15 bg-black/75 p-1.5 shadow-sm backdrop-blur-sm"
+          className="pointer-events-auto absolute top-0 left-0 z-20 max-w-[calc(100%-1rem)] rounded-xl border border-white/15 bg-slate-950/78 p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.32)] backdrop-blur-md"
           style={{ transform: `translate(${toolbarPosition.x}px, ${toolbarPosition.y}px)` }}
         >
           {isToolbarCollapsed ? (
@@ -285,7 +285,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
               onPointerUp={handleToolbarDragEnd}
               onPointerCancel={handleToolbarDragEnd}
               onLostPointerCapture={() => setToolbarDragState(null)}
-              className="flex cursor-grab touch-none items-center gap-1.5 rounded-sm bg-white/10 px-2 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-white/20 active:cursor-grabbing"
+              className="flex cursor-grab touch-none items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-white/20 active:cursor-grabbing"
               aria-label="Show tripwire toolbar"
             >
               <Waves size={13} /> Tripwire
@@ -300,7 +300,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
                   onPointerUp={handleToolbarDragEnd}
                   onPointerCancel={handleToolbarDragEnd}
                   onLostPointerCapture={() => setToolbarDragState(null)}
-                  className="cursor-grab rounded-sm p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white active:cursor-grabbing"
+                  className="cursor-grab rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white active:cursor-grabbing"
                   aria-label="Move tripwire toolbar"
                 >
                   <GripVertical size={13} />
@@ -313,7 +313,7 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
                       setActiveLine(line);
                       setSelectedPoint(null);
                     }}
-                    className={`rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${activeLine === line ? lineStyles[line].textClass : "bg-white/10 text-white hover:bg-white/20"}`}
+                    className={`rounded-lg px-2 py-1 text-[10px] font-bold transition-colors ${activeLine === line ? lineStyles[line].textClass : "bg-white/10 text-white hover:bg-white/20"}`}
                     aria-pressed={activeLine === line}
                   >
                     {lineStyles[line].label}
@@ -322,31 +322,31 @@ export function CameraOverlayConfig({ config, isEditMode, onConfigChange }: Came
                 <button
                   type="button"
                   onClick={() => setIsAddMode((current) => !current)}
-                  className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${isAddMode ? "bg-white text-slate-950" : "bg-white/10 text-white hover:bg-white/20"}`}
+                  className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold transition-colors ${isAddMode ? "bg-white text-slate-950" : "bg-white/10 text-white hover:bg-white/20"}`}
                   aria-label="Click the video to add an anchor point"
                   aria-pressed={isAddMode}
                 >
                   <Plus size={12} /> Point
                 </button>
-                <button type="button" onClick={addPointToActivePath} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Insert an anchor on the longest segment">
+                <button type="button" onClick={addPointToActivePath} className="rounded-lg p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Insert an anchor on the longest segment">
                   <Move size={13} />
                 </button>
                 <button
                   type="button"
                   onClick={deleteSelectedPoint}
                   disabled={!canDeleteSelectedPoint}
-                  className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:text-white/30"
+                  className="rounded-lg p-1.5 text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:text-white/30"
                   aria-label="Delete selected anchor"
                 >
                   <Trash2 size={13} />
                 </button>
-                <button type="button" onClick={toggleCurveMode} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Toggle smooth or linear tripwire path">
+                <button type="button" onClick={toggleCurveMode} className="rounded-lg p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Toggle smooth or linear tripwire path">
                   <Waves size={13} />
                 </button>
-                <button type="button" onClick={resetActiveLine} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Reset active tripwire">
+                <button type="button" onClick={resetActiveLine} className="rounded-lg p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Reset active tripwire">
                   <RotateCcw size={13} />
                 </button>
-                <button type="button" onClick={() => setIsToolbarCollapsed(true)} className="rounded-sm p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Hide tripwire toolbar">
+                <button type="button" onClick={() => setIsToolbarCollapsed(true)} className="rounded-lg p-1.5 text-white transition-colors hover:bg-white/20" aria-label="Hide tripwire toolbar">
                   <Minus size={13} />
                 </button>
               </div>

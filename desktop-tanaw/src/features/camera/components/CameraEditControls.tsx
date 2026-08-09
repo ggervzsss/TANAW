@@ -49,7 +49,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
   };
 
   return (
-    <div className="space-y-3 rounded-sm border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="space-y-3 rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130]">
       <section>
         <h4 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-wider text-[#111827] uppercase">
           <Video size={14} className="text-[#065f46]" /> Camera Stream
@@ -60,7 +60,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               type="text"
               value={editForm.name}
               onChange={(event) => onEditFormChange({ ...editForm, name: event.target.value })}
-              className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+              className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
             />
           </CompactField>
           <CompactField label="Assigned Zone">
@@ -68,10 +68,10 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               type="text"
               value={editForm.zone}
               onChange={(event) => onEditFormChange({ ...editForm, zone: event.target.value })}
-              className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+              className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
             />
           </CompactField>
-          <details className="rounded-sm border border-gray-200 bg-gray-50 p-2">
+          <details className="rounded-xl border border-gray-200 bg-gray-50 p-2.5">
             <summary className="cursor-pointer text-[9px] font-bold tracking-wider text-gray-500 uppercase">Advanced Settings</summary>
             <div className="mt-2 space-y-2">
               <CompactField label="Processing Profile">
@@ -98,7 +98,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                     step="0.05"
                     value={editForm.confidence}
                     onChange={(event) => onEditFormChange({ ...editForm, confidence: Number(event.target.value) })}
-                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
                   />
                 </CompactField>
                 <CompactField label="Tracking Confidence">
@@ -109,7 +109,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                     step="0.01"
                     value={editForm.trackingConfidence ?? 0.15}
                     onChange={(event) => onEditFormChange({ ...editForm, trackingConfidence: Number(event.target.value) })}
-                    className="w-full rounded-sm border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
                   />
                 </CompactField>
               </div>
@@ -157,7 +157,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                         },
                       })
                     }
-                    className="rounded-sm border border-gray-200 bg-white px-2 py-1 text-[9px] font-bold text-gray-600 transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
+                    className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[9px] font-bold text-gray-600 transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
                   >
                     Full Frame
                   </button>
@@ -192,7 +192,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                 autoComplete="username"
                 value={editForm.username ?? ""}
                 onChange={(event) => onEditFormChange({ ...editForm, username: event.target.value })}
-                className="w-full rounded-sm border border-gray-300 px-2 py-1.5 text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
+                className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-800 transition outline-none focus:border-[#065f46]"
               />
             </CompactField>
             <CompactField label="Password" required>
@@ -213,7 +213,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               readOnly
               aria-readonly="true"
               value={editForm.rtsp}
-              className="w-full cursor-default rounded-sm border border-gray-200 bg-gray-100 px-2 py-1.5 font-mono text-xs text-gray-600 outline-none"
+              className="w-full cursor-default rounded-lg border border-gray-200 bg-gray-100 px-2 py-1.5 font-mono text-xs text-gray-600 outline-none"
             />
           </CompactField>
         </div>

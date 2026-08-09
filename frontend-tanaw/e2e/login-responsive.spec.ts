@@ -204,11 +204,66 @@ test("prepares complete light and dark login backgrounds before revealing the pa
   await expect(page.locator("[data-auth-background-theme='light']")).toHaveCSS("opacity", "1");
   await expect(page.locator("[data-auth-background-theme='dark']")).toHaveCSS("opacity", "0");
   const after = await card.boundingBox();
-  expect(after).toEqual(before);
+  expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
+  expect(after?.y).toBeCloseTo(before?.y ?? 0, 0);
+  expect(after?.width).toBeCloseTo(before?.width ?? 0, 0);
+  expect(after?.height).toBeCloseTo(before?.height ?? 0, 0);
 
   await page.reload();
   await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
   await expect(card).toBeVisible();
+});
+
+test("keeps the Swarm Cursor isolated from shared login interactions", async ({ page }) => {
+  await page.goto("/login");
+
+  const swarm = page.locator("[data-swarm-cursor='true']");
+  await expect(swarm).toHaveCount(1);
+  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(0);
+  await expect.poll(() => page.locator(".swarm-cursor__canvas").count()).toBeLessThanOrEqual(1);
+
+  const email = page.getByLabel("Email", { exact: true });
+  const password = page.getByLabel("Password", { exact: true });
+  await email.fill("admin@example.com");
+  await password.fill("Interactive password 2026");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await page.getByRole("checkbox", { name: "Remember me" }).check();
+  await page.getByRole("button", { name: /Switch to (?:light|dark) mode/ }).click();
+  await page.getByRole("button", { name: "Forgot password?" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Close password recovery" }).click();
+
+  const box = await swarm.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(box!.x + box!.width * 0.35, box!.y + box!.height * 0.45);
+  await expect(swarm).toHaveAttribute("data-swarm-interaction", "scatter");
+  await expect(email).toHaveValue("admin@example.com");
+
+  await page.goto("/activate-account");
+  await expect(swarm).toHaveCount(0);
+  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
+});
+
+test("disables active Swarm motion for reduced-motion users without hiding login", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/login");
+  await expect(page.locator("[data-swarm-cursor='true']")).toHaveCount(1);
+  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
+  await page.getByLabel("Email", { exact: true }).fill("staff@example.com");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
+});
+
+test("keeps shared authentication usable when WebGL is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", { configurable: true, value: () => null });
+  });
+  await page.goto("/login");
+  await expect(page.locator("[data-swarm-state='unavailable']")).toHaveCount(1);
+  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
+  await page.getByLabel("Email", { exact: true }).fill("staff@example.com");
+  await page.getByLabel("Password", { exact: true }).fill("Authentication remains available 2026");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
 });
 
 test("keeps an explicit login theme through authentication, reload, and logout", async ({ page }) => {

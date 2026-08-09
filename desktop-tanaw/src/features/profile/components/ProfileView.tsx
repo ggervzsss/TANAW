@@ -152,22 +152,25 @@ export function ProfileView() {
 
           {accountChangeStatus && (
             <div
-              className={`mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${
+              className={`enterprise-profile-change-notice mb-6 rounded-2xl border px-4 py-3 text-sm font-semibold ${
                 accountChangeStatus.tone === "success" ? "border-emerald-200 bg-emerald-50 text-[#065f46]" : "border-amber-200 bg-amber-50 text-amber-800"
               }`}
+              data-tone={accountChangeStatus.tone}
             >
               {accountChangeStatus.message}
             </div>
           )}
 
           {pendingEmailChange ? (
-            <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-950 sm:flex-row sm:items-start sm:justify-between">
+            <div className="enterprise-profile-pending-email mb-6 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
-                <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-                <div>
-                  <p className="text-sm font-bold">Business email change pending</p>
-                  <p className="mt-1 text-sm leading-6 text-amber-900/80">
-                    Proposed address: <strong className="wrap-break-word">{pendingEmailChange.requestedEmail}</strong>.{" "}
+                <span className="enterprise-profile-pending-email__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/60 bg-white/70 text-amber-700 shadow-sm">
+                  <MailCheck className="h-4.5 w-4.5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="enterprise-profile-pending-email__title text-sm font-bold">Business email change pending</p>
+                  <p className="enterprise-profile-pending-email__copy mt-1.5 text-sm leading-6 text-amber-900/80">
+                    <span className="font-semibold">Proposed address:</span> <strong className="enterprise-profile-pending-email__address wrap-break-word">{pendingEmailChange.requestedEmail}</strong>.{" "}
                     {pendingEmailChange.status === "verified"
                       ? "Ownership is verified and TANAW IT can now review it."
                       : pendingEmailChange.status === "expired"
@@ -180,7 +183,7 @@ export function ProfileView() {
                 type="button"
                 disabled={isEmailChangeCancelling}
                 onClick={() => void handleCancelEmailChange()}
-                className="shrink-0 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+                className="enterprise-profile-pending-email__cancel shrink-0 rounded-xl border border-amber-300 bg-white px-3.5 py-2.5 text-xs font-bold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
               >
                 {isEmailChangeCancelling ? "Cancelling..." : "Cancel request"}
               </button>

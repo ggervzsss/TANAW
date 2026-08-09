@@ -1,5 +1,5 @@
 export const SPLASH_MIN_DISPLAY_MS = 10_000;
-export const STARTUP_READY_FALLBACK_MS = 12_000;
+export const STARTUP_READY_FALLBACK_MS = 30_000;
 export const DEV_STARTUP_READY_FALLBACK_MS = 90_000;
 
 export type StartupRevealReason = "fallback" | "ready";

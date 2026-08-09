@@ -19,6 +19,7 @@ type EnterpriseTopbarProps = {
   onLogout: () => void;
   onMarkAllRead: () => void;
   onNavigate: (view: EnterpriseView) => void;
+  onNavigateIntent: (view: EnterpriseView) => void;
   onNotificationSelect: (notification: EnterpriseNotification) => void;
   onNotificationsClose: () => void;
   onNotificationsToggle: () => void;
@@ -62,6 +63,7 @@ export function EnterpriseTopbar({
   onLogout,
   onMarkAllRead,
   onNavigate,
+  onNavigateIntent,
   onNotificationSelect,
   onNotificationsClose,
   onNotificationsToggle,
@@ -130,13 +132,21 @@ export function EnterpriseTopbar({
         const Icon = item.icon;
         const isActive = activeView === item.id;
         return (
-          <button key={item.id} type="button" onClick={() => onNavigate(item.id)} className={[navPillBase, isActive ? navPillActive : navPillInactive].join(" ")}>
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onNavigate(item.id)}
+            onFocus={() => onNavigateIntent(item.id)}
+            onPointerEnter={() => onNavigateIntent(item.id)}
+            onTouchStart={() => onNavigateIntent(item.id)}
+            className={[navPillBase, isActive ? navPillActive : navPillInactive].join(" ")}
+          >
             <Icon size={16} className="shrink-0" />
             {item.label}
           </button>
         );
       }),
-    [activeView, navPillActive, navPillBase, navPillInactive, onNavigate],
+    [activeView, navPillActive, navPillBase, navPillInactive, onNavigate, onNavigateIntent],
   );
 
   return (
@@ -284,6 +294,9 @@ export function EnterpriseTopbar({
                       onNavigate(item.id);
                       setShowMobileNav(false);
                     }}
+                    onFocus={() => onNavigateIntent(item.id)}
+                    onPointerEnter={() => onNavigateIntent(item.id)}
+                    onTouchStart={() => onNavigateIntent(item.id)}
                     className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-[background-color,color,box-shadow] ${isActive ? "bg-[#45a549]/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
                   >
                     <Icon size={16} className="shrink-0" />
