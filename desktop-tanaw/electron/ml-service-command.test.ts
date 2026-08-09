@@ -18,7 +18,7 @@ describe("getMlServiceCommand", () => {
     expect(pathExists).not.toHaveBeenCalled();
   });
 
-  it("preserves a prepared packaged Python runtime", () => {
+  it("uses the bundled standalone runtime in a packaged build", () => {
     const serviceDir = "C:\\tanaw\\resources\\ml-service";
 
     expect(
@@ -29,19 +29,20 @@ describe("getMlServiceCommand", () => {
         serviceDir,
       }),
     ).toEqual({
-      command: path.join(serviceDir, ".venv", "Scripts", "python.exe"),
-      args: ["main.py"],
+      command: path.join(serviceDir, "runtime", "tanaw-ml-service.exe"),
+      args: [],
     });
   });
 
-  it("uses the locked uv environment when no packaged runtime is present", () => {
+  it("refuses an incomplete package instead of requiring uv or the network", () => {
     expect(
-      getMlServiceCommand({
-        isPackaged: true,
-        pathExists: () => false,
-        platform: "linux",
-        serviceDir: "/opt/tanaw/ml-service",
-      }),
-    ).toEqual({ command: "uv", args: ["run", "--frozen", "python", "main.py"] });
+      () =>
+        getMlServiceCommand({
+          isPackaged: true,
+          pathExists: () => false,
+          platform: "linux",
+          serviceDir: "/opt/tanaw/ml-service",
+        }),
+    ).toThrow(/bundled ML runtime is missing/i);
   });
 });

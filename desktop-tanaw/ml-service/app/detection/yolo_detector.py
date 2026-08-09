@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from app.counting.geometry import Centroid, bbox_centroid
+from app.runtime.assets import model_directory
 from app.runtime.config_directories import configure_third_party_directories
 from app.runtime.hardware import get_runtime_capabilities
 
@@ -769,7 +770,7 @@ def _tracker_config_path(profile_name: str, tracker: str) -> Path:
 
 
 def _models_root() -> Path:
-    return Path(__file__).resolve().parents[2] / "models"
+    return model_directory()
 
 
 def _percentile(values: list[float], quantile: float) -> float | None:

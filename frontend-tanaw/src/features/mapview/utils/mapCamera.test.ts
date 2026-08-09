@@ -291,7 +291,7 @@ describe("geographic layer integrity safeguards", () => {
   });
 
   it("does not add positional transitions to Leaflet panes, paths, markers, or popups", () => {
-    const stylesheet = readFileSync(new URL("../../../index.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../../../styles/map.css", import.meta.url), "utf8");
     const geographicTransitionRule = stylesheet.match(/#admin-enterprise-map \.leaflet-marker-icon,\s*#admin-enterprise-map \.leaflet-popup\s*\{([^}]*)\}/);
     const unsafePaneTransform = /\.leaflet-(?:map|tile|overlay|marker|tooltip|popup)-pane[^{]*\{[^}]*(?:transition\s*:[^;}]*transform|will-change\s*:[^;}]*transform)/s;
 
@@ -311,10 +311,12 @@ describe("geographic layer integrity safeguards", () => {
 
   it("keeps the map hidden until the canonical initial camera has been applied", () => {
     const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+    const cameraHookSource = readFileSync(new URL("../hooks/useMapCameraSync.ts", import.meta.url), "utf8");
 
     expect(componentSource).not.toContain("sanPedroFallbackCenter");
     expect(componentSource).not.toContain("sanPedroRelaxedFallbackBounds");
-    expect(componentSource).toContain("initializedMapInstanceRef.current !== map");
+    expect(componentSource).toContain("useMapCameraSync({");
+    expect(cameraHookSource).toContain("initializedMapInstanceRef.current !== map");
     expect(componentSource).toContain('visibility: isInitialCameraReady ? "visible" : "hidden"');
   });
 

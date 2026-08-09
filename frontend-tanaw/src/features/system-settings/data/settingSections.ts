@@ -15,9 +15,7 @@ export const settingSections: SettingSection[] = [
     id: "logs",
     title: "Activity History",
     icon: FileText,
-    fields: [
-      { key: "retentionDays", label: "Keep Activity History For", type: "select", value: 180, options: [90, 180, 365] },
-    ],
+    fields: [{ key: "retentionDays", label: "Keep Activity History For", type: "select", value: 180, options: [90, 180, 365] }],
   },
   {
     id: "display",

@@ -9,9 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.models import Account, AccountRole, SystemConfiguration
 from app.features.activity_logs.models import ActivityLog
-from app.features.activity_logs.schemas import ActivityLogCreate, ActivityLogSummary
+from app.features.activity_logs.schemas import (
+    ActivityLogActorRole,
+    ActivityLogCreate,
+    ActivityLogSummary,
+)
 
-ROLE_LABELS = {
+ROLE_LABELS: dict[AccountRole, ActivityLogActorRole] = {
     AccountRole.ADMIN: "Admin",
     AccountRole.IT: "IT Personnel",
     AccountRole.STAFF: "LGU Staff",
@@ -40,8 +44,12 @@ ADMIN_IT_ACTIVITY_ACTIONS = frozenset(
 )
 
 
-def get_actor_role_label(account: Account) -> str:
-    return ROLE_LABELS[account.role]
+def get_actor_role_label_for_role(role: AccountRole) -> ActivityLogActorRole:
+    return ROLE_LABELS[role]
+
+
+def get_actor_role_label(account: Account) -> ActivityLogActorRole:
+    return get_actor_role_label_for_role(account.role)
 
 
 def can_role_view_log(role: str, log: ActivityLog | ActivityLogSummary) -> bool:
@@ -100,9 +108,39 @@ async def create_activity_log(db: AsyncSession, payload: ActivityLogCreate) -> A
         metadata_json=json.dumps(payload.metadata) if payload.metadata else None,
     )
     db.add(log)
-    await db.commit()
+    await db.flush()
     await db.refresh(log)
     return to_activity_log_summary(log)
+
+
+async def record_activity_log(
+    db: AsyncSession,
+    *,
+    category: str,
+    severity: str,
+    actor: str,
+    actor_role: str,
+    action: str,
+    target: str,
+    summary: str,
+    source_id: str,
+    metadata: dict[str, str | int | float | bool | None] | None = None,
+) -> None:
+    """Record a user-facing activity without exposing transport schemas to callers."""
+    await create_activity_log(
+        db,
+        ActivityLogCreate(
+            category=category,  # type: ignore[arg-type]
+            severity=severity,  # type: ignore[arg-type]
+            actor=actor,
+            actorRole=actor_role,  # type: ignore[arg-type]
+            action=action,
+            target=target,
+            summary=summary,
+            sourceId=source_id,
+            metadata=metadata,
+        ),
+    )
 
 
 async def get_activity_log_retention_days(db: AsyncSession) -> int:
@@ -120,7 +158,6 @@ async def purge_expired_activity_logs(
         CursorResult[Any],
         await db.execute(delete(ActivityLog).where(ActivityLog.timestamp < cutoff)),
     )
-    await db.commit()
     return result.rowcount or 0
 
 

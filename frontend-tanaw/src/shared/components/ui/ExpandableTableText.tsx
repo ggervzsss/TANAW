@@ -10,14 +10,7 @@ type ExpandableTableTextProps = {
   twoLines?: boolean;
 };
 
-export function ExpandableTableText({
-  primary,
-  secondary,
-  ariaLabel,
-  className = "",
-  secondaryClassName = "",
-  twoLines = false,
-}: ExpandableTableTextProps) {
+export function ExpandableTableText({ primary, secondary, ariaLabel, className = "", secondaryClassName = "", twoLines = false }: ExpandableTableTextProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
   const contentId = useId();
@@ -84,7 +77,7 @@ export function ExpandableTableText({
             event.stopPropagation();
             setIsExpanded((current) => !current);
           }}
-          className="mt-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded text-sm font-black leading-none text-emerald-700 transition-colors hover:text-emerald-900 focus:ring-2 focus:ring-emerald-500/30 focus:outline-none dark:text-emerald-300 dark:hover:text-emerald-100"
+          className="mt-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded text-sm leading-none font-black text-emerald-700 transition-colors hover:text-emerald-900 focus:ring-2 focus:ring-emerald-500/30 focus:outline-none dark:text-emerald-300 dark:hover:text-emerald-100"
         >
           &hellip;
         </button>

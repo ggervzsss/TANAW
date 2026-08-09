@@ -1,7 +1,7 @@
 {
   "name": "desktop-tanaw",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
   "description": "TANAW Enterprise Desktop application for local enterprise monitoring and reporting.",
   "author": "City Government of San Pedro",
   "type": "module",
@@ -11,7 +11,10 @@
   "scripts": {
     "dev": "node scripts/with-electron-env.cjs vite --host 127.0.0.1",
     "build": "tsc && vite build",
-    "dist": "npm run build && electron-builder",
+    "dist": "node scripts/run-distribution-build.mjs",
+    "deployment:validate": "node scripts/validate-deployment-config.ts",
+    "renderer:verify": "node scripts/verify-renderer-build.mjs",
+    "builder": "electron-builder",
     "start": "node scripts/with-electron-env.cjs electron .",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 && npm run lint:tailwind",
     "lint:tailwind": "node scripts/lint-tailwind-canonical.mjs",
@@ -21,6 +24,7 @@
     "models:setup:openvino": "uv --cache-dir .uv-cache run --directory ml-service python scripts/setup_detector_models.py --export-openvino",
     "models:setup:reid": "uv --cache-dir .uv-cache run --directory ml-service --group export python scripts/export_person_reid_onnx.py --profile all",
     "models:verify": "uv --cache-dir .uv-cache run --directory ml-service python -m scripts.verify_model_assets",
+    "ml:bundle": "npm run models:verify && uv --cache-dir .uv-cache run --directory ml-service --group packaging pyinstaller --noconfirm tanaw_ml_service.spec && node scripts/verify-ml-runtime.mjs",
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",
     "prettier": "prettier --write .",

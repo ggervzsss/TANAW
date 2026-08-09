@@ -147,7 +147,11 @@ async def validate_account_activation(db: AsyncSession, raw_token: str) -> Accou
 
 
 async def complete_account_activation(
-    db: AsyncSession, raw_token: str, new_password: str
+    db: AsyncSession,
+    raw_token: str,
+    new_password: str,
+    *,
+    commit: bool = True,
 ) -> Account:
     validate_password_policy(new_password)
     token, account = await _resolve_activation(db, raw_token, lock=True)
@@ -167,7 +171,10 @@ async def complete_account_activation(
         invalidated_at=now,
     )
     await invalidate_password_reset_challenges(db, account.id, invalidated_at=now)
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(account)
     return account
 

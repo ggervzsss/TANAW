@@ -20,17 +20,15 @@ from app.features.mail.models import (
     EmailOutboxStatus,
     EmailTemplateName,
 )
-from app.features.operational.models import (
+from app.features.monitoring.models import EnterpriseTelemetrySnapshot, OperationalAlert
+from app.features.notifications.models import UserNotification
+from app.features.realtime.models import RealtimeOutbox
+from app.features.reporting.models import (
     EnterpriseReportSubmission,
-    EnterpriseTelemetrySnapshot,
     FinalReport,
     FinalReportSource,
-    OperationalAlert,
-    SupportTicket,
-    SupportTicketMessage,
-    UserNotification,
 )
-from app.features.realtime.models import RealtimeOutbox
+from app.features.support.models import SupportTicket, SupportTicketMessage
 
 __all__ = [
     "Account",

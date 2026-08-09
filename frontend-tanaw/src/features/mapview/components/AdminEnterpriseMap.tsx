@@ -1,47 +1,34 @@
 import L, { type GeoJSONOptions, type Layer } from "leaflet";
-import { Activity, ArrowLeft, BarChart3, Building2, Map as MapIcon, MapPin, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useAuthStore } from "@/app/store/authStore";
+import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { useOperationalMapEnterprises } from "@/shared/hooks/useOperationalSync";
-import { SelectDropdown } from "@/shared/components/ui";
-import { listEnterpriseAccounts, type AccountSummary } from "@/shared/services/accountManagement";
-import type { MapEnterprise, VisitorInsightRange } from "@/shared/types";
+import type { AccountSummary, MapEnterprise, VisitorInsightRange } from "@/shared/types";
 import {
   createBoundaryPopupHtml,
   createBoundaryTooltipHtml,
-  createPopupHtml,
-  createTooltipHtml,
   getActiveBoundaryStyle,
   getBarangayForPoint,
   getBarangayLabel,
   getBaseBoundaryStyle,
   getCurrentLeafletMapTheme,
   getDimmedBoundaryStyle,
-  getDarkMonitoringBadgeClass,
-  getMonitoringStatusColor,
-  getOccupancyBadgeClass,
-  getOccupancyRingColor,
-  getEnterprisesByBarangay,
-  getFeatureValue,
   getHoverBoundaryStyle,
-  isBoundaryPolygonFeature,
-  isPointInsideSanPedro,
   initialMapInteractionState,
   MapMotionController,
   mapInteractionReducer,
   mountLeafletThemeLayer,
   normalizeBarangayName,
-  normalizeGeoJson,
-  SAN_PEDRO_BARANGAYS_URL,
   shouldClearBarangayFromMapClick,
-  type GeoJsonFeatureCollection,
   type LeafletMapTheme,
   type MapDeselectReason,
 } from "../utils";
+import { useEnterpriseMarkers, useMapCameraSync, useMapDirectoryData, useSanPedroBoundary } from "../hooks";
+import { AdminMapDirectory } from "./AdminMapDirectory";
+import { AdminMapInsights } from "./AdminMapInsights";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
-import { VisitorInsightsDrawer } from "./VisitorInsightsDrawer";
 
 const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 const EMPTY_MAP_ENTERPRISES: MapEnterprise[] = [];
@@ -59,9 +46,7 @@ export function AdminEnterpriseMap() {
   const initializedMapInstanceRef = useRef<L.Map | null>(null);
   const lastCameraCommandKeyRef = useRef<string | null>(null);
 
-  const [boundary, setBoundary] = useState<GeoJsonFeatureCollection | null>(null);
-  const [isBoundaryLoading, setIsBoundaryLoading] = useState(true);
-  const [isBoundaryError, setIsBoundaryError] = useState(false);
+  const { boundary, isError: isBoundaryError, isLoading: isBoundaryLoading } = useSanPedroBoundary();
   const [isInitialCameraReady, setIsInitialCameraReady] = useState(false);
   const [isDirectoryCollapsed, setIsDirectoryCollapsed] = useState(false);
   const [showBoundaries, setShowBoundaries] = useState(true);
@@ -71,61 +56,20 @@ export function AdminEnterpriseMap() {
   const [mapTheme, setMapTheme] = useState<LeafletMapTheme>(() => getCurrentLeafletMapTheme());
   const { cameraTarget, insightEnterpriseId, selectedBarangayName, selectedEnterpriseId } = mapInteractionState;
   const token = useAuthStore((state) => state.token);
-  const enterpriseAccountsQuery = useQuery({ queryKey: ["enterprise-accounts", token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
+  const enterpriseAccountsQuery = useQuery({ queryKey: [...enterpriseAccountsQueryKey, token], queryFn: listEnterpriseAccounts, enabled: Boolean(token) });
   const mapEnterprisesQuery = useOperationalMapEnterprises();
   const enterpriseAccounts = enterpriseAccountsQuery.data ?? EMPTY_ENTERPRISE_ACCOUNTS;
   const rawMapEnterprises = mapEnterprisesQuery.data ?? EMPTY_MAP_ENTERPRISES;
-  const mapEnterprises = useMemo(() => rawMapEnterprises.filter((enterprise) => isPointInsideSanPedro(boundary, enterprise.lat, enterprise.lng)), [boundary, rawMapEnterprises]);
-  const unpinnedEnterprises = useMemo(() => enterpriseAccounts.filter((enterprise) => !hasUsableSanPedroCoordinates(boundary, enterprise)), [boundary, enterpriseAccounts]);
-  const unpinnedEnterpriseCount = unpinnedEnterprises.length;
-
-  const boundaryFeatureCount = useMemo(() => boundary?.features.filter(isBoundaryPolygonFeature).length ?? 0, [boundary]);
-
-  const enterpriseCountsByBarangay = useMemo(() => {
-    const counts = new Map<string, number>();
-
-    mapEnterprises.forEach((enterprise) => {
-      const key = normalizeBarangayName(enterprise.barangay);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-
-    return counts;
-  }, [mapEnterprises]);
-
-  const barangayDirectoryItems = useMemo(() => {
-    return (boundary?.features ?? [])
-      .filter(isBoundaryPolygonFeature)
-      .map((featureItem) => {
-        const label = getBarangayLabel(featureItem);
-        const key = normalizeBarangayName(label);
-        const enterpriseCount = enterpriseCountsByBarangay.get(key) ?? 0;
-
-        return {
-          feature: featureItem,
-          label,
-          key,
-          subtitle: getFeatureValue(featureItem, ["official_barangay", "name"]),
-          enterpriseCount,
-        };
-      })
-      .sort((left, right) => left.label.localeCompare(right.label));
-  }, [boundary, enterpriseCountsByBarangay]);
-
-  const barangayDropdownOptions = useMemo(
-    () => [
-      { value: "", label: "All Barangays", meta: String(enterpriseAccounts.length) },
-      ...barangayDirectoryItems.map((item) => ({ value: item.label, label: `Barangay ${item.label}`, meta: String(item.enterpriseCount), searchText: item.subtitle })),
-    ],
-    [barangayDirectoryItems, enterpriseAccounts.length],
-  );
-
-  const selectedBarangayEnterprises = useMemo(() => (selectedBarangayName ? getEnterprisesByBarangay(mapEnterprises, selectedBarangayName) : []), [mapEnterprises, selectedBarangayName]);
-  const selectedBarangayUnpinnedEnterprises = useMemo(
-    () => (selectedBarangayName ? unpinnedEnterprises.filter((enterprise) => normalizeBarangayName(enterprise.barangay ?? "Unassigned") === normalizeBarangayName(selectedBarangayName)) : []),
-    [selectedBarangayName, unpinnedEnterprises],
-  );
-  const visibleEnterprises = selectedBarangayName ? selectedBarangayEnterprises : mapEnterprises;
-  const selectedEnterprise = selectedEnterpriseId === null ? null : (mapEnterprises.find((enterprise) => enterprise.id === selectedEnterpriseId) ?? null);
+  const {
+    barangayDropdownOptions,
+    boundaryFeatureCount,
+    mapEnterprises,
+    selectedBarangayEnterprises,
+    selectedBarangayUnpinnedEnterprises,
+    selectedEnterprise,
+    unpinnedEnterprises,
+    visibleEnterprises,
+  } = useMapDirectoryData({ boundary, enterpriseAccounts, rawMapEnterprises, selectedBarangayName, selectedEnterpriseId });
 
   const applyBoundarySelection = useCallback(
     (barangayName: string | null) => {
@@ -249,33 +193,6 @@ export function AdminEnterpriseMap() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [closeEnterpriseDetails, selectedEnterprise]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    fetch(SAN_PEDRO_BARANGAYS_URL)
-      .then((response) => {
-        if (!response.ok) throw new Error("Unable to load barangay boundary GeoJSON.");
-        return response.json() as Promise<GeoJsonFeatureCollection>;
-      })
-      .then((payload) => {
-        if (!isMounted) return;
-        setBoundary(normalizeGeoJson(payload));
-        setIsBoundaryError(false);
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setBoundary(null);
-        setIsBoundaryError(true);
-      })
-      .finally(() => {
-        if (isMounted) setIsBoundaryLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     selectedBarangayNameRef.current = selectedBarangayName;
@@ -447,88 +364,23 @@ export function AdminEnterpriseMap() {
     boundaryLayer.setStyle((geoFeature) => getBaseBoundaryStyle(getBarangayLabel(geoFeature), mapTheme, "boundaryPane", "admin"));
   }, [applyBoundarySelection, boundary, mapTheme, selectedBarangayName]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const motionController = mapMotionControllerRef.current;
-    const boundaryLayer = boundaryLayerRef.current;
-    if (!map || !motionController || !boundaryLayer) return;
-
-    let commandKey: string;
-
-    if (cameraTarget.type === "citywide") {
-      const bounds = citywideBoundsRef.current ?? boundaryLayer.getBounds();
-      if (!bounds.isValid()) return;
-      commandKey = `citywide:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
-      if (lastCameraCommandKeyRef.current === commandKey) return;
-
-      motionController.setTarget({ type: "citywide", bounds }, { directoryCollapsed: isDirectoryCollapsed, immediate: initializedMapInstanceRef.current !== map });
-    } else if (cameraTarget.type === "barangay") {
-      const targetLayer = findBoundaryLayerByName(cameraTarget.barangayName);
-      if (!targetLayer || !(targetLayer instanceof L.Polygon)) return;
-      const bounds = barangayBoundsRef.current.get(normalizeBarangayName(cameraTarget.barangayName)) ?? targetLayer.getBounds();
-      if (!bounds.isValid()) return;
-      commandKey = `barangay:${normalizeBarangayName(cameraTarget.barangayName)}:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
-      if (lastCameraCommandKeyRef.current === commandKey) return;
-
-      motionController.setTarget({ type: "barangay", bounds }, { directoryCollapsed: isDirectoryCollapsed });
-    } else {
-      const enterprise = mapEnterprises.find((item) => item.id === cameraTarget.enterpriseId);
-      if (!enterprise) return;
-      commandKey = `enterprise:${enterprise.id}:${enterprise.lat}:${enterprise.lng}:${isDirectoryCollapsed ? "collapsed" : "expanded"}`;
-      if (lastCameraCommandKeyRef.current === commandKey) return;
-
-      motionController.setTarget({ type: "enterprise", center: [enterprise.lat, enterprise.lng], zoom: 16 }, { directoryCollapsed: isDirectoryCollapsed });
-    }
-
-    if (initializedMapInstanceRef.current !== map) {
-      initializedMapInstanceRef.current = map;
-      setIsInitialCameraReady(true);
-    }
-    lastCameraCommandKeyRef.current = commandKey;
-  }, [boundary, cameraTarget, findBoundaryLayerByName, isDirectoryCollapsed, mapEnterprises]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    Object.values(markersRef.current).forEach((marker) => marker.remove());
-    markersRef.current = {};
-
-    visibleEnterprises.forEach((enterprise) => {
-      const color = getMonitoringStatusColor(enterprise.monitoringStatus);
-      const occupancyRingColor = getOccupancyRingColor(enterprise.occupancyStatus);
-      const markerOutline = mapTheme === "dark" ? "#dbeafe" : "#ffffff";
-      const markerShadow = mapTheme === "dark" ? "0 0 0 2px rgba(8,17,31,.72),0 8px 20px rgba(0,0,0,.58)" : "0 2px 8px rgba(0,0,0,.45)";
-      const marker = L.marker([enterprise.lat, enterprise.lng], {
-        icon: L.divIcon({
-          className: enterprise.occupancyStatus === "High Occupancy" ? "tanaw-map-pin animate-pulse" : "tanaw-map-pin",
-          iconAnchor: [12, 12],
-          popupAnchor: [0, -10],
-          html: `<span style="background-color:${color};width:20px;height:20px;display:block;border-radius:50%;border:3px solid ${markerOutline};box-shadow:0 0 0 4px ${occupancyRingColor},${markerShadow};"></span>`,
-        }),
-      }).addTo(map);
-
-      marker.bindTooltip(createTooltipHtml(enterprise, color), {
-        direction: "top",
-        offset: [0, -10],
-        opacity: 0.95,
-      });
-      marker.bindPopup(createPopupHtml(enterprise, color), {
-        closeButton: false,
-      });
-      marker.on("click", (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stopPropagation(event.originalEvent);
-        selectEnterprise(enterprise);
-      });
-      markersRef.current[enterprise.id] = marker;
-    });
-  }, [mapTheme, selectEnterprise, visibleEnterprises]);
-
-  useEffect(() => {
-    if (!selectedEnterpriseId || !mapRef.current || !markersRef.current[selectedEnterpriseId]) return;
-
-    markersRef.current[selectedEnterpriseId].openPopup();
-  }, [selectedEnterpriseId, visibleEnterprises]);
+  const handleInitialCameraReady = useCallback(() => setIsInitialCameraReady(true), []);
+  useMapCameraSync({
+    barangayBoundsRef,
+    boundary,
+    boundaryLayerRef,
+    cameraTarget,
+    citywideBoundsRef,
+    findBoundaryLayerByName,
+    initializedMapInstanceRef,
+    isDirectoryCollapsed,
+    lastCameraCommandKeyRef,
+    mapEnterprises,
+    mapMotionControllerRef,
+    mapRef,
+    onReady: handleInitialCameraReady,
+  });
+  useEnterpriseMarkers({ mapRef, markersRef, mapTheme, onSelect: selectEnterprise, selectedEnterpriseId, visibleEnterprises });
 
   return (
     <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
@@ -536,272 +388,45 @@ export function AdminEnterpriseMap() {
         <div id={mapContainerId} className="h-full w-full" style={{ visibility: isInitialCameraReady ? "visible" : "hidden" }} />
       </div>
 
-      <AnimatePresence>
-        {(isBoundaryLoading || isBoundaryError) && (
-          <motion.div
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className={`tanaw-map-status absolute top-4 right-4 z-420 flex max-w-xs items-center gap-3 rounded-xl border px-4 py-3 text-xs font-bold shadow-[0_18px_46px_rgba(0,0,0,0.38)] backdrop-blur-xl ${
-              isBoundaryError ? "border-red-300/30 bg-[#2b1620]/92 text-red-100" : "border-slate-400/30 bg-[#0d192b]/92 text-slate-100"
-            }`}
-          >
-            <RefreshCw size={16} className={isBoundaryLoading ? "animate-spin text-emerald-300" : "text-red-300"} aria-hidden="true" />
-            <span>{isBoundaryError ? "Barangay boundaries are temporarily unavailable." : "Loading barangay boundaries..."}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AdminMapInsights
+        barangay={selectedBarangayName}
+        enterpriseId={insightEnterpriseId}
+        isBoundaryError={isBoundaryError}
+        isBoundaryLoading={isBoundaryLoading}
+        isOpen={isInsightsOpen}
+        range={insightRange}
+        onClose={() => setIsInsightsOpen(false)}
+        onOpen={() => setIsInsightsOpen(true)}
+        onRangeChange={setInsightRange}
+        onShowArea={() => dispatchMapInteraction({ type: "show-area-insights" })}
+      />
 
-      {!isInsightsOpen && (
-        <motion.button
-          type="button"
-          initial={{ opacity: 0, x: 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => setIsInsightsOpen(true)}
-          className={`absolute right-4 z-420 inline-flex items-center gap-2 rounded-xl border border-slate-400/35 bg-[#0b1527]/92 px-4 py-3 text-xs font-black tracking-wide text-white uppercase shadow-[0_18px_46px_rgba(0,0,0,0.44)] backdrop-blur-xl transition-all hover:border-emerald-300/45 hover:bg-[#132139] ${isBoundaryLoading || isBoundaryError ? "top-20" : "top-4"}`}
-        >
-          <BarChart3 size={16} className="text-emerald-300" />
-          Visitor Insights
-        </motion.button>
-      )}
-
-      <AnimatePresence>
-        {isInsightsOpen && (
-          <VisitorInsightsDrawer
-            range={insightRange}
-            enterpriseId={insightEnterpriseId ?? undefined}
-            barangay={insightEnterpriseId ? undefined : (selectedBarangayName ?? undefined)}
-            onRangeChange={setInsightRange}
-            onShowArea={() => dispatchMapInteraction({ type: "show-area-insights" })}
-            onClose={() => setIsInsightsOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence initial={false}>
-        {!isDirectoryCollapsed && (
-          <motion.aside
-            id="spatial-directory-panel"
-            initial={{ opacity: 0, x: -24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="tanaw-map-directory absolute top-4 bottom-4 left-4 z-420 flex w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-400/35 bg-[#0b1527]/92 shadow-[0_28px_80px_rgba(0,0,0,0.52)] ring-1 ring-white/8 backdrop-blur-xl"
-          >
-            {/* Header section (Fixed size, shrink-0) */}
-            <div className="tanaw-map-directory__header flex shrink-0 flex-col gap-3 border-b border-slate-500/35 bg-[#111f34]/90 px-4 py-3.5">
-              <div className="relative z-10 flex items-start justify-between gap-3">
-                <div>
-                  <span className="flex items-center gap-2 text-[10px] font-black tracking-widest text-white uppercase">
-                    <MapIcon size={14} className="text-tanaw-sky" /> Spatial Directory
-                  </span>
-                  <p className="mt-1 text-[9px] font-bold tracking-widest text-white/65 uppercase">
-                    {selectedBarangayName
-                      ? `${selectedBarangayEnterprises.length} registered enterprises`
-                      : isBoundaryLoading
-                        ? "Loading refined boundaries"
-                        : isBoundaryError
-                          ? "Boundary layer unavailable"
-                          : enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError
-                            ? "Enterprise registry unavailable"
-                            : enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading
-                              ? "Loading enterprises"
-                              : `${boundaryFeatureCount} barangay boundaries`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    title={showBoundaries ? "Hide barangay boundaries" : "Show barangay boundaries"}
-                    aria-pressed={showBoundaries}
-                    onClick={() => setShowBoundaries((value) => !value)}
-                    className={`focus:ring-tanaw-sky rounded border px-2 py-1 text-[9px] font-black tracking-widest uppercase transition focus:ring-2 focus:outline-none ${showBoundaries ? "border-emerald-400/45 bg-emerald-500/25 text-white shadow-sm shadow-emerald-950/30" : "border-white/20 bg-white/10 text-white/75 hover:border-white/30 hover:bg-white/15 hover:text-white"}`}
-                  >
-                    Boundaries
-                  </button>
-                  <button
-                    type="button"
-                    aria-controls="spatial-directory-panel"
-                    aria-label="Collapse spatial directory"
-                    title="Collapse spatial directory"
-                    onClick={() => setIsDirectoryCollapsed(true)}
-                    className="focus:ring-tanaw-sky flex h-8 w-8 shrink-0 items-center justify-center rounded border border-white/20 bg-white/10 text-white/80 transition hover:border-white/30 hover:bg-white/15 hover:text-white focus:ring-2 focus:outline-none"
-                  >
-                    <PanelLeftClose size={15} />
-                  </button>
-                </div>
-              </div>
-              <MonitoringLegend />
-            </div>
-
-            {/* Dropdown Selector section (Fixed size, shrink-0, overflow-visible for dropdown menu) */}
-            <div className="tanaw-map-directory__selector relative z-20 shrink-0 overflow-visible border-b border-slate-500/30 bg-[#0d192b]/92 px-4 py-3.5">
-              <SelectDropdown
-                label="Select Barangay"
-                ariaLabel="Select barangay"
-                value={selectedBarangayName ?? ""}
-                options={barangayDropdownOptions}
-                onChange={(barangayName) => (barangayName ? selectBarangay(barangayName) : clearBarangaySelection("all-barangays"))}
-                searchable
-                searchPlaceholder="Search barangay..."
-                variant="directory"
-              />
-            </div>
-
-            {/* Scrollable details and enterprise list container */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <AnimatePresence mode="wait" initial={false}>
-                {selectedBarangayName ? (
-                  <motion.div
-                    key={`barangay-enterprises-${normalizeBarangayName(selectedBarangayName)}`}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.24, ease: "easeOut" }}
-                    className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden p-3"
-                  >
-                    {/* Selected Barangay Info */}
-                    <div className="tanaw-map-directory__card shrink-0 rounded-xl border border-slate-400/25 bg-[#15233a]/82 p-3 shadow-sm shadow-black/20">
-                      <div className="mb-2.5 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          aria-label="Back to Barangay Directory"
-                          title="Return to all barangays"
-                          onClick={() => clearBarangaySelection("back")}
-                          className="focus:ring-tanaw-sky inline-flex min-h-7 items-center gap-1.5 rounded-md border border-white/15 bg-slate-950/35 px-2 py-1 text-[9px] font-black tracking-widest text-white/75 uppercase transition hover:border-emerald-300/35 hover:bg-slate-950/55 hover:text-white focus:ring-2 focus:outline-none"
-                        >
-                          <ArrowLeft size={12} className="text-tanaw-sky shrink-0" />
-                          All Barangays
-                        </button>
-                        <span className="shrink-0 rounded border border-white/15 bg-black/35 px-2 py-1 font-mono text-[9px] font-black tracking-widest text-white uppercase">
-                          {selectedBarangayEnterprises.length + selectedBarangayUnpinnedEnterprises.length}
-                        </span>
-                      </div>
-                      <h3 className="text-sm leading-tight font-black tracking-wide text-white uppercase">Barangay {selectedBarangayName}</h3>
-                      <p className="mt-1 text-[9px] font-bold tracking-widest text-white/65 uppercase">Enterprises within this barangay</p>
-                    </div>
-
-                    {/* Dedicated Enterprise List section at the bottom */}
-                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3 shadow-sm shadow-black/20">
-                      <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2">
-                        <h3 className="flex min-w-0 items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
-                          <Building2 size={13} className="text-tanaw-sky" />
-                          Enterprises within this Barangay
-                        </h3>
-                        <span className="shrink-0 text-[9px] font-bold tracking-widest text-white/65 uppercase">{selectedBarangayEnterprises.length + selectedBarangayUnpinnedEnterprises.length}</span>
-                      </div>
-                      <div className="tanaw-map-directory__list min-h-0 flex-1 space-y-2 overflow-y-auto pr-1.5">
-                        {selectedBarangayEnterprises.map((enterprise, index) => (
-                          <motion.div
-                            key={enterprise.id}
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.22, delay: Math.min(index * 0.025, 0.12), ease: "easeOut" }}
-                          >
-                            <EnterpriseMapCard enterprise={enterprise} selected={selectedEnterpriseId === enterprise.id} onClick={() => selectEnterprise(enterprise)} />
-                          </motion.div>
-                        ))}
-                        {selectedBarangayUnpinnedEnterprises.map((enterprise) => (
-                          <UnpinnedEnterpriseCard key={enterprise.id} enterprise={enterprise} />
-                        ))}
-                        {selectedBarangayEnterprises.length === 0 && selectedBarangayUnpinnedEnterprises.length === 0 && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.22, ease: "easeOut" }}
-                            className="rounded-lg border border-white/15 bg-black/20 p-4 text-center text-[10px] leading-relaxed font-bold tracking-widest text-white/65 uppercase"
-                          >
-                            {enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError ? "Unable to load enterprise registry." : "No registered enterprises found for this barangay yet."}
-                          </motion.div>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="all-enterprises-view"
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 4 }}
-                    transition={{ duration: 0.22, ease: "easeOut" }}
-                    className="flex min-h-0 flex-1 flex-col overflow-hidden p-3"
-                  >
-                    {/* Dedicated Enterprise List section showing all enterprises */}
-                    <div className="tanaw-map-directory__card flex min-h-0 flex-1 flex-col rounded-xl border border-slate-400/25 bg-[#111e32]/88 p-3 shadow-sm shadow-black/20">
-                      <div className="mb-2.5 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-2">
-                        <h3 className="flex min-w-0 items-center gap-2 text-[9px] font-black tracking-widest text-white/80 uppercase">
-                          <Building2 size={13} className="text-tanaw-sky" />
-                          All Enterprises
-                        </h3>
-                        <span className="shrink-0 text-right text-[9px] leading-tight font-bold tracking-widest text-white/65 uppercase">
-                          {unpinnedEnterpriseCount > 0 ? `${mapEnterprises.length} pinned / ${unpinnedEnterpriseCount} unpinned` : enterpriseAccounts.length}
-                        </span>
-                      </div>
-                      <div className="tanaw-map-directory__list min-h-0 flex-1 space-y-2 overflow-y-auto pr-1.5">
-                        {mapEnterprises.map((enterprise) => (
-                          <EnterpriseMapCard
-                            key={enterprise.id}
-                            enterprise={enterprise}
-                            selected={selectedEnterpriseId === enterprise.id}
-                            onClick={() => {
-                              selectEnterprise(enterprise);
-                            }}
-                          />
-                        ))}
-                        {unpinnedEnterprises.map((enterprise) => (
-                          <UnpinnedEnterpriseCard key={enterprise.id} enterprise={enterprise} />
-                        ))}
-                        {enterpriseAccounts.length === 0 && (
-                          <div className="rounded-lg border border-white/15 bg-black/20 p-4 text-center text-[10px] leading-relaxed font-bold tracking-widest text-white/65 uppercase">
-                            {enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError ? (
-                              <div className="flex flex-col items-center gap-3">
-                                <span>Unable to load enterprise registry.</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void enterpriseAccountsQuery.refetch();
-                                    void mapEnterprisesQuery.refetch();
-                                  }}
-                                  className="focus:ring-tanaw-sky inline-flex items-center gap-1.5 rounded border border-white/20 bg-white/10 px-2 py-1 text-[9px] font-black tracking-widest text-white transition hover:bg-white/15 focus:ring-2 focus:outline-none"
-                                >
-                                  <RefreshCw size={11} />
-                                  Retry
-                                </button>
-                              </div>
-                            ) : enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading ? (
-                              "Loading enterprises..."
-                            ) : (
-                              "No pinned enterprise locations yet."
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {isDirectoryCollapsed && (
-        <motion.button
-          type="button"
-          aria-controls="spatial-directory-panel"
-          aria-label="Expand spatial directory"
-          title="Expand spatial directory"
-          initial={{ opacity: 0, x: -12 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
-          onClick={() => setIsDirectoryCollapsed(false)}
-          className="focus:ring-tanaw-sky absolute top-4 left-4 z-430 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-400/35 bg-[#0b1527]/92 text-white shadow-[0_18px_46px_rgba(0,0,0,0.44)] backdrop-blur-xl transition hover:border-slate-300/45 hover:bg-[#132139] focus:ring-2 focus:outline-none"
-        >
-          <PanelLeftOpen size={18} />
-        </motion.button>
-      )}
+      <AdminMapDirectory
+        barangayDropdownOptions={barangayDropdownOptions}
+        boundaryFeatureCount={boundaryFeatureCount}
+        enterpriseAccounts={enterpriseAccounts}
+        isBoundaryError={isBoundaryError}
+        isBoundaryLoading={isBoundaryLoading}
+        isCollapsed={isDirectoryCollapsed}
+        isEnterpriseError={enterpriseAccountsQuery.isError || mapEnterprisesQuery.isError}
+        isEnterpriseLoading={enterpriseAccountsQuery.isLoading || mapEnterprisesQuery.isLoading}
+        mapEnterprises={mapEnterprises}
+        onClearBarangay={clearBarangaySelection}
+        onCollapseChange={setIsDirectoryCollapsed}
+        onRetry={() => {
+          void enterpriseAccountsQuery.refetch();
+          void mapEnterprisesQuery.refetch();
+        }}
+        onSelectBarangay={selectBarangay}
+        onSelectEnterprise={selectEnterprise}
+        onShowBoundariesChange={setShowBoundaries}
+        selectedBarangayEnterprises={selectedBarangayEnterprises}
+        selectedBarangayName={selectedBarangayName}
+        selectedBarangayUnpinnedEnterprises={selectedBarangayUnpinnedEnterprises}
+        selectedEnterpriseId={selectedEnterpriseId}
+        showBoundaries={showBoundaries}
+        unpinnedEnterprises={unpinnedEnterprises}
+      />
 
       <AnimatePresence>
         {selectedEnterprise && (
@@ -818,97 +443,4 @@ export function AdminEnterpriseMap() {
       </AnimatePresence>
     </div>
   );
-}
-
-function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapEnterprise; selected: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`focus:ring-tanaw-sky w-full rounded-lg border p-2.5 text-left shadow-sm shadow-black/15 transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/10 focus:ring-2 focus:outline-none ${selected ? "border-tanaw-sky/60 bg-tanaw-sky/15" : "border-white/15 bg-slate-950/35"}`}
-    >
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.name}</h4>
-          <div className="mt-1 flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-white/70 uppercase">
-            <MapPin size={10} className="shrink-0" />
-            <span className="truncate">{enterprise.fullAddress}</span>
-          </div>
-        </div>
-        <span
-          className={`flex max-w-[46%] shrink-0 items-center justify-center rounded border px-1.5 py-0.5 text-center text-[9px] leading-tight font-black tracking-widest uppercase ${getDarkMonitoringBadgeClass(enterprise.monitoringStatus)}`}
-        >
-          {enterprise.monitoringStatus}
-        </span>
-      </div>
-
-      <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-white/15 pt-2 font-mono text-[10px]">
-        <span className="truncate text-white/70">
-          {enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras` : "No camera telemetry"}
-        </span>
-        <span className={`justify-self-end rounded border px-1.5 py-0.5 font-sans text-[8px] font-black tracking-wider uppercase ${getOccupancyBadgeClass(enterprise.occupancyStatus)}`}>
-          {enterprise.occupancyStatus}
-        </span>
-        <span className="text-white/70">Live Occupancy</span>
-        <span className="flex items-center justify-end gap-1 font-bold text-white">
-          <Activity size={12} className="text-tanaw-sky" />
-          {enterprise.totalLiveOccupancy.toLocaleString()}
-        </span>
-        <span className="text-white/70">Est. Unique</span>
-        <span className="text-right font-bold text-white">{enterprise.estimatedUniqueCount.toLocaleString()}</span>
-      </div>
-    </button>
-  );
-}
-
-function MonitoringLegend() {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[8px] font-bold tracking-wider text-white/70 uppercase">
-      <LegendItem color="#16a34a" label="All Running" />
-      <LegendItem color="#ea580c" label="Partial" />
-      <LegendItem color="#64748b" label="Stopped" />
-      <LegendItem color="#dc2626" label="Fault" />
-      <span className="text-white/50">Outer ring: occupancy alert</span>
-    </div>
-  );
-}
-
-function LegendItem({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className="h-2 w-2 rounded-full ring-1 ring-white/40" style={{ backgroundColor: color }} aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function UnpinnedEnterpriseCard({ enterprise }: { enterprise: AccountSummary }) {
-  const statusLabel = enterprise.latitude === null || enterprise.longitude === null ? "Not Pinned" : "Needs Correction";
-
-  return (
-    <div className="w-full rounded-lg border border-dashed border-white/15 bg-slate-950/25 p-2.5 text-left shadow-sm shadow-black/15">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h4 className="text-[12px] leading-tight font-bold text-white">{enterprise.enterpriseName ?? enterprise.displayName}</h4>
-          <div className="mt-1 flex items-center gap-1.5 text-[9px] font-bold tracking-widest text-white/70 uppercase">
-            <MapPin size={10} className="shrink-0" />
-            <span className="truncate">{enterprise.address ?? "Address not provided"}</span>
-          </div>
-        </div>
-        <span className="flex max-w-[46%] shrink-0 items-center justify-center rounded border border-amber-400/30 bg-amber-900/35 px-1.5 py-0.5 text-center text-[9px] leading-tight font-black tracking-widest text-amber-100 uppercase">
-          {statusLabel}
-        </span>
-      </div>
-
-      <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1.5 border-t border-white/15 pt-2 font-mono text-[10px]">
-        <span className="truncate text-white/70">{enterprise.category ?? "Uncategorized"}</span>
-        <span className="truncate text-right font-bold text-white">{enterprise.barangay ?? "Unassigned"}</span>
-      </div>
-    </div>
-  );
-}
-
-function hasUsableSanPedroCoordinates(boundary: GeoJsonFeatureCollection | null, enterprise: AccountSummary) {
-  if (enterprise.latitude === null || enterprise.longitude === null) return false;
-  return isPointInsideSanPedro(boundary, enterprise.latitude, enterprise.longitude);
 }

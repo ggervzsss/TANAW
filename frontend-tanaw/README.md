@@ -1,6 +1,8 @@
 # TANAW Frontend
 
-Cloud-backed dynamic data uses the shared authenticated `/realtime/ws` provider with REST initial reads and mutation APIs. See [the realtime architecture](../docs/REALTIME_ARCHITECTURE.md).
+Cloud-backed dynamic data uses the shared authenticated `/realtime/ws`
+provider with REST initial reads and mutation APIs. See the root
+[realtime architecture](../README.md#realtime-architecture).
 
 React, TypeScript, Vite, and Tailwind web application for the TANAW LGU portal.
 It gives LGU users role-specific workspaces for monitoring enterprises,

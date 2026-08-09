@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     email_delivery_mode: str = "log"
     resend_api_key: SecretStr | None = None
+    geoapify_api_key: SecretStr | None = None
     resend_api_base_url: str = "https://api.resend.com"
     email_from_name: str = "TANAW"
     email_from_address: EmailStr = "onboarding@resend.dev"
@@ -88,12 +89,6 @@ class Settings(BaseSettings):
     account_email_change_retention_days: int = Field(default=180, ge=30, le=3650)
     email_outbox_retention_days: int = Field(default=180, ge=30, le=3650)
     failed_email_outbox_retention_days: int = Field(default=365, ge=30, le=3650)
-    realtime_enabled: bool = True
-    realtime_heartbeat_seconds: int = Field(default=30, ge=10, le=120)
-    realtime_outbox_poll_seconds: float = Field(default=0.5, ge=0.05, le=10.0)
-    realtime_outbox_batch_size: int = Field(default=100, ge=1, le=500)
-    realtime_broker_reconnect_seconds: float = Field(default=1.0, ge=0.1, le=60.0)
-
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", populate_by_name=True
     )
@@ -122,6 +117,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "resend_api_key",
+        "geoapify_api_key",
         "email_secret_derivation_key",
         "email_test_recipient",
         "bootstrap_it_username",
@@ -135,7 +131,10 @@ class Settings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def normalize_optional_email_setting(cls, value: object) -> object:
+    def normalize_optional_setting(cls, value: object) -> object:
+        if isinstance(value, SecretStr):
+            normalized_secret = value.get_secret_value().strip()
+            return SecretStr(normalized_secret) if normalized_secret else None
         if not isinstance(value, str):
             return value
         normalized = value.strip()

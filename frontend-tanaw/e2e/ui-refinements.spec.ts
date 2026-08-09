@@ -135,7 +135,7 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
   await expect(viewer).toBeHidden();
 });
 
-test("keeps Password Settings blank, theme-correct, resettable, and uses the shared dark Logout treatment", async ({ page }) => {
+test("keeps Password Settings blank, theme-correct, and resettable", async ({ page }) => {
   await page.route("**/auth/change-password", async (route) => {
     expect(route.request().postDataJSON()).toEqual({
       currentPassword: "Current secure passphrase 2026",
@@ -180,18 +180,22 @@ test("keeps Password Settings blank, theme-correct, resettable, and uses the sha
   await expect(currentPassword).toHaveValue("");
   await expect(newPassword).toHaveValue("");
   await expect(confirmation).toHaveValue("");
-  await expect(page.getByText("Workstation Browser (Current)")).toBeVisible();
 
   await page.goto("/staff/analytics");
   await page.goto("/staff/security");
   await expect(page.getByLabel("Current Password", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("New Password", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Confirm New Password", { exact: true })).toHaveValue("");
+});
 
+test("shows the Logout background only while the shared profile action is interactive", async ({ page }) => {
+  await signInAsStaff(page);
   await page.getByRole("button", { name: "Open account menu" }).click();
   const logout = page.getByRole("button", { name: "Logout" });
   await expect(logout).toHaveClass(/profile-menu-danger/);
-  await expect(logout).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await logout.focus();
-  await expect(logout).toBeFocused();
+  await expect(logout).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await logout.hover();
+  await expect(logout).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.mouse.move(0, 0);
+  await expect(logout).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 });

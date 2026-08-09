@@ -14,6 +14,7 @@ from app.features.accounts.models import (
     Account,
     AccountEmailChangeRequest,
     AccountEmailChangeStatus,
+    AccountRole,
     AccountStatus,
 )
 from app.features.auth.challenge_service import invalidate_password_reset_challenges
@@ -45,6 +46,7 @@ class AccountEmailChangeError(ValueError):
 @dataclass(frozen=True)
 class AccountEmailChangeVerificationDetails:
     account_id: str
+    account_role: AccountRole
     display_name: str
     requested_email: str
     status: str
@@ -261,6 +263,7 @@ async def verify_account_email_change(
         await db.flush()
     return AccountEmailChangeVerificationDetails(
         account_id=account.id,
+        account_role=account.role,
         display_name=account.display_name,
         requested_email=request.requested_email,
         status=request.status,

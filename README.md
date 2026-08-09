@@ -1,7 +1,5 @@
 # TANAW
 
-See [Realtime architecture](docs/REALTIME_ARCHITECTURE.md) for the authenticated cross-client event pipeline, deployment proxy requirements, recovery behavior, and validation commands.
-
 TANAW is a tourism monitoring, enterprise reporting, and LGU operations platform
 for the City of San Pedro, Laguna. It connects participating enterprises to the
 city through a local desktop application that can count visitors from CCTV/IP
@@ -23,6 +21,7 @@ Want only the commands needed to test the system? Use the
 - [TL;DR test guide](./TLDR.md)
 - [What TANAW provides](#what-tanaw-provides)
 - [Architecture](#architecture)
+- [Realtime architecture](#realtime-architecture)
 - [Technology stack](#technology-stack)
 - [Project structure](#project-structure)
 - [Prerequisites](#prerequisites)
@@ -108,6 +107,24 @@ Raw camera video is not uploaded to PostgreSQL. ReID processing and temporary
 appearance metadata stay on the enterprise device. Live frames remain in
 memory and are not stored as SQLite rows.
 
+## Realtime architecture
+
+TANAW uses one authenticated application WebSocket endpoint at
+`/realtime/ws`. The web and desktop clients load their initial state through
+REST, then use this connection for change notifications. Camera streams and the
+desktop ML-service transport remain separate local channels.
+
+The backend writes application events to the realtime outbox in the same
+database transaction as the related state change. The realtime runtime claims
+committed events and publishes them to authenticated clients. Clients recover
+from disconnects by reconnecting and refreshing the affected REST resources,
+so correctness does not depend on receiving every WebSocket message.
+
+Deployments must proxy WebSocket upgrades for `/realtime/ws` and expose
+`/ready/realtime` for readiness checks. Runtime timing and retention values are
+application defaults in the codebase; environment configuration is reserved
+for deployment-specific connection, credential, and API settings.
+
 ## Technology stack
 
 | Area                 | Technologies                                                                                             |
@@ -133,8 +150,15 @@ TANAW/
 │   │       ├── accounts/       # LGU/enterprise accounts and bootstrap seed
 │   │       ├── activity_logs/  # Audit and operational activity
 │   │       ├── auth/           # Login, logout, password, and recovery flows
+│   │       ├── dashboard/      # Cross-capability dashboard queries
+│   │       ├── mail/           # Transactional email delivery
+│   │       ├── maintenance/    # Retention and background maintenance
+│   │       ├── monitoring/     # Telemetry, visitor insights, and alerts
+│   │       ├── notifications/  # In-application notifications
+│   │       ├── realtime/       # Outbox and WebSocket delivery
+│   │       ├── reporting/      # Intake, review, and final reports
 │   │       ├── sample_data/    # Development sample-data CLI
-│   │       └── operational/    # Telemetry, reports, sync, and final reports
+│   │       └── support/        # Support tickets and conversations
 │   ├── alembic/                # Database migrations
 │   └── tests/
 ├── frontend-tanaw/             # LGU role-based React web portal
@@ -415,13 +439,18 @@ npm run dist
 Build artifacts are written under `desktop-tanaw/release/`.
 
 The current installer build includes the TANAW desktop code and ML service
-source, but local model artifacts are not committed to Git. A build machine
-must run the model setup command first if installer packaging should include
-those assets. It does not bundle a standalone Python runtime and installed
-Python packages. A machine running that development installer still needs
-Python 3.12 or newer and uv available. Group members cloning the repository
-should use `npm run dev`, which uses the `.venv` created by
-`uv sync --directory ml-service --frozen`.
+runtime, but local model artifacts are not committed to Git. A build machine
+must run the model setup commands before packaging. The distribution workflow
+uses PyInstaller to bundle Python and the locked ML dependencies, verifies the
+standalone runtime, and copies the model assets into the installer. Installed
+computers do not need Python or `uv`; development still uses the `.venv` created
+by `uv sync --directory ml-service --frozen`.
+
+Create Windows installers on Windows x64 so PyInstaller and native ML
+dependencies match the target operating system. Before `npm run dist`, set the
+public HTTPS `VITE_API_BASE_URL` in the build environment. Development remains
+on the local Vite and backend addresses. See the desktop README for the complete
+Windows distribution checklist.
 
 ## Bootstrap and development accounts
 
@@ -665,7 +694,7 @@ The backend production template contains only deployment-specific values:
 | `TANAW_ENV`                                      | Enables production validation                      |
 | `DATABASE_URL`                                   | Managed PostgreSQL connection URL                  |
 | `JWT_SECRET_KEY`                                 | Token-signing secret                               |
-| `CORS_ORIGINS`                                   | Authorized public frontend origin                  |
+| `CORS_ORIGINS`                                   | Authorized web and packaged desktop origins        |
 | `FRONTEND_PUBLIC_URL`                            | Public URL used in transactional links             |
 | `BOOTSTRAP_IT_USERNAME`, `BOOTSTRAP_IT_PASSWORD` | One-time credentials for an empty database         |
 | `EMAIL_DELIVERY_MODE`                            | Selects production Resend delivery                 |

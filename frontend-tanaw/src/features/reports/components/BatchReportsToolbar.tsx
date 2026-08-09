@@ -43,7 +43,13 @@ export function BatchReportsToolbar({
           className="focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
         />
       </div>
-      <FilterSelect value={barangayFilter} onChange={onBarangayChange} options={[["all", "All Barangays"], ...availableBarangays.map((barangay) => [barangay, barangay] as const)]} ariaLabel="Barangay" searchable />
+      <FilterSelect
+        value={barangayFilter}
+        onChange={onBarangayChange}
+        options={[["all", "All Barangays"], ...availableBarangays.map((barangay) => [barangay, barangay] as const)]}
+        ariaLabel="Barangay"
+        searchable
+      />
       <FilterSelect value={monthFilter} onChange={onMonthChange} options={availableMonths} ariaLabel="Report month" />
       <FilterSelect value={yearFilter} onChange={onYearChange} options={availableYears} ariaLabel="Report year" />
       <button

@@ -1,120 +1,93 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse, Response
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from starlette.responses import Response
 
 from app.api.router import api_router
-from app.core.config import get_settings
+from app.api.system_router import router as system_router
+from app.core.config import Settings, get_settings
 from app.core.http_security import apply_security_headers
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
+from app.features.accounts.location_search_runtime import (
+    close_location_search_runtime,
+    initialize_location_search_runtime,
+)
 from app.features.accounts.seed import seed_default_accounts
-from app.features.mail.runtime import (
-    close_email_runtime,
-    email_runtime_ready,
-    initialize_email_runtime,
-)
-from app.features.mail.worker import (
-    email_outbox_worker_ready,
-    start_email_outbox_worker,
-    stop_email_outbox_worker,
-)
+from app.features.mail.runtime import close_email_runtime, initialize_email_runtime
+from app.features.mail.worker import start_email_outbox_worker, stop_email_outbox_worker
 from app.features.maintenance.runtime import (
-    retention_cleanup_worker_ready,
     start_retention_cleanup_worker,
     stop_retention_cleanup_worker,
 )
-from app.features.realtime.runtime import (
-    realtime_runtime_health,
-    realtime_runtime_ready,
-    start_realtime_runtime,
-    stop_realtime_runtime,
-)
+from app.features.realtime.runtime import start_realtime_runtime, stop_realtime_runtime
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    async with engine.connect() as connection:
-        await validate_database_migration_head(connection)
+def create_lifespan(
+    settings: Settings,
+    database_engine: AsyncEngine,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        async with database_engine.connect() as connection:
+            await validate_database_migration_head(connection)
 
-    async with AsyncSessionLocal() as session:
-        await seed_default_accounts(session)
+        async with session_factory() as session:
+            await seed_default_accounts(session)
 
-    await initialize_email_runtime(settings)
-    await start_email_outbox_worker(settings)
-    await start_retention_cleanup_worker(settings)
-    await start_realtime_runtime(settings)
-    try:
-        yield
-    finally:
-        await stop_realtime_runtime()
-        await stop_retention_cleanup_worker()
-        await stop_email_outbox_worker()
-        await close_email_runtime()
+        await initialize_email_runtime(settings)
+        await initialize_location_search_runtime(settings)
+        await start_email_outbox_worker(settings)
+        await start_retention_cleanup_worker(settings)
+        await start_realtime_runtime(settings)
+        try:
+            yield
+        finally:
+            await stop_realtime_runtime()
+            await stop_retention_cleanup_worker()
+            await stop_email_outbox_worker()
+            await close_email_runtime()
+            await close_location_search_runtime()
 
-
-settings = get_settings()
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+    return lifespan
 
 
-@app.middleware("http")
-async def security_headers_middleware(
-    request: Request, call_next: Callable[[Request], Awaitable[Response]]
-) -> Response:
-    response = await call_next(request)
-    apply_security_headers(request, response)
-    return response
-
-
-app.include_router(api_router)
-
-
-@app.get("/health")
-@app.head("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/ready/email")
-@app.head("/ready/email")
-async def email_readiness() -> JSONResponse:
-    ready = email_runtime_ready(settings) and email_outbox_worker_ready()
-    return JSONResponse(
-        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={
-            "status": "ready" if ready else "not_ready",
-            "mode": settings.email_delivery_mode,
-            "provider": "resend" if settings.email_delivery_mode == "resend" else "local",
-        },
+def create_app(
+    *,
+    settings: Settings | None = None,
+    database_engine: AsyncEngine = engine,
+    session_factory: async_sessionmaker[AsyncSession] = AsyncSessionLocal,
+) -> FastAPI:
+    resolved_settings = settings or get_settings()
+    application = FastAPI(
+        title=resolved_settings.app_name,
+        lifespan=create_lifespan(resolved_settings, database_engine, session_factory),
+    )
+    application.state.settings = resolved_settings
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolved_settings.cors_origin_list,
+        allow_credentials=True,
+        allow_methods=["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
+    @application.middleware("http")
+    async def security_headers_middleware(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        apply_security_headers(request, response)
+        return response
 
-@app.get("/ready/maintenance")
-@app.head("/ready/maintenance")
-async def maintenance_readiness() -> JSONResponse:
-    ready = retention_cleanup_worker_ready()
-    return JSONResponse(
-        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"status": "ready" if ready else "not_ready"},
-    )
+    application.include_router(system_router)
+    application.include_router(api_router)
+    return application
 
 
-@app.get("/ready/realtime")
-@app.head("/ready/realtime")
-async def realtime_readiness() -> JSONResponse:
-    ready = realtime_runtime_ready()
-    return JSONResponse(
-        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
-        content=realtime_runtime_health(),
-    )
+app = create_app()

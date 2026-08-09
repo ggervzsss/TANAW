@@ -122,12 +122,16 @@ export function ReportReviewModal({ report, isUpdating = false, onClose, onAccep
                     <tbody className="divide-y divide-gray-100">
                       <tr>
                         <td className="py-2 font-medium text-gray-800">Zone A - Main Entrance</td>
-                        <td className="py-2 font-mono text-gray-500">{report.month} 31, {timeFormat === "12-hour" ? "11:55 PM" : "23:55"} Philippine Time</td>
+                        <td className="py-2 font-mono text-gray-500">
+                          {report.month} 31, {timeFormat === "12-hour" ? "11:55 PM" : "23:55"} Philippine Time
+                        </td>
                         <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{Math.floor(report.metrics.unique * 0.7).toLocaleString()}</td>
                       </tr>
                       <tr>
                         <td className="py-2 font-medium text-gray-800">Zone B - Rear Exit</td>
-                        <td className="py-2 font-mono text-gray-500">{report.month} 31, {timeFormat === "12-hour" ? "11:58 PM" : "23:58"} Philippine Time</td>
+                        <td className="py-2 font-mono text-gray-500">
+                          {report.month} 31, {timeFormat === "12-hour" ? "11:58 PM" : "23:58"} Philippine Time
+                        </td>
                         <td className="text-tgreen-dark py-2 text-right font-mono font-bold">{(report.metrics.unique - Math.floor(report.metrics.unique * 0.7)).toLocaleString()}</td>
                       </tr>
                     </tbody>

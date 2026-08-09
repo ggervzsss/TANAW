@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import {
-  replaceLocalCameras,
-  testCameraConnection,
-  updateCameraCountingConfig,
-} from "./ml-service";
+import { getMlHealth, getMlServiceStatus, getStreamUrl, replaceLocalCameras, testCameraConnection, updateCameraCountingConfig } from "./ml-service";
 
 describe("secure camera service requests", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -18,11 +14,56 @@ describe("secure camera service requests", () => {
     await testCameraConnection("http://127.0.0.1:8765", camera(), "enterprise:1");
 
     expect(request).toHaveBeenCalledOnce();
-    const payload = request.mock.calls[0]?.[3] as Record<string, unknown>;
+    const payload = request.mock.calls[0]?.[2] as Record<string, unknown>;
     expect(payload).not.toHaveProperty("camera_type");
     expect(payload).not.toHaveProperty("password");
     expect(payload).not.toHaveProperty("username");
     expect(payload.stream_url).toBe("rtsp://192.168.1.9/stream2");
+  });
+
+  it("keeps the per-launch token in Electron and proxies local service requests", async () => {
+    const request = vi.fn().mockResolvedValue({
+      body: JSON.stringify({ status: "ok" }),
+      ok: true,
+      status: 200,
+      statusText: "OK",
+    });
+    vi.stubGlobal("window", {
+      clearTimeout,
+      setTimeout,
+      tanawMlService: {
+        getStatus: vi.fn().mockResolvedValue({
+          baseUrl: "http://127.0.0.1:8765",
+          desktopBuild: "development",
+          desktopVersion: "test",
+          error: null,
+          packaged: false,
+          pid: 123,
+          running: true,
+        }),
+        request,
+      },
+    });
+
+    await getMlServiceStatus();
+    await getMlHealth("http://127.0.0.1:8765");
+
+    expect(request).toHaveBeenCalledWith({
+      body: undefined,
+      method: "GET",
+      timeoutMs: 2500,
+      url: "http://127.0.0.1:8765/health",
+    });
+    expect(JSON.stringify(await getMlServiceStatus())).not.toContain("launch-secret");
+  });
+
+  it("uses the token-hiding Electron stream protocol", () => {
+    vi.stubGlobal("window", { tanawMlService: {} });
+
+    const streamUrl = getStreamUrl("http://127.0.0.1:8765", 42, 3, false);
+
+    expect(streamUrl).toBe("tanaw-ml://service/camera/42/stream?overlay=0&v=3");
+    expect(streamUrl).not.toContain("access_token");
   });
 });
 
@@ -134,13 +175,7 @@ describe("camera configuration write boundary", () => {
       setTimeout,
     });
 
-    await expect(
-      updateCameraCountingConfig(
-        "http://127.0.0.1:8765",
-        camera(),
-        { requireActiveWorker: true },
-      ),
-    ).rejects.toMatchObject({
+    await expect(updateCameraCountingConfig("http://127.0.0.1:8765", camera(), { requireActiveWorker: true })).rejects.toMatchObject({
       code: "route_unavailable",
       status: 404,
     });

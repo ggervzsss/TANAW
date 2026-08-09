@@ -9,6 +9,7 @@ from unittest.mock import patch
 import numpy as np
 
 from app.camera.camera_manager import CameraProcessingManager, ProcessingSession
+from app.camera.runtime_math import resolve_reid_mode
 from app.config.camera_config import CameraCountingConfigUpdate, CameraStartRequest
 from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
@@ -20,6 +21,17 @@ from app.tracking import ResolvedTrack
 
 
 class CameraProcessingManagerSessionTest(unittest.TestCase):
+    def test_close_terminates_reid_workers_and_is_idempotent(self) -> None:
+        manager = CameraProcessingManager()
+        self.assertTrue(manager._reid_worker.status()["reid_worker_alive"])
+        self.assertTrue(manager._quality_reid_worker.status()["reid_worker_alive"])
+
+        manager.close()
+        manager.close()
+
+        self.assertFalse(manager._reid_worker.status()["reid_worker_alive"])
+        self.assertFalse(manager._quality_reid_worker.status()["reid_worker_alive"])
+
     def test_initial_enterprise_binding_does_not_write_unbound_retired_database(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             retired_database = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
@@ -57,12 +69,7 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         self.assertIsNone(status["stream_frame_stale_ms"])
 
     def test_high_accuracy_auto_mode_enables_quality_reid(self) -> None:
-        manager = CameraProcessingManager()
-        manager._tracker = cast(
-            Any, type("TrackerProfile", (), {"effective_profile": "high_accuracy"})()
-        )
-
-        self.assertEqual(manager._resolve_reid_mode("auto"), "quality")
+        self.assertEqual(resolve_reid_mode("auto", "high_accuracy"), "quality")
 
     def test_enterprise_binding_switches_session_store_scope(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -551,9 +558,10 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
                 manager._active_session = session
 
             frame = np.zeros((200, 200, 3), dtype=np.uint8)
-            first = manager._detect_and_count(session, frame, 0.35)[0]
-            pending = manager._detect_and_count(session, frame, 0.35)[0]
-            entry = manager._detect_and_count(session, frame, 0.35)[0]
+            with patch("app.camera.camera_manager.time.monotonic", side_effect=[10.0, 10.1, 10.2]):
+                first = manager._detect_and_count(session, frame, 0.35)[0]
+                pending = manager._detect_and_count(session, frame, 0.35)[0]
+                entry = manager._detect_and_count(session, frame, 0.35)[0]
 
             self.assertEqual([first.track_id, pending.track_id, entry.track_id], [12, 8, 14])
             self.assertIsNone(first.direction)

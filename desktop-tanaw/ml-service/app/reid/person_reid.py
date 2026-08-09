@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 from app.reid.model_registry import ReIdModelProfile
+from app.runtime.assets import model_directory
 
 
 @dataclass(frozen=True)
@@ -182,8 +183,7 @@ class PersonReIdentifier:
                 return str(requested_path)
             raise FileNotFoundError(f"ReID model file was not found at {requested_path}.")
 
-        service_root = Path(__file__).resolve().parents[2]
-        bundled_path = service_root / "models" / requested_path.name
+        bundled_path = model_directory() / requested_path.name
         if bundled_path.exists():
             return str(bundled_path)
 

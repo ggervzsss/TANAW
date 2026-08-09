@@ -1,4 +1,4 @@
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import type { LguRoleFilter, LguStatusFilter } from "../types";
 
 export const lguRoleLabel: Record<string, string> = {

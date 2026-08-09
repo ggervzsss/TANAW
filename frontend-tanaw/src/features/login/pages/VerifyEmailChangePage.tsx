@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, LoaderCircle, MailCheck, MapPin, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
@@ -18,16 +18,12 @@ export function VerifyEmailChangePage() {
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLElement>();
   const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
-  useLayoutEffect(() => {
-    if (!window.location.hash) return;
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
-  }, []);
-
   useEffect(() => {
     if (!token) return undefined;
     let isCurrent = true;
     void verifyAccountEmailChange(token)
       .then((verification) => {
+        clearEmailChangeTokenFromAddressBar();
         if (!isCurrent) return;
         setResult(verification);
         setView("verified");
@@ -139,4 +135,9 @@ function VerifiedState({ result }: { result: EmailChangeVerificationResult }) {
 function readEmailChangeToken(): string {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
   return new URLSearchParams(hash).get("token")?.trim() ?? "";
+}
+
+function clearEmailChangeTokenFromAddressBar() {
+  if (!window.location.hash) return;
+  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
 }

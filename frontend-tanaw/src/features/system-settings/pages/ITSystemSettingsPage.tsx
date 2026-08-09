@@ -7,9 +7,9 @@ import { ModalFrame, PageMotion } from "@/shared/components/ui";
 import { SettingsDetailPanel } from "../components";
 import { settingSections } from "../data";
 import type { SettingField, SettingValue } from "../types";
-import { getSystemSettings, updateSystemSettings } from "@/shared/services/accountManagement";
-import { purgeExpiredActivityLogs } from "@/shared/services/activityLogs";
-import { activityLogsQueryKey } from "@/shared/hooks/useActivityLogs";
+import { getSystemSettings, updateSystemSettings } from "@/shared/services/systemSettingsService";
+import { activityLogsQueryKey } from "@/features/system-logs/hooks";
+import { purgeExpiredActivityLogs } from "@/features/system-logs/services";
 import { systemSettingsQueryKey, useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { formatPhilippineDateTime, PHILIPPINE_TIME_LABEL } from "@/shared/utils/dateTime";
 
@@ -32,7 +32,7 @@ export function ITSystemSettingsPage() {
     onSuccess: ({ deletedCount }) => {
       setIsPurgeConfirmOpen(false);
       toast.success(`Deleted ${deletedCount} old activity ${deletedCount === 1 ? "entry" : "entries"}.`);
-      void queryClient.invalidateQueries({ queryKey: ["system-settings"] });
+      void queryClient.invalidateQueries({ queryKey: systemSettingsQueryKey });
       return queryClient.invalidateQueries({ queryKey: activityLogsQueryKey });
     },
     onError: () => toast.error("Unable to delete old activity."),
@@ -53,12 +53,7 @@ export function ITSystemSettingsPage() {
           isSaving={saveMutation.isPending}
           metadataLabel={metadataLabel}
           additionalContentBySectionId={{
-            logs: (
-              <PurgeLogsSettingCard
-                isPending={purgeMutation.isPending}
-                onOpenConfirm={() => setIsPurgeConfirmOpen(true)}
-              />
-            ),
+            logs: <PurgeLogsSettingCard isPending={purgeMutation.isPending} onOpenConfirm={() => setIsPurgeConfirmOpen(true)} />,
           }}
           onSave={(values) => saveMutation.mutate(values)}
         />
@@ -69,9 +64,7 @@ export function ITSystemSettingsPage() {
             <p className="text-sm leading-6 text-slate-600">
               This permanently deletes activity history older than the currently saved retention period. Older entries are already hidden; this action removes them from storage.
             </p>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
-              This cannot be undone. TANAW will record this action in System Activity.
-            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">This cannot be undone. TANAW will record this action in System Activity.</div>
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-5">
               <button
                 type="button"

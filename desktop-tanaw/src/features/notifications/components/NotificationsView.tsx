@@ -11,7 +11,7 @@ type NotificationsViewProps = {
 
 export function NotificationsView({ notifications, unreadCount, onMarkAllRead, onSelectNotification }: NotificationsViewProps) {
   return (
-    <div className="animate-in fade-in mx-auto w-full max-w-290 space-y-6 pt-2 font-['Inter'] duration-500">
+    <div className="animate-in fade-in mx-auto w-full max-w-290 space-y-6 pt-2 font-sans duration-500">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="mb-2 text-[11px] font-black tracking-[0.24em] text-[#b7952b] uppercase">Enterprise Alerts</p>
@@ -39,9 +39,7 @@ export function NotificationsView({ notifications, unreadCount, onMarkAllRead, o
                 onClick={() => onSelectNotification(notification)}
                 className={`flex w-full gap-4 p-5 text-left transition-colors hover:bg-emerald-50/70 ${notification.read ? "opacity-75" : "bg-blue-50/20"}`}
               >
-                <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${notificationIconClassName(notification.type)}`}>
-                  {notificationIcon(notification.type)}
-                </span>
+                <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${notificationIconClassName(notification.type)}`}>{notificationIcon(notification.type)}</span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-sm leading-relaxed ${notification.read ? "font-semibold text-gray-700" : "font-black text-[#111827]"}`}>{notification.message}</span>
                   <span className="mt-2 block text-[10px] font-black tracking-wider text-gray-400 uppercase">{notification.time}</span>

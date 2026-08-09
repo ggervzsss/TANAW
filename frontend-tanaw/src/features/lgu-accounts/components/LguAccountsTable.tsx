@@ -1,7 +1,7 @@
 import { Users } from "lucide-react";
 import { EmptyState, ExpandableTableText, StatusBadge } from "@/shared/components/ui";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
-import type { AccountSummary } from "@/shared/services/accountManagement";
+import type { AccountSummary } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";
 import { lguRoleLabel } from "../utils";
 
@@ -59,7 +59,9 @@ export function LguAccountsTable({ accounts, filteredAccounts, isLoading, onSele
                 <StatusBadge tone="blue">{lguRoleLabel[account.role] ?? account.role}</StatusBadge>
               </td>
               <td className="px-4 py-4 whitespace-nowrap">
-                <StatusBadge tone={account.status === "inactive" ? "slate" : account.isActivated ? "green" : "amber"}>{account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}</StatusBadge>
+                <StatusBadge tone={account.status === "inactive" ? "slate" : account.isActivated ? "green" : "amber"}>
+                  {account.status === "inactive" ? "inactive" : account.isActivated ? "active" : "pending activation"}
+                </StatusBadge>
               </td>
               <td className="truncate px-4 py-4 text-sm whitespace-nowrap text-gray-500">{account.lastLoginAt ? formatPhilippineDateTime(account.lastLoginAt, timeFormat) : "Never"}</td>
             </tr>

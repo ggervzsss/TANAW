@@ -1,6 +1,6 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { staffApi } from "../../lib/axios";
+import { API_BASE_URL, staffApi } from "../../lib/axios";
 import { useAuthStore } from "../login/stores/auth-store";
 import { RealtimeContext, type RealtimeListener } from "./realtime-context";
 import { isRealtimeEnvelope, realtimeOrderingKey, type RealtimeConnectionState, type RealtimeEnvelope } from "./types";
@@ -180,7 +180,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
 }
 
 function getRealtimeUrl() {
-  const url = new URL(staffApi.defaults.baseURL ?? "http://localhost:8000");
+  const url = new URL(staffApi.defaults.baseURL ?? API_BASE_URL);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = "/realtime/ws";
   url.search = "";

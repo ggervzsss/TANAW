@@ -1,0 +1,1 @@
+export { DevDeliveriesList } from "./DevDeliveriesList";

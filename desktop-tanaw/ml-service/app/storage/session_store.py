@@ -25,8 +25,7 @@ class SessionStore:
         if self._camera_id is not None and payload.get("camera_id") != self._camera_id:
             raise ValueError("Camera monitoring state does not match its camera-scoped store.")
         updated_at = datetime.now(UTC).isoformat()
-        serializable = self._data_store.save_monitoring_state(payload, updated_at)
-        self._data_store.save_count_snapshot(serializable, updated_at)
+        self._data_store.save_monitoring_state(payload, updated_at)
 
     def list_camera_profiles(self) -> list[dict[str, Any]]:
         return self._data_store.list_camera_profiles()

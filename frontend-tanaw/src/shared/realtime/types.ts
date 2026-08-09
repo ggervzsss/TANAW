@@ -33,14 +33,7 @@ export const realtimeEventTypes = [
 ] as const;
 
 export type RealtimeEventType = (typeof realtimeEventTypes)[number];
-export type RealtimeConnectionState =
-  | "closed"
-  | "connecting"
-  | "connected"
-  | "reconnecting"
-  | "offline"
-  | "resynchronizing"
-  | "unauthorized";
+export type RealtimeConnectionState = "closed" | "connecting" | "connected" | "reconnecting" | "offline" | "resynchronizing" | "unauthorized";
 
 export type RealtimeEnvelope = {
   schema_version: 1;

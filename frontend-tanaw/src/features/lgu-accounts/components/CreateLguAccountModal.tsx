@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import toast from "react-hot-toast/headless";
 import { ContactNumberField, FormField, ModalFrame, SearchableDropdownField } from "@/shared/components/ui";
-import { type CreateLguAccountPayload, createLguAccount } from "@/shared/services/accountManagement";
+import { devDeliveriesQueryKey } from "@/features/dev-log";
+import { type CreateLguAccountPayload, createLguAccount, lguAccountsQueryKey } from "../services";
 import { getApiErrorMessage } from "@/shared/utils/apiErrors";
 import { useFocusFirstInvalidField } from "@/shared/hooks/useFocusFirstInvalidField";
 import {
@@ -52,8 +53,8 @@ export function CreateLguAccountModal({ onClose }: CreateLguAccountModalProps) {
     mutationFn: createLguAccount,
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["lgu-accounts"] }),
-        queryClient.invalidateQueries({ queryKey: ["dev-deliveries"] }),
+        queryClient.invalidateQueries({ queryKey: lguAccountsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: devDeliveriesQueryKey }),
         queryClient.invalidateQueries({ queryKey: ["email-deliveries"] }),
       ]);
       toast.success("LGU account created; activation email queued");

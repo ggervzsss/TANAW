@@ -60,7 +60,11 @@ export function SupportRequestDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {submitted ? (
-          <div role="status" aria-live="polite" className="mt-5 rounded-[28px] border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-950 dark:border-emerald-300/30 dark:bg-emerald-500/12 dark:text-emerald-100">
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-5 rounded-[28px] border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-950 dark:border-emerald-300/30 dark:bg-emerald-500/12 dark:text-emerald-100"
+          >
             Support request sent to TANAW support.
           </div>
         ) : (
@@ -115,7 +119,16 @@ export function SupportRequestDialog({ onClose }: { onClose: () => void }) {
                 placeholder="Describe the sign-in issue"
               />
             </label>
-            {error ? <p id="support-request-error" role="alert" aria-live="assertive" className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-400/30 dark:bg-red-500/12 dark:text-red-100">{error}</p> : null}
+            {error ? (
+              <p
+                id="support-request-error"
+                role="alert"
+                aria-live="assertive"
+                className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-400/30 dark:bg-red-500/12 dark:text-red-100"
+              >
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={isSubmitting}

@@ -61,9 +61,7 @@ export function clearScopedPageState(scope: PageStateScope) {
     if (key.startsWith(prefix)) memoryState.delete(key);
   }
   try {
-    const keys = Array.from({ length: window.sessionStorage.length }, (_, index) => window.sessionStorage.key(index)).filter(
-      (key): key is string => Boolean(key?.startsWith(prefix)),
-    );
+    const keys = Array.from({ length: window.sessionStorage.length }, (_, index) => window.sessionStorage.key(index)).filter((key): key is string => Boolean(key?.startsWith(prefix)));
     keys.forEach((key) => window.sessionStorage.removeItem(key));
   } catch {
     // Storage may be blocked; the in-memory namespace was still cleared.
@@ -130,10 +128,7 @@ function isSafePageStateValue(value: unknown, seen = new Set<object>()): boolean
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return false;
   seen.add(value);
-  const isSafe = Object.entries(value).every(
-    ([key, item]) =>
-      !SENSITIVE_PAGE_STATE_KEY.test(key) && isSafePageStateValue(item, seen),
-  );
+  const isSafe = Object.entries(value).every(([key, item]) => !SENSITIVE_PAGE_STATE_KEY.test(key) && isSafePageStateValue(item, seen));
   seen.delete(value);
   return isSafe;
 }

@@ -1,14 +1,7 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
-import {
-  createPageStateKey,
-  readPageState,
-  removePageState,
-  sameSerializableValue,
-  writePageState,
-  type PageStateStorage,
-} from "@/shared/utils/pageState";
+import { createPageStateKey, readPageState, removePageState, sameSerializableValue, writePageState, type PageStateStorage } from "@/shared/utils/pageState";
 
 type ScopedPageStateOptions<T> = {
   initialValue: T;
@@ -38,7 +31,7 @@ export function useScopedPageState<T>({
     [user?.id, user?.role],
   );
   const key = useMemo(() => createPageStateKey(scope, pathname, namespace), [namespace, pathname, scope]);
-  const [value, setValue] = useState<T>(() => (preferInitial ? initialValue : readPageState(key, version, isValid, storage) ?? initialValue));
+  const [value, setValue] = useState<T>(() => (preferInitial ? initialValue : (readPageState(key, version, isValid, storage) ?? initialValue)));
 
   useEffect(() => {
     if (sameSerializableValue(value, initialValue)) {

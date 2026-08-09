@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AccountLayout } from "@/shared/components/layout";
+import { AccountLayout } from "@/app/layouts/portal";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
 import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
