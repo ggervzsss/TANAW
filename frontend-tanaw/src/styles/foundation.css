@@ -96,6 +96,16 @@
 }
 
 @theme {
+  --text-xs: 0.78125rem;
+  --text-sm: 0.90625rem;
+  --text-base: 1.03125rem;
+  --text-lg: 1.15625rem;
+  --text-xl: 1.28125rem;
+  --text-2xl: 1.5625rem;
+  --text-3xl: 1.9375rem;
+  --text-4xl: 2.375rem;
+  --text-5xl: 3.0625rem;
+  --text-6xl: 3.8125rem;
   --color-tanaw-green: #055b25;
   --color-tanaw-lime: #45a549;
   --color-tanaw-navy: #2a3063;
@@ -245,6 +255,7 @@ html.dark {
     min-width: 320px;
     background: var(--tanaw-page-bg-gradient);
     font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-base);
     color: var(--tanaw-text);
     transition:
       background-color 180ms ease,

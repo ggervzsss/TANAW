@@ -138,6 +138,93 @@ test("unifies IT summary metrics in dark mode and preserves responsive overflow"
   await expect(page.getByRole("button", { name: "Register Enterprise" })).toBeVisible();
 });
 
+test("keeps IT dropdown navigation local, keyboard-accessible, and reduced-motion safe", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockPortal(page, "it", "dark");
+  await page.goto("/it/dashboard");
+
+  const overview = page.getByRole("link", { name: "Overview" });
+  const workCenter = page.getByRole("link", { name: "Work Center" });
+  const accounts = page.getByRole("button", { name: "Accounts" });
+  await expect(overview.locator("[data-topbar-active-underline='true']")).toHaveCount(1);
+  await expect(page.locator("[data-topbar-glass-indicator='true']")).toHaveCount(0);
+
+  await workCenter.focus();
+  const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "work-center");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-motion", "reduced");
+  await accounts.focus();
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "accounts");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-origin", "droplet-center");
+  await accounts.press("Enter");
+  await expect(accounts).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("link", { name: "LGU Personnel" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Enterprises", exact: true })).toBeVisible();
+  await accounts.press("Enter");
+  await expect(accounts).toHaveAttribute("aria-expanded", "false");
+});
+
+test("glides one neutral refractive IT glass capsule through navigation gaps", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockPortal(page, "it", "dark");
+  await page.goto("/it/dashboard");
+
+  const overview = page.getByRole("link", { name: "Overview" });
+  const workCenter = page.getByRole("link", { name: "Work Center" });
+  const accounts = page.getByRole("button", { name: "Accounts" });
+  const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
+
+  await overview.hover();
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "adaptive-neutral-refraction");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "hairline");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "subtle");
+  const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
+  await expect(refractiveEdge).toHaveCount(1);
+  await expect(refractiveEdge).toHaveCSS("filter", /tanaw-topbar-edge-distortion/);
+  await expect(glassIndicator).toHaveCSS("border-top-width", "0px");
+  await expect(refractiveEdge).toHaveCSS("padding-top", "0.75px");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-motion", "edge-glide");
+  await expect(glassIndicator).toHaveCSS("clip-path", "none");
+  await page.waitForTimeout(480);
+
+  const overviewBox = await overview.boundingBox();
+  const workCenterBox = await workCenter.boundingBox();
+  expect(overviewBox).not.toBeNull();
+  expect(workCenterBox).not.toBeNull();
+  await page.mouse.move((overviewBox!.x + overviewBox!.width + workCenterBox!.x) / 2, workCenterBox!.y + workCenterBox!.height / 2);
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "gap");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "gap:dashboard:work-center");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-deformation", "1.000");
+  await expect(glassIndicator).toHaveCSS("border-radius", "999px");
+  await page.waitForTimeout(220);
+  const gapBox = await glassIndicator.boundingBox();
+  expect(gapBox).not.toBeNull();
+  const gapCenter = gapBox!.x + gapBox!.width / 2;
+  const midpointBetweenItems = (overviewBox!.x + overviewBox!.width / 2 + workCenterBox!.x + workCenterBox!.width / 2) / 2;
+  expect(gapCenter).toBeCloseTo(midpointBetweenItems, 0);
+  await workCenter.hover();
+  await page.waitForTimeout(240);
+
+  const glidingBox = await glassIndicator.boundingBox();
+  expect(glidingBox).not.toBeNull();
+  const overviewCenter = overviewBox!.x + overviewBox!.width / 2;
+  const workCenterCenter = workCenterBox!.x + workCenterBox!.width / 2;
+  const glidingCenter = glidingBox!.x + glidingBox!.width / 2;
+  const fullUnionWidth = workCenterBox!.x + workCenterBox!.width - overviewBox!.x;
+  expect(glidingCenter).toBeGreaterThan(overviewCenter);
+  expect(glidingCenter).toBeLessThan(workCenterCenter);
+  expect(glidingBox!.width).toBeLessThan(fullUnionWidth * 0.85);
+  await expect(glassIndicator).toHaveCSS("border-radius", "999px");
+
+  await accounts.hover();
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "accounts");
+  await page.waitForTimeout(620);
+  const accountsBox = await accounts.boundingBox();
+  const settledBox = await glassIndicator.boundingBox();
+  expect(settledBox!.x + settledBox!.width / 2).toBeCloseTo(accountsBox!.x + accountsBox!.width / 2, 0);
+});
+
 test("keeps Staff Reporting Period as a real control beside unified metrics", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await mockPortal(page, "staff", "light");

@@ -199,6 +199,7 @@ test("prepares complete light and dark login backgrounds before revealing the pa
     ),
   ).toBe(true);
 
+  await expect(card).toHaveCSS("transform", "none");
   const before = await card.boundingBox();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("[data-auth-background-theme='light']")).toHaveCSS("opacity", "1");
@@ -214,13 +215,53 @@ test("prepares complete light and dark login backgrounds before revealing the pa
   await expect(card).toBeVisible();
 });
 
+test("keeps every web login card corner rounded in light and dark responsive layouts", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 827 });
+  await page.addInitScript(() => window.localStorage.setItem("tanaw-web-theme", "light"));
+  await page.goto("/login");
+
+  const card = page.locator(".tanaw-auth-card");
+  await expect(card).toBeVisible();
+  await expect(card).toHaveCSS("overflow", "hidden");
+  const assertUniformCorners = async () => {
+    const radii = await card.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius];
+    });
+    expect(new Set(radii).size).toBe(1);
+    expect(Number.parseFloat(radii[0])).toBeGreaterThanOrEqual(24);
+    const box = await card.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThan(0);
+    expect(box!.x + box!.width).toBeLessThan(page.viewportSize()!.width);
+  };
+
+  await assertUniformCorners();
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await assertUniformCorners();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await assertUniformCorners();
+});
+
 test("keeps the Swarm Cursor isolated from shared login interactions", async ({ page }) => {
   await page.goto("/login");
 
   const swarm = page.locator("[data-swarm-cursor='true']");
   await expect(swarm).toHaveCount(1);
+  await expect(swarm).toHaveAttribute("data-swarm-visual", "firefly");
+  await expect(swarm).toHaveAttribute("data-swarm-algorithm", "reactbits-noise-field");
+  await expect(swarm).toHaveAttribute("data-swarm-count", "8");
+  await expect(swarm).toHaveAttribute("data-swarm-size", "5");
+  await expect(swarm).toHaveAttribute("data-swarm-radius-scale", "2.1");
+  await expect(swarm).toHaveAttribute("data-swarm-speed", "2.5");
+  await expect(swarm).toHaveAttribute("data-swarm-trail", "0.75");
   await expect(page.locator(".tanaw-stage-glow")).toHaveCount(0);
   await expect.poll(() => page.locator(".swarm-cursor__canvas").count()).toBeLessThanOrEqual(1);
+
+  const previewBox = await swarm.boundingBox();
+  expect(previewBox).not.toBeNull();
+  await page.mouse.move(previewBox!.x + previewBox!.width * 0.35, previewBox!.y + previewBox!.height * 0.45);
+  await page.waitForTimeout(500);
 
   const email = page.getByLabel("Email", { exact: true });
   const password = page.getByLabel("Password", { exact: true });

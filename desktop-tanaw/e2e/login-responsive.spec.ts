@@ -139,6 +139,7 @@ test("prepares both Enterprise login backgrounds before revealing the renderer",
     )
     .toEqual({ backgroundReady: true, imagesReady: true });
 
+  await expect(card).toHaveCSS("transform", "none");
   const before = await card.boundingBox();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("[data-auth-background-theme='light']")).toHaveCSS("opacity", "1");
@@ -172,8 +173,20 @@ test("keeps the Enterprise Swarm Cursor isolated from authentication controls", 
 
   const swarm = page.locator("[data-swarm-cursor='true']");
   await expect(swarm).toHaveCount(1);
+  await expect(swarm).toHaveAttribute("data-swarm-visual", "firefly");
+  await expect(swarm).toHaveAttribute("data-swarm-algorithm", "reactbits-noise-field");
+  await expect(swarm).toHaveAttribute("data-swarm-count", "8");
+  await expect(swarm).toHaveAttribute("data-swarm-size", "5");
+  await expect(swarm).toHaveAttribute("data-swarm-radius-scale", "2.1");
+  await expect(swarm).toHaveAttribute("data-swarm-speed", "2.5");
+  await expect(swarm).toHaveAttribute("data-swarm-trail", "0.75");
   await expect(page.locator(".tanaw-stage-glow")).toHaveCount(0);
   await expect.poll(() => page.locator(".swarm-cursor__canvas").count()).toBeLessThanOrEqual(1);
+
+  const previewBox = await swarm.boundingBox();
+  expect(previewBox).not.toBeNull();
+  await page.mouse.move(previewBox!.x + previewBox!.width * 0.35, previewBox!.y + previewBox!.height * 0.45);
+  await page.waitForTimeout(500);
 
   const identifier = page.getByPlaceholder("Enter username or registered email");
   const password = page.getByPlaceholder("Enter your password");

@@ -5,6 +5,16 @@
 @theme {
   --font-sans: "Inter", "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
+  --text-xs: 0.78125rem;
+  --text-sm: 0.90625rem;
+  --text-base: 1.03125rem;
+  --text-lg: 1.15625rem;
+  --text-xl: 1.28125rem;
+  --text-2xl: 1.5625rem;
+  --text-3xl: 1.9375rem;
+  --text-4xl: 2.375rem;
+  --text-5xl: 3.0625rem;
+  --text-6xl: 3.8125rem;
   --color-tanaw-green: #055b25;
   --color-tanaw-green-dark: #044a1e;
   --color-tanaw-navy: #2a3063;
@@ -86,6 +96,7 @@ body {
   min-width: 0;
   overflow: hidden;
   background: #eef5f0;
+  font-size: var(--text-base);
   user-select: none;
 }
 

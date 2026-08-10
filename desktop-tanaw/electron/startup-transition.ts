@@ -10,6 +10,7 @@ type StartupTransitionOptions = {
   fallbackMs?: number;
   minimumSplashMs?: number;
   now?: () => number;
+  onReadyForReveal?: () => void;
   onReveal: (reason: StartupRevealReason) => void;
   waitForSplash: boolean;
 };
@@ -20,6 +21,7 @@ export function createStartupTransitionController({
   fallbackMs = STARTUP_READY_FALLBACK_MS,
   minimumSplashMs = SPLASH_MIN_DISPLAY_MS,
   now = Date.now,
+  onReadyForReveal,
   onReveal,
   waitForSplash,
 }: StartupTransitionOptions) {
@@ -27,6 +29,7 @@ export function createStartupTransitionController({
   let minimumTimer: TimerHandle | null = null;
   let mainReady = false;
   let rendererReady = false;
+  let readinessNotified = false;
   let revealed = false;
   let splashShownAt: number | null = null;
   let shouldWaitForSplash = waitForSplash;
@@ -48,6 +51,11 @@ export function createStartupTransitionController({
   const tryReveal = () => {
     if (revealed || !mainReady || !rendererReady) return;
     if (shouldWaitForSplash && splashShownAt === null) return;
+
+    if (!readinessNotified) {
+      readinessNotified = true;
+      onReadyForReveal?.();
+    }
 
     const remainingMs = splashShownAt === null ? 0 : minimumSplashMs - (now() - splashShownAt);
     if (remainingMs <= 0) {

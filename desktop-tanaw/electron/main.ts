@@ -177,7 +177,10 @@ function createSplashWindow() {
     if (splash.isDestroyed() || startupTransition?.hasRevealed()) return;
     splash.maximize();
     splash.show();
-    startupTransition?.markSplashVisible();
+    void splash.webContents
+      .executeJavaScript("window.tanawSplash?.start?.()", true)
+      .catch((error) => console.warn("[tanaw] Splash progress could not start cleanly.", error))
+      .finally(() => startupTransition?.markSplashVisible());
   });
   splash.on("closed", () => {
     if (splashWindow === splash) splashWindow = null;
@@ -370,6 +373,10 @@ if (gotSingleInstanceLock) {
     const waitForSplash = existsSync(getSplashPath());
     startupTransition = createStartupTransitionController({
       fallbackMs: VITE_DEV_SERVER_URL ? DEV_STARTUP_READY_FALLBACK_MS : undefined,
+      onReadyForReveal: () => {
+        if (!splashWindow || splashWindow.isDestroyed()) return;
+        void splashWindow.webContents.executeJavaScript("window.tanawSplash?.ready?.()", true).catch((error) => console.warn("[tanaw] Splash readiness could not synchronize cleanly.", error));
+      },
       onReveal: (reason) => void revealMainWindow(reason),
       waitForSplash,
     });

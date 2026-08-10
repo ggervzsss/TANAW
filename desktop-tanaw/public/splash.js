@@ -1,9 +1,9 @@
 (() => {
   const root = document.documentElement;
-  const startedAt = performance.now();
   const minimumDurationMs = 10_000;
-  const maximumWaitingProgress = 94;
+  const maximumWaitingProgress = 97.5;
   const finishingDurationMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 180 : 520;
+  let startedAt = null;
   let completionRequested = false;
   let finishingStartedAt = 0;
   let currentProgress = 0;
@@ -19,11 +19,31 @@
   };
 
   const frame = (now) => {
-    const elapsed = now - startedAt;
-    if (!completionRequested || elapsed < minimumDurationMs) {
-      const ratio = Math.min(1, elapsed / minimumDurationMs);
-      setProgress(maximumWaitingProgress * (1 - Math.pow(1 - ratio, 2.15)));
+    if (startedAt === null) {
       requestAnimationFrame(frame);
+      return;
+    }
+
+    const elapsed = now - startedAt;
+    if (!completionRequested) {
+      const ratio = Math.min(1, elapsed / minimumDurationMs);
+      const easedWaiting = ratio * ratio * (3 - 2 * ratio);
+      setProgress(maximumWaitingProgress * easedWaiting);
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    if (elapsed < minimumDurationMs) {
+      const ratio = elapsed / minimumDurationMs;
+      const easedReady = ratio * ratio * (3 - 2 * ratio);
+      setProgress(100 * easedReady);
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    if (currentProgress >= 99.9) {
+      setProgress(100);
+      resolveCompletion?.();
       return;
     }
 
@@ -44,7 +64,15 @@
   };
 
   window.tanawSplash = {
+    start() {
+      if (startedAt === null) startedAt = performance.now();
+    },
+    ready() {
+      if (startedAt === null) startedAt = performance.now();
+      completionRequested = true;
+    },
     complete() {
+      if (startedAt === null) startedAt = performance.now() - minimumDurationMs;
       completionRequested = true;
       return completion;
     },

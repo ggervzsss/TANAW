@@ -1,13 +1,22 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import { CameraList } from "./CameraList";
+import { CameraList, CameraSidebarToggle } from "./CameraList";
 
 describe("CameraList", () => {
   it("keeps one Add Camera action above an empty camera list", () => {
     const markup = renderToStaticMarkup(<CameraList cameras={[]} activeCamId={null} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />);
     expect(markup.indexOf("Add Camera")).toBeLessThan(markup.indexOf("No cameras registered."));
     expect(markup.match(/Add Camera/g)).toHaveLength(1);
+  });
+
+  it("keeps an accessible edge control for both sidebar states", () => {
+    const expanded = renderToStaticMarkup(<CameraSidebarToggle collapsed={false} onToggle={() => undefined} />);
+    const collapsed = renderToStaticMarkup(<CameraSidebarToggle collapsed onToggle={() => undefined} />);
+    expect(expanded).toContain('aria-label="Collapse configured cameras"');
+    expect(expanded).toContain('aria-expanded="true"');
+    expect(collapsed).toContain('aria-label="Expand configured cameras"');
+    expect(collapsed).toContain('aria-expanded="false"');
   });
 
   it("shows independent running cards and retains one sidebar action", () => {
@@ -19,13 +28,7 @@ describe("CameraList", () => {
 
   it("renders six independent cards and disables registration at the policy limit", () => {
     const markup = renderToStaticMarkup(
-      <CameraList
-        cameras={Array.from({ length: 6 }, (_, index) => camera(index + 1))}
-        activeCamId={6}
-        cameraLimit={6}
-        onAdd={() => undefined}
-        onSelect={() => undefined}
-      />,
+      <CameraList cameras={Array.from({ length: 6 }, (_, index) => camera(index + 1))} activeCamId={6} cameraLimit={6} onAdd={() => undefined} onSelect={() => undefined} />,
     );
 
     expect(markup.match(/Status: running/g)).toHaveLength(6);

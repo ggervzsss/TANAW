@@ -298,6 +298,18 @@ html.dark .tanaw-auth-card {
     max-height: calc(100svh - clamp(1.5rem, 4svh, 3rem));
     overflow-y: auto;
   }
+
+  .tanaw-login-card {
+    max-height: none;
+    overflow: hidden;
+  }
+
+}
+
+.tanaw-login-card {
+  overflow: hidden;
+  isolation: isolate;
+  scrollbar-gutter: auto;
 }
 
 .tanaw-auth-control-gap {

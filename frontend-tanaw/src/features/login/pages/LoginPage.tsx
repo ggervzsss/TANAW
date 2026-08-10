@@ -47,7 +47,7 @@ export function LoginPage() {
       <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
-      <SwarmCursor color="#f1f5f9" accentColor="#d7b35a" opacity={0.72} />
+      <SwarmCursor color="#ffffff" accentColor="#ffffff" count={8} size={5} speed={2.5} spread={100} trail={0.75} wander={0.25} scatterOnClick />
       <AuthParticles />
       <AuthThemeToggle />
 
@@ -73,7 +73,7 @@ export function LoginPage() {
 
         <main className="flex min-h-0 items-center justify-center lg:justify-end">
           <motion.div
-            className="tanaw-auth-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
+            className="tanaw-auth-card tanaw-login-card relative z-10 w-full max-w-145 rounded-[30px] border border-white/80 bg-(--tanaw-card)/96 px-6 py-8 shadow-[0_30px_90px_rgba(3,20,12,0.32)] ring-1 ring-black/3 backdrop-blur-xl sm:px-9 sm:py-9 xl:px-10"
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.55, ease: "easeOut" }}

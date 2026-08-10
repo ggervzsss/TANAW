@@ -166,7 +166,7 @@ export function LoginPage() {
       <CriticalLoginBackground onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
-      <SwarmCursor color="#f1f5f9" accentColor="#d7b35a" opacity={0.72} />
+      <SwarmCursor color="#ffffff" accentColor="#ffffff" count={8} size={5} speed={2.5} spread={100} trail={0.75} wander={0.25} scatterOnClick />
       <div className="tanaw-stage-particles absolute inset-0" aria-hidden="true">
         {particles.map((particle, index) => (
           <span
