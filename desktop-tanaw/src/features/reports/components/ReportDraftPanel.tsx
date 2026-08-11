@@ -47,7 +47,7 @@ export function ReportDraftPanel({
 
   return (
     <Card
-      className={`h-fit rounded-sm border-t-4 p-6 shadow-md transition-colors lg:col-span-1 ${isReadOnly ? "border-t-gray-400" : activeReport?.status === "Returned for Revision" ? "border-t-[#ffd200]" : "border-t-[#065f46]"}`}
+      className={`relative h-fit overflow-hidden rounded-[22px] border p-5 shadow-[0_18px_42px_rgba(15,23,42,0.08)] transition-colors dark:shadow-[0_20px_48px_rgba(2,8,18,0.3)] ${isReadOnly ? "border-gray-300 border-t-gray-400" : activeReport?.status === "Returned for Revision" ? "border-amber-200 border-t-[#ffd200]" : "border-emerald-800/18 border-t-[#065f46]"} border-t-[3px]`}
     >
       <ReportDraftHeader activeReport={activeReport} activeReportId={activeReportId} isReadOnly={isReadOnly} />
       <ReportDraftAlerts activeReport={activeReport} />

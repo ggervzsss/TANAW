@@ -111,7 +111,7 @@ describe("map camera target resolution", () => {
     expect(collapsed).not.toBeNull();
     expect(expanded!.zoom).toBe(14.2);
     expect(expanded!.center.lng).not.toBeCloseTo(collapsed!.center.lng, 6);
-    expect(map.getBoundsZoom).toHaveBeenCalledWith(expect.anything(), false, [476, 108]);
+    expect(map.getBoundsZoom).toHaveBeenCalledWith(expect.anything(), false, [504, 108]);
   });
 
   it("does not mutate the original geographic bounds while resolving a target", () => {

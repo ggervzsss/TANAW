@@ -33,8 +33,8 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
   }, [ledgerRows, searchQuery, statusFilter]);
 
   return (
-    <Card className="flex flex-col overflow-hidden rounded-sm border border-gray-200 shadow-sm lg:col-span-2">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white p-5">
+    <Card className="flex min-h-136 flex-col overflow-hidden rounded-[22px] border border-gray-200 bg-white/95 shadow-[0_18px_42px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_48px_rgba(2,8,18,0.3)]">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4.5">
         <div>
           <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase">Report Submissions</h3>
           <p className="mt-1 text-xs text-gray-500">Select a row to load its data into the workspace, or use View to open the DOT form preview.</p>
@@ -48,7 +48,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search reports"
-              className="h-9 w-44 rounded-sm border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] transition-colors outline-none focus:border-[#065f46]"
+              className="h-10 w-48 rounded-xl border border-gray-200 bg-white py-2 pr-3 pl-9 text-xs font-semibold text-[#111827] shadow-sm transition-colors outline-none focus:border-[#065f46]"
             />
           </label>
           <SelectDropdown
@@ -61,7 +61,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-0">
+      <div className="m-2.5 mt-0 flex-1 overflow-x-hidden overflow-y-auto rounded-2xl border border-gray-100 bg-white">
         <table className="w-full table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[31%]" />
@@ -70,7 +70,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
             <col className="w-[20%]" />
             <col className="w-[15%]" />
           </colgroup>
-          <thead className="sticky top-0 bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
             <tr>
               <th className="border-b border-gray-200 px-3 py-3 xl:px-5">Report</th>
               <th className="border-b border-gray-200 px-3 py-3 whitespace-nowrap xl:px-5">Period</th>
@@ -98,7 +98,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                       onSelectReport(row);
                     }
                   }}
-                  className={`group cursor-pointer transition-colors focus-visible:bg-[#065f46]/5 focus-visible:outline-none ${isActive ? "bg-[#065f46]/5" : "hover:bg-gray-50"}`}
+                  className={`group cursor-pointer transition-[background-color,box-shadow] focus-visible:bg-[#065f46]/5 focus-visible:outline-none ${isActive ? "bg-[#065f46]/5 shadow-[inset_3px_0_0_#065f46]" : "hover:bg-gray-50"}`}
                 >
                   <td className="px-3 py-4 xl:px-5">
                     <ExpandableText
@@ -118,7 +118,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                     </Badge>
                   </td>
                   <td className="px-3 py-4 text-right whitespace-nowrap xl:px-5">
-                    <div className="flex flex-nowrap justify-end gap-3 opacity-70 transition-opacity group-hover:opacity-100">
+                    <div className="flex flex-nowrap justify-end gap-2 opacity-80 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
                         aria-label={`View ${row.reportLabel}`}
@@ -126,7 +126,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                           event.stopPropagation();
                           onPreviewReport(report);
                         }}
-                        className="flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wider whitespace-nowrap text-[#065f46] uppercase hover:text-[#044a36]"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-800/12 bg-emerald-50/60 text-[#065f46] transition-colors hover:border-emerald-700/35 hover:bg-emerald-100/70 hover:text-[#044a36]"
                         title="View report"
                       >
                         <FileText size={14} />
@@ -138,7 +138,7 @@ export function ReportLedgerTable({ activeLedgerKey, ledgerRows, onDownloadRepor
                           event.stopPropagation();
                           onDownloadReport(report);
                         }}
-                        className="flex shrink-0 items-center gap-1 text-xs font-semibold tracking-wider whitespace-nowrap text-gray-500 uppercase hover:text-[#065f46]"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:border-emerald-700/30 hover:bg-emerald-50/60 hover:text-[#065f46]"
                         title="Download PDF"
                       >
                         <Download size={14} />

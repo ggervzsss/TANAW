@@ -4,6 +4,7 @@ const MONTH_ORDER = ["January", "February", "March", "April", "May", "June", "Ju
 
 export type AnalyticsPeriod = { key: string; label: string; monthIndex: number; reports: IntakeReport[]; year: string };
 export type EnterpriseReportRow = { enterprise: ReportEnterprise; reports: IntakeReport[]; submitted: boolean };
+export type EnterpriseTrafficRow = { entries: number; name: string; status: "Missing" | "Submitted"; unique: number };
 export type BarangayComplianceRow = { barangay: string; complete: number; pending: number; total: number };
 
 export function getCurrentAnalyticsPeriod(date = new Date()): AnalyticsPeriod {
@@ -63,6 +64,20 @@ export function getBarangayComplianceRows(rows: EnterpriseReportRow[]): Barangay
     return map;
   }, new Map());
   return Array.from(byBarangay.values()).sort((left, right) => left.barangay.localeCompare(right.barangay));
+}
+
+export function getEnterpriseTrafficRows(rows: EnterpriseReportRow[]): EnterpriseTrafficRow[] {
+  return rows.map(({ enterprise, reports, submitted }) => ({
+    entries: sumReportMetric(reports, "entry"),
+    name: enterprise.name,
+    status: submitted ? "Submitted" : "Missing",
+    unique: sumReportMetric(reports, "unique"),
+  }));
+}
+
+export function getCompliancePercentage(complete: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((complete / total) * 100)));
 }
 
 function getReportYear(report: IntakeReport) {

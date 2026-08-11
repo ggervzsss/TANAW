@@ -42,7 +42,7 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
   } = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
 
   return (
-    <div className="animate-in fade-in space-y-6 font-sans duration-500">
+    <div className="tanaw-reports-workspace animate-in fade-in space-y-5 font-sans duration-500" data-reports-surface="camera-setup-generation">
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
@@ -58,14 +58,14 @@ export function ReportsView({ enterpriseName, reportsHistory, setReportsHistory 
 
       {showConfirm && <SubmitReportDialog isSubmitting={isSubmitting} onCancel={() => setShowConfirm(false)} onConfirm={executeSubmit} />}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-1">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-[#111827]">Reports</h2>
-          <p className="mt-1 text-sm text-gray-500">Prepare unfinished monthly reports and review submitted report history.</p>
+          <h2 className="text-xl font-bold tracking-tight text-[#111827] dark:text-slate-50">Reports</h2>
+          <p className="mt-0.5 text-xs font-medium text-gray-500 dark:text-slate-400">Prepare unfinished monthly reports and review submitted report history.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(360px,0.82fr)_minmax(0,1.7fr)]">
         <ReportDraftPanel
           activeReport={activeReport}
           activeReportId={activeReportId}

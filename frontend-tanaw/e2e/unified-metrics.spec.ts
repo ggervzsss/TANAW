@@ -228,6 +228,53 @@ test("glides one neutral refractive IT glass capsule through navigation gaps", a
 test("keeps Staff Reporting Period as a real control beside unified metrics", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await mockPortal(page, "staff", "light");
+  await page.route("**/operational/reports/enterprises", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { id: "archie", name: "Archie's Event Place", category: "Events Place", barangay: "Landayan", complianceOwner: "Archie" },
+        { id: "balon", name: "Balon ni Lolo Uweng", category: "Attraction", barangay: "Landayan", complianceOwner: "Balon" },
+        { id: "golf", name: "Hallow Ridge Filipinas Golf Inc.", category: "Attraction", barangay: "Nueva", complianceOwner: "Hallow" },
+      ]),
+    }),
+  );
+  await page.route("**/operational/reports/intake", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "report-archie",
+          enterpriseId: "archie",
+          enterprise: "Archie's Event Place",
+          category: "Events Place",
+          barangay: "Landayan",
+          month: "August",
+          period: "August 2026",
+          submitted: "2026-08-05T08:00:00Z",
+          submittedAt: "2026-08-05T08:00:00Z",
+          status: "Consolidated",
+          code: "REP-ARCHIE",
+          metrics: { entry: 680, exit: 620, unique: 455, peak: "11:00 AM" },
+        },
+        {
+          id: "report-golf",
+          enterpriseId: "golf",
+          enterprise: "Hallow Ridge Filipinas Golf Inc.",
+          category: "Attraction",
+          barangay: "Nueva",
+          month: "August",
+          period: "August 2026",
+          submitted: "2026-08-07T08:00:00Z",
+          submittedAt: "2026-08-07T08:00:00Z",
+          status: "Ready to Consolidate",
+          code: "REP-GOLF",
+          metrics: { entry: 990, exit: 900, unique: 690, peak: "2:00 PM" },
+        },
+      ]),
+    }),
+  );
 
   await page.goto("/staff/analytics");
   const analyticsHeader = page.locator("[data-unified-metrics-header]");
@@ -237,6 +284,22 @@ test("keeps Staff Reporting Period as a real control beside unified metrics", as
   await reportingPeriod.focus();
   await expect(analyticsHeader.locator(".tanaw-unified-metrics__segment").last().locator(".tanaw-unified-metrics__hover")).toHaveCSS("opacity", "1");
   await expect(page.getByText("Enterprise Traffic Comparison", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Horizontal comparison of Total Entries and Unique Pax by enterprise" })).toBeVisible();
+  await expect(page.getByText("Compare Total Entries and Unique Pax for every registered enterprise.")).toBeVisible();
+  const comparisonTable = page.getByRole("table", { name: "Enterprise Traffic Comparison data" });
+  await expect(comparisonTable.getByRole("row", { name: "Archie's Event Place 680 455" })).toHaveCount(1);
+  await expect(comparisonTable.getByRole("row", { name: "Balon ni Lolo Uweng 0 0" })).toHaveCount(1);
+  await expect(page.getByText("1 of 2 reports complete", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 of 1 reports complete", { exact: true })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Landayan report completion" })).toHaveAttribute("aria-valuenow", "50");
+  await expect(page.getByRole("progressbar", { name: "Nueva report completion" })).toHaveAttribute("aria-valuenow", "100");
+
+  await page.setViewportSize({ width: 1100, height: 820 });
+  const trafficBox = await page.locator(".tanaw-traffic-card").boundingBox();
+  const complianceBox = await page.locator(".tanaw-compliance-panel").boundingBox();
+  expect(trafficBox).not.toBeNull();
+  expect(complianceBox).not.toBeNull();
+  expect(complianceBox!.y).toBeGreaterThan(trafficBox!.y + trafficBox!.height - 2);
 
   await page.goto("/staff/batch-reports");
   await expectUnifiedHeader(page.locator("[data-unified-metrics-header]"), ["Registered Enterprises", "Ready Reports", "Missing Submissions", "Archived Reports"]);

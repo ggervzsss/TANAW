@@ -114,6 +114,128 @@ test("reveals and focuses the first invalid Support Ticket field", async ({ page
   await expect(page.getByText("Enter the affected area.", { exact: true })).toBeVisible();
 });
 
+test("keeps the modern Reports workspace dense, rounded, and fully interactive", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  const reportDemo = {
+    thisProvMale: "30",
+    thisProvFemale: "30",
+    otherProvMale: "15",
+    otherProvFemale: "15",
+    foreignMale: "5",
+    foreignFemale: "5",
+  };
+  await page.route("http://127.0.0.1:8765/**", (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/context/enterprise") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }) });
+    }
+    if (url.pathname === "/metrics/summary") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          entries: 120,
+          exits: 80,
+          peak_occupancy: 40,
+          current_occupancy: 40,
+          unique_count: 100,
+          estimated_unique_count: 100,
+          confirmed_unique_count: 100,
+          degraded_unique_count: 0,
+          pending_unique_entries: 0,
+          repeat_entry_count: 20,
+          occupancy_correction_delta: 0,
+          total_events: 200,
+          unsubmitted_events: 200,
+          unsynced_events: 0,
+          first_event_at: "2026-08-01T00:00:00Z",
+          last_event_at: "2026-08-10T12:00:00Z",
+          period: "2026-08",
+        }),
+      });
+    }
+    if (url.pathname === "/reports/local") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            report_id: "REP-202607",
+            period: "2026-07",
+            submitted_at: "2026-08-01T01:00:00Z",
+            entries: 140,
+            exits: 90,
+            peak_occupancy: 50,
+            unique_count: 100,
+            notes: "Monthly operational summary",
+            payload: { status: "Consolidated", demo: reportDemo, metrics: { entries: 140, exits: 90, peak: 50, unique: 100 } },
+            sync_status: "synced",
+            synced_at: "2026-08-01T01:01:00Z",
+            camera_breakdown: [],
+          },
+        ]),
+      });
+    }
+    if (url.pathname.startsWith("/reports/drafts/")) return route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Not required by Reports presentation coverage" }) });
+  });
+  await page.route("**/operational/desktop/sample-preparation", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "null" }));
+  await page.route("**/operational/reports/intake", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+
+  await page.goto("/#/enterprise/reports");
+  const workspace = page.locator("[data-reports-surface='camera-setup-generation']");
+  await expect(workspace).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Report Workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Report Submissions" })).toBeVisible();
+  await expect.poll(() => page.getByText("REP-202607", { exact: true }).count()).toBeGreaterThan(0);
+  await expect(page.getByRole("heading", { name: "Report Workspace" }).locator("..")).toHaveCSS("border-radius", "22px");
+  const demographicCards = page.locator(".tanaw-demographic-card");
+  await expect(demographicCards).toHaveCount(3);
+  await expect(demographicCards.first()).toHaveCSS("background-color", "rgb(16, 25, 35)");
+  const darkDemographicSurfaces = await page.evaluate(() => {
+    const card = document.querySelector<HTMLElement>(".tanaw-demographic-card");
+    const input = document.querySelector<HTMLElement>(".tanaw-demographic-input");
+    const total = document.querySelector<HTMLElement>(".tanaw-demographic-total");
+    return {
+      card: card ? getComputedStyle(card).backgroundColor : null,
+      input: input ? getComputedStyle(input).backgroundColor : null,
+      total: total ? getComputedStyle(total).backgroundColor : null,
+    };
+  });
+  expect(darkDemographicSurfaces.input).not.toBe("rgb(255, 255, 255)");
+  expect(darkDemographicSurfaces.total).not.toBe("rgb(255, 255, 255)");
+  expect(darkDemographicSurfaces.input).not.toBe(darkDemographicSurfaces.card);
+  expect(darkDemographicSurfaces.total).not.toBe(darkDemographicSurfaces.card);
+
+  await page.getByRole("button", { name: "Assisted" }).click();
+  await expect(page.getByText("Assisted Allocation", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Manual" }).click();
+  await page.getByRole("button", { name: "Fill Remaining" }).click();
+  const notes = page.getByPlaceholder("Add notes regarding events, closures, or demographic estimates...");
+  await notes.fill("Updated report workspace notes");
+  await expect(notes).toHaveValue("Updated report workspace notes");
+
+  const search = page.getByPlaceholder("Search reports");
+  await search.fill("REP-202607");
+  await expect(page.getByText("REP-202607", { exact: true }).first()).toBeVisible();
+  await page.getByRole("combobox", { name: "Filter reports by status" }).click();
+  await page.getByRole("option", { name: "Consolidated" }).click();
+  await page.getByRole("button", { name: "View REP-202607", exact: true }).click();
+  const preview = page.getByRole("dialog", { name: "DOT Form Preview" });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Download PDF" })).toBeEnabled();
+  await preview.getByRole("button", { name: "Close preview", exact: true }).click();
+
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  await expect(demographicCards.first()).toHaveCSS("background-color", "rgb(240, 245, 241)");
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await expect(workspace).toBeVisible();
+  await expect(page.getByPlaceholder("Search reports")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+});
+
 test("keeps Enterprise password inputs empty and reveals only manually entered text", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route("**/auth/change-password", async (route) => {

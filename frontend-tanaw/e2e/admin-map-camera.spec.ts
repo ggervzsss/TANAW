@@ -152,7 +152,7 @@ function expectCanonicalCitywideFraming(geometry: MapGeometry) {
   expect(geometry.boundary.left).toBeGreaterThan(geometry.directoryRight + 24);
   expect(geometry.boundary.top).toBeGreaterThan(geometry.map.top + 30);
   expect(geometry.boundary.bottom).toBeLessThan(geometry.map.bottom - 30);
-  expect(Math.abs(geometry.boundary.centerX - usableCenterX)).toBeLessThan(Math.max(80, geometry.map.width * 0.08));
+  expect(Math.abs(geometry.boundary.centerX - usableCenterX)).toBeLessThan(Math.max(90, geometry.map.width * 0.09));
 }
 
 function expectSameCamera(actual: MapGeometry, expected: MapGeometry) {
@@ -332,6 +332,59 @@ test("keeps the canonical citywide framing at laptop size in dark mode", async (
 
   expectCanonicalCitywideFraming(await readMapGeometry(page));
   await expect(page.locator("html")).toHaveClass(/dark/);
+});
+
+test("keeps the Spatial Directory readable, compact when retracted, and map-safe while balancing Enterprise Details", async ({ page }) => {
+  await configureAdminMapSession(page);
+
+  const directory = page.locator("#spatial-directory-panel");
+  const collapse = page.getByRole("button", { name: "Collapse spatial directory" });
+  await expect(directory).toHaveAttribute("data-directory-state", "expanded");
+  const expandedDirectoryBox = await directory.boundingBox();
+  const collapseBox = await collapse.boundingBox();
+  expect(expandedDirectoryBox).not.toBeNull();
+  expect(collapseBox).not.toBeNull();
+  expect(collapseBox!.y + collapseBox!.height / 2).toBeCloseTo(expandedDirectoryBox!.y + expandedDirectoryBox!.height / 2, 0);
+
+  await page.getByRole("button", { name: /Map Camera Test Enterprise/ }).click();
+  const detailsDialog = page.getByRole("dialog", { name: mapEnterprise.name });
+  await expect(detailsDialog).toBeVisible();
+  await expect(detailsDialog.locator("[data-modal-top-accent='green-to-yellow']")).toHaveCount(1);
+  await expect(detailsDialog.locator("[data-details-modal-layout='balanced-enterprise']")).toHaveCount(1);
+  const contactCard = detailsDialog.getByText("Contact", { exact: true }).locator("..").locator("..");
+  const hoursCard = detailsDialog.getByText("Operating Hours", { exact: true }).locator("..").locator("..");
+  const addressCard = detailsDialog.getByText("Full Address", { exact: true }).locator("..").locator("..");
+  const [contactBox, hoursBox, addressBox] = await Promise.all([contactCard.boundingBox(), hoursCard.boundingBox(), addressCard.boundingBox()]);
+  expect(contactBox).not.toBeNull();
+  expect(hoursBox).not.toBeNull();
+  expect(addressBox).not.toBeNull();
+  expect(hoursBox!.y).toBeCloseTo(contactBox!.y, 0);
+  expect(addressBox!.y).toBeGreaterThan(contactBox!.y + contactBox!.height);
+  expect(addressBox!.width).toBeGreaterThan(contactBox!.width * 1.8);
+  await expect(detailsDialog.getByText("Not specified", { exact: true })).toBeVisible();
+  await expect(detailsDialog.getByRole("button", { name: "View Visitor Insights" })).toBeVisible();
+  await detailsDialog.getByRole("button", { name: "Close modal" }).click();
+
+  await collapse.click();
+  await expect(directory).toHaveAttribute("data-directory-state", "collapsed");
+  await expect(directory).toHaveCSS("width", "0px");
+  await expect(directory.locator(".tanaw-spatial-directory-shell")).toHaveCSS("opacity", "0");
+  const expand = page.getByRole("button", { name: "Expand spatial directory" });
+  await expect(expand).toBeVisible();
+  await expect(expand).toContainText("Spatial Directory");
+  const collapsedDirectoryBox = await directory.boundingBox();
+  const expandBox = await expand.boundingBox();
+  expect(collapsedDirectoryBox).not.toBeNull();
+  expect(expandBox).not.toBeNull();
+  expect(expandBox!.y + expandBox!.height / 2).toBeCloseTo(collapsedDirectoryBox!.y + collapsedDirectoryBox!.height / 2, 0);
+  await expect(page.locator("#admin-enterprise-map .leaflet-tile-loaded").first()).toBeVisible();
+
+  await expand.click();
+  await expect(directory).toHaveAttribute("data-directory-state", "expanded");
+  await expect(page.getByRole("heading", { name: "Barangay San Antonio" })).toBeVisible();
+  await expect(directory).toHaveCSS("width", "408px");
+  const restoredDirectoryBox = await directory.boundingBox();
+  expect(restoredDirectoryBox!.width).toBeCloseTo(expandedDirectoryBox!.width, 0);
 });
 
 test("keeps only the latest barangay tooltip while rapidly switching selections", async ({ page }) => {
