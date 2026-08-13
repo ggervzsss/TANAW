@@ -106,6 +106,18 @@ test("unifies IT summary metrics in dark mode and preserves responsive overflow"
   await expectUnifiedHeader(dashboardHeader, ["Urgent Issues", "Desktop Apps", "Support Requests", "Account Requests", "Email Problems"]);
   await expect(dashboardHeader).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(dashboardHeader.locator(".tanaw-unified-metrics__icon").first()).toHaveCSS("transform", "none");
+  await expect(page.getByRole("heading", { name: "Current Work" })).toBeVisible();
+  for (const category of ["Technical Issues", "Support Requests", "Account Requests", "Email Problems"]) {
+    await expect(page.getByRole("link", { name: new RegExp(category) })).toBeVisible();
+  }
+  await expect(page.getByRole("heading", { name: "Desktop Application Status" })).toBeVisible();
+  await expect(page.getByText("2 online, 1 delayed, and 4 offline.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Online", { exact: true })).toBeVisible();
+  await expect(page.getByText("Delayed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Offline", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account Directory" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Accounts" })).toBeVisible();
+  await expect(page.locator(".tanaw-it-health-card")).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
 
   for (const zoom of ["90%", "100%", "110%"]) {
     await page.evaluate((nextZoom) => {
@@ -284,11 +296,14 @@ test("keeps Staff Reporting Period as a real control beside unified metrics", as
   await reportingPeriod.focus();
   await expect(analyticsHeader.locator(".tanaw-unified-metrics__segment").last().locator(".tanaw-unified-metrics__hover")).toHaveCSS("opacity", "1");
   await expect(page.getByText("Enterprise Traffic Comparison", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Horizontal comparison of Total Entries and Unique Pax by enterprise" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Horizontal grouped bar chart comparing Total Entries and Unique Pax by enterprise" })).toBeVisible();
   await expect(page.getByText("Compare Total Entries and Unique Pax for every registered enterprise.")).toBeVisible();
+  await expect(page.locator(".tanaw-traffic-card .recharts-bar")).toHaveCount(2);
+  await expect(page.locator(".tanaw-traffic-card .recharts-scatter")).toHaveCount(0);
   const comparisonTable = page.getByRole("table", { name: "Enterprise Traffic Comparison data" });
   await expect(comparisonTable.getByRole("row", { name: "Archie's Event Place 680 455" })).toHaveCount(1);
   await expect(comparisonTable.getByRole("row", { name: "Balon ni Lolo Uweng 0 0" })).toHaveCount(1);
+  await expect(page.getByText("Enterprise Traffic Comparison data", { exact: true })).not.toBeVisible();
   await expect(page.getByText("1 of 2 reports complete", { exact: true })).toBeVisible();
   await expect(page.getByText("1 of 1 reports complete", { exact: true })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Landayan report completion" })).toHaveAttribute("aria-valuenow", "50");

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPinned, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronLeft, MapPinned, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { SelectDropdown, type SelectDropdownOption } from "@/shared/components/ui";
 import type { AccountSummary } from "@/shared/types";
@@ -48,19 +48,17 @@ export function AdminMapDirectory(props: AdminMapDirectoryProps) {
             aria-controls="spatial-directory-panel"
             aria-expanded="false"
             aria-label="Expand spatial directory"
-            title="Expand spatial directory"
+            title="Expand Spatial Directory"
             initial={{ opacity: 0, x: -12, scale: 0.96 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -10, scale: 0.97 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             onClick={() => onCollapseChange(false)}
-            className="tanaw-spatial-directory__reopen absolute top-1/2 left-0 z-430 flex min-h-12 -translate-y-1/2 items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-left"
+            className="tanaw-spatial-directory__reopen absolute top-1/2 left-0 z-430 grid size-13 -translate-y-1/2 place-items-center rounded-2xl"
           >
-            <span className="tanaw-spatial-directory__reopen-icon grid h-8 w-8 shrink-0 place-items-center rounded-xl" aria-hidden="true">
-              <MapPinned size={17} />
+            <span className="tanaw-spatial-directory__reopen-icon grid size-9 place-items-center rounded-xl" aria-hidden="true">
+              <MapPinned size={19} />
             </span>
-            <span className="text-sm font-semibold whitespace-nowrap">Spatial Directory</span>
-            <ChevronRight size={17} className="shrink-0" aria-hidden="true" />
           </motion.button>
         ) : (
           <motion.button

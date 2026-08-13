@@ -571,6 +571,25 @@ html.dark .tanaw-data-page .tanaw-data-empty-icon {
   background: var(--tanaw-chart-tooltip-bg);
 }
 
+.tanaw-chart-legend-pattern {
+  background-color: var(--tanaw-chart-secondary);
+  background-image: repeating-linear-gradient(45deg, transparent 0 4px, var(--tanaw-chart-pattern) 4px 6px);
+}
+
+.tanaw-chart-data-table-wrap,
+.tanaw-chart-data-table {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .tanaw-dashboard-scroll {
   scrollbar-color: rgb(100 116 139 / 0.42) transparent;
   scrollbar-gutter: stable;

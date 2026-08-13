@@ -1,12 +1,11 @@
 import { Activity } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { EmptyState } from "@/shared/components/ui";
 import type { StaffAnalyticsViewModel } from "../hooks";
 
-type TrafficDatum = StaffAnalyticsViewModel["chartData"][number] & { range: [number, number] };
+type TrafficDatum = StaffAnalyticsViewModel["chartData"][number];
 type TrafficTooltipProps = { active?: boolean; payload?: ReadonlyArray<{ payload?: TrafficDatum }> };
 type AxisTickProps = { payload?: { value?: string }; x?: number; y?: number };
-type MarkerProps = { cx?: number; cy?: number };
 
 export function EnterpriseTrafficChart({ analytics }: { analytics: StaffAnalyticsViewModel }) {
   let emptyState = null;
@@ -24,11 +23,7 @@ export function EnterpriseTrafficChart({ analytics }: { analytics: StaffAnalytic
       />
     );
 
-  const chartData: TrafficDatum[] = analytics.chartData.map((row) => ({
-    ...row,
-    range: [Math.min(row.entries, row.unique), Math.max(row.entries, row.unique)],
-  }));
-  const chartHeight = Math.max(330, chartData.length * 62 + 68);
+  const chartHeight = Math.max(340, analytics.chartData.length * 76 + 52);
 
   return (
     <section className="tanaw-dashboard-panel tanaw-traffic-card flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-gray-200 bg-white shadow-sm">
@@ -50,26 +45,37 @@ export function EnterpriseTrafficChart({ analytics }: { analytics: StaffAnalytic
             >
               <div style={{ height: chartHeight }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
+                  <BarChart
                     accessibilityLayer
-                    data={chartData}
+                    data={analytics.chartData}
                     layout="vertical"
-                    margin={{ top: 16, right: 26, bottom: 12, left: 2 }}
+                    margin={{ top: 14, right: 64, bottom: 12, left: 4 }}
                     role="img"
-                    aria-label="Horizontal comparison of Total Entries and Unique Pax by enterprise"
+                    aria-label="Horizontal grouped bar chart comparing Total Entries and Unique Pax by enterprise"
+                    barCategoryGap="28%"
+                    barGap={6}
                   >
-                    <CartesianGrid horizontal={false} stroke="var(--tanaw-chart-grid)" strokeDasharray="2 7" />
+                    <defs>
+                      <pattern id="tanawUniquePaxPattern" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        <rect width="8" height="8" fill="var(--tanaw-chart-secondary)" />
+                        <rect width="2" height="8" fill="var(--tanaw-chart-pattern)" />
+                      </pattern>
+                    </defs>
+                    <CartesianGrid stroke="var(--tanaw-chart-grid)" strokeDasharray="2 7" />
                     <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--tanaw-chart-axis)" }} tickFormatter={formatAxisValue} domain={[0, "dataMax"]} />
-                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} interval={0} tick={<EnterpriseAxisTick />} width={184} />
-                    <Tooltip cursor={false} content={<TrafficTooltip />} />
-                    <Bar dataKey="range" name="Comparison span" barSize={4} fill="var(--tanaw-chart-connector)" radius={999} isAnimationActive={false} />
-                    <Scatter dataKey="entries" name="Total Entries" fill="var(--tanaw-chart-primary)" shape={<EntryMarker />} isAnimationActive={false} />
-                    <Scatter dataKey="unique" name="Unique Pax" fill="var(--tanaw-chart-secondary)" shape={<UniqueMarker />} isAnimationActive={false} />
-                  </ComposedChart>
+                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} interval={0} tick={<EnterpriseAxisTick />} width={188} />
+                    <Tooltip cursor={{ fill: "var(--tanaw-chart-row-hover)" }} content={<TrafficTooltip />} />
+                    <Bar dataKey="entries" name="Total Entries" barSize={14} fill="var(--tanaw-chart-primary)" radius={[0, 7, 7, 0]} isAnimationActive={false}>
+                      <LabelList dataKey="entries" position="right" fill="var(--tanaw-chart-label)" fontSize={11} fontWeight={700} formatter={formatBarValue} />
+                    </Bar>
+                    <Bar dataKey="unique" name="Unique Pax" barSize={14} fill="url(#tanawUniquePaxPattern)" radius={[0, 7, 7, 0]} isAnimationActive={false}>
+                      <LabelList dataKey="unique" position="right" fill="var(--tanaw-chart-label)" fontSize={11} fontWeight={700} formatter={formatBarValue} />
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <TrafficDataTable rows={chartData} />
+            <TrafficDataTable rows={analytics.chartData} />
           </>
         )}
       </div>
@@ -81,10 +87,10 @@ function ChartLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-semibold" aria-label="Chart legend">
       <span className="tanaw-dashboard-card-copy inline-flex items-center gap-2">
-        <span className="h-3 w-3 rounded-full bg-(--tanaw-chart-primary)" aria-hidden="true" /> Total Entries
+        <span className="h-2.5 w-5 rounded-full bg-(--tanaw-chart-primary)" aria-hidden="true" /> Total Entries
       </span>
       <span className="tanaw-dashboard-card-copy inline-flex items-center gap-2">
-        <span className="h-3 w-3 rotate-45 rounded-[3px] bg-(--tanaw-chart-secondary)" aria-hidden="true" /> Unique Pax
+        <span className="tanaw-chart-legend-pattern h-2.5 w-5 rounded-full" aria-hidden="true" /> Unique Pax
       </span>
     </div>
   );
@@ -103,7 +109,7 @@ function TrafficTooltip({ active, payload }: TrafficTooltipProps) {
         </dt>
         <dd className="font-mono font-bold text-(--tanaw-chart-tooltip-text) tabular-nums">{row.entries.toLocaleString()}</dd>
         <dt className="flex items-center gap-2 text-(--tanaw-secondary-text)">
-          <span className="h-2.5 w-2.5 rotate-45 rounded-xs bg-(--tanaw-chart-secondary)" aria-hidden="true" /> Unique Pax
+          <span className="tanaw-chart-legend-pattern h-2.5 w-2.5 rounded-sm" aria-hidden="true" /> Unique Pax
         </dt>
         <dd className="font-mono font-bold text-(--tanaw-chart-tooltip-text) tabular-nums">{row.unique.toLocaleString()}</dd>
       </dl>
@@ -116,9 +122,9 @@ function EnterpriseAxisTick({ payload, x = 0, y = 0 }: AxisTickProps) {
   return (
     <g transform={`translate(${x},${y})`}>
       <title>{payload?.value}</title>
-      <text x={-10} y={lines.length === 1 ? 4 : -3} textAnchor="end" fill="var(--tanaw-chart-label)" fontSize={11.5} fontWeight={600}>
+      <text x={-12} y={lines.length === 1 ? 4 : -3} textAnchor="end" fill="var(--tanaw-chart-label)" fontSize={11.5} fontWeight={600}>
         {lines.map((line, index) => (
-          <tspan key={`${line}-${index}`} x={-10} dy={index === 0 ? 0 : 14}>
+          <tspan key={`${line}-${index}`} x={-12} dy={index === 0 ? 0 : 14}>
             {line}
           </tspan>
         ))}
@@ -127,37 +133,28 @@ function EnterpriseAxisTick({ payload, x = 0, y = 0 }: AxisTickProps) {
   );
 }
 
-function EntryMarker({ cx = 0, cy = 0 }: MarkerProps) {
-  return <circle cx={cx} cy={cy} r={7} fill="var(--tanaw-chart-primary)" stroke="var(--tanaw-chart-marker-stroke)" strokeWidth={2} />;
-}
-
-function UniqueMarker({ cx = 0, cy = 0 }: MarkerProps) {
-  return (
-    <rect x={cx - 6} y={cy - 6} width={12} height={12} rx={2.5} transform={`rotate(45 ${cx} ${cy})`} fill="var(--tanaw-chart-secondary)" stroke="var(--tanaw-chart-marker-stroke)" strokeWidth={2} />
-  );
-}
-
 function TrafficDataTable({ rows }: { rows: TrafficDatum[] }) {
   return (
-    <table className="sr-only">
-      <caption>Enterprise Traffic Comparison data</caption>
-      <thead>
-        <tr>
-          <th>Enterprise</th>
-          <th>Total Entries</th>
-          <th>Unique Pax</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.name}>
-            <th>{row.name}</th>
-            <td>{row.entries}</td>
-            <td>{row.unique}</td>
+    <div className="tanaw-chart-data-table-wrap">
+      <table className="tanaw-chart-data-table" aria-label="Enterprise Traffic Comparison data">
+        <thead>
+          <tr>
+            <th>Enterprise</th>
+            <th>Total Entries</th>
+            <th>Unique Pax</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.name}>
+              <th>{row.name}</th>
+              <td>{row.entries}</td>
+              <td>{row.unique}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -185,4 +182,8 @@ function formatAxisValue(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}m`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1)}k`;
   return value.toLocaleString();
+}
+
+function formatBarValue(value: unknown) {
+  return Number(value).toLocaleString();
 }

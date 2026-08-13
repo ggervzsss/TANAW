@@ -224,7 +224,17 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await page.getByRole("button", { name: "View REP-202607", exact: true }).click();
   const preview = page.getByRole("dialog", { name: "DOT Form Preview" });
   await expect(preview).toBeVisible();
+  await expect(preview).toHaveCSS("border-radius", "26px");
+  await expect(preview.getByText("Ready for Export", { exact: true })).toBeVisible();
+  const reportPaper = preview.locator(".enterprise-dot-document");
+  await expect(reportPaper).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(reportPaper).toHaveCSS("color", "rgb(17, 24, 39)");
+  await expect(reportPaper.getByRole("heading", { name: "TANAW - DOT Visitor Attraction Report" })).toBeVisible();
   await expect(preview.getByRole("button", { name: "Download PDF" })).toBeEnabled();
+  await expect(preview.getByRole("button", { name: "Close Preview", exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 900, height: 700 });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Download PDF" })).toBeVisible();
   await preview.getByRole("button", { name: "Close preview", exact: true }).click();
 
   await page.getByRole("button", { name: "Switch to light mode" }).click();
@@ -234,6 +244,81 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect(workspace).toBeVisible();
   await expect(page.getByPlaceholder("Search reports")).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+});
+
+test("presents accurate responsive historical trends and an intentional zero state", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  const summary = {
+    entries: 32,
+    exits: 12,
+    peak_occupancy: 18,
+    current_occupancy: 15,
+    unique_count: 24,
+    estimated_unique_count: 24,
+    confirmed_unique_count: 24,
+    degraded_unique_count: 0,
+    pending_unique_entries: 0,
+    repeat_entry_count: 8,
+    occupancy_correction_delta: 0,
+    total_events: 44,
+    unsubmitted_events: 44,
+    unsynced_events: 0,
+    first_event_at: "2026-08-11T01:00:00Z",
+    last_event_at: "2026-08-11T03:00:00Z",
+    period: "2026-08",
+  };
+  const populated = [
+    { label: "09:00", visitors: 8, entries: 12, exits: 2, peak_occupancy: 12, current_occupancy: 12 },
+    { label: "10:00", visitors: 14, entries: 20, exits: 4, peak_occupancy: 18, current_occupancy: 18 },
+    { label: "11:00", visitors: 20, entries: 32, exits: 12, peak_occupancy: 18, current_occupancy: 15 },
+  ];
+  const zero = [
+    { label: "Aug 1", visitors: 0, entries: 0, exits: 0, peak_occupancy: 0, current_occupancy: 0 },
+    { label: "Aug 2", visitors: 0, entries: 0, exits: 0, peak_occupancy: 0, current_occupancy: 0 },
+  ];
+
+  await page.route("http://127.0.0.1:8765/metrics/summary**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summary) }));
+  await page.route("http://127.0.0.1:8765/metrics/history**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ hourly_density: [], historical: { Today: populated, Week: populated, Month: zero } }),
+    }),
+  );
+  await page.route("http://127.0.0.1:8765/reports/local**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await page.goto("/#/enterprise/dashboard");
+
+  await expect(page.getByText("Live Occupancy", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unique Entries", { exact: true })).toBeVisible();
+  const week = page.getByRole("button", { name: "Week", exact: true });
+  await expect(week).toHaveAttribute("aria-pressed", "true");
+  const chart = page.getByRole("img", { name: "Week historical visitor trends for Entry Flow and Live Occupancy" });
+  await expect(chart).toBeVisible();
+  await expect(page.locator(".tanaw-trend-plot .recharts-line")).toHaveCount(2);
+  const linePath = page.locator(".tanaw-trend-plot .recharts-line-curve").first();
+  await expect(linePath).toHaveAttribute("d", /^M[^C]+$/);
+
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await expect(page.getByText("No visitor activity recorded for this period.", { exact: true })).toBeVisible();
+  await expect(page.locator(".tanaw-trend-plot")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Today historical visitor trends for Entry Flow and Live Occupancy" })).toBeVisible();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  await expect(page.locator(".tanaw-trend-plot")).toBeVisible();
+});
+
+test("keeps the camera-service warning and explains unavailable historical data", async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await signIn(page);
+
+  await expect(page.getByText("Historical data is temporarily unavailable.", { exact: true })).toBeVisible();
+  await expect(page.getByText("TANAW will display visitor trends when the local camera service is ready.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Visitor counts unavailable", { exact: false })).toBeVisible();
+  await expect(page.locator(".tanaw-trend-plot")).toHaveCount(0);
 });
 
 test("keeps Enterprise password inputs empty and reveals only manually entered text", async ({ page }) => {

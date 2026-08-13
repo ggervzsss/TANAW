@@ -178,6 +178,8 @@
   --tanaw-chart-label: #334155;
   --tanaw-chart-primary: #047857;
   --tanaw-chart-secondary: #2563eb;
+  --tanaw-chart-pattern: rgb(255 255 255 / 0.32);
+  --tanaw-chart-row-hover: rgb(15 118 110 / 0.055);
   --tanaw-chart-connector: #94a3b8;
   --tanaw-chart-marker-stroke: #ffffff;
   --tanaw-chart-tooltip-bg: #ffffff;
@@ -235,6 +237,8 @@ html.dark {
   --tanaw-chart-label: #d7e0e6;
   --tanaw-chart-primary: #34d399;
   --tanaw-chart-secondary: #60a5fa;
+  --tanaw-chart-pattern: rgb(15 23 42 / 0.34);
+  --tanaw-chart-row-hover: rgb(52 211 153 / 0.065);
   --tanaw-chart-connector: #64748b;
   --tanaw-chart-marker-stroke: #151f2b;
   --tanaw-chart-tooltip-bg: #1b2834;

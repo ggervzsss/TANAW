@@ -371,7 +371,10 @@ test("keeps the Spatial Directory readable, compact when retracted, and map-safe
   await expect(directory.locator(".tanaw-spatial-directory-shell")).toHaveCSS("opacity", "0");
   const expand = page.getByRole("button", { name: "Expand spatial directory" });
   await expect(expand).toBeVisible();
-  await expect(expand).toContainText("Spatial Directory");
+  await expect(expand).not.toContainText("Spatial Directory");
+  await expect(expand).toHaveAttribute("title", "Expand Spatial Directory");
+  await expect(expand).toHaveCSS("width", "52px");
+  await expect(expand).toHaveCSS("height", "52px");
   const collapsedDirectoryBox = await directory.boundingBox();
   const expandBox = await expand.boundingBox();
   expect(collapsedDirectoryBox).not.toBeNull();
