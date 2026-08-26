@@ -83,6 +83,26 @@ async function expectUnifiedHeader(header: Locator, titles: string[], dividerCou
   expect(afterHover?.height).toBeCloseTo(beforeHover?.height ?? 0, 1);
 }
 
+async function readTopbarGlassFrame(page: Page) {
+  return page.evaluate(() => {
+    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
+    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
+    if (!material || !optics) throw new Error("Liquid glass layers are missing");
+    const rect = material.getBoundingClientRect();
+    return {
+      center: rect.left + rect.width / 2,
+      materialOpacity: Number(getComputedStyle(material).opacity),
+      opticsOpacity: Number(getComputedStyle(optics).opacity),
+    };
+  });
+}
+
+async function expectSettledTopbarGlass(page: Page, targetCenter: number) {
+  await expect.poll(async () => Math.abs((await readTopbarGlassFrame(page)).center - targetCenter), { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThan(1);
+  await expect.poll(async () => (await readTopbarGlassFrame(page)).materialOpacity, { timeout: 1_500 }).toBeGreaterThan(0.95);
+  await expect.poll(async () => (await readTopbarGlassFrame(page)).opticsOpacity, { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThanOrEqual(0.01);
+}
+
 test("unifies Admin summary metrics without changing the surrounding pages", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockPortal(page, "admin", "light");
@@ -161,6 +181,7 @@ test("keeps IT dropdown navigation local, keyboard-accessible, and reduced-motio
   const accounts = page.getByRole("button", { name: "Accounts" });
   await expect(overview.locator("[data-topbar-active-underline='true']")).toHaveCount(1);
   const glassIndicator = page.locator("[data-topbar-glass-indicator='true']");
+  const foregroundOptics = page.locator("[data-topbar-glass-optics='foreground-endcaps']");
   await expect(glassIndicator).toHaveCount(1);
   expect(await glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();
   await expect(glassIndicator).toHaveCSS("opacity", "0");
@@ -171,6 +192,8 @@ test("keeps IT dropdown navigation local, keyboard-accessible, and reduced-motio
   await accounts.focus();
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "accounts");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-origin", "droplet-center");
+  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-optics-activation", "rendered-edge-velocity");
+  await expect(foregroundOptics).toHaveCSS("opacity", "0");
   await accounts.press("Enter");
   await expect(accounts).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("link", { name: "LGU Personnel" })).toBeVisible();
@@ -224,12 +247,15 @@ test("glides one neutral refractive IT glass capsule through navigation gaps", a
   await overview.hover();
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "replicated-lens-refraction");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "feathered-lens-band");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "visible");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "motion-gated");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-band", "outer-14px");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-rest-optics", "clear");
   const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
   await expect(refractiveEdge).toHaveCount(1);
   const foregroundOptics = page.locator("[data-topbar-glass-optics='foreground-endcaps']");
   await expect(foregroundOptics).toHaveCount(1);
   await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-edge-zone", "feathered");
+  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-optics-activation", "rendered-edge-velocity");
   await expect(foregroundOptics.locator("[data-topbar-glass-edge-side]")).toHaveCount(0);
   await expect(glassIndicator.locator("[data-topbar-glass-lobe], [data-topbar-glass-neck]")).toHaveCount(0);
   const refractionTrack = foregroundOptics.locator("[data-topbar-refraction-track='filtered-navigation-copy']");
@@ -269,7 +295,18 @@ test("glides one neutral refractive IT glass capsule through navigation gaps", a
   const workCenterBox = await workCenter.boundingBox();
   expect(overviewBox).not.toBeNull();
   expect(workCenterBox).not.toBeNull();
+  const overviewCenter = overviewBox!.x + overviewBox!.width / 2;
+  await expectSettledTopbarGlass(page, overviewCenter);
   await page.mouse.move((overviewBox!.x + overviewBox!.width + workCenterBox!.x) / 2, workCenterBox!.y + workCenterBox!.height / 2);
+  await expect
+    .poll(
+      async () => {
+        const frame = await readTopbarGlassFrame(page);
+        return Math.abs(frame.center - overviewCenter) > 1 && frame.opticsOpacity > 0.15 && frame.materialOpacity > 0.85;
+      },
+      { timeout: 900, intervals: [16, 16, 24, 32] },
+    )
+    .toBe(true);
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "gap");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "gap:dashboard:work-center");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-deformation", "1.000");
@@ -289,7 +326,6 @@ test("glides one neutral refractive IT glass capsule through navigation gaps", a
 
   const glidingBox = await glassIndicator.boundingBox();
   expect(glidingBox).not.toBeNull();
-  const overviewCenter = overviewBox!.x + overviewBox!.width / 2;
   const workCenterCenter = workCenterBox!.x + workCenterBox!.width / 2;
   const glidingCenter = glidingBox!.x + glidingBox!.width / 2;
   const fullUnionWidth = workCenterBox!.x + workCenterBox!.width - overviewBox!.x;
@@ -358,10 +394,22 @@ test("glides one neutral refractive IT glass capsule through navigation gaps", a
   await page.waitForTimeout(260);
   const releasedBox = await glassIndicator.boundingBox();
   expect(releasedBox!.width).toBeCloseTo(systemBox!.width + 8, 0);
+  const systemCenter = systemBox!.x + systemBox!.width / 2;
+  await expectSettledTopbarGlass(page, systemCenter);
 
   await system.blur();
   await overview.hover();
+  await expect
+    .poll(
+      async () => {
+        const frame = await readTopbarGlassFrame(page);
+        return Math.abs(frame.center - systemCenter) > 1 && frame.opticsOpacity > 0.15 && frame.materialOpacity > 0.85;
+      },
+      { timeout: 900, intervals: [16, 16, 24, 32] },
+    )
+    .toBe(true);
   await page.waitForTimeout(360);
+  await expectSettledTopbarGlass(page, overviewCenter);
   const overviewGlassBox = await glassIndicator.boundingBox();
   await page.mouse.down();
   await page.mouse.move(overviewBox!.x - 38, overviewBox!.y + overviewBox!.height / 2, { steps: 6 });

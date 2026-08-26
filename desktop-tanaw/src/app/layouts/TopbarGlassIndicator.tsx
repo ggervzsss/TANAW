@@ -18,7 +18,7 @@ export type TopbarGlassTarget = {
 export type TopbarGlassSignal = MotionValue<TopbarGlassTarget | null>;
 
 const endcapMask =
-  "radial-gradient(ellipse 22px 94% at 0% 50%,#000 0%,#000 38%,rgba(0,0,0,0.86) 58%,rgba(0,0,0,0.34) 78%,transparent 100%),radial-gradient(ellipse 22px 94% at 100% 50%,#000 0%,#000 38%,rgba(0,0,0,0.86) 58%,rgba(0,0,0,0.34) 78%,transparent 100%)";
+  "radial-gradient(ellipse 14px 94% at 0% 50%,#000 0%,#000 34%,rgba(0,0,0,0.8) 54%,rgba(0,0,0,0.22) 76%,transparent 100%),radial-gradient(ellipse 14px 94% at 100% 50%,#000 0%,#000 34%,rgba(0,0,0,0.8) 54%,rgba(0,0,0,0.22) 76%,transparent 100%)";
 
 const edgeBackdrop: CSSProperties = {
   backdropFilter: "blur(3px) brightness(1.06) saturate(1.12)",
@@ -230,8 +230,8 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
   }, [renderedCenter, renderedHeight, renderedPull, renderedTop, renderedWidth, shouldReduceMotion, target, targetCenter, targetHeight, targetOpacity, targetPull, targetTop, targetWidth]);
 
   const materialBackground = isDark
-    ? "radial-gradient(ellipse 82% 52% at 50% 0%,rgba(255,255,255,0.055),transparent 72%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.055) 0%,rgba(255,255,255,0.032) 46%,rgba(255,255,255,0.1) 100%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.2) 0%,rgba(255,255,255,0.065) 48%,rgba(255,255,255,0.16) 100%) border-box"
-    : "radial-gradient(ellipse 82% 52% at 50% 0%,rgba(255,255,255,0.07),transparent 72%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.065) 0%,rgba(255,255,255,0.04) 46%,rgba(255,255,255,0.105) 100%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.22) 0%,rgba(255,255,255,0.075) 48%,rgba(255,255,255,0.18) 100%) border-box";
+    ? "radial-gradient(ellipse 78% 48% at 50% 0%,rgba(255,255,255,0.045),transparent 74%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.024) 48%,rgba(255,255,255,0.082) 100%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.18) 0%,rgba(255,255,255,0.045) 50%,rgba(255,255,255,0.14) 100%) border-box"
+    : "radial-gradient(ellipse 78% 48% at 50% 0%,rgba(255,255,255,0.055),transparent 74%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0.028) 48%,rgba(255,255,255,0.088) 100%) padding-box,linear-gradient(180deg,rgba(255,255,255,0.2) 0%,rgba(255,255,255,0.055) 50%,rgba(255,255,255,0.16) 100%) border-box";
 
   return (
     <>
@@ -264,6 +264,7 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
         data-topbar-glass-material={isDark ? "dark" : "light"}
         data-topbar-glass-edge="replicated-lens-refraction"
         data-topbar-glass-edge-thickness="feathered-lens-band"
+        data-topbar-glass-edge-band="outer-14px"
         data-topbar-glass-edge-distortion="visible"
         data-topbar-glass-motion={shouldReduceMotion ? "reduced" : "raf-spring"}
         data-topbar-glass-renderer="motion-value-raf"
@@ -282,9 +283,9 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
           background: materialBackground,
           border: "1px solid transparent",
           borderRadius: renderedRadius,
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.16),inset 0 -1px 0 rgba(255,255,255,0.07),0 3px 10px rgba(3,56,39,0.1)",
-          backdropFilter: "blur(4px) saturate(1.08) brightness(1.02)",
-          WebkitBackdropFilter: "blur(4px) saturate(1.08) brightness(1.02)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.18),inset 0 -1px 0 rgba(255,255,255,0.08),0 3px 10px rgba(3,56,39,0.08)",
+          backdropFilter: "blur(3.2px) saturate(1.1) brightness(1.03)",
+          WebkitBackdropFilter: "blur(3.2px) saturate(1.1) brightness(1.03)",
         }}
         className="pointer-events-none absolute top-0 left-0 z-0 overflow-hidden will-change-transform"
       >

@@ -40,6 +40,26 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
 }
 
+async function readTopbarGlassFrame(page: Page) {
+  return page.evaluate(() => {
+    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
+    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
+    if (!material || !optics) throw new Error("Liquid glass layers are missing");
+    const rect = material.getBoundingClientRect();
+    return {
+      center: rect.left + rect.width / 2,
+      materialOpacity: Number(getComputedStyle(material).opacity),
+      opticsOpacity: Number(getComputedStyle(optics).opacity),
+    };
+  });
+}
+
+async function expectSettledTopbarGlass(page: Page, targetCenter: number) {
+  await expect.poll(async () => Math.abs((await readTopbarGlassFrame(page)).center - targetCenter), { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThan(1);
+  await expect.poll(async () => (await readTopbarGlassFrame(page)).materialOpacity, { timeout: 1_500 }).toBeGreaterThan(0.95);
+  await expect.poll(async () => (await readTopbarGlassFrame(page)).opticsOpacity, { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThanOrEqual(0.01);
+}
+
 test("updates Support Ticket selects in the same theme transaction", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
@@ -438,12 +458,15 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-shape", "continuous-waterdrop");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "replicated-lens-refraction");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "feathered-lens-band");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "visible");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "motion-gated");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-band", "outer-14px");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-rest-optics", "clear");
   const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
   await expect(refractiveEdge).toHaveCount(1);
   const foregroundOptics = page.locator("[data-topbar-glass-optics='foreground-endcaps']");
   await expect(foregroundOptics).toHaveCount(1);
   await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-edge-zone", "feathered");
+  await expect(foregroundOptics).toHaveAttribute("data-topbar-glass-optics-activation", "rendered-edge-velocity");
   await expect(foregroundOptics.locator("[data-topbar-glass-edge-side]")).toHaveCount(0);
   await expect(glassIndicator.locator("[data-topbar-glass-lobe], [data-topbar-glass-neck]")).toHaveCount(0);
   const refractionTrack = foregroundOptics.locator("[data-topbar-refraction-track='filtered-navigation-copy']");
@@ -471,12 +494,22 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   const cameraBox = await cameraNavigation.boundingBox();
   expect(dashboardBox).not.toBeNull();
   expect(cameraBox).not.toBeNull();
+  const dashboardCenter = dashboardBox!.x + dashboardBox!.width / 2;
+  await expectSettledTopbarGlass(page, dashboardCenter);
   await cameraNavigation.hover();
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "cameras");
+  await expect
+    .poll(
+      async () => {
+        const frame = await readTopbarGlassFrame(page);
+        return Math.abs(frame.center - dashboardCenter) > 1 && frame.opticsOpacity > 0.15 && frame.materialOpacity > 0.85;
+      },
+      { timeout: 900, intervals: [16, 16, 24, 32] },
+    )
+    .toBe(true);
   await page.waitForTimeout(260);
   const stretchedGlassBox = await glassIndicator.boundingBox();
   expect(stretchedGlassBox).not.toBeNull();
-  const dashboardCenter = dashboardBox!.x + dashboardBox!.width / 2;
   const cameraCenter = cameraBox!.x + cameraBox!.width / 2;
   const glidingCenter = stretchedGlassBox!.x + stretchedGlassBox!.width / 2;
   const fullUnionWidth = cameraBox!.x + cameraBox!.width - dashboardBox!.x;
@@ -496,6 +529,8 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   const reportsBox = await reportsNavigation.boundingBox();
   const reportsGlassBox = await reportsGlass.boundingBox();
   expect(reportsGlassBox!.x + reportsGlassBox!.width / 2).toBeCloseTo(reportsBox!.x + reportsBox!.width / 2, 0);
+  const reportsCenter = reportsBox!.x + reportsBox!.width / 2;
+  await expectSettledTopbarGlass(page, reportsCenter);
   await page.mouse.down();
   await page.mouse.move(reportsBox!.x + reportsBox!.width + 38, reportsBox!.y + reportsBox!.height / 2, { steps: 6 });
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-state", "pull");
@@ -522,10 +557,20 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await page.waitForTimeout(260);
   const releasedBox = await glassIndicator.boundingBox();
   expect(releasedBox!.width).toBeCloseTo(reportsBox!.width + 8, 0);
+  await expectSettledTopbarGlass(page, reportsCenter);
   await reportsNavigation.blur();
   await expect(reportsNavigation).not.toHaveCSS("transform", /matrix/);
   await cameraNavigation.hover();
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-target", "cameras");
+  await expect
+    .poll(
+      async () => {
+        const frame = await readTopbarGlassFrame(page);
+        return Math.abs(frame.center - reportsCenter) > 1 && frame.opticsOpacity > 0.15 && frame.materialOpacity > 0.85;
+      },
+      { timeout: 900, intervals: [16, 16, 24, 32] },
+    )
+    .toBe(true);
   await expect(activeUnderline).toHaveCount(1);
   await page.mouse.move(900, 150);
   await expect.poll(() => glassIndicator.getAttribute("data-topbar-glass-target")).toBeNull();

@@ -219,7 +219,9 @@ test("uses one canonical admin map camera for login, route return, refresh, and 
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-shape", "continuous-waterdrop");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge", "replicated-lens-refraction");
   await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-thickness", "feathered-lens-band");
-  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "visible");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-distortion", "motion-gated");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-edge-band", "outer-14px");
+  await expect(glassIndicator).toHaveAttribute("data-topbar-glass-rest-optics", "clear");
   const refractiveEdge = glassIndicator.locator("[data-topbar-glass-refraction='background-adaptive']");
   await expect(refractiveEdge).toHaveCount(1);
   const refractionTrack = page.locator("[data-topbar-refraction-track='filtered-navigation-copy']");
