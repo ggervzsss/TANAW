@@ -2,7 +2,7 @@ import { Activity, Building2, Camera, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AccountSummary } from "@/shared/types";
 import type { MapEnterprise } from "@/shared/types";
-import { getDarkMonitoringBadgeClass, getOccupancyBadgeClass } from "../utils";
+import { getDarkMonitoringBadgeClass, getOccupancyBadgeClass, monitoringStatusLegend } from "../utils";
 
 export function EnterpriseList({ children, count, title }: { children: ReactNode; count: ReactNode; title: string }) {
   return (
@@ -22,9 +22,29 @@ export function DirectoryEmptyMessage({ children }: { children: ReactNode }) {
   return <div className="tanaw-map-directory__empty rounded-xl border p-5 text-center text-xs leading-relaxed font-medium">{children}</div>;
 }
 
-export function EnterpriseMapCard({ enterprise, selected, onClick }: { enterprise: MapEnterprise; selected: boolean; onClick: () => void }) {
+export function EnterpriseMapCard({
+  enterprise,
+  selected,
+  onClick,
+  onHoverChange,
+}: {
+  enterprise: MapEnterprise;
+  selected: boolean;
+  onClick: () => void;
+  onHoverChange: (enterpriseId: string | null) => void;
+}) {
   return (
-    <button type="button" onClick={onClick} aria-pressed={selected} data-selected={selected} className="tanaw-map-enterprise-card relative w-full overflow-hidden rounded-2xl border p-3.5 text-left">
+    <button
+      type="button"
+      onClick={onClick}
+      onPointerEnter={() => onHoverChange(enterprise.id)}
+      onPointerLeave={() => onHoverChange(null)}
+      onFocus={() => onHoverChange(enterprise.id)}
+      onBlur={() => onHoverChange(null)}
+      aria-pressed={selected}
+      data-selected={selected}
+      className="tanaw-map-enterprise-card relative w-full overflow-hidden rounded-2xl border p-3.5 text-left"
+    >
       <span className="tanaw-map-enterprise-card__selection absolute inset-y-3 left-0 w-0.75 rounded-r-full" aria-hidden="true" />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -68,12 +88,7 @@ export function MonitoringLegend() {
   return (
     <div className="tanaw-map-directory__legend mt-4 border-t pt-3" aria-label="Camera monitoring status legend">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] font-semibold">
-        {[
-          ["running", "All Running"],
-          ["partial", "Partial"],
-          ["stopped", "Stopped"],
-          ["fault", "Fault"],
-        ].map(([tone, label]) => (
+        {monitoringStatusLegend.map(({ tone, label }) => (
           <span key={label} className="inline-flex items-center gap-1.5">
             <span className="tanaw-map-directory__legend-dot h-2.5 w-2.5 rounded-full" data-tone={tone} aria-hidden="true" />
             {label}

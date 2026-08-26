@@ -1,4 +1,4 @@
-import { BarChart3, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { VisitorInsightRange } from "@/shared/types";
 import { VisitorInsightsDrawer } from "./VisitorInsightsDrawer";
@@ -11,7 +11,6 @@ type Props = {
   isOpen: boolean;
   range: VisitorInsightRange;
   onClose: () => void;
-  onOpen: () => void;
   onRangeChange: (range: VisitorInsightRange) => void;
   onShowArea: () => void;
 };
@@ -34,18 +33,6 @@ export function AdminMapInsights(props: Props) {
           </motion.div>
         )}
       </AnimatePresence>
-      {!props.isOpen && (
-        <motion.button
-          type="button"
-          initial={{ opacity: 0, x: 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={props.onOpen}
-          className={`absolute right-4 z-420 inline-flex items-center gap-2 rounded-xl border border-slate-400/35 bg-[#0b1527]/92 px-4 py-3 text-xs font-black tracking-wide text-white uppercase shadow-[0_18px_46px_rgba(0,0,0,0.44)] backdrop-blur-xl transition-all hover:border-emerald-300/45 hover:bg-[#132139] ${props.isBoundaryLoading || props.isBoundaryError ? "top-20" : "top-4"}`}
-        >
-          <BarChart3 size={16} className="text-emerald-300" />
-          Visitor Insights
-        </motion.button>
-      )}
       <AnimatePresence>
         {props.isOpen && (
           <VisitorInsightsDrawer

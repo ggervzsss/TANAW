@@ -8,11 +8,11 @@ export const defaultTypeOptions = ["All Types", "IT Activity", "Enterprise Activ
 export const defaultAccountOptions = ["All Accounts", "IT Personnel", "Enterprise Account", "System"];
 
 export const activityGroupClasses: Record<Exclude<ActivityGroup, "All Activity">, string> = {
-  Reports: "border-teal-200 bg-teal-50 text-teal-700",
-  "Admin Activity": "border-indigo-200 bg-indigo-50 text-indigo-700",
-  "Accounts & Settings": "border-blue-200 bg-blue-50 text-blue-700",
-  "Issues & Resolutions": "border-amber-200 bg-amber-50 text-amber-700",
-  Security: "border-red-200 bg-red-50 text-red-700",
+  Reports: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-400/25 dark:bg-teal-400/10 dark:text-teal-200",
+  "Admin Activity": "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/25 dark:bg-indigo-400/10 dark:text-indigo-200",
+  "Accounts & Settings": "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/10 dark:text-blue-200",
+  "Issues & Resolutions": "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-200",
+  Security: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/25 dark:bg-red-400/10 dark:text-red-200",
 };
 
 export const systemLogTypeClasses: Record<SystemLogCategory, string> = {

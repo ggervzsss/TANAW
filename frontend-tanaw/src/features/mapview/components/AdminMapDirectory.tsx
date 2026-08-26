@@ -19,6 +19,7 @@ type AdminMapDirectoryProps = {
   onClearBarangay: (reason: MapDeselectReason) => void;
   onCollapseChange: (collapsed: boolean) => void;
   onRetry: () => void;
+  onHoverEnterprise: (enterpriseId: string | null) => void;
   onSelectBarangay: (barangayName: string) => void;
   onSelectEnterprise: (enterprise: MapEnterprise) => void;
   onShowBoundariesChange: (show: boolean) => void;
@@ -40,45 +41,24 @@ export function AdminMapDirectory(props: AdminMapDirectoryProps) {
           <SpatialDirectory {...props} />
         </div>
       </div>
-      <AnimatePresence initial={false}>
-        {isCollapsed ? (
-          <motion.button
-            key="directory-reopen"
-            type="button"
-            aria-controls="spatial-directory-panel"
-            aria-expanded="false"
-            aria-label="Expand spatial directory"
-            title="Expand Spatial Directory"
-            initial={{ opacity: 0, x: -12, scale: 0.96 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -10, scale: 0.97 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            onClick={() => onCollapseChange(false)}
-            className="tanaw-spatial-directory__reopen absolute top-1/2 left-0 z-430 grid size-13 -translate-y-1/2 place-items-center rounded-2xl"
-          >
-            <span className="tanaw-spatial-directory__reopen-icon grid size-9 place-items-center rounded-xl" aria-hidden="true">
-              <MapPinned size={19} />
-            </span>
-          </motion.button>
-        ) : (
-          <motion.button
-            key="directory-collapse"
-            type="button"
-            aria-controls="spatial-directory-panel"
-            aria-expanded="true"
-            aria-label="Collapse spatial directory"
-            title="Collapse spatial directory"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => onCollapseChange(true)}
-            className="tanaw-spatial-directory__collapse absolute top-1/2 z-430 grid h-12 w-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-xl"
-          >
-            <ChevronLeft size={18} strokeWidth={2.25} aria-hidden="true" />
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {!isCollapsed && (
+        <motion.button
+          key="directory-collapse"
+          type="button"
+          aria-controls="spatial-directory-panel"
+          aria-expanded="true"
+          aria-label="Collapse spatial directory"
+          title="Collapse spatial directory"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          onClick={() => onCollapseChange(true)}
+          className="tanaw-spatial-directory__collapse absolute top-1/2 z-430 grid h-12 w-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-xl"
+        >
+          <ChevronLeft size={18} strokeWidth={2.25} aria-hidden="true" />
+        </motion.button>
+      )}
     </aside>
   );
 }
@@ -95,6 +75,7 @@ function SpatialDirectory(props: AdminMapDirectoryProps) {
     mapEnterprises,
     onClearBarangay,
     onRetry,
+    onHoverEnterprise,
     onSelectBarangay,
     onSelectEnterprise,
     onShowBoundariesChange,
@@ -155,6 +136,7 @@ function SpatialDirectory(props: AdminMapDirectoryProps) {
               isEnterpriseError={isEnterpriseError}
               onBack={() => onClearBarangay("back")}
               onSelectEnterprise={onSelectEnterprise}
+              onHoverEnterprise={onHoverEnterprise}
               pinned={selectedBarangayEnterprises}
               selectedBarangayName={selectedBarangayName}
               selectedEnterpriseId={selectedEnterpriseId}
@@ -168,6 +150,7 @@ function SpatialDirectory(props: AdminMapDirectoryProps) {
               isEnterpriseLoading={isEnterpriseLoading}
               mapEnterprises={mapEnterprises}
               onRetry={onRetry}
+              onHoverEnterprise={onHoverEnterprise}
               onSelectEnterprise={onSelectEnterprise}
               selectedEnterpriseId={selectedEnterpriseId}
               unpinnedEnterprises={unpinnedEnterprises}
@@ -183,6 +166,7 @@ function SelectedBarangayDirectory({
   isEnterpriseError,
   onBack,
   onSelectEnterprise,
+  onHoverEnterprise,
   pinned,
   selectedBarangayName,
   selectedEnterpriseId,
@@ -191,6 +175,7 @@ function SelectedBarangayDirectory({
   isEnterpriseError: boolean;
   onBack: () => void;
   onSelectEnterprise: (enterprise: MapEnterprise) => void;
+  onHoverEnterprise: (enterpriseId: string | null) => void;
   pinned: MapEnterprise[];
   selectedBarangayName: string;
   selectedEnterpriseId: string | null;
@@ -223,7 +208,7 @@ function SelectedBarangayDirectory({
       <EnterpriseList title="Enterprises within this Barangay" count={pinned.length + unpinned.length}>
         {pinned.map((enterprise, index) => (
           <motion.div key={enterprise.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, delay: Math.min(index * 0.025, 0.12), ease: "easeOut" }}>
-            <EnterpriseMapCard enterprise={enterprise} selected={selectedEnterpriseId === enterprise.id} onClick={() => onSelectEnterprise(enterprise)} />
+            <EnterpriseMapCard enterprise={enterprise} selected={selectedEnterpriseId === enterprise.id} onClick={() => onSelectEnterprise(enterprise)} onHoverChange={onHoverEnterprise} />
           </motion.div>
         ))}
         {unpinned.map((enterprise) => (
@@ -243,6 +228,7 @@ function AllEnterprisesDirectory({
   isEnterpriseLoading,
   mapEnterprises,
   onRetry,
+  onHoverEnterprise,
   onSelectEnterprise,
   selectedEnterpriseId,
   unpinnedEnterprises,
@@ -252,6 +238,7 @@ function AllEnterprisesDirectory({
   isEnterpriseLoading: boolean;
   mapEnterprises: MapEnterprise[];
   onRetry: () => void;
+  onHoverEnterprise: (enterpriseId: string | null) => void;
   onSelectEnterprise: (enterprise: MapEnterprise) => void;
   selectedEnterpriseId: string | null;
   unpinnedEnterprises: AccountSummary[];
@@ -267,7 +254,13 @@ function AllEnterprisesDirectory({
     >
       <EnterpriseList title="All Enterprises" count={count}>
         {mapEnterprises.map((enterprise) => (
-          <EnterpriseMapCard key={enterprise.id} enterprise={enterprise} selected={selectedEnterpriseId === enterprise.id} onClick={() => onSelectEnterprise(enterprise)} />
+          <EnterpriseMapCard
+            key={enterprise.id}
+            enterprise={enterprise}
+            selected={selectedEnterpriseId === enterprise.id}
+            onClick={() => onSelectEnterprise(enterprise)}
+            onHoverChange={onHoverEnterprise}
+          />
         ))}
         {unpinnedEnterprises.map((enterprise) => (
           <UnpinnedEnterpriseCard key={enterprise.id} enterprise={enterprise} />

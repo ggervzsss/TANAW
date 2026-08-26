@@ -1,8 +1,7 @@
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
 import type { SyntheticEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { NavLink } from "react-router-dom";
 import { preloadPortalRoute } from "@/app/routers/routeModules";
 import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
@@ -11,54 +10,14 @@ import type { UserRole } from "@/shared/types/role.types";
 import type { TopbarEntry } from "./portalNavigationModel";
 import { TopbarActiveUnderline, TopbarLiquidGlass } from "./TopbarGlassIndicator";
 import type { TopbarGlassTarget } from "./TopbarGlassIndicator";
+import { useTopbarGlassPointer } from "./useTopbarGlassPointer";
 
 type DesktopProps = { entries: TopbarEntry[]; isDark: boolean; openMenuId: string | null; pathname: string; role: UserRole; onMenuChange: (id: string | null) => void };
 
-const interpolate = (from: number, to: number, progress: number) => from + (to - from) * progress;
-
-function getTopbarGapTarget(navigation: HTMLElement, clientX: number): TopbarGlassTarget | null {
-  const navigationRect = navigation.getBoundingClientRect();
-  const items = Array.from(navigation.querySelectorAll<HTMLElement>("[data-topbar-navigation]"))
-    .map((element) => ({ element, rect: element.getBoundingClientRect() }))
-    .sort((first, second) => first.rect.left - second.rect.left);
-
-  for (let index = 0; index < items.length - 1; index += 1) {
-    const leading = items[index];
-    const trailing = items[index + 1];
-    const gapWidth = trailing.rect.left - leading.rect.right;
-    if (gapWidth <= 0 || clientX <= leading.rect.right || clientX >= trailing.rect.left) continue;
-
-    const progress = (clientX - leading.rect.right) / gapWidth;
-    const easedProgress = progress * progress * (3 - 2 * progress);
-    const deformation = Math.sin(Math.PI * progress);
-    const leadingCenterX = leading.rect.left + leading.rect.width / 2;
-    const trailingCenterX = trailing.rect.left + trailing.rect.width / 2;
-    const leadingCenterY = leading.rect.top + leading.rect.height / 2;
-    const trailingCenterY = trailing.rect.top + trailing.rect.height / 2;
-    const centerX = interpolate(leadingCenterX, trailingCenterX, easedProgress);
-    const centerY = interpolate(leadingCenterY, trailingCenterY, easedProgress);
-    const height = interpolate(leading.rect.height, trailing.rect.height, easedProgress) - deformation * 1.5;
-    const width = interpolate(leading.rect.width, trailing.rect.width, easedProgress) + 8 + deformation * Math.min(10, gapWidth * 0.7);
-    const leadingId = leading.element.dataset.topbarNavigation ?? "leading";
-    const trailingId = trailing.element.dataset.topbarNavigation ?? "trailing";
-
-    return {
-      deformation,
-      height,
-      id: `gap:${leadingId}:${trailingId}`,
-      left: centerX - width / 2 - navigationRect.left,
-      mode: "gap",
-      top: centerY - height / 2 - navigationRect.top,
-      width,
-    };
-  }
-
-  return null;
-}
-
 export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname, role, onMenuChange }: DesktopProps) {
   const queryClient = useQueryClient();
-  const [glassTarget, setGlassTarget] = useState<TopbarGlassTarget | null>(null);
+  const glassTarget = useMotionValue<TopbarGlassTarget | null>(null);
+  const { onPointerDown: handleGlassPointerDown, onPointerLeave: handleGlassPointerLeave, onPointerMove: handleGlassPointerMove, setNavigationElement } = useTopbarGlassPointer(glassTarget);
   const base =
     "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/65 focus-visible:outline-none max-2xl:px-3.5";
   const active = "text-white";
@@ -68,7 +27,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
     if (!navigation) return;
     const navigationRect = navigation.getBoundingClientRect();
     const itemRect = element.getBoundingClientRect();
-    setGlassTarget({
+    glassTarget.set({
       deformation: 0,
       height: itemRect.height,
       id,
@@ -79,20 +38,18 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
     });
   };
   const hideGlass = () => {
-    setGlassTarget(null);
+    glassTarget.set(null);
   };
   return (
     <nav
+      ref={setNavigationElement}
       data-liquid-glass-navigation="true"
       className="relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4"
       aria-label={`${rolePortalLabel[role]} navigation`}
-      onPointerLeave={(event) => {
-        if (!event.currentTarget.contains(document.activeElement)) hideGlass();
-      }}
-      onPointerMove={(event) => {
-        const gapTarget = getTopbarGapTarget(event.currentTarget, event.clientX);
-        if (gapTarget) setGlassTarget(gapTarget);
-      }}
+      onDragStart={(event) => event.preventDefault()}
+      onPointerDown={handleGlassPointerDown}
+      onPointerLeave={handleGlassPointerLeave}
+      onPointerMove={handleGlassPointerMove}
     >
       <TopbarLiquidGlass isDark={isDark} target={glassTarget} />
       {entries.map((entry) => {
@@ -110,7 +67,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
             >
               {({ isActive }) => (
                 <>
-                  <span className="relative z-10 flex items-center gap-2">
+                  <span data-topbar-refractive-source="true" className="relative z-10 flex items-center gap-2">
                     <Icon size={16} className="shrink-0" />
                     {entry.item.label}
                   </span>
@@ -136,7 +93,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
               onPointerEnter={(event) => showGlass(entry.id, event.currentTarget)}
               className={[base, isActive || isOpen ? active : inactive].join(" ")}
             >
-              <span className="relative z-10 flex items-center gap-2">
+              <span data-topbar-refractive-source="true" className="relative z-10 flex items-center gap-2">
                 <Icon size={16} />
                 {entry.label}
                 <ChevronDown size={14} className={`ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`} />

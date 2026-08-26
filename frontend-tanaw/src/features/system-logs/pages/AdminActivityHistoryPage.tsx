@@ -1,4 +1,4 @@
-import { CalendarDays, FileCheck2, ShieldAlert, UserCheck } from "lucide-react";
+import { CalendarDays, FileCheck2, History, ShieldAlert, UserCheck } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
@@ -31,19 +31,36 @@ export function AdminActivityHistoryPage() {
           },
         ]}
       />
-      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
-        <AdminActivityFilters
-          activityGroup={page.activityGroup}
-          query={page.query}
-          timeRange={page.timeRange}
-          onActivityGroupChange={page.setActivityGroup}
-          onQueryChange={page.setQuery}
-          onTimeRangeChange={page.setTimeRange}
-        />
-        <AdminActivityTable activities={page.activities} isLoading={page.isLoading} timeFormat={timeFormat} onSelect={page.setSelectedActivity} />
-        <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
-          <span>Showing {page.activities.length} records</span>
-          <span>{page.timeRange}</span>
+      <Panel className="tanaw-data-panel tanaw-admin-workspace tanaw-audit-workspace mt-6 overflow-hidden">
+        <header className="tanaw-audit-command">
+          <div className="tanaw-audit-command__identity">
+            <span className="tanaw-audit-command__icon" aria-hidden="true">
+              <History size={19} />
+            </span>
+            <div>
+              <h2>Activity records</h2>
+              <p>{page.activities.length} records in the current view</p>
+            </div>
+          </div>
+          <AdminActivityFilters
+            activityGroup={page.activityGroup}
+            query={page.query}
+            timeRange={page.timeRange}
+            onActivityGroupChange={page.setActivityGroup}
+            onQueryChange={page.setQuery}
+            onTimeRangeChange={page.setTimeRange}
+          />
+        </header>
+        <div className="tanaw-audit-ledger" role="region" aria-label="Activity records">
+          <div className="tanaw-audit-ledger__heading">
+            <span>Activity History</span>
+            <span>{page.timeRange}</span>
+          </div>
+          <AdminActivityTable activities={page.activities} isLoading={page.isLoading} timeFormat={timeFormat} onSelect={page.setSelectedActivity} />
+          <div className="tanaw-data-footer flex items-center justify-between border-t border-gray-100 bg-gray-50 px-4 py-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">
+            <span>Showing {page.activities.length} records</span>
+            <span>{page.timeRange}</span>
+          </div>
         </div>
       </Panel>
       <AnimatePresence>

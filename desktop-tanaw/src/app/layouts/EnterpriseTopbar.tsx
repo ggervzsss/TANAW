@@ -1,6 +1,6 @@
 import { Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
 import type { AuthUser } from "../../features/login/types";
 import type { EnterpriseNotification, EnterpriseView } from "../../types/enterprise";
@@ -8,6 +8,7 @@ import { getEnterpriseTopbarControlClasses } from "./enterpriseTopbarTheme";
 import { SAN_PEDRO_SEAL_IMAGE } from "../../lib/assets";
 import { TopbarActiveUnderline, TopbarLiquidGlass } from "./TopbarGlassIndicator";
 import type { TopbarGlassTarget } from "./TopbarGlassIndicator";
+import { useTopbarGlassPointer } from "./useTopbarGlassPointer";
 
 type EnterpriseTopbarProps = {
   activeView: EnterpriseView;
@@ -33,48 +34,6 @@ const enterpriseNavigation = [
   { id: "cameras", label: "Camera Setup", icon: Camera },
   { id: "reports", label: "Reports", icon: FileText },
 ] as const satisfies { id: EnterpriseView; label: string; icon: typeof LayoutDashboard }[];
-
-const interpolate = (from: number, to: number, progress: number) => from + (to - from) * progress;
-
-function getTopbarGapTarget(navigation: HTMLElement, clientX: number): TopbarGlassTarget | null {
-  const navigationRect = navigation.getBoundingClientRect();
-  const items = Array.from(navigation.querySelectorAll<HTMLElement>("[data-topbar-navigation]"))
-    .map((element) => ({ element, rect: element.getBoundingClientRect() }))
-    .sort((first, second) => first.rect.left - second.rect.left);
-
-  for (let index = 0; index < items.length - 1; index += 1) {
-    const leading = items[index];
-    const trailing = items[index + 1];
-    const gapWidth = trailing.rect.left - leading.rect.right;
-    if (gapWidth <= 0 || clientX <= leading.rect.right || clientX >= trailing.rect.left) continue;
-
-    const progress = (clientX - leading.rect.right) / gapWidth;
-    const easedProgress = progress * progress * (3 - 2 * progress);
-    const deformation = Math.sin(Math.PI * progress);
-    const leadingCenterX = leading.rect.left + leading.rect.width / 2;
-    const trailingCenterX = trailing.rect.left + trailing.rect.width / 2;
-    const leadingCenterY = leading.rect.top + leading.rect.height / 2;
-    const trailingCenterY = trailing.rect.top + trailing.rect.height / 2;
-    const centerX = interpolate(leadingCenterX, trailingCenterX, easedProgress);
-    const centerY = interpolate(leadingCenterY, trailingCenterY, easedProgress);
-    const height = interpolate(leading.rect.height, trailing.rect.height, easedProgress) - deformation * 1.5;
-    const width = interpolate(leading.rect.width, trailing.rect.width, easedProgress) + 8 + deformation * Math.min(10, gapWidth * 0.7);
-    const leadingId = leading.element.dataset.topbarNavigation ?? "leading";
-    const trailingId = trailing.element.dataset.topbarNavigation ?? "trailing";
-
-    return {
-      deformation,
-      height,
-      id: `gap:${leadingId}:${trailingId}`,
-      left: centerX - width / 2 - navigationRect.left,
-      mode: "gap",
-      top: centerY - height / 2 - navigationRect.top,
-      width,
-    };
-  }
-
-  return null;
-}
 
 export function EnterpriseBrand({ onDashboard }: { onDashboard: () => void }) {
   return (
@@ -115,7 +74,8 @@ export function EnterpriseTopbar({
 }: EnterpriseTopbarProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const [glassTarget, setGlassTarget] = useState<TopbarGlassTarget | null>(null);
+  const glassTarget = useMotionValue<TopbarGlassTarget | null>(null);
+  const { onPointerDown: handleGlassPointerDown, onPointerLeave: handleGlassPointerLeave, onPointerMove: handleGlassPointerMove, setNavigationElement } = useTopbarGlassPointer(glassTarget);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
 
@@ -173,7 +133,7 @@ export function EnterpriseTopbar({
     if (!navigation) return;
     const navigationRect = navigation.getBoundingClientRect();
     const itemRect = element.getBoundingClientRect();
-    setGlassTarget({
+    glassTarget.set({
       deformation: 0,
       height: itemRect.height,
       id,
@@ -183,7 +143,7 @@ export function EnterpriseTopbar({
       width: itemRect.width + 8,
     });
   };
-  const hideGlass = () => setGlassTarget(null);
+  const hideGlass = () => glassTarget.set(null);
   const navButtons = enterpriseNavigation.map((item) => {
     const Icon = item.icon;
     const isActive = activeView === item.id;
@@ -209,7 +169,7 @@ export function EnterpriseTopbar({
         }}
         className={[navItemBase, isActive ? navItemActive : navItemInactive].join(" ")}
       >
-        <span className="relative z-10 flex items-center gap-2">
+        <span data-topbar-refractive-source="true" className="relative z-10 flex items-center gap-2">
           <Icon size={16} className="shrink-0" />
           {item.label}
         </span>
@@ -232,16 +192,14 @@ export function EnterpriseTopbar({
           <span className="hidden h-9 w-px shrink-0 bg-white/16 xl:block" />
 
           <nav
+            ref={setNavigationElement}
             data-liquid-glass-navigation="true"
             className="relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4"
             aria-label="Enterprise navigation"
-            onPointerLeave={(event) => {
-              if (!event.currentTarget.contains(document.activeElement)) hideGlass();
-            }}
-            onPointerMove={(event) => {
-              const gapTarget = getTopbarGapTarget(event.currentTarget, event.clientX);
-              if (gapTarget) setGlassTarget(gapTarget);
-            }}
+            onDragStart={(event) => event.preventDefault()}
+            onPointerDown={handleGlassPointerDown}
+            onPointerLeave={handleGlassPointerLeave}
+            onPointerMove={handleGlassPointerMove}
           >
             <TopbarLiquidGlass isDark={isDarkTopbar} target={glassTarget} />
             {navButtons}
