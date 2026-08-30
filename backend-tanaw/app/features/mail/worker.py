@@ -13,15 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.db.session import AsyncSessionLocal
 from app.features.accounts.models import AccountRole
-from app.features.mail.client import ResendAPIError
+from app.features.mail.client import BrevoAPIError
 from app.features.mail.dev_log import record_dev_delivery
 from app.features.mail.models import EmailDeliveryAttempt, EmailOutbox, EmailOutboxStatus
 from app.features.mail.rendering import EmailRenderCancelled, render_outbox_email
-from app.features.mail.runtime import EmailRuntimeError, get_resend_client
+from app.features.mail.runtime import EmailRuntimeError, get_brevo_client
 from app.features.mail.service import (
+    BREVO_IDEMPOTENCY_WINDOW,
     MANUAL_RETRY_SAFETY_MARGIN,
     REDACTED_EMAIL_BODY,
-    RESEND_IDEMPOTENCY_WINDOW,
 )
 from app.features.mail.templates import EmailContent
 from app.features.notifications.service import (
@@ -184,7 +184,15 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
             )
             return
 
-        _validate_resend_recipient(settings, recipient)
+        if delivery_provider != "brevo":
+            raise EmailDispatchRejected(
+                "This email delivery has an unsupported provider.",
+                error_code="unsupported_provider",
+                status=EmailOutboxStatus.RECONCILIATION_REQUIRED,
+                outcome_uncertain=True,
+            )
+
+        _validate_brevo_configuration(settings)
         provider_payload_hash = _provider_payload_hash(
             sender=sender,
             recipient=recipient,
@@ -196,7 +204,7 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
             claim,
             provider_payload_hash=provider_payload_hash,
         )
-        sent = await get_resend_client().send_email(
+        sent = await get_brevo_client().send_email(
             sender=sender,
             recipient=recipient,
             subject=content.subject,
@@ -211,7 +219,7 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
             account_id=account_id,
             recipient=recipient,
             content=content,
-            provider="resend",
+            provider="brevo",
             provider_message_id=sent.id,
             delivery_status="accepted",
             outbox_status=EmailOutboxStatus.ACCEPTED,
@@ -220,7 +228,7 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
         )
     except EmailRenderCancelled as exc:
         await _record_cancelled(claim, str(exc))
-    except ResendAPIError as exc:
+    except BrevoAPIError as exc:
         await _record_failure(
             settings,
             claim,
@@ -229,8 +237,9 @@ async def _dispatch_claim(settings: Settings, claim: ClaimedEmail) -> None:
             or (f"http_{exc.status_code}" if exc.status_code is not None else "network_error"),
             error_message=str(exc),
             retry_after_seconds=exc.retry_after_seconds,
-            outcome_uncertain=exc.status_code is None,
+            outcome_uncertain=exc.status_code is None or exc.duplicate,
             attempt_started_at=attempt_started_at,
+            final_status=(EmailOutboxStatus.RECONCILIATION_REQUIRED if exc.duplicate else None),
         )
     except EmailDispatchRejected as exc:
         await _record_failure(
@@ -361,9 +370,12 @@ async def _record_failure(
         if outbox is None:
             return
         first_attempt_at = outbox.first_provider_attempt_at
-        inside_idempotency_window = first_attempt_at is None or now < (
-            _as_utc(first_attempt_at) + RESEND_IDEMPOTENCY_WINDOW - MANUAL_RETRY_SAFETY_MARGIN
+        idempotency_cutoff = (
+            _as_utc(first_attempt_at) + BREVO_IDEMPOTENCY_WINDOW - MANUAL_RETRY_SAFETY_MARGIN
+            if first_attempt_at is not None
+            else None
         )
+        inside_idempotency_window = idempotency_cutoff is None or now < idempotency_cutoff
         should_retry = final_status is None and (
             retryable and outbox.attempt_count < outbox.max_attempts and inside_idempotency_window
         )
@@ -374,8 +386,11 @@ async def _record_failure(
             )
             outbox.status = EmailOutboxStatus.RETRY_SCHEDULED.value
             outbox.next_attempt_at = now + timedelta(seconds=delay_seconds)
-            if outbox.valid_until is not None and outbox.next_attempt_at >= _as_utc(
-                outbox.valid_until
+            if (
+                idempotency_cutoff is not None and outbox.next_attempt_at >= idempotency_cutoff
+            ) or (
+                outbox.valid_until is not None
+                and outbox.next_attempt_at >= _as_utc(outbox.valid_until)
             ):
                 should_retry = False
                 outbox.status = EmailOutboxStatus.TERMINAL_FAILED.value
@@ -467,14 +482,9 @@ async def _get_claimed_email(
     return cast(EmailOutbox | None, await db.scalar(statement))
 
 
-def _validate_resend_recipient(settings: Settings, recipient: str) -> None:
-    if settings.resend_api_key is None:
-        raise EmailRuntimeError("RESEND_API_KEY is not configured.")
-    if settings.email_test_recipient and recipient != str(settings.email_test_recipient).lower():
-        raise EmailRuntimeError(
-            "The Resend development sender can only deliver to EMAIL_TEST_RECIPIENT "
-            "until a custom domain is verified."
-        )
+def _validate_brevo_configuration(settings: Settings) -> None:
+    if settings.brevo_api_key is None:
+        raise EmailRuntimeError("BREVO_API_KEY is not configured.")
 
 
 def _load_tags(value: str | None) -> dict[str, str] | None:
@@ -498,7 +508,7 @@ def _release_lease(outbox: EmailOutbox) -> None:
 
 
 def _retry_delay_seconds(attempt_count: int) -> float:
-    schedule = (30.0, 120.0, 600.0, 1800.0, 3600.0)
+    schedule = (30.0, 120.0, 300.0, 600.0)
     return schedule[min(max(attempt_count - 1, 0), len(schedule) - 1)]
 
 
@@ -535,11 +545,11 @@ async def _prepare_provider_attempt(
             )
         if outbox.first_provider_attempt_at is not None and now >= (
             _as_utc(outbox.first_provider_attempt_at)
-            + RESEND_IDEMPOTENCY_WINDOW
+            + BREVO_IDEMPOTENCY_WINDOW
             - MANUAL_RETRY_SAFETY_MARGIN
         ):
             raise EmailDispatchRejected(
-                "The Resend idempotency window elapsed; provider reconciliation is required.",
+                "The Brevo idempotency window elapsed; provider reconciliation is required.",
                 error_code="idempotency_window_elapsed",
                 status=(
                     EmailOutboxStatus.RECONCILIATION_REQUIRED

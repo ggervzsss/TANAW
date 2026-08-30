@@ -55,12 +55,12 @@ async def test_enqueue_email_persists_only_template_source_data(
 
 
 @pytest.mark.asyncio
-async def test_resend_outbox_snapshots_sender_and_redacts_future_delivery_logs(
+async def test_brevo_outbox_snapshots_sender_and_redacts_future_delivery_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = Settings(
-        email_delivery_mode="resend",
-        resend_api_key=SecretStr("re_test_sending_key_123456789"),
+        email_delivery_mode="brevo",
+        brevo_api_key=SecretStr("xkeysib-test_sending_key_123456789"),
         email_from_name="TANAW System",
         email_from_address="no-reply@example.com",
     )
@@ -78,7 +78,7 @@ async def test_resend_outbox_snapshots_sender_and_redacts_future_delivery_logs(
         idempotency_key="activation-source-id",
     )
 
-    assert outbox.provider == "resend"
+    assert outbox.provider == "brevo"
     assert outbox.sender == "TANAW System <no-reply@example.com>"
     assert REDACTED_EMAIL_BODY == (
         "[Sensitive email content is not retained in production delivery logs.]"

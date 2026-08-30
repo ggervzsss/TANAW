@@ -39,8 +39,8 @@ def test_production_session_cookie_supports_credentialed_cross_site_restore(
             jwt_secret_key="production-jwt-secret-with-at-least-32-characters",
             cors_origins="https://tanaw-sanpedro.vercel.app",
             frontend_public_url="https://tanaw-sanpedro.vercel.app",
-            email_delivery_mode="resend",
-            resend_api_key=SecretStr("re_production_sending_key_123456789"),
+            email_delivery_mode="brevo",
+            brevo_api_key=SecretStr("xkeysib-production_sending_key_123456789"),
             email_secret_derivation_key=SecretStr(
                 "production-email-secret-different-from-jwt-2026"
             ),

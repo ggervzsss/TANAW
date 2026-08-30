@@ -26,7 +26,7 @@ from app.features.auth import account_activation, password_recovery, secret_valu
 from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
 from app.features.mail import service as mail_service
 from app.features.mail import worker as mail_worker
-from app.features.mail.client import ResendAPIError, SentEmail
+from app.features.mail.client import BrevoAPIError, SentEmail
 from app.features.mail.dev_log import clear_dev_deliveries, list_dev_deliveries
 from app.features.mail.models import (
     EmailDeliveryAttempt,
@@ -35,9 +35,9 @@ from app.features.mail.models import (
     EmailTemplateName,
 )
 from app.features.mail.service import (
+    BREVO_IDEMPOTENCY_WINDOW,
     MANUAL_RETRY_SAFETY_MARGIN,
     REDACTED_EMAIL_BODY,
-    RESEND_IDEMPOTENCY_WINDOW,
     enqueue_email,
 )
 from tests.support.postgres import PostgresRuntime, postgres_test_database_url
@@ -52,7 +52,7 @@ class CreatedAccount:
     email: str
 
 
-class AcceptingResendClient:
+class AcceptingBrevoClient:
     def __init__(self) -> None:
         self.idempotency_keys: list[str] = []
 
@@ -72,7 +72,7 @@ class AcceptingResendClient:
         return SentEmail(id=f"postgres-test-{uuid4()}")
 
 
-class TimeoutThenAcceptResendClient(AcceptingResendClient):
+class TimeoutThenAcceptBrevoClient(AcceptingBrevoClient):
     async def send_email(
         self,
         *,
@@ -86,12 +86,12 @@ class TimeoutThenAcceptResendClient(AcceptingResendClient):
     ) -> SentEmail:
         self.idempotency_keys.append(idempotency_key)
         if len(self.idempotency_keys) == 1:
-            raise ResendAPIError("Resend timed out before TANAW received a response.")
+            raise BrevoAPIError("Brevo timed out before TANAW received a response.")
         del sender, recipient, subject, text, html, tags
         return SentEmail(id=f"postgres-test-{uuid4()}")
 
 
-class IdempotentAcceptingResendClient(AcceptingResendClient):
+class DuplicateRejectingBrevoClient(AcceptingBrevoClient):
     def __init__(self) -> None:
         super().__init__()
         self.provider_ids: dict[str, str] = {}
@@ -109,11 +109,18 @@ class IdempotentAcceptingResendClient(AcceptingResendClient):
     ) -> SentEmail:
         del sender, recipient, subject, text, html, tags
         self.idempotency_keys.append(idempotency_key)
-        provider_id = self.provider_ids.setdefault(idempotency_key, f"postgres-test-{uuid4()}")
+        if idempotency_key in self.provider_ids:
+            raise BrevoAPIError(
+                "Brevo rejected a duplicate idempotency key.",
+                status_code=400,
+                error_type="duplicate_parameter",
+            )
+        provider_id = f"postgres-test-{uuid4()}"
+        self.provider_ids[idempotency_key] = provider_id
         return SentEmail(id=provider_id)
 
 
-class PermanentlyRejectingResendClient(AcceptingResendClient):
+class PermanentlyRejectingBrevoClient(AcceptingBrevoClient):
     async def send_email(
         self,
         *,
@@ -127,14 +134,14 @@ class PermanentlyRejectingResendClient(AcceptingResendClient):
     ) -> SentEmail:
         del sender, recipient, subject, text, html, tags
         self.idempotency_keys.append(idempotency_key)
-        raise ResendAPIError(
-            "Resend rejected the recipient.",
+        raise BrevoAPIError(
+            "Brevo rejected the recipient.",
             status_code=422,
             error_type="validation_error",
         )
 
 
-class BlockingResendClient(AcceptingResendClient):
+class BlockingBrevoClient(AcceptingBrevoClient):
     def __init__(self) -> None:
         super().__init__()
         self.started = asyncio.Event()
@@ -166,8 +173,8 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
     settings = Settings(
         environment="development",
         database_url=database_url,
-        email_delivery_mode="resend",
-        resend_api_key=SecretStr("re_postgres_outbox_test_key_123456789"),
+        email_delivery_mode="brevo",
+        brevo_api_key=SecretStr("xkeysib-postgres_outbox_test_key_123456789"),
         email_from_name="TANAW PostgreSQL Test",
         email_from_address="no-reply@example.com",
         email_secret_derivation_key=SecretStr("postgres-outbox-test-derivation-key-123456789"),
@@ -325,8 +332,8 @@ async def test_transaction_rollback_leaves_no_activation_source_or_outbox_send(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = AcceptingResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = AcceptingBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="rollback", activated=False)
 
     async with postgres_runtime.sessions() as db:
@@ -356,8 +363,8 @@ async def test_two_concurrent_workers_claim_one_email_once(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = AcceptingResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = AcceptingBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="concurrent")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="concurrent"
@@ -388,8 +395,8 @@ async def test_expired_lease_is_recovered_and_stale_worker_is_fenced(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = BlockingResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = BlockingBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="lease")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="lease"
@@ -446,12 +453,12 @@ async def test_expired_lease_is_recovered_and_stale_worker_is_fenced(
 
 
 @pytest.mark.asyncio
-async def test_transient_resend_timeout_retries_with_same_idempotency_key_then_accepts(
+async def test_transient_brevo_timeout_retries_with_same_idempotency_key_then_accepts(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = TimeoutThenAcceptResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = TimeoutThenAcceptBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="retry")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="retry"
@@ -476,12 +483,12 @@ async def test_transient_resend_timeout_retries_with_same_idempotency_key_then_a
 
 
 @pytest.mark.asyncio
-async def test_provider_acceptance_then_database_commit_failure_reuses_same_message(
+async def test_provider_acceptance_then_database_commit_failure_requires_reconciliation(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = IdempotentAcceptingResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = DuplicateRejectingBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="commit-failure")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="commit-failure"
@@ -515,12 +522,14 @@ async def test_provider_acceptance_then_database_commit_failure_reuses_same_mess
     await _make_retry_due(postgres_runtime, outbox_id)
     assert await mail_worker.run_email_outbox_batch(postgres_runtime.settings) == 1
 
-    completed = await _get_outbox(postgres_runtime, outbox_id)
+    reconciliation = await _get_outbox(postgres_runtime, outbox_id)
     assert client.idempotency_keys == [idempotency_key, idempotency_key]
     assert len(client.provider_ids) == 1
-    assert completed.provider_message_id == client.provider_ids[idempotency_key]
-    assert completed.status == EmailOutboxStatus.ACCEPTED.value
-    assert completed.attempt_count == 2
+    assert reconciliation.provider_message_id is None
+    assert reconciliation.status == EmailOutboxStatus.RECONCILIATION_REQUIRED.value
+    assert reconciliation.last_error_code == "duplicate_parameter"
+    assert reconciliation.outcome_uncertain is True
+    assert reconciliation.attempt_count == 2
 
 
 @pytest.mark.asyncio
@@ -528,8 +537,8 @@ async def test_permanent_provider_failure_is_dead_lettered_without_automatic_ret
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = PermanentlyRejectingResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = PermanentlyRejectingBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="permanent-failure")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="permanent-failure"
@@ -551,8 +560,8 @@ async def test_transient_failure_reaching_attempt_ceiling_is_dead_lettered(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = TimeoutThenAcceptResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = TimeoutThenAcceptBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="attempt-ceiling")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="attempt-ceiling"
@@ -578,8 +587,8 @@ async def test_provider_payload_mutation_is_rejected_before_a_second_send(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = TimeoutThenAcceptResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = TimeoutThenAcceptBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="payload")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="payload"
@@ -607,23 +616,23 @@ async def test_provider_payload_mutation_is_rejected_before_a_second_send(
 
 
 @pytest.mark.asyncio
-async def test_ambiguous_outcome_at_23_hours_requires_reconciliation(
+async def test_ambiguous_outcome_at_28_minutes_requires_reconciliation(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = TimeoutThenAcceptResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = TimeoutThenAcceptBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     account = await _create_account(postgres_runtime, label="reconcile")
     outbox_id, idempotency_key = await _enqueue_business_email(
         postgres_runtime, account, label="reconcile"
     )
 
-    assert RESEND_IDEMPOTENCY_WINDOW - MANUAL_RETRY_SAFETY_MARGIN == timedelta(hours=23)
+    assert BREVO_IDEMPOTENCY_WINDOW - MANUAL_RETRY_SAFETY_MARGIN == timedelta(minutes=28)
     assert await mail_worker.run_email_outbox_batch(postgres_runtime.settings) == 1
     await _make_retry_due(
         postgres_runtime,
         outbox_id,
-        first_provider_attempt_at=datetime.now(UTC) - timedelta(hours=23),
+        first_provider_attempt_at=datetime.now(UTC) - timedelta(minutes=28),
     )
 
     assert await mail_worker.run_email_outbox_batch(postgres_runtime.settings) == 1
@@ -640,8 +649,8 @@ async def test_raw_activation_token_and_password_reset_code_are_never_persisted(
     postgres_runtime: PostgresRuntime,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = AcceptingResendClient()
-    monkeypatch.setattr(mail_worker, "get_resend_client", lambda: client)
+    client = AcceptingBrevoClient()
+    monkeypatch.setattr(mail_worker, "get_brevo_client", lambda: client)
     pending_account = await _create_account(
         postgres_runtime, label="secret-activation", activated=False
     )

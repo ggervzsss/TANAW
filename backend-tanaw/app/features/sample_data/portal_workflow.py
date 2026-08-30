@@ -207,7 +207,7 @@ async def create_portal_workflow_data(
         template_payload_json=json.dumps({"recipientName": support_enterprise.display_name}),
         tags_json=json.dumps({"sample": True}),
         idempotency_key=f"{SAMPLE_SOURCE_PREFIX}email:activation:{support_enterprise.id}",
-        provider="resend",
+        provider="brevo",
         status=EmailOutboxStatus.TERMINAL_FAILED.value,
         attempt_count=3,
         max_attempts=3,

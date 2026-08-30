@@ -12,7 +12,7 @@ from app.db.migrations import (
 )
 
 
-def test_migration_history_has_canonical_baseline_and_realtime_outbox() -> None:
+def test_migration_history_has_one_canonical_baseline() -> None:
     backend_root = next(
         parent
         for parent in Path(__file__).resolve().parents
@@ -23,7 +23,6 @@ def test_migration_history_has_canonical_baseline_and_realtime_outbox() -> None:
 
     assert migration_names == [
         "20260720_0001_initial_tanaw_schema.py",
-        "20260723_0002_realtime_outbox.py",
     ]
 
 

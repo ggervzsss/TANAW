@@ -1,72 +1,83 @@
+import json
+from uuid import UUID
+
 import httpx
 import pytest
 
-from app.features.mail.client import ResendAPIError, ResendClient
+from app.features.mail.client import BrevoAPIError, BrevoClient
 
 
 @pytest.mark.asyncio
-async def test_resend_client_reuses_connection_pool_for_multiple_messages() -> None:
+async def test_brevo_client_reuses_connection_pool_and_maps_messages() -> None:
     request_count = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal request_count
         request_count += 1
-        assert request.headers["authorization"] == "Bearer re_test_sending_key_123456789"
+        assert request.url == "https://api.brevo.com/v3/smtp/email"
+        assert request.headers["api-key"] == "xkeysib-test_sending_key_123456789"
         assert request.headers["user-agent"] == "TANAW/1.0"
-        return httpx.Response(200, json={"id": f"email-{request_count}"})
+        payload = json.loads(request.content)
+        assert payload["sender"] == {
+            "name": "TANAW",
+            "email": "no-reply@example.com",
+        }
+        assert payload["to"] == [{"email": f"recipient-{request_count}@example.com"}]
+        assert payload["htmlContent"] == f"<p>Message {request_count}</p>"
+        assert payload["textContent"] == f"Message {request_count}"
+        assert payload["tags"] == ["category:authentication", "purpose:test"]
+        UUID(payload["headers"]["idempotencyKey"])
+        return httpx.Response(201, json={"messageId": f"email-{request_count}"})
 
-    client = ResendClient(
-        "re_test_sending_key_123456789",
-        base_url="https://api.resend.com",
+    client = BrevoClient(
+        "xkeysib-test_sending_key_123456789",
+        base_url="https://api.brevo.com/v3",
         timeout_seconds=10,
         transport=httpx.MockTransport(handler),
     )
     try:
-        first = await client.send_email(
-            sender="TANAW <no-reply@example.com>",
-            recipient="first@example.com",
-            subject="First",
-            text="First",
-            html="<p>First</p>",
-            idempotency_key="first-message",
-        )
-        second = await client.send_email(
-            sender="TANAW <no-reply@example.com>",
-            recipient="second@example.com",
-            subject="Second",
-            text="Second",
-            html="<p>Second</p>",
-            idempotency_key="second-message",
-        )
+        sent = []
+        for number in (1, 2):
+            sent.append(
+                await client.send_email(
+                    sender="TANAW <no-reply@example.com>",
+                    recipient=f"recipient-{number}@example.com",
+                    subject=f"Message {number}",
+                    text=f"Message {number}",
+                    html=f"<p>Message {number}</p>",
+                    idempotency_key=f"message-{number}",
+                    tags={"purpose": "test", "category": "authentication"},
+                )
+            )
     finally:
         await client.aclose()
 
-    assert (first.id, second.id) == ("email-1", "email-2")
+    assert [message.id for message in sent] == ["email-1", "email-2"]
     assert request_count == 2
 
 
 @pytest.mark.asyncio
-async def test_resend_error_classifies_retry_and_redacts_api_key() -> None:
-    api_key = "re_secret_sending_key_123456789"
+async def test_brevo_error_classifies_retry_and_redacts_api_key() -> None:
+    api_key = "xkeysib-secret_sending_key_123456789"
 
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
             429,
             headers={"retry-after": "2.5"},
             json={
-                "name": "rate_limit_exceeded",
+                "code": "rate_limit",
                 "message": f"Retry request authenticated with {api_key}",
             },
         )
 
-    client = ResendClient(
+    client = BrevoClient(
         api_key,
-        base_url="https://api.resend.com",
+        base_url="https://api.brevo.com/v3",
         timeout_seconds=10,
         transport=httpx.MockTransport(handler),
     )
     try:
-        with pytest.raises(ResendAPIError) as captured:
+        with pytest.raises(BrevoAPIError) as captured:
             await client.send_email(
                 sender="TANAW <no-reply@example.com>",
                 recipient="recipient@example.com",
@@ -81,6 +92,17 @@ async def test_resend_error_classifies_retry_and_redacts_api_key() -> None:
     error = captured.value
     assert error.retryable is True
     assert error.status_code == 429
-    assert error.error_type == "rate_limit_exceeded"
+    assert error.error_type == "rate_limit"
     assert error.retry_after_seconds == 2.5
     assert api_key not in str(error)
+
+
+def test_brevo_duplicate_error_requires_provider_reconciliation() -> None:
+    error = BrevoAPIError(
+        "Brevo rejected a duplicate idempotency key.",
+        status_code=400,
+        error_type="duplicate_parameter",
+    )
+
+    assert error.retryable is False
+    assert error.duplicate is True

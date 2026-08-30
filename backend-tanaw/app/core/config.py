@@ -60,12 +60,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
     render_external_url: str | None = Field(default=None, validation_alias="RENDER_EXTERNAL_URL")
     email_delivery_mode: str = "log"
-    resend_api_key: SecretStr | None = None
+    brevo_api_key: SecretStr | None = None
     geoapify_api_key: SecretStr | None = None
-    resend_api_base_url: str = "https://api.resend.com"
+    brevo_api_base_url: str = "https://api.brevo.com/v3"
     email_from_name: str = "TANAW"
-    email_from_address: EmailStr = "onboarding@resend.dev"
-    email_test_recipient: EmailStr | None = None
+    email_from_address: EmailStr = "no-reply@example.com"
     email_request_timeout_seconds: float = Field(default=10.0, ge=0.5, le=60.0)
     email_secret_derivation_key: SecretStr | None = None
     email_outbox_poll_interval_seconds: float = Field(default=1.0, ge=0.1, le=10.0)
@@ -111,15 +110,14 @@ class Settings(BaseSettings):
     @classmethod
     def validate_email_delivery_mode(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"log", "resend"}:
-            raise ValueError("EMAIL_DELIVERY_MODE must be either 'log' or 'resend'.")
+        if normalized not in {"log", "brevo"}:
+            raise ValueError("EMAIL_DELIVERY_MODE must be either 'log' or 'brevo'.")
         return normalized
 
     @field_validator(
-        "resend_api_key",
+        "brevo_api_key",
         "geoapify_api_key",
         "email_secret_derivation_key",
-        "email_test_recipient",
         "bootstrap_it_username",
         "bootstrap_it_password",
         "development_admin_username",
@@ -156,9 +154,9 @@ class Settings(BaseSettings):
             raise ValueError("FRONTEND_PUBLIC_URL must be an absolute HTTP(S) URL.")
         return normalized
 
-    @field_validator("resend_api_base_url")
+    @field_validator("brevo_api_base_url")
     @classmethod
-    def normalize_resend_api_base_url(cls, value: str) -> str:
+    def normalize_brevo_api_base_url(cls, value: str) -> str:
         normalized = value.strip().rstrip("/")
         parsed = urlsplit(normalized)
         if (
@@ -169,7 +167,7 @@ class Settings(BaseSettings):
             or parsed.query
             or parsed.fragment
         ):
-            raise ValueError("RESEND_API_BASE_URL must be an absolute HTTP(S) URL.")
+            raise ValueError("BREVO_API_BASE_URL must be an absolute HTTP(S) URL.")
         return normalized
 
     @field_validator("email_from_name")
@@ -244,10 +242,10 @@ class Settings(BaseSettings):
             )
 
     def _validate_production_email(self) -> None:
-        if self.email_delivery_mode != "resend":
-            raise ValueError("EMAIL_DELIVERY_MODE must be 'resend' in production.")
-        if self.resend_api_key is None:
-            raise ValueError("RESEND_API_KEY is required in production.")
+        if self.email_delivery_mode != "brevo":
+            raise ValueError("EMAIL_DELIVERY_MODE must be 'brevo' in production.")
+        if self.brevo_api_key is None:
+            raise ValueError("BREVO_API_KEY is required in production.")
         if self.email_secret_derivation_key is None:
             raise ValueError("EMAIL_SECRET_DERIVATION_KEY is required in production.")
 
@@ -265,36 +263,29 @@ class Settings(BaseSettings):
         if hmac.compare_digest(derivation_key, self.jwt_secret_key):
             raise ValueError("EMAIL_SECRET_DERIVATION_KEY must be different from JWT_SECRET_KEY.")
 
-        api_key = self.resend_api_key.get_secret_value().strip()
+        api_key = self.brevo_api_key.get_secret_value().strip()
         normalized_key = api_key.lower()
         if (
-            not api_key.startswith("re_")
+            not api_key.startswith("xkeysib-")
             or len(api_key) < 20
             or any(
                 placeholder in normalized_key
-                for placeholder in ("replace", "change", "example", "your_resend")
+                for placeholder in ("replace", "change", "example", "your_brevo")
             )
             or "<" in api_key
             or ">" in api_key
         ):
-            raise ValueError("RESEND_API_KEY must be a non-placeholder Resend sending key.")
+            raise ValueError("BREVO_API_KEY must be a non-placeholder Brevo API key.")
 
         sender_domain = str(self.email_from_address).rsplit("@", 1)[1].lower()
         if sender_domain in {
-            "resend.dev",
             "example.com",
             "example.net",
             "example.org",
         } or sender_domain.endswith((".example", ".example.com")):
-            raise ValueError(
-                "EMAIL_FROM_ADDRESS must use a verified custom sending domain in production."
-            )
-        if self.email_test_recipient is not None:
-            raise ValueError(
-                "EMAIL_TEST_RECIPIENT must be omitted in production after domain verification."
-            )
-        if self.resend_api_base_url != "https://api.resend.com":
-            raise ValueError("RESEND_API_BASE_URL must be https://api.resend.com in production.")
+            raise ValueError("EMAIL_FROM_ADDRESS must use a verified Brevo sender in production.")
+        if self.brevo_api_base_url != "https://api.brevo.com/v3":
+            raise ValueError("BREVO_API_BASE_URL must be https://api.brevo.com/v3 in production.")
         if self.password_reset_response_floor_seconds < 0.15:
             raise ValueError(
                 "PASSWORD_RESET_RESPONSE_FLOOR_SECONDS must be at least 0.15 in production."

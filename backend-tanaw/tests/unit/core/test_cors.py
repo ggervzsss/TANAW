@@ -10,8 +10,8 @@ TRUSTED_FRONTEND_ORIGIN = "https://tanaw-sanpedro.vercel.app"
 EVIL_ORIGIN = "https://evil.example"
 PRODUCTION_JWT_SECRET = "production-jwt-secret-with-at-least-32-characters"
 PRODUCTION_EMAIL_SETTINGS: dict[str, Any] = {
-    "email_delivery_mode": "resend",
-    "resend_api_key": "re_production_sending_key_123456789",
+    "email_delivery_mode": "brevo",
+    "brevo_api_key": "xkeysib-production_sending_key_123456789",
     "email_secret_derivation_key": "production-email-secret-different-from-jwt-2026",
     "email_from_address": "no-reply@mail.tanaw-sanpedro.ph",
 }

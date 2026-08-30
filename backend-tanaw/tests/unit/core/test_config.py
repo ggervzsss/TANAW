@@ -12,8 +12,8 @@ PRODUCTION_SETTINGS: dict[str, Any] = {
     "cors_origins": PRODUCTION_FRONTEND_URL,
     "frontend_public_url": PRODUCTION_FRONTEND_URL,
     "jwt_secret_key": PRODUCTION_JWT_SECRET,
-    "email_delivery_mode": "resend",
-    "resend_api_key": "re_production_sending_key_123456789",
+    "email_delivery_mode": "brevo",
+    "brevo_api_key": "xkeysib-production_sending_key_123456789",
     "email_secret_derivation_key": "production-email-secret-different-from-jwt-2026",
     "email_from_address": "no-reply@mail.tanaw-sanpedro.ph",
 }
@@ -51,7 +51,7 @@ def test_email_delivery_defaults_to_safe_local_logging() -> None:
     settings = Settings()
 
     assert settings.email_delivery_mode == "log"
-    assert settings.resend_api_key is None
+    assert settings.brevo_api_key is None
 
 
 def test_blank_geoapify_key_disables_location_search() -> None:
@@ -168,9 +168,9 @@ def test_production_allows_bootstrap_credentials_to_be_removed_after_initializat
 def test_production_accepts_complete_verified_domain_email_configuration() -> None:
     settings = production_settings()
 
-    assert settings.email_delivery_mode == "resend"
-    assert settings.resend_api_key is not None
-    assert settings.resend_api_key.get_secret_value().startswith("re_")
+    assert settings.email_delivery_mode == "brevo"
+    assert settings.brevo_api_key is not None
+    assert settings.brevo_api_key.get_secret_value().startswith("xkeysib-")
     assert str(settings.email_from_address) == "no-reply@mail.tanaw-sanpedro.ph"
 
 
@@ -178,17 +178,15 @@ def test_production_accepts_complete_verified_domain_email_configuration() -> No
     ("overrides", "message"),
     [
         ({"email_delivery_mode": "log"}, "EMAIL_DELIVERY_MODE"),
-        ({"resend_api_key": None}, "RESEND_API_KEY"),
+        ({"brevo_api_key": None}, "BREVO_API_KEY"),
         ({"email_secret_derivation_key": None}, "EMAIL_SECRET_DERIVATION_KEY"),
         (
             {"email_secret_derivation_key": PRODUCTION_JWT_SECRET},
             "different from JWT_SECRET_KEY",
         ),
-        ({"resend_api_key": "replace_with_your_resend_api_key"}, "RESEND_API_KEY"),
-        ({"email_from_address": "onboarding@resend.dev"}, "verified custom sending domain"),
-        ({"email_from_address": "no-reply@example.com"}, "verified custom sending domain"),
-        ({"email_test_recipient": "owner@example.com"}, "EMAIL_TEST_RECIPIENT"),
-        ({"resend_api_base_url": "https://api.example.com"}, "RESEND_API_BASE_URL"),
+        ({"brevo_api_key": "replace_with_your_brevo_api_key"}, "BREVO_API_KEY"),
+        ({"email_from_address": "no-reply@example.com"}, "verified Brevo sender"),
+        ({"brevo_api_base_url": "https://api.example.com"}, "BREVO_API_BASE_URL"),
     ],
 )
 def test_production_rejects_incomplete_or_placeholder_email_configuration(
@@ -253,11 +251,9 @@ def test_production_requires_a_password_recovery_timing_floor() -> None:
         production_settings(password_reset_response_floor_seconds=0.1)
 
 
-def test_sender_and_test_recipient_must_be_valid_email_addresses() -> None:
+def test_sender_must_be_a_valid_email_address() -> None:
     with pytest.raises(ValueError):
         Settings(email_from_address="not-an-email")
-    with pytest.raises(ValueError):
-        Settings(email_test_recipient="not-an-email")
 
 
 def test_development_seed_accounts_require_complete_credentials() -> None:

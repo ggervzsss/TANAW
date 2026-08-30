@@ -10,8 +10,8 @@ from app.core.config import get_settings
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
 
 REDACTED_EMAIL_BODY = "[Sensitive email content is not retained in production delivery logs.]"
-RESEND_IDEMPOTENCY_WINDOW = timedelta(hours=24)
-MANUAL_RETRY_SAFETY_MARGIN = timedelta(hours=1)
+BREVO_IDEMPOTENCY_WINDOW = timedelta(minutes=30)
+MANUAL_RETRY_SAFETY_MARGIN = timedelta(minutes=2)
 
 
 class EmailOutboxRetryError(ValueError):
@@ -47,7 +47,7 @@ async def enqueue_email(
             json.dumps(tags, sort_keys=True, separators=(",", ":")) if tags is not None else None
         ),
         idempotency_key=idempotency_key,
-        provider="resend" if settings.email_delivery_mode == "resend" else "local",
+        provider="brevo" if settings.email_delivery_mode == "brevo" else "local",
         status=EmailOutboxStatus.QUEUED.value,
         attempt_count=0,
         max_attempts=settings.email_outbox_max_attempts,
@@ -133,6 +133,10 @@ async def retry_terminal_email(db: AsyncSession, outbox_id: str) -> EmailOutbox:
         raise EmailOutboxRetryError("Email delivery record not found.")
     if outbox.status != EmailOutboxStatus.TERMINAL_FAILED.value:
         raise EmailOutboxRetryError("Only terminally failed email can be retried manually.")
+    if outbox.provider != "brevo":
+        raise EmailOutboxRetryError(
+            "Only Brevo delivery records can be retried through this endpoint."
+        )
 
     now = datetime.now(UTC)
     if outbox.valid_until is not None and _as_utc(outbox.valid_until) <= now:
@@ -141,11 +145,11 @@ async def retry_terminal_email(db: AsyncSession, outbox_id: str) -> EmailOutbox:
         )
     if outbox.first_provider_attempt_at is not None and now >= (
         _as_utc(outbox.first_provider_attempt_at)
-        + RESEND_IDEMPOTENCY_WINDOW
+        + BREVO_IDEMPOTENCY_WINDOW
         - MANUAL_RETRY_SAFETY_MARGIN
     ):
         raise EmailOutboxRetryError(
-            "This delivery is outside Resend's safe idempotency window. "
+            "This delivery is outside Brevo's safe idempotency window. "
             "Issue a new activation, recovery, or support message instead."
         )
 

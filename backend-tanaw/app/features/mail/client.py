@@ -1,11 +1,13 @@
 import re
 from dataclasses import dataclass
+from email.utils import parseaddr
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 
 
-class ResendAPIError(RuntimeError):
+class BrevoAPIError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -26,8 +28,11 @@ class ResendAPIError(RuntimeError):
             or self.status_code == 408
             or self.status_code == 429
             or (self.status_code is not None and self.status_code >= 500)
-            or self.error_type == "concurrent_idempotent_requests"
         )
+
+    @property
+    def duplicate(self) -> bool:
+        return self.error_type == "duplicate_parameter"
 
 
 @dataclass(frozen=True)
@@ -35,7 +40,7 @@ class SentEmail:
     id: str
 
 
-class ResendClient:
+class BrevoClient:
     def __init__(
         self,
         api_key: str,
@@ -77,25 +82,25 @@ class ResendClient:
         idempotency_key: str,
         tags: dict[str, str] | None = None,
     ) -> SentEmail:
+        sender_name, sender_address = parseaddr(sender)
+        if not sender_address:
+            raise BrevoAPIError("TANAW has an invalid Brevo sender address.")
+
         payload: dict[str, Any] = {
-            "from": sender,
-            "to": [recipient],
+            "sender": {"name": sender_name, "email": sender_address},
+            "to": [{"email": recipient}],
             "subject": subject,
-            "text": text,
-            "html": html,
+            "textContent": text,
+            "htmlContent": html,
+            "headers": {"idempotencyKey": _brevo_idempotency_key(idempotency_key)},
         }
         if tags:
-            payload["tags"] = [{"name": name, "value": value} for name, value in tags.items()]
+            payload["tags"] = [f"{name}:{value}" for name, value in sorted(tags.items())]
 
-        response = await self._request(
-            "POST",
-            "/emails",
-            json=payload,
-            headers={"Idempotency-Key": idempotency_key},
-        )
-        message_id = response.get("id")
+        response = await self._request("POST", "/smtp/email", json=payload)
+        message_id = response.get("messageId")
         if not isinstance(message_id, str) or not message_id:
-            raise ResendAPIError("Resend returned an invalid send response.")
+            raise BrevoAPIError("Brevo returned an invalid send response.")
         return SentEmail(id=message_id)
 
     async def _request(
@@ -104,12 +109,11 @@ class ResendClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         request_headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "accept": "application/json",
+            "api-key": self._api_key,
             "Content-Type": "application/json",
-            **(headers or {}),
         }
         try:
             response = await self._client.request(
@@ -119,41 +123,37 @@ class ResendClient:
                 headers=request_headers,
             )
         except httpx.HTTPError as exc:
-            raise ResendAPIError("Resend could not be reached.") from exc
+            raise BrevoAPIError("Brevo could not be reached.") from exc
 
         try:
             payload = response.json()
         except ValueError as exc:
-            raise ResendAPIError(f"Resend returned HTTP {response.status_code}.") from exc
+            raise BrevoAPIError(f"Brevo returned HTTP {response.status_code}.") from exc
         if response.is_error:
-            error_type, message = _resend_error_details(payload)
-            raise ResendAPIError(
-                f"Resend returned HTTP {response.status_code}: "
+            error_type, message = _brevo_error_details(payload)
+            raise BrevoAPIError(
+                f"Brevo returned HTTP {response.status_code}: "
                 f"{_redact_api_keys(message, self._api_key)}",
                 status_code=response.status_code,
                 error_type=error_type,
                 retry_after_seconds=_retry_after_seconds(response),
             )
         if not isinstance(payload, dict):
-            raise ResendAPIError("Resend returned an invalid JSON response.")
+            raise BrevoAPIError("Brevo returned an invalid JSON response.")
         return payload
 
 
-def _resend_error_details(payload: object) -> tuple[str | None, str]:
+def _brevo_idempotency_key(value: str) -> str:
+    return str(uuid5(NAMESPACE_URL, f"https://tanaw.local/email/{value}"))
+
+
+def _brevo_error_details(payload: object) -> tuple[str | None, str]:
     if isinstance(payload, dict):
-        error_type = payload.get("name") or payload.get("type")
+        error_type = payload.get("code")
         normalized_type = error_type if isinstance(error_type, str) else None
         message = payload.get("message")
         if isinstance(message, str) and message:
             return normalized_type, message
-        nested_error = payload.get("error")
-        if isinstance(nested_error, dict):
-            nested_type = nested_error.get("name") or nested_error.get("type")
-            if isinstance(nested_type, str):
-                normalized_type = nested_type
-            nested_message = nested_error.get("message")
-            if isinstance(nested_message, str) and nested_message:
-                return normalized_type, nested_message
         return normalized_type, "request failed"
     return None, "request failed"
 
@@ -170,4 +170,4 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
 
 def _redact_api_keys(message: str, configured_key: str) -> str:
     redacted = message.replace(configured_key, "[redacted]")
-    return re.sub(r"\bre_[A-Za-z0-9_-]{8,}\b", "[redacted]", redacted)
+    return re.sub(r"\bxkeysib-[A-Za-z0-9_-]{8,}\b", "[redacted]", redacted)

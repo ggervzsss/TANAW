@@ -3,7 +3,7 @@ import type { EmailDelivery } from "../services";
 export const emailDeliveriesQueryKey = ["email-deliveries"] as const;
 
 export const emailDeliveryStatusLabels: Record<EmailDelivery["status"], string> = {
-  accepted: "Accepted by Resend",
+  accepted: "Accepted by provider",
   cancelled: "Cancelled",
   expired: "Expired",
   processing: "Processing",
@@ -14,9 +14,15 @@ export const emailDeliveryStatusLabels: Record<EmailDelivery["status"], string> 
   terminal_failed: "Delivery failed",
 };
 
+export function emailProviderLabel(provider: string) {
+  if (provider === "brevo") return "Brevo";
+  if (provider === "local") return "Local log";
+  return provider;
+}
+
 export function filterEmailDeliveries(deliveries: EmailDelivery[], query: string, problemsOnly: boolean) {
   const visible = problemsOnly ? deliveries.filter((delivery) => delivery.status === "terminal_failed" || delivery.status === "reconciliation_required" || delivery.canRetry) : deliveries;
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return visible;
-  return visible.filter((delivery) => `${delivery.recipient} ${delivery.purpose} ${emailDeliveryStatusLabels[delivery.status]}`.toLowerCase().includes(normalizedQuery));
+  return visible.filter((delivery) => `${delivery.recipient} ${delivery.purpose} ${delivery.provider} ${emailDeliveryStatusLabels[delivery.status]}`.toLowerCase().includes(normalizedQuery));
 }

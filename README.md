@@ -334,9 +334,8 @@ DEVELOPMENT_IT_USERNAME=it@email.com
 DEVELOPMENT_IT_PASSWORD=it123456
 
 EMAIL_DELIVERY_MODE=log
-RESEND_API_KEY=
-EMAIL_FROM_ADDRESS=onboarding@resend.dev
-EMAIL_TEST_RECIPIENT=
+BREVO_API_KEY=
+EMAIL_FROM_ADDRESS=no-reply@example.com
 ```
 
 Use the Compose hostname `db` in `DATABASE_URL`; `localhost` would point back
@@ -628,13 +627,15 @@ not be copied for local development.
 
 ### Web portal
 
-Paste the CARTO key into `frontend-tanaw/.env`, then configure the local API
-override and start the portal:
+Docker Compose passes the CARTO key from the root `.env` to the web portal. No
+`frontend-tanaw/.env` is needed. To run the portal directly on the host, create
+an ignored `.env.local` containing the local API override and CARTO key, then
+start the portal:
 
 ```shell
 cd frontend-tanaw
 npm ci
-printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
+printf 'VITE_API_BASE_URL=http://localhost:8000\nVITE_CARTO_BASEMAP_API_KEY=your-carto-key\n' > .env.local
 npm run dev
 ```
 
@@ -643,7 +644,10 @@ PowerShell:
 ```powershell
 Set-Location frontend-tanaw
 npm ci
-Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
+Set-Content -Path .env.local -Value @(
+    "VITE_API_BASE_URL=http://localhost:8000"
+    "VITE_CARTO_BASEMAP_API_KEY=your-carto-key"
+)
 npm run dev
 ```
 
@@ -693,7 +697,7 @@ The repository keeps development and production configuration separate:
 
 - The root `.env.example` is the Docker Compose development template. It
   contains the CARTO basemap key placeholder, local database and account
-  credentials, plus optional Resend testing.
+  credentials, plus the Brevo delivery switch and sender configuration.
 - `backend-tanaw/.env.example` is the backend production template.
 - `frontend-tanaw/.env.example` is the frontend production template.
 
@@ -707,10 +711,10 @@ The backend production template contains only deployment-specific values:
 | `CORS_ORIGINS`                                   | Authorized web and packaged desktop origins        |
 | `FRONTEND_PUBLIC_URL`                            | Public URL used in transactional links             |
 | `BOOTSTRAP_IT_USERNAME`, `BOOTSTRAP_IT_PASSWORD` | One-time credentials for an empty database         |
-| `EMAIL_DELIVERY_MODE`                            | Selects production Resend delivery                 |
-| `RESEND_API_KEY`                                 | Backend-only Resend credential                     |
+| `EMAIL_DELIVERY_MODE`                            | Selects production Brevo delivery                  |
+| `BREVO_API_KEY`                                  | Backend-only Brevo credential                      |
 | `EMAIL_SECRET_DERIVATION_KEY`                    | Separate secret for activation and recovery values |
-| `EMAIL_FROM_ADDRESS`                             | Sender on a verified domain                        |
+| `EMAIL_FROM_ADDRESS`                             | Sender address verified in Brevo                   |
 
 The frontend production template contains `VITE_API_BASE_URL` and
 `VITE_CARTO_BASEMAP_API_KEY`, which are compiled into the browser bundle. Vercel

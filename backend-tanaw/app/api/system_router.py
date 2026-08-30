@@ -32,7 +32,7 @@ async def email_readiness(request: Request) -> JSONResponse:
         content={
             "status": "ready" if ready else "not_ready",
             "mode": settings.email_delivery_mode,
-            "provider": "resend" if settings.email_delivery_mode == "resend" else "local",
+            "provider": "brevo" if settings.email_delivery_mode == "brevo" else "local",
         },
     )
 

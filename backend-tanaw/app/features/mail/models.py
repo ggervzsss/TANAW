@@ -82,7 +82,7 @@ class EmailOutbox(Base):
     idempotency_key: Mapped[str] = mapped_column(
         String(256), unique=True, index=True, nullable=False
     )
-    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="resend")
+    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="brevo")
     status: Mapped[str] = mapped_column(
         String(30), index=True, nullable=False, default=EmailOutboxStatus.QUEUED.value
     )

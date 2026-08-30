@@ -121,7 +121,7 @@ app/
     activity_logs/     # Operational, account, and workflow audit records
     auth/              # Login, logout, password, and recovery flows
     dashboard/         # Cross-capability read-only dashboard queries
-    mail/              # Outbound Resend delivery and email templates
+    mail/              # Outbound Brevo delivery and email templates
     maintenance/       # Retention cleanup and background maintenance
     monitoring/        # Telemetry, visitor insights, and operational alerts
     notifications/     # In-application notification lifecycle
@@ -176,8 +176,8 @@ fields.
 ## Email Integration
 
 TANAW supports two email modes. `EMAIL_DELIVERY_MODE=log` records development
-messages locally without contacting an external provider. `EMAIL_DELIVERY_MODE=resend`
-sends outbound transactional messages through Resend. New users receive a
+messages locally without contacting an external provider. `EMAIL_DELIVERY_MODE=brevo`
+sends outbound transactional messages through Brevo. New users receive a
 single-use activation link and choose their own password; TANAW never sends a
 password by email. Password recovery continues to use an emailed OTP. Account
 phone numbers remain contact/profile information and are never used for SMS
@@ -227,28 +227,27 @@ must follow the LGU's controlled incident-recovery process, preserve an audit
 record of the authorization, and restore access explicitly rather than deleting
 the `startup-bootstrap-v1` marker or restarting TANAW with a known password.
 
-The Resend-managed development sender can deliver only to the Resend account
-email, so set `EMAIL_TEST_RECIPIENT` until a custom sending domain is verified.
 Support requests and ticket replies are submitted directly to the TANAW API and
 stored in the Support Tickets queue. TANAW does not receive or parse inbound
 email.
 
 Secrets belong only in a private `.env` or deployment secret store. The root
-`.env.example` contains the few values used for local Resend testing, while this
+`.env.example` contains the few values used for local Brevo testing, while this
 project's `.env.example` contains only the values required for production.
 
-When a verified LGU domain becomes available, change `EMAIL_FROM_ADDRESS` and
-remove `EMAIL_TEST_RECIPIENT`; no application code change is required.
+When a verified LGU sender becomes available, change `EMAIL_FROM_ADDRESS`; no
+application code change is required.
 
-Production starts only with `EMAIL_DELIVERY_MODE=resend`, a non-placeholder
-Resend key, a verified custom sender domain, and no test-recipient restriction.
-The official Resend endpoint and bounded provider timeout are code defaults.
-Create a Resend key with **Sending access** and scope it to the verified TANAW
-domain; TANAW does not need Full access. The process keeps one pooled HTTP client
-for its lifetime and closes it during shutdown. `/health` reports API process
-health, while `/ready/email` separately reports whether outbound email
-infrastructure is initialized; deployment readiness checks should use both
-endpoints.
+Production starts only with `EMAIL_DELIVERY_MODE=brevo`, a non-placeholder
+Brevo API key, and a verified Brevo sender address.
+The official Brevo v3 endpoint and bounded provider timeout are code defaults.
+Register and authenticate the TANAW sender in Brevo, then keep the API key only
+in the backend secret store. The process keeps one pooled HTTP client for its
+lifetime and closes it during shutdown. `/health` reports API process health,
+while `/ready/email` separately reports whether outbound email infrastructure is
+initialized; deployment readiness checks should use both endpoints. See Brevo's
+[transactional email guide](https://developers.brevo.com/docs/send-a-transactional-email)
+for sender setup and API-key requirements.
 
 Production also requires `EMAIL_SECRET_DERIVATION_KEY`, a random secret of at
 least 32 characters that is different from `JWT_SECRET_KEY`. TANAW uses it to
@@ -267,7 +266,7 @@ record that caused the message. The background worker sends only committed rows,
 claims work with PostgreSQL row locks and fencing leases, and records every
 attempt separately. A provider failure never rolls back an account or support
 reply. Transient failures use bounded exponential retries with the same stable
-Resend idempotency key; permanent failures remain visible to authorized IT
+Brevo idempotency key; permanent failures remain visible to authorized IT
 Personnel on the **Email Delivery** page.
 
 Authentication outbox payloads contain source IDs and immutable, non-secret
@@ -276,13 +275,13 @@ The worker derives those values in memory and checks the source is still valid
 immediately before delivery. It also hashes the exact provider payload so a
 retry cannot accidentally reuse an idempotency key with changed content.
 
-An `accepted` status means Resend accepted the API request; it does not promise
+An `accepted` status means Brevo accepted the API request; it does not promise
 that the recipient mailbox delivered it. Use the stored provider ID in the
-Resend dashboard to inspect delivered, delayed, bounced, or suppressed events.
-TANAW remains outbound-only and does not require an inbound-email webhook. Resend
-retains idempotency keys for 24 hours, so TANAW stops automatic retries before
-that boundary and marks an ambiguous older result for provider reconciliation
-instead of risking a duplicate.
+Brevo dashboard to inspect delivered, delayed, bounced, or blocked events.
+TANAW remains outbound-only and does not require an inbound-email webhook. Brevo
+retains transactional-email idempotency keys for 30 minutes, so TANAW stops
+automatic retries two minutes before that boundary and marks an ambiguous older
+result for provider reconciliation instead of risking a duplicate.
 
 Password recovery applies database-backed limits per client IP, per normalized
 email identifier, and globally within a bounded window.

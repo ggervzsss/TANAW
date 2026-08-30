@@ -2,6 +2,7 @@ import { Inbox, RefreshCw } from "lucide-react";
 import { EmptyState } from "@/shared/components/ui";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
 import type { EmailDelivery } from "../services";
+import { emailProviderLabel } from "../model/emailDeliveryPresentation";
 import { EmailDeliveryStatus } from "./EmailDeliveryStatus";
 
 type EmailDeliveriesListProps = {
@@ -27,9 +28,9 @@ export function EmailDeliveriesList({ deliveries, isLoading, isRetrying, problem
             <p className="text-xs text-slate-500">
               Queued {formatPhilippineDateTime(delivery.createdAt, timeFormat)} · Attempt {delivery.attemptCount}/{delivery.maxAttempts}
             </p>
-            {delivery.providerMessageId ? <p className="font-mono text-[11px] text-slate-500">Resend Reference: {delivery.providerMessageId}</p> : null}
+            {delivery.providerMessageId ? <p className="font-mono text-[11px] text-slate-500">{emailProviderLabel(delivery.provider)} reference: {delivery.providerMessageId}</p> : null}
             {delivery.failureReason ? <p className="max-w-3xl text-sm text-rose-700">{delivery.failureReason}</p> : null}
-            {delivery.status === "accepted" ? <p className="text-xs text-slate-500">Resend accepted the email. Delivery or bounce details remain available in the Resend dashboard.</p> : null}
+            {delivery.status === "accepted" ? <p className="text-xs text-slate-500">{emailProviderLabel(delivery.provider)} accepted the email. Delivery or bounce details remain available in that provider&apos;s dashboard.</p> : null}
           </div>
           {delivery.canRetry ? (
             <button

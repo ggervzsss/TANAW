@@ -170,7 +170,7 @@ CORS_ORIGINS=https://portal.your-domain.example,tanaw-app://desktop
 
 Keep `FRONTEND_PUBLIC_URL` set to the web portal URL used in activation and
 email-verification links. Do not place database credentials, JWT secrets,
-Resend credentials, or other backend secrets in a desktop Vite environment.
+Brevo credentials, or other backend secrets in a desktop Vite environment.
 
 The resulting NSIS installer is written under `release/`. Before distribution,
 install it on a clean Windows x64 computer without Node.js, Python, or `uv` and

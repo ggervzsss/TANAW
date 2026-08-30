@@ -41,7 +41,7 @@ def test_derived_password_code_matches_stored_verifier_without_persistence() -> 
 
 @pytest.mark.parametrize(
     ("attempt_count", "expected_seconds"),
-    ((1, 30.0), (2, 120.0), (3, 600.0), (4, 1800.0), (5, 3600.0), (8, 3600.0)),
+    ((1, 30.0), (2, 120.0), (3, 300.0), (4, 600.0), (5, 600.0), (8, 600.0)),
 )
 def test_email_retry_schedule_uses_bounded_exponential_backoff(
     attempt_count: int, expected_seconds: float
@@ -86,7 +86,7 @@ async def test_manual_retry_preserves_attempt_history_and_increments_retry_count
 @pytest.mark.asyncio
 async def test_manual_retry_rejects_expired_or_ambiguous_old_delivery() -> None:
     record = outbox_record(status=EmailOutboxStatus.TERMINAL_FAILED)
-    record.first_provider_attempt_at = datetime.now(UTC) - timedelta(hours=24)
+    record.first_provider_attempt_at = datetime.now(UTC) - timedelta(minutes=30)
     db = MagicMock()
     db.scalar = AsyncMock(return_value=record)
 
@@ -108,7 +108,7 @@ def outbox_record(*, status: EmailOutboxStatus) -> EmailOutbox:
         secret_version="v1",
         template_payload_json='{"tokenId":"source-1"}',
         idempotency_key="activation-source-1",
-        provider="resend",
+        provider="brevo",
         status=status.value,
         attempt_count=0,
         max_attempts=5,

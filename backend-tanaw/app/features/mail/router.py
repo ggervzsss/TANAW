@@ -12,8 +12,8 @@ from app.features.activity_logs.service import create_activity_log
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus
 from app.features.mail.schemas import EmailDeliverySummary
 from app.features.mail.service import (
+    BREVO_IDEMPOTENCY_WINDOW,
     MANUAL_RETRY_SAFETY_MARGIN,
-    RESEND_IDEMPOTENCY_WINDOW,
     EmailOutboxRetryError,
     get_email_outbox,
     list_email_outbox,
@@ -106,12 +106,14 @@ def to_email_delivery_summary(record: EmailOutbox) -> EmailDeliverySummary:
 def _can_retry(record: EmailOutbox) -> bool:
     if record.status != EmailOutboxStatus.TERMINAL_FAILED.value:
         return False
+    if record.provider != "brevo":
+        return False
     now = datetime.now(UTC)
     if record.valid_until is not None and _as_utc(record.valid_until) <= now:
         return False
     return record.first_provider_attempt_at is None or now < (
         _as_utc(record.first_provider_attempt_at)
-        + RESEND_IDEMPOTENCY_WINDOW
+        + BREVO_IDEMPOTENCY_WINDOW
         - MANUAL_RETRY_SAFETY_MARGIN
     )
 
