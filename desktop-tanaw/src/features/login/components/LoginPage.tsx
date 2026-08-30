@@ -5,13 +5,13 @@ import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, LockKey
 import { routePaths } from "../../../app/router/routePaths";
 import { cn } from "../../../utils/cn";
 import { PASSWORD_INPUT_MAX_CODE_UNITS } from "../../../utils/password-policy";
-import { useAuthStageGlow } from "../hooks/use-auth-stage-glow";
 import { useLogin } from "../hooks/use-login";
 import { loginSchema, type LoginFormValues } from "../schemas/login-schema";
 import { isRememberEnabled, useAuthStore } from "../stores/auth-store";
 import { AuthThemeToggle } from "./AuthThemeToggle";
 import { PasswordRecoveryDialog } from "./PasswordRecoveryDialog";
 import { SupportRequestDialog } from "./SupportRequestDialog";
+import { SwarmCursor } from "./SwarmCursor";
 import { CITY_HALL_DAY_IMAGE, CITY_HALL_NIGHT_IMAGE } from "../utils/login-background-assets";
 import { SAN_PEDRO_SEAL_IMAGE } from "../../../lib/assets";
 
@@ -122,7 +122,6 @@ export function LoginPage() {
   const [rememberMe, setRememberMe] = useState(() => isRememberEnabled());
   const [errors, setErrors] = useState<FormErrors>({});
   const [activeDialog, setActiveDialog] = useState<DialogMode>(null);
-  const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLDivElement>();
   const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   if (isAuthenticated) {
@@ -161,15 +160,13 @@ export function LoginPage() {
 
   return (
     <div
-      ref={stageRef}
       className="tanaw-login-stage tanaw-auth-stage tanaw-auth-desktop-stage tanaw-auth-shell relative grid min-h-svh grid-cols-[minmax(0,1.04fr)_minmax(420px,0.72fr)] items-center gap-8 bg-(--tanaw-bg) px-6 py-6 text-(--tanaw-text) lg:gap-10 lg:px-10 lg:py-8"
-      style={stageGlowStyle}
       data-auth-background-ready={isBackgroundReady}
     >
       <CriticalLoginBackground onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
-      <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
+      <SwarmCursor color="#ffffff" accentColor="#ffffff" count={8} size={5} speed={2.5} spread={100} trail={0.75} wander={0.25} scatterOnClick />
       <div className="tanaw-stage-particles absolute inset-0" aria-hidden="true">
         {particles.map((particle, index) => (
           <span

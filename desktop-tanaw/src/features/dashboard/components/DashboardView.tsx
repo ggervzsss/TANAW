@@ -111,7 +111,7 @@ export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
 
       <DashboardHeader summary={summary} />
       <DashboardMetricsGrid summary={summary} />
-      <HistoricalTrendChart data={history.historical[trendFilter]} summary={summary} trendFilter={trendFilter} onTrendFilterChange={setTrendFilter} />
+      <HistoricalTrendChart data={history.historical[trendFilter]} summary={summary} trendFilter={trendFilter} unavailable={Boolean(metricsError)} onTrendFilterChange={setTrendFilter} />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <SubmissionLedgerPreview reports={ledgerReports} onPreviewReport={handlePreviewReport} />
         <DemographicsBreakdownChart report={demographicsReport} />

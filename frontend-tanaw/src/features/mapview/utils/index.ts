@@ -30,8 +30,9 @@ export {
 export { getCurrentLeafletMapTheme, mountLeafletThemeLayer } from "./leafletTheme";
 export { calculateAdaptiveMapDuration, getDefaultCitywideCamera, MapMotionController, prefersReducedMapMotion, resolveMapCameraPosition } from "./mapCamera";
 export { initialMapInteractionState, mapInteractionReducer, shouldClearBarangayFromMapClick } from "./mapInteractionState";
-export { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getOccupancyBadgeClass, getOccupancyRingColor } from "./mapStatusStyles";
+export { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getMonitoringStatusPresentation, getOccupancyBadgeClass, getOccupancyRingColor, monitoringStatusLegend } from "./mapStatusStyles";
 export type { BarangayPointResolution, GeoJsonFeatureCollection } from "./enterpriseMapUtils";
 export type { LeafletMapTheme } from "./leafletTheme";
 export type { MapCameraTransitionOptions, ResolvedMapCameraPosition, ResolvedMapCameraTarget } from "./mapCamera";
 export type { MapCameraTarget, MapDeselectReason, MapInteractionAction, MapInteractionState } from "./mapInteractionState";
+export type { MonitoringStatusPresentation, MonitoringStatusTone } from "./mapStatusStyles";

@@ -17,8 +17,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
 
   return (
     <ModalFrame title={enterprise.name} eyebrow="Enterprise Details" onClose={onClose} maxWidthClassName="max-w-5xl">
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
-        <section className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-5 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-500/10">
+      <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]" data-details-modal-layout="balanced-enterprise">
+        <section className="rounded-[22px] border border-emerald-100 bg-emerald-50/60 p-5 shadow-[0_14px_34px_rgba(6,95,70,0.08)] dark:border-emerald-300/20 dark:bg-emerald-500/10">
           <div className="flex items-start gap-3">
             <span className="text-tanaw-green flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-emerald-100 dark:bg-[#172033] dark:text-emerald-200 dark:ring-emerald-300/20">
               <Building2 size={22} />
@@ -49,7 +49,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
           </button>
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2">
+        <section className="grid auto-rows-fr gap-3 sm:grid-cols-2">
           <EnterpriseDetailRow icon={<Building2 size={15} />} label="Category" value={enterprise.category} />
           <EnterpriseDetailRow icon={<Radio size={15} />} label="Desktop App Status" value={<DesktopAppStatusBadge status={enterprise.gatewayStatus ?? "Not Linked"} />} />
           <EnterpriseDetailRow
@@ -63,8 +63,8 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
           />
           <EnterpriseDetailRow icon={<Clock size={15} />} label="Last update" value={enterprise.lastSync ? formatPhilippineDateTime(enterprise.lastSync, timeFormat) : "No update recorded"} />
           <EnterpriseDetailRow icon={<Phone size={15} />} label="Contact" value={enterprise.contact ?? "No contact listed"} />
+          <EnterpriseDetailRow icon={<Clock size={15} />} label="Operating Hours" value={enterprise.operatingHours ?? "Not specified"} />
           <EnterpriseDetailRow className="sm:col-span-2" icon={<MapPin size={15} />} label="Full Address" value={enterprise.fullAddress} />
-          <EnterpriseDetailRow className="sm:col-span-2" icon={<Clock size={15} />} label="Operating Hours" value={enterprise.operatingHours ?? "Not specified"} />
         </section>
       </div>
     </ModalFrame>
@@ -73,7 +73,7 @@ export function EnterpriseDetailsModal({ enterprise, onClose, onOpenInsights }: 
 
 function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-white bg-white p-4 shadow-sm ring-1 ring-emerald-100/70 dark:border-slate-700 dark:bg-[#121c31] dark:ring-emerald-300/20 ${className}`}>
+    <div className={`rounded-[18px] border border-white bg-white p-4 shadow-sm ring-1 ring-emerald-100/70 dark:border-slate-700 dark:bg-[#121c31] dark:ring-emerald-300/20 ${className}`}>
       <div className="text-tanaw-green flex items-center gap-2">
         {icon}
         <p className="text-[10px] font-black tracking-[0.16em] text-slate-500 uppercase">{label}</p>
@@ -86,7 +86,7 @@ function EnterpriseMetricCard({ icon, label, value, className = "" }: { icon: Re
 function EnterpriseDetailRow({ icon, label, value, className = "" }: { icon: ReactNode; label: string; value: ReactNode; className?: string }) {
   return (
     <div
-      className={`flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
+      className={`flex min-w-0 items-start gap-3 rounded-[18px] border border-slate-200 bg-slate-50/80 p-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)] ring-1 ring-white dark:border-slate-700 dark:bg-[#0f172a] dark:ring-white/8 ${className}`}
     >
       <span className="text-tanaw-green mt-0.5">{icon}</span>
       <div className="min-w-0">

@@ -2,6 +2,7 @@ import { Bell, Building2, MapPinned, Search, TicketCheck, UserRoundCog } from "l
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
 import { useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { EnterpriseProfileRequestsPanel } from "@/features/enterprise-accounts/components";
@@ -49,6 +50,12 @@ export function AdminOperationsCenterPage() {
 
   const filteredAlerts = useMemo(() => filterAdminAlerts(alerts, query), [alerts, query]);
   const filteredSupportTickets = useMemo(() => filterAdminSupportTickets(supportTickets, query), [query, supportTickets]);
+  const viewCounts: Record<OperationsView, number> = {
+    situations: filteredAlerts.length,
+    support: filteredSupportTickets.length,
+    accounts: pendingAccountRequests,
+  };
+  const currentView = operationsViews.find((item) => item.id === view) ?? operationsViews[0];
 
   const setView = (nextView: OperationsView) => {
     const nextParams = new URLSearchParams();
@@ -138,53 +145,72 @@ export function AdminOperationsCenterPage() {
         ]}
       />
 
-      <Panel className="tanaw-data-panel mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 p-3">
-          {operationsViews.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setView(item.id)}
-              className={`rounded-full px-4 py-2 text-xs font-black tracking-wide uppercase transition ${
-                view === item.id ? "bg-emerald-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        {view !== "accounts" && (
-          <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
-            <div className="relative min-w-65 flex-1">
-              <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={view === "situations" ? "Search establishment, situation, or suggested response" : "Search enterprise, request, category, or status"}
-                className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
-              />
+      <Panel className="tanaw-data-panel tanaw-admin-workspace tanaw-operations-workspace mt-6 overflow-hidden">
+        <header className="tanaw-operations-command">
+          <div className="tanaw-operations-command__identity">
+            <span className="tanaw-operations-command__icon" aria-hidden="true">
+              <Bell size={18} />
+            </span>
+            <div>
+              <h2>{currentView.label}</h2>
+              <p>{viewCounts[view]} items in the current view</p>
             </div>
           </div>
-        )}
-
-        {view === "situations" && <SituationTable alerts={filteredAlerts} isLoading={alertsLoading} onOpen={openAlert} />}
-        {view === "support" && (
-          <SupportRequestTable tickets={filteredSupportTickets} isLoading={supportTicketsQuery.isLoading} onOpen={(ticketId) => setSearchParams({ view: "support", ticket: ticketId })} />
-        )}
-        {view === "accounts" && (
-          <div className="p-5">
-            {pendingAccountRequests > 0 ? (
-              <EnterpriseProfileRequestsPanel accounts={enterpriseAccounts} canResolve={false} onAccountUpdated={() => undefined} />
-            ) : (
-              <EmptyState
-                icon={UserRoundCog}
-                title={enterpriseAccountsQuery.isLoading ? "Loading account requests" : "No pending account requests"}
-                description={enterpriseAccountsQuery.isLoading ? "Checking enterprise account changes." : "IT has no enterprise profile changes waiting for review."}
-              />
-            )}
+          <div className="tanaw-operations-switcher flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Operations Center categories">
+            {operationsViews.map((item) => (
+              <button
+                key={item.id}
+                id={`operations-tab-${item.id}`}
+                type="button"
+                role="tab"
+                aria-controls="operations-view-panel"
+                aria-selected={view === item.id}
+                tabIndex={view === item.id ? 0 : -1}
+                onClick={() => setView(item.id)}
+                onKeyDown={(event) => handleOperationsTabKeyDown(event, item.id, setView)}
+                className="tanaw-operations-switcher__tab min-h-10 rounded-xl border px-4 py-2 text-xs font-black tracking-[0.04em] uppercase"
+              >
+                <span>{item.label}</span>
+                <span className="tanaw-operations-switcher__count">{viewCounts[item.id]}</span>
+              </button>
+            ))}
           </div>
-        )}
+        </header>
+
+        <div id="operations-view-panel" role="tabpanel" aria-labelledby={`operations-tab-${view}`}>
+          {view !== "accounts" && (
+            <div className="tanaw-data-toolbar tanaw-admin-workspace__toolbar flex flex-wrap items-center gap-3 border-b p-4">
+              <div className="relative min-w-65 flex-1">
+                <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={query}
+                  aria-label="Search Operations Center"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={view === "situations" ? "Search establishment, situation, or suggested response" : "Search enterprise, request, category, or status"}
+                  className="tanaw-data-search w-full rounded-xl border py-2.5 pr-4 pl-9 text-sm transition outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {view === "situations" && <SituationTable alerts={filteredAlerts} isLoading={alertsLoading} onOpen={openAlert} />}
+          {view === "support" && (
+            <SupportRequestTable tickets={filteredSupportTickets} isLoading={supportTicketsQuery.isLoading} onOpen={(ticketId) => setSearchParams({ view: "support", ticket: ticketId })} />
+          )}
+          {view === "accounts" && (
+            <div className="tanaw-operations-accounts p-5">
+              {pendingAccountRequests > 0 ? (
+                <EnterpriseProfileRequestsPanel accounts={enterpriseAccounts} canResolve={false} onAccountUpdated={() => undefined} />
+              ) : (
+                <EmptyState
+                  icon={UserRoundCog}
+                  title={enterpriseAccountsQuery.isLoading ? "Loading account requests" : "No pending account requests"}
+                  description={enterpriseAccountsQuery.isLoading ? "Checking enterprise account changes." : "IT has no enterprise profile changes waiting for review."}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </Panel>
 
       <AnimatePresence>
@@ -193,4 +219,19 @@ export function AdminOperationsCenterPage() {
       </AnimatePresence>
     </PageMotion>
   );
+}
+
+function handleOperationsTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentView: OperationsView, setView: (view: OperationsView) => void) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+
+  const currentIndex = operationsViews.findIndex((item) => item.id === currentView);
+  const nextIndex =
+    event.key === "Home" ? 0 : event.key === "End" ? operationsViews.length - 1 : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + operationsViews.length) % operationsViews.length;
+  const nextView = operationsViews[nextIndex];
+  if (!nextView) return;
+
+  setView(nextView.id);
+  const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  tabs?.[nextIndex]?.focus();
 }

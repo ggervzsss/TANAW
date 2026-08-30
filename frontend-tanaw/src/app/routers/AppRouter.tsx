@@ -1,47 +1,32 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AccountLayout } from "@/app/layouts/portal";
 import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
 import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { routes } from "./routes";
-
-const AccountProfilePage = lazy(() => import("@/features/account").then((module) => ({ default: module.AccountProfilePage })));
-const AccountSecurityPage = lazy(() => import("@/features/account").then((module) => ({ default: module.AccountSecurityPage })));
-const AdminOperationsCenterPage = lazy(() =>
-  import("@/features/alerts-monitor").then((module) => ({
-    default: module.AdminOperationsCenterPage,
-  })),
-);
-const ITWorkCenterPage = lazy(() => import("@/features/alerts-monitor").then((module) => ({ default: module.ITWorkCenterPage })));
-const StaffAnalyticsPage = lazy(() => import("@/features/analytics").then((module) => ({ default: module.StaffAnalyticsPage })));
-const ITDashboardPage = lazy(() => import("@/features/dashboard").then((module) => ({ default: module.ITDashboardPage })));
-const ITDevLogPage = import.meta.env.DEV ? lazy(() => import("@/features/dev-log").then((module) => ({ default: module.ITDevLogPage }))) : null;
-const ITEnterpriseAccountsPage = lazy(() =>
-  import("@/features/enterprise-accounts").then((module) => ({
-    default: module.ITEnterpriseAccountsPage,
-  })),
-);
-const ITLguAccountsPage = lazy(() => import("@/features/lgu-accounts").then((module) => ({ default: module.ITLguAccountsPage })));
-const ActivateAccountPage = lazy(() => import("@/features/login").then((module) => ({ default: module.ActivateAccountPage })));
-const EnterpriseAccessPage = lazy(() => import("@/features/login").then((module) => ({ default: module.EnterpriseAccessPage })));
-const LoginPage = lazy(() => import("@/features/login").then((module) => ({ default: module.LoginPage })));
-const VerifyEmailChangePage = lazy(() => import("@/features/login").then((module) => ({ default: module.VerifyEmailChangePage })));
-const AdminMapViewPage = lazy(() => import("@/features/mapview").then((module) => ({ default: module.AdminMapViewPage })));
-const NotificationsPage = lazy(() => import("@/features/notifications").then((module) => ({ default: module.NotificationsPage })));
-const StaffBatchReportsPage = lazy(() => import("@/features/reports").then((module) => ({ default: module.StaffBatchReportsPage })));
-const StaffFinalReportsAuditPage = lazy(() =>
-  import("@/features/reports").then((module) => ({
-    default: module.StaffFinalReportsAuditPage,
-  })),
-);
-const ITSystemSettingsPage = lazy(() =>
-  import("@/features/system-settings").then((module) => ({
-    default: module.ITSystemSettingsPage,
-  })),
-);
-const AdminActivityHistoryPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.AdminActivityHistoryPage })));
-const ITSystemLogsPage = lazy(() => import("@/features/system-logs").then((module) => ({ default: module.ITSystemLogsPage })));
+import {
+  AccountProfilePage,
+  AccountSecurityPage,
+  ActivateAccountPage,
+  AdminActivityHistoryPage,
+  AdminMapViewPage,
+  AdminOperationsCenterPage,
+  EnterpriseAccessPage,
+  ITDashboardPage,
+  ITDevLogPage,
+  ITEnterpriseAccountsPage,
+  ITLguAccountsPage,
+  ITSystemLogsPage,
+  ITSystemSettingsPage,
+  ITWorkCenterPage,
+  LoginPage,
+  NotificationsPage,
+  StaffAnalyticsPage,
+  StaffBatchReportsPage,
+  StaffFinalReportsAuditPage,
+  VerifyEmailChangePage,
+} from "./routeModules";
 
 function RootRedirect() {
   const user = useAuthStore((state) => state.user);

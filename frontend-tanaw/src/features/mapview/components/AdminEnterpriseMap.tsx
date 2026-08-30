@@ -29,6 +29,7 @@ import { useEnterpriseMarkers, useMapCameraSync, useMapDirectoryData, useSanPedr
 import { AdminMapDirectory } from "./AdminMapDirectory";
 import { AdminMapInsights } from "./AdminMapInsights";
 import { EnterpriseDetailsModal } from "./EnterpriseDetailsModal";
+import { MapToolRail } from "./MapToolRail";
 
 const EMPTY_ENTERPRISE_ACCOUNTS: AccountSummary[] = [];
 const EMPTY_MAP_ENTERPRISES: MapEnterprise[] = [];
@@ -49,6 +50,7 @@ export function AdminEnterpriseMap() {
   const { boundary, isError: isBoundaryError, isLoading: isBoundaryLoading } = useSanPedroBoundary();
   const [isInitialCameraReady, setIsInitialCameraReady] = useState(false);
   const [isDirectoryCollapsed, setIsDirectoryCollapsed] = useState(false);
+  const [hoveredEnterpriseId, setHoveredEnterpriseId] = useState<string | null>(null);
   const [showBoundaries, setShowBoundaries] = useState(true);
   const [mapInteractionState, dispatchMapInteraction] = useReducer(mapInteractionReducer, initialMapInteractionState);
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
@@ -380,7 +382,7 @@ export function AdminEnterpriseMap() {
     mapRef,
     onReady: handleInitialCameraReady,
   });
-  useEnterpriseMarkers({ mapRef, markersRef, mapTheme, onSelect: selectEnterprise, selectedEnterpriseId, visibleEnterprises });
+  useEnterpriseMarkers({ hoveredEnterpriseId, mapRef, markersRef, mapTheme, onSelect: selectEnterprise, selectedEnterpriseId, visibleEnterprises });
 
   return (
     <div className="bg-tanaw-gray relative min-h-0 flex-1 overflow-hidden">
@@ -396,10 +398,11 @@ export function AdminEnterpriseMap() {
         isOpen={isInsightsOpen}
         range={insightRange}
         onClose={() => setIsInsightsOpen(false)}
-        onOpen={() => setIsInsightsOpen(true)}
         onRangeChange={setInsightRange}
         onShowArea={() => dispatchMapInteraction({ type: "show-area-insights" })}
       />
+
+      <MapToolRail isDirectoryCollapsed={isDirectoryCollapsed} isInsightsOpen={isInsightsOpen} onOpenDirectory={() => setIsDirectoryCollapsed(false)} onOpenInsights={() => setIsInsightsOpen(true)} />
 
       <AdminMapDirectory
         barangayDropdownOptions={barangayDropdownOptions}
@@ -417,6 +420,7 @@ export function AdminEnterpriseMap() {
           void enterpriseAccountsQuery.refetch();
           void mapEnterprisesQuery.refetch();
         }}
+        onHoverEnterprise={setHoveredEnterpriseId}
         onSelectBarangay={selectBarangay}
         onSelectEnterprise={selectEnterprise}
         onShowBoundariesChange={setShowBoundaries}

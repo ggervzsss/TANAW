@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useOperationalReports } from "@/shared/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
-import { getAnalyticsPeriods, getBarangayComplianceRows, getCurrentAnalyticsPeriod, getEnterpriseReportRows, getTrendLabel, sumReportMetric } from "../model";
+import { getAnalyticsPeriods, getBarangayComplianceRows, getCurrentAnalyticsPeriod, getEnterpriseReportRows, getEnterpriseTrafficRows, getTrendLabel, sumReportMetric } from "../model";
 
 const EMPTY_LIST: never[] = [];
 
@@ -25,12 +25,7 @@ export function useStaffAnalytics() {
   const totalReports = enterprises.length;
   return {
     activePeriod,
-    chartData: enterpriseRows.map(({ enterprise, reports: enterpriseReports, submitted }) => ({
-      name: enterprise.name,
-      entries: sumReportMetric(enterpriseReports, "entry"),
-      unique: sumReportMetric(enterpriseReports, "unique"),
-      status: submitted ? "Submitted" : "Missing",
-    })),
+    chartData: getEnterpriseTrafficRows(enterpriseRows),
     complianceRows: getBarangayComplianceRows(enterpriseRows),
     entries: sumReportMetric(activeReports, "entry"),
     enterpriseLoading: enterpriseQuery.isLoading,

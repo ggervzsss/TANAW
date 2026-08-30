@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
+import { scheduleAuthorizedRoutePreload } from "@/app/routers/routeModules";
 import { useAuthStore } from "@/app/store/authStore";
 import { useHeaderStore } from "@/app/store/headerStore";
 import { currentUserQueryKey, getCurrentUser } from "@/shared/services/accountService";
@@ -64,6 +65,8 @@ export function AccountLayout({ role }: AccountLayoutProps) {
       updateUser(currentUserQuery.data);
     }
   }, [currentUserQuery.data, updateUser]);
+
+  useEffect(() => scheduleAuthorizedRoutePreload(role, pathname), [pathname, role]);
 
   useEffect(() => {
     if (currentUserQuery.isError) {
@@ -129,11 +132,28 @@ export function AccountLayout({ role }: AccountLayoutProps) {
         <main ref={mainRef} className={mainClassName}>
           <div className={mainContentClassName}>
             {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
-            {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? <Navigate to={routes.it.dashboard} replace /> : <Outlet />}
+            {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? (
+              <Navigate to={routes.it.dashboard} replace />
+            ) : (
+              <Suspense fallback={<DestinationShellFallback />}>
+                <Outlet />
+              </Suspense>
+            )}
           </div>
         </main>
       </div>
     </section>
+  );
+}
+
+function DestinationShellFallback() {
+  return (
+    <div
+      className="grid min-h-64 place-items-center rounded-2xl border border-slate-200/70 bg-white/70 text-sm font-semibold text-emerald-800 shadow-sm dark:border-white/8 dark:bg-white/3 dark:text-emerald-200"
+      role="status"
+    >
+      Preparing workspace...
+    </div>
   );
 }
 

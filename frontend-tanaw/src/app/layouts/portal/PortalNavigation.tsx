@@ -1,29 +1,79 @@
 import { ChevronDown } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import type { SyntheticEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { NavLink } from "react-router-dom";
+import { preloadPortalRoute } from "@/app/routers/routeModules";
+import { prefetchPortalRouteData } from "@/app/routers/portalDataPrefetch";
 import { rolePortalLabel } from "@/shared/constants/roleLabels";
 import type { UserRole } from "@/shared/types/role.types";
 import type { TopbarEntry } from "./portalNavigationModel";
+import { TopbarActiveUnderline, TopbarLiquidGlass } from "./TopbarGlassIndicator";
+import type { TopbarGlassTarget } from "./TopbarGlassIndicator";
+import { useTopbarGlassPointer } from "./useTopbarGlassPointer";
 
 type DesktopProps = { entries: TopbarEntry[]; isDark: boolean; openMenuId: string | null; pathname: string; role: UserRole; onMenuChange: (id: string | null) => void };
 
 export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname, role, onMenuChange }: DesktopProps) {
-  const base = "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-[color,background-color,box-shadow,transform] duration-200 max-2xl:px-3.5";
-  const active = isDark
-    ? "bg-emerald-300/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.46)] ring-1 ring-emerald-100/14"
-    : "bg-white/18 text-white shadow-[0_12px_28px_rgba(8,44,20,0.42)] ring-1 ring-white/22";
-  const inactive = isDark
-    ? "text-white/72 hover:-translate-y-0.5 hover:bg-white/7 hover:text-white hover:shadow-[0_10px_26px_rgba(0,0,0,0.38)]"
-    : "text-white/84 hover:-translate-y-0.5 hover:bg-white/13 hover:text-white hover:shadow-[0_10px_24px_rgba(3,38,16,0.34)]";
+  const queryClient = useQueryClient();
+  const glassTarget = useMotionValue<TopbarGlassTarget | null>(null);
+  const { onPointerDown: handleGlassPointerDown, onPointerLeave: handleGlassPointerLeave, onPointerMove: handleGlassPointerMove, setNavigationElement } = useTopbarGlassPointer(glassTarget);
+  const base =
+    "relative z-10 isolate flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-white/65 focus-visible:outline-none max-2xl:px-3.5";
+  const active = "text-white";
+  const inactive = isDark ? "text-white/72 hover:text-white" : "text-white/84 hover:text-white";
+  const showGlass = (id: string, element: HTMLElement) => {
+    const navigation = element.closest<HTMLElement>("[data-liquid-glass-navigation]");
+    if (!navigation) return;
+    const navigationRect = navigation.getBoundingClientRect();
+    const itemRect = element.getBoundingClientRect();
+    glassTarget.set({
+      deformation: 0,
+      height: itemRect.height,
+      id,
+      left: itemRect.left - navigationRect.left - 4,
+      mode: "item",
+      top: itemRect.top - navigationRect.top,
+      width: itemRect.width + 8,
+    });
+  };
+  const hideGlass = () => {
+    glassTarget.set(null);
+  };
   return (
-    <nav className="hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4" aria-label={`${rolePortalLabel[role]} navigation`}>
+    <nav
+      ref={setNavigationElement}
+      data-liquid-glass-navigation="true"
+      className="relative isolate hidden flex-none items-center justify-start gap-3 xl:flex 2xl:gap-4"
+      aria-label={`${rolePortalLabel[role]} navigation`}
+      onDragStart={(event) => event.preventDefault()}
+      onPointerDown={handleGlassPointerDown}
+      onPointerLeave={handleGlassPointerLeave}
+      onPointerMove={handleGlassPointerMove}
+    >
+      <TopbarLiquidGlass isDark={isDark} target={glassTarget} />
       {entries.map((entry) => {
         if (entry.type === "link") {
           const Icon = entry.item.icon;
           return (
-            <NavLink key={entry.item.id} to={entry.item.path} onClick={() => onMenuChange(null)} className={({ isActive }) => [base, isActive ? active : inactive].join(" ")}>
-              <Icon size={16} className="shrink-0" />
-              {entry.item.label}
+            <NavLink
+              key={entry.item.id}
+              to={entry.item.path}
+              data-topbar-navigation={entry.item.id}
+              onClick={() => onMenuChange(null)}
+              onBlur={hideGlass}
+              {...routeIntentHandlers(queryClient, entry.item.path, (element) => showGlass(entry.item.id, element))}
+              className={({ isActive }) => [base, isActive ? active : inactive].join(" ")}
+            >
+              {({ isActive }) => (
+                <>
+                  <span data-topbar-refractive-source="true" className="relative z-10 flex items-center gap-2">
+                    <Icon size={16} className="shrink-0" />
+                    {entry.item.label}
+                  </span>
+                  {isActive && <TopbarActiveUnderline isDark={isDark} />}
+                </>
+              )}
             </NavLink>
           );
         }
@@ -31,17 +81,24 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
         const isOpen = openMenuId === entry.id;
         const Icon = entry.icon;
         return (
-          <div key={entry.id} className="relative">
+          <div key={entry.id} className="relative z-10">
             <button
               type="button"
+              data-topbar-navigation={entry.id}
               aria-haspopup="menu"
               aria-expanded={isOpen}
               onClick={() => onMenuChange(isOpen ? null : entry.id)}
+              onBlur={hideGlass}
+              onFocus={(event) => showGlass(entry.id, event.currentTarget)}
+              onPointerEnter={(event) => showGlass(entry.id, event.currentTarget)}
               className={[base, isActive || isOpen ? active : inactive].join(" ")}
             >
-              <Icon size={16} />
-              {entry.label}
-              <ChevronDown size={14} className={`ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              <span data-topbar-refractive-source="true" className="relative z-10 flex items-center gap-2">
+                <Icon size={16} />
+                {entry.label}
+                <ChevronDown size={14} className={`ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              </span>
+              {isActive && <TopbarActiveUnderline isDark={isDark} />}
             </button>
             <AnimatePresence>
               {isOpen && (
@@ -58,6 +115,7 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
                         key={child.id}
                         to={child.path}
                         onClick={() => onMenuChange(null)}
+                        {...routeIntentHandlers(queryClient, child.path)}
                         className={({ isActive }) =>
                           `flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-semibold transition ${isActive ? "bg-tanaw-green/10 text-tanaw-green" : "hover:text-tanaw-green text-slate-700 hover:bg-slate-50"}`
                         }
@@ -78,8 +136,9 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
 }
 
 export function MobilePortalNavigation({ entries, isDark, role, onNavigate }: { entries: TopbarEntry[]; isDark: boolean; role: UserRole; onNavigate: () => void }) {
+  const queryClient = useQueryClient();
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${isActive ? "bg-tanaw-lime/30 text-white shadow-md shadow-black/10" : "text-white/80 hover:bg-white/10 hover:text-white"}`;
+    `relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${isActive ? "text-white after:absolute after:bottom-1 after:left-4 after:h-0.5 after:w-4 after:rounded-full after:bg-emerald-300" : "text-white/80 hover:bg-white/10 hover:text-white"}`;
   return (
     <motion.div
       initial={{ opacity: 0, height: 0 }}
@@ -90,7 +149,7 @@ export function MobilePortalNavigation({ entries, isDark, role, onNavigate }: { 
       <nav className="grid gap-4 pt-4" aria-label={`${rolePortalLabel[role]} mobile navigation`}>
         {entries.map((entry) =>
           entry.type === "link" ? (
-            <NavLink key={entry.item.id} to={entry.item.path} onClick={onNavigate} className={linkClass}>
+            <NavLink key={entry.item.id} to={entry.item.path} onClick={onNavigate} {...routeIntentHandlers(queryClient, entry.item.path)} className={linkClass}>
               {<entry.item.icon size={16} />}
               {entry.item.label}
             </NavLink>
@@ -102,7 +161,7 @@ export function MobilePortalNavigation({ entries, isDark, role, onNavigate }: { 
               </div>
               <div className="grid gap-2">
                 {entry.children.map((child) => (
-                  <NavLink key={child.id} to={child.path} onClick={onNavigate} className={linkClass}>
+                  <NavLink key={child.id} to={child.path} onClick={onNavigate} {...routeIntentHandlers(queryClient, child.path)} className={linkClass}>
                     {<child.icon size={15} />}
                     {child.label}
                   </NavLink>
@@ -114,4 +173,17 @@ export function MobilePortalNavigation({ entries, isDark, role, onNavigate }: { 
       </nav>
     </motion.div>
   );
+}
+
+function routeIntentHandlers(queryClient: ReturnType<typeof useQueryClient>, path: string, onIntent?: (element: HTMLElement) => void) {
+  const preload = (event: SyntheticEvent<HTMLElement>) => {
+    onIntent?.(event.currentTarget);
+    void preloadPortalRoute(path);
+    void prefetchPortalRouteData(queryClient, path);
+  };
+  return {
+    onFocus: preload,
+    onPointerEnter: preload,
+    onTouchStart: preload,
+  };
 }

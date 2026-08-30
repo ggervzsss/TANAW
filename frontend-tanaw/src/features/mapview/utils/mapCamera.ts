@@ -1,6 +1,7 @@
 import type { LatLng, LatLngBounds, LatLngExpression, Map as LeafletMap, Point } from "leaflet";
 
 const DIRECTORY_BREAKPOINT_PX = 820;
+const EXPANDED_DIRECTORY_OCCLUSION_PX = 448;
 const DEFAULT_CITYWIDE_BOUNDS_PADDING = 0.04;
 const DEFAULT_CITYWIDE_MAX_ZOOM = 14.35;
 const PROJECTION_ZOOM = 18;
@@ -67,7 +68,7 @@ function resolveBoundsCameraPosition(
   maxZoom: number,
 ): ResolvedMapCameraPosition {
   const hasDirectoryOffset = !directoryCollapsed && map.getSize().x >= DIRECTORY_BREAKPOINT_PX;
-  const paddingTopLeft: [number, number] = hasDirectoryOffset ? [420, target.type === "citywide" ? 48 : 52] : [42, 42];
+  const paddingTopLeft: [number, number] = hasDirectoryOffset ? [EXPANDED_DIRECTORY_OCCLUSION_PX, target.type === "citywide" ? 48 : 52] : [42, 42];
   const paddingBottomRight: [number, number] = target.type === "citywide" ? [48, 48] : [56, 56];
   const paddedBounds = target.bounds.pad(boundsPadding);
   const totalPadding = [paddingTopLeft[0] + paddingBottomRight[0], paddingTopLeft[1] + paddingBottomRight[1]] as unknown as Point;

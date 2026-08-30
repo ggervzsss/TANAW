@@ -473,15 +473,541 @@ html.dark .tanaw-unified-metrics__scroller::-webkit-scrollbar-thumb:hover {
   }
 }
 
+.tanaw-data-page .tanaw-admin-workspace {
+  overflow: hidden;
+  border-color: rgb(71 85 105 / 0.16);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow:
+    0 20px 54px rgb(15 23 42 / 0.09),
+    inset 0 1px 0 rgb(255 255 255 / 0.82);
+}
+
+.tanaw-data-page .tanaw-admin-workspace__toolbar {
+  min-height: 74px;
+  border-color: rgb(71 85 105 / 0.13);
+  background: linear-gradient(145deg, rgb(248 251 249 / 0.96), rgb(241 247 244 / 0.92));
+}
+
+.tanaw-audit-command,
+.tanaw-operations-command {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid rgb(71 85 105 / 0.13);
+  background: linear-gradient(145deg, rgb(248 251 249 / 0.98), rgb(239 247 243 / 0.94));
+}
+
+.tanaw-audit-command__identity,
+.tanaw-operations-command__identity {
+  display: flex;
+  min-width: 220px;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tanaw-audit-command__identity h2,
+.tanaw-operations-command__identity h2 {
+  color: #17251f;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.tanaw-audit-command__identity p,
+.tanaw-operations-command__identity p {
+  margin-top: 0.18rem;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.tanaw-audit-command__icon,
+.tanaw-operations-command__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(5 150 105 / 0.2);
+  border-radius: 14px;
+  background: rgb(5 150 105 / 0.09);
+  color: #087455;
+}
+
+.tanaw-audit-controls {
+  min-height: auto !important;
+  flex: 1;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.tanaw-audit-ledger {
+  margin: 1rem;
+  overflow: hidden;
+  border: 1px solid rgb(71 85 105 / 0.16);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 12px 30px rgb(15 23 42 / 0.06);
+}
+
+.tanaw-audit-ledger__heading {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid rgb(71 85 105 / 0.12);
+  color: #526174;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.tanaw-audit-timestamp {
+  display: block;
+  max-width: 15ch;
+  line-height: 1.55;
+}
+
+.tanaw-audit-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.tanaw-audit-cell > svg {
+  margin-top: 0.15rem;
+  flex: 0 0 auto;
+  color: #789083;
+}
+
+.tanaw-audit-cell__icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(5 150 105 / 0.16);
+  border-radius: 10px;
+  background: rgb(5 150 105 / 0.08);
+  color: #087455;
+}
+
+.tanaw-audit-cell--details {
+  line-height: 1.55;
+}
+
+.tanaw-data-page .tanaw-data-search,
+.tanaw-data-page .tanaw-data-filter > button,
+.tanaw-data-page button.tanaw-data-filter {
+  min-height: 44px;
+  border-color: rgb(100 116 139 / 0.24);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.92);
+  color: var(--tanaw-text);
+  box-shadow:
+    0 4px 12px rgb(15 23 42 / 0.04),
+    inset 0 1px 0 rgb(255 255 255 / 0.76);
+}
+
+.tanaw-data-page .tanaw-data-search:hover,
+.tanaw-data-page .tanaw-data-filter > button:hover,
+.tanaw-data-page button.tanaw-data-filter:hover {
+  border-color: rgb(5 150 105 / 0.34);
+  background: #ffffff;
+}
+
+.tanaw-data-page .tanaw-data-search:focus-visible,
+.tanaw-data-page .tanaw-data-filter > button:focus-visible,
+.tanaw-data-page button.tanaw-data-filter:focus-visible {
+  border-color: rgb(5 150 105 / 0.72);
+  box-shadow: 0 0 0 3px rgb(5 150 105 / 0.14);
+}
+
+.tanaw-data-page .tanaw-admin-workspace__table {
+  background: rgb(255 255 255 / 0.94);
+  scrollbar-color: rgb(100 116 139 / 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+.tanaw-data-page .tanaw-data-table-head {
+  border-color: rgb(71 85 105 / 0.12);
+  background: #f1f5f3;
+  color: #536274;
+}
+
+.tanaw-data-page .tanaw-data-table-head th {
+  border-bottom: 1px solid rgb(71 85 105 / 0.12);
+}
+
+.tanaw-data-page .tanaw-data-table-row {
+  border-color: rgb(71 85 105 / 0.1);
+  background: rgb(255 255 255 / 0.88);
+}
+
+.tanaw-data-page .tanaw-data-table-row:nth-child(even) {
+  background: rgb(248 250 249 / 0.8);
+}
+
+.tanaw-data-page .tanaw-data-table-row:hover,
+.tanaw-data-page .tanaw-data-table-row:focus-visible {
+  background: rgb(239 248 243 / 0.92);
+  box-shadow: inset 3px 0 0 rgb(5 150 105 / 0.55);
+}
+
+.tanaw-data-page .tanaw-data-table-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+.tanaw-data-page .tanaw-data-footer {
+  min-height: 44px;
+  border-color: rgb(71 85 105 / 0.12);
+  background: #f4f7f5;
+  color: #64748b;
+}
+
+.tanaw-operations-switcher {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.tanaw-operations-switcher__tab {
+  border-color: transparent;
+  background: transparent;
+  color: #526174;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.tanaw-operations-switcher__tab:hover {
+  border-color: rgb(5 150 105 / 0.16);
+  background: rgb(255 255 255 / 0.78);
+  color: #076143;
+}
+
+.tanaw-operations-switcher__tab[aria-selected="true"] {
+  border-color: rgb(5 150 105 / 0.32);
+  background: #087455;
+  color: #ffffff;
+  box-shadow:
+    0 7px 18px rgb(5 95 63 / 0.17),
+    inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+
+.tanaw-operations-switcher__count {
+  display: inline-grid;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  margin-left: 0.45rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(71 85 105 / 0.1);
+  font-size: 0.64rem;
+}
+
+.tanaw-operations-switcher__tab[aria-selected="true"] .tanaw-operations-switcher__count {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.tanaw-operations-master-detail {
+  display: grid;
+  min-height: 390px;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.58fr);
+  background: #eef3f0;
+}
+
+.tanaw-operations-queue {
+  border-right: 1px solid rgb(71 85 105 / 0.14);
+  background: rgb(248 250 249 / 0.95);
+}
+
+.tanaw-operations-queue__heading {
+  display: flex;
+  height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid rgb(71 85 105 / 0.12);
+  color: #526174;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tanaw-operations-queue__heading span:last-child {
+  display: grid;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(5 150 105 / 0.1);
+  color: #087455;
+}
+
+.tanaw-operations-queue__items {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 0.55rem;
+  scrollbar-color: rgb(100 116 139 / 0.4) transparent;
+  scrollbar-width: thin;
+}
+
+.tanaw-operations-queue__item {
+  display: block;
+  width: 100%;
+  padding: 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: #526174;
+  text-align: left;
+  transition: 150ms ease;
+}
+
+.tanaw-operations-queue__item + .tanaw-operations-queue__item {
+  margin-top: 0.35rem;
+}
+
+.tanaw-operations-queue__item:hover {
+  border-color: rgb(5 150 105 / 0.14);
+  background: rgb(255 255 255 / 0.86);
+}
+
+.tanaw-operations-queue__item:focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: 1px;
+}
+
+.tanaw-operations-queue__item[aria-pressed="true"] {
+  border-color: rgb(5 150 105 / 0.3);
+  background: #ffffff;
+  box-shadow:
+    0 8px 22px rgb(15 23 42 / 0.08),
+    inset 3px 0 0 #0b8a64;
+}
+
+.tanaw-operations-queue__code,
+.tanaw-operations-queue__title,
+.tanaw-operations-queue__enterprise {
+  display: block;
+}
+
+.tanaw-operations-queue__code {
+  margin-bottom: 0.25rem;
+  color: #087455;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.tanaw-operations-queue__title {
+  color: #17251f;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.tanaw-operations-queue__enterprise {
+  margin-top: 0.3rem;
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tanaw-operations-queue__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.tanaw-operations-detail {
+  position: relative;
+  margin: 1rem;
+  padding: clamp(1.15rem, 2.5vw, 2rem);
+  border: 1px solid rgb(71 85 105 / 0.16);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.97);
+  box-shadow: 0 16px 36px rgb(15 23 42 / 0.07);
+}
+
+.tanaw-operations-detail__eyebrow,
+.tanaw-operations-detail__response span,
+.tanaw-operations-detail__facts dt {
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tanaw-operations-detail__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.55rem;
+}
+
+.tanaw-operations-detail__title-row h3 {
+  color: #12221b;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  font-weight: 850;
+}
+
+.tanaw-operations-detail__title-row p {
+  margin-top: 0.3rem;
+  color: #526174;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.tanaw-operations-detail__summary {
+  max-width: 78ch;
+  margin-top: 1.25rem;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.tanaw-operations-detail__response {
+  margin-top: 1.15rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgb(5 150 105 / 0.17);
+  border-radius: 14px;
+  background: rgb(5 150 105 / 0.065);
+}
+
+.tanaw-operations-detail__response p {
+  margin-top: 0.35rem;
+  color: #294338;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.tanaw-operations-detail__facts {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tanaw-operations-detail__facts > div {
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid rgb(71 85 105 / 0.13);
+  border-radius: 12px;
+  background: #f8faf9;
+}
+
+.tanaw-operations-detail__facts dd {
+  margin-top: 0.4rem;
+  overflow-wrap: anywhere;
+  color: #263a31;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.tanaw-operations-detail__action {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1.1rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 11px;
+  background: #087455;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  transition: 150ms ease;
+}
+
+.tanaw-operations-detail__action:hover {
+  background: #075f47;
+  transform: translateY(-1px);
+}
+
+.tanaw-operations-detail__action:focus-visible {
+  outline: 3px solid rgb(5 150 105 / 0.25);
+  outline-offset: 2px;
+}
+
+.tanaw-operations-empty {
+  min-height: 330px;
+  display: grid;
+  place-items: center;
+}
+
+.tanaw-operations-accounts {
+  background: rgb(255 255 255 / 0.68);
+}
+
 html.dark .tanaw-data-page .tanaw-data-panel {
   border-color: var(--tanaw-border-subtle);
   background: var(--tanaw-surface);
   box-shadow: var(--tanaw-shadow-soft);
 }
 
+html.dark .tanaw-data-page .tanaw-admin-workspace {
+  border-color: rgb(103 123 148 / 0.34);
+  background: rgb(17 29 42 / 0.96);
+  box-shadow:
+    0 24px 64px rgb(0 0 0 / 0.32),
+    inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
 html.dark .tanaw-data-page .tanaw-data-toolbar {
   border-color: var(--tanaw-border-subtle);
   background: var(--tanaw-surface-inset);
+}
+
+html.dark .tanaw-data-page .tanaw-admin-workspace__toolbar {
+  background: linear-gradient(145deg, rgb(19 33 46 / 0.96), rgb(14 27 39 / 0.94));
+}
+
+html.dark .tanaw-audit-command,
+html.dark .tanaw-operations-command {
+  border-color: var(--tanaw-border-subtle);
+  background: linear-gradient(145deg, rgb(19 33 46 / 0.98), rgb(14 28 39 / 0.96));
+}
+
+html.dark .tanaw-audit-command__identity h2,
+html.dark .tanaw-operations-command__identity h2,
+html.dark .tanaw-operations-queue__title,
+html.dark .tanaw-operations-detail__title-row h3 {
+  color: #eef7f2;
+}
+
+html.dark .tanaw-audit-command__identity p,
+html.dark .tanaw-operations-command__identity p {
+  color: #91a6b5;
+}
+
+html.dark .tanaw-audit-ledger {
+  border-color: var(--tanaw-border-subtle);
+  background: rgb(14 26 38 / 0.96);
+  box-shadow: 0 16px 38px rgb(0 0 0 / 0.25);
+}
+
+html.dark .tanaw-audit-ledger__heading {
+  border-color: var(--tanaw-border-subtle);
+  color: #9cafbd;
+}
+
+html.dark .tanaw-audit-cell > svg {
+  color: #8299aa;
 }
 
 html.dark .tanaw-data-page .tanaw-data-search,
@@ -525,8 +1051,17 @@ html.dark .tanaw-data-page .tanaw-data-table-row {
   background: var(--tanaw-surface);
 }
 
+html.dark .tanaw-data-page .tanaw-data-table-row:nth-child(even) {
+  background: rgb(20 33 46 / 0.92);
+}
+
 html.dark .tanaw-data-page .tanaw-data-table-row:hover {
-  background: var(--tanaw-control-hover);
+  background: rgb(25 51 45 / 0.86);
+}
+
+html.dark .tanaw-data-page .tanaw-data-table-row:focus-visible {
+  background: rgb(25 51 45 / 0.86);
+  box-shadow: inset 3px 0 0 rgb(52 211 153 / 0.7);
 }
 
 html.dark .tanaw-data-page .tanaw-data-footer {
@@ -542,6 +1077,144 @@ html.dark .tanaw-data-page .tanaw-data-empty-icon {
   box-shadow: 0 10px 26px rgb(0 0 0 / 0.2);
 }
 
+html.dark .tanaw-operations-switcher {
+  background: transparent;
+}
+
+html.dark .tanaw-operations-switcher__tab {
+  color: #aebdca;
+}
+
+html.dark .tanaw-operations-switcher__tab:hover {
+  border-color: rgb(52 211 153 / 0.18);
+  background: rgb(255 255 255 / 0.045);
+  color: #d1fae5;
+}
+
+html.dark .tanaw-operations-switcher__tab[aria-selected="true"] {
+  border-color: rgb(52 211 153 / 0.34);
+  background: #168562;
+  color: #f0fdf4;
+  box-shadow:
+    0 8px 22px rgb(0 0 0 / 0.25),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+html.dark .tanaw-operations-accounts {
+  background: rgb(17 29 42 / 0.92);
+}
+
+html.dark .tanaw-operations-master-detail {
+  background: rgb(10 20 30 / 0.9);
+}
+
+html.dark .tanaw-operations-queue {
+  border-color: var(--tanaw-border-subtle);
+  background: rgb(14 26 38 / 0.94);
+}
+
+html.dark .tanaw-operations-queue__heading {
+  border-color: var(--tanaw-border-subtle);
+  color: #9cafbd;
+}
+
+html.dark .tanaw-operations-queue__item {
+  color: #9cafbd;
+}
+
+html.dark .tanaw-operations-queue__item:hover {
+  border-color: rgb(52 211 153 / 0.18);
+  background: rgb(255 255 255 / 0.04);
+}
+
+html.dark .tanaw-operations-queue__item[aria-pressed="true"] {
+  border-color: rgb(52 211 153 / 0.32);
+  background: rgb(24 41 52 / 0.98);
+  box-shadow:
+    0 10px 24px rgb(0 0 0 / 0.22),
+    inset 3px 0 0 #34d399;
+}
+
+html.dark .tanaw-operations-detail {
+  border-color: var(--tanaw-border-subtle);
+  background: rgb(18 31 43 / 0.98);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.28);
+}
+
+html.dark .tanaw-operations-detail__eyebrow,
+html.dark .tanaw-operations-detail__response span,
+html.dark .tanaw-operations-detail__facts dt {
+  color: #91a6b5;
+}
+
+html.dark .tanaw-operations-detail__title-row p,
+html.dark .tanaw-operations-detail__summary {
+  color: #bccbd5;
+}
+
+html.dark .tanaw-operations-detail__response {
+  border-color: rgb(52 211 153 / 0.18);
+  background: rgb(16 185 129 / 0.075);
+}
+
+html.dark .tanaw-operations-detail__response p,
+html.dark .tanaw-operations-detail__facts dd {
+  color: #d5e5dc;
+}
+
+html.dark .tanaw-operations-detail__facts > div {
+  border-color: var(--tanaw-border-subtle);
+  background: rgb(12 24 35 / 0.78);
+}
+
+@media (max-width: 1050px) {
+  .tanaw-audit-command,
+  .tanaw-operations-command {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tanaw-operations-switcher {
+    justify-content: flex-start;
+  }
+
+  .tanaw-operations-master-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .tanaw-operations-queue {
+    border-right: 0;
+    border-bottom: 1px solid rgb(71 85 105 / 0.14);
+  }
+
+  .tanaw-operations-queue__items {
+    display: grid;
+    max-height: 260px;
+    gap: 0.35rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .tanaw-operations-queue__item + .tanaw-operations-queue__item {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .tanaw-audit-ledger,
+  .tanaw-operations-detail {
+    margin: 0.65rem;
+  }
+
+  .tanaw-operations-detail__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .tanaw-operations-switcher__tab {
+    flex: 1 1 auto;
+    padding-inline: 0.65rem;
+  }
+}
+
 .tanaw-dashboard-panel,
 .tanaw-dashboard-inset,
 .tanaw-information-banner,
@@ -553,6 +1226,141 @@ html.dark .tanaw-data-page .tanaw-data-empty-icon {
     color 180ms ease;
 }
 
+.tanaw-dashboard-card-header {
+  border-color: var(--tanaw-border-subtle);
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.9), rgb(247 250 248 / 0.88));
+}
+
+.tanaw-dashboard-card-header h3 {
+  color: var(--tanaw-text);
+}
+
+.tanaw-dashboard-card-copy {
+  color: var(--tanaw-secondary-text);
+}
+
+.tanaw-chart-tooltip {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-chart-tooltip-bg);
+}
+
+.tanaw-chart-legend-pattern {
+  background-color: var(--tanaw-chart-secondary);
+  background-image: repeating-linear-gradient(45deg, transparent 0 4px, var(--tanaw-chart-pattern) 4px 6px);
+}
+
+.tanaw-chart-data-table-wrap,
+.tanaw-chart-data-table {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.tanaw-dashboard-scroll {
+  scrollbar-color: rgb(100 116 139 / 0.42) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.tanaw-dashboard-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.tanaw-dashboard-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.tanaw-dashboard-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgb(100 116 139 / 0.42);
+  background-clip: padding-box;
+}
+
+.tanaw-dashboard-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105 / 0.64);
+  background-clip: padding-box;
+}
+
+.tanaw-traffic-chart-scroll .recharts-surface {
+  overflow: visible;
+}
+
+.tanaw-traffic-chart-scroll :where(.recharts-wrapper, .recharts-surface):focus:not(:focus-visible) {
+  outline: none;
+}
+
+.tanaw-traffic-chart-scroll :where(.recharts-wrapper, .recharts-surface):focus-visible {
+  outline: 2px solid var(--tanaw-focus-ring);
+  outline-offset: -2px;
+}
+
+.tanaw-compliance-panel__icon {
+  border: 1px solid rgb(5 150 105 / 0.18);
+  background: rgb(5 150 105 / 0.09);
+  color: #047857;
+}
+
+.tanaw-compliance-summary {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-muted);
+  color: var(--tanaw-secondary-text);
+}
+
+.tanaw-compliance-summary[data-tone="complete"] svg,
+.tanaw-compliance-summary[data-tone="complete"] strong {
+  color: #047857;
+}
+
+.tanaw-compliance-summary[data-tone="pending"] svg,
+.tanaw-compliance-summary[data-tone="pending"] strong {
+  color: #b45309;
+}
+
+.tanaw-compliance-item {
+  border-color: var(--tanaw-border-subtle);
+  background: var(--tanaw-surface-muted);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
+}
+
+.tanaw-compliance-item[data-state="complete"] {
+  border-color: rgb(5 150 105 / 0.2);
+  background: linear-gradient(145deg, rgb(240 253 244 / 0.82), rgb(248 250 252 / 0.92));
+}
+
+.tanaw-compliance-item[data-state="pending"] {
+  border-color: rgb(217 119 6 / 0.22);
+  background: linear-gradient(145deg, rgb(255 251 235 / 0.86), rgb(248 250 252 / 0.92));
+}
+
+.tanaw-compliance-progress {
+  background: var(--tanaw-surface-strong);
+}
+
+.tanaw-compliance-progress > span {
+  background: #059669;
+}
+
+.tanaw-compliance-item[data-state="pending"] .tanaw-compliance-progress > span {
+  background: #d97706;
+}
+
+.tanaw-compliance-item[data-state="empty"] .tanaw-compliance-progress > span {
+  background: #94a3b8;
+}
+
+.tanaw-compliance-item__message {
+  color: var(--tanaw-secondary-text);
+}
+
 html.dark .tanaw-dashboard-panel {
   border-color: var(--tanaw-border-subtle);
   background: var(--tanaw-surface);
@@ -562,6 +1370,59 @@ html.dark .tanaw-dashboard-panel {
 html.dark .tanaw-dashboard-inset {
   border-color: var(--tanaw-border-subtle);
   background: var(--tanaw-surface-inset);
+}
+
+html.dark .tanaw-dashboard-card-header {
+  background: linear-gradient(145deg, rgb(25 39 52 / 0.92), rgb(20 32 44 / 0.9));
+}
+
+html.dark .tanaw-dashboard-scroll {
+  scrollbar-color: rgb(148 163 184 / 0.4) transparent;
+}
+
+html.dark .tanaw-dashboard-scroll::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.4);
+  background-clip: padding-box;
+}
+
+html.dark .tanaw-dashboard-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(186 200 216 / 0.62);
+  background-clip: padding-box;
+}
+
+html.dark .tanaw-compliance-panel__icon {
+  border-color: rgb(52 211 153 / 0.18);
+  background: rgb(52 211 153 / 0.1);
+  color: #6ee7b7;
+}
+
+html.dark .tanaw-compliance-summary {
+  background: rgb(16 25 35 / 0.72);
+}
+
+html.dark .tanaw-compliance-summary[data-tone="complete"] svg,
+html.dark .tanaw-compliance-summary[data-tone="complete"] strong {
+  color: #6ee7b7;
+}
+
+html.dark .tanaw-compliance-summary[data-tone="pending"] svg,
+html.dark .tanaw-compliance-summary[data-tone="pending"] strong {
+  color: #fcd34d;
+}
+
+html.dark .tanaw-compliance-item {
+  background: rgb(16 25 35 / 0.72);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.025);
+}
+
+html.dark .tanaw-compliance-item[data-state="complete"] {
+  border-color: rgb(52 211 153 / 0.2);
+  background: linear-gradient(145deg, rgb(17 58 47 / 0.48), rgb(16 25 35 / 0.76));
+}
+
+html.dark .tanaw-compliance-item[data-state="pending"] {
+  border-color: rgb(251 191 36 / 0.2);
+  background: linear-gradient(145deg, rgb(83 55 16 / 0.4), rgb(16 25 35 / 0.76));
 }
 
 html.dark .tanaw-information-banner,

@@ -167,13 +167,17 @@ export function SelectDropdown({
   };
 
   const buttonClasses = isDirectory
-    ? "focus:ring-tanaw-sky flex w-full items-center justify-between gap-2 rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-left shadow-inner shadow-black/20 transition hover:border-white/25 hover:bg-slate-950/55 focus:ring-2 focus:outline-none"
+    ? "tanaw-directory-select-trigger flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left transition focus:outline-none"
     : "focus:border-tanaw-green focus:ring-tanaw-green/15 tanaw-data-filter flex min-h-10 items-center justify-between gap-3 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-700 outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-[#0f172a] dark:text-slate-200";
 
   return (
     <div data-field-name={name} className={`relative min-w-0 ${className}`}>
       {label && (
-        <span className={`mb-1.5 block font-bold uppercase ${isDirectory ? "text-[9px] tracking-widest text-white/65" : "text-[11px] tracking-wide text-slate-500 dark:text-slate-300"}`}>{label}</span>
+        <span
+          className={`mb-2 block font-bold ${isDirectory ? "tanaw-directory-select-label text-[11px] tracking-[0.06em] uppercase" : "text-[11px] tracking-wide text-slate-500 uppercase dark:text-slate-300"}`}
+        >
+          {label}
+        </span>
       )}
       {name && <input type="hidden" name={name} value={value} />}
       <button
@@ -194,16 +198,19 @@ export function SelectDropdown({
         onKeyDown={handleKeyDown}
         className={`${buttonClasses} ${error ? "border-red-400" : ""}`}
       >
-        <span className={`truncate ${isDirectory ? "text-[10px] font-bold tracking-widest text-white uppercase" : selectedOption ? "font-medium" : "text-gray-400 dark:text-slate-500"}`}>
+        <span className={`truncate ${isDirectory ? "tanaw-directory-select-value text-[12px] font-semibold" : selectedOption ? "font-medium" : "text-gray-400 dark:text-slate-500"}`}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="flex shrink-0 items-center gap-2">
           {selectedOption?.meta && (
-            <span className={isDirectory ? "rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white/70" : "text-xs font-semibold text-gray-400 dark:text-slate-400"}>
+            <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[10px] font-bold" : "text-xs font-semibold text-gray-400 dark:text-slate-400"}>
               {selectedOption.meta}
             </span>
           )}
-          <ChevronDown size={14} className={`shrink-0 transition-transform duration-200 ${isDirectory ? "text-white/65" : "text-gray-400 dark:text-slate-400"} ${isOpen ? "rotate-180" : ""}`} />
+          <ChevronDown
+            size={16}
+            className={`shrink-0 transition-transform duration-200 ${isDirectory ? "tanaw-directory-select-chevron" : "text-gray-400 dark:text-slate-400"} ${isOpen ? "rotate-180" : ""}`}
+          />
         </span>
       </button>
       {error && (
@@ -227,15 +234,15 @@ export function SelectDropdown({
               onKeyDown={handleKeyDown}
               onPointerDown={(event) => event.stopPropagation()}
               className={`fixed z-1501 flex flex-col overflow-hidden rounded-xl shadow-[0_22px_54px_rgba(0,0,0,0.32)] outline-none ${
-                isDirectory ? "border border-white/15 bg-slate-950/97 text-white backdrop-blur-md" : "border border-gray-200 bg-white dark:border-slate-700 dark:bg-[#121c31]"
+                isDirectory ? "tanaw-directory-select-menu border backdrop-blur-md" : "border border-gray-200 bg-white dark:border-slate-700 dark:bg-[#121c31]"
               }`}
             >
               {searchEnabled && (
-                <div className={`shrink-0 border-b p-2 ${isDirectory ? "border-white/10 bg-black/30" : "border-gray-100 dark:border-slate-700"}`}>
+                <div className={`shrink-0 border-b p-2 ${isDirectory ? "tanaw-directory-select-search-shell" : "border-gray-100 dark:border-slate-700"}`}>
                   <label
-                    className={`relative flex items-center rounded-md border ${isDirectory ? "border-white/15 bg-black/35 text-white" : "border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-[#0f172a]"}`}
+                    className={`relative flex items-center rounded-lg border ${isDirectory ? "tanaw-directory-select-search" : "border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-[#0f172a]"}`}
                   >
-                    <Search size={14} className={`absolute left-3 ${isDirectory ? "text-white/55" : "text-gray-400"}`} />
+                    <Search size={14} className={`absolute left-3 ${isDirectory ? "tanaw-directory-select-chevron" : "text-gray-400"}`} />
                     <input
                       autoFocus
                       type="search"
@@ -249,7 +256,7 @@ export function SelectDropdown({
                         setActiveIndex(0);
                       }}
                       onKeyDown={handleKeyDown}
-                      className={`min-w-0 flex-1 bg-transparent py-2 pr-3 pl-9 text-sm outline-none ${isDirectory ? "text-[10px] font-bold tracking-widest text-white uppercase placeholder:text-white/40" : "text-gray-900 dark:text-slate-100 dark:placeholder:text-slate-500"}`}
+                      className={`min-w-0 flex-1 bg-transparent py-2.5 pr-3 pl-9 text-sm outline-none ${isDirectory ? "tanaw-directory-select-value text-xs font-medium placeholder:font-normal" : "text-gray-900 dark:text-slate-100 dark:placeholder:text-slate-500"}`}
                     />
                   </label>
                 </div>
@@ -271,8 +278,8 @@ export function SelectDropdown({
                       className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${
                         isDirectory
                           ? active || selected
-                            ? "bg-sky-400/20 font-bold text-white ring-1 ring-sky-300/30"
-                            : "text-white/72 hover:bg-white/10 hover:text-white"
+                            ? "tanaw-directory-select-option--active font-semibold ring-1"
+                            : "tanaw-directory-select-option"
                           : active
                             ? "bg-emerald-50 font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200"
                             : selected
@@ -280,19 +287,21 @@ export function SelectDropdown({
                               : "text-gray-700 hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-800"
                       }`}
                     >
-                      <span className={isDirectory ? "truncate text-[9px] tracking-widest uppercase" : "truncate"}>{option.label}</span>
+                      <span className={isDirectory ? "truncate text-xs font-medium" : "truncate"}>{option.label}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         {option.meta && (
-                          <span className={isDirectory ? "rounded-sm bg-black/35 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white/60" : "text-xs text-gray-400 dark:text-slate-400"}>
+                          <span className={isDirectory ? "tanaw-directory-select-meta rounded-md px-2 py-0.5 font-mono text-[10px] font-bold" : "text-xs text-gray-400 dark:text-slate-400"}>
                             {option.meta}
                           </span>
                         )}
-                        {selected && <Check size={15} className={isDirectory ? "text-sky-300" : "text-emerald-700 dark:text-emerald-300"} />}
+                        {selected && <Check size={15} className={isDirectory ? "text-emerald-600 dark:text-emerald-300" : "text-emerald-700 dark:text-emerald-300"} />}
                       </span>
                     </button>
                   );
                 })}
-                {filteredOptions.length === 0 && <div className={`px-3 py-5 text-center text-xs font-semibold ${isDirectory ? "text-white/40" : "text-gray-400"}`}>No matching options</div>}
+                {filteredOptions.length === 0 && (
+                  <div className={`px-3 py-5 text-center text-xs font-semibold ${isDirectory ? "tanaw-directory-select-label" : "text-gray-400"}`}>No matching options</div>
+                )}
               </div>
             </motion.div>
           </ModalPortal>

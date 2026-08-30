@@ -96,14 +96,14 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
       </div>
       {!isReadOnly && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex rounded-sm border border-gray-200 bg-gray-50 p-1">
+          <div className="flex rounded-xl border border-gray-200 bg-gray-50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
             <ModeButton active={mode === "manual"} icon={<Keyboard size={13} />} label="Manual" onClick={() => setMode("manual")} />
             <ModeButton active={mode === "assisted"} icon={<SlidersHorizontal size={13} />} label="Assisted" onClick={() => setMode("assisted")} />
           </div>
           <button
             type="button"
             onClick={applyRemainingAllocation}
-            className="flex items-center gap-1.5 rounded-sm border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-[#065f46] uppercase transition-colors hover:border-[#065f46]/40 hover:bg-[#065f46]/5"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-bold tracking-wider text-[#065f46] uppercase shadow-sm transition-colors hover:border-[#065f46]/40 hover:bg-[#065f46]/5"
           >
             <Sparkles size={13} /> Fill Remaining
           </button>
@@ -111,7 +111,7 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
       )}
 
       {mode === "assisted" && !isReadOnly && (
-        <div className="mb-3 space-y-3 rounded-sm border border-gray-200 bg-gray-50 p-3">
+        <div className="mb-3 space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[10px] font-bold tracking-wider text-[#111827] uppercase">Assisted Allocation</p>
@@ -121,7 +121,7 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
               <button
                 type="button"
                 onClick={resetEvenly}
-                className="flex items-center gap-1 rounded-sm border border-gray-200 bg-white px-2 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
+                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
               >
                 <RotateCcw size={12} /> Even Split
               </button>
@@ -129,7 +129,7 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
                 type="button"
                 disabled={!hasPreviousDemo}
                 onClick={usePreviousMix}
-                className="rounded-sm border border-gray-200 bg-white px-2 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-gray-600 uppercase transition-colors hover:border-[#065f46]/40 hover:text-[#065f46] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
               >
                 Previous Mix
               </button>
@@ -147,7 +147,7 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
             <button
               type="button"
               onClick={applyAssistedAllocation}
-              className="flex items-center gap-2 rounded-sm bg-[#065f46] px-3 py-2 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm transition-colors hover:bg-[#044a36]"
+              className="flex items-center gap-2 rounded-xl bg-[#065f46] px-3.5 py-2.5 text-[10px] font-bold tracking-wider text-white uppercase shadow-sm transition-colors hover:bg-[#044a36]"
             >
               <Sparkles size={13} /> Apply Allocation
             </button>
@@ -155,21 +155,21 @@ export function DemographicsBreakdown({ demo, isReadOnly, previousDemo = null, s
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2 rounded-sm border border-gray-200 bg-white p-2">
+      <div className="tanaw-demographic-grid grid grid-cols-3 gap-2.5 rounded-2xl border border-(--tanaw-border-subtle) bg-(--tanaw-surface-raised) p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] max-[850px]:grid-cols-1">
         {groups.map((group) => (
-          <div key={group.title} className="min-w-0 border-r border-gray-100 pr-2 last:border-r-0 last:pr-0">
+          <div key={group.title} className="tanaw-demographic-card min-w-0 rounded-xl border border-(--tanaw-border-subtle) bg-(--tanaw-surface-inset) p-2.5">
             <div className="mb-2 flex min-w-0 items-center gap-1">
-              <p className="min-w-0 truncate text-[9px] font-bold text-[#111827] uppercase">{group.title}</p>
+              <p className="min-w-0 truncate text-[9px] font-bold text-(--tanaw-text) uppercase">{group.title}</p>
               <InfoTooltip content={group.description} align="left">
-                <Info size={12} className="shrink-0 text-gray-400 transition-colors hover:text-[#065f46]" aria-hidden="true" />
+                <Info size={12} className="shrink-0 text-(--tanaw-muted-text) transition-colors hover:text-(--tanaw-green)" aria-hidden="true" />
               </InfoTooltip>
             </div>
             <div className="space-y-2">
               <DemographicInput demo={demo} disabled={isReadOnly} field={group.maleKey} label="Male" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
               <DemographicInput demo={demo} disabled={isReadOnly} field={group.femaleKey} label="Female" setDemo={setDemo} setInputNote={setInputNote} uniqueCap={allocation.cap} />
-              <div className="rounded-sm border border-gray-200 bg-gray-50 px-2 py-1.5 text-center">
-                <p className="text-[8px] font-bold tracking-wider text-gray-400 uppercase">Total</p>
-                <p className="font-mono text-xs font-bold text-[#111827]">{totals[group.totalKey].toLocaleString()}</p>
+              <div className="tanaw-demographic-total rounded-lg border border-(--tanaw-border-subtle) bg-(--tanaw-surface-raised) px-2 py-1.5 text-center shadow-sm">
+                <p className="text-[8px] font-bold tracking-wider text-(--tanaw-muted-text) uppercase">Total</p>
+                <p className="font-mono text-xs font-bold text-(--tanaw-text)">{totals[group.totalKey].toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -195,7 +195,7 @@ function ModeButton({ active, icon, label, onClick }: ModeButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-sm px-2.5 py-1.5 text-[10px] font-bold tracking-wider uppercase transition-colors ${
+      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold tracking-wider uppercase transition-colors ${
         active ? "bg-white text-[#065f46] shadow-sm" : "text-gray-500 hover:text-[#111827]"
       }`}
     >
@@ -219,7 +219,7 @@ function AssistedGroupControls({ group, previewDemo, settings, setSettings }: As
   const categoryPreview = malePreview + femalePreview;
 
   return (
-    <div className="rounded-sm border border-gray-200 bg-white p-3">
+    <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-[10px] font-bold tracking-wider text-[#111827] uppercase">{group.title}</p>
         <p className="font-mono text-[10px] font-bold text-[#065f46]">
@@ -289,7 +289,7 @@ function PercentageControl({ balancedLabels, countLabel, label, onChange, value 
 }
 
 function CountPreview({ label }: { label: string }) {
-  return <span className="w-24 shrink-0 rounded-sm border border-gray-300 bg-gray-50 px-1 text-center font-mono text-xs leading-8 font-bold text-[#111827]">{label}</span>;
+  return <span className="w-24 shrink-0 rounded-lg border border-gray-300 bg-gray-50 px-1 text-center font-mono text-xs leading-8 font-bold text-[#111827]">{label}</span>;
 }
 
 type PercentageInputProps = {
@@ -307,7 +307,7 @@ function PercentageInput({ ariaLabel, onChange, value }: PercentageInputProps) {
       max={100}
       value={value}
       onChange={(event) => onChange(clampPercentage(event.target.value))}
-      className="h-8 w-14 rounded-sm border border-gray-300 px-1 text-center text-xs font-bold text-[#111827] outline-none focus:border-[#065f46]"
+      className="h-8 w-14 rounded-lg border border-gray-300 px-1 text-center text-xs font-bold text-[#111827] outline-none focus:border-[#065f46]"
     />
   );
 }
@@ -334,7 +334,7 @@ function DemographicInput({ demo, disabled, field, label, setDemo, setInputNote,
         disabled={disabled}
         value={demo[field]}
         onChange={(event) => updateDemographicValue(event.target.value, field, setDemo, setInputNote, uniqueCap)}
-        className="w-full rounded-sm border border-gray-300 p-1.5 text-center text-xs outline-none focus:border-[#065f46] disabled:bg-gray-50"
+        className="tanaw-demographic-input w-full rounded-lg border border-(--tanaw-border-strong) bg-(--tanaw-control-bg) p-2 text-center text-xs text-(--tanaw-text) outline-none focus:border-(--tanaw-green) disabled:bg-(--tanaw-surface-inset) disabled:text-(--tanaw-muted-text)"
       />
     </label>
   );

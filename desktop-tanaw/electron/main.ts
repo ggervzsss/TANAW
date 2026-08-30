@@ -177,7 +177,10 @@ function createSplashWindow() {
     if (splash.isDestroyed() || startupTransition?.hasRevealed()) return;
     splash.maximize();
     splash.show();
-    startupTransition?.markSplashVisible();
+    void splash.webContents
+      .executeJavaScript("window.tanawSplash?.start?.()", true)
+      .catch((error) => console.warn("[tanaw] Splash progress could not start cleanly.", error))
+      .finally(() => startupTransition?.markSplashVisible());
   });
   splash.on("closed", () => {
     if (splashWindow === splash) splashWindow = null;
@@ -226,13 +229,20 @@ function showWindowWhenReady() {
   startupTransition?.markMainReady();
 }
 
-function revealMainWindow(reason: StartupRevealReason) {
+async function revealMainWindow(reason: StartupRevealReason) {
   if (!win || win.isDestroyed()) return;
 
   if (reason === "fallback") {
     console.warn("[tanaw] Renderer readiness timed out; revealing the main window using the startup fallback.");
   }
 
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    await splashWindow.webContents
+      .executeJavaScript("window.tanawSplash?.complete?.() ?? Promise.resolve()", true)
+      .catch((error) => console.warn("[tanaw] Splash progress could not finish cleanly.", error));
+  }
+
+  if (!win || win.isDestroyed()) return;
   win.maximize();
   win.show();
   if (win.isMinimized()) {
@@ -363,7 +373,11 @@ if (gotSingleInstanceLock) {
     const waitForSplash = existsSync(getSplashPath());
     startupTransition = createStartupTransitionController({
       fallbackMs: VITE_DEV_SERVER_URL ? DEV_STARTUP_READY_FALLBACK_MS : undefined,
-      onReveal: revealMainWindow,
+      onReadyForReveal: () => {
+        if (!splashWindow || splashWindow.isDestroyed()) return;
+        void splashWindow.webContents.executeJavaScript("window.tanawSplash?.ready?.()", true).catch((error) => console.warn("[tanaw] Splash readiness could not synchronize cleanly.", error));
+      },
+      onReveal: (reason) => void revealMainWindow(reason),
       waitForSplash,
     });
 

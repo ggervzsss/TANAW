@@ -96,6 +96,16 @@
 }
 
 @theme {
+  --text-xs: 0.78125rem;
+  --text-sm: 0.90625rem;
+  --text-base: 1.03125rem;
+  --text-lg: 1.15625rem;
+  --text-xl: 1.28125rem;
+  --text-2xl: 1.5625rem;
+  --text-3xl: 1.9375rem;
+  --text-4xl: 2.375rem;
+  --text-5xl: 3.0625rem;
+  --text-6xl: 3.8125rem;
   --color-tanaw-green: #055b25;
   --color-tanaw-lime: #45a549;
   --color-tanaw-navy: #2a3063;
@@ -165,6 +175,13 @@
   --tanaw-shadow-raised: 0 18px 42px rgb(15 23 42 / 0.12);
   --tanaw-chart-grid: #d9e0e5;
   --tanaw-chart-axis: #64748b;
+  --tanaw-chart-label: #334155;
+  --tanaw-chart-primary: #047857;
+  --tanaw-chart-secondary: #2563eb;
+  --tanaw-chart-pattern: rgb(255 255 255 / 0.32);
+  --tanaw-chart-row-hover: rgb(15 118 110 / 0.055);
+  --tanaw-chart-connector: #94a3b8;
+  --tanaw-chart-marker-stroke: #ffffff;
   --tanaw-chart-tooltip-bg: #ffffff;
   --tanaw-chart-tooltip-text: #1f2937;
   --tanaw-dark-surface: #121c31;
@@ -217,6 +234,13 @@ html.dark {
   --tanaw-shadow-raised: 0 20px 48px rgb(0 0 0 / 0.25);
   --tanaw-chart-grid: rgb(174 188 201 / 0.13);
   --tanaw-chart-axis: #9ba8b5;
+  --tanaw-chart-label: #d7e0e6;
+  --tanaw-chart-primary: #34d399;
+  --tanaw-chart-secondary: #60a5fa;
+  --tanaw-chart-pattern: rgb(15 23 42 / 0.34);
+  --tanaw-chart-row-hover: rgb(52 211 153 / 0.065);
+  --tanaw-chart-connector: #64748b;
+  --tanaw-chart-marker-stroke: #151f2b;
   --tanaw-chart-tooltip-bg: #1b2834;
   --tanaw-chart-tooltip-text: #eef3f2;
   --tanaw-dark-surface: #151f2b;
@@ -245,6 +269,7 @@ html.dark {
     min-width: 320px;
     background: var(--tanaw-page-bg-gradient);
     font-family: "Bai Jamjuree", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-base);
     color: var(--tanaw-text);
     transition:
       background-color 180ms ease,

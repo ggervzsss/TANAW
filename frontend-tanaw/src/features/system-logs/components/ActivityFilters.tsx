@@ -20,7 +20,7 @@ export function ITSystemLogFilters(props: {
   return (
     <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4">
       <div className="flex flex-wrap items-center gap-3">
-        <SearchInput value={props.query} placeholder="Search summary or name" onChange={props.onQueryChange} />
+        <SearchInput value={props.query} placeholder="Search summary or name" ariaLabel="Search system activity" onChange={props.onQueryChange} />
         <FilterSelect value={props.typeFilter} onChange={props.onTypeChange} options={props.typeOptions} />
         <FilterSelect value={props.accountFilter} onChange={props.onAccountChange} options={props.accountOptions} />
         <FilterSelect value={props.timeRange} onChange={(value) => props.onTimeRangeChange(value as ActivityTimeRange)} options={activityTimeRanges} />
@@ -45,23 +45,48 @@ export function AdminActivityFilters(props: {
   onTimeRangeChange: (value: ActivityTimeRange) => void;
 }) {
   return (
-    <div className="tanaw-data-toolbar flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50 p-4">
-      <SearchInput value={props.query} placeholder="Search activity, name, affected item, or details" onChange={props.onQueryChange} className="min-w-65" />
-      <FilterSelect value={props.activityGroup} onChange={(value) => props.onActivityGroupChange(value as ActivityGroup)} options={activityGroups} />
-      <FilterSelect value={props.timeRange} onChange={(value) => props.onTimeRangeChange(value as ActivityTimeRange)} options={activityTimeRanges} />
+    <div className="tanaw-data-toolbar tanaw-admin-workspace__toolbar tanaw-audit-controls flex flex-wrap items-center gap-3">
+      <SearchInput value={props.query} placeholder="Search activity, name, affected item, or details" ariaLabel="Search activity history" onChange={props.onQueryChange} className="min-w-65" />
+      <FilterSelect
+        value={props.activityGroup}
+        onChange={(value) => props.onActivityGroupChange(value as ActivityGroup)}
+        options={activityGroups}
+        ariaLabel="Filter activity category"
+        className="tanaw-data-filter"
+      />
+      <FilterSelect
+        value={props.timeRange}
+        onChange={(value) => props.onTimeRangeChange(value as ActivityTimeRange)}
+        options={activityTimeRanges}
+        ariaLabel="Filter activity time range"
+        className="tanaw-data-filter"
+      />
     </div>
   );
 }
 
-function SearchInput({ value, placeholder, onChange, className = "sm:min-w-64" }: { value: string; placeholder: string; onChange: (value: string) => void; className?: string }) {
+function SearchInput({
+  value,
+  placeholder,
+  ariaLabel,
+  onChange,
+  className = "sm:min-w-64",
+}: {
+  value: string;
+  placeholder: string;
+  ariaLabel: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
   return (
     <div className={`relative min-w-0 flex-1 ${className}`}>
       <Search size={14} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
       <input
         value={value}
+        aria-label={ariaLabel}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="tanaw-data-search focus:ring-tgreen-dark w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-9 text-sm text-gray-900 transition outline-none focus:ring-1"
+        className="tanaw-data-search w-full rounded-xl border py-2.5 pr-4 pl-9 text-sm transition outline-none"
       />
     </div>
   );

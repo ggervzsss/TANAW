@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getOccupancyBadgeClass, getOccupancyRingColor } from "./mapStatusStyles";
+import { getDarkMonitoringBadgeClass, getMonitoringStatusColor, getMonitoringStatusPresentation, getOccupancyBadgeClass, getOccupancyRingColor, monitoringStatusLegend } from "./mapStatusStyles";
 
 describe("enterprise map monitoring styles", () => {
   it.each(["Stopped", "Offline", "Not Configured"] as const)("uses neutral gray styling for %s enterprises", (status) => {
@@ -16,6 +16,30 @@ describe("enterprise map monitoring styles", () => {
   ] as const)("uses the semantic palette for %s", (status, color, classColor) => {
     expect(getMonitoringStatusColor(status)).toBe(color);
     expect(getDarkMonitoringBadgeClass(status)).toContain(classColor);
+  });
+
+  it.each([
+    ["Fully Monitoring", "running"],
+    ["Partially Monitoring", "partial"],
+    ["Updates Delayed", "partial"],
+    ["Stopped", "stopped"],
+    ["Offline", "stopped"],
+    ["Not Configured", "stopped"],
+    ["Fault", "fault"],
+  ] as const)("shares the %s presentation with markers and directory badges", (status, tone) => {
+    const presentation = getMonitoringStatusPresentation(status);
+    expect(presentation.tone).toBe(tone);
+    expect(presentation.color).toBe(getMonitoringStatusColor(status));
+    expect(presentation.badgeClass).toBe(getDarkMonitoringBadgeClass(status));
+  });
+
+  it("publishes the directory legend from the authoritative marker tones", () => {
+    expect(monitoringStatusLegend).toEqual([
+      { label: "All Running", tone: "running" },
+      { label: "Partial", tone: "partial" },
+      { label: "Stopped", tone: "stopped" },
+      { label: "Fault", tone: "fault" },
+    ]);
   });
 
   it.each([

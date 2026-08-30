@@ -20,7 +20,7 @@ export function ReportDraftActions({ activeReport, isReadOnly, metricsError, val
         type="button"
         disabled={isSubmitDisabled}
         onClick={onSubmitPrompt}
-        className={`flex w-full items-center justify-center gap-2 rounded-sm border-2 py-2 text-xs font-bold tracking-wide uppercase shadow-md transition-colors ${
+        className={`flex w-full items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-bold tracking-wide uppercase shadow-[0_10px_24px_rgba(6,95,70,0.14)] transition-colors ${
           isSubmitDisabled ? "cursor-not-allowed border-gray-300 bg-gray-300 text-gray-500" : "border-[#065f46] bg-[#065f46] text-white hover:border-[#044a36] hover:bg-[#044a36]"
         }`}
       >
