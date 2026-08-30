@@ -91,23 +91,6 @@ html[data-boot-video-state="fallback"] .tanaw-boot-card video {
   opacity: 0;
 }
 
-.tanaw-boot-loader-mask {
-  position: absolute;
-  top: 80%;
-  left: 41%;
-  z-index: 3;
-  width: 18%;
-  height: 20%;
-  pointer-events: none;
-}
-
-.tanaw-boot-loader-mask::before {
-  content: "";
-  position: absolute;
-  inset: -14%;
-  background: radial-gradient(ellipse closest-side at center, #f8f8f4 0 46%, rgb(248 248 244 / 0.98) 62%, rgb(248 248 244 / 0.82) 74%, transparent 100%);
-}
-
 .tanaw-boot-progress {
   position: absolute;
   top: 78.34%;
