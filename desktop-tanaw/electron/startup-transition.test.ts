@@ -166,6 +166,7 @@ describe("desktop splash presentation", () => {
     const css = readFileSync(`${publicDirectory}splash.css`, "utf8");
     const script = readFileSync(`${publicDirectory}splash.js`, "utf8");
     const main = readFileSync(fileURLToPath(new URL("./main.ts", import.meta.url)), "utf8");
+    const preload = readFileSync(fileURLToPath(new URL("./preload.ts", import.meta.url)), "utf8");
 
     expect(html).toContain("tanaw-boot-progress");
     expect(html).toContain("tanaw-boot-progress__track");
@@ -198,6 +199,12 @@ describe("desktop splash presentation", () => {
     expect(main).toContain("screen.getPrimaryDisplay().workArea");
     expect(main).toContain("await prepareWindowForDisplay(splash)");
     expect(main).toContain("await prepareWindowForDisplay(win)");
+    expect(main).toContain('win.webContents.send("startup:revealed")');
+    expect(main).toContain('targetWebContents.on("did-finish-load"');
+    expect(main).toContain("startupTransition?.hasRevealed()");
+    expect(main).toContain('targetWebContents.send("startup:revealed")');
+    expect(preload).toContain('ipcRenderer.on("startup:revealed"');
+    expect(preload).toContain("onRevealed(listener");
     expect(main).not.toMatch(/\.maximize\(\);\s*\n\s*\w+\.show\(\)/);
   });
 

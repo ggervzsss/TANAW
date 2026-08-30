@@ -9,7 +9,10 @@ type MlServiceStatus = {
 };
 
 interface Window {
-  tanawStartup?: { ready: () => void };
+  tanawStartup?: {
+    onRevealed?: (listener: () => void) => () => void;
+    ready: () => void;
+  };
   tanawAuthSession?: {
     load: () => Promise<unknown | null>;
     save: (session: unknown, persist: boolean) => Promise<boolean>;

@@ -112,7 +112,21 @@ test("keeps typed Enterprise credentials on the dark auth surface", async ({ pag
 test("prepares both Enterprise login backgrounds before revealing the renderer", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("tanaw-enterprise-theme", "dark");
+    const startupWasAlreadyRevealed = window.sessionStorage.getItem("tanaw-e2e-startup-revealed") === "true";
     window.tanawStartup = {
+      onRevealed: (listener) => {
+        if (startupWasAlreadyRevealed) {
+          listener();
+          return () => undefined;
+        }
+
+        const handleReveal = () => {
+          window.sessionStorage.setItem("tanaw-e2e-startup-revealed", "true");
+          listener();
+        };
+        window.addEventListener("tanaw-e2e-startup-revealed", handleReveal);
+        return () => window.removeEventListener("tanaw-e2e-startup-revealed", handleReveal);
+      },
       ready: () => {
         const stage = document.querySelector<HTMLElement>("[data-auth-background-ready]");
         const images = Array.from(document.querySelectorAll<HTMLImageElement>("[data-auth-background-theme]"));
@@ -131,7 +145,7 @@ test("prepares both Enterprise login backgrounds before revealing the renderer",
   const stage = page.locator("[data-auth-background-ready]");
   const card = page.locator(".tanaw-auth-card");
   await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
-  await expect(card).toBeVisible();
+  await expect(card).toHaveCSS("opacity", "0");
   await expect(page.locator("[data-auth-background-theme]")).toHaveCount(2);
   expect(
     await page.locator("[data-auth-background-theme]").evaluateAll((images) =>
@@ -150,6 +164,8 @@ test("prepares both Enterprise login backgrounds before revealing the renderer",
     )
     .toEqual({ backgroundReady: true, imagesReady: true });
 
+  await page.evaluate(() => window.dispatchEvent(new Event("tanaw-e2e-startup-revealed")));
+  await expect(card).toHaveCSS("opacity", "1");
   await expect(card).toHaveCSS("transform", "none");
   const before = await card.boundingBox();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
@@ -163,7 +179,8 @@ test("prepares both Enterprise login backgrounds before revealing the renderer",
 
   await page.reload();
   await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
-  await expect(card).toBeVisible();
+  await expect(card).toHaveCSS("opacity", "1");
+  await expect(card).toHaveCSS("transform", "none");
 });
 
 test("restores the Enterprise cursor-following glow without interfering with authentication controls", async ({ page }) => {

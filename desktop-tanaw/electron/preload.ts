@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+let startupRevealed = false;
+const startupRevealListeners = new Set<() => void>();
+
+ipcRenderer.on("startup:revealed", () => {
+  startupRevealed = true;
+  for (const listener of startupRevealListeners) listener();
+  startupRevealListeners.clear();
+});
+
 contextBridge.exposeInMainWorld("tanawMlService", {
   getStatus() {
     return ipcRenderer.invoke("ml-service:get-status");
@@ -43,6 +52,17 @@ contextBridge.exposeInMainWorld("tanawAuthSession", {
 });
 
 contextBridge.exposeInMainWorld("tanawStartup", {
+  onRevealed(listener: () => void) {
+    if (startupRevealed) {
+      listener();
+      return () => undefined;
+    }
+
+    startupRevealListeners.add(listener);
+    return () => {
+      startupRevealListeners.delete(listener);
+    };
+  },
   ready() {
     ipcRenderer.send("startup:renderer-ready");
   },

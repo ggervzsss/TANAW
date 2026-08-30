@@ -281,6 +281,7 @@ async function revealMainWindow(reason: StartupRevealReason) {
   await prepareWindowForDisplay(win);
   if (!win || win.isDestroyed()) return;
   win.show();
+  win.webContents.send("startup:revealed");
   if (win.isMinimized()) {
     win.restore();
   }
@@ -319,6 +320,10 @@ function createWindow() {
   const targetWebContents = win.webContents;
   targetWebContents.setWindowOpenHandler(() => ({ action: "deny" }));
   targetWebContents.on("will-navigate", (event) => event.preventDefault());
+  targetWebContents.on("did-finish-load", () => {
+    if (!startupTransition?.hasRevealed()) return;
+    targetWebContents.send("startup:revealed");
+  });
   win.once("ready-to-show", showWindowWhenReady);
 
   win.on("close", (event) => {

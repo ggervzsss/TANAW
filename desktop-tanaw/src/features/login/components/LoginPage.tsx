@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, type SyntheticEvent, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ChangeEvent, type FormEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { AlertCircle, ArrowRight, ExternalLink, Eye, EyeOff, Headphones, LockKeyhole, MapPin, UserRound } from "lucide-react";
@@ -95,6 +95,18 @@ function CriticalLoginBackground({ onReady }: { onReady: () => void }) {
 
 const formatLockout = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
+function useStartupReveal() {
+  const [isRevealed, setIsRevealed] = useState(() => !window.tanawStartup?.onRevealed);
+
+  useEffect(() => {
+    const subscribeToReveal = window.tanawStartup?.onRevealed;
+    if (!subscribeToReveal) return undefined;
+    return subscribeToReveal(() => setIsRevealed(true));
+  }, []);
+
+  return isRevealed;
+}
+
 export function LoginPage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const location = useLocation();
@@ -124,6 +136,8 @@ export function LoginPage() {
   const [activeDialog, setActiveDialog] = useState<DialogMode>(null);
   const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLDivElement>();
   const [isBackgroundReady, setIsBackgroundReady] = useState(false);
+  const isStartupRevealed = useStartupReveal();
+  const shouldAnimateEntrance = isBackgroundReady && isStartupRevealed;
 
   if (isAuthenticated) {
     return <Navigate to={routePaths.enterpriseDashboard} replace />;
@@ -191,7 +205,12 @@ export function LoginPage() {
       <AuthThemeToggle />
 
       <section className="tanaw-auth-hero relative z-10 flex min-h-[min(42rem,calc(100svh-2rem))] items-end overflow-visible px-2 pb-10 text-white xl:pb-14">
-        <motion.div className="relative z-10 max-w-xl" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: "easeOut" }}>
+        <motion.div
+          className="relative z-10 max-w-xl"
+          initial={{ opacity: 0, y: 18 }}
+          animate={shouldAnimateEntrance ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+          transition={{ duration: 0.65, ease: "easeOut" }}
+        >
           <div className="tanaw-sampaguita-glow mb-5 inline-flex text-(--tanaw-gold)">
             <SampaguitaIcon className="h-8 w-8" />
           </div>
@@ -209,7 +228,7 @@ export function LoginPage() {
 
       <motion.form
         initial={{ opacity: 0, x: 18 }}
-        animate={{ opacity: 1, x: 0 }}
+        animate={shouldAnimateEntrance ? { opacity: 1, x: 0 } : { opacity: 0, x: 18 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
         onSubmit={handleSubmit}
         noValidate
