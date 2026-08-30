@@ -14,13 +14,13 @@ const enterpriseUser = {
 
 test("advances the desktop splash progress separator", async ({ page }) => {
   await page.goto("/splash.html");
-  const progressFill = page.locator(".tanaw-boot-progress__fill");
-  await expect(progressFill).toHaveCSS("width", "0px");
+  const progressRoot = page.locator("html");
+  await expect.poll(() => progressRoot.evaluate((element) => Number.parseFloat(getComputedStyle(element).getPropertyValue("--tanaw-boot-progress")))).toBe(0);
   await page.evaluate(() => {
     const splashWindow = window as typeof window & { tanawSplash?: { start: () => void } };
     splashWindow.tanawSplash?.start();
   });
-  await expect.poll(async () => Number.parseFloat(await progressFill.evaluate((element) => getComputedStyle(element).width))).toBeGreaterThan(1);
+  await expect.poll(() => progressRoot.evaluate((element) => Number.parseFloat(getComputedStyle(element).getPropertyValue("--tanaw-boot-progress")))).toBeGreaterThan(0);
 });
 
 const electronViewports = [

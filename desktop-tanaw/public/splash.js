@@ -16,6 +16,9 @@
   const setProgress = (progress) => {
     currentProgress = Math.max(currentProgress, Math.min(100, progress));
     root.style.setProperty("--tanaw-boot-progress", currentProgress.toFixed(3));
+    root.style.setProperty("--tanaw-boot-progress-left-scale", Math.min(1, currentProgress / 50).toFixed(4));
+    root.style.setProperty("--tanaw-boot-progress-right-scale", Math.max(0, (currentProgress - 50) / 50).toFixed(4));
+    root.style.setProperty("--tanaw-boot-progress-ornament-active", Math.min(1, Math.max(0, (currentProgress - 48) / 2)).toFixed(4));
   };
 
   const frame = (now) => {

@@ -184,11 +184,18 @@ describe("desktop splash presentation", () => {
     expect(css).not.toContain("0 -1px 0");
     expect(css).toContain("top: 78.34%");
     expect(css).not.toContain("background: rgb(248 248 244 / 0.08)");
-    expect(css).toContain("width: calc(var(--tanaw-boot-progress) * 1%)");
+    expect(css).toContain("--tanaw-boot-ornament-half-gap: 3.2%");
+    expect(css).toContain(".tanaw-boot-progress__fill::before");
+    expect(css).toContain(".tanaw-boot-progress__fill::after");
+    expect(css).toContain("transform: scaleX(var(--tanaw-boot-progress-left-scale))");
+    expect(css).toContain("transform: scaleX(var(--tanaw-boot-progress-right-scale))");
     expect(css).toMatch(/:root\s*{[^}]*--tanaw-boot-progress:\s*0;/s);
     expect(css.match(/html,\s*body,\s*#root\s*{[^}]*}/s)?.[0]).not.toContain("--tanaw-boot-progress");
     expect(css).toContain("prefers-reduced-motion");
     expect(script).toContain("maximumWaitingProgress = 97.5");
+    expect(script).toContain('"--tanaw-boot-progress-left-scale"');
+    expect(script).toContain('"--tanaw-boot-progress-right-scale"');
+    expect(script).toContain('"--tanaw-boot-progress-ornament-active"');
     expect(script).toContain("start()");
     expect(script).toContain("ready()");
     expect(script).toContain("ratio * ratio * (3 - 2 * ratio)");
@@ -215,10 +222,14 @@ describe("desktop splash presentation", () => {
     splash.api.ready();
     splash.frameAt(5_001);
     expect(splash.progress()).toBeCloseTo(50, 0);
+    expect(splash.leftScale()).toBe(1);
+    expect(splash.rightScale()).toBeCloseTo(0, 2);
+    expect(splash.ornamentActive()).toBe(1);
     splash.frameAt(9_900);
     expect(splash.progress()).toBeLessThan(100);
     splash.frameAt(10_000);
     expect(splash.progress()).toBe(100);
+    expect(splash.rightScale()).toBe(1);
   });
 
   it("holds near completion after ten seconds when readiness is late, then finishes once", () => {
@@ -284,6 +295,15 @@ function createSplashHarness() {
     },
     progress() {
       return Number(properties.get("--tanaw-boot-progress") ?? 0);
+    },
+    leftScale() {
+      return Number(properties.get("--tanaw-boot-progress-left-scale") ?? 0);
+    },
+    ornamentActive() {
+      return Number(properties.get("--tanaw-boot-progress-ornament-active") ?? 0);
+    },
+    rightScale() {
+      return Number(properties.get("--tanaw-boot-progress-right-scale") ?? 0);
     },
   };
 }

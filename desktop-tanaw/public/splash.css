@@ -1,5 +1,8 @@
 :root {
   --tanaw-boot-progress: 0;
+  --tanaw-boot-progress-left-scale: 0;
+  --tanaw-boot-progress-right-scale: 0;
+  --tanaw-boot-progress-ornament-active: 0;
 }
 
 html,
@@ -92,6 +95,7 @@ html[data-boot-video-state="fallback"] .tanaw-boot-card video {
 }
 
 .tanaw-boot-progress {
+  --tanaw-boot-ornament-half-gap: 3.2%;
   position: absolute;
   top: 78.34%;
   left: 33.65%;
@@ -113,17 +117,72 @@ html[data-boot-video-state="fallback"] .tanaw-boot-card video {
 .tanaw-boot-progress__track {
   background: linear-gradient(90deg, rgb(182 138 45 / 0.22), rgb(255 250 231 / 0.72) 50%, rgb(182 138 45 / 0.22));
   box-shadow: 0 0 5px rgb(182 138 45 / 0.12);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 0 calc(50% - var(--tanaw-boot-ornament-half-gap)),
+    transparent calc(50% - var(--tanaw-boot-ornament-half-gap)) calc(50% + var(--tanaw-boot-ornament-half-gap)),
+    #000 calc(50% + var(--tanaw-boot-ornament-half-gap)) 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    #000 0 calc(50% - var(--tanaw-boot-ornament-half-gap)),
+    transparent calc(50% - var(--tanaw-boot-ornament-half-gap)) calc(50% + var(--tanaw-boot-ornament-half-gap)),
+    #000 calc(50% + var(--tanaw-boot-ornament-half-gap)) 100%
+  );
 }
 
 .tanaw-boot-progress__fill {
-  width: calc(var(--tanaw-boot-progress) * 1%);
-  background: linear-gradient(90deg, var(--tanaw-emerald), var(--tanaw-gold-deep) 58%, rgb(255 247 214 / 0.96));
+  overflow: visible;
+}
+
+.tanaw-boot-progress__fill::before,
+.tanaw-boot-progress__fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 1.5px;
+  border-radius: 999px;
   box-shadow: 0 0 5px rgb(215 179 90 / 0.42);
-  transition: width 80ms linear;
+  transform-origin: left center;
+  transition: transform 80ms linear;
+}
+
+.tanaw-boot-progress__fill::before {
+  left: 0;
+  width: calc(50% - var(--tanaw-boot-ornament-half-gap));
+  background: linear-gradient(90deg, var(--tanaw-emerald), var(--tanaw-gold-deep));
+  transform: scaleX(var(--tanaw-boot-progress-left-scale));
+}
+
+.tanaw-boot-progress__fill::after {
+  left: calc(50% + var(--tanaw-boot-ornament-half-gap));
+  width: calc(50% - var(--tanaw-boot-ornament-half-gap));
+  background: linear-gradient(90deg, var(--tanaw-gold-deep), rgb(255 247 214 / 0.96));
+  transform: scaleX(var(--tanaw-boot-progress-right-scale));
+}
+
+.tanaw-boot-progress::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--tanaw-boot-ornament-half-gap) * 2);
+  min-width: 0.625rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 247 214 / 0.72) 0%, rgb(215 179 90 / 0.2) 46%, transparent 72%);
+  opacity: var(--tanaw-boot-progress-ornament-active);
+  filter: blur(0.5px);
+  transform: translate(-50%, -50%) scale(calc(0.82 + var(--tanaw-boot-progress-ornament-active) * 0.18));
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tanaw-boot-progress__fill {
+  .tanaw-boot-progress__fill::before,
+  .tanaw-boot-progress__fill::after,
+  .tanaw-boot-progress::after {
     transition: none;
   }
 }
