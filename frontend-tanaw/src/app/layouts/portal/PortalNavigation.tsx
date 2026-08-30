@@ -23,6 +23,8 @@ export function DesktopPortalNavigation({ entries, isDark, openMenuId, pathname,
   const active = "text-white";
   const inactive = isDark ? "text-white/72 hover:text-white" : "text-white/84 hover:text-white";
   const showGlass = (id: string, element: HTMLElement) => {
+    const currentTarget = glassTarget.get();
+    if (currentTarget?.mode === "drag" || currentTarget?.mode === "pull" || currentTarget?.mode === "recoil") return;
     const navigation = element.closest<HTMLElement>("[data-liquid-glass-navigation]");
     if (!navigation) return;
     const navigationRect = navigation.getBoundingClientRect();

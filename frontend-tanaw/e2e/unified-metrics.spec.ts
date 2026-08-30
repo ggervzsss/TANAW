@@ -374,9 +374,14 @@ test("glides one neutral refractive IT glass capsule through navigation gaps", a
   expect(pulledBox!.width).toBeLessThan(systemBox!.width + 38);
   expect(Math.abs(pulledBox!.x - (systemBox!.x - 4))).toBeLessThan(2.5);
   expect(pulledBox!.x + pulledBox!.width - (systemBox!.x + systemBox!.width)).toBeGreaterThan(18);
-  const pulledOpticsBox = await foregroundOptics.boundingBox();
-  expect(pulledOpticsBox).not.toBeNull();
-  expect(Math.abs(pulledOpticsBox!.width - pulledBox!.width)).toBeLessThan(1.5);
+  const pulledLayerWidths = await page.evaluate(() => {
+    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
+    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
+    return { material: material?.getBoundingClientRect().width ?? null, optics: optics?.getBoundingClientRect().width ?? null };
+  });
+  expect(pulledLayerWidths.material).not.toBeNull();
+  expect(pulledLayerWidths.optics).not.toBeNull();
+  expect(Math.abs(pulledLayerWidths.optics! - pulledLayerWidths.material!)).toBeLessThan(1.5);
   const pulledRadii = await page.evaluate(() => {
     const material = document.querySelector("[data-topbar-glass-indicator='true']");
     const optics = document.querySelector("[data-topbar-glass-optics='foreground-endcaps']");

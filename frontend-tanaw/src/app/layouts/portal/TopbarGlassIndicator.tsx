@@ -1,4 +1,4 @@
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "motion/react";
+import { motion, useMotionValue, useReducedMotion, useSpring, useTransform, useVelocity } from "motion/react";
 import type { MotionValue } from "motion/react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef } from "react";
 import type { CSSProperties } from "react";
@@ -79,11 +79,20 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
   const targetPull = useMotionValue(0);
   const renderedCenter = useSpring(targetCenter, { stiffness: 610, damping: 44, mass: 0.4 });
   const renderedTop = useSpring(targetTop, { stiffness: 680, damping: 48, mass: 0.36 });
-  const renderedWidth = useSpring(targetWidth, { stiffness: 640, damping: 38, mass: 0.4 });
+  const renderedWidth = useSpring(targetWidth, { stiffness: 760, damping: 36, mass: 0.36 });
   const renderedHeight = useSpring(targetHeight, { stiffness: 680, damping: 46, mass: 0.36 });
   const renderedOpacity = useSpring(targetOpacity, { stiffness: 560, damping: 44, mass: 0.3 });
   const renderedPull = useSpring(targetPull, { stiffness: 470, damping: 34, mass: 0.32 });
   const renderedLeft = useTransform([renderedCenter, renderedWidth], ([center, width]) => Number(center) - Number(width) / 2);
+  const centerVelocity = useVelocity(renderedCenter);
+  const widthVelocity = useVelocity(renderedWidth);
+  const renderedEdgeOpacity = useTransform([centerVelocity, widthVelocity, renderedOpacity], ([centerSpeed, widthSpeed, opacity]) => {
+    if (shouldReduceMotion) return 0;
+    const center = Number(centerSpeed);
+    const halfWidth = Number(widthSpeed) / 2;
+    const edgeVelocity = Math.max(Math.abs(center - halfWidth), Math.abs(center + halfWidth));
+    return clampUnit((edgeVelocity - 4) / 160) * Number(opacity);
+  });
   const inverseLeft = useTransform(renderedLeft, (left) => -left);
   const inverseTop = useTransform(renderedTop, (top) => -top);
   const leftPullIntensity = useTransform(renderedPull, (pull) => clampUnit(-pull));
@@ -265,7 +274,8 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
         data-topbar-glass-edge="replicated-lens-refraction"
         data-topbar-glass-edge-thickness="feathered-lens-band"
         data-topbar-glass-edge-band="outer-14px"
-        data-topbar-glass-edge-distortion="visible"
+        data-topbar-glass-edge-distortion="motion-gated"
+        data-topbar-glass-rest-optics="clear"
         data-topbar-glass-motion={shouldReduceMotion ? "reduced" : "raf-spring"}
         data-topbar-glass-renderer="motion-value-raf"
         data-topbar-glass-geometry="continuous-capsule"
@@ -297,6 +307,7 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
       </motion.span>
       <motion.span
         data-topbar-glass-optics="foreground-endcaps"
+        data-topbar-glass-optics-activation="rendered-edge-velocity"
         data-topbar-glass-edge-zone="feathered"
         aria-hidden="true"
         style={{
@@ -304,7 +315,7 @@ export function TopbarLiquidGlass({ isDark, target }: { isDark: boolean; target:
           y: renderedTop,
           width: renderedWidth,
           height: renderedHeight,
-          opacity: renderedOpacity,
+          opacity: renderedEdgeOpacity,
           borderRadius: renderedRadius,
           ...edgeBackdrop,
         }}

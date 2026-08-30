@@ -543,9 +543,14 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   expect(pulledBox!.width).toBeGreaterThan(reportsBox!.width + 24);
   expect(pulledBox!.width).toBeLessThan(reportsBox!.width + 38);
   expect(pulledBox!.x + pulledBox!.width - (reportsBox!.x + reportsBox!.width)).toBeGreaterThan(18);
-  const pulledOpticsBox = await foregroundOptics.boundingBox();
-  expect(pulledOpticsBox).not.toBeNull();
-  expect(Math.abs(pulledOpticsBox!.width - pulledBox!.width)).toBeLessThan(1.5);
+  const pulledLayerWidths = await page.evaluate(() => {
+    const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");
+    const optics = document.querySelector<HTMLElement>("[data-topbar-glass-optics='foreground-endcaps']");
+    return { material: material?.getBoundingClientRect().width ?? null, optics: optics?.getBoundingClientRect().width ?? null };
+  });
+  expect(pulledLayerWidths.material).not.toBeNull();
+  expect(pulledLayerWidths.optics).not.toBeNull();
+  expect(Math.abs(pulledLayerWidths.optics! - pulledLayerWidths.material!)).toBeLessThan(1.5);
   const pulledRadii = await page.evaluate(() => {
     const material = document.querySelector("[data-topbar-glass-indicator='true']");
     const optics = document.querySelector("[data-topbar-glass-optics='foreground-endcaps']");
