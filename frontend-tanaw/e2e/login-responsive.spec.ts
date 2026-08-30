@@ -243,25 +243,25 @@ test("keeps every web login card corner rounded in light and dark responsive lay
   await assertUniformCorners();
 });
 
-test("keeps the Swarm Cursor isolated from shared login interactions", async ({ page }) => {
+test("restores the cursor-following glow without interfering with login controls", async ({ page }) => {
   await page.goto("/login");
 
-  const swarm = page.locator("[data-swarm-cursor='true']");
-  await expect(swarm).toHaveCount(1);
-  await expect(swarm).toHaveAttribute("data-swarm-visual", "firefly");
-  await expect(swarm).toHaveAttribute("data-swarm-algorithm", "reactbits-noise-field");
-  await expect(swarm).toHaveAttribute("data-swarm-count", "8");
-  await expect(swarm).toHaveAttribute("data-swarm-size", "5");
-  await expect(swarm).toHaveAttribute("data-swarm-radius-scale", "2.1");
-  await expect(swarm).toHaveAttribute("data-swarm-speed", "2.5");
-  await expect(swarm).toHaveAttribute("data-swarm-trail", "0.75");
-  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(0);
-  await expect.poll(() => page.locator(".swarm-cursor__canvas").count()).toBeLessThanOrEqual(1);
-
-  const previewBox = await swarm.boundingBox();
-  expect(previewBox).not.toBeNull();
-  await page.mouse.move(previewBox!.x + previewBox!.width * 0.35, previewBox!.y + previewBox!.height * 0.45);
-  await page.waitForTimeout(500);
+  const stage = page.locator(".tanaw-login-stage");
+  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(1);
+  await expect(page.locator("[data-swarm-cursor='true'], .swarm-cursor__canvas")).toHaveCount(0);
+  const stageBox = await stage.boundingBox();
+  expect(stageBox).not.toBeNull();
+  const target = { x: stageBox!.x + stageBox!.width * 0.35, y: stageBox!.y + stageBox!.height * 0.45 };
+  await page.mouse.move(target.x, target.y);
+  await expect
+    .poll(async () => {
+      const position = await stage.evaluate((element) => ({
+        x: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--hero-glow-x")),
+        y: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--hero-glow-y")),
+      }));
+      return Math.max(Math.abs(position.x - (target.x - stageBox!.x)), Math.abs(position.y - (target.y - stageBox!.y)));
+    })
+    .toBeLessThan(2);
 
   const email = page.getByLabel("Email", { exact: true });
   const password = page.getByLabel("Password", { exact: true });
@@ -275,36 +275,10 @@ test("keeps the Swarm Cursor isolated from shared login interactions", async ({ 
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Close password recovery" }).click();
 
-  const box = await swarm.boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.click(box!.x + box!.width * 0.35, box!.y + box!.height * 0.45);
-  await expect(swarm).toHaveAttribute("data-swarm-interaction", "scatter");
   await expect(email).toHaveValue("admin@example.com");
 
   await page.goto("/activate-account");
-  await expect(swarm).toHaveCount(0);
-  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
-});
-
-test("disables active Swarm motion for reduced-motion users without hiding login", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/login");
-  await expect(page.locator("[data-swarm-cursor='true']")).toHaveCount(1);
-  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
-  await page.getByLabel("Email", { exact: true }).fill("staff@example.com");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
-});
-
-test("keeps shared authentication usable when WebGL is unavailable", async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", { configurable: true, value: () => null });
-  });
-  await page.goto("/login");
-  await expect(page.locator("[data-swarm-state='unavailable']")).toHaveCount(1);
-  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
-  await page.getByLabel("Email", { exact: true }).fill("staff@example.com");
-  await page.getByLabel("Password", { exact: true }).fill("Authentication remains available 2026");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
+  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(1);
 });
 
 test("keeps an explicit login theme through authentication, reload, and logout", async ({ page }) => {

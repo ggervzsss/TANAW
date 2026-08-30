@@ -12,6 +12,17 @@ const enterpriseUser = {
   buildingCapacity: 100,
 };
 
+test("advances the desktop splash progress separator", async ({ page }) => {
+  await page.goto("/splash.html");
+  const progressFill = page.locator(".tanaw-boot-progress__fill");
+  await expect(progressFill).toHaveCSS("width", "0px");
+  await page.evaluate(() => {
+    const splashWindow = window as typeof window & { tanawSplash?: { start: () => void } };
+    splashWindow.tanawSplash?.start();
+  });
+  await expect.poll(async () => Number.parseFloat(await progressFill.evaluate((element) => getComputedStyle(element).width))).toBeGreaterThan(1);
+});
+
 const electronViewports = [
   { width: 800, height: 500 },
   { width: 1100, height: 720 },
@@ -155,38 +166,25 @@ test("prepares both Enterprise login backgrounds before revealing the renderer",
   await expect(card).toBeVisible();
 });
 
-test("keeps the Enterprise Swarm Cursor isolated from authentication controls", async ({ page }) => {
-  let signedIn = false;
-  await page.route("**/auth/login", (route) => {
-    signedIn = true;
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "swarm-cleanup-token", user: enterpriseUser }) });
-  });
-  await page.route("**/auth/session", (route) =>
-    route.fulfill({
-      status: signedIn ? 200 : 401,
-      contentType: "application/json",
-      body: JSON.stringify(signedIn ? { token: "swarm-cleanup-token", user: enterpriseUser } : { detail: "Not authenticated" }),
-    }),
-  );
-  await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(enterpriseUser) }));
+test("restores the Enterprise cursor-following glow without interfering with authentication controls", async ({ page }) => {
   await page.goto("/#/login");
 
-  const swarm = page.locator("[data-swarm-cursor='true']");
-  await expect(swarm).toHaveCount(1);
-  await expect(swarm).toHaveAttribute("data-swarm-visual", "firefly");
-  await expect(swarm).toHaveAttribute("data-swarm-algorithm", "reactbits-noise-field");
-  await expect(swarm).toHaveAttribute("data-swarm-count", "8");
-  await expect(swarm).toHaveAttribute("data-swarm-size", "5");
-  await expect(swarm).toHaveAttribute("data-swarm-radius-scale", "2.1");
-  await expect(swarm).toHaveAttribute("data-swarm-speed", "2.5");
-  await expect(swarm).toHaveAttribute("data-swarm-trail", "0.75");
-  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(0);
-  await expect.poll(() => page.locator(".swarm-cursor__canvas").count()).toBeLessThanOrEqual(1);
-
-  const previewBox = await swarm.boundingBox();
-  expect(previewBox).not.toBeNull();
-  await page.mouse.move(previewBox!.x + previewBox!.width * 0.35, previewBox!.y + previewBox!.height * 0.45);
-  await page.waitForTimeout(500);
+  const stage = page.locator(".tanaw-login-stage");
+  await expect(page.locator(".tanaw-stage-glow")).toHaveCount(1);
+  await expect(page.locator("[data-swarm-cursor='true'], .swarm-cursor__canvas")).toHaveCount(0);
+  const stageBox = await stage.boundingBox();
+  expect(stageBox).not.toBeNull();
+  const target = { x: stageBox!.x + stageBox!.width * 0.35, y: stageBox!.y + stageBox!.height * 0.45 };
+  await page.mouse.move(target.x, target.y);
+  await expect
+    .poll(async () => {
+      const position = await stage.evaluate((element) => ({
+        x: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--hero-glow-x")),
+        y: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--hero-glow-y")),
+      }));
+      return Math.max(Math.abs(position.x - (target.x - stageBox!.x)), Math.abs(position.y - (target.y - stageBox!.y)));
+    })
+    .toBeLessThan(2);
 
   const identifier = page.getByPlaceholder("Enter username or registered email");
   const password = page.getByPlaceholder("Enter your password");
@@ -200,36 +198,7 @@ test("keeps the Enterprise Swarm Cursor isolated from authentication controls", 
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Close dialog" }).click();
 
-  const box = await swarm.boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.click(box!.x + box!.width * 0.35, box!.y + box!.height * 0.45);
-  await expect(swarm).toHaveAttribute("data-swarm-interaction", "scatter");
   await expect(identifier).toHaveValue("enterprise@example.com");
-
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
-  await expect(swarm).toHaveCount(0);
-  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
-});
-
-test("disables active Enterprise Swarm motion for reduced-motion users", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/#/login");
-  await expect(page.locator("[data-swarm-cursor='true']")).toHaveCount(1);
-  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
-  await page.getByPlaceholder("Enter username or registered email").fill("enterprise@example.com");
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
-});
-
-test("keeps Enterprise authentication usable when WebGL is unavailable", async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", { configurable: true, value: () => null });
-  });
-  await page.goto("/#/login");
-  await expect(page.locator("[data-swarm-state='unavailable']")).toHaveCount(1);
-  await expect(page.locator(".swarm-cursor__canvas")).toHaveCount(0);
-  await page.getByPlaceholder("Enter username or registered email").fill("enterprise@example.com");
-  await page.getByPlaceholder("Enter your password").fill("Authentication remains available 2026");
   await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
 });
 

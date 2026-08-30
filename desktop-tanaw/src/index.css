@@ -797,6 +797,46 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   }
 }
 
+.tanaw-stage-glow {
+  pointer-events: none;
+  contain: paint;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 17% 78%, rgb(3 61 36 / 0.58), transparent 28rem), radial-gradient(ellipse at 48% 76%, rgb(6 78 47 / 0.2), transparent 21rem);
+  opacity: 0.94;
+  mix-blend-mode: screen;
+  transition: opacity 180ms ease;
+  animation: tanaw-stage-aura 7.5s ease-in-out infinite;
+}
+
+.tanaw-stage-glow::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  background:
+    radial-gradient(ellipse at 24% 68%, rgb(215 179 90 / 0.14), transparent 30%), radial-gradient(ellipse at 42% 52%, rgb(255 255 255 / 0.08), transparent 34%),
+    linear-gradient(115deg, transparent 18%, rgb(255 255 255 / 0.12) 42%, transparent 64%);
+  opacity: 0.62;
+  transform: translate3d(-2%, 1%, 0) rotate(-1.5deg);
+  animation: tanaw-ambient-shimmer 12s ease-in-out infinite alternate;
+}
+
+.tanaw-stage-glow::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(22rem, 44vw, 48rem);
+  height: clamp(22rem, 44vw, 48rem);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(255 242 185 / 0.8) 0, rgb(255 231 153 / 0.42) 5.5rem, rgb(15 107 67 / 0.22) 14rem, transparent 68%);
+  opacity: 0.9;
+  transform: translate3d(calc(var(--hero-glow-x, 28vw) - 50%), calc(var(--hero-glow-y, 72vh) - 50%), 0);
+  transform-origin: center;
+  animation: tanaw-cursor-ripple 4.8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 .tanaw-stage-particles {
   pointer-events: none;
   overflow: hidden;
@@ -884,6 +924,42 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
   }
 }
 
+@keyframes tanaw-stage-aura {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes tanaw-ambient-shimmer {
+  0% {
+    transform: translate3d(-3%, 1%, 0) rotate(-1.5deg);
+    opacity: 0.46;
+  }
+
+  100% {
+    transform: translate3d(3%, -1%, 0) rotate(1.5deg);
+    opacity: 0.68;
+  }
+}
+
+@keyframes tanaw-cursor-ripple {
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: translate3d(calc(var(--hero-glow-x, 28vw) - 50%), calc(var(--hero-glow-y, 72vh) - 50%), 0) scale(0.995);
+  }
+
+  50% {
+    opacity: 0.78;
+    transform: translate3d(calc(var(--hero-glow-x, 28vw) - 50%), calc(var(--hero-glow-y, 72vh) - 50%), 0) scale(1.01);
+  }
+}
+
 @keyframes tanaw-sampaguita-breathe {
   0%,
   100% {
@@ -912,8 +988,15 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .tanaw-hero-particle,
   .tanaw-sampaguita-glow,
-  .tanaw-gold-shimmer::after {
+  .tanaw-gold-shimmer::after,
+  .tanaw-stage-glow,
+  .tanaw-stage-glow::before,
+  .tanaw-stage-glow::after {
     animation: none;
+  }
+
+  .tanaw-stage-glow {
+    transition: none;
   }
 
   .tanaw-login-photo__image,
@@ -940,6 +1023,11 @@ html.dark .tanaw-auth-theme-toggle:focus-visible {
 @media (max-height: 720px) {
   .tanaw-stage-particles {
     display: none;
+  }
+
+  .tanaw-stage-glow::before {
+    opacity: 0.42;
+    animation: none;
   }
 }
 

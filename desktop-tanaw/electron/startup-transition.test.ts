@@ -180,7 +180,12 @@ describe("desktop splash presentation", () => {
     expect(css).not.toContain("box-shadow: 0 1px 0");
     expect(css).not.toContain("0 -1px 0");
     expect(css).toContain("top: 78.34%");
+    expect(css).toContain("ellipse closest-side at center");
+    expect(css).toContain("#f8f8f4 0 46%");
+    expect(css).not.toContain("background: rgb(248 248 244 / 0.08)");
     expect(css).toContain("width: calc(var(--tanaw-boot-progress) * 1%)");
+    expect(css).toMatch(/:root\s*{[^}]*--tanaw-boot-progress:\s*0;/s);
+    expect(css.match(/html,\s*body,\s*#root\s*{[^}]*}/s)?.[0]).not.toContain("--tanaw-boot-progress");
     expect(css).toContain("prefers-reduced-motion");
     expect(script).toContain("maximumWaitingProgress = 97.5");
     expect(script).toContain("start()");
@@ -190,6 +195,10 @@ describe("desktop splash presentation", () => {
     expect(script).toContain("complete()");
     expect(main).toContain("window.tanawSplash?.start?.()");
     expect(main).toContain("window.tanawSplash?.ready?.()");
+    expect(main).toContain("screen.getPrimaryDisplay().workArea");
+    expect(main).toContain("await prepareWindowForDisplay(splash)");
+    expect(main).toContain("await prepareWindowForDisplay(win)");
+    expect(main).not.toMatch(/\.maximize\(\);\s*\n\s*\w+\.show\(\)/);
   });
 
   it("drives the separator from left to midpoint to completion only after readiness", () => {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, nativeImage, net, protocol, Tray } from "electron";
+import { app, BrowserWindow, Menu, nativeImage, net, protocol, screen, Tray } from "electron";
 import { existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -45,6 +45,8 @@ let startupTransition: StartupTransitionController | null = null;
 const TRAY_ICON_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNgi3f7TwlmGDVg1IBRA4aLAQAdsKoQzBu6fQAAAABJRU5ErkJggg==";
 const MAIN_WINDOW_BACKGROUND_COLOR = "#f4f8f5";
 const SPLASH_WINDOW_BACKGROUND_COLOR = "#f7f7f3";
+const WINDOW_MAXIMIZE_SETTLE_MS = 80;
+const WINDOW_MAXIMIZE_TIMEOUT_MS = 1000;
 
 if (process.platform === "linux") {
   // TANAW's camera analysis runs in the Python ML service. Electron only renders
@@ -157,25 +159,59 @@ function getSplashPath() {
   return path.join(process.env.VITE_PUBLIC, "splash.html");
 }
 
+function getStartupWindowBounds() {
+  const { height, width, x, y } = screen.getPrimaryDisplay().workArea;
+  return { height, width, x, y };
+}
+
+function prepareWindowForDisplay(targetWindow: BrowserWindow) {
+  if (targetWindow.isDestroyed() || targetWindow.isMaximized()) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      targetWindow.removeListener("maximize", settleAfterMaximize);
+      resolve();
+    };
+    const settleAfterMaximize = () => {
+      if (settleTimer) return;
+      settleTimer = setTimeout(finish, WINDOW_MAXIMIZE_SETTLE_MS);
+    };
+
+    targetWindow.once("maximize", settleAfterMaximize);
+    timeoutTimer = setTimeout(finish, WINDOW_MAXIMIZE_TIMEOUT_MS);
+    targetWindow.maximize();
+
+    // Some Linux window managers update this state before emitting the event.
+    if (targetWindow.isMaximized()) settleAfterMaximize();
+  });
+}
+
 function createSplashWindow() {
   const splashPath = getSplashPath();
   if (!existsSync(splashPath)) return false;
 
   const splash = new BrowserWindow({
     backgroundColor: SPLASH_WINDOW_BACKGROUND_COLOR,
-    height: 900,
     icon: getWindowIcon(),
     minHeight: 500,
     minWidth: 800,
     show: false,
     title: "TANAW",
-    width: 1440,
+    ...getStartupWindowBounds(),
   });
   splashWindow = splash;
 
-  splash.once("ready-to-show", () => {
+  splash.once("ready-to-show", async () => {
     if (splash.isDestroyed() || startupTransition?.hasRevealed()) return;
-    splash.maximize();
+    await prepareWindowForDisplay(splash);
+    if (splash.isDestroyed() || startupTransition?.hasRevealed()) return;
     splash.show();
     void splash.webContents
       .executeJavaScript("window.tanawSplash?.start?.()", true)
@@ -222,8 +258,7 @@ function isNavigationAbort(error: unknown) {
 
 function showWindowWhenReady() {
   if (startupTransition?.hasRevealed()) {
-    win?.maximize();
-    showMainWindow();
+    void revealMainWindow("ready");
     return;
   }
   startupTransition?.markMainReady();
@@ -243,7 +278,8 @@ async function revealMainWindow(reason: StartupRevealReason) {
   }
 
   if (!win || win.isDestroyed()) return;
-  win.maximize();
+  await prepareWindowForDisplay(win);
+  if (!win || win.isDestroyed()) return;
   win.show();
   if (win.isMinimized()) {
     win.restore();
@@ -262,14 +298,13 @@ function createWindow() {
   }
 
   win = new BrowserWindow({
-    width: 1440,
-    height: 900,
     minWidth: 800,
     minHeight: 500,
     backgroundColor: MAIN_WINDOW_BACKGROUND_COLOR,
     icon: getWindowIcon(),
     show: false,
     title: "TANAW Enterprise Desktop",
+    ...getStartupWindowBounds(),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       backgroundThrottling: false,
