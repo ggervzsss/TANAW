@@ -20,5 +20,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["deployment.config.ts", "deployment.config.test.ts", "scripts/validate-deployment-config.ts", "vite.config.ts"]
+  "include": ["deployment.config.ts", "deployment.config.test.ts", "map-tiles.config.ts", "map-tiles.config.test.ts", "scripts/validate-deployment-config.ts", "vite.config.ts"]
 }

@@ -1,4 +1,4 @@
-import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
+import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config.ts";
 
 export const LOCAL_API_BASE_URL = "http://localhost:8000";
 export const TANAW_DESKTOP_ORIGIN = "tanaw-app://desktop";
@@ -37,6 +37,14 @@ export function resolveApiBaseUrl(configuredValue: string | undefined, { publicD
   }
 
   return normalizeHttpUrl(candidate, "VITE_API_BASE_URL", publicDeployment);
+}
+
+export function resolveCartoBasemapApiKey(configuredValue: string | undefined, { publicDeployment }: ApiBaseUrlOptions): string {
+  const apiKey = configuredValue?.trim() ?? "";
+  if (publicDeployment && !apiKey) {
+    throw new Error("VITE_CARTO_BASEMAP_API_KEY is required for a public TANAW deployment.");
+  }
+  return apiKey;
 }
 
 export function deriveConnectSources(apiBaseUrl: string): string[] {

@@ -70,10 +70,11 @@ The frontend expects the backend to provide:
 - activity logs and alert data;
 - CORS access for the web portal origin.
 
-Runtime API configuration is controlled through `VITE_API_BASE_URL`. The root
-Docker Compose and TL;DR guide document the expected local value and startup
-flow. This project's `.env.example` is intentionally a production deployment
-template and contains only that compiled API URL.
+Runtime API configuration is controlled through `VITE_API_BASE_URL`, while
+`VITE_CARTO_BASEMAP_API_KEY` authenticates the CARTO raster tiles rendered by
+Leaflet. The root Docker Compose and TL;DR guide document the expected local
+values and startup flow. This project's `.env.example` is intentionally a
+production deployment template and contains only these compiled browser values.
 
 ## Deployment Origins And CSP
 
@@ -93,26 +94,29 @@ the headless toast API and maintained application CSS, so production does not
 depend on runtime CSS-in-JS style injection.
 
 Vercel sets `VERCEL=1`, which makes the build fail if `VITE_API_BASE_URL` is
-missing, local/private, non-HTTPS, or malformed. For another public static or
-Docker host, set `TANAW_PUBLIC_DEPLOYMENT=true` in the build environment to
-enable the same guard. Local development and the production-like local Compose
-stack may leave this flag false and use `http://localhost:8000`.
+missing, local/private, non-HTTPS, or malformed, or if
+`VITE_CARTO_BASEMAP_API_KEY` is missing. For another public static or Docker
+host, set `TANAW_PUBLIC_DEPLOYMENT=true` in the build environment to enable the
+same guards. Local development and the production-like local Compose stack may
+leave this flag false and use `http://localhost:8000`.
 
 These values form one deployment unit and must change together:
 
-| Configuration                 | Current hosted deployment           | Future custom-domain example    |
-| ----------------------------- | ----------------------------------- | ------------------------------- |
-| Portal URL                    | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
-| Frontend `VITE_API_BASE_URL`  | `https://tanaw.onrender.com`        | `https://api.tanaw-sanpedro.ph` |
-| Backend `FRONTEND_PUBLIC_URL` | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
-| Backend `CORS_ORIGINS`        | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
-| Generated CSP sockets         | `wss://tanaw.onrender.com`          | `wss://api.tanaw-sanpedro.ph`   |
+| Configuration                         | Current hosted deployment           | Future custom-domain example    |
+| ------------------------------------- | ----------------------------------- | ------------------------------- |
+| Portal URL                            | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
+| Frontend `VITE_API_BASE_URL`          | `https://tanaw.onrender.com`        | `https://api.tanaw-sanpedro.ph` |
+| Frontend `VITE_CARTO_BASEMAP_API_KEY` | CARTO-issued browser key            | CARTO-issued browser key        |
+| Backend `FRONTEND_PUBLIC_URL`         | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
+| Backend `CORS_ORIGINS`                | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
+| Generated CSP sockets                 | `wss://tanaw.onrender.com`          | `wss://api.tanaw-sanpedro.ph`   |
 
-Before a deployment, validate the three operator-controlled values from this
+Before a deployment, validate the four operator-controlled values from this
 directory:
 
 ```shell
 VITE_API_BASE_URL=https://tanaw.onrender.com \
+VITE_CARTO_BASEMAP_API_KEY=your-carto-basemap-key \
 FRONTEND_PUBLIC_URL=https://tanaw-sanpedro.vercel.app \
 CORS_ORIGINS=https://tanaw-sanpedro.vercel.app \
 npm run deployment:validate
@@ -120,8 +124,9 @@ npm run deployment:validate
 
 Then rebuild the frontend and redeploy the backend. `FRONTEND_PUBLIC_URL`
 controls activation and email-ownership links, `CORS_ORIGINS` authorizes the
-browser origin at the API, and `VITE_API_BASE_URL` controls REST, WebSocket, and
-CSP destinations. A DNS change alone is therefore not sufficient.
+browser origin at the API, `VITE_API_BASE_URL` controls REST, WebSocket, and CSP
+destinations, and `VITE_CARTO_BASEMAP_API_KEY` authenticates browser tile
+requests. A DNS change alone is therefore not sufficient.
 
 ## UI And State Model
 

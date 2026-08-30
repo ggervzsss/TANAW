@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CARTO_TILE_IMAGE_SOURCES } from "./map-tiles.config";
-import { LOCAL_API_BASE_URL, TANAW_DESKTOP_ORIGIN, buildContentSecurityPolicy, resolveApiBaseUrl, validateCoordinatedDeployment } from "./deployment.config";
+import { LOCAL_API_BASE_URL, TANAW_DESKTOP_ORIGIN, buildContentSecurityPolicy, resolveApiBaseUrl, resolveCartoBasemapApiKey, validateCoordinatedDeployment } from "./deployment.config";
 
 type VercelHeaderRule = {
   source: string;
@@ -63,6 +63,12 @@ describe("deployment origin configuration", () => {
     expect(resolveApiBaseUrl(undefined, { publicDeployment: false })).toBe(LOCAL_API_BASE_URL);
     expect(() => resolveApiBaseUrl(undefined, { publicDeployment: true })).toThrow("VITE_API_BASE_URL is required");
     expect(() => resolveApiBaseUrl("http://localhost:8000", { publicDeployment: true })).toThrow("public HTTPS URL");
+  });
+
+  it("requires a CARTO basemap key only for public deployments", () => {
+    expect(resolveCartoBasemapApiKey(undefined, { publicDeployment: false })).toBe("");
+    expect(resolveCartoBasemapApiKey(" carto-test-key ", { publicDeployment: true })).toBe("carto-test-key");
+    expect(() => resolveCartoBasemapApiKey("", { publicDeployment: true })).toThrow("VITE_CARTO_BASEMAP_API_KEY is required");
   });
 
   it("uses a nonce for Vite development styles without weakening production styles", () => {

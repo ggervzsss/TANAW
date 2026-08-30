@@ -309,12 +309,14 @@ try {
 }
 ```
 
-Open `.env` in a text editor and replace the sample PostgreSQL password and JWT
-secret. Use the same PostgreSQL password in `POSTGRES_PASSWORD` and inside
-`DATABASE_URL`. The root template intentionally contains only local credentials
-and the optional Resend settings developers commonly change:
+Open `.env` in a text editor, paste the CARTO basemap key, and replace the
+sample PostgreSQL password and JWT secret. Use the same PostgreSQL password in
+`POSTGRES_PASSWORD` and inside `DATABASE_URL`. The root template contains the
+operator-controlled values developers commonly change:
 
 ```dotenv
+VITE_CARTO_BASEMAP_API_KEY=your-carto-basemap-key
+
 POSTGRES_DB=TanawDB
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-this-local-password
@@ -355,6 +357,10 @@ docker compose exec db psql -U postgres -d TanawDB
 
 Keep `DATABASE_URL` on `db:5432` because the backend connects inside the Compose
 network.
+
+`VITE_CARTO_BASEMAP_API_KEY` is compiled into browser tile requests. Keep it out
+of Git, use a key issued for the TANAW frontend domains, and preserve the CARTO
+and OpenStreetMap attribution shown on the map.
 
 ### 3. Start the database, API, and web portal
 
@@ -622,6 +628,9 @@ not be copied for local development.
 
 ### Web portal
 
+Paste the CARTO key into `frontend-tanaw/.env`, then configure the local API
+override and start the portal:
+
 ```shell
 cd frontend-tanaw
 npm ci
@@ -667,7 +676,7 @@ This configuration:
 - runs Uvicorn without reload;
 - compiles the web portal during image creation;
 - serves the compiled frontend through Nginx;
-- embeds `VITE_API_BASE_URL` into the web build.
+- embeds `VITE_API_BASE_URL` and `VITE_CARTO_BASEMAP_API_KEY` into the web build.
 
 The Electron desktop is not containerized and must still run on the host or be
 installed from a packaged desktop build.
@@ -683,7 +692,8 @@ up and recreated before deployment.
 The repository keeps development and production configuration separate:
 
 - The root `.env.example` is the Docker Compose development template. It
-  contains local database and account credentials plus optional Resend testing.
+  contains the CARTO basemap key placeholder, local database and account
+  credentials, plus optional Resend testing.
 - `backend-tanaw/.env.example` is the backend production template.
 - `frontend-tanaw/.env.example` is the frontend production template.
 
@@ -702,10 +712,11 @@ The backend production template contains only deployment-specific values:
 | `EMAIL_SECRET_DERIVATION_KEY`                    | Separate secret for activation and recovery values |
 | `EMAIL_FROM_ADDRESS`                             | Sender on a verified domain                        |
 
-The frontend production template contains only `VITE_API_BASE_URL`, which is
-compiled into the browser bundle. Vercel supplies its own production marker;
-other public build systems should set `TANAW_PUBLIC_DEPLOYMENT=true` in their
-build configuration to enable the same public-URL validation.
+The frontend production template contains `VITE_API_BASE_URL` and
+`VITE_CARTO_BASEMAP_API_KEY`, which are compiled into the browser bundle. Vercel
+supplies its own production marker; other public build systems should set
+`TANAW_PUBLIC_DEPLOYMENT=true` in their build configuration to require both
+values and enable public-URL validation.
 
 Ports, local origins, JWT algorithm and lifetime, provider endpoints, request
 timeouts, polling and lease behavior, rate limits, cooldowns, token lifetimes,

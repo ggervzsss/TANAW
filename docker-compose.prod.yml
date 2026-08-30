@@ -41,6 +41,7 @@ services:
       target: production
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_CARTO_BASEMAP_API_KEY: ${VITE_CARTO_BASEMAP_API_KEY:-}
         TANAW_PUBLIC_DEPLOYMENT: ${TANAW_PUBLIC_DEPLOYMENT:-false}
     ports:
       - "${FRONTEND_PORT:-5173}:80"

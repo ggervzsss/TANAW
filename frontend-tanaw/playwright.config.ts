@@ -27,6 +27,7 @@ export default defineConfig({
     env: {
       ...process.env,
       VITE_API_BASE_URL: apiUrl,
+      VITE_CARTO_BASEMAP_API_KEY: "carto-e2e-test-key",
     },
   },
 });

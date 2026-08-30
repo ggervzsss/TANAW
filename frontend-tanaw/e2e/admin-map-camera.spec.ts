@@ -87,7 +87,10 @@ async function configureAdminMapSession(page: Page, options: { theme?: "dark" | 
   await page.addInitScript((initialTheme) => {
     window.localStorage.setItem("tanaw-web-theme", initialTheme);
   }, theme);
-  await page.route(/https:\/\/[abcd]\.basemaps\.cartocdn\.com\/.*/, (route) => route.fulfill({ status: 200, contentType: "image/png", body: transparentPng }));
+  await page.route(/https:\/\/[abcd]\.basemaps\.cartocdn\.com\/.*/, (route) => {
+    expect(new URL(route.request().url()).searchParams.get("key")).toBe("carto-e2e-test-key");
+    return route.fulfill({ status: 200, contentType: "image/png", body: transparentPng });
+  });
   await page.route("**/operational/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/activity-logs**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/auth/login", (route) => {

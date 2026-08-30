@@ -1,5 +1,5 @@
 import L from "leaflet";
-import { CARTO_TILE_SUBDOMAIN_SEQUENCE } from "../../../../map-tiles.config";
+import { addCartoBasemapApiKey, CARTO_TILE_SUBDOMAIN_SEQUENCE } from "../../../../map-tiles.config";
 
 export type LeafletMapTheme = "light" | "dark";
 
@@ -9,14 +9,15 @@ type TileLayerDefinition = {
 };
 
 const CARTO_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const CARTO_BASEMAP_API_KEY = import.meta.env.VITE_CARTO_BASEMAP_API_KEY ?? "";
 
 const tileLayers: Record<LeafletMapTheme, TileLayerDefinition> = {
   light: {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    url: addCartoBasemapApiKey("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", CARTO_BASEMAP_API_KEY),
     attribution: CARTO_ATTRIBUTION,
   },
   dark: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    url: addCartoBasemapApiKey("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", CARTO_BASEMAP_API_KEY),
     attribution: CARTO_ATTRIBUTION,
   },
 };
