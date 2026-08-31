@@ -72,7 +72,7 @@ async def ingest_desktop_report_submission(
 ) -> IntakeReportSummary:
     try:
         report = await ingest_report_submission(db, account, payload)
-    except DuplicateReportPeriodError as exc:
+    except (DuplicateReportPeriodError, InvalidReportWorkflowError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     await notify_staff_report_submission(db, account, report)
     await record_operational_log(

@@ -3,6 +3,7 @@ from collections.abc import Mapping
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.date_time import ensure_aware
@@ -10,9 +11,16 @@ from app.core.json_values import parse_json_object
 from app.features.accounts.enterprise import require_enterprise_profile
 from app.features.accounts.models import Account, AccountRole
 from app.features.accounts.options import format_enterprise_category
-from app.features.reporting.errors import DuplicateReportPeriodError
+from app.features.reporting.errors import (
+    DuplicateReportPeriodError,
+    InvalidReportWorkflowError,
+)
 from app.features.reporting.models import EnterpriseReportSubmission
-from app.features.reporting.policies import validate_report_review_transition
+from app.features.reporting.policies import (
+    validate_new_report_submission,
+    validate_report_resubmission,
+    validate_report_review_transition,
+)
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
     IntakeReportSummary,
@@ -34,28 +42,39 @@ async def ingest_report_submission(
     db: AsyncSession, account: Account, payload: DesktopReportSubmissionIngest
 ) -> IntakeReportSummary:
     profile = require_enterprise_profile(account)
-    result = await db.scalars(
-        select(EnterpriseReportSubmission).where(
-            EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
-            EnterpriseReportSubmission.report_id == payload.reportId,
-        )
-    )
-    existing = result.first()
-    duplicate_period = await db.scalar(
-        select(EnterpriseReportSubmission).where(
+    existing = await db.scalar(
+        select(EnterpriseReportSubmission)
+        .where(
             EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
             EnterpriseReportSubmission.period == payload.period,
-            EnterpriseReportSubmission.report_id != payload.reportId,
         )
+        .with_for_update(of=EnterpriseReportSubmission)
+        .execution_options(populate_existing=True)
     )
-    if duplicate_period is not None:
+    if existing is None:
+        report_with_reused_id = await db.scalar(
+            select(EnterpriseReportSubmission)
+            .where(
+                EnterpriseReportSubmission.enterprise_profile_id == profile.account_id,
+                EnterpriseReportSubmission.report_id == payload.reportId,
+            )
+            .with_for_update(of=EnterpriseReportSubmission)
+            .execution_options(populate_existing=True)
+        )
+        if report_with_reused_id is not None:
+            raise InvalidReportWorkflowError(
+                "An existing report ID cannot be moved to a different reporting period."
+            )
+    elif existing.report_id != payload.reportId:
         raise DuplicateReportPeriodError(
             f"A report for {payload.period} has already been submitted."
         )
+
     report_status = status_from_payload(payload.payload)
     month = month_from_submission(payload.period)
 
     if existing is None:
+        validate_new_report_submission(report_status)
         report = EnterpriseReportSubmission(
             report_id=payload.reportId,
             enterprise_profile_id=profile.account_id,
@@ -76,13 +95,19 @@ async def ingest_report_submission(
             payload_json=json.dumps(payload.payload or {}, sort_keys=True),
         )
         db.add(report)
+        try:
+            await db.flush()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise DuplicateReportPeriodError(
+                f"A report for {payload.period} has already been submitted."
+            ) from exc
     else:
+        validate_report_resubmission(existing.review_status, report_status)
         report = existing
-        report.enterprise_profile_id = profile.account_id
         report.enterprise_name = profile.enterprise_name
         report.category = format_enterprise_category(profile.category) or "Uncategorized"
         report.barangay = profile.barangay or "Unassigned"
-        report.period = payload.period
         report.month = month
         report.submitted_at = ensure_aware(payload.submittedAt)
         report.entries = payload.entries
@@ -93,8 +118,8 @@ async def ingest_report_submission(
         report.notes = payload.notes
         report.sync_status = payload.syncStatus
         report.payload_json = json.dumps(payload.payload or {}, sort_keys=True)
-        if report.review_status == "Returned" and report_status in {"Submitted", "Resubmitted"}:
-            report.review_status = "Pending Review"
+        report.review_status = "Pending Review"
+        report.remarks = None
 
     profile.gateway_status = "Connected"
     await db.flush()
@@ -122,15 +147,19 @@ async def update_report_status(
 ) -> IntakeReportSummary | None:
     report = (
         await db.scalars(
-            select(EnterpriseReportSubmission).where(EnterpriseReportSubmission.id == report_id)
+            select(EnterpriseReportSubmission)
+            .where(EnterpriseReportSubmission.id == report_id)
+            .with_for_update(of=EnterpriseReportSubmission)
+            .execution_options(populate_existing=True)
         )
     ).first()
     if report is None:
         report = (
             await db.scalars(
-                select(EnterpriseReportSubmission).where(
-                    EnterpriseReportSubmission.report_id == report_id
-                )
+                select(EnterpriseReportSubmission)
+                .where(EnterpriseReportSubmission.report_id == report_id)
+                .with_for_update(of=EnterpriseReportSubmission)
+                .execution_options(populate_existing=True)
             )
         ).first()
     if report is None:

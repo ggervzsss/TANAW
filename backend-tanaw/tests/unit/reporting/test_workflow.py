@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from pydantic import ValidationError
 
 from app.features.reporting.errors import InvalidReportWorkflowError
 from app.features.reporting.intake import report_demographics_from_payload
@@ -15,10 +16,13 @@ from app.features.reporting.policies import (
     resolve_final_report_status_transition,
     validate_final_report_revision_return,
     validate_final_report_sources,
+    validate_new_report_submission,
+    validate_report_resubmission,
     validate_report_review_transition,
 )
 from app.features.reporting.schemas import (
     DesktopReportSubmissionIngest,
+    FinalReportCreate,
 )
 
 
@@ -36,6 +40,23 @@ def test_non_pending_report_cannot_be_changed_by_review_action(current_status: s
 def test_consolidated_status_is_not_a_direct_review_action() -> None:
     with pytest.raises(InvalidReportWorkflowError):
         validate_report_review_transition("Pending Review", "Consolidated")
+
+
+def test_enterprise_submission_changes_require_the_return_resubmission_workflow() -> None:
+    validate_new_report_submission("Submitted")
+    validate_report_resubmission("Returned", "Resubmitted")
+
+    with pytest.raises(InvalidReportWorkflowError):
+        validate_new_report_submission("Resubmitted")
+    with pytest.raises(InvalidReportWorkflowError):
+        validate_report_resubmission("Pending Review", "Resubmitted")
+    with pytest.raises(InvalidReportWorkflowError):
+        validate_report_resubmission("Returned", "Submitted")
+
+
+def test_final_report_source_ids_must_be_unique() -> None:
+    with pytest.raises(ValidationError, match="Report IDs must be unique"):
+        FinalReportCreate(reportIds=["report-1", "report-1"], preparedBy="Staff User")
 
 
 def test_final_report_sources_must_be_ready_and_same_period() -> None:

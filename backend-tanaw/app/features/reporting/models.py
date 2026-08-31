@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Sequence, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -20,6 +20,11 @@ class EnterpriseReportSubmission(Base):
             "enterprise_profile_id",
             "report_id",
             name="uq_enterprise_report_submission",
+        ),
+        UniqueConstraint(
+            "enterprise_profile_id",
+            "period",
+            name="uq_enterprise_report_period",
         ),
     )
 
@@ -62,6 +67,9 @@ class EnterpriseReportSubmission(Base):
     enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
 
 
+FINAL_REPORT_CODE_SEQUENCE = Sequence("final_report_code_sequence", start=1)
+
+
 class FinalReport(Base):
     __tablename__ = "final_reports"
 
@@ -89,9 +97,7 @@ class FinalReport(Base):
 
 class FinalReportSource(Base):
     __tablename__ = "final_report_sources"
-    __table_args__ = (
-        UniqueConstraint("final_report_id", "intake_report_id", name="uq_final_report_source"),
-    )
+    __table_args__ = (UniqueConstraint("intake_report_id", name="uq_final_report_source_intake"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     final_report_id: Mapped[str] = mapped_column(
@@ -119,4 +125,10 @@ class FinalReportSource(Base):
     unique_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     exits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    this_prov_male: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    this_prov_female: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    other_prov_male: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    other_prov_female: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    foreign_male: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    foreign_female: Mapped[int | None] = mapped_column(Integer, nullable=True)
     intake_report: Mapped[EnterpriseReportSubmission] = relationship(lazy="joined")

@@ -12,10 +12,10 @@ from app.features.notifications.service import (
     STAFF_REPORT_RESUBMITTED_NOTIFICATION,
     STAFF_REPORT_SUBMITTED_NOTIFICATION,
 )
+from app.features.reporting.final_reports import final_report_source_snapshot
 from app.features.reporting.models import (
     EnterpriseReportSubmission,
     FinalReport,
-    FinalReportSource,
 )
 from app.features.sample_data.dataset import (
     SAMPLE_CAMERA_PREFIX,
@@ -307,18 +307,9 @@ async def create_final_reports(
         db.add(final_report)
         await db.flush()
         for report in reports:
-            db.add(
-                FinalReportSource(
-                    id=sample_uuid("final-report-source", final_report.id, report.id),
-                    final_report_id=final_report.id,
-                    intake_report_id=report.id,
-                    enterprise=report.enterprise_name,
-                    code=report.report_id,
-                    unique_count=report.unique_count,
-                    entries=report.entries,
-                    exits=report.exits,
-                )
-            )
+            source = final_report_source_snapshot(final_report.id, report)
+            source.id = sample_uuid("final-report-source", final_report.id, report.id)
+            db.add(source)
         final_reports.append(final_report)
     await db.flush()
     return final_reports

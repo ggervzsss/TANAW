@@ -61,6 +61,24 @@ def validate_report_review_transition(current_status: str, requested_status: str
         )
 
 
+def validate_new_report_submission(submission_status: str) -> None:
+    if submission_status != "Submitted":
+        raise InvalidReportWorkflowError(
+            "A report can only be resubmitted after staff returns the existing submission."
+        )
+
+
+def validate_report_resubmission(current_status: str, submission_status: str) -> None:
+    if current_status != "Returned":
+        raise InvalidReportWorkflowError(
+            f"{current_status} reports cannot be changed by enterprise submission."
+        )
+    if submission_status != "Resubmitted":
+        raise InvalidReportWorkflowError(
+            "A returned report must be submitted through the resubmission workflow."
+        )
+
+
 def validate_final_report_sources(reports: Sequence[EnterpriseReportSubmission]) -> None:
     invalid_reports = [
         report.report_id for report in reports if report.review_status != "Ready to Consolidate"

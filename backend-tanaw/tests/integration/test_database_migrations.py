@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.base import Base
@@ -90,6 +91,37 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         "gateway_id",
         "gateway_status",
     }.isdisjoint(account_columns)
+
+    unique_constraints = {
+        (
+            table.name,
+            constraint.name,
+            tuple(column.name for column in constraint.columns),
+        )
+        for table in Base.metadata.tables.values()
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert (
+        "enterprise_report_submissions",
+        "uq_enterprise_report_period",
+        ("enterprise_profile_id", "period"),
+    ) in unique_constraints
+    assert (
+        "final_report_sources",
+        "uq_final_report_source_intake",
+        ("intake_report_id",),
+    ) in unique_constraints
+
+    final_source_columns = set(Base.metadata.tables["final_report_sources"].columns.keys())
+    assert {
+        "this_prov_male",
+        "this_prov_female",
+        "other_prov_male",
+        "other_prov_female",
+        "foreign_male",
+        "foreign_female",
+    } <= final_source_columns
 
 
 @pytest.mark.asyncio

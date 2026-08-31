@@ -180,6 +180,16 @@ class FinalReportCreate(BaseModel):
     reportIds: list[str] = Field(min_length=1, max_length=500)
     preparedBy: str = Field(min_length=1, max_length=120)
 
+    @field_validator("reportIds")
+    @classmethod
+    def validate_unique_report_ids(cls, value: list[str]) -> list[str]:
+        normalized_ids = [item.strip() for item in value if item.strip()]
+        if len(normalized_ids) != len(value):
+            raise ValueError("Report IDs cannot be blank.")
+        if len(normalized_ids) != len(set(normalized_ids)):
+            raise ValueError("Report IDs must be unique.")
+        return normalized_ids
+
 
 class FinalReportStatusUpdate(BaseModel):
     status: FinalReportStatus

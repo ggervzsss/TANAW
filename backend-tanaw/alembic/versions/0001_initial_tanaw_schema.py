@@ -97,6 +97,7 @@ def upgrade() -> None:
         op.f("ix_activity_logs_actor_role"), "activity_logs", ["actor_role"], unique=False
     )
     op.create_index(op.f("ix_activity_logs_category"), "activity_logs", ["category"], unique=False)
+    op.execute("CREATE SEQUENCE final_report_code_sequence START WITH 1")
     op.create_table(
         "final_reports",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -705,6 +706,7 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "enterprise_profile_id", "report_id", name="uq_enterprise_report_submission"
         ),
+        sa.UniqueConstraint("enterprise_profile_id", "period", name="uq_enterprise_report_period"),
     )
     op.create_index(
         op.f("ix_enterprise_report_submissions_enterprise_profile_id"),
@@ -860,6 +862,12 @@ def upgrade() -> None:
         sa.Column("unique_count", sa.Integer(), nullable=False),
         sa.Column("entries", sa.Integer(), nullable=False),
         sa.Column("exits", sa.Integer(), nullable=False),
+        sa.Column("this_prov_male", sa.Integer(), nullable=True),
+        sa.Column("this_prov_female", sa.Integer(), nullable=True),
+        sa.Column("other_prov_male", sa.Integer(), nullable=True),
+        sa.Column("other_prov_female", sa.Integer(), nullable=True),
+        sa.Column("foreign_male", sa.Integer(), nullable=True),
+        sa.Column("foreign_female", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
             ["final_report_id"],
             ["final_reports.id"],
@@ -873,7 +881,7 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("final_report_id", "intake_report_id", name="uq_final_report_source"),
+        sa.UniqueConstraint("intake_report_id", name="uq_final_report_source_intake"),
     )
     op.create_index(
         op.f("ix_final_report_sources_final_report_id"),
@@ -1496,6 +1504,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_final_reports_period"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_generated_on"), table_name="final_reports")
     op.drop_table("final_reports")
+    op.execute("DROP SEQUENCE final_report_code_sequence")
     op.drop_index(op.f("ix_activity_logs_category"), table_name="activity_logs")
     op.drop_index(op.f("ix_activity_logs_actor_role"), table_name="activity_logs")
     op.drop_table("activity_logs")

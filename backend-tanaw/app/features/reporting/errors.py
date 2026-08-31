@@ -4,3 +4,7 @@ class DuplicateReportPeriodError(Exception):
 
 class InvalidReportWorkflowError(Exception):
     pass
+
+
+class ReportAlreadyConsolidatedError(InvalidReportWorkflowError):
+    pass
