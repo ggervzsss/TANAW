@@ -8,15 +8,13 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from app.config.report_config import reporting_period_submission_error
-from app.storage.local_data_schema import (
-    CURRENT_LOCAL_SCHEMA_ID,
-    LocalDatabaseResetRequiredError,
-)
+from app.storage.local_data_schema import LocalDatabaseResetRequiredError
 from app.storage.local_data_store import LocalDataStore
+from app.storage.migrations import LATEST_REVISION
 
 
 class LocalDataStoreTest(unittest.TestCase):
-    def test_canonical_schema_has_current_identity_and_expected_tables(self) -> None:
+    def test_canonical_schema_has_current_migration_and_expected_tables(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
@@ -28,8 +26,8 @@ class LocalDataStoreTest(unittest.TestCase):
                         "select name from sqlite_master where type = 'table'"
                     )
                 }
-                identity = connection.execute(
-                    "select schema_id from schema_identity where singleton_id = 1"
+                migration = connection.execute(
+                    "select revision, applied_at from schema_migrations"
                 ).fetchone()
                 foreign_keys = connection.execute(
                     "pragma foreign_key_list(count_events)"
@@ -43,7 +41,10 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertNotIn("active_monitoring_state", tables)
             self.assertNotIn("count_snapshots", tables)
             self.assertIn("enterprise_occupancy_state", tables)
-            self.assertEqual(identity, (CURRENT_LOCAL_SCHEMA_ID,))
+            self.assertIsNotNone(migration)
+            assert migration is not None
+            self.assertEqual(migration[0], LATEST_REVISION)
+            self.assertTrue(migration[1])
             self.assertNotIn("camera_type", camera_columns)
             self.assertNotIn("purpose", camera_columns)
             self.assertNotIn("resolution", camera_columns)
@@ -65,38 +66,41 @@ class LocalDataStoreTest(unittest.TestCase):
                 connection.execute("create table unexpected_table (id integer primary key)")
                 connection.commit()
 
-            with self.assertRaisesRegex(
-                LocalDatabaseResetRequiredError, "does not match the current schema"
-            ):
+            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "cannot be upgraded"):
                 store.metrics_summary()
 
-    def test_noncanonical_schema_identity_requires_explicit_reset(self) -> None:
+    def test_noncanonical_migration_checksum_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
             with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.execute("update schema_identity set schema_id = ?", (str(uuid4()),))
+                connection.execute(
+                    "update schema_migrations set checksum = ? where revision = ?",
+                    (str(uuid4()), LATEST_REVISION),
+                )
                 connection.commit()
 
             reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             with self.assertRaisesRegex(
                 LocalDatabaseResetRequiredError,
-                "does not match the current schema",
+                "cannot be upgraded",
             ):
                 reopened.metrics_summary()
 
-    def test_incomplete_current_schema_requires_explicit_reset(self) -> None:
+    def test_newer_migration_revision_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
             with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.execute("drop table report_drafts")
+                connection.execute(
+                    "insert into schema_migrations (revision, checksum) values ('002', 'future')"
+                )
                 connection.commit()
 
             reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             with self.assertRaisesRegex(
                 LocalDatabaseResetRequiredError,
-                "does not match the current schema",
+                "cannot be upgraded",
             ):
                 reopened.metrics_summary()
 

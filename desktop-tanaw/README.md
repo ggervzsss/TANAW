@@ -384,9 +384,9 @@ PowerShell uses the same commands.
 Inspection output includes:
 
 - Electron app-data and SQLite ledger paths;
-- schema version and row counts for camera profiles, active state, events,
-  snapshots, report drafts, submitted reports, visitor identity tables, and
-  occupancy corrections;
+- current/latest migration revisions, pending migration count, and row counts
+  for camera profiles, active state, events, snapshots, report drafts,
+  submitted reports, visitor identity tables, and occupancy corrections;
 - current unsubmitted draft event count;
 - first and last event timestamps;
 - recent events and reports;
@@ -419,7 +419,7 @@ including demographic drafts, events, reports, monitoring state, and visitor
 metadata. SQLite camera profiles, OS-protected camera credentials,
 authentication storage, and Chromium preferences remain.
 
-Databases without the canonical schema metadata are not silently modified or
+Databases without supported migration history are not silently modified or
 deleted. Recreate one explicitly with:
 
 ```bash

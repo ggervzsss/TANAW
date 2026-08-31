@@ -1,9 +1,11 @@
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
-from app.storage.local_data_schema import CURRENT_LOCAL_SCHEMA_ID
 from app.storage.local_data_store import LocalDataStore
+from app.storage.migrations import LATEST_REVISION
 from app.tools.local_data_cli import clear_local_data, inspect_local_data
 
 
@@ -28,8 +30,30 @@ class LocalDataCliTest(unittest.TestCase):
             self.assertEqual(ledger["tables"]["count_events"], 2)
             self.assertEqual(ledger["tables"]["report_drafts"], 1)
             self.assertEqual(ledger["tables"]["camera_profiles"], 1)
-            self.assertEqual(ledger["schemaId"], CURRENT_LOCAL_SCHEMA_ID)
+            self.assertEqual(ledger["currentRevision"], LATEST_REVISION)
+            self.assertEqual(ledger["latestRevision"], LATEST_REVISION)
+            self.assertEqual(ledger["pendingMigrations"], 0)
+            self.assertTrue(ledger["migrationSupported"])
             self.assertEqual(ledger["currentDraftEvents"], 2)
+
+    def test_inspect_reports_unsupported_future_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app_data_dir = Path(directory)
+            store = LocalDataStore(str(app_data_dir), "enterprise@example.test")
+            store.metrics_summary()
+            with closing(sqlite3.connect(store._database_path)) as connection:
+                connection.execute(
+                    "insert into schema_migrations (revision, checksum) values ('002', 'future')"
+                )
+                connection.commit()
+
+            result = inspect_local_data(app_data_dir, "enterprise@example.test", limit=5)
+
+            ledger = result["ledgers"][0]
+            self.assertEqual(ledger["currentRevision"], "002")
+            self.assertEqual(ledger["latestRevision"], "001")
+            self.assertFalse(ledger["migrationSupported"])
+            self.assertIn("not supported", ledger["migrationError"])
 
     def test_clear_enterprise_does_not_remove_other_ledger_or_browser_storage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
