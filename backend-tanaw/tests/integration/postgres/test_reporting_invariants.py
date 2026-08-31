@@ -206,6 +206,7 @@ def _submission(
         "foreignFemale": "0",
     }
     return DesktopReportSubmissionIngest(
+        submissionId=uuid4(),
         reportId=report_id,
         period=period,
         submittedAt=submitted_at,

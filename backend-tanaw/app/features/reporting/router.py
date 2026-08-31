@@ -32,6 +32,10 @@ from app.features.reporting.final_reports import (
 from app.features.reporting.final_reports import (
     list_final_reports as list_final_report_records,
 )
+from app.features.reporting.idempotency import (
+    claim_report_submission,
+    complete_report_submission,
+)
 from app.features.reporting.intake import (
     ingest_report_submission,
     list_intake_reports,
@@ -71,6 +75,9 @@ async def ingest_desktop_report_submission(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IntakeReportSummary:
     try:
+        claim = await claim_report_submission(db, account, payload)
+        if claim.replay is not None:
+            return claim.replay
         report = await ingest_report_submission(db, account, payload)
     except (DuplicateReportPeriodError, InvalidReportWorkflowError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -91,6 +98,7 @@ async def ingest_desktop_report_submission(
             "uniqueCount": report.metrics["unique"],
         },
     )
+    await complete_report_submission(db, claim, report)
     return report
 
 

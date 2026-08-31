@@ -589,6 +589,7 @@ class LocalDataStore:
         metrics: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         submitted_at = _utc_now()
+        submission_id = str(uuid4())
         summary = self.metrics_summary(include_submitted=False)
         existing_submission = self._report_submission(report_id)
         existing_period_submission = self._report_submission_for_period(period)
@@ -637,6 +638,7 @@ class LocalDataStore:
                 """
                 insert into report_submissions (
                     report_id,
+                    submission_id,
                     period,
                     submitted_at,
                     entries,
@@ -647,8 +649,9 @@ class LocalDataStore:
                     payload_json,
                     sync_status
                 )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(report_id) do update set
+                    submission_id = excluded.submission_id,
                     period = excluded.period,
                     submitted_at = excluded.submitted_at,
                     entries = excluded.entries,
@@ -662,6 +665,7 @@ class LocalDataStore:
                 """,
                 (
                     report_id,
+                    submission_id,
                     period,
                     submitted_at,
                     summary["entries"],
@@ -715,6 +719,7 @@ class LocalDataStore:
         return {
             **summary,
             "report_id": report_id,
+            "submission_id": submission_id,
             "submitted_at": submitted_at,
             "sync_status": "pending_cloud_sync",
             "camera_breakdown": camera_breakdown,
@@ -757,16 +762,18 @@ class LocalDataStore:
             ).fetchall()
         return [_camera_breakdown_row(row) for row in rows]
 
-    def mark_report_synced(self, report_id: str, synced_at: str | None = None) -> bool:
+    def mark_report_synced(
+        self, report_id: str, submission_id: str, synced_at: str | None = None
+    ) -> bool:
         synced_at = synced_at or _utc_now()
         with self._connection() as connection:
             result = connection.execute(
                 """
                 update report_submissions
                 set sync_status = 'synced', synced_at = ?
-                where report_id = ?
+                where report_id = ? and submission_id = ?
                 """,
-                (synced_at, report_id),
+                (synced_at, report_id, submission_id),
             )
         return result.rowcount > 0
 
@@ -966,6 +973,7 @@ class LocalDataStore:
                 """
                 select
                     report_id,
+                    submission_id,
                     period,
                     submitted_at,
                     entries,
@@ -996,6 +1004,7 @@ class LocalDataStore:
                 """
                 select
                     report_id,
+                    submission_id,
                     period,
                     submitted_at,
                     entries,
@@ -1028,6 +1037,7 @@ class LocalDataStore:
                 """
                 select
                     report_id,
+                    submission_id,
                     period,
                     submitted_at,
                     entries,

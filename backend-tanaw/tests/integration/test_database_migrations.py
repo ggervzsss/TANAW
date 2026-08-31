@@ -38,7 +38,7 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         for constraint in table.foreign_key_constraints
     }
 
-    assert len(relationships) == 17
+    assert len(relationships) == 19
     assert {
         ("enterprise_profiles", ("account_id",), ("accounts.id",)),
         (
@@ -50,6 +50,16 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
             "enterprise_telemetry_snapshots",
             ("enterprise_profile_id",),
             ("enterprise_profiles.account_id",),
+        ),
+        (
+            "report_submission_operations",
+            ("enterprise_profile_id",),
+            ("enterprise_profiles.account_id",),
+        ),
+        (
+            "report_submission_operations",
+            ("intake_report_id",),
+            ("enterprise_report_submissions.id",),
         ),
         (
             "final_report_sources",
@@ -111,6 +121,11 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         "final_report_sources",
         "uq_final_report_source_intake",
         ("intake_report_id",),
+    ) in unique_constraints
+    assert (
+        "report_submission_operations",
+        "uq_report_submission_operation_identity",
+        ("enterprise_profile_id", "submission_id"),
     ) in unique_constraints
 
     final_source_columns = set(Base.metadata.tables["final_report_sources"].columns.keys())

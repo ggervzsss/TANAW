@@ -94,9 +94,16 @@ def delete_report_draft(draft_key: str, request: Request) -> SyncMarkResponse:
     return SyncMarkResponse(updated=1 if registry(request).delete_report_draft(draft_key) else 0)
 
 
-@router.post("/reports/local/{report_id}/synced", response_model=SyncMarkResponse)
-def mark_local_report_synced(report_id: str, request: Request) -> SyncMarkResponse:
-    return SyncMarkResponse(updated=1 if registry(request).mark_report_synced(report_id) else 0)
+@router.post(
+    "/reports/local/{report_id}/submissions/{submission_id}/synced",
+    response_model=SyncMarkResponse,
+)
+def mark_local_report_synced(
+    report_id: str, submission_id: str, request: Request
+) -> SyncMarkResponse:
+    return SyncMarkResponse(
+        updated=1 if registry(request).mark_report_synced(report_id, submission_id) else 0
+    )
 
 
 @router.post("/reports/local/{report_id}/purge-raw", response_model=ReportRawDataPurgeResponse)

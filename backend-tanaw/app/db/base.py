@@ -27,6 +27,7 @@ from app.features.reporting.models import (
     EnterpriseReportSubmission,
     FinalReport,
     FinalReportSource,
+    ReportSubmissionOperation,
 )
 from app.features.support.models import SupportTicket, SupportTicketMessage
 
@@ -52,6 +53,7 @@ __all__ = [
     "PasswordResetChallenge",
     "PasswordResetRateLimitBucket",
     "RealtimeOutbox",
+    "ReportSubmissionOperation",
     "SupportTicket",
     "SupportTicketMessage",
     "SystemConfiguration",

@@ -222,8 +222,8 @@ class SessionStore:
     def delete_report_draft(self, draft_key: str) -> bool:
         return self._data_store.delete_report_draft(draft_key)
 
-    def mark_report_synced(self, report_id: str) -> bool:
-        return self._data_store.mark_report_synced(report_id)
+    def mark_report_synced(self, report_id: str, submission_id: str) -> bool:
+        return self._data_store.mark_report_synced(report_id, submission_id)
 
     def purge_report_raw_events(self, report_id: str) -> dict[str, int | str | None]:
         return self._data_store.purge_report_raw_events(report_id)

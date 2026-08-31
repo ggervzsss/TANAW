@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -44,6 +45,7 @@ def _first_present(values: dict, *keys: str) -> object:
 
 
 class DesktopReportSubmissionIngest(BaseModel):
+    submissionId: UUID
     reportId: str = Field(min_length=3, max_length=80)
     period: str = Field(min_length=1, max_length=120)
     submittedAt: datetime

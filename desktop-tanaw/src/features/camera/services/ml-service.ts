@@ -206,8 +206,12 @@ export async function deleteLocalReportDraft(baseUrl: string, draftKey: string):
   return requestJson<{ updated: number }>(`${baseUrl}/reports/drafts/${encodeURIComponent(draftKey)}`, { method: "DELETE" }, 2500);
 }
 
-export async function markLocalReportSynced(baseUrl: string, reportId: string): Promise<{ updated: number }> {
-  return requestJson<{ updated: number }>(`${baseUrl}/reports/local/${encodeURIComponent(reportId)}/synced`, { method: "POST" }, 2500);
+export async function markLocalReportSynced(baseUrl: string, reportId: string, submissionId: string): Promise<{ updated: number }> {
+  return requestJson<{ updated: number }>(
+    `${baseUrl}/reports/local/${encodeURIComponent(reportId)}/submissions/${encodeURIComponent(submissionId)}/synced`,
+    { method: "POST" },
+    2500,
+  );
 }
 
 export async function purgeLocalReportRawEvents(baseUrl: string, reportId: string): Promise<{ report_id: string; purged_events: number; raw_purged_at: string | null }> {

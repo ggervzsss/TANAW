@@ -8,3 +8,7 @@ class InvalidReportWorkflowError(Exception):
 
 class ReportAlreadyConsolidatedError(InvalidReportWorkflowError):
     pass
+
+
+class ReportSubmissionIdentityConflictError(InvalidReportWorkflowError):
+    pass

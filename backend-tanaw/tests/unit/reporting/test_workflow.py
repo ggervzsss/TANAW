@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -109,6 +110,7 @@ def test_returned_final_report_can_be_archived_and_restored() -> None:
 
 def test_desktop_resubmission_uses_payload_metrics_for_demographic_validation() -> None:
     payload = DesktopReportSubmissionIngest(
+        submissionId=uuid4(),
         reportId="REP-963735",
         period="June 2026",
         submittedAt=datetime(2026, 7, 5, 8, 43, 12, tzinfo=UTC),
@@ -190,6 +192,7 @@ def test_report_demographics_reject_mismatched_totals() -> None:
 def test_desktop_submission_rejects_open_reporting_period() -> None:
     with pytest.raises(ValueError, match="Submission opens on Aug 1, 2026"):
         DesktopReportSubmissionIngest(
+            submissionId=uuid4(),
             reportId="REP-260701",
             period="July 2026",
             submittedAt=datetime(2026, 7, 15, 8, 0, tzinfo=UTC),
@@ -228,6 +231,7 @@ def test_reporting_period_submission_opens_on_next_manila_month() -> None:
 def test_desktop_submission_rejects_noncanonical_period_format() -> None:
     with pytest.raises(ValueError, match="Month YYYY"):
         DesktopReportSubmissionIngest(
+            submissionId=uuid4(),
             reportId="REP-260601",
             period="Jun 1 - Jun 30, 2026",
             submittedAt=datetime(2026, 7, 1, 0, 0, tzinfo=UTC),

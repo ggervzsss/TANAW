@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID, uuid4
 
 from app.config.report_config import reporting_period_submission_error
 from app.storage.local_data_schema import (
@@ -74,11 +75,17 @@ class LocalDataStoreTest(unittest.TestCase):
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
             with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.execute("update schema_metadata set schema_version = 2")
+                unsupported_version = LOCAL_SCHEMA_VERSION + 1
+                connection.execute(
+                    "update schema_metadata set schema_version = ?", (unsupported_version,)
+                )
                 connection.commit()
 
             reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "schema 2 is unsupported"):
+            with self.assertRaisesRegex(
+                LocalDatabaseResetRequiredError,
+                f"schema {unsupported_version} is unsupported",
+            ):
                 reopened.metrics_summary()
 
     def test_camera_profiles_are_persisted_without_credentials(self) -> None:
@@ -204,6 +211,30 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertEqual(reports[0]["entries"], 1)
             self.assertEqual(reports[0]["notes"], "notes")
             self.assertEqual(reports[0]["payload"]["demo"]["foreignMale"], "2")
+
+    def test_report_submission_identity_persists_and_changes_for_a_new_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = str(Path(directory))
+            store = LocalDataStore(root)
+            first = store.record_report_submission(
+                "REP-001", "Current Period", payload={"status": "Submitted"}
+            )
+            first_submission_id = str(UUID(str(first["submission_id"])))
+
+            reopened = LocalDataStore(root)
+            self.assertEqual(
+                reopened.list_report_submissions()[0]["submission_id"],
+                first_submission_id,
+            )
+
+            revised = reopened.record_report_submission(
+                "REP-001", "Current Period", payload={"status": "Resubmitted"}
+            )
+            self.assertNotEqual(revised["submission_id"], first_submission_id)
+            self.assertEqual(
+                reopened.list_report_submissions()[0]["submission_id"],
+                revised["submission_id"],
+            )
 
     def test_report_drafts_are_scoped_updated_and_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -763,10 +794,11 @@ class LocalDataStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "target@tanaw.test")
             store.append_count_event(_event("entry", entry=1, exit=0, occupancy=1))
-            store.record_report_submission("REP-001", "Current Period")
+            submission = store.record_report_submission("REP-001", "Current Period")
 
             self.assertEqual(store.metrics_summary(include_submitted=True)["unsynced_events"], 1)
-            self.assertTrue(store.mark_report_synced("REP-001"))
+            self.assertFalse(store.mark_report_synced("REP-001", str(uuid4())))
+            self.assertTrue(store.mark_report_synced("REP-001", str(submission["submission_id"])))
             self.assertEqual(store.mark_events_synced(), 1)
 
             report = store.list_report_submissions()[0]

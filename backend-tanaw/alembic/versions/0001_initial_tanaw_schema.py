@@ -745,6 +745,53 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
+        "report_submission_operations",
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
+        sa.Column("submission_id", sa.String(length=36), nullable=False),
+        sa.Column("request_fingerprint", sa.String(length=64), nullable=False),
+        sa.Column("report_id", sa.String(length=80), nullable=False),
+        sa.Column("intake_report_id", sa.String(length=36), nullable=True),
+        sa.Column("response_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["enterprise_profile_id"],
+            ["enterprise_profiles.account_id"],
+            name="fk_report_submission_operations_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["intake_report_id"],
+            ["enterprise_report_submissions.id"],
+            name="fk_report_submission_operations_intake_report_id",
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "enterprise_profile_id",
+            "submission_id",
+            name="uq_report_submission_operation_identity",
+        ),
+    )
+    op.create_index(
+        op.f("ix_report_submission_operations_enterprise_profile_id"),
+        "report_submission_operations",
+        ["enterprise_profile_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_report_submission_operations_intake_report_id"),
+        "report_submission_operations",
+        ["intake_report_id"],
+        unique=False,
+    )
+    op.create_table(
         "enterprise_telemetry_snapshots",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("enterprise_profile_id", sa.String(length=36), nullable=False),
@@ -1369,6 +1416,15 @@ def downgrade() -> None:
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_table("enterprise_telemetry_snapshots")
+    op.drop_index(
+        op.f("ix_report_submission_operations_intake_report_id"),
+        table_name="report_submission_operations",
+    )
+    op.drop_index(
+        op.f("ix_report_submission_operations_enterprise_profile_id"),
+        table_name="report_submission_operations",
+    )
+    op.drop_table("report_submission_operations")
     op.drop_index(
         op.f("ix_enterprise_report_submissions_submitted_at"),
         table_name="enterprise_report_submissions",

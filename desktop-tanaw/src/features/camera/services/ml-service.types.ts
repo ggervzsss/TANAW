@@ -240,6 +240,7 @@ export type LocalMetricsHistory = {
 
 export type LocalReportSubmission = LocalMetricsSummary & {
   report_id: string;
+  submission_id: string;
   submitted_at: string;
   sync_status: string;
   camera_breakdown: LocalReportCameraTotal[];
@@ -257,6 +258,7 @@ export type LocalReportCameraTotal = {
 
 export type LocalReportSubmissionRecord = {
   report_id: string;
+  submission_id: string;
   period: string;
   submitted_at: string;
   entries: number;

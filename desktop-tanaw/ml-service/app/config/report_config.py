@@ -174,6 +174,7 @@ class ReportCameraTotalResponse(BaseModel):
 
 class ReportSubmissionResponse(MetricsSummaryResponse):
     report_id: str
+    submission_id: str
     submitted_at: str
     sync_status: str
     camera_breakdown: list[ReportCameraTotalResponse] = Field(default_factory=list)
@@ -210,6 +211,7 @@ class SamplePrepareResponse(MetricsSummaryResponse):
 
 class ReportSubmissionRecordResponse(BaseModel):
     report_id: str
+    submission_id: str
     period: str
     submitted_at: str
     entries: int

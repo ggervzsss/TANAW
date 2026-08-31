@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Sequence, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -65,6 +66,47 @@ class EnterpriseReportSubmission(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
+
+
+class ReportSubmissionOperation(Base):
+    __tablename__ = "report_submission_operations"
+    __table_args__ = (
+        UniqueConstraint(
+            "enterprise_profile_id",
+            "submission_id",
+            name="uq_report_submission_operation_identity",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    enterprise_profile_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey(
+            "enterprise_profiles.account_id",
+            name="fk_report_submission_operations_enterprise_profile_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=False,
+    )
+    submission_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    report_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    intake_report_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey(
+            "enterprise_report_submissions.id",
+            name="fk_report_submission_operations_intake_report_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+        nullable=True,
+    )
+    response_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 FINAL_REPORT_CODE_SEQUENCE = Sequence("final_report_code_sequence", start=1)

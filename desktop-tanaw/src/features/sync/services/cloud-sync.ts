@@ -211,6 +211,7 @@ export async function syncDesktopReportSubmission(reportId: string) {
 async function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
   const metrics = reportMetricsFromSubmission(submission);
   await staffApi.post("/operational/desktop/report-submissions", {
+    submissionId: submission.submission_id,
     reportId: submission.report_id,
     period: submission.period,
     submittedAt: submission.submitted_at,
@@ -229,7 +230,7 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
       },
     },
   });
-  await markLocalReportSynced(baseUrl, submission.report_id);
+  await markLocalReportSynced(baseUrl, submission.report_id, submission.submission_id);
 }
 
 function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {

@@ -224,6 +224,7 @@ def _report_submission_row(row: sqlite3.Row) -> dict[str, Any]:
 
     return {
         "report_id": row["report_id"],
+        "submission_id": row["submission_id"],
         "period": row["period"],
         "submitted_at": row["submitted_at"],
         "entries": _safe_int(row["entries"]),

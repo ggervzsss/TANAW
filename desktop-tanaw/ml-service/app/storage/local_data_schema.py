@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.storage.local_data_serialization import _safe_int
 
-LOCAL_SCHEMA_VERSION = 1
+LOCAL_SCHEMA_VERSION = 2
 
 
 class LocalDatabaseResetRequiredError(RuntimeError):
@@ -145,6 +145,7 @@ def initialize_local_database(
 
             create table if not exists report_submissions (
                 report_id text primary key,
+                submission_id text not null unique,
                 period text not null unique,
                 submitted_at text not null,
                 entries integer not null default 0,
