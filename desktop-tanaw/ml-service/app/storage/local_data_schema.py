@@ -1,13 +1,9 @@
 import sqlite3
 from pathlib import Path
 
-from app.storage.local_data_migrations import (
-    LATEST_LOCAL_SCHEMA_VERSION,
-    migrate_local_database,
-)
 from app.storage.local_data_serialization import _safe_int
 
-LOCAL_SCHEMA_VERSION = LATEST_LOCAL_SCHEMA_VERSION
+LOCAL_SCHEMA_VERSION = 1
 
 
 class LocalDatabaseResetRequiredError(RuntimeError):
@@ -17,21 +13,9 @@ class LocalDatabaseResetRequiredError(RuntimeError):
 def initialize_local_database(
     root: Path,
     database_path: Path,
-    retired_database_path: Path,
     enterprise_id: str | None,
 ) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    if not database_path.exists() and retired_database_path.exists():
-        reset_command = (
-            f'npm run local-data -- clear --enterprise "{enterprise_id}" --yes'
-            if enterprise_id
-            else "npm run local-data -- clear --full-device --yes"
-        )
-        raise LocalDatabaseResetRequiredError(
-            "The retired tanaw_metrics.sqlite3 database is still present. TANAW will not "
-            f"silently replace local data. Close TANAW and run `{reset_command}`, then "
-            "reopen the application."
-        )
     database_exists = database_path.exists()
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
@@ -46,11 +30,10 @@ def initialize_local_database(
         }
         if database_exists and existing_tables and "schema_metadata" not in existing_tables:
             raise LocalDatabaseResetRequiredError(
-                "The local TANAW database uses the retired pre-versioned schema. "
-                "Close TANAW and run `npm run local-data -- clear --enterprise "
-                "<enterprise-id> --yes`, then reopen the application."
+                "The local TANAW database has no supported schema metadata. "
+                f"Close TANAW and run `{_reset_command(enterprise_id)}`, then reopen "
+                "the application."
             )
-        current_version = 0
         if "schema_metadata" in existing_tables:
             version_row = connection.execute(
                 "select schema_version from schema_metadata where singleton_id = 1"
@@ -58,15 +41,11 @@ def initialize_local_database(
             current_version = _safe_int(
                 version_row["schema_version"] if version_row is not None else None
             )
-            try:
-                current_version = migrate_local_database(connection, current_version)
-            except ValueError as exc:
-                raise LocalDatabaseResetRequiredError(str(exc)) from exc
             if current_version != LOCAL_SCHEMA_VERSION:
                 raise LocalDatabaseResetRequiredError(
-                    f"Local TANAW database schema {current_version} is incompatible with "
-                    f"the required schema {LOCAL_SCHEMA_VERSION}. Explicitly clear this "
-                    "enterprise's local data before reopening TANAW."
+                    f"Local TANAW database schema {current_version} is unsupported; "
+                    f"this release requires schema {LOCAL_SCHEMA_VERSION}. Close TANAW "
+                    f"and run `{_reset_command(enterprise_id)}`, then reopen the application."
                 )
 
         connection.executescript(
@@ -299,3 +278,9 @@ def initialize_local_database(
         connection.commit()
     finally:
         connection.close()
+
+
+def _reset_command(enterprise_id: str | None) -> str:
+    if enterprise_id:
+        return f'npm run local-data -- clear --enterprise "{enterprise_id}" --yes'
+    return "npm run local-data -- clear --full-device --yes"

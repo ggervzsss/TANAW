@@ -1,6 +1,6 @@
 {
   "type": "FeatureCollection",
-  "name": "san_pedro_barangays_clean_v4",
+  "name": "san_pedro_barangays_v1",
   "metadata": {
     "description": "Cleaned San Pedro, Laguna barangay layout for Leaflet. Central white gap assigned to San Antonio; Bayan-bayanan labelled above United Better Living; no landmark points/circle polygons included.",
     "crs": "EPSG:4326",

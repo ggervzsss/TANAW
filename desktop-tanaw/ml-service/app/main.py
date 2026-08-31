@@ -47,8 +47,8 @@ from app.storage.local_data_schema import LocalDatabaseResetRequiredError
 CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
-SERVICE_VERSION = "0.2.0"
-API_CONTRACT_VERSION = 9
+SERVICE_VERSION = "0.1.0"
+API_CONTRACT_VERSION = 1
 
 
 def has_valid_desktop_access_token(supplied_token: str, expected_token: str) -> bool:

@@ -1,7 +1,7 @@
 {
   "name": "desktop-tanaw",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "TANAW Enterprise Desktop application for local enterprise monitoring and reporting.",
   "author": "City Government of San Pedro",
   "type": "module",

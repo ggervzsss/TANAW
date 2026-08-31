@@ -37,12 +37,8 @@ class ArchitectureBoundariesTest(unittest.TestCase):
         self.assertNotIn("insert into visitor_identities", source)
         self.assertNotIn("insert into visitor_sightings", source)
 
-    def test_obsolete_duplicate_state_tables_are_only_referenced_by_migrations(self) -> None:
-        runtime_files = [
-            path
-            for path in (PROJECT_ROOT / "app").rglob("*.py")
-            if path.name != "local_data_migrations.py"
-        ]
+    def test_duplicate_state_tables_are_absent_from_the_canonical_schema(self) -> None:
+        runtime_files = list((PROJECT_ROOT / "app").rglob("*.py"))
         runtime_source = "\n".join(path.read_text(encoding="utf8") for path in runtime_files)
         self.assertNotIn("active_monitoring_state", runtime_source)
         self.assertNotIn("count_snapshots", runtime_source)

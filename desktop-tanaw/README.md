@@ -322,7 +322,7 @@ unique within the current enterprise camera list. Adding or editing a duplicate
 keeps the form and credentials intact, focuses the IP field, and shows an inline
 conflict. The serialized local configuration write boundary repeats the same
 validation so concurrent renderer actions cannot persist a duplicate. Separate
-enterprise lists may reuse the same private IP, and legacy duplicates are
+enterprise lists may reuse the same private IP, and duplicate entries are
 reported without automatic deletion or merging.
 
 The canonical local relationships are:
@@ -330,7 +330,7 @@ The canonical local relationships are:
 ```mermaid
 erDiagram
     CAMERA_PROFILES
-    ACTIVE_MONITORING_STATE
+    CAMERA_MONITORING_STATES
     REPORT_SUBMISSIONS ||--o{ COUNT_EVENTS : groups
     REPORT_DRAFTS
     OCCUPANCY_CORRECTIONS
@@ -414,12 +414,10 @@ npm run local-data -- clear --all-ledgers --yes
 This clears operational rows from every canonical enterprise database,
 including demographic drafts, events, reports, monitoring state, and visitor
 metadata. SQLite camera profiles, OS-protected camera credentials,
-authentication storage, and Chromium preferences remain. Retired
-`tanaw_metrics.sqlite3` databases, WAL files, and `active_session.json`
-sidecars are removed.
+authentication storage, and Chromium preferences remain.
 
-Databases created before the canonical versioned schema are not silently
-migrated or deleted. Recreate one explicitly with:
+Databases without the canonical schema metadata are not silently modified or
+deleted. Recreate one explicitly with:
 
 ```bash
 npm run local-data -- clear --enterprise "<enterprise-id>" --yes

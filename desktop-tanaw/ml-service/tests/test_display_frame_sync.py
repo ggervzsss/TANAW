@@ -11,7 +11,12 @@ class DisplayFrameSyncTest(unittest.TestCase):
     def test_overlay_snapshot_uses_the_frame_that_produced_the_tracks(self) -> None:
         manager = CameraProcessingManager()
         config = CameraStartRequest(stream_url="rtsp://192.168.1.20/stream2", camera_id=1)
-        session = ProcessingSession(session_id=1, config=config, stop_event=threading.Event())
+        session = ProcessingSession(
+            session_id=1,
+            config=config,
+            stop_event=threading.Event(),
+            event_scope="test-1",
+        )
         raw_frame = np.full((4, 4, 3), 255, dtype=np.uint8)
         processed_frame = np.zeros((4, 4, 3), dtype=np.uint8)
         manager._active_session = session

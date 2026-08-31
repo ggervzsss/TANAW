@@ -1,6 +1,6 @@
 """initial TANAW schema
 
-Revision ID: 20260720_0001
+Revision ID: 0001
 Revises:
 Create Date: 2026-07-19 22:22:12.715854
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "20260720_0001"
+revision: str = "0001"
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

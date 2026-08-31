@@ -114,11 +114,7 @@ class CameraConfigValidationTest(unittest.TestCase):
                         }
                     )
 
-    def test_confidence_aliases_and_modes_are_validated(self) -> None:
-        legacy = CameraStartRequest(stream_url="rtsp://192.168.1.20/stream2", confidence=0.42)
-        self.assertEqual(legacy.counting_confidence, 0.42)
-        self.assertEqual(legacy.confidence, 0.42)
-
+    def test_confidence_thresholds_and_modes_are_validated(self) -> None:
         explicit = CameraStartRequest(
             stream_url="rtsp://192.168.1.20/stream2",
             tracking_confidence=0.12,
@@ -127,7 +123,7 @@ class CameraConfigValidationTest(unittest.TestCase):
             unique_counting_mode="estimated_reid",
         )
         self.assertEqual(explicit.tracking_confidence, 0.12)
-        self.assertEqual(explicit.confidence, 0.38)
+        self.assertEqual(explicit.counting_confidence, 0.38)
         self.assertEqual(explicit.reid_mode, "quality")
 
         with self.assertRaisesRegex(ValidationError, "tracking_confidence"):

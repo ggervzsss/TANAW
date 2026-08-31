@@ -39,7 +39,7 @@ class ProcessingSession:
     session_id: int
     config: CameraStartRequest
     stop_event: threading.Event
-    event_scope: str = ""
+    event_scope: str
 
 
 @dataclass(frozen=True, slots=True)

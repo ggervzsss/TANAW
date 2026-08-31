@@ -77,7 +77,6 @@ class CameraStartRequest(BaseModel):
     stream_url: str = Field(..., min_length=3)
     tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
     counting_confidence: float = Field(default=0.35, ge=0.05, le=0.95)
-    confidence: float = Field(default=0.35, ge=0.05, le=0.95)
     camera_id: int | None = Field(default=None, ge=1)
     camera_name: str | None = Field(default=None, max_length=120)
     camera_zone: str | None = Field(default=None, max_length=120)
@@ -105,17 +104,11 @@ class CameraStartRequest(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def normalize_confidence_aliases(cls, data: Any) -> Any:
+    def normalize_rtsp_source(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
 
         normalized = {**data}
-        has_confidence = "confidence" in normalized
-        has_counting_confidence = "counting_confidence" in normalized
-        if has_confidence and not has_counting_confidence:
-            normalized["counting_confidence"] = normalized["confidence"]
-        elif has_counting_confidence and not has_confidence:
-            normalized["confidence"] = normalized["counting_confidence"]
         _normalize_rtsp_source(normalized)
         return normalized
 
@@ -137,8 +130,6 @@ class CameraStartRequest(BaseModel):
             raise ValueError(
                 "tracking_confidence must be less than or equal to counting_confidence."
             )
-        self.confidence = self.counting_confidence
-
         if self.entry_line is None and self.exit_line is None:
             return self
 
@@ -192,8 +183,8 @@ class CameraTestResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    service_version: str = "0.2.0"
-    api_contract_version: int = 9
+    service_version: str = "0.1.0"
+    api_contract_version: int = 1
     tripwire_hot_update: bool = True
     running: bool
     error: str | None = None

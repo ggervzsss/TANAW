@@ -22,7 +22,7 @@ def test_migration_history_has_one_canonical_baseline() -> None:
     migration_names = sorted(path.name for path in versions_directory.glob("*.py"))
 
     assert migration_names == [
-        "20260720_0001_initial_tanaw_schema.py",
+        "0001_initial_tanaw_schema.py",
     ]
 
 
@@ -103,7 +103,7 @@ async def test_current_database_revision_is_accepted() -> None:
 @pytest.mark.asyncio
 async def test_outdated_database_revision_is_rejected() -> None:
     connection = MagicMock()
-    connection.scalar = AsyncMock(return_value="20260711_0015")
+    connection.scalar = AsyncMock(return_value="0002")
 
     with pytest.raises(DatabaseMigrationError, match="migration is out of date"):
         await validate_database_migration_head(connection)

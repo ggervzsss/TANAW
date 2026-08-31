@@ -16,7 +16,6 @@ class LocalDatabase:
         root = Path(base_dir) / "ml-service" if base_dir else Path.home() / ".tanaw" / "ml-service"
         self.root = root / "enterprises" / _safe_scope(enterprise_id) if enterprise_id else root
         self.path = self.root / "tanaw_desktop.sqlite3"
-        self.retired_path = self.root / "tanaw_metrics.sqlite3"
         self.enterprise_id = enterprise_id
         self._initialized = False
 
@@ -39,5 +38,5 @@ class LocalDatabase:
     def initialize(self) -> None:
         if self._initialized:
             return
-        initialize_local_database(self.root, self.path, self.retired_path, self.enterprise_id)
+        initialize_local_database(self.root, self.path, self.enterprise_id)
         self._initialized = True

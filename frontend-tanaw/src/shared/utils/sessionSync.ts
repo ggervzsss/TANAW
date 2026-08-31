@@ -25,7 +25,7 @@ export function subscribeToSessionEvents(listener: (event: SessionSyncEvent) => 
       const parsed: unknown = JSON.parse(event.newValue);
       if (isSessionSyncEvent(parsed)) listener(parsed);
     } catch {
-      // Ignore malformed values written by other applications or old builds.
+      // Ignore malformed values that do not match TANAW's session payload.
     }
   };
 

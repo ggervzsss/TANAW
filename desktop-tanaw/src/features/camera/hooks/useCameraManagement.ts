@@ -323,7 +323,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
         const [saved, credentials] = await Promise.all([listLocalCameras(baseUrl), loadCameraCredentialMetadata(storageKey)]);
         const normalized = saved.map((camera) => applyStoredCameraMetadata(normalizeCamera(camera), credentials));
         const normalizedFingerprint = getCameraStorageFingerprint(normalized);
-        const legacyConflict = normalized.find((camera, index) => Boolean(findCameraIpConflict(normalized.slice(0, index), camera.cameraHost ?? "")));
+        const duplicateConflict = normalized.find((camera, index) => Boolean(findCameraIpConflict(normalized.slice(0, index), camera.cameraHost ?? "")));
         if (!disposed) {
           servicePidRef.current = status.pid;
           setServiceStatus(status);
@@ -332,7 +332,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
           lastPersistedCameraFingerprintRef.current = normalizedFingerprint;
           setActiveCamId(normalized[0]?.id ?? null);
           setHydratedFromStorage(true);
-          if (legacyConflict) {
+          if (duplicateConflict) {
             setConfigurationError(`${CAMERA_IP_CONFLICT_MESSAGE} Existing entries were left unchanged for review.`);
           }
         }

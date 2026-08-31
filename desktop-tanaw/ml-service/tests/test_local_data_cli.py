@@ -60,24 +60,16 @@ class LocalDataCliTest(unittest.TestCase):
                 {"demo": {"thisProvMale": "10"}},
             )
             store.replace_camera_profiles([_camera_profile()])
-            retired_database = app_data_dir / "ml-service" / "tanaw_metrics.sqlite3"
-            retired_database.parent.mkdir(parents=True, exist_ok=True)
-            retired_database.write_bytes(b"retired")
-            retired_session = store._database_path.parent / "active_session.json"
-            retired_session.write_text("{}", encoding="utf-8")
             browser_file = app_data_dir / "Local Storage" / "leveldb" / "000001.log"
             browser_file.parent.mkdir(parents=True)
             browser_file.write_text("camera settings", encoding="utf-8")
 
-            result = clear_local_data(app_data_dir, all_ledgers=True)
+            clear_local_data(app_data_dir, all_ledgers=True)
 
             self.assertTrue((app_data_dir / "ml-service" / "enterprises").exists())
             self.assertEqual(store.list_camera_profiles(), [_camera_profile()])
             self.assertEqual(store.metrics_summary()["total_events"], 0)
             self.assertIsNone(store.get_report_draft("period:July 2026"))
-            self.assertFalse(retired_database.exists())
-            self.assertFalse(retired_session.exists())
-            self.assertEqual(len(result["retiredPathsRemoved"]), 2)
             self.assertTrue(browser_file.exists())
 
     def test_full_device_removes_browser_and_ledgers(self) -> None:

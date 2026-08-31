@@ -149,12 +149,10 @@ uv run uvicorn main:app
 ```
 
 Application startup validates the `alembic_version` revision and fails with an
-actionable error when the database is missing or outdated. It never creates,
-alters, or drops schema objects. Revision `20260720_0001` is the canonical TANAW
-baseline and replaces the pre-release migration history. Existing development
-databases from the old chain must be recreated before starting this version;
-the baseline intentionally contains no compatibility or reconciliation logic.
-Back up any data that must be retained before resetting PostgreSQL.
+actionable error when the database is missing or does not match the canonical
+baseline. It never creates, alters, or drops schema objects. Revision `0001` is
+the complete initial TANAW schema and intentionally contains no compatibility
+or reconciliation logic.
 
 ### Canonical account and enterprise ownership
 

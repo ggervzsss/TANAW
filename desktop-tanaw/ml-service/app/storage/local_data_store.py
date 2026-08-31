@@ -42,7 +42,6 @@ class LocalDataStore:
         self._visitor_identities = VisitorIdentityRepository(self._database)
         self._root = self._database.root
         self._database_path = self._database.path
-        self._retired_database_path = self._database.retired_path
 
     def load_monitoring_state(self, camera_id: int | None = None) -> dict[str, Any] | None:
         return self._cameras.load_monitoring_state(camera_id)

@@ -16,7 +16,7 @@ export function useTechnicalIssuesPage() {
     initialValue: initialTechnicalIssueFilters,
     isValid: isTechnicalIssueFilters,
     namespace: "technical-issue-filters",
-    version: 2,
+    version: 1,
   });
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const selectedAlert = alerts.find((alert) => alert.id === (searchParams.get("alert") ?? selectedAlertId)) ?? null;

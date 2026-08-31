@@ -17,7 +17,7 @@ type BarangayPointMatch = {
   label: string;
 };
 
-export const SAN_PEDRO_BARANGAYS_URL = "/data/san_pedro_barangays_clean_v4.geojson";
+export const SAN_PEDRO_BARANGAYS_URL = "/data/san_pedro_barangays_v1.geojson";
 
 export const sanPedroFallbackCenter: L.LatLngTuple = [14.3413, 121.0446];
 

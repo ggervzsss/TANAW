@@ -56,192 +56,30 @@ class LocalDataStoreTest(unittest.TestCase):
                 )
             )
 
-    def test_preversioned_database_requires_explicit_reset(self) -> None:
+    def test_unversioned_database_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store._database_path.parent.mkdir(parents=True)
             with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.execute("create table legacy_table (id integer primary key)")
+                connection.execute("create table unexpected_table (id integer primary key)")
                 connection.commit()
 
             with self.assertRaisesRegex(
-                LocalDatabaseResetRequiredError, "retired pre-versioned schema"
+                LocalDatabaseResetRequiredError, "no supported schema metadata"
             ):
                 store.metrics_summary()
 
-    def test_schema_five_is_migrated_without_clearing_local_data(self) -> None:
+    def test_noncanonical_schema_version_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            store._database_path.parent.mkdir(parents=True)
-            with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.executescript(
-                    """
-                    create table schema_metadata (
-                        singleton_id integer primary key,
-                        schema_version integer not null,
-                        applied_at text not null
-                    );
-                    insert into schema_metadata values (1, 5, '2026-06-07T00:00:00+00:00');
-                    create table visitor_identities (
-                        visitor_id text primary key,
-                        business_date text not null,
-                        camera_id integer,
-                        first_seen_at text not null,
-                        last_seen_at text not null,
-                        representative_embedding blob not null,
-                        embedding_dim integer not null,
-                        embedding_count integer not null default 1,
-                        model_name text not null,
-                        expires_at text not null
-                    );
-                    insert into visitor_identities values (
-                        'visitor-1',
-                        '2026-06-07',
-                        1,
-                        '2026-06-07T01:00:00+00:00',
-                        '2026-06-07T01:00:00+00:00',
-                        X'0000000000000000',
-                        2,
-                        1,
-                        'fast',
-                        '2026-06-08T02:00:00+00:00'
-                    );
-                    """
-                )
-
             store.metrics_summary()
-
             with closing(sqlite3.connect(store._database_path)) as connection:
-                version = connection.execute(
-                    "select schema_version from schema_metadata where singleton_id = 1"
-                ).fetchone()
-                identity = connection.execute(
-                    """
-                    select identity_status, canonical_visitor_id
-                    from visitor_identities
-                    where visitor_id = 'visitor-1'
-                    """
-                ).fetchone()
-                prototype_count = connection.execute(
-                    """
-                    select count(*)
-                    from visitor_identity_prototypes
-                    where visitor_id = 'visitor-1'
-                    """
-                ).fetchone()
-
-            self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
-            self.assertEqual(identity, ("confirmed", None))
-            self.assertEqual(prototype_count, (1,))
-
-    def test_schema_one_rtsp_profile_and_monitoring_state_survive_full_chain(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            store._database_path.parent.mkdir(parents=True)
-            with closing(sqlite3.connect(store._database_path)) as connection:
-                connection.executescript(
-                    """
-                    create table schema_metadata (
-                        singleton_id integer primary key, schema_version integer, applied_at text
-                    );
-                    insert into schema_metadata values (1, 1, '2026-01-01T00:00:00+00:00');
-                    create table camera_profiles (
-                        camera_id integer primary key, name text not null, zone text not null,
-                        status text not null, camera_type text not null, stream_url text not null,
-                        purpose text not null, resolution text not null, fps real not null,
-                        processing_profile text not null, tracking_confidence real,
-                        counting_confidence real not null, reid_mode text,
-                        unique_counting_mode text, config_json text not null,
-                        payload_json text not null, created_at text not null, updated_at text not null
-                    );
-                    insert into camera_profiles values (
-                        11, 'Legacy Entrance', 'Lobby', 'stopped', 'RTSP_CCTV',
-                        'rtsp://192.168.1.11/stream2', 'entry_exit', '1080p', 24,
-                        'balanced', 0.2, 0.35, 'auto', 'estimated_reid', '{}',
-                        '{"id":11,"name":"Legacy Entrance","zone":"Lobby","status":"stopped","rtsp":"rtsp://192.168.1.11/stream2","processingProfile":"balanced","trackingConfidence":0.2,"confidence":0.35,"reidMode":"auto","uniqueCountingMode":"estimated_reid","config":{}}',
-                        '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'
-                    );
-                    create table active_monitoring_state (
-                        singleton_id integer primary key, camera_id integer,
-                        camera_name_snapshot text, running integer, status text, error text,
-                        started_at text, entry_count integer, exit_count integer,
-                        occupancy_count integer, camera_config_json text, updated_at text
-                    );
-                    insert into active_monitoring_state values (
-                        1, 11, 'Legacy Entrance', 0, 'stopped', null, null, 7, 2, 5,
-                        '{}', '2026-01-01T00:00:00+00:00'
-                    );
-                    """
-                )
-
-            profiles = store.list_camera_profiles()
-            state = store.load_monitoring_state(11)
-
-            self.assertEqual(profiles[0]["name"], "Legacy Entrance")
-            self.assertEqual(profiles[0]["cameraHost"], "192.168.1.11")
-            self.assertEqual(profiles[0]["rtspStream"], "stream2")
-            assert state is not None
-            self.assertEqual(state["counts"]["occupancy"], 5)
-
-    def test_schema_five_migration_reclassifies_unsubmitted_ambiguous_identity(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            original.upsert_visitor_identity(
-                visitor_id="visitor-ambiguous",
-                business_date="2026-06-07",
-                camera_id=1,
-                embedding=b"\x00" * 8,
-                embedding_dim=2,
-                embedding_count=1,
-                model_name="fast",
-                expires_at="2026-06-08T02:00:00+00:00",
-                recorded_at="2026-06-07T01:00:00+00:00",
-            )
-            original.append_visitor_sighting(
-                {
-                    "visitor_id": "visitor-ambiguous",
-                    "business_date": "2026-06-07",
-                    "camera_id": 1,
-                    "track_id": 99,
-                    "direction": "entry",
-                    "reid_decision": "ambiguous_new",
-                    "identity_confidence": "low",
-                },
-                "2026-06-07T01:00:00+00:00",
-            )
-            event = _event("entry", entry=1, exit=0, occupancy=1, is_unique_entry=True)
-            event.update(
-                {
-                    "visitor_id": "visitor-ambiguous",
-                    "reid_decision": "ambiguous_new",
-                    "identity_confidence": "low",
-                }
-            )
-            original.append_count_event(event)
-            with closing(sqlite3.connect(original._database_path)) as connection:
-                connection.execute("update schema_metadata set schema_version = 5")
+                connection.execute("update schema_metadata set schema_version = 2")
                 connection.commit()
 
-            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            summary = migrated.metrics_summary()
-            identity = migrated.load_active_visitor_identities(
-                "2026-06-07", "2026-06-07T01:01:00+00:00"
-            )[0]
-
-            self.assertEqual(summary["estimated_unique_count"], 0)
-            self.assertEqual(summary["pending_unique_entries"], 1)
-            self.assertEqual(identity["identity_status"], "provisional")
-
-    def test_retired_database_filename_requires_explicit_reset(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            store._retired_database_path.parent.mkdir(parents=True)
-            with closing(sqlite3.connect(store._retired_database_path)) as connection:
-                connection.execute("create table count_events (id integer primary key)")
-                connection.commit()
-
-            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "tanaw_metrics.sqlite3"):
-                store.metrics_summary()
+            reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            with self.assertRaisesRegex(LocalDatabaseResetRequiredError, "schema 2 is unsupported"):
+                reopened.metrics_summary()
 
     def test_camera_profiles_are_persisted_without_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -284,7 +122,6 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertTrue(restored["running"])
             self.assertEqual(restored["camera_id"], 101)
             self.assertEqual(restored["counts"]["entry"], 4)
-            self.assertFalse((store._database_path.parent / "active_session.json").exists())
 
     def test_local_schema_has_no_sample_data_provenance_columns(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1039,24 +876,6 @@ class LocalDataStoreTest(unittest.TestCase):
                 list(executor.map(lambda item: item[1].append_count_event(item[0]), events))
 
             self.assertEqual(first.enterprise_occupancy(), 20)
-
-    def test_older_versioned_schema_is_upgraded_without_losing_events(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            original = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            original.append_count_event({**_event("entry", 1, 0, 1, True), "event_id": "kept"})
-            with closing(sqlite3.connect(original._database_path)) as connection:
-                connection.execute("update schema_metadata set schema_version = 3")
-                connection.commit()
-
-            migrated = LocalDataStore(str(Path(directory)), "enterprise@example.test")
-            summary = migrated.metrics_summary()
-            with closing(sqlite3.connect(migrated._database_path)) as connection:
-                version = connection.execute(
-                    "select schema_version from schema_metadata where singleton_id = 1"
-                ).fetchone()
-
-            self.assertEqual(summary["entries"], 1)
-            self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
 
     def test_report_camera_breakdown_survives_raw_event_purge(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

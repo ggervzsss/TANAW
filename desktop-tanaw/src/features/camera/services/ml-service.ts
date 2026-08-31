@@ -271,7 +271,6 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     camera_zone: camera.zone,
     camera_id: camera.id,
     camera_host: camera.cameraHost || null,
-    confidence: camera.confidence,
     counting_confidence: camera.confidence,
     entry_line: toMlTripwireLine(camera.config.tripwires.entry),
     event_cooldown_seconds: 3.6,

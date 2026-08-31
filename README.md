@@ -387,7 +387,7 @@ Stop the services without deleting database data:
 docker compose down
 ```
 
-Compose applies every versioned Alembic migration before the backend starts.
+Compose applies the canonical Alembic baseline before the backend starts.
 The backend validates that migration state, initializes the bootstrap IT account
 once, and optionally creates explicitly enabled development accounts. Later
 restarts never mutate the schema or synchronize or reset an existing account.
@@ -687,9 +687,8 @@ installed from a packaged desktop build.
 
 For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
 pre-deploy or release command before replacing the backend process. TANAW refuses
-to start against an uninitialized or outdated database. The canonical baseline
-starts a new migration history, so existing pre-release databases must be backed
-up and recreated before deployment.
+to start against an uninitialized database or one that does not match the
+canonical revision `0001`.
 
 ## Environment configuration
 

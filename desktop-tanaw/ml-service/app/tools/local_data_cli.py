@@ -9,8 +9,6 @@ from typing import Any
 
 APP_DIRECTORY_NAME = "desktop-tanaw"
 DATABASE_NAME = "tanaw_desktop.sqlite3"
-RETIRED_DATABASE_NAME = "tanaw_metrics.sqlite3"
-RETIRED_SESSION_NAME = "active_session.json"
 LEDGER_TABLES = (
     "schema_metadata",
     "camera_profiles",
@@ -133,13 +131,11 @@ def clear_local_data(
             removed_bytes += database_path.stat().st_size
             _clear_operational_rows(database_path)
             removed_paths.append(str(database_path))
-    retired_paths, retired_bytes = _remove_retired_artifacts(ml_root)
     return {
         "scope": "all-operational-ledgers",
         "path": str(ml_root),
         "removedPaths": removed_paths,
-        "removedBytes": removed_bytes + retired_bytes,
-        "retiredPathsRemoved": retired_paths,
+        "removedBytes": removed_bytes,
         "cameraProfilesPreserved": True,
         "browserStorageRemoved": False,
     }
@@ -312,35 +308,6 @@ def _clear_operational_rows(database_path: Path) -> None:
         connection.execute("pragma wal_checkpoint(truncate)")
     finally:
         connection.close()
-
-
-def _remove_retired_artifacts(ml_root: Path) -> tuple[list[str], int]:
-    scope_roots = [ml_root]
-    enterprise_root = ml_root / "enterprises"
-    if enterprise_root.exists():
-        scope_roots.extend(path for path in enterprise_root.iterdir() if path.is_dir())
-
-    candidates: list[Path] = []
-    for scope_root in scope_roots:
-        retired_database = scope_root / RETIRED_DATABASE_NAME
-        candidates.extend(
-            (
-                retired_database,
-                retired_database.with_name(f"{retired_database.name}-shm"),
-                retired_database.with_name(f"{retired_database.name}-wal"),
-                scope_root / RETIRED_SESSION_NAME,
-            )
-        )
-
-    removed_paths: list[str] = []
-    removed_bytes = 0
-    for candidate in candidates:
-        if not candidate.is_file():
-            continue
-        removed_bytes += candidate.stat().st_size
-        candidate.unlink()
-        removed_paths.append(str(candidate))
-    return removed_paths, removed_bytes
 
 
 def _directory_size(path: Path) -> int:

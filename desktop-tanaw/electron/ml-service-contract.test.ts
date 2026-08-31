@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { hasCompatibleCameraRuntime, hasCompatibleMlHealth } from "./ml-service-contract";
 
 describe("ML service compatibility contract", () => {
-  it("rejects the legacy health payload that caused the runtime 404", () => {
+  it("rejects an incomplete health payload", () => {
     expect(hasCompatibleMlHealth({ status: "ok", running: true })).toBe(false);
   });
 
   it("requires both the contract version and collection runtime shape", () => {
     expect(
       hasCompatibleMlHealth({
-        api_contract_version: 9,
+        api_contract_version: 1,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -17,7 +17,7 @@ describe("ML service compatibility contract", () => {
     ).toBe(true);
     expect(
       hasCompatibleMlHealth({
-        api_contract_version: 8,
+        api_contract_version: 2,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -25,7 +25,7 @@ describe("ML service compatibility contract", () => {
     ).toBe(false);
     expect(
       hasCompatibleMlHealth({
-        api_contract_version: 9,
+        api_contract_version: 1,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
       }),

@@ -32,32 +32,6 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
         self.assertFalse(manager._reid_worker.status()["reid_worker_alive"])
         self.assertFalse(manager._quality_reid_worker.status()["reid_worker_alive"])
 
-    def test_initial_enterprise_binding_does_not_write_unbound_retired_database(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            retired_database = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
-            retired_database.parent.mkdir(parents=True)
-            retired_database.write_bytes(b"retired")
-            manager = CameraProcessingManager(directory)
-
-            result = manager.bind_enterprise("enterprise-a@tanaw.test", "Enterprise A")
-
-            self.assertTrue(result["changed"])
-            self.assertEqual(result["enterprise_id"], "enterprise-a@tanaw.test")
-            self.assertEqual(retired_database.read_bytes(), b"retired")
-
-    def test_health_status_does_not_open_an_unbound_database(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            retired_database = Path(directory) / "ml-service" / "tanaw_metrics.sqlite3"
-            retired_database.parent.mkdir(parents=True)
-            retired_database.write_bytes(b"retired")
-            manager = CameraProcessingManager(directory)
-
-            status = manager.model_status()
-
-            self.assertEqual(status["estimated_unique_count"], 0)
-            self.assertEqual(status["confirmed_unique_count"], 0)
-            self.assertEqual(retired_database.read_bytes(), b"retired")
-
     def test_health_status_exposes_frame_freshness_and_stale_reid_results(self) -> None:
         manager = CameraProcessingManager()
 
@@ -777,6 +751,7 @@ def _session(session_id: int, **config_values: Any) -> ProcessingSession:
         session_id=session_id,
         config=CameraStartRequest(stream_url="rtsp://192.168.1.20/stream2", **config_values),
         stop_event=threading.Event(),
+        event_scope=f"test-{session_id}",
     )
 
 

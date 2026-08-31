@@ -17,7 +17,7 @@ async def local_database_reset_required(_request: Request, exc: Exception) -> JS
         raise exc
     return JSONResponse(
         status_code=409,
-        content={"code": "local_database_migration_required", "message": str(exc)},
+        content={"code": "local_database_reset_required", "message": str(exc)},
     )
 
 

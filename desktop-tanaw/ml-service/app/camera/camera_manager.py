@@ -1468,11 +1468,12 @@ class CameraProcessingManager:
             visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
             camera_id = self._config.camera_id if self._config else None
             direction_count = counts.get(direction, 0)
-            event_scope = session.event_scope or f"legacy-{session.session_id}"
             try:
                 self._session_store.append_event(
                     {
-                        "event_id": f"{camera_id}:{event_scope}:{direction}:{direction_count}",
+                        "event_id": (
+                            f"{camera_id}:{session.event_scope}:{direction}:{direction_count}"
+                        ),
                         "enterprise_id": self._enterprise_id,
                         "camera_id": camera_id,
                         "camera_name": self._config.camera_name if self._config else None,

@@ -77,7 +77,7 @@ def load_san_pedro_boundary() -> dict[str, Any] | None:
         / "frontend-tanaw"
         / "public"
         / "data"
-        / "san_pedro_barangays_clean_v4.geojson"
+        / "san_pedro_barangays_v1.geojson"
     )
 
     for path in candidates:
