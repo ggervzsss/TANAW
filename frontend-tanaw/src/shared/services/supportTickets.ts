@@ -6,12 +6,11 @@ export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
 export type SupportTicketStatus = "Open" | "In Review" | "Resolved";
 
 export type SupportTicketAttachment = {
-  id?: string | null;
+  id: string;
   fileName: string;
   mediaType: "image/png" | "image/jpeg" | "image/webp";
   sizeBytes: number;
-  dataUrl?: string;
-  url?: string | null;
+  url: string;
 };
 
 export type SupportTicketMessage = {
@@ -129,10 +128,6 @@ export async function fetchSupportTicketAttachmentBlob(attachment: SupportTicket
     return response.data;
   }
 
-  if (attachment.dataUrl) {
-    return dataUrlToBlob(attachment.dataUrl, attachment.mediaType);
-  }
-
   throw new Error("Attachment image data is unavailable.");
 }
 
@@ -151,20 +146,6 @@ function getSafeAttachmentRequestUrl(url: string | null | undefined) {
   }
 
   return null;
-}
-
-function dataUrlToBlob(dataUrl: string, expectedMediaType: SupportTicketAttachment["mediaType"]) {
-  const prefix = `data:${expectedMediaType};base64,`;
-  if (!dataUrl.startsWith(prefix)) {
-    throw new Error("Attachment image data is invalid.");
-  }
-
-  const binary = window.atob(dataUrl.slice(prefix.length));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: expectedMediaType });
 }
 
 function getBlobMediaType(value: string | undefined) {

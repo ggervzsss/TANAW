@@ -1,3 +1,4 @@
+import base64
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -21,6 +22,8 @@ from app.features.support.router import (
     support_ticket_notification_roles,
 )
 from app.features.support.schemas import (
+    MAX_SUPPORT_TICKET_ATTACHMENT_BYTES,
+    SupportTicketAttachmentCreate,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
@@ -122,6 +125,40 @@ def test_support_ticket_rejects_unknown_category() -> None:
             subject="Unknown category",
             description="The category is not part of the supported workflow.",
             affectedArea="Lobby",
+        )
+
+
+def test_support_ticket_attachment_rejects_malformed_base64() -> None:
+    with pytest.raises(ValidationError, match="Upload a valid image file"):
+        SupportTicketAttachmentCreate(
+            fileName="evidence.png",
+            mediaType="image/png",
+            sizeBytes=3,
+            dataUrl="data:image/png;base64,not-valid-base64!",
+        )
+
+
+def test_support_ticket_attachment_rejects_declared_size_mismatch() -> None:
+    encoded = base64.b64encode(b"actual attachment bytes").decode()
+
+    with pytest.raises(ValidationError, match="Photo size does not match"):
+        SupportTicketAttachmentCreate(
+            fileName="evidence.png",
+            mediaType="image/png",
+            sizeBytes=1,
+            dataUrl=f"data:image/png;base64,{encoded}",
+        )
+
+
+def test_support_ticket_attachment_rejects_oversized_decoded_content() -> None:
+    encoded = base64.b64encode(b"x" * (MAX_SUPPORT_TICKET_ATTACHMENT_BYTES + 1)).decode()
+
+    with pytest.raises(ValidationError, match="Each photo must be under 5 MB"):
+        SupportTicketAttachmentCreate(
+            fileName="evidence.png",
+            mediaType="image/png",
+            sizeBytes=1,
+            dataUrl=f"data:image/png;base64,{encoded}",
         )
 
 

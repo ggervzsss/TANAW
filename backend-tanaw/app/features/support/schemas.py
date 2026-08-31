@@ -1,3 +1,5 @@
+import base64
+import binascii
 from datetime import datetime
 from typing import Literal
 
@@ -13,15 +15,18 @@ SupportTicketCategory = Literal[
 SupportTicketPriority = Literal["Low", "Normal", "High", "Urgent"]
 SupportTicketStatus = Literal["Open", "In Review", "Resolved"]
 SupportTicketAttachmentType = Literal["image/png", "image/jpeg", "image/webp"]
+MAX_SUPPORT_TICKET_ATTACHMENT_BYTES = 5 * 1024 * 1024
+MAX_SUPPORT_TICKET_ATTACHMENT_DATA_URL_LENGTH = 7_200_000
 
 
-class SupportTicketAttachment(BaseModel):
-    id: str | None = None
+class SupportTicketAttachmentCreate(BaseModel):
     fileName: str = Field(min_length=1, max_length=160)
     mediaType: SupportTicketAttachmentType
-    sizeBytes: int = Field(ge=1, le=5 * 1024 * 1024)
-    dataUrl: str = Field(min_length=1, max_length=7_200_000)
-    url: str | None = None
+    sizeBytes: int = Field(ge=1, le=MAX_SUPPORT_TICKET_ATTACHMENT_BYTES)
+    dataUrl: str = Field(
+        min_length=1,
+        max_length=MAX_SUPPORT_TICKET_ATTACHMENT_DATA_URL_LENGTH,
+    )
 
     @field_validator("fileName")
     @classmethod
@@ -44,11 +49,30 @@ class SupportTicketAttachment(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_media_type_matches_data(self) -> SupportTicketAttachment:
+    def validate_attachment_data(self) -> SupportTicketAttachmentCreate:
         expected_prefix = f"data:{self.mediaType};base64,"
         if not self.dataUrl.startswith(expected_prefix):
             raise ValueError("Upload a valid image file.")
+        try:
+            decoded = base64.b64decode(
+                self.dataUrl.removeprefix(expected_prefix),
+                validate=True,
+            )
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("Upload a valid image file.") from exc
+        if not decoded or len(decoded) > MAX_SUPPORT_TICKET_ATTACHMENT_BYTES:
+            raise ValueError("Each photo must be under 5 MB.")
+        if len(decoded) != self.sizeBytes:
+            raise ValueError("Photo size does not match the uploaded content.")
         return self
+
+
+class SupportTicketAttachmentMetadata(BaseModel):
+    id: str
+    fileName: str
+    mediaType: SupportTicketAttachmentType
+    sizeBytes: int
+    url: str
 
 
 class SupportTicketCreate(BaseModel):
@@ -58,7 +82,10 @@ class SupportTicketCreate(BaseModel):
     description: str = Field(min_length=10, max_length=4000)
     affectedArea: str | None = Field(default=None, min_length=1, max_length=120)
     cameraNode: str | None = Field(default=None, max_length=120)
-    attachments: list[SupportTicketAttachment] = Field(default_factory=list, max_length=5)
+    attachments: list[SupportTicketAttachmentCreate] = Field(
+        default_factory=list,
+        max_length=5,
+    )
 
     @field_validator("subject", "description", "affectedArea", "cameraNode", mode="before")
     @classmethod
@@ -99,7 +126,7 @@ class SupportTicketSummary(BaseModel):
     description: str
     affectedArea: str | None = None
     cameraNode: str | None = None
-    attachments: list[SupportTicketAttachment] = Field(default_factory=list)
+    attachments: list[SupportTicketAttachmentMetadata] = Field(default_factory=list)
     status: SupportTicketStatus
     createdAt: datetime
     updatedAt: datetime

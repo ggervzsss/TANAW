@@ -1,9 +1,9 @@
-import type { SupportTicketAttachment, SupportTicketPriority, SupportTicketSort } from "../services/tickets";
+import type { SupportTicketAttachment, SupportTicketAttachmentCreate, SupportTicketPriority, SupportTicketSort } from "../services/tickets";
 import { isSupportTicketCategory, isSupportTicketPriority, type TicketFormState } from "./ticket-form-validation";
 
 export const ticketPriorities: SupportTicketPriority[] = ["Normal", "High", "Urgent", "Low"];
 export const maxTicketPhotoCount = 5;
-export const emptyTicketPhotos: SupportTicketAttachment[] = [];
+export const emptyTicketPhotos: SupportTicketAttachmentCreate[] = [];
 
 export const emptyTicketForm: TicketFormState = {
   affectedArea: "",
@@ -29,7 +29,7 @@ const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const allowedImageExtensions = new Set(["png", "jpg", "jpeg", "webp"]);
 const maxPhotoBytes = 5 * 1024 * 1024;
 
-export async function readTicketPhoto(file: File): Promise<SupportTicketAttachment> {
+export async function readTicketPhoto(file: File): Promise<SupportTicketAttachmentCreate> {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (!allowedImageTypes.has(file.type) || !allowedImageExtensions.has(extension)) {
     throw new Error("Only image files are allowed.");
@@ -66,7 +66,7 @@ export function isTicketFormState(value: unknown): value is TicketFormState {
   );
 }
 
-export function isTicketPhotoDraft(value: unknown): value is SupportTicketAttachment[] {
+export function isTicketPhotoDraft(value: unknown): value is SupportTicketAttachmentCreate[] {
   return (
     Array.isArray(value) &&
     value.length <= maxTicketPhotoCount &&

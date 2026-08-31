@@ -5,12 +5,18 @@ export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
 export type SupportTicketStatus = "Open" | "In Review" | "Resolved";
 
 export type SupportTicketAttachment = {
-  dataUrl: string;
   fileName: string;
-  id?: string | null;
+  id: string;
   mediaType: "image/png" | "image/jpeg" | "image/webp";
   sizeBytes: number;
-  url?: string | null;
+  url: string;
+};
+
+export type SupportTicketAttachmentCreate = {
+  dataUrl: string;
+  fileName: string;
+  mediaType: SupportTicketAttachment["mediaType"];
+  sizeBytes: number;
 };
 
 export type SupportTicketMessage = {
@@ -75,7 +81,7 @@ export type SupportTicketCreatePayload = {
   description: string;
   priority: SupportTicketPriority;
   subject: string;
-  attachments?: SupportTicketAttachment[];
+  attachments?: SupportTicketAttachmentCreate[];
 };
 
 export async function listSupportTickets() {
@@ -98,15 +104,41 @@ export async function replyToSupportTicket(ticketId: string, message: string) {
   return response.data;
 }
 
-export function getSupportTicketAttachmentUrl(attachment: SupportTicketAttachment) {
-  if (attachment.dataUrl) {
-    return attachment.dataUrl;
+const safeSupportTicketImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+export async function fetchSupportTicketAttachmentBlob(attachment: SupportTicketAttachment) {
+  const requestUrl = getSafeAttachmentRequestUrl(attachment.url);
+  if (!requestUrl) {
+    throw new Error("Attachment image data is unavailable.");
   }
-  if (attachment.url) {
-    const baseUrl = staffApi.defaults.baseURL ?? API_BASE_URL;
-    return attachment.url.startsWith("http") ? attachment.url : new URL(attachment.url, baseUrl).toString();
+
+  const response = await staffApi.get<Blob>(requestUrl, { responseType: "blob" });
+  const contentTypeHeader = response.headers["content-type"];
+  const responseType = getBlobMediaType(response.data.type || (typeof contentTypeHeader === "string" ? contentTypeHeader : undefined));
+  if (!safeSupportTicketImageTypes.has(responseType)) {
+    throw new Error("The attachment response was not a supported image.");
   }
-  return "";
+  return response.data;
+}
+
+function getSafeAttachmentRequestUrl(url: string) {
+  if (url.startsWith("/operational/tickets/")) return url;
+
+  try {
+    const parsedUrl = new URL(url);
+    const apiUrl = new URL(staffApi.defaults.baseURL ?? API_BASE_URL);
+    if (parsedUrl.origin === apiUrl.origin && parsedUrl.pathname.startsWith("/operational/tickets/")) {
+      return parsedUrl.toString();
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getBlobMediaType(value: string | undefined) {
+  return value?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
 }
 
 function compareSupportTickets(left: SupportTicket, right: SupportTicket, sort: SupportTicketSort) {

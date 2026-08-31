@@ -1,5 +1,38 @@
-import { describe, expect, it } from "vitest";
-import { sortRecommendedSupportTickets, type SupportTicket, type SupportTicketPriority, type SupportTicketStatus } from "./supportTickets";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { apiClient } from "../lib/apiClient";
+import { fetchSupportTicketAttachmentBlob, sortRecommendedSupportTickets, type SupportTicket, type SupportTicketPriority, type SupportTicketStatus } from "./supportTickets";
+
+vi.mock("../lib/apiClient", () => ({
+  apiClient: {
+    get: vi.fn(),
+  },
+}));
+
+describe("support ticket attachment retrieval", () => {
+  beforeEach(() => {
+    vi.mocked(apiClient.get).mockReset();
+  });
+
+  it("loads attachment content through the authenticated attachment endpoint", async () => {
+    const blob = new Blob(["recognizable attachment bytes"], { type: "image/png" });
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: blob,
+      headers: { "content-type": "image/png" },
+    });
+
+    await expect(
+      fetchSupportTicketAttachmentBlob({
+        id: "ticket-1:0",
+        fileName: "evidence.png",
+        mediaType: "image/png",
+        sizeBytes: blob.size,
+        url: "/operational/tickets/ticket-1/attachments/0",
+      }),
+    ).resolves.toBe(blob);
+
+    expect(apiClient.get).toHaveBeenCalledWith("/operational/tickets/ticket-1/attachments/0", { responseType: "blob" });
+  });
+});
 
 describe("recommended support ticket ordering", () => {
   it("orders active work by priority and keeps resolved tickets last", () => {

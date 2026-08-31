@@ -1,9 +1,10 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, MessageSquare, Paperclip, RefreshCw, Send, X } from "lucide-react";
+import { AlertCircle, ImageIcon, MessageSquare, Paperclip, RefreshCw, Send, X } from "lucide-react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import type { SystemTimeFormat } from "../../../utils/date-time";
-import { canReplyToSupportTicket, getSupportTicketAttachmentUrl, replyToSupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
+import { canReplyToSupportTicket, replyToSupportTicket, type SupportTicketAttachment, type SupportTicketDetail } from "../services/tickets";
+import { useTicketAttachmentImageUrl } from "../hooks/useTicketAttachmentImageUrl";
 import { TicketBadge, TicketStatusBadge } from "./TicketPresentation";
 import { formatFileSize, formatTicketTime, getTicketRequestError } from "../utils/ticket-presentation";
 
@@ -163,7 +164,7 @@ export function TicketDetailModal({ error, isLoading, onClose, onPreviewPhoto, o
                             onClick={() => onPreviewPhoto(attachment)}
                             className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-600 dark:bg-[#121c31] dark:hover:border-emerald-300/40 dark:hover:bg-emerald-500/10"
                           >
-                            <img src={getSupportTicketAttachmentUrl(attachment)} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
+                            <TicketAttachmentImage attachment={attachment} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-gray-200 dark:ring-slate-700" />
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-bold text-[#111827] dark:text-slate-100">{attachment.fileName}</span>
                               <span className="mt-1 block text-[11px] font-semibold text-gray-500 dark:text-slate-300">{formatFileSize(attachment.sizeBytes)}</span>
@@ -284,13 +285,32 @@ export function PhotoPreviewModal({ onClose, photo }: { onClose: () => void; pho
           </header>
           <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto bg-white p-5 dark:bg-[#121c31]">
             <div className="rounded-3xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-600 dark:bg-[#0f172a]">
-              <img src={getSupportTicketAttachmentUrl(photo)} alt={photo.fileName} className="max-h-[70vh] w-full rounded-2xl object-contain" />
+              <TicketAttachmentImage attachment={photo} alt={photo.fileName} className="max-h-[70vh] min-h-72 w-full rounded-2xl object-contain" showError />
             </div>
           </div>
         </section>
       </div>
     </ModalPortal>
   );
+}
+
+function TicketAttachmentImage({ alt, attachment, className, showError = false }: { alt: string; attachment: SupportTicketAttachment; className: string; showError?: boolean }) {
+  const { error, imageUrl, isLoading } = useTicketAttachmentImageUrl(attachment);
+
+  if (error || isLoading || !imageUrl) {
+    return (
+      <div
+        className={`${className} flex items-center justify-center border border-dashed border-gray-200 bg-white text-center text-gray-500 dark:border-slate-600 dark:bg-[#121c31] dark:text-slate-300`}
+      >
+        <span className="flex max-w-full flex-col items-center gap-2 px-3">
+          {isLoading ? <RefreshCw size={showError ? 28 : 18} className="animate-spin text-[#065f46] dark:text-emerald-200" /> : <ImageIcon size={showError ? 30 : 18} />}
+          {showError && <span className="text-sm font-semibold">{error || "Loading image"}</span>}
+        </span>
+      </div>
+    );
+  }
+
+  return <img src={imageUrl} alt={alt} className={className} />;
 }
 
 function DetailTile({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {

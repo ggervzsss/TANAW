@@ -8,7 +8,8 @@ from app.features.accounts.enterprise import enterprise_name
 from app.features.accounts.models import Account, AccountRole
 from app.features.support.models import SupportTicket, SupportTicketMessage
 from app.features.support.schemas import (
-    SupportTicketAttachment,
+    SupportTicketAttachmentCreate,
+    SupportTicketAttachmentMetadata,
     SupportTicketCreate,
     SupportTicketDetail,
     SupportTicketMessageCreate,
@@ -45,20 +46,23 @@ def to_support_ticket_summary(ticket: SupportTicket) -> SupportTicketSummary:
     )
 
 
-def ticket_attachment_summaries(ticket: SupportTicket) -> list[SupportTicketAttachment]:
+def ticket_attachment_summaries(
+    ticket: SupportTicket,
+) -> list[SupportTicketAttachmentMetadata]:
     attachments = parse_ticket_attachments(ticket.attachments_json)
     return [
-        attachment.model_copy(
-            update={
-                "id": f"{ticket.id}:{index}",
-                "url": f"/operational/tickets/{ticket.id}/attachments/{index}",
-            }
+        SupportTicketAttachmentMetadata(
+            id=f"{ticket.id}:{index}",
+            fileName=attachment.fileName,
+            mediaType=attachment.mediaType,
+            sizeBytes=attachment.sizeBytes,
+            url=f"/operational/tickets/{ticket.id}/attachments/{index}",
         )
         for index, attachment in enumerate(attachments)
     ]
 
 
-def parse_ticket_attachments(value: str | None) -> list[SupportTicketAttachment]:
+def parse_ticket_attachments(value: str | None) -> list[SupportTicketAttachmentCreate]:
     if not value:
         return []
     try:
@@ -67,10 +71,10 @@ def parse_ticket_attachments(value: str | None) -> list[SupportTicketAttachment]
         return []
     if not isinstance(parsed, list):
         return []
-    attachments: list[SupportTicketAttachment] = []
+    attachments: list[SupportTicketAttachmentCreate] = []
     for item in parsed:
         try:
-            attachments.append(SupportTicketAttachment.model_validate(item))
+            attachments.append(SupportTicketAttachmentCreate.model_validate(item))
         except ValueError:
             continue
     return attachments

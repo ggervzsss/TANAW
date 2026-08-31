@@ -1,5 +1,40 @@
-import { describe, expect, it } from "vitest";
-import { sortSupportTickets, type SupportTicket, type SupportTicketPriority, type SupportTicketStatus } from "./tickets";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffApi } from "../../../lib/axios";
+import { fetchSupportTicketAttachmentBlob, sortSupportTickets, type SupportTicket, type SupportTicketPriority, type SupportTicketStatus } from "./tickets";
+
+vi.mock("../../../lib/axios", () => ({
+  API_BASE_URL: "http://localhost:8000",
+  staffApi: {
+    defaults: { baseURL: "http://localhost:8000" },
+    get: vi.fn(),
+  },
+}));
+
+describe("support ticket attachment retrieval", () => {
+  beforeEach(() => {
+    vi.mocked(staffApi.get).mockReset();
+  });
+
+  it("loads attachment content through the authenticated attachment endpoint", async () => {
+    const blob = new Blob(["recognizable attachment bytes"], { type: "image/png" });
+    vi.mocked(staffApi.get).mockResolvedValue({
+      data: blob,
+      headers: { "content-type": "image/png" },
+    });
+
+    await expect(
+      fetchSupportTicketAttachmentBlob({
+        id: "ticket-1:0",
+        fileName: "evidence.png",
+        mediaType: "image/png",
+        sizeBytes: blob.size,
+        url: "/operational/tickets/ticket-1/attachments/0",
+      }),
+    ).resolves.toBe(blob);
+
+    expect(staffApi.get).toHaveBeenCalledWith("/operational/tickets/ticket-1/attachments/0", { responseType: "blob" });
+  });
+});
 
 describe("enterprise support ticket sorting", () => {
   const tickets = [
