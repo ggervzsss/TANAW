@@ -7,8 +7,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.base import Base
 from app.db.migrations import (
-    LATEST_DATABASE_REVISION,
+    CANONICAL_DATABASE_REVISION,
     DatabaseMigrationError,
+    canonical_schema_fingerprint,
     validate_database_migration_head,
 )
 
@@ -142,7 +143,9 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
 @pytest.mark.asyncio
 async def test_current_database_revision_is_accepted() -> None:
     connection = MagicMock()
-    connection.scalar = AsyncMock(return_value=LATEST_DATABASE_REVISION)
+    connection.scalar = AsyncMock(
+        side_effect=[CANONICAL_DATABASE_REVISION, canonical_schema_fingerprint()]
+    )
 
     await validate_database_migration_head(connection)
 
@@ -153,6 +156,28 @@ async def test_outdated_database_revision_is_rejected() -> None:
     connection.scalar = AsyncMock(return_value="0002")
 
     with pytest.raises(DatabaseMigrationError, match="migration is out of date"):
+        await validate_database_migration_head(connection)
+
+
+@pytest.mark.asyncio
+async def test_stale_canonical_schema_fingerprint_is_rejected() -> None:
+    connection = MagicMock()
+    connection.scalar = AsyncMock(
+        side_effect=[CANONICAL_DATABASE_REVISION, "stale-schema-fingerprint"]
+    )
+
+    with pytest.raises(DatabaseMigrationError, match="does not match the current canonical schema"):
+        await validate_database_migration_head(connection)
+
+
+@pytest.mark.asyncio
+async def test_missing_schema_identity_is_rejected() -> None:
+    connection = MagicMock()
+    connection.scalar = AsyncMock(
+        side_effect=[CANONICAL_DATABASE_REVISION, SQLAlchemyError("missing schema identity")]
+    )
+
+    with pytest.raises(DatabaseMigrationError, match="does not match the current canonical schema"):
         await validate_database_migration_head(connection)
 
 

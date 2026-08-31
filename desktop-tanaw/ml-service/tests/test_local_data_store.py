@@ -9,14 +9,14 @@ from uuid import UUID, uuid4
 
 from app.config.report_config import reporting_period_submission_error
 from app.storage.local_data_schema import (
-    LOCAL_SCHEMA_VERSION,
+    CURRENT_LOCAL_SCHEMA_ID,
     LocalDatabaseResetRequiredError,
 )
 from app.storage.local_data_store import LocalDataStore
 
 
 class LocalDataStoreTest(unittest.TestCase):
-    def test_canonical_schema_has_versioned_camera_and_session_tables(self) -> None:
+    def test_canonical_schema_has_current_identity_and_expected_tables(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
@@ -28,8 +28,8 @@ class LocalDataStoreTest(unittest.TestCase):
                         "select name from sqlite_master where type = 'table'"
                     )
                 }
-                version = connection.execute(
-                    "select schema_version from schema_metadata where singleton_id = 1"
+                identity = connection.execute(
+                    "select schema_id from schema_identity where singleton_id = 1"
                 ).fetchone()
                 foreign_keys = connection.execute(
                     "pragma foreign_key_list(count_events)"
@@ -43,7 +43,7 @@ class LocalDataStoreTest(unittest.TestCase):
             self.assertNotIn("active_monitoring_state", tables)
             self.assertNotIn("count_snapshots", tables)
             self.assertIn("enterprise_occupancy_state", tables)
-            self.assertEqual(version, (LOCAL_SCHEMA_VERSION,))
+            self.assertEqual(identity, (CURRENT_LOCAL_SCHEMA_ID,))
             self.assertNotIn("camera_type", camera_columns)
             self.assertNotIn("purpose", camera_columns)
             self.assertNotIn("resolution", camera_columns)
@@ -57,7 +57,7 @@ class LocalDataStoreTest(unittest.TestCase):
                 )
             )
 
-    def test_unversioned_database_requires_explicit_reset(self) -> None:
+    def test_unidentified_database_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store._database_path.parent.mkdir(parents=True)
@@ -66,25 +66,37 @@ class LocalDataStoreTest(unittest.TestCase):
                 connection.commit()
 
             with self.assertRaisesRegex(
-                LocalDatabaseResetRequiredError, "no supported schema metadata"
+                LocalDatabaseResetRequiredError, "does not match the current schema"
             ):
                 store.metrics_summary()
 
-    def test_noncanonical_schema_version_requires_explicit_reset(self) -> None:
+    def test_noncanonical_schema_identity_requires_explicit_reset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             store.metrics_summary()
             with closing(sqlite3.connect(store._database_path)) as connection:
-                unsupported_version = LOCAL_SCHEMA_VERSION + 1
-                connection.execute(
-                    "update schema_metadata set schema_version = ?", (unsupported_version,)
-                )
+                connection.execute("update schema_identity set schema_id = ?", (str(uuid4()),))
                 connection.commit()
 
             reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
             with self.assertRaisesRegex(
                 LocalDatabaseResetRequiredError,
-                f"schema {unsupported_version} is unsupported",
+                "does not match the current schema",
+            ):
+                reopened.metrics_summary()
+
+    def test_incomplete_current_schema_requires_explicit_reset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            store.metrics_summary()
+            with closing(sqlite3.connect(store._database_path)) as connection:
+                connection.execute("drop table report_drafts")
+                connection.commit()
+
+            reopened = LocalDataStore(str(Path(directory)), "enterprise@example.test")
+            with self.assertRaisesRegex(
+                LocalDatabaseResetRequiredError,
+                "does not match the current schema",
             ):
                 reopened.metrics_summary()
 

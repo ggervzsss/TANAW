@@ -10,7 +10,7 @@ from typing import Any
 APP_DIRECTORY_NAME = "desktop-tanaw"
 DATABASE_NAME = "tanaw_desktop.sqlite3"
 LEDGER_TABLES = (
-    "schema_metadata",
+    "schema_identity",
     "camera_profiles",
     "camera_monitoring_states",
     "count_events",
@@ -216,7 +216,7 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
         "eventRange": {"first": None, "last": None},
         "recentEvents": [],
         "recentReports": [],
-        "schemaVersion": None,
+        "schemaId": None,
     }
     if not database_path.exists():
         return result
@@ -232,12 +232,12 @@ def _inspect_ledger(scope: str, database_path: Path, limit: int) -> dict[str, An
             table: _row_count(connection, table) if table in existing_tables else 0
             for table in LEDGER_TABLES
         }
-        if "schema_metadata" in existing_tables:
-            version_row = connection.execute(
-                "select schema_version from schema_metadata where singleton_id = 1"
+        if "schema_identity" in existing_tables:
+            identity_row = connection.execute(
+                "select schema_id from schema_identity where singleton_id = 1"
             ).fetchone()
-            result["schemaVersion"] = (
-                int(version_row["schema_version"]) if version_row is not None else None
+            result["schemaId"] = (
+                str(identity_row["schema_id"]) if identity_row is not None else None
             )
         if "count_events" in existing_tables:
             result["currentDraftEvents"] = connection.execute(
@@ -344,7 +344,7 @@ def _print_inspection(result: dict[str, Any]) -> None:
             print("  Status: not found")
             continue
         print(f"  Size: {ledger['sizeBytes']} bytes")
-        print(f"  Schema version: {ledger['schemaVersion']}")
+        print(f"  Schema ID: {ledger['schemaId']}")
         print(f"  Current draft events: {ledger['currentDraftEvents']}")
         print(f"  Event range: {ledger['eventRange']['first']} to {ledger['eventRange']['last']}")
         print("  Tables:")

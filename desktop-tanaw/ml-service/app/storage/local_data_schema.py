@@ -1,9 +1,25 @@
 import sqlite3
 from pathlib import Path
 
-from app.storage.local_data_serialization import _safe_int
-
-LOCAL_SCHEMA_VERSION = 2
+# Replace this opaque identity whenever the canonical SQLite DDL changes.
+CURRENT_LOCAL_SCHEMA_ID = "30b844a2-3035-4b90-88be-10156f4083a8"
+CURRENT_LOCAL_TABLES = frozenset(
+    {
+        "schema_identity",
+        "camera_profiles",
+        "camera_monitoring_states",
+        "enterprise_occupancy_state",
+        "count_events",
+        "report_submissions",
+        "report_drafts",
+        "report_camera_totals",
+        "occupancy_corrections",
+        "visitor_identities",
+        "visitor_identity_prototypes",
+        "visitor_model_embeddings",
+        "visitor_sightings",
+    }
+)
 
 
 class LocalDatabaseResetRequiredError(RuntimeError):
@@ -16,7 +32,6 @@ def initialize_local_database(
     enterprise_id: str | None,
 ) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    database_exists = database_path.exists()
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
     try:
@@ -27,33 +42,34 @@ def initialize_local_database(
         existing_tables = {
             str(row["name"])
             for row in connection.execute("select name from sqlite_master where type = 'table'")
+            if not str(row["name"]).startswith("sqlite_")
         }
-        if database_exists and existing_tables and "schema_metadata" not in existing_tables:
+        if existing_tables and existing_tables != CURRENT_LOCAL_TABLES:
             raise LocalDatabaseResetRequiredError(
-                "The local TANAW database has no supported schema metadata. "
+                "The local TANAW database does not match the current schema. "
                 f"Close TANAW and run `{_reset_command(enterprise_id)}`, then reopen "
                 "the application."
             )
-        if "schema_metadata" in existing_tables:
-            version_row = connection.execute(
-                "select schema_version from schema_metadata where singleton_id = 1"
+        if existing_tables:
+            identity_row = connection.execute(
+                "select schema_id from schema_identity where singleton_id = 1"
             ).fetchone()
-            current_version = _safe_int(
-                version_row["schema_version"] if version_row is not None else None
-            )
-            if current_version != LOCAL_SCHEMA_VERSION:
+            schema_id = str(identity_row["schema_id"]) if identity_row is not None else None
+            if schema_id != CURRENT_LOCAL_SCHEMA_ID:
                 raise LocalDatabaseResetRequiredError(
-                    f"Local TANAW database schema {current_version} is unsupported; "
-                    f"this release requires schema {LOCAL_SCHEMA_VERSION}. Close TANAW "
-                    f"and run `{_reset_command(enterprise_id)}`, then reopen the application."
+                    "The local TANAW database does not match the current schema. "
+                    f"Close TANAW and run `{_reset_command(enterprise_id)}`, then reopen "
+                    "the application."
                 )
+            return
 
         connection.executescript(
             f"""
-            create table if not exists schema_metadata (
+            begin immediate;
+
+            create table if not exists schema_identity (
                 singleton_id integer primary key check (singleton_id = 1),
-                schema_version integer not null,
-                applied_at text not null
+                schema_id text not null
             );
 
             create table if not exists camera_profiles (
@@ -102,12 +118,6 @@ def initialize_local_database(
                 current_occupancy integer not null default 0 check (current_occupancy >= 0),
                 peak_occupancy integer not null default 0 check (peak_occupancy >= 0),
                 updated_at text not null
-            );
-
-            insert or ignore into schema_metadata (
-                singleton_id, schema_version, applied_at
-            ) values (
-                1, {LOCAL_SCHEMA_VERSION}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
             );
 
             create table if not exists count_events (
@@ -274,6 +284,14 @@ def initialize_local_database(
             );
 
             create index if not exists idx_visitor_sightings_business_date on visitor_sightings(business_date);
+
+            insert into schema_identity (
+                singleton_id, schema_id
+            ) values (
+                1, '{CURRENT_LOCAL_SCHEMA_ID}'
+            );
+
+            commit;
             """
         )
         connection.commit()

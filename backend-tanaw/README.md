@@ -148,11 +148,13 @@ uv run alembic upgrade head
 uv run uvicorn main:app
 ```
 
-Application startup validates the `alembic_version` revision and fails with an
-actionable error when the database is missing or does not match the canonical
-baseline. It never creates, alters, or drops schema objects. Revision `0001` is
-the complete initial TANAW schema and intentionally contains no compatibility
-or reconciliation logic.
+Application startup validates both the `alembic_version` revision and the
+fingerprint recorded when the canonical baseline created the database. It
+fails with an actionable error when the database is missing or does not exactly
+match that baseline. It never creates, alters, or drops schema objects.
+Revision `0001` is the complete initial TANAW schema and intentionally contains
+no compatibility or reconciliation logic. When the baseline changes during
+pre-production, recreate the database instead of upgrading it.
 
 ### Canonical account and enterprise ownership
 
