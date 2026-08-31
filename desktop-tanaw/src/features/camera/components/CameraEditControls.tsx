@@ -2,9 +2,9 @@ import React from "react";
 import { Maximize, Video } from "lucide-react";
 import type { Camera } from "../../../types/enterprise";
 import { SelectDropdown } from "../../../components/SelectDropdown";
+import { CameraIpAddressField } from "./CameraIpAddressField";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
-import { TapoRtspBuilder } from "./TapoRtspBuilder";
-import { buildTapoRtspUrl, isValidIpv4, parseRtspConnection, type TapoStreamId } from "../utils/rtsp";
+import { buildTapoRtspUrl, CAMERA_QUALITY_OPTIONS, isValidIpv4, parseRtspConnection, type TapoStreamId } from "../utils/rtsp";
 
 type CameraEditControlsProps = {
   cameraIpError?: string;
@@ -52,7 +52,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
     <div className="space-y-3 rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130]">
       <section>
         <h4 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-wider text-[#111827] uppercase">
-          <Video size={14} className="text-[#065f46]" /> Camera Stream
+          <Video size={14} className="text-[#065f46]" /> Camera Settings
         </h4>
         <div className="space-y-2">
           <CompactField label="Camera Name">
@@ -74,6 +74,15 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
           <details className="rounded-xl border border-gray-200 bg-gray-50 p-2.5">
             <summary className="cursor-pointer text-[9px] font-bold tracking-wider text-gray-500 uppercase">Advanced Settings</summary>
             <div className="mt-2 space-y-2">
+              <CompactField label="Video Quality">
+                <SelectDropdown
+                  value={rtspStream}
+                  onChange={(stream) => updateRtspSource(cameraHost, stream as TapoStreamId)}
+                  options={CAMERA_QUALITY_OPTIONS.map((option) => [option.value, option.label] as const)}
+                  ariaLabel="Video quality"
+                  size="compact"
+                />
+              </CompactField>
               <CompactField label="Processing Profile">
                 <SelectDropdown
                   value={editForm.processingProfile}
@@ -200,22 +209,11 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               {hasExistingPassword && !editForm.password ? <span className="mt-1 block text-[9px] font-semibold text-gray-500">Password configured. Leave blank to keep it unchanged.</span> : null}
             </CompactField>
           </div>
-          <TapoRtspBuilder
+          <CameraIpAddressField
             host={cameraHost}
-            streamId={rtspStream}
             error={cameraIpError ?? (cameraHost && !isValidIpv4(cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined)}
             onHostChange={(host) => updateRtspSource(host, rtspStream)}
-            onStreamChange={(stream) => updateRtspSource(cameraHost, stream)}
-            layout="stacked"
           />
-          <CompactField label="Stream URL">
-            <input
-              readOnly
-              aria-readonly="true"
-              value={editForm.rtsp}
-              className="w-full cursor-default rounded-lg border border-gray-200 bg-gray-100 px-2 py-1.5 font-mono text-xs text-gray-600 outline-none"
-            />
-          </CompactField>
         </div>
       </section>
     </div>

@@ -295,7 +295,10 @@ are never stored as database rows.
 
 TANAW accepts RTSP cameras only. Camera creation requires both a non-blank
 device username and device password. These are device credentials and do not use TANAW account
-password-complexity rules. Stream URLs remain credential-free. Existing
+password-complexity rules. New cameras use the recommended standard-quality
+feed automatically and are connection-tested before being added; users can
+choose high quality later under Advanced Settings. Generated stream URLs
+remain internal and credential-free. Existing
 passwords are never populated into the edit form; a blank edit password keeps
 the encrypted value unchanged, while an entered value replaces it. Electron
 refuses plaintext credential persistence when OS secure storage is unavailable,

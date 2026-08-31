@@ -2,10 +2,10 @@ import { Check, RefreshCw, Video, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import type { CameraFormValues } from "../types/camera";
-import { buildTapoRtspUrl, isValidIpv4, type TapoStreamId } from "../utils/rtsp";
+import { buildTapoRtspUrl, isValidIpv4 } from "../utils/rtsp";
 import { validateCameraForm } from "../utils/camera-form-validation";
+import { CameraIpAddressField } from "./CameraIpAddressField";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
-import { TapoRtspBuilder } from "./TapoRtspBuilder";
 
 type CameraAddModalProps = {
   newCam: CameraFormValues;
@@ -24,12 +24,12 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
   const usernameError = errors.username ?? (touchedCredentials.username ? currentErrors.username : undefined);
   const passwordError = errors.password ?? (touchedCredentials.password ? currentErrors.password : undefined);
   const canSave = Object.keys(currentErrors).length === 0 && !duplicateIpError;
-  const updateRtspSource = (cameraHost: string, rtspStream: TapoStreamId) => {
+  const updateCameraHost = (cameraHost: string) => {
     onChange({
       ...newCam,
       cameraHost,
-      rtsp: buildTapoRtspUrl(cameraHost, rtspStream),
-      rtspStream,
+      rtsp: buildTapoRtspUrl(cameraHost, "stream2"),
+      rtspStream: "stream2",
     });
   };
 
@@ -86,15 +86,13 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               </div>
 
               <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">
-                <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">RTSP Camera Configuration</h4>
-                <TapoRtspBuilder
-                  host={newCam.cameraHost}
-                  streamId={newCam.rtspStream}
-                  error={hostError}
-                  showHeading={false}
-                  onHostChange={(cameraHost) => updateRtspSource(cameraHost, newCam.rtspStream)}
-                  onStreamChange={(rtspStream) => updateRtspSource(newCam.cameraHost, rtspStream)}
-                />
+                <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">Camera Connection</h4>
+                <CameraIpAddressField host={newCam.cameraHost} error={hostError} onHostChange={updateCameraHost} />
+                {errors.rtsp ? (
+                  <p role="alert" className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
+                    {errors.rtsp}
+                  </p>
+                ) : null}
               </section>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -128,15 +126,6 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 </ModalField>
               </div>
 
-              <ModalField label="Stream URL" error={errors.rtsp}>
-                <input
-                  readOnly
-                  aria-readonly="true"
-                  value={newCam.rtsp}
-                  className="w-full cursor-default rounded-xl border border-gray-200 bg-gray-100 p-3 font-mono text-sm text-gray-600 outline-none dark:border-slate-700 dark:bg-[#0b1220] dark:text-slate-300"
-                />
-              </ModalField>
-
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-700">
                 <button
                   type="button"
@@ -152,11 +141,11 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 >
                   {isValidating ? (
                     <>
-                      <RefreshCw size={16} className="animate-spin" /> Validating Stream...
+                      <RefreshCw size={16} className="animate-spin" /> Testing Camera...
                     </>
                   ) : (
                     <>
-                      <Check size={16} /> Save Configuration
+                      <Check size={16} /> Test &amp; Add Camera
                     </>
                   )}
                 </button>

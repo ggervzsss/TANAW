@@ -14,6 +14,7 @@ import {
 } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { cameraConfigurationLimitMessage, DEFAULT_ENTERPRISE_CAMERA_LIMIT, hasReachedCameraConfigurationLimit } from "../utils/camera-capacity";
+import { buildTapoRtspUrl } from "../utils/rtsp";
 import {
   createCameraUpdateGate,
   getCameraSaveRuntimeAction,
@@ -505,21 +506,18 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       id: Date.now(),
       name: newCam.name.trim(),
       password: undefined,
-      rtsp: newCam.rtsp.trim(),
-      rtspStream: newCam.rtspStream,
+      rtsp: buildTapoRtspUrl(newCam.cameraHost, "stream2"),
+      rtspStream: "stream2",
       status: "untested",
       username: newCam.username.trim(),
       zone: newCam.zone.trim(),
     });
+    let metadata: Awaited<ReturnType<typeof saveCameraCredential>>;
     try {
-      const metadata = await saveCameraCredential(storageKey, newCameraNode.id, {
+      metadata = await saveCameraCredential(storageKey, newCameraNode.id, {
         password: newCam.password,
         username: newCam.username,
       });
-      setCredentialMetadata((current) => ({
-        ...current,
-        [String(newCameraNode.id)]: metadata,
-      }));
     } catch (error) {
       setCameraFormErrors({
         password: toErrorMessage(error),
@@ -527,11 +525,31 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       setIsValidating(false);
       return;
     }
-    setCameras((current) => [...current, newCameraNode]);
-    setActiveCamId(newCameraNode.id);
+
+    try {
+      const result = await testCameraConnection(mlBaseUrl, newCameraNode, storageKey);
+      if (!result.ok) throw new Error(result.message);
+    } catch (error) {
+      try {
+        await deleteCameraCredential(storageKey, newCameraNode.id);
+      } catch {
+        // The connection error remains the actionable failure for the user.
+      }
+      setCameraFormErrors({ rtsp: toErrorMessage(error) });
+      setIsValidating(false);
+      return;
+    }
+
+    setCredentialMetadata((current) => ({
+      ...current,
+      [String(newCameraNode.id)]: metadata,
+    }));
+    const verifiedCameraNode: Camera = { ...newCameraNode, status: "online" };
+    setCameras((current) => [...current, verifiedCameraNode]);
+    setActiveCamId(verifiedCameraNode.id);
     setNewCam(emptyCameraForm);
     setCameraFormErrors({});
-    setCameraError(newCameraNode.id, null);
+    setCameraError(verifiedCameraNode.id, null);
     setIsValidating(false);
     setShowAddModal(false);
   };

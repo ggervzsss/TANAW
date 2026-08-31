@@ -1,8 +1,8 @@
 export type TapoStreamId = "stream1" | "stream2";
 
-export const TAPO_STREAM_OPTIONS: Array<{ label: string; value: TapoStreamId }> = [
-  { label: "Stream2 Low Latency", value: "stream2" },
-  { label: "Stream1 High Quality", value: "stream1" },
+export const CAMERA_QUALITY_OPTIONS: Array<{ label: string; value: TapoStreamId }> = [
+  { label: "Standard quality (Recommended)", value: "stream2" },
+  { label: "High quality", value: "stream1" },
 ];
 
 export function buildTapoRtspUrl(hostInput: string, streamId: TapoStreamId = "stream2") {

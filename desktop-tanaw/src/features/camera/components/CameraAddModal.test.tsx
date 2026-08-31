@@ -8,18 +8,20 @@ vi.mock("../../../components/ModalPortal", () => ({
 }));
 
 describe("CameraAddModal", () => {
-  it("renders the required field order and a copyable read-only generated URL", () => {
+  it("renders a simple camera setup without exposing stream internals", () => {
     const markup = render(values(), {});
-    const labels = ["Camera Name", "Assigned Zone", "Camera IP / Host", "RTSP Stream", "Username", "Password", "Stream URL"];
+    const labels = ["Camera Name", "Assigned Zone", "Camera IP Address", "Username", "Password"];
     const positions = labels.map((label) => markup.indexOf(label));
 
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
-    expect(markup).toContain('readonly=""');
-    expect(markup).toContain("rtsp://192.168.1.9/stream2");
-    expect(markup).not.toContain("Optional");
-    expect(markup).not.toContain("Credentials and video processing");
-    expect(markup).not.toContain("Read Only");
+    expect(markup).toContain("Camera Connection");
+    expect(markup).toContain("Test &amp; Add Camera");
+    expect(markup).not.toContain("RTSP Stream");
+    expect(markup).not.toContain("Stream URL");
+    expect(markup).not.toContain("rtsp://");
+    expect(markup).not.toContain("stream1");
+    expect(markup).not.toContain("stream2");
   });
 
   it("disables saving and shows an inline error for an invalid IPv4 address", () => {
@@ -47,6 +49,15 @@ describe("CameraAddModal", () => {
 
     expect(markup).toContain("A camera with this IP address is already configured");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*type="submit"|<button[^>]*type="submit"[^>]*disabled=""/);
+  });
+
+  it("shows camera connection failures without exposing the generated URL", () => {
+    const markup = render(values({ username: "camera-user", password: "device pass" }), {
+      rtsp: "Unable to connect to this camera. Check its address and credentials.",
+    });
+
+    expect(markup).toContain("Unable to connect to this camera");
+    expect(markup).not.toContain("rtsp://");
   });
 });
 
