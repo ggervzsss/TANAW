@@ -24,7 +24,7 @@ staffApi.interceptors.request.use((config) => {
 staffApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    if (error.response?.status === 401) {
       useAuthStore.getState().logout();
     }
 

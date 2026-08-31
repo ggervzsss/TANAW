@@ -152,9 +152,10 @@ async def login(
     ):
         if lockout_candidate is not None:
             remaining = register_failed_login(lockout_candidate, policy=lockout_policy)
-            await db.commit()
             if remaining > 0:
                 await notify_failed_login_threshold(db, lockout_candidate)
+            await db.commit()
+            if remaining > 0:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail={

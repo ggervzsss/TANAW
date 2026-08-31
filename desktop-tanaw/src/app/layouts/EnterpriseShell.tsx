@@ -101,7 +101,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   }, [notificationStorageKey]);
 
   useEffect(() => {
-    if (currentUserQuery.isError && isAxiosError(currentUserQuery.error) && (currentUserQuery.error.response?.status === 401 || currentUserQuery.error.response?.status === 403)) {
+    if (currentUserQuery.isError && isAxiosError(currentUserQuery.error) && currentUserQuery.error.response?.status === 401) {
       logout();
       navigate(routePaths.login, { replace: true });
     }
