@@ -1,9 +1,12 @@
+from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import raiseload
 
 from app.core.date_time import ensure_aware
 from app.features.accounts.models import Account, AccountRole
@@ -39,26 +42,66 @@ from app.features.reporting.schemas import (
     ReportDemographicsSummary,
 )
 
+FINAL_REPORT_LIST_LIMIT = 500
+
 
 async def list_final_reports(
-    db: AsyncSession, account: Account, limit: int = 500
+    db: AsyncSession,
+    account: Account,
+    limit: int = FINAL_REPORT_LIST_LIMIT,
+    offset: int = 0,
 ) -> list[FinalReportSummary]:
-    statement = select(FinalReport).order_by(FinalReport.generated_on.desc()).limit(limit)
-    reports = list((await db.scalars(statement)).all())
+    statement = select(FinalReport)
     if account.role == AccountRole.ENTERPRISE:
-        visible_ids = {
-            item.final_report_id
-            for item in (
-                await db.scalars(
-                    select(FinalReportSource)
-                    .join(FinalReportSource.intake_report)
-                    .where(EnterpriseReportSubmission.enterprise_profile_id == account.id)
-                )
-            ).all()
-        }
-        reports = [report for report in reports if report.id in visible_ids]
+        visible_final_report = (
+            select(FinalReportSource.id)
+            .join(
+                EnterpriseReportSubmission,
+                EnterpriseReportSubmission.id == FinalReportSource.intake_report_id,
+            )
+            .where(
+                FinalReportSource.final_report_id == FinalReport.id,
+                EnterpriseReportSubmission.enterprise_profile_id == account.id,
+            )
+            .exists()
+        )
+        statement = statement.where(visible_final_report)
 
-    return [await to_final_report_summary(db, report) for report in reports]
+    statement = (
+        statement.order_by(FinalReport.generated_on.desc(), FinalReport.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    reports = list((await db.scalars(statement)).all())
+    sources_by_report = await load_final_report_sources(db, [report.id for report in reports])
+
+    return [
+        final_report_summary(report, sources_by_report.get(report.id, ())) for report in reports
+    ]
+
+
+async def load_final_report_sources(
+    db: AsyncSession, final_report_ids: Sequence[str]
+) -> dict[str, list[FinalReportSource]]:
+    sources_by_report: defaultdict[str, list[FinalReportSource]] = defaultdict(list)
+    if not final_report_ids:
+        return {}
+
+    sources = (
+        await db.scalars(
+            select(FinalReportSource)
+            .where(FinalReportSource.final_report_id.in_(final_report_ids))
+            .options(raiseload(FinalReportSource.intake_report))
+            .order_by(
+                FinalReportSource.final_report_id.asc(),
+                FinalReportSource.enterprise.asc(),
+                FinalReportSource.intake_report_id.asc(),
+            )
+        )
+    ).all()
+    for source in sources:
+        sources_by_report[source.final_report_id].append(source)
+    return dict(sources_by_report)
 
 
 async def create_final_report(
@@ -276,13 +319,13 @@ async def find_final_report(
 
 
 async def to_final_report_summary(db: AsyncSession, report: FinalReport) -> FinalReportSummary:
-    sources = (
-        await db.scalars(
-            select(FinalReportSource)
-            .where(FinalReportSource.final_report_id == report.id)
-            .order_by(FinalReportSource.enterprise.asc())
-        )
-    ).all()
+    sources = await load_final_report_sources(db, [report.id])
+    return final_report_summary(report, sources.get(report.id, ()))
+
+
+def final_report_summary(
+    report: FinalReport, sources: Sequence[FinalReportSource]
+) -> FinalReportSummary:
     return FinalReportSummary(
         id=report.report_code,
         title=report.title,

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from app.features.reporting.errors import (
     InvalidReportWorkflowError,
 )
 from app.features.reporting.final_reports import (
+    FINAL_REPORT_LIST_LIMIT,
     create_final_report,
     return_final_report_for_revision,
     update_final_report_status,
@@ -185,8 +186,10 @@ async def update_intake_report_status(
 async def list_final_report_submissions(
     account: OperationalReadAccount,
     db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=FINAL_REPORT_LIST_LIMIT)] = FINAL_REPORT_LIST_LIMIT,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[FinalReportSummary]:
-    return await list_final_report_records(db, account)
+    return await list_final_report_records(db, account, limit=limit, offset=offset)
 
 
 @router.post(

@@ -10,7 +10,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, event, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -32,6 +32,7 @@ from app.features.reporting.errors import (
 )
 from app.features.reporting.final_reports import (
     create_final_report,
+    list_final_reports,
     return_final_report_for_revision,
     to_final_report_summary,
 )
@@ -59,6 +60,15 @@ TEST_PREPARED_BY_PREFIX = "Reporting PG"
 class CreatedEnterprise:
     id: str
     email: str
+
+
+@dataclass(frozen=True)
+class FinalListingRecord:
+    final_id: str
+    report_code: str
+    intake_report_id: str
+    snapshot_enterprise: str
+    snapshot_unique: int
 
 
 @pytest_asyncio.fixture
@@ -300,6 +310,110 @@ def _create_test_app(runtime: PostgresRuntime) -> FastAPI:
 
 def _authorization(account: CreatedEnterprise) -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token(account.id)}"}
+
+
+def _reader(account_id: str, role: AccountRole) -> Account:
+    return Account(
+        id=account_id,
+        email=f"reader-{account_id}@example.com",
+        password_hash="unused-test-password-hash",
+        role=role,
+        display_name="Reporting Reader",
+        title="Reporting Reader",
+        status=AccountStatus.ACTIVE,
+    )
+
+
+async def _seed_final_listing_records(
+    runtime: PostgresRuntime,
+    enterprise: CreatedEnterprise,
+    *,
+    count: int,
+    label: str,
+    generated_on: datetime,
+) -> list[FinalListingRecord]:
+    records: list[FinalListingRecord] = []
+    async with runtime.sessions() as db:
+        for index in range(count):
+            intake_report_id = str(uuid4())
+            final_id = str(uuid4())
+            report_code = f"CON-F09-{label.upper()}-{index:03d}-{uuid4().hex[:8]}"
+            snapshot_enterprise = f"F09 Snapshot {label} {index}"
+            snapshot_unique = index + 10
+            period = f"F09 {label} Period {index}"
+            intake = EnterpriseReportSubmission(
+                id=intake_report_id,
+                report_id=f"REP-F09-{label.upper()}-{index:03d}",
+                enterprise_profile_id=enterprise.id,
+                enterprise_name=snapshot_enterprise,
+                category="business",
+                barangay="Poblacion",
+                period=period,
+                month=f"F09-{index:03d}",
+                submitted_at=generated_on,
+                entries=index + 20,
+                exits=index + 5,
+                peak_occupancy=index + 15,
+                unique_count=snapshot_unique,
+                status="Submitted",
+                review_status="Consolidated",
+                payload_json=json.dumps(
+                    {
+                        "demo": {
+                            "thisProvMale": str(snapshot_unique),
+                            "thisProvFemale": "0",
+                            "otherProvMale": "0",
+                            "otherProvFemale": "0",
+                            "foreignMale": "0",
+                            "foreignFemale": "0",
+                        }
+                    }
+                ),
+            )
+            final_report = FinalReport(
+                id=final_id,
+                report_code=report_code,
+                title="F09 bounded listing",
+                period=period,
+                generated_on=generated_on,
+                prepared_by=f"{TEST_PREPARED_BY_PREFIX} F09 {label}",
+                prepared_role="Staff Processing Division",
+                status="Finalized",
+                total_entry=intake.entries,
+                total_exit=intake.exits,
+                total_unique=snapshot_unique,
+                enterprise_count=1,
+            )
+            db.add_all([intake, final_report])
+            await db.flush()
+            db.add(
+                FinalReportSource(
+                    final_report_id=final_id,
+                    intake_report_id=intake_report_id,
+                    enterprise=snapshot_enterprise,
+                    code=intake.report_id,
+                    unique_count=snapshot_unique,
+                    entries=intake.entries,
+                    exits=intake.exits,
+                    this_prov_male=snapshot_unique,
+                    this_prov_female=0,
+                    other_prov_male=0,
+                    other_prov_female=0,
+                    foreign_male=0,
+                    foreign_female=0,
+                )
+            )
+            records.append(
+                FinalListingRecord(
+                    final_id=final_id,
+                    report_code=report_code,
+                    intake_report_id=intake_report_id,
+                    snapshot_enterprise=snapshot_enterprise,
+                    snapshot_unique=snapshot_unique,
+                )
+            )
+        await db.commit()
+    return records
 
 
 @pytest.mark.asyncio
@@ -795,3 +909,156 @@ async def test_returned_sources_reconsolidate_into_the_same_final_report(
         )
         assert len(final_ids) == 1
         assert source_count == 2
+
+
+@pytest.mark.asyncio
+async def test_final_report_listing_uses_snapshots_scope_order_and_pagination(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    first_enterprise = await _create_enterprise(postgres_runtime, label="f09-list-one")
+    second_enterprise = await _create_enterprise(postgres_runtime, label="f09-list-two")
+    generated_on = datetime(2200, 1, 1, 8, tzinfo=UTC)
+    first_records = await _seed_final_listing_records(
+        postgres_runtime,
+        first_enterprise,
+        count=2,
+        label="list-one",
+        generated_on=generated_on,
+    )
+    second_records = await _seed_final_listing_records(
+        postgres_runtime,
+        second_enterprise,
+        count=1,
+        label="list-two",
+        generated_on=generated_on,
+    )
+    all_records = [*first_records, *second_records]
+
+    mutated_record = first_records[0]
+    async with postgres_runtime.sessions() as db:
+        intake = await db.get(EnterpriseReportSubmission, mutated_record.intake_report_id)
+        assert intake is not None
+        intake.enterprise_name = "Mutable intake changed after finalization"
+        intake.report_id = "REP-F09-MUTATED"
+        intake.unique_count = 999
+        intake.entries = 999
+        intake.payload_json = json.dumps(
+            {
+                "demo": {
+                    "thisProvMale": "0",
+                    "thisProvFemale": "999",
+                    "otherProvMale": "0",
+                    "otherProvFemale": "0",
+                    "foreignMale": "0",
+                    "foreignFemale": "0",
+                }
+            }
+        )
+        await db.commit()
+
+    staff = _reader(str(uuid4()), AccountRole.STAFF)
+    expected_order = [
+        record.report_code
+        for record in sorted(all_records, key=lambda record: record.final_id, reverse=True)
+    ]
+    async with postgres_runtime.sessions() as db:
+        first_page = await list_final_reports(db, staff, limit=2, offset=0)
+        second_page = await list_final_reports(db, staff, limit=2, offset=2)
+        first_enterprise_reports = await list_final_reports(
+            db,
+            _reader(first_enterprise.id, AccountRole.ENTERPRISE),
+        )
+        empty_reports = await list_final_reports(
+            db,
+            _reader(str(uuid4()), AccountRole.ENTERPRISE),
+        )
+
+    combined = [*first_page, *second_page]
+    assert [report.id for report in combined[:3]] == expected_order
+    mutated_summary = next(
+        source
+        for report in combined
+        for source in report.sources
+        if source.id == mutated_record.intake_report_id
+    )
+    assert mutated_summary.enterprise == mutated_record.snapshot_enterprise
+    assert mutated_summary.unique == mutated_record.snapshot_unique
+    assert mutated_summary.entry != 999
+    assert mutated_summary.demographics is not None
+    assert mutated_summary.demographics.thisProvMale == mutated_record.snapshot_unique
+    assert {report.id for report in first_enterprise_reports} == {
+        record.report_code for record in first_records
+    }
+    assert empty_reports == []
+
+    application = _create_test_app(postgres_runtime)
+    transport = ASGITransport(app=application)
+    expected_enterprise_order = [
+        record.report_code
+        for record in sorted(first_records, key=lambda record: record.final_id, reverse=True)
+    ]
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            "/operational/reports/final?limit=1&offset=1",
+            headers=_authorization(first_enterprise),
+        )
+        invalid_limit = await client.get(
+            "/operational/reports/final?limit=501",
+            headers=_authorization(first_enterprise),
+        )
+
+    assert response.status_code == 200
+    assert [report["id"] for report in response.json()] == [expected_enterprise_order[1]]
+    assert invalid_limit.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_final_report_listing_query_count_is_bounded(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    enterprise = await _create_enterprise(postgres_runtime, label="f09-query-count")
+    records = await _seed_final_listing_records(
+        postgres_runtime,
+        enterprise,
+        count=20,
+        label="query-count",
+        generated_on=datetime(2300, 1, 1, 8, tzinfo=UTC),
+    )
+    staff = _reader(str(uuid4()), AccountRole.STAFF)
+    statements: list[str] = []
+
+    def capture_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    event.listen(postgres_runtime.engine.sync_engine, "before_cursor_execute", capture_statement)
+    try:
+        async with postgres_runtime.sessions() as db:
+            one_report = await list_final_reports(db, staff, limit=1)
+        one_report_query_count = len(statements)
+
+        statements.clear()
+        async with postgres_runtime.sessions() as db:
+            twenty_reports = await list_final_reports(db, staff, limit=20)
+        twenty_report_statements = list(statements)
+    finally:
+        event.remove(
+            postgres_runtime.engine.sync_engine,
+            "before_cursor_execute",
+            capture_statement,
+        )
+
+    assert len(one_report) == 1
+    assert len(twenty_reports) == len(records)
+    assert len(twenty_report_statements) <= one_report_query_count + 1
+    assert len(twenty_report_statements) <= 3
+    assert all(
+        "enterprise_report_submissions" not in statement.lower()
+        for statement in twenty_report_statements
+    )
