@@ -1,9 +1,14 @@
 export const LOCAL_DESKTOP_API_BASE_URL = "http://localhost:8000";
+export const LOCAL_DESKTOP_RENDERER_ORIGIN = "http://127.0.0.1:5174";
 export const PACKAGED_RENDERER_ORIGIN = "tanaw-app://desktop";
 export const PACKAGED_RENDERER_ENTRY_URL = `${PACKAGED_RENDERER_ORIGIN}/index.html`;
 
 type DesktopApiBaseUrlOptions = {
   distributionBuild: boolean;
+};
+
+type DesktopRendererContentSecurityPolicyOptions = {
+  development: boolean;
 };
 
 export function resolveDesktopApiBaseUrl(configuredValue: string | undefined, { distributionBuild }: DesktopApiBaseUrlOptions): string {
@@ -34,6 +39,32 @@ export function resolveDesktopApiBaseUrl(configuredValue: string | undefined, { 
 
   const pathname = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
   return `${url.origin}${pathname}`;
+}
+
+export function buildDesktopRendererContentSecurityPolicy(apiBaseUrl: string, { development }: DesktopRendererContentSecurityPolicyOptions): string {
+  const apiOrigin = new URL(apiBaseUrl).origin;
+  const apiWebSocketOrigin = toWebSocketOrigin(apiOrigin);
+  const connectSources = new Set(["'self'", apiOrigin, apiWebSocketOrigin]);
+  if (development) connectSources.add(toWebSocketOrigin(LOCAL_DESKTOP_RENDERER_ORIGIN));
+
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: tanaw-ml:",
+    "media-src 'self' blob: tanaw-ml:",
+    `connect-src ${[...connectSources].join(" ")}`,
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-src 'none'",
+  ].join("; ");
+}
+
+function toWebSocketOrigin(httpOrigin: string): string {
+  const url = new URL(httpOrigin);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.origin;
 }
 
 function isLocalOrPrivateHost(hostname: string): boolean {

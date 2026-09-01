@@ -4,7 +4,7 @@ import { defineConfig, loadEnv } from "vite";
 import electron from "vite-plugin-electron/simple";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { resolveDesktopApiBaseUrl } from "./deployment.config";
+import { buildDesktopRendererContentSecurityPolicy, LOCAL_DESKTOP_RENDERER_ORIGIN, resolveDesktopApiBaseUrl } from "./deployment.config";
 
 const rendererOnly = process.env.TANAW_RENDERER_ONLY === "true";
 
@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const distributionBuild = (process.env.TANAW_DESKTOP_DISTRIBUTION ?? env.TANAW_DESKTOP_DISTRIBUTION)?.toLowerCase() === "true";
   const apiBaseUrl = resolveDesktopApiBaseUrl(process.env.VITE_API_BASE_URL ?? env.VITE_API_BASE_URL, { distributionBuild });
+  const rendererCsp = buildDesktopRendererContentSecurityPolicy(apiBaseUrl, { development: mode === "development" });
+  const rendererDevelopmentUrl = new URL(LOCAL_DESKTOP_RENDERER_ORIGIN);
 
   return {
     base: "./",
@@ -20,8 +22,8 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_API_BASE_URL": JSON.stringify(apiBaseUrl),
     },
     server: {
-      host: "127.0.0.1",
-      port: 5174,
+      host: rendererDevelopmentUrl.hostname,
+      port: Number(rendererDevelopmentUrl.port),
       warmup: {
         clientFiles: [
           "./index.html",
@@ -38,6 +40,19 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      {
+        name: "tanaw-renderer-content-security-policy",
+        transformIndexHtml: {
+          order: "pre",
+          handler: () => [
+            {
+              tag: "meta",
+              attrs: { "http-equiv": "Content-Security-Policy", content: rendererCsp },
+              injectTo: "head-prepend",
+            },
+          ],
+        },
+      },
       react(),
       tailwindcss(),
       ...(rendererOnly

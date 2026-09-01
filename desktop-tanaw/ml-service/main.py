@@ -3,15 +3,17 @@ import os
 
 import uvicorn
 
-from app.main import app
+from app.config.service_settings import ServiceSettings
+from app.main import app, create_app
 
 __all__ = ["app", "main"]
 
 
 def main() -> None:
+    settings = ServiceSettings.from_environment()
     port = int(os.environ.get("TANAW_ML_SERVICE_PORT", "8765"))
-    host = os.environ.get("TANAW_ML_SERVICE_HOST", "127.0.0.1")
-    uvicorn.run("app.main:app", host=host, port=port, reload=False, access_log=False)
+    application = create_app(settings=settings)
+    uvicorn.run(application, host=settings.bind_host, port=port, reload=False, access_log=False)
 
 
 if __name__ == "__main__":

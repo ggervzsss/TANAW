@@ -2,7 +2,7 @@
 
 This FastAPI service provides the local camera-processing runtime used by TANAW Desktop. It owns camera connectivity, person detection and tracking, entry/exit counting, local metrics storage, and report-draft persistence.
 
-The Electron main process starts the service with an ephemeral `TANAW_ML_SERVICE_TOKEN`. Desktop HTTP requests send that token in the `X-TANAW-ML-Token` header, while WebSocket stream requests use the `access_token` query parameter. Running the service directly without the environment variable leaves this authentication boundary disabled for local development tools.
+The Electron main process starts the service on loopback with an ephemeral `TANAW_ML_SERVICE_TOKEN`. Desktop HTTP requests send that token in the `X-TANAW-ML-Token` header, while WebSocket stream requests use the `access_token` query parameter. Running the service directly without the environment variable leaves authentication disabled only when the service binds to a loopback address for local development tools. A non-loopback `TANAW_ML_SERVICE_HOST` is rejected unless `TANAW_ML_SERVICE_TOKEN` is a whitespace-free token of at least 32 characters.
 
 ## Development
 

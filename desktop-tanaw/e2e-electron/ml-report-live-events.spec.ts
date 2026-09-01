@@ -16,6 +16,7 @@ test("mediates authenticated report events across preload and IPC", async () => 
     });
     const page = await getMainWindow(electronApp);
     await expectBridge(page);
+    expect(await rendererConnectSources(page)).toEqual(["'self'", "http://localhost:8000", "ws://localhost:8000"]);
     await expect.poll(() => sidecar.requestTokens.length).toBeGreaterThan(0);
 
     const exposedApi = await page.evaluate(async () => ({
@@ -102,6 +103,17 @@ async function getMainWindow(electronApp: ElectronApplication) {
 
 async function expectBridge(page: Page) {
   await page.waitForFunction(() => typeof window.tanawMlService?.subscribeToReportEvents === "function");
+}
+
+async function rendererConnectSources(page: Page) {
+  return page.evaluate(() => {
+    const policy = document.querySelector<HTMLMetaElement>('meta[http-equiv="Content-Security-Policy"]')?.content ?? "";
+    const directive = policy
+      .split(";")
+      .map((item) => item.trim())
+      .find((item) => item.startsWith("connect-src "));
+    return directive?.split(/\s+/).slice(1) ?? [];
+  });
 }
 
 async function subscribeInRenderer(page: Page) {
