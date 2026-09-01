@@ -1,7 +1,23 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { ML_REPORT_LIVE_EVENT_CHANNELS, type MlReportLiveEvent } from "../src/types/ml-report-live-events";
 
 let startupRevealed = false;
 const startupRevealListeners = new Set<() => void>();
+const reportEventListeners = new Set<(event: MlReportLiveEvent) => void>();
+
+const handleReportEvent = (_event: Electron.IpcRendererEvent, reportEvent: MlReportLiveEvent) => {
+  for (const listener of reportEventListeners) listener(reportEvent);
+};
+
+ipcRenderer.on(ML_REPORT_LIVE_EVENT_CHANNELS.event, handleReportEvent);
+
+window.addEventListener("unload", () => {
+  if (reportEventListeners.size > 0) {
+    ipcRenderer.send(ML_REPORT_LIVE_EVENT_CHANNELS.unsubscribe);
+    reportEventListeners.clear();
+  }
+  ipcRenderer.removeListener(ML_REPORT_LIVE_EVENT_CHANNELS.event, handleReportEvent);
+});
 
 ipcRenderer.on("startup:revealed", () => {
   startupRevealed = true;
@@ -21,6 +37,21 @@ contextBridge.exposeInMainWorld("tanawMlService", {
   },
   request(request: { body?: string; method: string; timeoutMs: number; url: string }) {
     return ipcRenderer.invoke("ml-service:request", request);
+  },
+  subscribeToReportEvents(listener: (event: MlReportLiveEvent) => void) {
+    if (reportEventListeners.size === 0) {
+      ipcRenderer.send(ML_REPORT_LIVE_EVENT_CHANNELS.subscribe);
+    }
+    reportEventListeners.add(listener);
+    let subscribed = true;
+    return () => {
+      if (!subscribed) return;
+      subscribed = false;
+      reportEventListeners.delete(listener);
+      if (reportEventListeners.size === 0) {
+        ipcRenderer.send(ML_REPORT_LIVE_EVENT_CHANNELS.unsubscribe);
+      }
+    };
   },
 });
 

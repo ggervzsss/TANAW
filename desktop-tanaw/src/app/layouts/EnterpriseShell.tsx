@@ -65,7 +65,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => resolveThemePreference(getInitialThemePreference()));
   const [mlContextReady, setMlContextReady] = useState(false);
   const [mlContextError, setMlContextError] = useState<string | null>(null);
-  const [mlBaseUrl, setMlBaseUrl] = useState(DEFAULT_ML_SERVICE_BASE_URL);
   const [backendNotifications, setBackendNotifications] = useState<BackendNotification[]>([]);
   const displayName = user?.enterpriseName ?? user?.name ?? "Enterprise User";
   const initials = getInitials(displayName);
@@ -75,7 +74,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     [activeView, user?.id, user?.role],
   );
 
-  useDesktopCloudSync(mlContextReady, mlBaseUrl);
+  useDesktopCloudSync(mlContextReady);
   usePersistentIssue({
     id: "ml-enterprise-context",
     message: mlContextError,
@@ -167,7 +166,6 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     void getMlServiceStatus()
       .then((status) => {
         const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-        setMlBaseUrl(baseUrl);
         return setMlEnterpriseContext(baseUrl, enterpriseId, user?.enterpriseName ?? user?.displayName ?? user?.name);
       })
       .then(() => {

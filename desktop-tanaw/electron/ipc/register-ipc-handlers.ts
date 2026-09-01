@@ -1,6 +1,7 @@
 import { ipcMain, type WebContents } from "electron";
 import { cameraCredentialScopeForCurrentSession, clearAuthSession, loadAuthSession, saveAuthSession } from "../stores/auth-session-store";
 import { loadCameraCredentials, removeCameraCredential, saveCameraCredential } from "../stores/camera-credential-store";
+import { ML_REPORT_LIVE_EVENT_CHANNELS } from "../../src/types/ml-report-live-events";
 
 type IpcHandlerDependencies = {
   getMlServiceStatus: () => unknown | Promise<unknown>;
@@ -10,6 +11,8 @@ type IpcHandlerDependencies = {
   requestCamera: (scope: string, cameraId: unknown, operation: unknown, payload: unknown) => Promise<unknown>;
   restartMlService: () => Promise<void>;
   stopCamera: () => Promise<void>;
+  subscribeToReportEvents: (sender: WebContents) => void;
+  unsubscribeFromReportEvents: (sender: WebContents) => void;
 };
 
 export function registerIpcHandlers(dependencies: IpcHandlerDependencies) {
@@ -36,6 +39,14 @@ export function registerIpcHandlers(dependencies: IpcHandlerDependencies) {
   ipcMain.handle("ml-service:request", (event, request: unknown) => {
     requireMainRenderer(event.sender);
     return dependencies.requestMlService(request);
+  });
+  ipcMain.on(ML_REPORT_LIVE_EVENT_CHANNELS.subscribe, (event) => {
+    requireMainRenderer(event.sender);
+    dependencies.subscribeToReportEvents(event.sender);
+  });
+  ipcMain.on(ML_REPORT_LIVE_EVENT_CHANNELS.unsubscribe, (event) => {
+    requireMainRenderer(event.sender);
+    dependencies.unsubscribeFromReportEvents(event.sender);
   });
 
   ipcMain.handle("camera-credentials:load", (event) => {

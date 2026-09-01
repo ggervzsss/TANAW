@@ -1,11 +1,6 @@
 import { useEffect, useRef } from "react";
-import {
-  getMlCameraWebSocketUrl,
-  type MlCameraLiveEnvelope,
-  type MlCameraStates,
-} from "../../camera/services/ml-service";
+import type { MlCameraStates } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { createReconnectingWebSocket } from "../../../utils/reconnecting-websocket";
 import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 import { CAMERA_FRAME_STALE_AFTER_MS } from "../services/camera-monitoring";
 
@@ -20,7 +15,7 @@ type LiveTelemetryState = {
   timerId: number | undefined;
 };
 
-export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
+export function useDesktopCloudSync(contextReady: boolean) {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.user?.role);
   const syncStateRef = useRef({ preparation: false, reports: false, telemetry: false });
@@ -117,16 +112,12 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
       scheduleTelemetrySync();
     };
 
-    const liveConnection = createReconnectingWebSocket({
-      url: getMlCameraWebSocketUrl(mlBaseUrl),
-      onOpen: () => {
+    const unsubscribeFromReportEvents = window.tanawMlService?.subscribeToReportEvents((event) => {
+      if (event.type === "connected") {
         scheduleTelemetrySync();
-      },
-      onMessage: (event) => {
-        const envelope = parseLiveCameraEnvelope(event.data);
-        if (envelope?.type !== "camera.states") return;
-        handleLiveCameraStates(envelope.data);
-      },
+      } else {
+        handleLiveCameraStates(event.data);
+      }
     });
 
     const runAllSync = () => {
@@ -144,21 +135,13 @@ export function useDesktopCloudSync(contextReady: boolean, mlBaseUrl: string) {
     return () => {
       isDisposed = true;
       clearLiveTelemetryTimer();
-      liveConnection.dispose();
+      unsubscribeFromReportEvents?.();
       window.clearInterval(telemetryIntervalId);
       window.clearInterval(preparationIntervalId);
       window.clearInterval(reportIntervalId);
       window.removeEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
     };
-  }, [contextReady, mlBaseUrl, role, token]);
-}
-
-function parseLiveCameraEnvelope(rawData: string): MlCameraLiveEnvelope | null {
-  try {
-    return JSON.parse(rawData) as MlCameraLiveEnvelope;
-  } catch {
-    return null;
-  }
+  }, [contextReady, role, token]);
 }
 
 function liveCameraStatesSignature(states: MlCameraStates) {

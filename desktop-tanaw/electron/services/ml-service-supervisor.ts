@@ -13,6 +13,7 @@ import { classifyMlServiceStderr } from "../ml-service-log";
 import { buildWindowsListenerPidScript, buildWindowsTerminateTreeArgs, shouldTerminateExternalService, waitForListenerRelease } from "../ml-service-process";
 import { getCameraCredential, normalizeCameraCredentialId } from "../stores/camera-credential-store";
 import { SerializedOperationQueue } from "./serialized-operation-queue";
+import { MlReportLiveEventStream } from "./ml-report-live-events";
 
 const desktopBuild = getDesktopBuildFingerprint();
 const mlServicePort = Number(process.env["TANAW_ML_SERVICE_PORT"] ?? "8765");
@@ -21,6 +22,10 @@ const mlServiceAccessToken = randomBytes(32).toString("hex");
 const ML_SERVICE_STARTUP_TIMEOUT_MS = 20_000;
 const execFileAsync = promisify(execFile);
 const lifecycleOperations = new SerializedOperationQueue();
+const reportLiveEvents = new MlReportLiveEventStream({
+  accessToken: mlServiceAccessToken,
+  baseUrl: mlServiceUrl,
+});
 
 let mlServiceProcess: ChildProcess | null = null;
 let mlServiceError: string | null = null;
@@ -63,6 +68,7 @@ async function startMlServiceUnlocked() {
   if (existingService.compatible) {
     mlServiceConnectedExternally = true;
     mlServiceError = null;
+    reportLiveEvents.reconnectAfterServiceRestart();
     notifyStatusChange();
     return;
   }
@@ -142,6 +148,8 @@ async function startMlServiceUnlocked() {
   if (!(await waitForCompatibleMlService(ML_SERVICE_STARTUP_TIMEOUT_MS))) {
     mlServiceError = "The local ML service started but did not expose the required camera runtime API.";
     notifyStatusChange();
+  } else {
+    reportLiveEvents.reconnectAfterServiceRestart();
   }
 }
 
@@ -204,6 +212,14 @@ export async function proxyMlServiceJsonRequest(requestInput: unknown) {
     status: response.status,
     statusText: response.statusText,
   };
+}
+
+export function subscribeToMlReportLiveEvents(sender: Parameters<MlReportLiveEventStream["subscribe"]>[0]) {
+  reportLiveEvents.subscribe(sender);
+}
+
+export function unsubscribeFromMlReportLiveEvents(sender: Parameters<MlReportLiveEventStream["unsubscribe"]>[0]) {
+  reportLiveEvents.unsubscribe(sender);
 }
 
 export async function proxyMlServiceStream(request: Request) {
@@ -496,6 +512,7 @@ export function shutdownMlService() {
 }
 
 async function shutdownMlServiceUnlocked() {
+  reportLiveEvents.dispose();
   if (isMlServiceRunning()) {
     await stopCameraProcessingFromTray();
   }

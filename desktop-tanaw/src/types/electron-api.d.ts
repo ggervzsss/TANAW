@@ -8,6 +8,8 @@ type MlServiceStatus = {
   running: boolean;
 };
 
+type MlReportLiveEvent = import("./ml-report-live-events").MlReportLiveEvent;
+
 interface Window {
   tanawStartup?: {
     onRevealed?: (listener: () => void) => () => void;
@@ -23,6 +25,7 @@ interface Window {
     restart: () => Promise<MlServiceStatus>;
     request: (request: { body?: string; method: string; timeoutMs: number; url: string }) => Promise<{ body: string; ok: boolean; status: number; statusText: string }>;
     stopCamera: () => Promise<MlServiceStatus>;
+    subscribeToReportEvents: (listener: (event: MlReportLiveEvent) => void) => () => void;
   };
   tanawCameraCredentials?: {
     load: () => Promise<Record<string, { passwordConfigured: boolean; username?: string }>>;

@@ -18,6 +18,8 @@ import {
   shutdownMlService,
   startMlService,
   stopCameraProcessingFromTray,
+  subscribeToMlReportLiveEvents,
+  unsubscribeFromMlReportLiveEvents,
 } from "./services/ml-service-supervisor";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -407,6 +409,8 @@ if (gotSingleInstanceLock) {
       requestMlService: proxyMlServiceJsonRequest,
       restartMlService,
       stopCamera: stopCameraProcessingFromTray,
+      subscribeToReportEvents: subscribeToMlReportLiveEvents,
+      unsubscribeFromReportEvents: unsubscribeFromMlReportLiveEvents,
     });
     createTray();
 
