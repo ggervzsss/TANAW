@@ -1,4 +1,12 @@
 import { spawn } from "node:child_process";
+import { assertWindowsReleaseHost, assertWindowsSigningCredentials, releaseBuilderArguments } from "../release.config.ts";
+
+const requireSigning = process.argv.includes("--require-signing");
+
+assertWindowsReleaseHost();
+if (requireSigning) {
+  assertWindowsSigningCredentials(process.env);
+}
 
 const environment = {
   ...process.env,
@@ -6,17 +14,20 @@ const environment = {
 };
 
 try {
-  for (const script of ["deployment:validate", "build", "renderer:verify", "ml:bundle", "builder"]) {
+  for (const script of ["release:verify", "deployment:validate", "build", "renderer:verify", "ml:bundle", "release:verify:inputs"]) {
     await runNpmScript(script);
   }
+  await runNpmScript("builder", releaseBuilderArguments(requireSigning));
+  await runNpmScript("release:verify:packaged");
+  await runNpmScript("release:checksums");
 } catch (error) {
   console.error(error instanceof Error ? error.message : "The desktop distribution build failed.");
   process.exitCode = 1;
 }
 
-function runNpmScript(script) {
+function runNpmScript(script, forwardedArguments = []) {
   const command = process.platform === "win32" ? "npm.cmd" : "npm";
-  const child = spawn(command, ["run", script], {
+  const child = spawn(command, ["run", script, ...(forwardedArguments.length > 0 ? ["--", ...forwardedArguments] : [])], {
     env: environment,
     shell: process.platform === "win32",
     stdio: "inherit",

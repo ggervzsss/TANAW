@@ -5,6 +5,8 @@
   asar: true,
   icon: "build/icon.png",
   productName: "TANAW Enterprise Desktop",
+  electronLanguages: ["en-US", "fil"],
+  forceCodeSigning: false,
   directories: {
     output: "release/${version}",
   },
@@ -13,23 +15,38 @@
     {
       from: "ml-service/dist/tanaw-ml-service",
       to: "ml-service/runtime",
-      filter: ["**/*"],
+      filter: ["tanaw-ml-service.exe", "_internal/**/*", "!_internal/**/__pycache__/**/*", "!_internal/**/*.pyc", "!_internal/**/*.pyo", "!_internal/mypy/**/*", "!_internal/torch/test/**/*"],
     },
     {
       from: "ml-service/models",
       to: "ml-service/models",
-      filter: ["**/*"],
+      filter: [
+        "person_reid.onnx",
+        "person_reid_cpu.onnx",
+        "yolo11m.pt",
+        "yolo11m_640_openvino_model/metadata.yaml",
+        "yolo11m_640_openvino_model/yolo11m.bin",
+        "yolo11m_640_openvino_model/yolo11m.xml",
+        "yolo11n.pt",
+        "yolo11n_480_openvino_model/metadata.yaml",
+        "yolo11n_480_openvino_model/yolo11n.bin",
+        "yolo11n_480_openvino_model/yolo11n.xml",
+        "yolo11n_640_openvino_model/metadata.yaml",
+        "yolo11n_640_openvino_model/yolo11n.bin",
+        "yolo11n_640_openvino_model/yolo11n.xml",
+        "yolo11s.pt",
+        "yolo11s_640_openvino_model/metadata.yaml",
+        "yolo11s_640_openvino_model/yolo11s.bin",
+        "yolo11s_640_openvino_model/yolo11s.xml",
+      ],
     },
   ],
-  mac: {
-    icon: "build/icon.icns",
-    target: ["dmg"],
-    artifactName: "${productName}-Mac-${version}-Installer.${ext}",
-  },
   win: {
     icon: "build/icon.ico",
-    signAndEditExecutable: false,
-    verifyUpdateCodeSignature: false,
+    signAndEditExecutable: true,
+    signtoolOptions: {
+      signingHashAlgorithms: ["sha256"],
+    },
     target: [
       {
         target: "nsis",
@@ -43,10 +60,5 @@
     perMachine: false,
     allowToChangeInstallationDirectory: true,
     deleteAppDataOnUninstall: false,
-  },
-  linux: {
-    icon: "build/icon.png",
-    target: ["AppImage"],
-    artifactName: "${productName}-Linux-${version}.${ext}",
   },
 }

@@ -23,9 +23,31 @@ analysis = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["gdown", "onnx", "onnxscript", "pytest", "tensorboard", "torchreid"],
+    excludes=[
+        "gdown",
+        "mypy",
+        "onnx",
+        "onnxscript",
+        "pytest",
+        "tensorboard",
+        "torchreid",
+    ],
     noarchive=False,
 )
+
+
+def keep_production_runtime_entry(entry):
+    destination = entry[0].replace("\\", "/")
+    return not (
+        destination.startswith("mypy/")
+        or destination.startswith("torch/test/")
+        or "/__pycache__/" in destination
+        or destination.endswith((".pyc", ".pyo"))
+    )
+
+
+analysis.binaries = TOC(entry for entry in analysis.binaries if keep_production_runtime_entry(entry))
+analysis.datas = TOC(entry for entry in analysis.datas if keep_production_runtime_entry(entry))
 python_archive = PYZ(analysis.pure)
 
 executable = EXE(

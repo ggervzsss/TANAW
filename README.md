@@ -435,10 +435,17 @@ npm run build
 npm start
 ```
 
-To create a platform installer or package:
+To create an unsigned local Windows x64 installer for package testing:
 
 ```shell
 npm run dist
+```
+
+Publishable releases must be built on Windows x64 with Authenticode credentials
+provided through CI secrets as `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD`:
+
+```shell
+npm run release:win
 ```
 
 Build artifacts are written under `desktop-tanaw/release/`.
@@ -451,8 +458,9 @@ standalone runtime, and copies the model assets into the installer. Installed
 computers do not need Python or `uv`; development still uses the `.venv` created
 by `uv sync --directory ml-service --frozen`.
 
-Create Windows installers on Windows x64 so PyInstaller and native ML
-dependencies match the target operating system. Before `npm run dist`, set the
+Windows 10/11 x64 is the only currently supported desktop distribution target.
+Create installers on Windows x64 so PyInstaller and native ML dependencies
+match the target operating system. Before either packaging command, set the
 public HTTPS `VITE_API_BASE_URL` in the build environment. Development remains
 on the local Vite and backend addresses. See the desktop README for the complete
 Windows distribution checklist.

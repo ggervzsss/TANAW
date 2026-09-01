@@ -126,10 +126,11 @@ npm run preview:web
 `npm run dev` starts the Vite/Electron development flow. It retains the local
 API fallback and is unaffected by production packaging configuration.
 
-`npm run dist` is the guarded distribution workflow. It requires a public
-HTTPS `VITE_API_BASE_URL`, builds and verifies the renderer, creates and smoke
-tests the standalone ML runtime, then invokes Electron Builder. Do not use it
-for an ordinary local preview.
+`npm run dist` is the guarded, unsigned local packaging workflow. It requires
+a public HTTPS `VITE_API_BASE_URL`, builds and verifies the renderer, creates
+and smoke tests the standalone ML runtime, then invokes Electron Builder for
+Windows x64 only. Do not use it for an ordinary local preview or publish its
+unsigned installer as a release.
 
 ## Windows Distribution Build
 
@@ -172,9 +173,38 @@ Keep `FRONTEND_PUBLIC_URL` set to the web portal URL used in activation and
 email-verification links. Do not place database credentials, JWT secrets,
 Brevo credentials, or other backend secrets in a desktop Vite environment.
 
-The resulting NSIS installer is written under `release/`. Before distribution,
+TANAW currently supports distribution only on Windows 10/11 x64. The builder
+does not define macOS, Linux, Windows ARM, or 32-bit Windows artifacts because
+their native ML runtimes are not tested or supported.
+
+For a publishable signed release, provide the Authenticode certificate through
+the CI secret store and use the signing-required command:
+
+```powershell
+$env:WIN_CSC_LINK = "<CI-provided PFX path, URL, or base64 value>"
+$env:WIN_CSC_KEY_PASSWORD = "<CI-provided certificate password>"
+npm run release:win
+```
+
+`release:win` enables Electron Builder's `forceCodeSigning` check and fails
+before building when either credential is missing. Certificate files and
+passwords must never be committed. `npm run dist` remains available for local
+unsigned package testing and still applies executable metadata and icons.
+
+The resulting NSIS installer and `SHA256SUMS.txt` are written under
+`release/<version>/`. Before distribution,
 install it on a clean Windows x64 computer without Node.js, Python, or `uv` and
 verify login, backend synchronization, camera startup, and local ML health.
+
+The release build keeps only Electron's `en-US` and Filipino (`fil`) locales.
+Its ML resource manifest contains all emergency, compatibility, balanced, and
+high-accuracy detector models, all corresponding OpenVINO exports, and both
+ReID models. Runtime type-checker, compiled test-suite, and cache files are excluded; native Torch,
+OpenVINO, ONNX Runtime, OpenCV, and fallback assets are retained unless a
+packaged inference test proves they are unnecessary. Run `npm run
+release:verify` to validate the target/signing/resource configuration and
+`npm run release:verify:inputs` on the Windows build host after `npm run
+ml:bundle` to validate the physical inputs.
 
 ## Detector Model Setup
 
