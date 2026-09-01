@@ -1,23 +1,9 @@
 import { apiClient } from "../lib/apiClient";
+import { apiPaths, type ApiNotification, type ApiSchemas } from "@/contracts/api";
 import type { FinalReport, FinalReportStatus, IntakeReport, MapEnterprise, OperationalSummary, ReportStatus, VisitorInsightRange, VisitorInsights } from "../types";
 
-export type BackendNotificationSeverity = "Info" | "Warning" | "Critical" | "Success";
-
-export type BackendNotification = {
-  id: string;
-  recipientAccountId: string;
-  title: string;
-  message: string;
-  type: string;
-  severity: BackendNotificationSeverity;
-  sourceType: string | null;
-  sourceId: string | null;
-  createdBy: string | null;
-  recipientRole: string;
-  recipientEnterpriseId: string | null;
-  createdAt: string;
-  readAt: string | null;
-};
+export type BackendNotificationSeverity = ApiNotification["severity"];
+export type BackendNotification = ApiNotification;
 
 type MapEnterpriseResponse = Omit<MapEnterprise, "lat" | "lng" | "lastSync" | "gatewayStatus"> & {
   lat: number | null;
@@ -26,32 +12,24 @@ type MapEnterpriseResponse = Omit<MapEnterprise, "lat" | "lng" | "lastSync" | "g
   gatewayStatus?: MapEnterprise["gatewayStatus"] | null;
 };
 
-export type UpdateReportStatusPayload = {
-  status: Extract<ReportStatus, "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated">;
+export type UpdateReportStatusPayload = Omit<ApiSchemas["ReportStatusUpdate"], "status"> & {
+  status: Extract<ReportStatus, ApiSchemas["ReportStatusUpdate"]["status"]>;
   remarks?: string;
 };
 
-export type FinalReportCreatePayload = {
-  reportIds: string[];
-  preparedBy: string;
-};
+export type FinalReportCreatePayload = ApiSchemas["FinalReportCreate"];
 
-export type FinalReportStatusPayload = {
-  status: FinalReportStatus;
-};
+export type FinalReportStatusPayload = Omit<ApiSchemas["FinalReportStatusUpdate"], "status"> & { status: FinalReportStatus };
 
-export type FinalReportRevisionPayload = {
-  sourceReportIds: string[];
-  remarks: string;
-};
+export type FinalReportRevisionPayload = ApiSchemas["FinalReportRevisionReturn"];
 
 export async function getOperationalSummary() {
-  const response = await apiClient.get<OperationalSummary>("/operational/telemetry/summary");
+  const response = await apiClient.get<OperationalSummary>(apiPaths.telemetrySummary);
   return response.data;
 }
 
 export async function listIntakeReports() {
-  const response = await apiClient.get<IntakeReport[]>("/operational/reports/intake");
+  const response = await apiClient.get<IntakeReport[]>(apiPaths.intakeReports);
   return response.data;
 }
 
@@ -61,12 +39,12 @@ export async function updateIntakeReportStatus(reportId: string, payload: Update
 }
 
 export async function listFinalReports() {
-  const response = await apiClient.get<FinalReport[]>("/operational/reports/final");
+  const response = await apiClient.get<FinalReport[]>(apiPaths.finalReports);
   return response.data;
 }
 
 export async function createFinalReport(payload: FinalReportCreatePayload) {
-  const response = await apiClient.post<FinalReport>("/operational/reports/final", payload);
+  const response = await apiClient.post<FinalReport>(apiPaths.finalReports, payload);
   return response.data;
 }
 
@@ -103,7 +81,7 @@ export async function getVisitorInsights(params: VisitorInsightParams) {
 }
 
 export async function listUserNotifications() {
-  const response = await apiClient.get<BackendNotification[]>("/operational/notifications");
+  const response = await apiClient.get<BackendNotification[]>(apiPaths.notifications);
   return response.data;
 }
 

@@ -1,4 +1,5 @@
 import type { UserRole } from "@/shared/types/role.types";
+import { apiPaths } from "@/contracts/api";
 import { apiClient } from "@/shared/lib/apiClient";
 import type { SessionResponse } from "@/shared/services/sessionService";
 
@@ -17,7 +18,7 @@ export type AccountActivationDetails = {
 };
 
 export async function loginService(_credentials: LoginCredentials): Promise<LoginServiceResponse> {
-  const response = await apiClient.post<LoginServiceResponse>("/auth/login", {
+  const response = await apiClient.post<LoginServiceResponse>(apiPaths.authLogin, {
     username: _credentials.clientId,
     password: _credentials.encryptionKey,
     loginScope: "web",

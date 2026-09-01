@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/shared/components/layout";
 import { Panel } from "@/shared/components/panel";
 import { EmptyState, ExpandableTableText, FilterSelect, PageMotion } from "@/shared/components/ui";
-import { useOperationalFinalReports } from "@/shared/hooks/useOperationalSync";
+import { useOperationalFinalReports } from "@/app/hooks/useOperationalSync";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { FinalReport } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";

@@ -1,11 +1,9 @@
+import type { ApiAuthUser } from "@/contracts/api";
+
 export type UserRole = "it" | "admin" | "staff" | "enterprise";
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  displayName: string;
+export type AuthUser = Omit<ApiAuthUser, "role"> & {
   role: UserRole;
-  title: string;
   phone: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -16,5 +14,4 @@ export type AuthUser = {
   barangay: string | null;
   address: string | null;
   buildingCapacity: number;
-  displayImageDataUrl: string | null;
 };

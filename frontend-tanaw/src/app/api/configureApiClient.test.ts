@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "@/app/store/authStore";
+import { configureWebApiClientAuthentication } from "@/app/api/configureApiClient";
 import type { AuthUser } from "@/shared/types/role.types";
-import { apiClient } from "./apiClient";
+import { apiClient } from "@/shared/lib/apiClient";
 
 const authenticatedUser: AuthUser = {
   id: "api-client-test-user",
@@ -49,6 +50,8 @@ function requestRejectingWith(error: Error) {
 }
 
 describe("API client authentication failures", () => {
+  let resetAuthentication: () => void;
+
   beforeEach(() => {
     vi.useFakeTimers();
     const localStorage = createStorage();
@@ -61,12 +64,14 @@ describe("API client authentication failures", () => {
       token: "valid-session-token",
       user: authenticatedUser,
     });
+    resetAuthentication = configureWebApiClientAuthentication();
   });
 
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     useAuthStore.setState({ status: "checking", token: null, user: null });
+    resetAuthentication();
     vi.unstubAllGlobals();
   });
 

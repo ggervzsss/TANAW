@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { routes } from "@/app/routers/routes";
 import { useAuthStore } from "@/app/store/authStore";
-import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
+import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
 
 export function EnterpriseAccessPage() {
   const user = useAuthStore((state) => state.user);

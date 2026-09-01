@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast/headless";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
-import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
+import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
 import { loginService } from "../services";
 
 export function useLogin() {

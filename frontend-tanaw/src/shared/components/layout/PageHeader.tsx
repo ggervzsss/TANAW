@@ -1,6 +1,12 @@
-import { useEffect } from "react";
+import { createContext, useContext, useEffect } from "react";
 import type { ReactNode } from "react";
-import { useHeaderStore } from "@/app/store/headerStore";
+
+type SetPageHeader = (title: string, description: string) => void;
+const PageHeaderContext = createContext<SetPageHeader>(() => undefined);
+
+export function PageHeaderProvider({ children, setHeader }: { children: ReactNode; setHeader: SetPageHeader }) {
+  return <PageHeaderContext.Provider value={setHeader}>{children}</PageHeaderContext.Provider>;
+}
 
 type PageHeaderProps = {
   title: string;
@@ -9,7 +15,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({ title, description, action }: PageHeaderProps) {
-  const setHeader = useHeaderStore((state) => state.setHeader);
+  const setHeader = useContext(PageHeaderContext);
 
   useEffect(() => {
     setHeader(title, description);

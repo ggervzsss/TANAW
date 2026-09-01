@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { alertsQueryKey, useAlerts } from "@/shared/hooks/useAlerts";
-import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
+import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { updateAlertStatus } from "@/shared/services/alerts";
 import type { PriorityAlert, PriorityAlertStatus } from "@/shared/types";
 import { filterTechnicalIssues, initialTechnicalIssueFilters, isTechnicalIssueFilters, type TechnicalIssueFilters } from "../model";

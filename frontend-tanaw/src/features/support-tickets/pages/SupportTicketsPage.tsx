@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { UnifiedMetricsHeader } from "@/shared/components/cards";
 import { PageHeader } from "@/shared/components/layout";
 import { PageMotion } from "@/shared/components/ui";
-import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
+import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { listSupportTickets, supportTicketsQueryKey, type SupportTicket } from "@/shared/services/supportTickets";
 import { SupportTicketFilters, SupportTicketsTable, TicketDetailsModal } from "../components";

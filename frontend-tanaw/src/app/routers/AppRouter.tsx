@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AccountLayout } from "@/app/layouts/portal";
-import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
+import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
 import { useAuthStore } from "../store/authStore";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { routes } from "./routes";

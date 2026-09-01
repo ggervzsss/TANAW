@@ -5,7 +5,10 @@ import { BrowserRouter, useLocation } from "react-router-dom";
 import { resolveValue, useToaster, type DefaultToastOptions, type Toast } from "react-hot-toast/headless";
 import { routes } from "@/app/routers/routes";
 import { AuthSessionManager } from "@/app/session/AuthSessionManager";
+import { useAuthStore } from "@/app/store/authStore";
+import { useHeaderStore } from "@/app/store/headerStore";
 import { TOAST_DURATION_MS } from "@/shared/config/app.config";
+import { PageHeaderProvider } from "@/shared/components/layout";
 import { queryClient } from "@/shared/lib/queryClient";
 import { SystemDisplayPreferencesProvider } from "@/shared/providers/SystemDisplayPreferencesProvider";
 import { RealtimeProvider } from "@/shared/realtime/RealtimeProvider";
@@ -48,14 +51,21 @@ const tanawToastOptions = {
 const portalRoutePrefixes = [routes.it.root, routes.admin.root, routes.staff.root] as const;
 
 export function AppProviders({ children }: AppProvidersProps) {
+  const authenticated = useAuthStore((state) => state.status === "authenticated");
+  const token = useAuthStore((state) => state.token);
+  const markAnonymous = useAuthStore((state) => state.markAnonymous);
+  const setHeader = useHeaderStore((state) => state.setHeader);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthSessionManager />
-        <RealtimeProvider>
-          <SystemDisplayPreferencesProvider>
-            {children}
-            <TanawToaster />
+        <RealtimeProvider authenticated={authenticated} token={token} onUnauthorized={markAnonymous}>
+          <SystemDisplayPreferencesProvider authenticated={authenticated}>
+            <PageHeaderProvider setHeader={setHeader}>
+              {children}
+              <TanawToaster />
+            </PageHeaderProvider>
           </SystemDisplayPreferencesProvider>
         </RealtimeProvider>
       </BrowserRouter>

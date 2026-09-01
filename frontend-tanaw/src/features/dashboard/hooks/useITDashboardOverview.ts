@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAlerts } from "@/shared/hooks/useAlerts";
-import { useOperationalSummary } from "@/shared/hooks/useOperationalSync";
+import { useOperationalSummary } from "@/app/hooks/useOperationalSync";
 import { emailDeliveriesQueryKey, listEmailDeliveries } from "@/features/email-deliveries";
 import { enterpriseAccountsQueryKey, listEnterpriseAccounts } from "@/features/enterprise-accounts";
 import { lguAccountsQueryKey, listLguAccounts } from "@/features/lgu-accounts";

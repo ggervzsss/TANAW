@@ -12,7 +12,7 @@ import {
   operationalNotificationsQueryKey,
   operationalReportsQueryKey,
   operationalSummaryQueryKey,
-} from "@/shared/hooks/useOperationalSync";
+} from "@/app/hooks/useOperationalSync";
 import { listAlerts } from "@/shared/services/alerts";
 import { getOperationalSummary, listFinalReports, listIntakeReports, listOperationalMapEnterprises, listUserNotifications } from "@/shared/services/operationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";

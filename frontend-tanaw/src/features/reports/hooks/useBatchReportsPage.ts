@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
 import { useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/shared/hooks/useOperationalSync";
-import { useScopedPageState } from "@/shared/hooks/useScopedPageState";
+import { operationalFinalReportsQueryKey, operationalReportsQueryKey, useOperationalReports } from "@/app/hooks/useOperationalSync";
+import { useScopedPageState } from "@/app/hooks/useScopedPageState";
 import { createFinalReport, listReportEnterprises, updateIntakeReportStatus } from "@/shared/services/reporting";
 import type { IntakeReport, ReportEnterprise, ReportStatus } from "@/shared/types";
 import {

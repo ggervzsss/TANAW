@@ -2,7 +2,7 @@ import axios from "axios";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast/headless";
-import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/shared/hooks/useOperationalSync";
+import { operationalFinalReportsQueryKey, operationalReportsQueryKey } from "@/app/hooks/useOperationalSync";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import { returnFinalReportForRevision, updateFinalReportStatus } from "@/shared/services/reporting";
 import type { FinalReport, FinalReportStatus } from "@/shared/types";

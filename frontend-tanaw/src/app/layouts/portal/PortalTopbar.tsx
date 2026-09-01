@@ -10,7 +10,7 @@ import { logoutSession } from "@/shared/services/sessionService";
 import { CITY_SEAL } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
-import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "@/shared/utils/routeUtils";
+import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "@/app/routers/roleRoutes";
 import type { UserRole } from "@/shared/types/role.types";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "@/shared/utils/sessionSync";

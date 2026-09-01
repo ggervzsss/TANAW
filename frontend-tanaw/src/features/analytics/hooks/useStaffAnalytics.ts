@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useOperationalReports } from "@/shared/hooks/useOperationalSync";
+import { useOperationalReports } from "@/app/hooks/useOperationalSync";
 import { listReportEnterprises } from "@/shared/services/reporting";
 import { getAnalyticsPeriods, getBarangayComplianceRows, getCurrentAnalyticsPeriod, getEnterpriseReportRows, getEnterpriseTrafficRows, getTrendLabel, sumReportMetric } from "../model";
 

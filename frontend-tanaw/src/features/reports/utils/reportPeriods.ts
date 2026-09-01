@@ -80,11 +80,12 @@ export function getEnterpriseReportRows(reportEnterprises: ReportEnterprise[], f
     .map((enterprise) => {
       const currentReport = filteredByPeriod.find((report) => report.enterpriseId === enterprise.id);
       const archivedReports = nonPeriodReports.filter((report) => report.enterpriseId === enterprise.id);
+      const status: ReportStatus = currentReport?.status ?? "Missing";
       return {
         enterprise,
         currentReport,
         archivedReports,
-        status: currentReport?.status ?? "Missing",
+        status,
       };
     })
     .filter(

@@ -1,47 +1,21 @@
+import { apiPaths, type ApiSchemas, type ApiSupportTicket, type ApiSupportTicketDetail } from "@/contracts/api";
 import { API_BASE_URL } from "../config/api.config";
 import { apiClient } from "../lib/apiClient";
 
-export type SupportTicketCategory = "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
-export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
-export type SupportTicketStatus = "Open" | "In Review" | "Resolved";
+export type SupportTicketCategory = ApiSchemas["SupportTicketCreate"]["category"];
+export type SupportTicketPriority = ApiSchemas["SupportTicketCreate"]["priority"];
+export type SupportTicketStatus = ApiSchemas["SupportTicketStatusUpdate"]["status"];
 
-export type SupportTicketAttachment = {
-  id: string;
-  fileName: string;
-  mediaType: "image/png" | "image/jpeg" | "image/webp";
-  sizeBytes: number;
-  url: string;
-};
+export type SupportTicketAttachment = ApiSchemas["SupportTicketAttachmentMetadata"];
+export type SupportTicketMessage = ApiSchemas["SupportTicketMessageSummary"];
 
-export type SupportTicketMessage = {
-  id: string;
-  ticketId: string;
-  authorId: string;
-  authorName: string;
-  authorRole: string;
-  message: string;
-  createdAt: string;
-};
-
-export type SupportTicket = {
-  id: string;
-  code: string;
-  enterpriseId: string;
-  enterpriseName: string;
-  submittedBy: string;
+export type SupportTicket = Omit<ApiSupportTicket, "attachments" | "category" | "priority"> & {
+  attachments: SupportTicketAttachment[];
   category: SupportTicketCategory;
   priority: SupportTicketPriority;
-  subject: string;
-  description: string;
-  affectedArea: string | null;
-  cameraNode: string | null;
-  attachments: SupportTicketAttachment[];
-  status: SupportTicketStatus;
-  createdAt: string;
-  updatedAt: string;
 };
 
-export type SupportTicketDetail = SupportTicket & {
+export type SupportTicketDetail = Omit<ApiSupportTicketDetail, "attachments" | "category" | "messages" | "priority"> & SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
@@ -89,7 +63,7 @@ export function sortRecommendedSupportTickets(tickets: readonly SupportTicket[])
 const safeSupportTicketImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 export async function listSupportTickets() {
-  const response = await apiClient.get<SupportTicket[]>("/operational/tickets");
+  const response = await apiClient.get<SupportTicket[]>(apiPaths.supportTickets);
   return response.data;
 }
 

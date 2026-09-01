@@ -8,7 +8,7 @@ import {
   listOperationalMapEnterprises,
   listUserNotifications,
   type VisitorInsightParams,
-} from "../services/operationalSync";
+} from "@/shared/services/operationalSync";
 
 export const operationalSummaryQueryKey = ["operational", "summary"];
 export const operationalReportsQueryKey = ["operational", "reports", "intake"];

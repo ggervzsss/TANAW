@@ -1,3 +1,4 @@
+import { apiPaths, type ApiDesktopReportSubmission, type ApiDesktopTelemetry, type ApiSchemas } from "../../../contracts/api";
 import { staffApi } from "../../../lib/axios";
 import { useAuthStore } from "../../login/stores/auth-store";
 import {
@@ -20,72 +21,19 @@ import {
 } from "../../camera/services/ml-service";
 import { listEnterpriseFinalReports, type EnterpriseFinalReport } from "../../reports/services/report-history";
 import { isSameReportingMonth } from "../../reports/utils/reporting-period";
-import { buildCameraMonitoringSummary, type CameraMonitoringSummary } from "./camera-monitoring";
+import { buildCameraMonitoringSummary } from "./camera-monitoring";
 
 export const DESKTOP_REPORT_SYNC_EVENT = "tanaw:desktop-report-submitted";
 
 const DEVICE_ID_STORAGE_KEY = "tanaw-desktop-device-id";
 
-type DesktopTelemetryPayload = {
-  deviceId: string;
-  capturedAt: string;
-  metrics: {
-    entries: number;
-    exits: number;
-    peakOccupancy: number;
-    currentOccupancy: number;
-    uniqueCount: number;
-    confirmedUniqueCount: number;
-    degradedUniqueCount: number;
-    totalEvents: number;
-    unsubmittedEvents: number;
-    unsyncedEvents: number;
-    firstEventAt: string | null;
-    lastEventAt: string | null;
-  };
-  session: {
-    running: boolean;
-    status: string;
-    error: string | null;
-    cameraId: number | null;
-    cameraName: string | null;
-    updatedAt: string | null;
-  };
-  health: {
-    analyticsFps: number | null;
-    processingProfile: string | null;
-    detectorP50Ms: number | null;
-    detectorP95Ms: number | null;
-    processingFrameAgeMs: number | null;
-    processingFramesSkipped: number;
-    modelReady: boolean;
-    reidReady: boolean;
-    qualityReidReady: boolean;
-    reidQueueDepth: number;
-    qualityReidQueueDepth: number;
-  };
-  monitoring: CameraMonitoringSummary;
-  payload: Record<string, unknown>;
-};
+type DesktopTelemetryPayload = ApiDesktopTelemetry;
 
-export type BackendSamplePreparationCounts = {
-  entries: number;
-  exits: number;
-  uniqueCount: number;
-  peakOccupancy: number;
-  period: string;
-  reportId: string;
-};
-
-export type BackendSamplePreparation = {
-  enterpriseId: string;
-  enterpriseName: string;
-  counts: BackendSamplePreparationCounts | null;
-  pendingCounts?: BackendSamplePreparationCounts[];
-};
+export type BackendSamplePreparationCounts = ApiSchemas["SamplePreparationCounts"];
+export type BackendSamplePreparation = ApiSchemas["SamplePreparationSummary"];
 
 export async function getDesktopSamplePreparation() {
-  const response = await staffApi.get<BackendSamplePreparation | null>("/operational/desktop/sample-preparation");
+  const response = await staffApi.get<BackendSamplePreparation | null>(apiPaths.desktopSamplePreparation);
   return response.data;
 }
 
@@ -177,7 +125,7 @@ export async function syncDesktopTelemetry() {
     },
   };
 
-  await staffApi.post("/operational/desktop/telemetry", payload);
+  await staffApi.post(apiPaths.desktopTelemetry, payload);
   await markLocalEventsSynced(baseUrl);
   return payload;
 }
@@ -210,7 +158,7 @@ export async function syncDesktopReportSubmission(reportId: string) {
 
 async function syncReportSubmission(baseUrl: string, submission: LocalReportSubmissionRecord) {
   const metrics = reportMetricsFromSubmission(submission);
-  await staffApi.post("/operational/desktop/report-submissions", {
+  const payload = {
     submissionId: submission.submission_id,
     reportId: submission.report_id,
     period: submission.period,
@@ -229,7 +177,8 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
         syncedAt: submission.synced_at,
       },
     },
-  });
+  } satisfies ApiDesktopReportSubmission;
+  await staffApi.post(apiPaths.desktopReportSubmissions, payload);
   await markLocalReportSynced(baseUrl, submission.report_id, submission.submission_id);
 }
 

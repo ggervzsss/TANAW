@@ -2,7 +2,7 @@ import { Activity, BarChart3, Building2, CalendarDays, ChevronRight, Clock3, Ref
 import { motion } from "motion/react";
 import type { KeyboardEvent } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useVisitorInsights } from "@/shared/hooks/useOperationalSync";
+import { useVisitorInsights } from "@/app/hooks/useOperationalSync";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
 import type { VisitorInsightRange } from "@/shared/types";
 import { formatPhilippineDateTime } from "@/shared/utils/dateTime";

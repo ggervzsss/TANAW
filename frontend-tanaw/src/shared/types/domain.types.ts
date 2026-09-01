@@ -91,19 +91,7 @@ export type PriorityAlert = {
   time: string;
 };
 
-export type OperationalSummary = {
-  enterpriseCount: number;
-  onlineGateways: number;
-  delayedGateways: number;
-  offlineGateways: number;
-  totalCurrentOccupancy: number;
-  totalEntries: number;
-  totalExits: number;
-  totalUniqueCount: number;
-  activeReports: number;
-  pendingReports: number;
-  lastSyncAt?: string | null;
-};
+export type OperationalSummary = ApiSchemas["OperationalSummary"];
 
 export type SystemLogCategory = "IT Activity" | "Staff Submission" | "Staff Operation" | "Admin Operation" | "Enterprise Activity" | "System";
 export type SystemLogActorRole = "Admin" | "IT Personnel" | "LGU Staff" | "Enterprise Account" | "System";
@@ -125,33 +113,15 @@ export type SystemLog = {
 export type ReportStatus = "Pending Review" | "Ready to Consolidate" | "Returned" | "Consolidated" | "Missing";
 export type FinalReportArchivedFromStatus = "Draft" | "Finalized" | "Returned for Revision";
 export type FinalReportStatus = FinalReportArchivedFromStatus | "Archived";
-export type ReportDemographics = {
-  thisProvMale: number;
-  thisProvFemale: number;
-  otherProvMale: number;
-  otherProvFemale: number;
-  foreignMale: number;
-  foreignFemale: number;
-};
+export type ReportDemographics = ApiSchemas["ReportDemographicsSummary"];
 
 export type ReportPayload = Record<string, unknown> & {
   demo?: Partial<Record<keyof ReportDemographics, number | string>>;
 };
 
-export type IntakeReport = {
-  id: string;
-  enterpriseId: string;
-  enterprise: string;
-  category: string;
-  barangay: string;
-  month: string;
-  period: string;
-  submitted: string;
-  submittedAt?: string;
-  status: ReportStatus;
-  code: string;
-  remarks?: string;
-  notes?: string;
+export type IntakeReport = Omit<ApiIntakeReport, "demographics" | "metrics" | "payload" | "status" | "submittedAt"> & {
+  demographics?: ReportDemographics | null;
+  status: Exclude<ReportStatus, "Missing">;
   metrics: {
     entry: number;
     exit: number;
@@ -159,7 +129,7 @@ export type IntakeReport = {
     peak: string;
   };
   payload?: ReportPayload | null;
-  demographics?: ReportDemographics | null;
+  submittedAt?: string;
 };
 
 export type ReportEnterprise = {
@@ -170,28 +140,6 @@ export type ReportEnterprise = {
   complianceOwner: string;
 };
 
-export type FinalReportSource = {
-  id: string;
-  enterprise: string;
-  code: string;
-  unique: number;
-  entry: number;
-  exit: number;
-  demographics?: ReportDemographics | null;
-};
-
-export type FinalReport = {
-  id: string;
-  title: string;
-  period: string;
-  generatedOn: string;
-  preparedBy: string;
-  preparedRole: string;
-  status: FinalReportStatus;
-  archivedFromStatus?: FinalReportArchivedFromStatus | null;
-  totalEntry: number;
-  totalExit: number;
-  totalUnique: number;
-  enterpriseCount: number;
-  sources: FinalReportSource[];
-};
+export type FinalReportSource = ApiSchemas["FinalReportSourceSummary"];
+export type FinalReport = ApiFinalReport;
+import type { ApiFinalReport, ApiIntakeReport, ApiSchemas } from "@/contracts/api";

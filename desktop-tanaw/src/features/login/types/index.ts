@@ -1,26 +1,15 @@
+import type { ApiAuthUser, ApiLoginResponse } from "../../../contracts/api";
+
 export type AuthRole = "enterprise";
 
-export type AuthUser = {
-  id: string;
-  name: string;
+export type AuthUser = Omit<ApiAuthUser, "buildingCapacity" | "displayName" | "role" | "title"> & {
+  buildingCapacity?: number;
   displayName?: string;
-  email: string;
+  name: string;
   role: AuthRole;
   title?: string;
-  phone?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  enterpriseId?: string | null;
-  enterpriseName?: string | null;
-  category?: string | null;
-  managerName?: string | null;
-  barangay?: string | null;
-  address?: string | null;
-  buildingCapacity?: number;
-  displayImageDataUrl?: string | null;
 };
 
-export type LoginResponse = {
-  token: string;
+export type LoginResponse = Omit<ApiLoginResponse, "user"> & {
   user: AuthUser;
 };

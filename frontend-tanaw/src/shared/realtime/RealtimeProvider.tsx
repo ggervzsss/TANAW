@@ -1,7 +1,6 @@
 import { type PropsWithChildren, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { WifiOff } from "lucide-react";
-import { useAuthStore } from "@/app/store/authStore";
 import { getWebSocketUrl } from "@/shared/config/api.config";
 import { resynchronizeActiveRealtimeQueries, routeRealtimeEvent } from "./eventRouter";
 import { isRealtimeEnvelope, realtimeOrderingKey, type RealtimeConnectionState, type RealtimeEnvelope } from "./types";
@@ -10,14 +9,18 @@ const MAX_DEDUPLICATION_EVENTS = 2_048;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const HEARTBEAT_WATCH_INTERVAL_MS = 5_000;
 
-export function RealtimeProvider({ children }: PropsWithChildren) {
-  const authStatus = useAuthStore((state) => state.status);
-  const token = useAuthStore((state) => state.token);
+type RealtimeProviderProps = PropsWithChildren<{
+  authenticated: boolean;
+  onUnauthorized: () => void;
+  token: string | null;
+}>;
+
+export function RealtimeProvider({ authenticated, children, onUnauthorized, token }: RealtimeProviderProps) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<RealtimeConnectionState>("closed");
 
   useEffect(() => {
-    if (authStatus !== "authenticated" || !token) {
+    if (!authenticated || !token) {
       return undefined;
     }
 
@@ -146,7 +149,7 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
         if (disposed || intentionalClose) return;
         if (event.code === 4401) {
           setState("unauthorized");
-          useAuthStore.getState().markAnonymous();
+          onUnauthorized();
           return;
         }
         scheduleReconnect();
@@ -188,12 +191,12 @@ export function RealtimeProvider({ children }: PropsWithChildren) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       closeCurrentSocket();
     };
-  }, [authStatus, queryClient, token]);
+  }, [authenticated, onUnauthorized, queryClient, token]);
 
   return (
     <>
       {children}
-      <RealtimeStatus state={authStatus === "authenticated" ? state : "closed"} />
+      <RealtimeStatus state={authenticated ? state : "closed"} />
     </>
   );
 }

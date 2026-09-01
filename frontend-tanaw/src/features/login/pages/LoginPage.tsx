@@ -3,7 +3,7 @@ import { MapPin } from "lucide-react";
 import { motion } from "motion/react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/app/store/authStore";
-import { getRoleDashboardPath } from "@/shared/utils/routeUtils";
+import { getRoleDashboardPath } from "@/app/routers/roleRoutes";
 import { AuthParticles, AuthThemeToggle, LoginBackground, LoginForm } from "../components";
 import { useAuthStageGlow, useLogin } from "../hooks";
 import { SAN_PEDRO_SEAL } from "../utils";

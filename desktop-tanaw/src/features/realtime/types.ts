@@ -1,3 +1,5 @@
+import { realtimeEventTypes, type components } from "../../contracts/generated/realtime";
+
 export type RealtimeConnectionState =
   | "closed"
   | "connecting"
@@ -7,57 +9,14 @@ export type RealtimeConnectionState =
   | "resynchronizing"
   | "unauthorized";
 
-export const realtimeEventTypes = [
-  "support_ticket.created",
-  "support_ticket.updated",
-  "support_ticket.message.created",
-  "support_ticket.status.changed",
-  "notification.created",
-  "notification.updated",
-  "alert.created",
-  "alert.updated",
-  "alert.status.changed",
-  "alert.resolved",
-  "alert.reopened",
-  "account_request.created",
-  "account_request.updated",
-  "account_request.approved",
-  "account_request.declined",
-  "enterprise.created",
-  "enterprise.updated",
-  "user.created",
-  "user.updated",
-  "user.status.changed",
-  "activity.created",
-  "report.created",
-  "report.updated",
-  "report.processing",
-  "report.finalized",
-  "report.archived",
-  "report.failed",
-  "email_delivery.updated",
-  "dev_log.created",
-  "telemetry.updated",
-  "system_setting.updated",
-] as const;
-
-export type RealtimeEventType = (typeof realtimeEventTypes)[number];
-
-export type RealtimeEnvelope = {
-  schema_version: 1;
-  event_id: string;
-  event_type: RealtimeEventType;
-  occurred_at: string;
-  sequence: number;
-  scope: {
-    enterprise_id?: string | null;
-    enterprise_account_id?: string | null;
-    recipient_account_id?: string | null;
-    ticket_id?: string | null;
-    report_id?: string | null;
-  };
-  actor?: { user_id?: string | null; role?: string | null } | null;
+export { realtimeEventTypes };
+export type RealtimeEventType = components["schemas"]["RealtimeEventType"];
+type GeneratedRealtimeEnvelope = components["schemas"]["RealtimeEnvelope"];
+export type RealtimeEnvelope = Omit<GeneratedRealtimeEnvelope, "actor" | "payload" | "schema_version" | "scope"> & {
+  actor?: Partial<components["schemas"]["RealtimeActor"]> | null;
   payload: Record<string, unknown>;
+  schema_version: 1;
+  scope: Partial<components["schemas"]["RealtimeScope"]>;
 };
 
 const realtimeEventTypeSet = new Set<string>(realtimeEventTypes);

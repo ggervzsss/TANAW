@@ -1,53 +1,21 @@
+import { apiPaths, type ApiSchemas, type ApiSupportTicket, type ApiSupportTicketCreate, type ApiSupportTicketDetail } from "../../../contracts/api";
 import { API_BASE_URL, staffApi } from "../../../lib/axios";
 
-export type SupportTicketCategory = "Camera Issue" | "Report Concern" | "Maintenance" | "Account & Security" | "Other";
-export type SupportTicketPriority = "Low" | "Normal" | "High" | "Urgent";
-export type SupportTicketStatus = "Open" | "In Review" | "Resolved";
+export type SupportTicketCategory = ApiSchemas["SupportTicketCreate"]["category"];
+export type SupportTicketPriority = ApiSchemas["SupportTicketCreate"]["priority"];
+export type SupportTicketStatus = ApiSchemas["SupportTicketStatusUpdate"]["status"];
 
-export type SupportTicketAttachment = {
-  fileName: string;
-  id: string;
-  mediaType: "image/png" | "image/jpeg" | "image/webp";
-  sizeBytes: number;
-  url: string;
-};
+export type SupportTicketAttachment = ApiSchemas["SupportTicketAttachmentMetadata"];
+export type SupportTicketAttachmentCreate = ApiSchemas["SupportTicketAttachmentCreate"];
+export type SupportTicketMessage = ApiSchemas["SupportTicketMessageSummary"];
 
-export type SupportTicketAttachmentCreate = {
-  dataUrl: string;
-  fileName: string;
-  mediaType: SupportTicketAttachment["mediaType"];
-  sizeBytes: number;
-};
-
-export type SupportTicketMessage = {
-  id: string;
-  ticketId: string;
-  authorId: string;
-  authorName: string;
-  authorRole: string;
-  message: string;
-  createdAt: string;
-};
-
-export type SupportTicket = {
-  id: string;
-  code: string;
-  enterpriseId: string;
-  enterpriseName: string;
-  submittedBy: string;
+export type SupportTicket = Omit<ApiSupportTicket, "attachments" | "category" | "priority"> & {
+  attachments: SupportTicketAttachment[];
   category: SupportTicketCategory;
   priority: SupportTicketPriority;
-  subject: string;
-  description: string;
-  affectedArea: string | null;
-  cameraNode: string | null;
-  attachments: SupportTicketAttachment[];
-  status: SupportTicketStatus;
-  createdAt: string;
-  updatedAt: string;
 };
 
-export type SupportTicketDetail = SupportTicket & {
+export type SupportTicketDetail = Omit<ApiSupportTicketDetail, "attachments" | "category" | "messages" | "priority"> & SupportTicket & {
   messages: SupportTicketMessage[];
 };
 
@@ -74,18 +42,12 @@ export function canReplyToSupportTicket(ticket: Pick<SupportTicket, "status">) {
   return ticket.status !== "Resolved";
 }
 
-export type SupportTicketCreatePayload = {
-  affectedArea?: string | null;
-  cameraNode?: string | null;
-  category: SupportTicketCategory;
-  description: string;
-  priority: SupportTicketPriority;
-  subject: string;
+export type SupportTicketCreatePayload = Omit<ApiSupportTicketCreate, "attachments"> & {
   attachments?: SupportTicketAttachmentCreate[];
 };
 
 export async function listSupportTickets() {
-  const response = await staffApi.get<SupportTicket[]>("/operational/tickets");
+  const response = await staffApi.get<SupportTicket[]>(apiPaths.supportTickets);
   return response.data;
 }
 
@@ -95,7 +57,7 @@ export async function getSupportTicket(ticketId: string) {
 }
 
 export async function createSupportTicket(payload: SupportTicketCreatePayload) {
-  const response = await staffApi.post<SupportTicket>("/operational/tickets", payload);
+  const response = await staffApi.post<SupportTicket>(apiPaths.supportTickets, payload);
   return response.data;
 }
 
