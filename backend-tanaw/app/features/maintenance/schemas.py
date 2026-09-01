@@ -7,6 +7,7 @@ from app.features.maintenance.runtime import RetentionRuntimeSnapshot
 
 
 class RetentionCleanupCountsResponse(BaseModel):
+    telemetrySnapshots: int
     activationTokens: int
     passwordResetChallenges: int
     passwordResetRateBuckets: int
@@ -23,6 +24,8 @@ class RetentionStatusResponse(BaseModel):
     failedRuns: int
     intervalSeconds: int
     batchSize: int
+    telemetryRetentionDays: int
+    telemetryBatchSize: int
     lastStartedAt: datetime | None
     lastCompletedAt: datetime | None
     lastDurationSeconds: float | None
@@ -33,6 +36,7 @@ class RetentionStatusResponse(BaseModel):
 
 def to_counts_response(counts: RetentionCleanupCounts) -> RetentionCleanupCountsResponse:
     return RetentionCleanupCountsResponse(
+        telemetrySnapshots=counts.telemetry_snapshots,
         activationTokens=counts.activation_tokens,
         passwordResetChallenges=counts.password_reset_challenges,
         passwordResetRateBuckets=counts.password_reset_rate_buckets,
@@ -48,6 +52,8 @@ def to_status_response(
     *,
     interval_seconds: int,
     batch_size: int,
+    telemetry_retention_days: int,
+    telemetry_batch_size: int,
 ) -> RetentionStatusResponse:
     return RetentionStatusResponse(
         workerReady=snapshot.worker_ready,
@@ -56,6 +62,8 @@ def to_status_response(
         failedRuns=snapshot.failed_runs,
         intervalSeconds=interval_seconds,
         batchSize=batch_size,
+        telemetryRetentionDays=telemetry_retention_days,
+        telemetryBatchSize=telemetry_batch_size,
         lastStartedAt=snapshot.last_started_at,
         lastCompletedAt=snapshot.last_completed_at,
         lastDurationSeconds=snapshot.last_duration_seconds,

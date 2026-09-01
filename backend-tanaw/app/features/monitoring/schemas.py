@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+MAX_TELEMETRY_CAMERA_ITEMS = 32
+MAX_TELEMETRY_SERIALIZED_BYTES = 256 * 1024
 
 
 class DesktopMetricsSummary(BaseModel):
@@ -62,7 +65,9 @@ class DesktopCameraMonitoringSummary(BaseModel):
     startingCameraCount: int = Field(default=0, ge=0)
     stoppedCameraCount: int = Field(default=0, ge=0)
     errorCameraCount: int = Field(default=0, ge=0)
-    cameras: list[DesktopCameraMonitoringItem] = Field(default_factory=list)
+    cameras: list[DesktopCameraMonitoringItem] = Field(
+        default_factory=list, max_length=MAX_TELEMETRY_CAMERA_ITEMS
+    )
 
 
 class DesktopTelemetryIngest(BaseModel):
@@ -75,6 +80,16 @@ class DesktopTelemetryIngest(BaseModel):
         default_factory=DesktopCameraMonitoringSummary
     )
     payload: dict | None = None
+
+    @model_validator(mode="after")
+    def validate_serialized_size(self) -> DesktopTelemetryIngest:
+        serialized_size = len(self.model_dump_json().encode("utf-8"))
+        if serialized_size > MAX_TELEMETRY_SERIALIZED_BYTES:
+            raise ValueError(
+                "Telemetry payload exceeds the maximum serialized size of "
+                f"{MAX_TELEMETRY_SERIALIZED_BYTES} bytes."
+            )
+        return self
 
 
 class TelemetrySnapshotSummary(BaseModel):

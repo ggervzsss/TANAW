@@ -139,6 +139,17 @@ def test_canonical_schema_enforces_owned_record_relationships() -> None:
         "foreign_female",
     } <= final_source_columns
 
+    telemetry_indexes = {
+        str(index.name): tuple(str(expression) for expression in index.expressions)
+        for index in Base.metadata.tables["enterprise_telemetry_snapshots"].indexes
+    }
+    assert telemetry_indexes["ix_enterprise_telemetry_snapshots_enterprise_received"] == (
+        "enterprise_telemetry_snapshots.enterprise_profile_id",
+        "enterprise_telemetry_snapshots.received_at DESC",
+        "enterprise_telemetry_snapshots.id DESC",
+    )
+    assert "ix_enterprise_telemetry_snapshots_enterprise_profile_id" not in telemetry_indexes
+
 
 @pytest.mark.asyncio
 async def test_current_database_revision_is_accepted() -> None:

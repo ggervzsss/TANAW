@@ -113,8 +113,10 @@ async def run_retention_cleanup_now(settings: Settings) -> RetentionCleanupCount
             _metrics.last_completed_at = datetime.now(UTC)
             _metrics.last_duration_seconds = monotonic() - started_clock
             logger.info(
-                "Retention cleanup completed deleted=%d expired_email_changes=%d",
+                "Retention cleanup completed deleted=%d telemetry_snapshots=%d "
+                "expired_email_changes=%d",
                 counts.deleted_records,
+                counts.telemetry_snapshots,
                 counts.expired_email_change_requests,
             )
             return counts
@@ -142,6 +144,7 @@ def _add_counts(
     addition: RetentionCleanupCounts,
 ) -> RetentionCleanupCounts:
     return RetentionCleanupCounts(
+        telemetry_snapshots=current.telemetry_snapshots + addition.telemetry_snapshots,
         activation_tokens=current.activation_tokens + addition.activation_tokens,
         password_reset_challenges=(
             current.password_reset_challenges + addition.password_reset_challenges

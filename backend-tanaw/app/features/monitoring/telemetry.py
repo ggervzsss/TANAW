@@ -68,15 +68,26 @@ async def ingest_telemetry(
 async def list_latest_telemetry(
     db: AsyncSession, account: Account | None, limit: int = 500
 ) -> list[TelemetrySnapshotSummary]:
-    latest_ranked_snapshot = select(
+    enterprise_account_id = (
+        account.id if account is not None and account.role == AccountRole.ENTERPRISE else None
+    )
+    ranked_statement = select(
         EnterpriseTelemetrySnapshot.id.label("snapshot_id"),
         func.row_number()
         .over(
             partition_by=EnterpriseTelemetrySnapshot.enterprise_profile_id,
-            order_by=EnterpriseTelemetrySnapshot.received_at.desc(),
+            order_by=(
+                EnterpriseTelemetrySnapshot.received_at.desc(),
+                EnterpriseTelemetrySnapshot.id.desc(),
+            ),
         )
         .label("snapshot_rank"),
-    ).subquery()
+    )
+    if enterprise_account_id is not None:
+        ranked_statement = ranked_statement.where(
+            EnterpriseTelemetrySnapshot.enterprise_profile_id == enterprise_account_id
+        )
+    latest_ranked_snapshot = ranked_statement.subquery()
     statement = (
         select(EnterpriseTelemetrySnapshot)
         .join(
@@ -84,14 +95,18 @@ async def list_latest_telemetry(
             EnterpriseTelemetrySnapshot.id == latest_ranked_snapshot.c.snapshot_id,
         )
         .where(latest_ranked_snapshot.c.snapshot_rank == 1)
-        .order_by(EnterpriseTelemetrySnapshot.received_at.desc())
+        .order_by(
+            EnterpriseTelemetrySnapshot.received_at.desc(),
+            EnterpriseTelemetrySnapshot.id.desc(),
+        )
         .limit(limit)
     )
-    if account is not None and account.role == AccountRole.ENTERPRISE:
-        statement = statement.where(EnterpriseTelemetrySnapshot.enterprise_profile_id == account.id)
-
     snapshots = (await db.scalars(statement)).all()
-    accounts = await enterprise_accounts_by_id(db)
+    accounts = (
+        {account.id: account}
+        if account is not None and enterprise_account_id is not None
+        else await enterprise_accounts_by_id(db)
+    )
 
     return [
         to_telemetry_summary(snapshot, accounts.get(snapshot.enterprise_profile_id))

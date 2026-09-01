@@ -63,9 +63,10 @@ async def test_cleanup_failure_records_only_exception_type(
 
 def test_retention_count_total_excludes_state_transitions() -> None:
     counts = RetentionCleanupCounts(
+        telemetry_snapshots=4,
         activation_tokens=1,
         expired_email_change_requests=5,
         email_change_requests=2,
     )
 
-    assert counts.deleted_records == 3
+    assert counts.deleted_records == 7

@@ -18,6 +18,7 @@ from app.features.auth.models import (
 )
 from app.features.mail.models import EmailOutbox, EmailOutboxStatus, EmailTemplateName
 from app.features.mail.service import cancel_pending_source_emails
+from app.features.monitoring.models import EnterpriseTelemetrySnapshot
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -35,6 +36,7 @@ FAILED_TERMINAL_OUTBOX_STATUSES = (
 
 @dataclass(frozen=True)
 class RetentionCleanupCounts:
+    telemetry_snapshots: int = 0
     activation_tokens: int = 0
     password_reset_challenges: int = 0
     password_reset_rate_buckets: int = 0
@@ -45,7 +47,8 @@ class RetentionCleanupCounts:
     @property
     def deleted_records(self) -> int:
         return (
-            self.activation_tokens
+            self.telemetry_snapshots
+            + self.activation_tokens
             + self.password_reset_challenges
             + self.password_reset_rate_buckets
             + self.email_change_requests
@@ -62,6 +65,11 @@ async def run_retention_cleanup(
     current = _as_utc(now or datetime.now(UTC))
     batch_size = settings.retention_cleanup_batch_size
     return RetentionCleanupCounts(
+        telemetry_snapshots=await _delete_telemetry_snapshots(
+            session_factory,
+            cutoff=current - timedelta(days=settings.telemetry_raw_retention_days),
+            batch_size=settings.telemetry_retention_batch_size,
+        ),
         activation_tokens=await _delete_activation_tokens(
             session_factory,
             cutoff=current - timedelta(days=settings.activation_token_retention_days),
@@ -96,6 +104,33 @@ async def run_retention_cleanup(
             batch_size=batch_size,
         ),
     )
+
+
+async def _delete_telemetry_snapshots(
+    session_factory: SessionFactory,
+    *,
+    cutoff: datetime,
+    batch_size: int,
+) -> int:
+    async with session_factory() as db:
+        ids = list(
+            await db.scalars(
+                select(EnterpriseTelemetrySnapshot.id)
+                .where(EnterpriseTelemetrySnapshot.received_at < cutoff)
+                .order_by(
+                    EnterpriseTelemetrySnapshot.received_at.asc(),
+                    EnterpriseTelemetrySnapshot.id.asc(),
+                )
+                .with_for_update(skip_locked=True)
+                .limit(batch_size)
+            )
+        )
+        if ids:
+            await db.execute(
+                delete(EnterpriseTelemetrySnapshot).where(EnterpriseTelemetrySnapshot.id.in_(ids))
+            )
+        await db.commit()
+        return len(ids)
 
 
 async def _delete_activation_tokens(

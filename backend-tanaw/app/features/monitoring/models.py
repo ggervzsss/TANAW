@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -24,7 +24,6 @@ class EnterpriseTelemetrySnapshot(Base):
             name="fk_enterprise_telemetry_snapshots_enterprise_profile_id",
             ondelete="RESTRICT",
         ),
-        index=True,
         nullable=False,
     )
     enterprise_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -52,6 +51,14 @@ class EnterpriseTelemetrySnapshot(Base):
     analytics_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     enterprise_profile: Mapped[EnterpriseProfile] = relationship(lazy="joined")
+
+
+Index(
+    "ix_enterprise_telemetry_snapshots_enterprise_received",
+    EnterpriseTelemetrySnapshot.enterprise_profile_id,
+    EnterpriseTelemetrySnapshot.received_at.desc(),
+    EnterpriseTelemetrySnapshot.id.desc(),
+)
 
 
 class OperationalAlert(Base):

@@ -26,6 +26,8 @@ async def get_retention_status(_: ITAccount) -> RetentionStatusResponse:
         retention_runtime_snapshot(),
         interval_seconds=settings.retention_cleanup_interval_seconds,
         batch_size=settings.retention_cleanup_batch_size,
+        telemetry_retention_days=settings.telemetry_raw_retention_days,
+        telemetry_batch_size=settings.telemetry_retention_batch_size,
     )
 
 
@@ -59,6 +61,7 @@ async def run_retention_now(
             sourceId="retention-cleanup",
             metadata={
                 "deletedRecords": counts.deleted_records,
+                "telemetrySnapshots": counts.telemetry_snapshots,
                 "expiredEmailChangeRequests": counts.expired_email_change_requests,
             },
         ),
@@ -67,4 +70,6 @@ async def run_retention_now(
         retention_runtime_snapshot(),
         interval_seconds=settings.retention_cleanup_interval_seconds,
         batch_size=settings.retention_cleanup_batch_size,
+        telemetry_retention_days=settings.telemetry_raw_retention_days,
+        telemetry_batch_size=settings.telemetry_retention_batch_size,
     )

@@ -218,6 +218,8 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
 
     assert settings.retention_cleanup_interval_seconds == 3600
     assert settings.retention_cleanup_batch_size == 500
+    assert settings.telemetry_raw_retention_days == 45
+    assert settings.telemetry_retention_batch_size == 10_000
     assert settings.activation_token_retention_days == 30
     assert settings.password_reset_retention_days == 30
     assert settings.password_reset_rate_bucket_retention_days == 2
@@ -233,6 +235,10 @@ def test_retention_cleanup_has_bounded_documented_defaults() -> None:
         ("retention_cleanup_interval_seconds", 86_401),
         ("retention_cleanup_batch_size", 9),
         ("retention_cleanup_batch_size", 5001),
+        ("telemetry_raw_retention_days", 34),
+        ("telemetry_raw_retention_days", 366),
+        ("telemetry_retention_batch_size", 99),
+        ("telemetry_retention_batch_size", 50_001),
         ("activation_token_retention_days", 0),
         ("password_reset_retention_days", 0),
         ("password_reset_rate_bucket_retention_days", 0),

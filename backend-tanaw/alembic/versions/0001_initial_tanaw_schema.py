@@ -851,9 +851,9 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
-        op.f("ix_enterprise_telemetry_snapshots_enterprise_profile_id"),
+        "ix_enterprise_telemetry_snapshots_enterprise_received",
         "enterprise_telemetry_snapshots",
-        ["enterprise_profile_id"],
+        ["enterprise_profile_id", sa.text("received_at DESC"), sa.text("id DESC")],
         unique=False,
     )
     op.create_index(
@@ -1425,7 +1425,7 @@ def downgrade() -> None:
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_index(
-        op.f("ix_enterprise_telemetry_snapshots_enterprise_profile_id"),
+        "ix_enterprise_telemetry_snapshots_enterprise_received",
         table_name="enterprise_telemetry_snapshots",
     )
     op.drop_index(

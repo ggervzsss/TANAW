@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     account_email_change_ttl_hours: int = Field(default=24, ge=1, le=168)
     retention_cleanup_interval_seconds: int = Field(default=3600, ge=60, le=86_400)
     retention_cleanup_batch_size: int = Field(default=500, ge=10, le=5000)
+    telemetry_raw_retention_days: int = Field(default=45, ge=35, le=365)
+    telemetry_retention_batch_size: int = Field(default=10_000, ge=100, le=50_000)
     activation_token_retention_days: int = Field(default=30, ge=1, le=3650)
     password_reset_retention_days: int = Field(default=30, ge=1, le=3650)
     password_reset_rate_bucket_retention_days: int = Field(default=2, ge=1, le=90)
