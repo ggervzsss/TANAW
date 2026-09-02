@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.date_time import PHILIPPINE_TIME_ZONE, ensure_aware
 from app.features.accounts.enterprise import enterprise_name
 from app.features.accounts.models import Account, AccountRole
-from app.features.monitoring.models import EnterpriseTelemetrySnapshot, OperationalAlert
+from app.features.monitoring.models import (
+    OPERATIONAL_ALERT_CODE_SEQUENCE,
+    EnterpriseTelemetrySnapshot,
+    OperationalAlert,
+)
 from app.features.monitoring.schemas import (
     DesktopTelemetryIngest,
     OperationalAlertSummary,
@@ -104,9 +108,11 @@ async def create_operational_alert(
             await db.refresh(existing)
             return existing
 
-    count = await db.scalar(select(func.count()).select_from(OperationalAlert))
+    alert_number = await db.scalar(select(OPERATIONAL_ALERT_CODE_SEQUENCE.next_value()))
+    if alert_number is None:
+        raise RuntimeError("Operational alert code sequence did not return a value.")
     alert = OperationalAlert(
-        alert_code=f"ALT-{int(count or 0) + 1:06d}",
+        alert_code=f"ALT-{alert_number:06d}",
         alert_type=alert_type,
         severity=severity,
         enterprise=enterprise,

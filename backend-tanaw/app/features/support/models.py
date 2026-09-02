@@ -4,13 +4,18 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Sequence, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
 if TYPE_CHECKING:
     from app.features.accounts.models import EnterpriseProfile
+
+
+SUPPORT_TICKET_CODE_SEQUENCE = Sequence(
+    "support_ticket_code_sequence", start=1, metadata=Base.metadata
+)
 
 
 class SupportTicket(Base):

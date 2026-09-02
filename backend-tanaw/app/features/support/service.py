@@ -1,12 +1,16 @@
 import json
 from typing import cast
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.accounts.enterprise import enterprise_name
 from app.features.accounts.models import Account, AccountRole
-from app.features.support.models import SupportTicket, SupportTicketMessage
+from app.features.support.models import (
+    SUPPORT_TICKET_CODE_SEQUENCE,
+    SupportTicket,
+    SupportTicketMessage,
+)
 from app.features.support.schemas import (
     SupportTicketAttachmentCreate,
     SupportTicketAttachmentMetadata,
@@ -184,9 +188,11 @@ async def create_support_ticket(
     account: Account,
     payload: SupportTicketCreate,
 ) -> SupportTicketSummary:
-    ticket_count = await db.scalar(select(func.count()).select_from(SupportTicket))
+    ticket_number = await db.scalar(select(SUPPORT_TICKET_CODE_SEQUENCE.next_value()))
+    if ticket_number is None:
+        raise RuntimeError("Support ticket code sequence did not return a value.")
     ticket = SupportTicket(
-        ticket_code=f"TCK-{int(ticket_count or 0) + 1:06d}",
+        ticket_code=f"TCK-{ticket_number:06d}",
         enterprise_profile_id=account.id,
         enterprise_name=enterprise_name(account),
         category=payload.category,

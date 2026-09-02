@@ -4,7 +4,18 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Sequence,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -58,6 +69,11 @@ Index(
     EnterpriseTelemetrySnapshot.enterprise_profile_id,
     EnterpriseTelemetrySnapshot.received_at.desc(),
     EnterpriseTelemetrySnapshot.id.desc(),
+)
+
+
+OPERATIONAL_ALERT_CODE_SEQUENCE = Sequence(
+    "operational_alert_code_sequence", start=1, metadata=Base.metadata
 )
 
 

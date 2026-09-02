@@ -149,6 +149,7 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_final_reports_report_code"), "final_reports", ["report_code"], unique=True
     )
+    op.execute("CREATE SEQUENCE operational_alert_code_sequence START WITH 1")
     op.create_table(
         "operational_alerts",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -862,6 +863,7 @@ def upgrade() -> None:
         ["received_at"],
         unique=False,
     )
+    op.execute("CREATE SEQUENCE support_ticket_code_sequence START WITH 1")
     op.create_table(
         "support_tickets",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -1420,6 +1422,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_support_tickets_created_at"), table_name="support_tickets")
     op.drop_index(op.f("ix_support_tickets_category"), table_name="support_tickets")
     op.drop_table("support_tickets")
+    op.execute("DROP SEQUENCE support_ticket_code_sequence")
     op.drop_index(
         op.f("ix_enterprise_telemetry_snapshots_received_at"),
         table_name="enterprise_telemetry_snapshots",
@@ -1573,6 +1576,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_operational_alerts_alert_type"), table_name="operational_alerts")
     op.drop_index(op.f("ix_operational_alerts_alert_code"), table_name="operational_alerts")
     op.drop_table("operational_alerts")
+    op.execute("DROP SEQUENCE operational_alert_code_sequence")
     op.drop_index(op.f("ix_final_reports_report_code"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_period"), table_name="final_reports")
     op.drop_index(op.f("ix_final_reports_generated_on"), table_name="final_reports")
