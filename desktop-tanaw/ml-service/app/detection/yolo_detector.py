@@ -10,59 +10,22 @@ from typing import Any
 import numpy as np
 
 from app.counting.geometry import Centroid, bbox_centroid
+from app.detection.detector_selection import (
+    DETECTOR_PROFILES,
+    PROFILE_FALLBACKS,
+    DetectorSelection,
+    detector_model_availability,
+    resolve_model_path,
+    select_detector,
+)
 from app.runtime.assets import model_directory
 from app.runtime.config_directories import configure_third_party_directories
 from app.runtime.hardware import get_runtime_capabilities
 
 configure_third_party_directories()
 
-PROCESSING_PROFILE_VALUES = {
-    "auto",
-    "compatibility",
-    "balanced",
-    "high_accuracy",
-    "emergency",
-}
-RUNTIME_BACKEND_VALUES = {"auto", "cuda", "openvino", "cpu"}
-TRACKER_PROFILE_VALUES = {"auto", "bytetrack", "botsort"}
 PERSON_CLASS_IDS = (0,)
 _GLOBAL_INFERENCE_LOCK = Lock()
-
-
-@dataclass(frozen=True)
-class DetectorProfile:
-    name: str
-    model_name: str
-    image_size: int
-    nms_iou: float
-    max_detections: int
-    preferred_runtimes: tuple[str, ...]
-    target_processing_fps: float | None
-    default_tracker: str
-    default_reid_mode: str
-    role: str
-    optional: bool = False
-
-
-@dataclass(frozen=True)
-class DetectorSelection:
-    requested_profile: str
-    normalized_profile: str
-    effective_profile: str
-    model_name: str
-    model_path: str | None
-    runtime_backend: str
-    requested_runtime: str
-    requested_tracker: str
-    effective_tracker: str
-    tracker_config_path: str
-    image_size: int
-    nms_iou: float
-    max_detections: int
-    target_processing_fps: float | None
-    selection_reason: str
-    fallback_reason: str | None
-    fallback_chain: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -72,66 +35,6 @@ class TrackResult:
     confidence: float
     centroid: Centroid
     counting_point: Centroid
-
-
-DETECTOR_PROFILES: dict[str, DetectorProfile] = {
-    "emergency": DetectorProfile(
-        name="emergency",
-        model_name="yolo11n",
-        image_size=480,
-        nms_iou=0.45,
-        max_detections=32,
-        preferred_runtimes=("openvino", "cpu", "cuda"),
-        target_processing_fps=7.0,
-        default_tracker="bytetrack",
-        default_reid_mode="off",
-        role="lowest-resource emergency fallback",
-    ),
-    "compatibility": DetectorProfile(
-        name="compatibility",
-        model_name="yolo11n",
-        image_size=640,
-        nms_iou=0.50,
-        max_detections=64,
-        preferred_runtimes=("cuda", "openvino", "cpu"),
-        target_processing_fps=9.0,
-        default_tracker="bytetrack",
-        default_reid_mode="off",
-        role="safe CPU and weaker-device profile",
-    ),
-    "balanced": DetectorProfile(
-        name="balanced",
-        model_name="yolo11s",
-        image_size=640,
-        nms_iou=0.55,
-        max_detections=96,
-        preferred_runtimes=("cuda", "openvino", "cpu"),
-        target_processing_fps=12.0,
-        default_tracker="botsort",
-        default_reid_mode="fast",
-        role="recommended capable-device profile",
-    ),
-    "high_accuracy": DetectorProfile(
-        name="high_accuracy",
-        model_name="yolo11m",
-        image_size=640,
-        nms_iou=0.55,
-        max_detections=128,
-        preferred_runtimes=("cuda", "openvino", "cpu"),
-        target_processing_fps=12.0,
-        default_tracker="botsort",
-        default_reid_mode="fast",
-        role="higher-accuracy dedicated GPU profile",
-        optional=True,
-    ),
-}
-
-PROFILE_FALLBACKS: dict[str, tuple[str, ...]] = {
-    "emergency": ("emergency",),
-    "compatibility": ("compatibility", "emergency"),
-    "balanced": ("balanced", "compatibility", "emergency"),
-    "high_accuracy": ("high_accuracy", "balanced", "compatibility", "emergency"),
-}
 
 
 class YoloPersonTracker:
@@ -532,234 +435,24 @@ def resolve_detector_selection(
     capabilities: dict[str, Any] | None = None,
     models_root: Path | None = None,
 ) -> DetectorSelection:
-    capabilities = capabilities or get_runtime_capabilities()
-    models_root = models_root or _models_root()
-    requested_profile = processing_profile if processing_profile else "auto"
-    requested_runtime = runtime_backend if runtime_backend in RUNTIME_BACKEND_VALUES else "auto"
-    requested_tracker = tracker_profile if tracker_profile in TRACKER_PROFILE_VALUES else "auto"
-    normalized_profile = _normalize_processing_profile(requested_profile)
-
-    if normalized_profile == "auto":
-        starting_profile, selection_reason = _auto_profile(capabilities)
-    else:
-        starting_profile = normalized_profile
-        selection_reason = f"Using requested {starting_profile} model profile."
-
-    fallback_chain = PROFILE_FALLBACKS.get(starting_profile, ("compatibility", "emergency"))
-    fallback_notes: list[str] = []
-    for profile_name in fallback_chain:
-        profile = DETECTOR_PROFILES[profile_name]
-        for runtime in _runtime_candidates(profile, requested_runtime, capabilities):
-            model_path = _first_existing_model_path(profile_name, runtime, models_root)
-            if model_path is None:
-                continue
-            tracker, tracker_config_path, tracker_note = _resolve_tracker(
-                profile_name, requested_tracker
-            )
-            if tracker_note is not None:
-                fallback_notes.append(tracker_note)
-            if profile_name != starting_profile:
-                fallback_notes.append(
-                    f"{DETECTOR_PROFILES[starting_profile].model_name} was unavailable; "
-                    f"using {profile.model_name}."
-                )
-            if requested_runtime != "auto" and runtime != requested_runtime:
-                fallback_notes.append(
-                    f"Requested {requested_runtime} runtime was unavailable; using {runtime}."
-                )
-            return DetectorSelection(
-                requested_profile=requested_profile,
-                normalized_profile=normalized_profile,
-                effective_profile=profile_name,
-                model_name=profile.model_name,
-                model_path=str(model_path),
-                runtime_backend=runtime,
-                requested_runtime=requested_runtime,
-                requested_tracker=requested_tracker,
-                effective_tracker=tracker,
-                tracker_config_path=str(tracker_config_path),
-                image_size=profile.image_size,
-                nms_iou=profile.nms_iou,
-                max_detections=profile.max_detections,
-                target_processing_fps=profile.target_processing_fps,
-                selection_reason=selection_reason,
-                fallback_reason=" ".join(fallback_notes) or None,
-                fallback_chain=_visible_fallback_chain(fallback_chain, profile_name),
-            )
-        fallback_notes.append(f"{profile.model_name} has no available model for usable runtimes.")
-
-    profile = DETECTOR_PROFILES[starting_profile]
-    tracker, tracker_config_path, tracker_note = _resolve_tracker(
-        starting_profile, requested_tracker
-    )
-    if tracker_note is not None:
-        fallback_notes.append(tracker_note)
-    return DetectorSelection(
-        requested_profile=requested_profile,
-        normalized_profile=normalized_profile,
-        effective_profile=starting_profile,
-        model_name=profile.model_name,
-        model_path=None,
-        runtime_backend="cpu",
-        requested_runtime=requested_runtime,
-        requested_tracker=requested_tracker,
-        effective_tracker=tracker,
-        tracker_config_path=str(tracker_config_path),
-        image_size=profile.image_size,
-        nms_iou=profile.nms_iou,
-        max_detections=profile.max_detections,
-        target_processing_fps=profile.target_processing_fps,
-        selection_reason=selection_reason,
-        fallback_reason=" ".join(fallback_notes) or "No bundled detector model is available.",
-        fallback_chain=fallback_chain,
+    return select_detector(
+        processing_profile=processing_profile,
+        runtime_backend=runtime_backend,
+        tracker_profile=tracker_profile,
+        capabilities=capabilities or get_runtime_capabilities(),
+        models_root=models_root or _models_root(),
+        tracker_config_path=_tracker_config_path,
     )
 
 
 def get_detector_model_availability(models_root: Path | None = None) -> dict[str, Any]:
-    root = models_root or _models_root()
-    profiles: dict[str, Any] = {}
-    for profile in DETECTOR_PROFILES.values():
-        pt_path = root / f"{profile.model_name}.pt"
-        openvino_paths = _openvino_model_paths(profile.model_name, profile.image_size, root)
-        openvino_available = [path for path in openvino_paths if path.exists()]
-        profiles[profile.name] = {
-            "model": profile.model_name,
-            "role": profile.role,
-            "required": profile.name == "emergency",
-            "optional": profile.optional,
-            "available": pt_path.exists() or bool(openvino_available),
-            "pt": {"path": str(pt_path), "exists": pt_path.exists()},
-            "openvino": [{"path": str(path), "exists": path.exists()} for path in openvino_paths],
-            "available_runtimes": _available_runtimes_for_profile(profile.name, root),
-        }
-    return profiles
-
-
-def _normalize_processing_profile(processing_profile: str) -> str:
-    if processing_profile in PROCESSING_PROFILE_VALUES:
-        return processing_profile
-    return "auto"
-
-
-def _auto_profile(capabilities: dict[str, Any]) -> tuple[str, str]:
-    if bool(capabilities.get("cuda_available")):
-        return "balanced", "CUDA is available; selected balanced YOLO11s profile."
-    if bool(capabilities.get("openvino_available")):
-        return "compatibility", "OpenVINO is available; selected compatibility YOLO11n profile."
-    return "emergency", "No accelerator runtime detected; selected emergency CPU YOLO11n profile."
-
-
-def _runtime_candidates(
-    profile: DetectorProfile, requested_runtime: str, capabilities: dict[str, Any]
-) -> tuple[str, ...]:
-    candidates: tuple[str, ...]
-    if requested_runtime == "cpu":
-        candidates = ("cpu",)
-    elif requested_runtime == "openvino":
-        candidates = ("openvino", "cpu")
-    elif requested_runtime == "cuda":
-        candidates = ("cuda", "cpu")
-    else:
-        candidates = (*profile.preferred_runtimes, "cpu")
-
-    unique_candidates: list[str] = []
-    for runtime in candidates:
-        if runtime in unique_candidates:
-            continue
-        if _runtime_available(runtime, capabilities):
-            unique_candidates.append(runtime)
-    return tuple(unique_candidates)
-
-
-def _visible_fallback_chain(
-    fallback_chain: tuple[str, ...], effective_profile: str
-) -> tuple[str, ...]:
-    if effective_profile not in fallback_chain:
-        return fallback_chain
-    return fallback_chain[: fallback_chain.index(effective_profile) + 1]
-
-
-def _runtime_available(runtime: str, capabilities: dict[str, Any]) -> bool:
-    if runtime in {"auto", "cpu"}:
-        return True
-    runtime_available = capabilities.get("runtime_available")
-    if isinstance(runtime_available, dict) and runtime in runtime_available:
-        return bool(runtime_available[runtime])
-    if runtime == "cuda":
-        return bool(capabilities.get("cuda_available"))
-    if runtime == "openvino":
-        return bool(capabilities.get("openvino_available"))
-    return False
-
-
-def _first_existing_model_path(profile_name: str, runtime: str, models_root: Path) -> Path | None:
-    profile = DETECTOR_PROFILES[profile_name]
-    for path in _model_path_candidates(profile, runtime, models_root):
-        if path.exists():
-            return path
-    return None
+    return detector_model_availability(models_root or _models_root())
 
 
 def _resolve_model_path_for(
     configured_model_path: str, profile_name: str, runtime: str
 ) -> Path | None:
-    requested_path = Path(configured_model_path)
-    if requested_path.is_absolute():
-        if requested_path.exists():
-            return requested_path
-        raise FileNotFoundError(f"YOLO model file was not found at {requested_path}.")
-
-    if configured_model_path != "yolo11n.pt":
-        bundled_path = _models_root() / requested_path.name
-        if bundled_path.exists():
-            return bundled_path
-        raise FileNotFoundError(f"YOLO model file was not found at {bundled_path}.")
-
-    return _first_existing_model_path(profile_name, runtime, _models_root())
-
-
-def _model_path_candidates(
-    profile: DetectorProfile, runtime: str, models_root: Path
-) -> tuple[Path, ...]:
-    if runtime == "openvino":
-        return tuple(_openvino_model_paths(profile.model_name, profile.image_size, models_root))
-    return (models_root / f"{profile.model_name}.pt",)
-
-
-def _openvino_model_paths(model_name: str, image_size: int, models_root: Path) -> tuple[Path, ...]:
-    return (
-        models_root / f"{model_name}_{image_size}_openvino_model",
-        models_root / f"{model_name}_openvino_model",
-    )
-
-
-def _available_runtimes_for_profile(profile_name: str, models_root: Path) -> list[str]:
-    profile = DETECTOR_PROFILES[profile_name]
-    runtimes: list[str] = []
-    if (models_root / f"{profile.model_name}.pt").exists():
-        runtimes.extend(["cpu", "cuda"])
-    if any(
-        path.exists()
-        for path in _openvino_model_paths(profile.model_name, profile.image_size, models_root)
-    ):
-        runtimes.append("openvino")
-    return sorted(set(runtimes))
-
-
-def _resolve_tracker(profile_name: str, requested_tracker: str) -> tuple[str, Path, str | None]:
-    preferred_tracker = (
-        DETECTOR_PROFILES[profile_name].default_tracker
-        if requested_tracker == "auto"
-        else requested_tracker
-    )
-    tracker_config_path = _tracker_config_path(profile_name, preferred_tracker)
-    if preferred_tracker == "botsort" and not tracker_config_path.exists():
-        return (
-            "bytetrack",
-            _tracker_config_path(profile_name, "bytetrack"),
-            "BoT-SORT config was unavailable; using ByteTrack.",
-        )
-    return preferred_tracker, tracker_config_path, None
+    return resolve_model_path(configured_model_path, profile_name, runtime, _models_root())
 
 
 def _tracker_config_path(profile_name: str, tracker: str) -> Path:

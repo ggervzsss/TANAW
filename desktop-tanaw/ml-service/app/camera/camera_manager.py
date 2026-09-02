@@ -12,6 +12,7 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 import numpy as np
 
 from app.camera.auth import build_authenticated_stream_url, redact_stream_credentials
+from app.camera.capture_worker import CaptureWorker
 from app.camera.contracts import CameraCounts, CameraSessionState
 from app.camera.frame_geometry import crop_track, track_inside_roi
 from app.camera.frame_renderer import CameraFrameRenderer, DisplayTrack
@@ -31,7 +32,7 @@ from app.camera.runtime_math import quality_reid_enabled as _quality_reid_enable
 from app.camera.runtime_math import resolve_reid_mode as _resolve_reid_mode
 from app.camera.runtime_math import safe_int as _safe_int
 from app.camera.runtime_math import seconds_to_frames as _seconds_to_frames
-from app.camera.stream_reader import open_capture, validate_stream
+from app.camera.stream_reader import validate_stream
 from app.config.camera_config import (
     CameraCountingConfigUpdate,
     CameraStartRequest,
@@ -51,7 +52,6 @@ from app.storage.session_store import SessionStore
 from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
 
 logger = logging.getLogger(__name__)
-RECONNECT_MAX_DELAY_SECONDS = 15.0
 FAST_REID_RESULT_MAX_AGE_SECONDS = 2.5
 QUALITY_REID_RESULT_MAX_AGE_SECONDS = 6.0
 
@@ -108,6 +108,15 @@ class CameraProcessingManager:
             self._session_store,
             model_name=self._reidentifier.model_name,
             quality_model_name=self._quality_reidentifier.model_name,
+        )
+        self._capture_worker = CaptureWorker(
+            self._frame_renderer,
+            is_current_session=self._is_current_session,
+            processing_width=lambda config: _max_frame_width(
+                config.max_frame_width, self._effective_profile
+            ),
+            publish_frame=self._publish_raw_frame,
+            mark_reconnecting=self._mark_reconnecting,
         )
         self._session_updated_at: str | None = None
         self._restoring_session = False
@@ -781,41 +790,7 @@ class CameraProcessingManager:
         return build_authenticated_stream_url(config.stream_url, config.username, config.password)
 
     def _opencv_capture_loop(self, session: ProcessingSession, stream_url: str) -> None:
-        config = session.config
-        reconnect_attempt = 0
-        while not session.stop_event.is_set() and self._is_current_session(session):
-            capture = open_capture(stream_url)
-            failed_reads = 0
-            reconnect_message = "Camera stream could not be opened."
-            try:
-                if capture.isOpened():
-                    while not session.stop_event.is_set() and self._is_current_session(session):
-                        ok, frame = capture.read()
-                        if not ok or frame is None:
-                            failed_reads += 1
-                            if failed_reads >= 90:
-                                reconnect_message = "Camera stream stopped returning frames."
-                                break
-                            session.stop_event.wait(0.05)
-                            continue
-
-                        failed_reads = 0
-                        reconnect_attempt = 0
-                        frame = self._frame_renderer.resize_for_processing(
-                            frame, _max_frame_width(config.max_frame_width, self._effective_profile)
-                        )
-                        self._publish_raw_frame(session, frame)
-            except Exception as exc:
-                reconnect_message = redact_stream_credentials(str(exc))
-            finally:
-                capture.release()
-
-            if session.stop_event.is_set() or not self._is_current_session(session):
-                return
-            reconnect_attempt += 1
-            self._mark_reconnecting(session, reconnect_message)
-            if session.stop_event.wait(self._reconnect_delay(reconnect_attempt)):
-                return
+        self._capture_worker.run(session, stream_url)
 
     def _mark_reconnecting(self, session: ProcessingSession, message: str) -> None:
         with self._raw_frame_condition:
@@ -838,10 +813,6 @@ class CameraProcessingManager:
                 "status": "reconnecting",
             },
         )
-
-    @staticmethod
-    def _reconnect_delay(attempt: int) -> float:
-        return float(min(2 ** max(0, attempt - 1), RECONNECT_MAX_DELAY_SECONDS))
 
     def _publish_raw_frame(
         self, session: ProcessingSession, frame: np.ndarray, captured_at: float | None = None

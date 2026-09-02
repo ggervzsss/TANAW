@@ -1,61 +1,20 @@
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
-from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from app.identity.gallery_store import VisitorGalleryStore
+from app.identity.models import (
+    VisitorDecision,
+    VisitorIdentity,
+    VisitorModelEmbedding,
+    VisitorPrototype,
+)
+from app.identity.models import (
+    normalize_embedding as _normalize_embedding,
+)
 from app.storage.session_store import SessionStore
-
-
-@dataclass(frozen=True)
-class VisitorDecision:
-    visitor_id: str | None
-    is_unique_entry: bool
-    reid_score: float | None
-    reid_decision: str
-    identity_confidence: str
-    business_date: str
-
-    def as_event_fields(self) -> dict[str, Any]:
-        return {
-            "visitor_id": self.visitor_id,
-            "is_unique_entry": self.is_unique_entry,
-            "reid_score": self.reid_score,
-            "reid_decision": self.reid_decision,
-            "identity_confidence": self.identity_confidence,
-            "business_date": self.business_date,
-        }
-
-
-@dataclass
-class VisitorPrototype:
-    prototype_index: int
-    embedding: np.ndarray
-    embedding_count: int
-
-
-@dataclass
-class VisitorIdentity:
-    visitor_id: str
-    business_date: str
-    camera_id: int | None
-    embedding: np.ndarray
-    embedding_count: int
-    model_name: str
-    expires_at: str
-    identity_status: str = "confirmed"
-    canonical_visitor_id: str | None = None
-    prototypes: list[VisitorPrototype] = field(default_factory=list)
-
-
-@dataclass
-class VisitorModelEmbedding:
-    visitor_id: str
-    embedding: np.ndarray
-    embedding_count: int
-    model_name: str
 
 
 class UniqueVisitorRegistry:
@@ -80,7 +39,7 @@ class UniqueVisitorRegistry:
         max_prototypes_per_identity: int = 3,
         prototype_update_threshold: float = 0.82,
     ) -> None:
-        self._session_store = session_store
+        self._gallery_store = VisitorGalleryStore(session_store, model_name, quality_model_name)
         self.model_name = model_name
         self.timezone = ZoneInfo(timezone_name)
         self.retention_grace_hours = retention_grace_hours
@@ -144,7 +103,7 @@ class UniqueVisitorRegistry:
 
     def cleanup_expired(self, now: datetime | None = None) -> int:
         now = now or datetime.now(UTC)
-        deleted_count = self._session_store.cleanup_expired_visitor_metadata(now.isoformat())
+        deleted_count = self._gallery_store.cleanup_expired(now)
         self._last_cleanup_at = now.isoformat()
         if deleted_count and self._business_date is not None:
             self._gallery = self._load_gallery(self._business_date, self._camera_id, now)
@@ -348,10 +307,7 @@ class UniqueVisitorRegistry:
         now: datetime | None = None,
     ) -> bool:
         now = now or datetime.now(UTC)
-        restored = self._session_store.restore_visitor_identity(
-            visitor_id,
-            recorded_at=now.isoformat(),
-        )
+        restored = self._gallery_store.restore_identity(visitor_id, now)
         if not restored:
             return False
 
@@ -395,67 +351,7 @@ class UniqueVisitorRegistry:
     def _load_gallery(
         self, business_date: str, camera_id: int | None, now: datetime
     ) -> list[VisitorIdentity]:
-        rows = self._session_store.load_active_visitor_identities(business_date, now.isoformat())
-        gallery: list[VisitorIdentity] = []
-        prototypes_by_visitor: dict[str, list[VisitorPrototype]] = {}
-        prototype_rows = self._session_store.load_active_visitor_identity_prototypes(
-            business_date, self.model_name, now.isoformat()
-        )
-        for prototype_row in prototype_rows:
-            prototype_embedding = np.frombuffer(
-                prototype_row["representative_embedding"], dtype=np.float32
-            )
-            if prototype_embedding.size != int(prototype_row["embedding_dim"]):
-                continue
-            normalized_prototype = _normalize_embedding(prototype_embedding)
-            if normalized_prototype is None:
-                continue
-            prototypes_by_visitor.setdefault(prototype_row["visitor_id"], []).append(
-                VisitorPrototype(
-                    prototype_index=int(prototype_row["prototype_index"]),
-                    embedding=normalized_prototype,
-                    embedding_count=int(prototype_row["embedding_count"]),
-                )
-            )
-
-        for row in rows:
-            if row.get("model_name") != self.model_name:
-                continue
-            row_camera_id = row.get("camera_id")
-            if camera_id is not None and row_camera_id != camera_id:
-                continue
-            if camera_id is None and row_camera_id is not None:
-                continue
-
-            embedding = np.frombuffer(row["representative_embedding"], dtype=np.float32)
-            expected_dim = int(row["embedding_dim"])
-            if embedding.size != expected_dim:
-                continue
-            normalized = _normalize_embedding(embedding)
-            if normalized is None:
-                continue
-            prototypes = prototypes_by_visitor.get(row["visitor_id"]) or [
-                VisitorPrototype(
-                    prototype_index=0,
-                    embedding=normalized,
-                    embedding_count=int(row["embedding_count"]),
-                )
-            ]
-            gallery.append(
-                VisitorIdentity(
-                    visitor_id=row["visitor_id"],
-                    business_date=row["business_date"],
-                    camera_id=row_camera_id,
-                    embedding=normalized,
-                    embedding_count=int(row["embedding_count"]),
-                    model_name=row["model_name"],
-                    expires_at=row["expires_at"],
-                    identity_status=row.get("identity_status") or "confirmed",
-                    canonical_visitor_id=row.get("canonical_visitor_id"),
-                    prototypes=prototypes,
-                )
-            )
-        return gallery
+        return self._gallery_store.load_gallery(business_date, camera_id, now)
 
     def _load_quality_gallery(
         self,
@@ -463,38 +359,10 @@ class UniqueVisitorRegistry:
         camera_id: int | None,
         now: datetime,
     ) -> dict[str, VisitorModelEmbedding]:
-        if self.quality_model_name is None:
-            return {}
-
         valid_visitor_ids = {identity.visitor_id for identity in self._gallery}
-        gallery: dict[str, VisitorModelEmbedding] = {}
-        rows = self._session_store.load_active_visitor_model_embeddings(
-            business_date,
-            self.quality_model_name,
-            now.isoformat(),
+        return self._gallery_store.load_quality_gallery(
+            business_date, camera_id, now, valid_visitor_ids
         )
-        for row in rows:
-            visitor_id = row["visitor_id"]
-            if visitor_id not in valid_visitor_ids:
-                continue
-            row_camera_id = row.get("camera_id")
-            if camera_id is not None and row_camera_id != camera_id:
-                continue
-            if camera_id is None and row_camera_id is not None:
-                continue
-            embedding = np.frombuffer(row["representative_embedding"], dtype=np.float32)
-            if embedding.size != int(row["embedding_dim"]):
-                continue
-            normalized = _normalize_embedding(embedding)
-            if normalized is None:
-                continue
-            gallery[visitor_id] = VisitorModelEmbedding(
-                visitor_id=visitor_id,
-                embedding=normalized,
-                embedding_count=int(row["embedding_count"]),
-                model_name=row["model_name"],
-            )
-        return gallery
 
     def _identity_for_visitor(self, visitor_id: str) -> VisitorIdentity | None:
         return next(
@@ -601,11 +469,7 @@ class UniqueVisitorRegistry:
             return decision
 
         provisional.identity_status = "confirmed"
-        self._session_store.resolve_visitor_identity(
-            provisional.visitor_id,
-            identity_status="confirmed",
-            recorded_at=now.isoformat(),
-        )
+        self._gallery_store.resolve_identity(provisional.visitor_id, "confirmed", None, now)
         self._track_visitors[track_id] = provisional.visitor_id
         decision = VisitorDecision(
             visitor_id=provisional.visitor_id,
@@ -802,11 +666,8 @@ class UniqueVisitorRegistry:
 
         provisional.identity_status = "merged"
         provisional.canonical_visitor_id = canonical.visitor_id
-        self._session_store.resolve_visitor_identity(
-            provisional.visitor_id,
-            identity_status="merged",
-            canonical_visitor_id=canonical.visitor_id,
-            recorded_at=now.isoformat(),
+        self._gallery_store.resolve_identity(
+            provisional.visitor_id, "merged", canonical.visitor_id, now
         )
         self._gallery = [
             identity for identity in self._gallery if identity.visitor_id != provisional.visitor_id
@@ -842,44 +703,17 @@ class UniqueVisitorRegistry:
             model_name=self.quality_model_name,
         )
         self._quality_gallery[visitor_id] = entry
-        self._session_store.upsert_visitor_model_embedding(
-            visitor_id=visitor_id,
-            model_name=self.quality_model_name,
-            embedding=updated_embedding.astype(np.float32).tobytes(),
-            embedding_dim=int(updated_embedding.size),
-            embedding_count=updated_count,
-            recorded_at=now.isoformat(),
+        self._gallery_store.persist_model_embedding(
+            visitor_id, updated_embedding, updated_count, now
         )
 
     def _persist_identity(self, identity: VisitorIdentity, now: datetime) -> None:
-        self._session_store.upsert_visitor_identity(
-            visitor_id=identity.visitor_id,
-            business_date=identity.business_date,
-            camera_id=identity.camera_id,
-            embedding=identity.embedding.astype(np.float32).tobytes(),
-            embedding_dim=int(identity.embedding.size),
-            embedding_count=identity.embedding_count,
-            model_name=identity.model_name,
-            expires_at=identity.expires_at,
-            identity_status=identity.identity_status,
-            canonical_visitor_id=identity.canonical_visitor_id,
-            recorded_at=now.isoformat(),
-        )
-        for prototype in identity.prototypes:
-            self._persist_prototype(identity, prototype, now)
+        self._gallery_store.persist_identity(identity, now)
 
     def _persist_prototype(
         self, identity: VisitorIdentity, prototype: VisitorPrototype, now: datetime
     ) -> None:
-        self._session_store.upsert_visitor_identity_prototype(
-            visitor_id=identity.visitor_id,
-            model_name=identity.model_name,
-            prototype_index=prototype.prototype_index,
-            embedding=prototype.embedding.astype(np.float32).tobytes(),
-            embedding_dim=int(prototype.embedding.size),
-            embedding_count=prototype.embedding_count,
-            recorded_at=now.isoformat(),
-        )
+        self._gallery_store.persist_prototype(identity, prototype, now)
 
     def _persist_sighting(
         self,
@@ -890,29 +724,6 @@ class UniqueVisitorRegistry:
         bbox: tuple[int, int, int, int] | None,
         now: datetime,
     ) -> None:
-        if decision.visitor_id is None:
-            return
-
-        self._session_store.append_visitor_sighting(
-            {
-                "visitor_id": decision.visitor_id,
-                "business_date": decision.business_date,
-                "camera_id": camera_id,
-                "track_id": track_id,
-                "direction": "entry",
-                "reid_score": decision.reid_score,
-                "reid_decision": decision.reid_decision,
-                "identity_confidence": decision.identity_confidence,
-                "detection_confidence": detection_confidence,
-                "bbox": bbox,
-            },
-            now.isoformat(),
+        self._gallery_store.persist_sighting(
+            decision, track_id, camera_id, detection_confidence, bbox, now
         )
-
-
-def _normalize_embedding(embedding: np.ndarray) -> np.ndarray | None:
-    normalized = np.asarray(embedding, dtype=np.float32).reshape(-1)
-    norm = float(np.linalg.norm(normalized))
-    if norm <= 1e-9:
-        return None
-    return (normalized / norm).astype(np.float32)
