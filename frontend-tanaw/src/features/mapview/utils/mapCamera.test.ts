@@ -303,31 +303,33 @@ describe("geographic layer integrity safeguards", () => {
 
   it("does not invalidate a map whose absolute directory overlay never changes its dimensions", () => {
     const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+    const lifecycleSource = readFileSync(new URL("../hooks/useAdminLeafletMap.ts", import.meta.url), "utf8");
 
-    expect(componentSource).not.toContain("invalidateSize");
-    expect(componentSource).not.toContain("isAnimating");
-    expect(componentSource).not.toContain("isTransitioning");
+    expect(componentSource + lifecycleSource).not.toContain("invalidateSize");
+    expect(componentSource + lifecycleSource).not.toContain("isAnimating");
+    expect(componentSource + lifecycleSource).not.toContain("isTransitioning");
   });
 
   it("keeps the map hidden until the canonical initial camera has been applied", () => {
     const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
+    const lifecycleSource = readFileSync(new URL("../hooks/useAdminLeafletMap.ts", import.meta.url), "utf8");
     const cameraHookSource = readFileSync(new URL("../hooks/useMapCameraSync.ts", import.meta.url), "utf8");
 
     expect(componentSource).not.toContain("sanPedroFallbackCenter");
     expect(componentSource).not.toContain("sanPedroRelaxedFallbackBounds");
-    expect(componentSource).toContain("useMapCameraSync({");
+    expect(lifecycleSource).toContain("useMapCameraSync({");
     expect(cameraHookSource).toContain("initializedMapInstanceRef.current !== map");
     expect(componentSource).toContain('visibility: isInitialCameraReady ? "visible" : "hidden"');
   });
 
   it("creates the GeoJSON layer only when boundary data changes", () => {
-    const componentSource = readFileSync(new URL("../components/AdminEnterpriseMap.tsx", import.meta.url), "utf8");
-    const creationEffect = componentSource.match(/const boundaryLayer = L\.geoJSON[\s\S]*?if \(boundaryLayerRef\.current === boundaryLayer\)[\s\S]*?\n\s{2}}, \[boundary\]\);/);
+    const lifecycleSource = readFileSync(new URL("../hooks/useAdminLeafletMap.ts", import.meta.url), "utf8");
+    const creationEffect = lifecycleSource.match(/const boundaryLayer = L\.geoJSON[\s\S]*?if \(boundaryLayerRef\.current === boundaryLayer\)[\s\S]*?\n\s{2}}, \[boundary, findBoundaryLayerByName\]\);/);
 
     expect(creationEffect).not.toBeNull();
     expect(creationEffect![0]).not.toContain("[boundary, mapTheme");
     expect(creationEffect![0]).not.toContain("[boundary, showBoundaries");
-    expect(componentSource).toContain("citywideBoundsRef.current = boundaryLayer.getBounds()");
-    expect(componentSource).toContain("barangayBoundsRef.current = new Map");
+    expect(lifecycleSource).toContain("citywideBoundsRef.current = boundaryLayer.getBounds()");
+    expect(lifecycleSource).toContain("barangayBoundsRef.current = new Map");
   });
 });

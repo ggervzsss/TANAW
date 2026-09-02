@@ -165,7 +165,7 @@ describe("desktop splash presentation", () => {
     const html = readFileSync(`${publicDirectory}splash.html`, "utf8");
     const css = readFileSync(`${publicDirectory}splash.css`, "utf8");
     const script = readFileSync(`${publicDirectory}splash.js`, "utf8");
-    const main = readFileSync(fileURLToPath(new URL("./main.ts", import.meta.url)), "utf8");
+    const windows = readFileSync(fileURLToPath(new URL("./application-windows.ts", import.meta.url)), "utf8");
     const preload = readFileSync(fileURLToPath(new URL("./preload.ts", import.meta.url)), "utf8");
 
     expect(html).toContain("tanaw-boot-progress");
@@ -201,18 +201,18 @@ describe("desktop splash presentation", () => {
     expect(script).toContain("ratio * ratio * (3 - 2 * ratio)");
     expect(script).toContain("window.tanawSplash");
     expect(script).toContain("complete()");
-    expect(main).toContain("window.tanawSplash?.start?.()");
-    expect(main).toContain("window.tanawSplash?.ready?.()");
-    expect(main).toContain("screen.getPrimaryDisplay().workArea");
-    expect(main).toContain("await prepareWindowForDisplay(splash)");
-    expect(main).toContain("await prepareWindowForDisplay(win)");
-    expect(main).toContain('win.webContents.send("startup:revealed")');
-    expect(main).toContain('targetWebContents.on("did-finish-load"');
-    expect(main).toContain("startupTransition?.hasRevealed()");
-    expect(main).toContain('targetWebContents.send("startup:revealed")');
+    expect(windows).toContain("window.tanawSplash?.start?.()");
+    expect(windows).toContain("window.tanawSplash?.ready?.()");
+    expect(windows).toContain("screen.getPrimaryDisplay().workArea");
+    expect(windows).toContain("await prepareWindowForDisplay(splash)");
+    expect(windows).toContain("await prepareWindowForDisplay(mainWindow)");
+    expect(windows).toContain('mainWindow.webContents.send("startup:revealed")');
+    expect(windows).toContain('targetWebContents.on("did-finish-load"');
+    expect(windows).toContain("startupTransition?.hasRevealed()");
+    expect(windows).toContain('targetWebContents.send("startup:revealed")');
     expect(preload).toContain('ipcRenderer.on("startup:revealed"');
     expect(preload).toContain("onRevealed(listener");
-    expect(main).not.toMatch(/\.maximize\(\);\s*\n\s*\w+\.show\(\)/);
+    expect(windows).not.toMatch(/\.maximize\(\);\s*\n\s*\w+\.show\(\)/);
   });
 
   it("drives the separator from left to midpoint to completion only after readiness", () => {

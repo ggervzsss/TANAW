@@ -1,47 +1,40 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   deleteLocalReportDraft,
-  getLocalMetricsSummary,
-  getLocalReportDraft,
   getMlServiceStatus,
-  listLocalReportSubmissions,
   recordLocalReportSubmission,
   type LocalReportSubmission,
 } from "../../camera/services/ml-service";
-import { listEnterpriseReportHistory } from "../services/report-history";
-import { DESKTOP_REPORT_SYNC_EVENT, getDesktopSamplePreparation, prepareDesktopSampleCounts, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel, isSameReportingMonth, shouldPrepareDraftPeriod } from "../utils/reporting-period";
 import { notifyError } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
-import { usePersistentIssue } from "../../toasts/services/persistent-issue";
 import {
   buildLedgerRows,
-  demoFromPayload,
   draftLedgerKey,
   emptyDemo,
   findPreviousDemo,
   getDemographicDraftKey,
   historyLedgerKey,
   isPreparedMetrics,
-  mergeReportHistory,
   metricsFromPendingCounts,
   metricsFromReport,
   metricsFromSummary,
-  reportFromCloudSubmission,
-  reportFromLocalSubmission,
   upsertReport,
   validateDemographicAllocation,
   validateReportDraft,
 } from "../model/report-workspace";
 import { getCurrentReportingPeriod } from "../model/reporting-calendar";
-import { clearLegacyBrowserDemographicDrafts, persistDemographicDraft, prepareNextWorkspaceMetrics, syncSubmittedReportToCloud } from "../services/report-workspace";
+import { prepareNextWorkspaceMetrics, syncSubmittedReportToCloud } from "../services/report-workspace";
 import type { ReportLedgerRow } from "../model/report-ledger";
 import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
+import { useDemographicDraft } from "./useDemographicDraft";
+import { useReportsWorkspaceData } from "./useReportsWorkspaceData";
 
 type ReportsWorkspaceOptions = {
   enterpriseName: string;
@@ -57,45 +50,34 @@ type DotPreviewState = {
   reportId: string;
 };
 
-const DEMOGRAPHIC_DRAFT_RETRY_DELAY_MS = 2000;
-const DEMOGRAPHIC_DRAFT_SAVE_DELAY_MS = 300;
-
 export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: ReportsWorkspaceOptions) {
   const { timeFormat } = useSystemDisplayPreferences();
   const currentReportingPeriod = useCurrentReportingPeriod();
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
-  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
   const [period, setPeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
   const [notes, setNotes] = useState("");
-  const [demo, setDemo] = useState<DemoBreakdown>(emptyDemo);
-
   const [previewReport, setPreviewReport] = useState<DotPreviewState | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [liveMetrics, setLiveMetrics] = useState<Metrics>(EMPTY_METRICS);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
-  const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPeriodChanging, setIsPeriodChanging] = useState(false);
-  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendSamplePreparationCounts[]>([]);
-  const reportsHistoryRef = useRef(reportsHistory);
-
-  usePersistentIssue({
-    id: "reports-local-metrics",
-    message: metricsError,
-    title: "Local metrics unavailable",
-    tone: "error",
-  });
-  usePersistentIssue({
-    id: "reports-submissions",
-    message: ledgerError,
-    title: "Report submissions unavailable",
-    tone: "warning",
-  });
 
   const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
-  const [hydratedDemographicDraftKey, setHydratedDemographicDraftKey] = useState<string | null>(null);
+  const { demo, setDemo } = useDemographicDraft({ activeReportId, demographicDraftKey, isReadOnly, period, reportsHistory });
+  const {
+    liveMetrics,
+    livePeriod,
+    metricsError,
+    pendingPeriodCounts,
+    refreshLocalMetrics,
+    refreshLocalReports,
+    refreshPendingPeriods,
+    setLiveMetrics,
+    setLivePeriod,
+    setMetricsError,
+    setPendingPeriodCounts,
+  } = useReportsWorkspaceData({ activeReportId, currentReportingPeriod, setPeriod, setReportsHistory, timeFormat });
 
   const selectedPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, period)) ?? null;
   const displayedMetrics = activeReport
@@ -129,125 +111,6 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, currentReportingPeriod, pendingPeriodCounts, reportsHistory],
   );
   const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
-
-  useEffect(() => {
-    reportsHistoryRef.current = reportsHistory;
-  }, [reportsHistory]);
-
-  const refreshLocalMetrics = useCallback(async () => {
-    try {
-      const status = await getMlServiceStatus();
-      const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      const summaryPeriod = summary.period || currentReportingPeriod;
-      setLiveMetrics(metricsFromSummary(summary));
-      setLivePeriod(summaryPeriod);
-      if (!activeReportId) {
-        setPeriod((currentPeriod) => (isSameReportingMonth(currentPeriod, summaryPeriod) ? summaryPeriod : currentPeriod));
-      }
-      setMetricsError(null);
-    } catch (error) {
-      setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
-    }
-  }, [activeReportId, currentReportingPeriod]);
-
-  const refreshLocalReports = useCallback(async () => {
-    try {
-      const status = await getMlServiceStatus();
-      const submissions = await listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      let cloudHistory: Awaited<ReturnType<typeof listEnterpriseReportHistory>> = [];
-      try {
-        cloudHistory = await listEnterpriseReportHistory();
-      } catch {
-        // Reports saved on this device remain available while the backend is offline.
-      }
-      const localReports = submissions.map((submission) => reportFromLocalSubmission(submission, timeFormat));
-      const cloudReports = cloudHistory.map((report) => reportFromCloudSubmission(report, timeFormat));
-      setReportsHistory(mergeReportHistory(localReports, cloudReports));
-      setLedgerError(null);
-    } catch (error) {
-      setLedgerError(error instanceof Error ? error.message : "Unable to load reports saved on this device.");
-    }
-  }, [setReportsHistory, timeFormat]);
-
-  const refreshPendingPeriods = useCallback(async () => {
-    try {
-      const preparation = await getDesktopSamplePreparation();
-      const pendingCounts = preparation ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : [];
-      setPendingPeriodCounts(pendingCounts);
-    } catch {
-      setPendingPeriodCounts([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshLocalMetrics();
-    const intervalId = window.setInterval(() => void refreshLocalMetrics(), 5000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshLocalMetrics]);
-
-  useEffect(() => {
-    void refreshLocalReports();
-    const intervalId = window.setInterval(() => void refreshLocalReports(), 15000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshLocalReports]);
-
-  useEffect(() => {
-    void refreshPendingPeriods();
-    const intervalId = window.setInterval(() => void refreshPendingPeriods(), 15000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshPendingPeriods]);
-
-  useEffect(() => {
-    clearLegacyBrowserDemographicDrafts();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    let retryTimeoutId: number | null = null;
-    setHydratedDemographicDraftKey(null);
-
-    const hydrateDraft = async () => {
-      let storedDemo: DemoBreakdown | null = null;
-      if (!isReadOnly) {
-        try {
-          const status = await getMlServiceStatus();
-          const draft = await getLocalReportDraft(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, demographicDraftKey);
-          storedDemo = draft ? demoFromPayload(draft.payload.demo) : null;
-        } catch {
-          if (!cancelled) {
-            retryTimeoutId = window.setTimeout(() => void hydrateDraft(), DEMOGRAPHIC_DRAFT_RETRY_DELAY_MS);
-          }
-          return;
-        }
-      }
-      if (cancelled) return;
-
-      if (storedDemo) {
-        setDemo(storedDemo);
-      } else if (activeReportId) {
-        const report = reportsHistoryRef.current.find((item) => item.id === activeReportId);
-        setDemo(report?.demo ?? emptyDemo());
-      } else {
-        setDemo(emptyDemo());
-      }
-      setHydratedDemographicDraftKey(demographicDraftKey);
-    };
-
-    void hydrateDraft();
-    return () => {
-      cancelled = true;
-      if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
-    };
-  }, [activeReportId, demographicDraftKey, isReadOnly]);
-
-  useEffect(() => {
-    if (isReadOnly || hydratedDemographicDraftKey !== demographicDraftKey) return;
-
-    const timeoutId = window.setTimeout(() => {
-      void persistDemographicDraft(demographicDraftKey, period, activeReportId, demo);
-    }, DEMOGRAPHIC_DRAFT_SAVE_DELAY_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [activeReportId, demo, demographicDraftKey, hydratedDemographicDraftKey, isReadOnly, period]);
 
   const resetDraftWorkspace = (nextPeriod?: string) => {
     setActiveReportId(null);
