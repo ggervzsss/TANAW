@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from pydantic import SecretStr
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import (
@@ -309,7 +310,7 @@ async def test_resend_invalidates_every_older_link_and_cancels_queued_email(
 
 
 @pytest.mark.asyncio
-async def test_pending_email_correction_rotates_delivery_and_deactivation_invalidates_it(
+async def test_pending_email_correction_rotates_delivery_and_deactivation_is_rejected(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     actor = await _create_active_it_actor(postgres_runtime, label="pending-email-actor")
@@ -368,13 +369,18 @@ async def test_pending_email_correction_rotates_delivery_and_deactivation_invali
     async with postgres_runtime.sessions() as db:
         stored_actor = await db.get(Account, actor.id)
         assert stored_actor is not None
-        await update_account_status(
-            account.id,
-            AccountStatusUpdate(status="inactive"),
-            stored_actor,
-            db,
-        )
-        await db.commit()
+        with pytest.raises(HTTPException) as raised:
+            await update_account_status(
+                account.id,
+                AccountStatusUpdate(status="inactive"),
+                stored_actor,
+                db,
+            )
+        assert raised.value.status_code == 409
+        assert raised.value.detail == {
+            "code": "account_activation_pending",
+            "message": "This account has not completed activation and cannot be deactivated.",
+        }
 
     async with postgres_runtime.sessions() as db:
         stored = await db.get(Account, account.id)
@@ -385,11 +391,13 @@ async def test_pending_email_correction_rotates_delivery_and_deactivation_invali
         assert stored is not None
         assert second_stored is not None
         assert second_outbox is not None
-        assert stored.status == AccountStatus.INACTIVE
-        assert second_stored.invalidated_at is not None
-        assert second_outbox.status == EmailOutboxStatus.CANCELLED.value
-        with pytest.raises(account_activation.AccountActivationError, match="invalid or expired"):
+        assert stored.status == AccountStatus.ACTIVE
+        assert stored.activated_at is None
+        assert second_stored.invalidated_at is None
+        assert second_outbox.status == EmailOutboxStatus.QUEUED.value
+        assert (
             await account_activation.validate_account_activation(db, second_raw)
+        ).display_name == "Activation Corrected"
 
 
 @pytest.mark.asyncio

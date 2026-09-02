@@ -25,8 +25,13 @@ from app.core.security import (
 from app.features.accounts.dependencies import is_token_invalidated
 from app.features.accounts.models import Account, AccountRole, AccountStatus
 from app.features.activity_logs.models import ActivityLog
-from app.features.auth import password_recovery, recovery_rate_limit, secret_values
-from app.features.auth import router as auth_router
+from app.features.auth import (
+    password_recovery,
+    password_router,
+    recovery_rate_limit,
+    secret_values,
+    session_router,
+)
 from app.features.auth.models import (
     AccountActivationToken,
     PasswordResetChallenge,
@@ -107,7 +112,7 @@ async def postgres_runtime(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Pos
 
     monkeypatch.setattr(recovery_rate_limit, "_increment_bucket", increment_isolated_test_bucket)
     monkeypatch.setattr(password_recovery, "get_settings", lambda: settings)
-    monkeypatch.setattr(auth_router, "get_settings", lambda: settings)
+    monkeypatch.setattr(password_router, "get_settings", lambda: settings)
     monkeypatch.setattr(mail_service, "get_settings", lambda: settings)
 
     monkeypatch.setattr(secret_values, "get_settings", lambda: settings)
@@ -248,7 +253,7 @@ async def _request_reset_api(
         }
     )
     async with runtime.sessions() as db:
-        return await auth_router.forgot_password_request(
+        return await password_router.forgot_password_request(
             request,
             ForgotPasswordRequest(email=email),
             db,
@@ -728,7 +733,7 @@ async def test_password_reset_serializes_before_old_password_login(
     async def run_old_password_login() -> LoginResponse | HTTPException | Exception:
         async with postgres_runtime.sessions() as db:
             try:
-                return await auth_router.login(
+                return await session_router.login(
                     LoginRequest(
                         username=account.email,
                         password=account.password,

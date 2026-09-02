@@ -32,8 +32,7 @@ from app.features.accounts.schemas import (
     LguAccountUpdate,
 )
 from app.features.activity_logs.models import ActivityLog
-from app.features.auth import email_change, secret_values
-from app.features.auth import router as auth_router
+from app.features.auth import email_change, profile_router, secret_values
 from app.features.auth.models import AccountActivationToken, PasswordResetChallenge
 from app.features.auth.secret_values import derive_account_email_change_token
 from app.features.mail import service as mail_service
@@ -272,17 +271,20 @@ async def test_secondary_notification_failure_does_not_report_request_as_failed(
     )
     requested_email = f"tanaw-email-change-pg-notification-new-{uuid4().hex}@example.com"
     notify = AsyncMock(side_effect=RuntimeError("simulated notification database failure"))
-    monkeypatch.setattr(auth_router, "notify_enterprise_account_change", notify)
+    monkeypatch.setattr(profile_router, "notify_enterprise_account_change", notify)
 
     async with postgres_runtime.sessions() as db:
         stored_account = await db.get(Account, account.id)
         assert stored_account is not None
-        response = await auth_router.request_business_email_change(
+        response = await profile_router.request_business_email_change(
             BusinessEmailChangeRequest(email=requested_email),
             stored_account,
             db,
         )
         assert response.status == "pending_verification"
+        await db.commit()
+
+    notify.assert_awaited_once()
 
     async with postgres_runtime.sessions() as db:
         request = await db.scalar(

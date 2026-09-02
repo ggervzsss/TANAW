@@ -260,19 +260,19 @@ async def request_business_email_change(
     notification_account_id = account.id
     notification_request_id = email_request.id
     try:
-        await notify_enterprise_account_change(
-            db,
-            account,
-            title=f"{enterprise} requested a business email change.",
-            message=(
-                f"{enterprise} requested a business email change to {new_email}. The proposed "
-                "address must be verified before IT can approve it."
-            ),
-            notification_type="Enterprise Profile Change Request",
-            source_type="enterprise.profile.email",
-        )
+        async with db.begin_nested():
+            await notify_enterprise_account_change(
+                db,
+                account,
+                title=f"{enterprise} requested a business email change.",
+                message=(
+                    f"{enterprise} requested a business email change to {new_email}. The proposed "
+                    "address must be verified before IT can approve it."
+                ),
+                notification_type="Enterprise Profile Change Request",
+                source_type="enterprise.profile.email",
+            )
     except Exception:
-        await db.rollback()
         logger.exception(
             "Failed to publish email-change request notifications account_id=%s request_id=%s",
             notification_account_id,
