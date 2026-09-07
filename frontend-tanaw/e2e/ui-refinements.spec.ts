@@ -136,7 +136,11 @@ test("uses the night topbar, keyboard custom dropdown, and maximized report view
 });
 
 test("keeps Password Settings blank, theme-correct, and resettable", async ({ page }) => {
+  const browserErrors: string[] = [];
+  page.on("pageerror", (error) => browserErrors.push(error.message));
+  let passwordRequests = 0;
   await page.route("**/auth/change-password", async (route) => {
+    passwordRequests += 1;
     expect(route.request().postDataJSON()).toEqual({
       currentPassword: "Current secure passphrase 2026",
       newPassword: "Replacement secure passphrase 2026",
@@ -164,6 +168,20 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   await page.getByRole("button", { name: "Update Password" }).click();
   await expect(currentPassword).toBeFocused();
   await expect(page.getByText("Enter your current password.")).toBeVisible();
+  expect(browserErrors).toEqual([]);
+  expect(passwordRequests).toBe(0);
+
+  await currentPassword.fill("Current secure passphrase 2026");
+  await newPassword.fill("Replacement secure passphrase 2026");
+  await confirmation.fill("Mismatched secure passphrase 2026");
+  await page.getByRole("button", { name: "Update Password" }).click();
+  await expect(page.getByText("New passwords do not match.")).toBeVisible();
+  await expect(confirmation).toBeFocused();
+  await expect(currentPassword).toHaveValue("");
+  await expect(newPassword).toHaveValue("");
+  await expect(confirmation).toHaveValue("");
+  expect(browserErrors).toEqual([]);
+  expect(passwordRequests).toBe(0);
 
   await currentPassword.focus();
   await expect(currentPassword).not.toHaveAttribute("readonly", "");
@@ -186,6 +204,8 @@ test("keeps Password Settings blank, theme-correct, and resettable", async ({ pa
   await expect(page.getByLabel("Current Password", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("New Password", { exact: true })).toHaveValue("");
   await expect(page.getByLabel("Confirm New Password", { exact: true })).toHaveValue("");
+  expect(passwordRequests).toBe(1);
+  expect(browserErrors).toEqual([]);
 });
 
 test("shows the Logout background only while the shared profile action is interactive", async ({ page }) => {

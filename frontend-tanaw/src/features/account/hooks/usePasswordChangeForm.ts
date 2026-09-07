@@ -35,13 +35,14 @@ export function usePasswordChangeForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     const nextErrors = getPasswordErrors(currentPassword, newPassword, passwordConfirmation);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       clearValues();
       window.requestAnimationFrame(() =>
         focusFirstInvalidField(
-          event.currentTarget,
+          form,
           ["currentPassword", "newPassword", "confirmPassword"].filter((name) => nextErrors[name as keyof PasswordErrors]),
         ),
       );
