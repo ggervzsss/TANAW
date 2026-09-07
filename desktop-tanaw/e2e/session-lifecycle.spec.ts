@@ -13,6 +13,14 @@ const enterpriseUser = {
 };
 
 async function mockAuthenticatedEnterprise(page: Page, onSessionRestore: () => void, onLogout: () => void) {
+  await page.addInitScript((session) => {
+    window.localStorage.setItem("tanaw-auth-session-remember", "true");
+    window.tanawAuthSession = {
+      load: async () => session,
+      save: async () => true,
+      clear: async () => undefined,
+    };
+  }, { token: "enterprise-session-token", user: enterpriseUser });
   await page.route("**/auth/session", (route) => {
     onSessionRestore();
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "enterprise-session-token", user: enterpriseUser }) });
@@ -36,6 +44,14 @@ async function mockAuthenticatedEnterprise(page: Page, onSessionRestore: () => v
   });
 }
 
+async function expectAuthenticatedEnterprise(page: Page) {
+  const accountMenu = page.getByRole("button", { name: "Open account menu" });
+  await expect(accountMenu).toBeVisible();
+  await accountMenu.click();
+  await expect(page.getByText(enterpriseUser.email, { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+}
+
 test("keeps a valid Enterprise Desktop session active while idle and restores it after reload", async ({ page }) => {
   let logoutCalls = 0;
   let sessionRestoreCalls = 0;
@@ -51,7 +67,7 @@ test("keeps a valid Enterprise Desktop session active while idle and restores it
   );
 
   await page.goto("/#/enterprise/dashboard");
-  await expect(page.locator("[data-portal-role-label]", { hasText: "Enterprise Portal" })).toBeVisible();
+  await expectAuthenticatedEnterprise(page);
 
   await page.clock.fastForward(10 * 60 * 1000);
 
@@ -61,7 +77,7 @@ test("keeps a valid Enterprise Desktop session active while idle and restores it
   expect(logoutCalls).toBe(0);
 
   await page.reload();
-  await expect(page.locator("[data-portal-role-label]", { hasText: "Enterprise Portal" })).toBeVisible();
+  await expectAuthenticatedEnterprise(page);
   await expect.poll(() => sessionRestoreCalls).toBeGreaterThanOrEqual(2);
 
   await page.getByRole("button", { name: "Open account menu" }).click();
