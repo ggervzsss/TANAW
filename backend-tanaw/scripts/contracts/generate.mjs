@@ -5,13 +5,14 @@ import { dirname, resolve } from "node:path";
 import openapiTS, { astToString } from "openapi-typescript";
 
 const contractsDirectory = dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = resolve(contractsDirectory, "..");
+const backendDirectory = resolve(contractsDirectory, "../..");
+const repositoryRoot = resolve(backendDirectory, "..");
 const checkOnly = process.argv.includes("--check");
 const generatedHeader = "// Generated from FastAPI/Pydantic contracts. Do not edit manually.\n";
 
 const bundleText = execFileSync(
   "uv",
-  ["run", "--directory", resolve(repositoryRoot, "backend-tanaw"), "python", "-m", "app.contracts.export"],
+  ["run", "--directory", backendDirectory, "python", "-m", "app.contracts.export"],
   {
     encoding: "utf8",
     env: { ...process.env, UV_CACHE_DIR: process.env.UV_CACHE_DIR ?? "/tmp/uv-cache" },
@@ -57,6 +58,8 @@ for (const [filename, schema] of outputs) {
 }
 
 if (stale) {
-  console.error("Run `npm --prefix contracts run generate` and commit the generated files.");
+  console.error(
+    "Run `npm --prefix backend-tanaw/scripts/contracts run generate` and commit the generated files.",
+  );
   process.exitCode = 1;
 }

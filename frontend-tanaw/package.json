@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "contracts:generate": "npm --prefix ../contracts run generate",
-    "contracts:check": "npm --prefix ../contracts run check",
+    "contracts:generate": "npm --prefix ../backend-tanaw/scripts/contracts run generate",
+    "contracts:check": "npm --prefix ../backend-tanaw/scripts/contracts run check",
     "deployment:validate": "node scripts/validate-deployment-config.ts",
     "lint": "eslint . && npm run lint:tailwind && npm run lint:architecture",
     "lint:architecture": "node scripts/check-shared-boundaries.mjs",

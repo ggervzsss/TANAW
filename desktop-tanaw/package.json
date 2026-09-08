@@ -11,8 +11,8 @@
   "scripts": {
     "dev": "node scripts/with-electron-env.cjs vite --host 127.0.0.1",
     "build": "tsc && vite build",
-    "contracts:generate": "npm --prefix ../contracts run generate",
-    "contracts:check": "npm --prefix ../contracts run check",
+    "contracts:generate": "npm --prefix ../backend-tanaw/scripts/contracts run generate",
+    "contracts:check": "npm --prefix ../backend-tanaw/scripts/contracts run check",
     "dist": "node scripts/run-distribution-build.mjs",
     "release:win": "node scripts/run-distribution-build.mjs --require-signing",
     "deployment:validate": "node scripts/validate-deployment-config.ts",
