@@ -66,11 +66,17 @@ async function restoreAdminSession(page: Page) {
 }
 
 async function expectSameRow(left: Locator, right: Locator) {
-  const leftBox = await left.boundingBox();
-  const rightBox = await right.boundingBox();
-  expect(leftBox).not.toBeNull();
-  expect(rightBox).not.toBeNull();
-  expect(Math.abs(leftBox!.y - rightBox!.y)).toBeLessThan(2);
+  await expect(left).toBeVisible();
+  await expect(right).toBeVisible();
+  const dialog = left.locator("xpath=ancestor::*[@role='dialog']");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS("transform", "none");
+  const rightElement = await right.elementHandle();
+  if (!rightElement) throw new Error("Right detail card is missing");
+  // Read both boxes in one browser frame, after the modal's entrance settles.
+  const difference = await left.evaluate((element, other) =>
+    Math.abs(element.getBoundingClientRect().y - other.getBoundingClientRect().y), rightElement);
+  expect(difference).toBeLessThan(2);
 }
 
 async function expectTitleSizedAccent(dialog: Locator, title: string) {
@@ -112,7 +118,10 @@ test("balances Admin log and alert details with accessible long-text disclosures
   await expect(logDialog.getByRole("button", { name: "Show more activity" })).toHaveCount(0);
   await logDialog.getByRole("button", { name: "Close modal" }).click();
 
-  await page.goto(`/admin/operations?view=situations&alert=${alert.id}`);
+  await page.goto("/admin/operations?view=situations");
+  await page.getByRole("button", { name: "Select Maintenance Request", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "View situation details" }).click();
   const alertDialog = page.getByRole("dialog", { name: "Maintenance Request" });
   await expect(alertDialog).toBeVisible();
   const alertAccentWidth = await expectTitleSizedAccent(alertDialog, "Maintenance Request");
@@ -122,15 +131,20 @@ test("balances Admin log and alert details with accessible long-text disclosures
 
   await alertDialog.getByRole("button", { name: "Close modal" }).click();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await page.getByText("Maintenance Request", { exact: true }).first().click();
+  await page.getByRole("button", { name: "View situation details" }).click();
+  await expect(alertDialog).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Maintenance Request" })).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
 test("themes the shared Admin response panel without a bright dark-mode surface", async ({ page }) => {
   await restoreAdminSession(page);
-  await page.goto(`/admin/operations?view=situations&alert=${alert.id}`);
+  await page.goto("/admin/operations?view=situations");
+  await page.getByRole("button", { name: "Select Maintenance Request", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "View situation details" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Maintenance Request" });
+  await expect(dialog).toBeVisible();
   const responsePanel = dialog.locator(".tanaw-modal-action-panel");
   await expect(responsePanel).toBeVisible();
   await expect(responsePanel).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -141,7 +155,8 @@ test("themes the shared Admin response panel without a bright dark-mode surface"
   const darkBackground = await responsePanel.evaluate((element) => getComputedStyle(element).backgroundColor);
   await dialog.getByRole("button", { name: "Close modal" }).click();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
-  await page.getByText("Maintenance Request", { exact: true }).first().click();
+  await page.getByRole("button", { name: "View situation details" }).click();
+  await expect(dialog).toBeVisible();
   const lightResponsePanel = page.getByRole("dialog", { name: "Maintenance Request" }).locator(".tanaw-modal-action-panel");
   await expect.poll(() => lightResponsePanel.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(darkBackground);
 });

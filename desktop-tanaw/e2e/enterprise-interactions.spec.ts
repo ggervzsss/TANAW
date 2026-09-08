@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mlResponse, mockCameraSetup, mockMlRequest } from "./support/preload";
 
 const enterpriseUser = {
   id: "enterprise-interactions-test",
@@ -12,7 +13,7 @@ const enterpriseUser = {
   buildingCapacity: 100,
 };
 
-async function signIn(page: Page) {
+async function signIn(page: Page, configureMl?: () => Promise<void>) {
   let signedIn = false;
   await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
   await page.route("**/auth/login", (route) => {
@@ -26,13 +27,14 @@ async function signIn(page: Page) {
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(enterpriseUser) }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/operational/tickets", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("http://127.0.0.1:8765/**", (route) => {
-    if (new URL(route.request().url()).pathname === "/context/enterprise") {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }) });
+  await mockMlRequest(page, "*", (request) => {
+    if (new URL(request.url).pathname === "/context/enterprise") {
+      return mlResponse({ status: 200, body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }) });
     }
-    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "ML service unavailable in renderer acceptance test" }) });
+    return mlResponse({ status: 503, body: JSON.stringify({ detail: "ML service unavailable in renderer acceptance test" }) });
   });
 
+  await configureMl?.();
   await page.goto("/#/login");
   await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
   await page.getByPlaceholder("Enter your password").fill("Enterprise interaction password 2026");
@@ -60,7 +62,7 @@ async function expectSettledTopbarGlass(page: Page, targetCenter: number) {
   await expect.poll(async () => (await readTopbarGlassFrame(page)).opticsOpacity, { timeout: 1_500, intervals: [16, 24, 32, 48] }).toBeLessThanOrEqual(0.01);
 }
 
-test("updates Support Ticket selects in the same theme transaction", async ({ page }) => {
+test("updates Support Ticket selects together after a theme change", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page);
   await page.goto("/#/enterprise/tickets");
@@ -76,8 +78,9 @@ test("updates Support Ticket selects in the same theme transaction", async ({ pa
   expect(initialDarkState.categoryBackground).not.toBe("rgb(255, 255, 255)");
   expect(initialDarkState.priorityBackground).toBe(initialDarkState.categoryBackground);
 
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
   const lightState = await page.evaluate(() => {
-    (document.querySelector('[aria-label="Switch to light mode"]') as HTMLButtonElement).click();
     const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
     const prioritySelect = document.querySelector('[aria-label="Priority"]') as HTMLElement;
     return {
@@ -98,8 +101,9 @@ test("updates Support Ticket selects in the same theme transaction", async ({ pa
   await expect(page.getByRole("listbox", { name: "Category" }).locator("..")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await page.keyboard.press("Escape");
 
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
   const darkState = await page.evaluate(() => {
-    (document.querySelector('[aria-label="Switch to dark mode"]') as HTMLButtonElement).click();
     const categorySelect = document.querySelector('[aria-label="Category"]') as HTMLElement;
     const prioritySelect = document.querySelector('[aria-label="Priority"]') as HTMLElement;
     return {
@@ -128,7 +132,7 @@ test("reveals and focuses the first invalid Support Ticket field", async ({ page
   await subject.fill("Camera unavailable");
   await page.getByPlaceholder("Describe what happened, when it started, and any affected workflows.").fill("The camera feed stopped updating this morning.");
   await page.getByRole("button", { name: "Submit Ticket" }).click();
-  const affectedArea = page.getByPlaceholder("Lobby, reports, account");
+  const affectedArea = page.getByRole("textbox", { name: /^Affected Area/ });
   await expect(affectedArea).toBeFocused();
   await expect(affectedArea).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByText("Enter the affected area.", { exact: true })).toBeVisible();
@@ -145,15 +149,14 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
     foreignMale: "5",
     foreignFemale: "5",
   };
-  await page.route("http://127.0.0.1:8765/**", (route) => {
-    const url = new URL(route.request().url());
+  await mockMlRequest(page, "*", (request) => {
+    const url = new URL(request.url);
     if (url.pathname === "/context/enterprise") {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }) });
+      return mlResponse({ status: 200, body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }) });
     }
     if (url.pathname === "/metrics/summary") {
-      return route.fulfill({
+      return mlResponse({
         status: 200,
-        contentType: "application/json",
         body: JSON.stringify({
           entries: 120,
           exits: 80,
@@ -176,9 +179,8 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
       });
     }
     if (url.pathname === "/reports/local") {
-      return route.fulfill({
+      return mlResponse({
         status: 200,
-        contentType: "application/json",
         body: JSON.stringify([
           {
             report_id: "REP-202607",
@@ -197,8 +199,8 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
         ]),
       });
     }
-    if (url.pathname.startsWith("/reports/drafts/")) return route.fulfill({ status: 200, contentType: "application/json", body: "null" });
-    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Not required by Reports presentation coverage" }) });
+    if (url.pathname.startsWith("/reports/drafts/")) return mlResponse({ status: 200, body: "null" });
+    return mlResponse({ status: 503, body: JSON.stringify({ detail: "Not required by Reports presentation coverage" }) });
   });
   await page.route("**/operational/desktop/sample-preparation", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "null" }));
   await page.route("**/operational/reports/intake", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
@@ -298,15 +300,14 @@ test("presents accurate responsive historical trends and an intentional zero sta
     { label: "Aug 2", visitors: 0, entries: 0, exits: 0, peak_occupancy: 0, current_occupancy: 0 },
   ];
 
-  await page.route("http://127.0.0.1:8765/metrics/summary**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summary) }));
-  await page.route("http://127.0.0.1:8765/metrics/history**", (route) =>
-    route.fulfill({
+  await mockMlRequest(page, "/metrics/summary", () => mlResponse({ status: 200, body: JSON.stringify(summary) }));
+  await mockMlRequest(page, "/metrics/history", () =>
+    mlResponse({
       status: 200,
-      contentType: "application/json",
       body: JSON.stringify({ hourly_density: [], historical: { Today: populated, Week: populated, Month: zero } }),
     }),
   );
-  await page.route("http://127.0.0.1:8765/reports/local**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+  await mockMlRequest(page, "/reports/local", () => mlResponse({ status: 200, body: "[]" }));
   await page.goto("/#/enterprise/dashboard");
 
   await expect(page.getByText("Live Occupancy", { exact: true }).first()).toBeVisible();
@@ -334,7 +335,15 @@ test("presents accurate responsive historical trends and an intentional zero sta
 test("keeps the camera-service warning and explains unavailable historical data", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 760 });
   await signIn(page);
+  let historyRequests = 0;
+  await mockMlRequest(page, "/metrics/history", () => {
+    historyRequests += 1;
+    return mlResponse({ status: 503, body: JSON.stringify({ detail: "Historical metrics intentionally unavailable" }) });
+  });
+  await page.goto("/#/enterprise/dashboard");
 
+  await expect(page.getByRole("heading", { name: "Enterprise Analytics", exact: true })).toBeVisible();
+  await expect.poll(() => historyRequests).toBeGreaterThan(0);
   await expect(page.getByText("Historical data is temporarily unavailable.", { exact: true })).toBeVisible();
   await expect(page.getByText("TANAW will display visitor trends when the local camera service is ready.", { exact: true })).toBeVisible();
   await expect(page.getByText("Visitor counts unavailable", { exact: false })).toBeVisible();
@@ -428,7 +437,7 @@ test("keeps resolved Support Ticket history visible and closes the composer", as
   });
   await page.goto("/#/enterprise/tickets");
 
-  await page.getByText("Resolved camera concern", { exact: true }).click();
+  await page.getByRole("button", { name: /Resolved camera concern/ }).click();
   await expect(page.getByText("The connection has been restored.", { exact: true })).toBeVisible();
   await expect(page.getByText("This ticket is resolved. The conversation is now closed.", { exact: false })).toBeVisible();
   await expect(page.getByText("Reply in TANAW", { exact: true })).toHaveCount(0);
@@ -437,7 +446,7 @@ test("keeps resolved Support Ticket history visible and closes the composer", as
 
 test("themes the camera modal and keeps the minimized Tripwire toolbar draggable", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signIn(page);
+  await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
   await page.goto("/#/enterprise/cameras");
   const cameraNavigation = page.getByRole("button", { name: "Camera Setup", exact: true });
   const dashboardNavigation = page.getByRole("button", { name: "Dashboard", exact: true });
@@ -594,7 +603,7 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   let dialog = page.getByRole("dialog", { name: "Add Camera" });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(dialog.getByText("RTSP Camera Configuration", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Camera Connection", exact: true })).toBeVisible();
   await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("secret-camera-password");
   await dialog.getByRole("button", { name: "Show password" }).click();
   await expect(dialog.getByRole("textbox", { name: "Password", exact: true })).toHaveAttribute("type", "text");
@@ -606,10 +615,11 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill("Entrance");
   await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Lobby");
-  await dialog.getByPlaceholder("192.168.1.9").fill("127.0.0.1");
+  await dialog.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("127.0.0.1");
   await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
   await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("camera-password");
-  await dialog.getByRole("button", { name: "Save Configuration" }).click();
+  await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
+  await expect(dialog).toBeHidden();
 
   const controlsHeading = page.getByText("SYSTEM STATUS & CONTROLS", { exact: true });
   await expect(controlsHeading).toBeVisible();
@@ -618,7 +628,8 @@ test("themes the camera modal and keeps the minimized Tripwire toolbar draggable
   await expect(page.getByText("Profile pending", { exact: false })).toHaveCount(0);
   await expect(page.getByText("FPS adaptive", { exact: false })).toHaveCount(0);
   await expect(page.getByText("Frame Telemetry Idle", { exact: false })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Service", exact: true })).toBeVisible();
+  await expect(page.getByText("ML Service Ready", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Service", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Test", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
 

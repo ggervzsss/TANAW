@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mlResponse, mockMlRequest } from "./support/preload";
 
 const enterpriseUser = {
   id: "enterprise-session-test",
@@ -31,16 +32,15 @@ async function mockAuthenticatedEnterprise(page: Page, onSessionRestore: () => v
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ok" }) });
   });
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("http://127.0.0.1:8765/**", (route) => {
-    const pathname = new URL(route.request().url()).pathname;
+  await mockMlRequest(page, "*", (request) => {
+    const pathname = new URL(request.url).pathname;
     if (pathname === "/context/enterprise") {
-      return route.fulfill({
+      return mlResponse({
         status: 200,
-        contentType: "application/json",
         body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }),
       });
     }
-    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "ML service unavailable in renderer acceptance test" }) });
+    return mlResponse({ status: 503, body: JSON.stringify({ detail: "ML service unavailable in renderer acceptance test" }) });
   });
 }
 

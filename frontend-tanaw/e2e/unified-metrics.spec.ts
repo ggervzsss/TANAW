@@ -491,6 +491,8 @@ test("keeps Staff Reporting Period as a real control beside unified metrics", as
   await expectUnifiedHeader(analyticsHeader, ["Total Aggregated Entries", "Est. Unique People", "Reports Compliance"], 3);
   const reportingPeriod = page.getByRole("combobox", { name: "Reporting period" });
   await expect(reportingPeriod).toBeVisible();
+  await reportingPeriod.click();
+  await page.getByRole("option", { name: "August 2026", exact: true }).click();
   await reportingPeriod.focus();
   await expect(analyticsHeader.locator(".tanaw-unified-metrics__segment").last().locator(".tanaw-unified-metrics__hover")).toHaveCSS("opacity", "1");
   await expect(page.getByText("Enterprise Traffic Comparison", { exact: true })).toBeVisible();

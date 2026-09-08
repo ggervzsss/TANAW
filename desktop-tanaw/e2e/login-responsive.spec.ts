@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { mockRememberedSession } from "./support/preload";
 
 const enterpriseUser = {
   id: "enterprise-brand-test",
@@ -220,8 +221,13 @@ test("restores the Enterprise cursor-following glow without interfering with aut
 });
 
 test("keeps the theme through Enterprise authentication and renders the Portal label as static text", async ({ page }) => {
+  await mockRememberedSession(page);
   let signedIn = false;
-  await page.addInitScript(() => window.localStorage.setItem("tanaw-enterprise-theme", "dark"));
+  await page.addInitScript(() => {
+    if (!window.localStorage.getItem("tanaw-enterprise-theme")) {
+      window.localStorage.setItem("tanaw-enterprise-theme", "dark");
+    }
+  });
   await page.route("**/auth/login", (route) => {
     signedIn = true;
     return route.fulfill({
@@ -250,14 +256,20 @@ test("keeps the theme through Enterprise authentication and renders the Portal l
   await page.goto("/#/login");
   await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
   await page.getByPlaceholder("Enter your password").fill("Enterprise login passphrase 2026");
+  await page.getByRole("checkbox", { name: "Remember me" }).check();
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
   await expect(page.locator("html")).toHaveClass(/dark/);
   expect(await page.evaluate(() => window.localStorage.getItem("tanaw-enterprise-theme"))).toBe("dark");
 
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+
   await page.reload();
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
-  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.getByRole("button", { name: "Open account menu" })).toBeVisible();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  expect(await page.evaluate(() => window.localStorage.getItem("tanaw-enterprise-theme"))).toBe("light");
 
   const roleLabel = page.locator("[data-portal-role-label]", { hasText: "Enterprise Portal" });
   await expect(roleLabel).toBeVisible();

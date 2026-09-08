@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mlResponse, mockMlRequest } from "./support/preload";
 
 const enterpriseUser = {
   id: "enterprise-unified-metrics",
@@ -79,20 +80,18 @@ async function signIn(page: Page) {
   await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(enterpriseUser) }));
   await page.route("**/operational/notifications", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.route("**/operational/tickets", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
-  await page.route("http://127.0.0.1:8765/**", (route) => {
-    const pathname = new URL(route.request().url()).pathname;
+  await mockMlRequest(page, "*", (request) => {
+    const pathname = new URL(request.url).pathname;
     if (pathname === "/context/enterprise") {
-      return route.fulfill({
+      return mlResponse({
         status: 200,
-        contentType: "application/json",
         body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }),
       });
     }
-    if (pathname === "/metrics/summary") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summary) });
+    if (pathname === "/metrics/summary") return mlResponse({ status: 200, body: JSON.stringify(summary) });
     if (pathname === "/metrics/history") {
-      return route.fulfill({
+      return mlResponse({
         status: 200,
-        contentType: "application/json",
         body: JSON.stringify({
           hourly_density: [],
           historical: {
@@ -109,8 +108,8 @@ async function signIn(page: Page) {
         }),
       });
     }
-    if (pathname === "/reports/local") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([localReport]) });
-    return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Unavailable in unified metrics acceptance test" }) });
+    if (pathname === "/reports/local") return mlResponse({ status: 200, body: JSON.stringify([localReport]) });
+    return mlResponse({ status: 503, body: JSON.stringify({ detail: "Unavailable in unified metrics acceptance test" }) });
   });
 
   await page.goto("/#/login");
@@ -142,7 +141,7 @@ test("renders the Enterprise analytics metrics as one responsive dark-mode heade
   await expect(page.getByText("Peak reference 98", { exact: true })).toBeVisible();
   await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Week historical visitor trends for Entry Flow and Live Occupancy" })).toContainText("Peak 98");
   await expect(page.locator(".recharts-reference-line-line")).toHaveCount(1);
 
   await page.getByRole("button", { name: "Today", exact: true }).click();
@@ -150,13 +149,13 @@ test("renders the Enterprise analytics metrics as one responsive dark-mode heade
   await expect(page.getByText("Peak reference 98", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Utilization 67%", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Today historical visitor trends for Entry Flow and Live Occupancy" })).toContainText("Peak 18");
 
   await page.getByRole("button", { name: "Month", exact: true }).click();
   await expect(page.getByText("Peak reference 99", { exact: true })).toBeVisible();
   await expect(page.getByText("Peak reference 18", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Month historical visitor trends for Entry Flow and Live Occupancy" })).toContainText("Peak 99");
 
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByRole("button", { name: "Week", exact: true }).click();
