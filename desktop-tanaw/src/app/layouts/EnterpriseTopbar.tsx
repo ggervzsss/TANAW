@@ -1,4 +1,4 @@
-import { Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, Sun, User, X } from "lucide-react";
+import { BookOpen, Camera, ChevronDown, FileText, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, Shield, SlidersHorizontal, Sun, User, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { NotificationDropdown } from "../../features/notifications/components/NotificationDropdown";
@@ -274,7 +274,7 @@ export function EnterpriseTopbar({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="enterprise-profile-menu absolute top-full right-0 z-1003 mt-3 w-72 overflow-hidden rounded-3xl border border-white/85 bg-white py-2 text-slate-700 shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
+                    className="enterprise-profile-menu absolute top-full right-0 z-1003 mt-3 max-h-[calc(100svh-var(--tanaw-topbar-height)-1rem)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-3xl border border-white/85 bg-white py-2 text-slate-700 shadow-[0_24px_64px_rgba(2,20,8,0.24)] ring-1 ring-emerald-950/6"
                   >
                     <div className="enterprise-profile-menu__header mb-1 border-b border-emerald-100 bg-linear-to-r from-emerald-50/90 via-white to-amber-50/70 px-4 py-3.5">
                       <p title={displayName} className="text-tanaw-navy truncate text-sm font-bold">
@@ -302,6 +302,20 @@ export function EnterpriseTopbar({
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
                     >
                       <LifeBuoy size={14} /> Support Tickets
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateFromMenu("display-preferences")}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                    >
+                      <SlidersHorizontal size={14} /> Display Preferences
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateFromMenu("help")}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-[#065f46]"
+                    >
+                      <BookOpen size={14} /> Help Center
                     </button>
                     <button type="button" onClick={onLogout} className="text-tanaw-red flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-red-50">
                       <LogOut size={14} /> Sign Out
