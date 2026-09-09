@@ -9,6 +9,7 @@ const viewModules = {
   reports: () => import("../../features/reports/components/ReportsView"),
   security: () => import("../../features/security/components/SecurityView"),
   tickets: () => import("../../features/tickets/components/TicketsView"),
+  "display-preferences": () => import("../../features/preferences/DisplayPreferencesView"),
 } as const;
 
 export const CameraManagementView = lazy(() => viewModules.cameras().then((module) => ({ default: module.CameraManagementView })));
@@ -18,6 +19,7 @@ export const ProfileView = lazy(() => viewModules.profile().then((module) => ({ 
 export const ReportsView = lazy(() => viewModules.reports().then((module) => ({ default: module.ReportsView })));
 export const SecurityView = lazy(() => viewModules.security().then((module) => ({ default: module.SecurityView })));
 export const TicketsView = lazy(() => viewModules.tickets().then((module) => ({ default: module.TicketsView })));
+export const DisplayPreferencesView = lazy(() => viewModules["display-preferences"]().then((module) => ({ default: module.DisplayPreferencesView })));
 
 export function preloadEnterpriseView(view: EnterpriseView) {
   return viewModules[view]().then(() => undefined);

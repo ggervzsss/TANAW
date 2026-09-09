@@ -32,7 +32,7 @@ export function usePortalThemePreference() {
           setTheme(nextTheme);
         }
         persistThemePreference(nextTheme);
-        if (preferences.theme !== nextTheme) void updateAccountPreferences(nextTheme).catch(() => undefined);
+        if (preferences.theme !== nextTheme) void updateAccountPreferences({ theme: nextTheme }).catch(() => undefined);
         setPreferencesLoaded(true);
       })
       .catch(() => {
@@ -60,7 +60,7 @@ export function usePortalThemePreference() {
       skipNextSaveRef.current = false;
       return;
     }
-    void updateAccountPreferences(theme).catch(() => toast.error("Unable to save theme preference."));
+    void updateAccountPreferences({ theme }).catch(() => toast.error("Unable to save theme preference."));
   }, [preferencesLoaded, theme]);
 
   const toggleTheme = () => {

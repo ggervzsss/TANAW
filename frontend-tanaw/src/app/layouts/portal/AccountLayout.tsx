@@ -22,6 +22,9 @@ const centeredTitleClassByPath = new Map<string, string>([
   [routes.staff.profile, "mx-auto w-full max-w-5xl"],
   [routes.staff.security, "mx-auto w-full max-w-5xl"],
   [routes.it.systemSettings, "mx-auto w-full max-w-6xl"],
+  [routes.it.displayPreferences, "mx-auto w-full max-w-5xl"],
+  [routes.admin.displayPreferences, "mx-auto w-full max-w-5xl"],
+  [routes.staff.displayPreferences, "mx-auto w-full max-w-5xl"],
 ]);
 
 export function AccountLayout({ role }: AccountLayoutProps) {
@@ -129,7 +132,7 @@ export function AccountLayout({ role }: AccountLayoutProps) {
     <section className={sectionClassName}>
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <PortalTopbar role={role} showDevLog={!import.meta.env.PROD && isDevLogUnlocked} />
-        <main ref={mainRef} className={mainClassName}>
+        <main ref={mainRef} data-density-adjustable={!isMapView} className={mainClassName}>
           <div className={mainContentClassName}>
             {title && !isMapView && <h1 className={titleClassName}>{title}</h1>}
             {pathname === routes.it.devLog && (import.meta.env.PROD || !isDevLogUnlocked) ? (

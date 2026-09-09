@@ -1198,6 +1198,18 @@ export interface components {
         /** AccountPreferences */
         AccountPreferences: {
             /**
+             * Interfacescale
+             * @default default
+             * @enum {string}
+             */
+            interfaceScale: "compact" | "default" | "comfortable";
+            /**
+             * Textsize
+             * @default default
+             * @enum {string}
+             */
+            textSize: "small" | "default" | "large" | "extra-large";
+            /**
              * Theme
              * @default system
              * @enum {string}

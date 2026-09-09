@@ -16,6 +16,7 @@ export const routes = {
     systemSettings: "/it/system-settings",
     profile: "/it/profile",
     security: "/it/security",
+    displayPreferences: "/it/display-preferences",
   },
   admin: {
     root: "/admin",
@@ -25,6 +26,7 @@ export const routes = {
     notifications: "/admin/notifications",
     profile: "/admin/profile",
     security: "/admin/security",
+    displayPreferences: "/admin/display-preferences",
   },
   staff: {
     root: "/staff",
@@ -34,5 +36,6 @@ export const routes = {
     notifications: "/staff/notifications",
     profile: "/staff/profile",
     security: "/staff/security",
+    displayPreferences: "/staff/display-preferences",
   },
 } as const;
