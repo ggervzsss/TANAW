@@ -17,6 +17,7 @@ export const routes = {
     profile: "/it/profile",
     security: "/it/security",
     displayPreferences: "/it/display-preferences",
+    help: "/it/help",
   },
   admin: {
     root: "/admin",
@@ -27,6 +28,7 @@ export const routes = {
     profile: "/admin/profile",
     security: "/admin/security",
     displayPreferences: "/admin/display-preferences",
+    help: "/admin/help",
   },
   staff: {
     root: "/staff",
@@ -37,5 +39,6 @@ export const routes = {
     profile: "/staff/profile",
     security: "/staff/security",
     displayPreferences: "/staff/display-preferences",
+    help: "/staff/help",
   },
 } as const;

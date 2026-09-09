@@ -17,6 +17,7 @@ const modules = {
   systemLogs: () => import("@/features/system-logs"),
   systemSettings: () => import("@/features/system-settings"),
   displayPreferences: () => import("@/features/display-preferences"),
+  helpCenter: () => import("@/features/help-center"),
 } as const;
 
 export const AccountProfilePage = lazy(() => modules.account().then((module) => ({ default: module.AccountProfilePage })));
@@ -38,6 +39,7 @@ export const StaffBatchReportsPage = lazy(() => modules.reports().then((module) 
 export const StaffFinalReportsAuditPage = lazy(() => modules.reports().then((module) => ({ default: module.StaffFinalReportsAuditPage })));
 export const ITSystemSettingsPage = lazy(() => modules.systemSettings().then((module) => ({ default: module.ITSystemSettingsPage })));
 export const DisplayPreferencesPage = lazy(() => modules.displayPreferences().then((module) => ({ default: module.DisplayPreferencesPage })));
+export const HelpCenterPage = lazy(() => modules.helpCenter().then((module) => ({ default: module.HelpCenterPage })));
 export const AdminActivityHistoryPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.AdminActivityHistoryPage })));
 export const ITSystemLogsPage = lazy(() => modules.systemLogs().then((module) => ({ default: module.ITSystemLogsPage })));
 

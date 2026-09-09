@@ -25,6 +25,9 @@ const centeredTitleClassByPath = new Map<string, string>([
   [routes.it.displayPreferences, "mx-auto w-full max-w-5xl"],
   [routes.admin.displayPreferences, "mx-auto w-full max-w-5xl"],
   [routes.staff.displayPreferences, "mx-auto w-full max-w-5xl"],
+  [routes.it.help, "mx-auto w-full max-w-6xl"],
+  [routes.admin.help, "mx-auto w-full max-w-6xl"],
+  [routes.staff.help, "mx-auto w-full max-w-6xl"],
 ]);
 
 export function AccountLayout({ role }: AccountLayoutProps) {
