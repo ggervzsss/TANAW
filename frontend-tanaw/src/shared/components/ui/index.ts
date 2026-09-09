@@ -10,6 +10,7 @@ export { PageMotion } from "./PageMotion";
 export { SearchableDropdownField } from "./SearchableDropdownField";
 export { SelectDropdown } from "./SelectDropdown";
 export { StatusBadge } from "./StatusBadge";
+export { Switch } from "./Switch";
 export type { DropdownOption } from "./SearchableDropdownField";
 export type { SelectDropdownOption } from "./SelectDropdown";
 export { fadeInDown } from "./motionVariants";

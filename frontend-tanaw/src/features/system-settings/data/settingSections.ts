@@ -5,6 +5,7 @@ export const settingSections: SettingSection[] = [
   {
     id: "security",
     title: "Account & Security Settings",
+    description: "Control how TANAW responds to repeated unsuccessful sign-in attempts.",
     icon: ShieldCheck,
     fields: [
       { key: "loginAttemptLimit", label: "Failed Login Threshold", type: "select", value: 3, options: [3, 5, 10] },
@@ -14,12 +15,14 @@ export const settingSections: SettingSection[] = [
   {
     id: "logs",
     title: "Activity History",
+    description: "Choose how long System Activity remains visible and remove expired records when needed.",
     icon: FileText,
     fields: [{ key: "retentionDays", label: "Keep Activity History For", type: "select", value: 180, options: [90, 180, 365] }],
   },
   {
     id: "display",
     title: "Date & Time",
+    description: "Set the time format used throughout TANAW. All timestamps remain in Philippine Time.",
     icon: Clock3,
     fields: [
       {
@@ -35,6 +38,7 @@ export const settingSections: SettingSection[] = [
   {
     id: "notifications",
     title: "Technical Issue Notifications",
+    description: "Choose which operational problems should notify IT personnel.",
     icon: Bell,
     fields: [
       {
