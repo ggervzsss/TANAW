@@ -46,7 +46,7 @@ for (const [filename, schema] of outputs) {
       } catch {
         // A missing generated contract is stale by definition.
       }
-      if (current !== generated) {
+      if (normalizeLineEndings(current) !== normalizeLineEndings(generated)) {
         stale = true;
         console.error(`Stale generated contract: ${outputPath}`);
       }
@@ -62,4 +62,8 @@ if (stale) {
     "Run `npm --prefix backend-tanaw/scripts/contracts run generate` and commit the generated files.",
   );
   process.exitCode = 1;
+}
+
+function normalizeLineEndings(value) {
+  return value.replaceAll("\r\n", "\n");
 }
