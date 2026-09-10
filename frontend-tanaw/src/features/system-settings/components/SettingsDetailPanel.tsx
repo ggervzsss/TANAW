@@ -25,7 +25,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
   const [confirmSecurity, setConfirmSecurity] = useState(false);
   const confirmedRef = useRef(initialValues);
   const valuesRef = useRef(initialValues);
-  const failedPatchRef = useRef<Record<string, SettingValue> | null>(null);
+  const failedPatchByKeyRef = useRef<Record<string, Record<string, SettingValue>>>({});
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const queuePatch = (patch: Record<string, SettingValue>) => {
@@ -36,7 +36,9 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
       try {
         const persisted = await onPersist(snapshot);
         confirmedRef.current = { ...confirmedRef.current, ...persisted };
-        failedPatchRef.current = null;
+        keys.forEach((key) => {
+          delete failedPatchByKeyRef.current[key];
+        });
         const settledKeys = keys.filter((key) => valuesRef.current[key] === snapshot[key]);
         if (settledKeys.length > 0) {
           const nextValues = { ...valuesRef.current };
@@ -50,7 +52,9 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
       } catch {
         const failedKeys = keys.filter((key) => valuesRef.current[key] === snapshot[key]);
         if (failedKeys.length === 0) return;
-        failedPatchRef.current = snapshot;
+        failedKeys.forEach((key) => {
+          failedPatchByKeyRef.current[key] = snapshot;
+        });
         const rolledBack = { ...valuesRef.current };
         failedKeys.forEach((key) => {
           rolledBack[key] = confirmedRef.current[key];
@@ -73,8 +77,8 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
     }
   };
 
-  const retryFailedPatch = () => {
-    const patch = failedPatchRef.current;
+  const retryFailedPatch = (key: string) => {
+    const patch = failedPatchByKeyRef.current[key];
     if (!patch) return;
     valuesRef.current = { ...valuesRef.current, ...patch };
     setValues(valuesRef.current);
@@ -115,7 +119,7 @@ export function SettingsDetailPanel({ sections, storedValues, metadataLabel, add
               <div className="divide-y divide-slate-100 border-y border-slate-100 dark:divide-white/8 dark:border-white/8">
                 {section.fields.map((field) => {
                   const key = settingKey(section.id, field);
-                  return <SettingRow key={key} field={field} value={values[key] ?? field.value} saveState={saveStateByKey[key] ?? "idle"} onChange={(value) => updateValue(key, value, isImmediateSection)} onRetry={retryFailedPatch} />;
+                  return <SettingRow key={key} field={field} value={values[key] ?? field.value} saveState={saveStateByKey[key] ?? "idle"} onChange={(value) => updateValue(key, value, isImmediateSection)} onRetry={() => retryFailedPatch(key)} />;
                 })}
               </div>
               {!isImmediateSection && (

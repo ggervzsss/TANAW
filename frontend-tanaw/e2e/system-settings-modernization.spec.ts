@@ -66,6 +66,13 @@ test("persists independent settings, rolls back failures, and confirms security 
   await desktopSwitch.click();
   await expect(page.getByRole("alert").filter({ hasText: "Failed" })).toBeVisible();
   await expect(desktopSwitch).toHaveAttribute("aria-checked", "true");
+
+  // A later successful setting must not erase the failed setting's retry payload.
+  const syncSwitch = page.getByRole("switch", { name: "Visitor Data Delays" });
+  await syncSwitch.click();
+  await expect(syncSwitch).toHaveAttribute("aria-checked", "false");
+  await expect.poll(() => values["notifications.syncDelayAlerts"]).toBe(false);
+
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(desktopSwitch).toHaveAttribute("aria-checked", "false");
 

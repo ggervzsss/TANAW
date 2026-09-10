@@ -8,6 +8,14 @@ describe("Help Center knowledge base", () => {
     expect(articlesForRole(helpArticles, "staff").some((article) => article.id === "admin-map-navigation")).toBe(false);
   });
 
+  it("provides recommended and common guidance for every web role", () => {
+    for (const role of ["admin", "staff", "it"] as const) {
+      const articles = articlesForRole(helpArticles, role);
+      expect(articles.some((article) => article.recommended)).toBe(true);
+      expect(articles.some((article) => article.commonIssue)).toBe(true);
+    }
+  });
+
   it("ranks title matches above keyword and body-only matches", () => {
     const results = searchHelpArticles(helpArticles, "system settings");
     expect(results[0]?.article.id).toBe("it-system-settings");
