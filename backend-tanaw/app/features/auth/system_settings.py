@@ -19,3 +19,9 @@ def load_system_settings_values(
         for key, value in values.items()
         if isinstance(key, str) and isinstance(value, str | bool | int)
     }
+
+
+def merge_system_settings_values(
+    current: dict[str, str | bool | int], patch: dict[str, str | bool | int]
+) -> dict[str, str | bool | int]:
+    return {**current, **patch}

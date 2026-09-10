@@ -27,6 +27,8 @@ import {
   ReportsView,
   SecurityView,
   TicketsView,
+  DisplayPreferencesView,
+  HelpCenterView,
   preloadEnterpriseView,
   scheduleEnterpriseViewPreload,
 } from "../router/enterprise-view-modules";
@@ -43,6 +45,8 @@ const viewRouteById: Record<EnterpriseView, string> = {
   security: routePaths.enterpriseSecurity,
   notifications: routePaths.enterpriseNotifications,
   tickets: routePaths.enterpriseTickets,
+  "display-preferences": routePaths.enterpriseDisplayPreferences,
+  help: routePaths.enterpriseHelp,
 };
 
 export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellProps) {
@@ -285,6 +289,7 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         <div
           ref={contentScrollRef}
           data-form-scroll-container
+          data-density-adjustable={activeView !== "cameras"}
           className={`flex-1 bg-[#f4f8f5] transition-colors duration-300 dark:bg-(--enterprise-app-bg) ${activeView === "cameras" ? "overflow-hidden p-4 max-xl:p-3" : "overflow-auto p-8 max-xl:p-6 max-sm:p-4"}`}
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
@@ -297,6 +302,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
               {activeView === "profile" && <ProfileView />}
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}
+              {activeView === "display-preferences" && <DisplayPreferencesView />}
+              {activeView === "help" && <HelpCenterView />}
               {activeView === "notifications" && (
                 <NotificationsView
                   notifications={notifications}

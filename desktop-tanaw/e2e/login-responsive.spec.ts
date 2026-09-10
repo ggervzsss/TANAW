@@ -39,6 +39,8 @@ test("loads the original TANAW typefaces from bundled assets", async ({ page }) 
   });
 
   await page.goto("/#/login");
+  await expect(page.locator(".tanaw-auth-stage")).toBeVisible();
+  await expect(page.locator(".tanaw-auth-brand-title")).toBeVisible();
 
   const typography = await page.evaluate(async () => {
     await Promise.all([document.fonts.load('400 16px "Inter"', "TANAW"), document.fonts.load('500 16px "Montserrat"', "TANAW"), document.fonts.load('600 16px "Bai Jamjuree"', "TANAW")]);

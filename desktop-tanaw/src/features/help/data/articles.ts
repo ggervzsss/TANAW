@@ -1,0 +1,93 @@
+import type { HelpArticle } from "../model/help-articles";
+
+export const helpArticles: HelpArticle[] = [
+  {
+    id: "camera-connection",
+    title: "Connect and configure a camera",
+    summary: "Add a camera source, check its connection, and prepare it for visitor counting.",
+    category: "Cameras & Monitoring",
+    keywords: ["camera setup", "connection", "source", "configuration", "counting"],
+    recommended: true,
+    sections: [
+      { heading: "Before you begin", paragraphs: ["Confirm that the camera source is available to this Enterprise Desktop and that you have the correct connection details."] },
+      { heading: "Connect the camera", steps: ["Open Camera Setup.", "Add or select the camera configuration.", "Enter the required source details and test the connection.", "Save the valid configuration and confirm that its status is available."] },
+    ],
+    relatedArticleIds: ["camera-troubleshooting", "visitor-metrics"],
+  },
+  {
+    id: "camera-troubleshooting",
+    title: "Troubleshoot a camera connection",
+    summary: "Check the camera source, local counting service, and current status when processing is interrupted.",
+    category: "Troubleshooting",
+    keywords: ["offline", "camera problem", "connection failed", "processing", "service"],
+    commonIssue: true,
+    sections: [
+      { heading: "Problem", paragraphs: ["A configured camera is unavailable or visitor counting stops."] },
+      { heading: "What to check", steps: ["Confirm that the camera itself is powered and reachable.", "Review the camera status shown in Camera Setup.", "Check the current system issue notice for a local counting-service problem.", "Retry the camera connection after the source is available."] },
+      { heading: "When to contact support", paragraphs: ["Create a Support Ticket if the source is reachable but TANAW still cannot connect or process the camera."] },
+    ],
+    relatedArticleIds: ["camera-connection", "support-tickets"],
+    supportView: "tickets",
+  },
+  {
+    id: "visitor-metrics",
+    title: "Understand visitor and occupancy metrics",
+    summary: "Read current visitor totals, occupancy information, and the operational context shown on the dashboard.",
+    category: "Cameras & Monitoring",
+    keywords: ["visitors", "occupancy", "capacity", "dashboard", "count"],
+    sections: [{ heading: "Read the dashboard", steps: ["Open Dashboard.", "Review the latest visitor and occupancy values.", "Use Camera Setup when a camera status could affect the current count."] }],
+    relatedArticleIds: ["camera-troubleshooting", "reports-and-sync"],
+  },
+  {
+    id: "reports-and-sync",
+    title: "Review reports and synchronization",
+    summary: "Follow report history and understand when local visitor records are waiting to synchronize.",
+    category: "Reports",
+    keywords: ["reports", "sync", "pending", "history", "submission"],
+    recommended: true,
+    sections: [
+      { heading: "Review reports", steps: ["Open Reports.", "Choose the report or period you need.", "Review its current status and available values."] },
+      { heading: "Synchronization", paragraphs: ["Enterprise Desktop synchronizes supported operational data when backend connectivity is available. Keep the application open and review current issue notices if records remain pending."] },
+    ],
+    relatedArticleIds: ["support-tickets"],
+  },
+  {
+    id: "support-tickets",
+    title: "Create and follow a Support Ticket",
+    summary: "Send a support request, include useful context, and follow replies without creating duplicate tickets.",
+    category: "Troubleshooting",
+    keywords: ["ticket", "support", "reply", "attachment", "issue"],
+    commonIssue: true,
+    sections: [
+      { heading: "Create a ticket", steps: ["Open Support Tickets from the account menu.", "Choose the category that best matches the problem.", "Describe what happened and attach relevant non-sensitive evidence when useful.", "Submit the ticket once."] },
+      { heading: "Follow progress", paragraphs: ["Open the existing ticket to read IT replies and continue the conversation. Resolved tickets remain available in history."] },
+    ],
+    relatedArticleIds: ["camera-troubleshooting", "reports-and-sync"],
+    supportView: "tickets",
+  },
+  {
+    id: "account-session",
+    title: "Resolve account and session problems",
+    summary: "Recover from an expired session, a password problem, or a temporary account lock.",
+    category: "Account & Access",
+    keywords: ["login", "password", "session", "locked", "sign in"],
+    commonIssue: true,
+    sections: [
+      { heading: "What to check", steps: ["Confirm your Enterprise account email.", "Check Caps Lock and try once more.", "If the account is locked, wait for the period shown on screen."] },
+      { heading: "Steps to resolve", steps: ["Use Forgot Password on Sign In if needed.", "Complete the email verification flow.", "Sign in and reopen the Enterprise view you need."] },
+    ],
+    relatedArticleIds: ["display-preferences"],
+  },
+  {
+    id: "display-preferences",
+    title: "Adjust text size and interface scale",
+    summary: "Make Enterprise Desktop easier to read while keeping theme and system zoom separate.",
+    category: "Getting Started",
+    keywords: ["large text", "font", "compact", "accessibility", "display"],
+    sections: [
+      { heading: "Change your display", steps: ["Open the account menu.", "Choose Display Preferences.", "Select a Text size and Interface scale. Changes save immediately."] },
+      { heading: "Reset", paragraphs: ["Choose Reset to default to restore standard sizing. Your theme does not change."] },
+    ],
+    relatedArticleIds: ["account-session"],
+  },
+];

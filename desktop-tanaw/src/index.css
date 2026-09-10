@@ -22,6 +22,7 @@
 }
 
 :root {
+  --tanaw-root-font-size: 16px;
   --tanaw-green: #064e2f;
   --tanaw-green-dark: #033d24;
   --tanaw-green-soft: #0f6b43;
@@ -48,6 +49,26 @@
   --tanaw-shadow-raised: 0 18px 42px rgb(15 23 42 / 0.12);
   --tanaw-topbar-height: 5.5rem;
   color-scheme: light;
+}
+
+html {
+  font-size: var(--tanaw-root-font-size);
+}
+
+html[data-interface-scale="compact"] {
+  --tanaw-topbar-height: 5rem;
+}
+
+html[data-interface-scale="comfortable"] {
+  --tanaw-topbar-height: 6rem;
+}
+
+html[data-interface-scale="compact"] [data-density-adjustable="true"] {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+html[data-interface-scale="comfortable"] [data-density-adjustable="true"] {
+  padding: clamp(2rem, 3vw, 3rem) !important;
 }
 
 html.dark {

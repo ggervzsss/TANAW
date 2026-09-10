@@ -53,6 +53,7 @@ const portalRoutePrefixes = [routes.it.root, routes.admin.root, routes.staff.roo
 export function AppProviders({ children }: AppProvidersProps) {
   const authenticated = useAuthStore((state) => state.status === "authenticated");
   const token = useAuthStore((state) => state.token);
+  const accountId = useAuthStore((state) => state.user?.id);
   const markAnonymous = useAuthStore((state) => state.markAnonymous);
   const setHeader = useHeaderStore((state) => state.setHeader);
 
@@ -61,7 +62,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       <BrowserRouter>
         <AuthSessionManager />
         <RealtimeProvider authenticated={authenticated} token={token} onUnauthorized={markAnonymous}>
-          <SystemDisplayPreferencesProvider authenticated={authenticated}>
+          <SystemDisplayPreferencesProvider authenticated={authenticated} accountId={accountId}>
             <PageHeaderProvider setHeader={setHeader}>
               {children}
               <TanawToaster />

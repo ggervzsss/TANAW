@@ -22,7 +22,10 @@ from app.features.auth.schemas import (
     AccountPreferences,
     SystemSettingsPayload,
 )
-from app.features.auth.system_settings import load_system_settings_values
+from app.features.auth.system_settings import (
+    load_system_settings_values,
+    merge_system_settings_values,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,8 @@ async def update_system_settings(
     if record is None:
         record = SystemConfiguration(id=SYSTEM_SETTINGS_ID)
         db.add(record)
-    record.values_json = json.dumps(payload.values, sort_keys=True)
+    values = merge_system_settings_values(load_system_settings_values(record), payload.values)
+    record.values_json = json.dumps(values, sort_keys=True)
     record.updated_by = account.display_name
     await db.flush()
     await db.refresh(record)
@@ -99,7 +103,7 @@ async def update_system_settings(
         source_id=record.id,
     )
     return SystemSettingsPayload(
-        values=payload.values,
+        values=values,
         updatedBy=record.updated_by,
         updatedAt=record.updated_at,
     )

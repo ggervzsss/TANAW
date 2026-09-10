@@ -5,6 +5,12 @@ import type { AccountSummary, AuthUser } from "../types";
 export const currentUserQueryKey = queryKeys.currentUser;
 export const accountPreferencesQueryKey = ["account-preferences"] as const;
 
+export type AccountPreferences = {
+  theme: "light" | "dark" | "system";
+  textSize: "small" | "default" | "large" | "extra-large";
+  interfaceScale: "compact" | "default" | "comfortable";
+};
+
 export type ProfileUpdatePayload = {
   firstName?: string;
   lastName?: string;
@@ -32,13 +38,21 @@ export async function updateCurrentProfile(payload: ProfileUpdatePayload) {
 }
 
 export async function getAccountPreferences() {
-  const response = await apiClient.get<{ theme: "light" | "dark" | "system" }>("/auth/preferences");
-  return response.data;
+  const response = await apiClient.get<AccountPreferences>("/auth/preferences");
+  return normalizeAccountPreferences(response.data);
 }
 
-export async function updateAccountPreferences(theme: "light" | "dark" | "system") {
-  const response = await apiClient.patch<{ theme: "light" | "dark" | "system" }>("/auth/preferences", { theme });
-  return response.data;
+export async function updateAccountPreferences(preferences: Partial<AccountPreferences>) {
+  const response = await apiClient.patch<AccountPreferences>("/auth/preferences", preferences);
+  return normalizeAccountPreferences(response.data);
+}
+
+function normalizeAccountPreferences(preferences: Partial<AccountPreferences>): AccountPreferences {
+  return {
+    theme: preferences.theme ?? "system",
+    textSize: preferences.textSize ?? "default",
+    interfaceScale: preferences.interfaceScale ?? "default",
+  };
 }
 
 export async function resolveAccountEmailChangeRequest(accountId: string, action: "approve" | "decline") {

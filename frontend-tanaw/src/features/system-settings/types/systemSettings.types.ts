@@ -22,6 +22,7 @@ export type SettingField =
 export type SettingSection = {
   id: string;
   title: string;
+  description: string;
   icon: ComponentType<{ className?: string }>;
   fields: SettingField[];
 };

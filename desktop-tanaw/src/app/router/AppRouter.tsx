@@ -184,6 +184,26 @@ export function AppRouter() {
             </RequireAuth>
           }
         />
+        <Route
+          path={routePaths.enterpriseDisplayPreferences}
+          element={
+            <RequireAuth>
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="display-preferences" />
+              </RendererReadyBoundary>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path={routePaths.enterpriseHelp}
+          element={
+            <RequireAuth>
+              <RendererReadyBoundary>
+                <EnterpriseShell initialView="help" />
+              </RendererReadyBoundary>
+            </RequireAuth>
+          }
+        />
         <Route path="*" element={<Navigate to={routePaths.enterpriseDashboard} replace />} />
       </Routes>
     </Suspense>

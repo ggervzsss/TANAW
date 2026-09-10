@@ -20,13 +20,6 @@ export function ITSystemSettingsPage() {
   const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({ queryKey: systemSettingsQueryKey, queryFn: getSystemSettings });
-  const saveMutation = useMutation({
-    mutationFn: updateSystemSettings,
-    onSuccess: () => {
-      toast.success("System settings saved.");
-      return queryClient.invalidateQueries({ queryKey: systemSettingsQueryKey });
-    },
-  });
   const purgeMutation = useMutation({
     mutationFn: purgeExpiredActivityLogs,
     onSuccess: ({ deletedCount }) => {
@@ -41,22 +34,30 @@ export function ITSystemSettingsPage() {
   const storedValues = useMemo(() => filterVisibleSettings(systemSettings?.values ?? {}), [systemSettings?.values]);
   const metadataLabel = formatSettingsMetadata(systemSettings?.updatedBy ?? null, systemSettings?.updatedAt ?? null, timeFormat);
 
+  const persistSettings = async (values: Record<string, SettingValue>) => {
+    const updated = await updateSystemSettings(values);
+    queryClient.setQueryData(systemSettingsQueryKey, updated);
+    return filterVisibleSettings(updated.values);
+  };
+
   return (
     <PageMotion>
       <PageHeader title="System Settings" description="Manage account safety, activity history, Philippine time display, and technical issue notifications." />
 
       <div>
+        {settingsQuery.isPending && <div className="grid min-h-52 place-items-center text-sm font-semibold text-slate-500" role="status">Loading system settings…</div>}
+        {settingsQuery.isError && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-800">Unable to load System Settings. Refresh the page to try again.</div>}
+        {systemSettings && (
         <SettingsDetailPanel
-          key={JSON.stringify(storedValues)}
           sections={settingSections}
           storedValues={storedValues}
-          isSaving={saveMutation.isPending}
           metadataLabel={metadataLabel}
           additionalContentBySectionId={{
             logs: <PurgeLogsSettingCard isPending={purgeMutation.isPending} onOpenConfirm={() => setIsPurgeConfirmOpen(true)} />,
           }}
-          onSave={(values) => saveMutation.mutate(values)}
+          onPersist={persistSettings}
         />
+        )}
       </div>
       {isPurgeConfirmOpen && (
         <ModalFrame title="Delete Old Activity" eyebrow="Permanent action" onClose={() => setIsPurgeConfirmOpen(false)} maxWidthClassName="max-w-xl">

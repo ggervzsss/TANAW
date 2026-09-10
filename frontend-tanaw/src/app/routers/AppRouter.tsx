@@ -8,6 +8,8 @@ import { routes } from "./routes";
 import {
   AccountProfilePage,
   AccountSecurityPage,
+  DisplayPreferencesPage,
+  HelpCenterPage,
   ActivateAccountPage,
   AdminActivityHistoryPage,
   AdminMapViewPage,
@@ -68,6 +70,9 @@ export function AppRouter() {
           <Route path="system-settings" element={<ITSystemSettingsPage />} />
           <Route path="profile" element={<AccountProfilePage role="it" />} />
           <Route path="security" element={<AccountSecurityPage />} />
+          <Route path="display-preferences" element={<DisplayPreferencesPage />} />
+          <Route path="help" element={<HelpCenterPage role="it" />} />
+          <Route path="help/:articleId" element={<HelpCenterPage role="it" />} />
         </Route>
 
         <Route
@@ -85,6 +90,9 @@ export function AppRouter() {
           <Route path="notifications" element={<NotificationsPage role="admin" />} />
           <Route path="profile" element={<AccountProfilePage role="admin" />} />
           <Route path="security" element={<AccountSecurityPage />} />
+          <Route path="display-preferences" element={<DisplayPreferencesPage />} />
+          <Route path="help" element={<HelpCenterPage role="admin" />} />
+          <Route path="help/:articleId" element={<HelpCenterPage role="admin" />} />
         </Route>
 
         <Route
@@ -102,6 +110,9 @@ export function AppRouter() {
           <Route path="notifications" element={<NotificationsPage role="staff" />} />
           <Route path="profile" element={<AccountProfilePage role="staff" />} />
           <Route path="security" element={<AccountSecurityPage />} />
+          <Route path="display-preferences" element={<DisplayPreferencesPage />} />
+          <Route path="help" element={<HelpCenterPage role="staff" />} />
+          <Route path="help/:articleId" element={<HelpCenterPage role="staff" />} />
         </Route>
 
         <Route path="*" element={<RootRedirect />} />

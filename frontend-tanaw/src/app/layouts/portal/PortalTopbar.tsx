@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut, Menu, Moon, Shield, Sun, TicketCheck, User, X } from "lucide-react";
+import { BookOpen, ChevronDown, LogOut, Menu, Moon, Settings, Shield, SlidersHorizontal, Sun, TicketCheck, User, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,7 +10,7 @@ import { logoutSession } from "@/shared/services/sessionService";
 import { CITY_SEAL } from "@/shared/constants/branding";
 import { roleAccessLabel, rolePortalLabel } from "@/shared/constants/roleLabels";
 import { PortalNotificationDropdown, usePortalNotifications } from "@/features/notifications/portal";
-import { getRoleDashboardPath, getRoleProfilePath, getRoleSecurityPath } from "@/app/routers/roleRoutes";
+import { getRoleDashboardPath, getRoleDisplayPreferencesPath, getRoleHelpPath, getRoleProfilePath, getRoleSecurityPath } from "@/app/routers/roleRoutes";
 import type { UserRole } from "@/shared/types/role.types";
 import { getPortalTopbarThemeClasses } from "./portalTopbarTheme";
 import { publishSessionEvent } from "@/shared/utils/sessionSync";
@@ -195,6 +195,8 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
   const profilePath = getRoleProfilePath(role);
   const securityPath = getRoleSecurityPath(role);
   const supportTicketsPath = getRoleSupportTicketsPath(role);
+  const displayPreferencesPath = getRoleDisplayPreferencesPath(role);
+  const helpPath = getRoleHelpPath(role);
   const accountMenuButtonClass = (targetPath: string) => ["profile-menu-button", pathname === targetPath ? "bg-tanaw-green/10 text-tanaw-green" : ""].filter(Boolean).join(" ");
 
   return (
@@ -298,7 +300,7 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.98 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute right-0 z-1001 mt-3 w-72 overflow-hidden rounded-2xl border border-white/80 bg-white py-2 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/4"
+                    className="absolute right-0 z-1001 mt-3 max-h-[calc(100svh-var(--tanaw-topbar-height)-1rem)] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-white/80 bg-white py-2 text-slate-700 shadow-[0_18px_44px_rgba(15,23,42,0.18)] ring-1 ring-slate-900/4"
                   >
                     <div className="mb-1 border-b border-slate-100 px-4 py-3.5">
                       <p title={profile.name} className="text-tanaw-navy truncate text-sm font-bold">
@@ -314,6 +316,17 @@ export function PortalTopbar({ role, showDevLog = false }: PortalTopbarProps) {
                     <button type="button" onClick={() => openAccountPage("security")} className={accountMenuButtonClass(securityPath)}>
                       <Shield size={14} /> Password Settings
                     </button>
+                    <button type="button" onClick={() => { setShowProfileMenu(false); navigate(displayPreferencesPath); }} className={accountMenuButtonClass(displayPreferencesPath)}>
+                      <SlidersHorizontal size={14} /> Display Preferences
+                    </button>
+                    <button type="button" onClick={() => { setShowProfileMenu(false); navigate(helpPath); }} className={accountMenuButtonClass(helpPath)}>
+                      <BookOpen size={14} /> Help Center
+                    </button>
+                    {role === "it" && (
+                      <button type="button" onClick={() => { setShowProfileMenu(false); navigate(routes.it.systemSettings); }} className={accountMenuButtonClass(routes.it.systemSettings)}>
+                        <Settings size={14} /> System Settings
+                      </button>
+                    )}
                     {supportTicketsPath && (
                       <button type="button" onClick={openSupportTickets} className={accountMenuButtonClass(supportTicketsPath)}>
                         <TicketCheck size={14} /> Support Tickets

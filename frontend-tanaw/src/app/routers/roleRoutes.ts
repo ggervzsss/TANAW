@@ -19,3 +19,15 @@ export function getRoleSecurityPath(role: UserRole): string {
   if (role === "staff") return routes.staff.security;
   return routes.it.security;
 }
+
+export function getRoleDisplayPreferencesPath(role: UserRole): string {
+  if (role === "admin") return routes.admin.displayPreferences;
+  if (role === "staff") return routes.staff.displayPreferences;
+  return routes.it.displayPreferences;
+}
+
+export function getRoleHelpPath(role: UserRole): string {
+  if (role === "admin") return routes.admin.help;
+  if (role === "staff") return routes.staff.help;
+  return routes.it.help;
+}
