@@ -21,7 +21,7 @@
     "release:verify:inputs": "node scripts/verify-release-package.ts inputs",
     "release:verify:packaged": "node scripts/verify-release-package.ts packaged",
     "release:checksums": "node scripts/verify-release-package.ts checksums",
-    "builder": "electron-builder --win nsis --x64",
+    "builder": "electron-builder --win nsis-web --x64",
     "start": "node scripts/with-electron-env.cjs electron .",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 && npm run lint:tailwind",
     "lint:tailwind": "node scripts/lint-tailwind-canonical.mjs",

@@ -191,8 +191,12 @@ before building when either credential is missing. Certificate files and
 passwords must never be committed. `npm run dist` remains available for local
 unsigned package testing and still applies executable metadata and icons.
 
-The resulting NSIS installer and `SHA256SUMS.txt` are written under
-`release/<version>/`. Before distribution,
+The resulting large-app NSIS installer, its adjacent `.nsis.7z` application
+payload, and update metadata are written under `release/<version>/nsis-web/`;
+`SHA256SUMS.txt` is written one level above them. Keep the installer and payload
+in the same directory for offline installation; the installer verifies the
+payload before extracting it. Published builds can use the configured GitHub
+release as a network fallback. Before distribution,
 install it on a clean Windows x64 computer without Node.js, Python, or `uv` and
 verify login, backend synchronization, camera startup, and local ML health.
 
