@@ -62,6 +62,9 @@ export async function inspectMlReleaseResources(runtimeDirectory: string, models
   if (!runtimeFiles.some((file) => file.startsWith("_internal/"))) {
     throw new Error("The packaged ML runtime is missing its _internal dependency directory.");
   }
+  if (!runtimeFiles.some((file) => /^_internal\/lap\/_lapjv.*\.pyd$/.test(file))) {
+    throw new Error("The packaged ML runtime is missing the native lap tracker dependency.");
+  }
 
   const expectedModels = new Set<string>(REQUIRED_MODEL_ASSETS);
   const missingModels = REQUIRED_MODEL_ASSETS.filter((file) => !modelFiles.includes(file));
