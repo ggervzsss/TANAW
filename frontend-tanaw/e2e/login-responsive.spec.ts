@@ -243,25 +243,44 @@ test("keeps every web login card corner rounded in light and dark responsive lay
   await assertUniformCorners();
 });
 
-test("restores the cursor-following glow without interfering with login controls", async ({ page }) => {
+test("keeps the cursor-following glow isolated without interfering with login controls", async ({ page }) => {
   await page.goto("/login");
 
   const stage = page.locator(".tanaw-login-stage");
+  const cursor = page.locator(".tanaw-stage-glow__cursor");
   await expect(page.locator(".tanaw-stage-glow")).toHaveCount(1);
   await expect(page.locator("[data-swarm-cursor='true'], .swarm-cursor__canvas")).toHaveCount(0);
   const stageBox = await stage.boundingBox();
   expect(stageBox).not.toBeNull();
   const target = { x: stageBox!.x + stageBox!.width * 0.35, y: stageBox!.y + stageBox!.height * 0.45 };
+  await expect(page.locator(".tanaw-auth-card")).toHaveCSS("transform", "none");
+  await stage.evaluate((element) => {
+    const mutations: string[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.target instanceof Element && !record.target.closest(".tanaw-stage-glow")) {
+          mutations.push(record.target.className);
+        }
+      }
+    });
+    observer.observe(element, { attributes: true, attributeFilter: ["style"], subtree: true });
+    Object.assign(window, { authGlowMutations: mutations, authGlowObserver: observer });
+  });
   await page.mouse.move(target.x, target.y);
   await expect
     .poll(async () => {
-      const position = await stage.evaluate((element) => ({
-        x: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--hero-glow-x")),
-        y: Number.parseFloat((element as HTMLElement).style.getPropertyValue("--hero-glow-y")),
-      }));
-      return Math.max(Math.abs(position.x - (target.x - stageBox!.x)), Math.abs(position.y - (target.y - stageBox!.y)));
+      const box = await cursor.boundingBox();
+      return box ? Math.max(Math.abs(box.x + box.width / 2 - target.x), Math.abs(box.y + box.height / 2 - target.y)) : Number.POSITIVE_INFINITY;
     })
     .toBeLessThan(2);
+  const mutations = await page.evaluate(() => {
+    const tracking = window as typeof window & { authGlowMutations: string[]; authGlowObserver: MutationObserver };
+    tracking.authGlowObserver.disconnect();
+    return tracking.authGlowMutations;
+  });
+  expect(mutations).toEqual([]);
+  expect(await cursor.evaluate((element) => getComputedStyle(element, "::after").animationName)).toBe("tanaw-cursor-ripple");
+  await expect(page.locator(".tanaw-auth-card")).toHaveCSS("backdrop-filter", "blur(24px)");
 
   const email = page.getByLabel("Email", { exact: true });
   const password = page.getByLabel("Password", { exact: true });
@@ -279,6 +298,56 @@ test("restores the cursor-following glow without interfering with login controls
 
   await page.goto("/activate-account");
   await expect(page.locator(".tanaw-stage-glow")).toHaveCount(1);
+});
+
+test("respects reduced motion and resumes cursor tracking when it is disabled", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/login");
+  const cursor = page.locator(".tanaw-stage-glow__cursor");
+  const initialTransform = await cursor.evaluate((element) => getComputedStyle(element).transform);
+  await page.mouse.move(300, 200);
+  await cursor.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(cursor).toHaveCSS("transform", initialTransform);
+  expect(await cursor.evaluate((element) => getComputedStyle(element, "::after").animationName)).toBe("none");
+
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.mouse.move(450, 300);
+  await expect.poll(async () => {
+    const box = await cursor.boundingBox();
+    return box ? Math.max(Math.abs(box.x + box.width / 2 - 450), Math.abs(box.y + box.height / 2 - 300)) : Number.POSITIVE_INFINITY;
+  }).toBeLessThan(2);
+  expect(await cursor.evaluate((element) => getComputedStyle(element, "::after").animationName)).toBe("tanaw-cursor-ripple");
+});
+
+test("pauses decorative effects and pointer updates while the page is hidden", async ({ page }) => {
+  await page.goto("/login");
+  const stage = page.locator(".tanaw-login-stage");
+  const cursor = page.locator(".tanaw-stage-glow__cursor");
+  await expect(stage).toHaveAttribute("data-auth-background-ready", "true");
+  await page.mouse.move(300, 200);
+  await expect.poll(() => cursor.evaluate((element) => (element as HTMLElement).style.transform)).not.toBe("");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(stage).toHaveAttribute("data-auth-effects-paused", "");
+  const pausedTransform = await cursor.evaluate((element) => (element as HTMLElement).style.transform);
+  await page.mouse.move(450, 300);
+  await cursor.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await cursor.evaluate((element) => (element as HTMLElement).style.transform)).toBe(pausedTransform);
+  for (const selector of [".tanaw-stage-glow", ".tanaw-hero-particle", ".tanaw-sampaguita-glow"]) {
+    await expect(page.locator(selector).first()).toHaveCSS("animation-play-state", "paused");
+  }
+  expect(await cursor.evaluate((element) => getComputedStyle(element, "::after").animationPlayState)).toBe("paused");
+
+  await page.evaluate(() => {
+    Reflect.deleteProperty(document, "hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(stage).not.toHaveAttribute("data-auth-effects-paused", "");
+  await page.mouse.move(500, 350);
+  await expect.poll(() => cursor.evaluate((element) => (element as HTMLElement).style.transform)).not.toBe(pausedTransform);
+  await expect(page.locator(".tanaw-stage-glow")).toHaveCSS("animation-play-state", "running");
 });
 
 test("keeps an explicit login theme through authentication, reload, and logout", async ({ page }) => {

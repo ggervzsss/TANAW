@@ -3,3 +3,4 @@ export { AuthThemeToggle } from "./AuthThemeToggle";
 export { LoginBackground } from "./LoginBackground";
 export { LoginForm } from "./LoginForm";
 export { AccountActivationCard } from "./AccountActivationCard";
+export { AuthStageGlow } from "./AuthStageGlow";
