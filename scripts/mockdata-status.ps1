@@ -13,4 +13,8 @@ try {
     Pop-Location
 }
 
+if ($ExitCode -eq 0 -and $ForwardedArgs -notcontains "--help" -and $ForwardedArgs -notcontains "-h") {
+    Write-Host "[SUCCESS] mockdata-status: Backend mock data status checked."
+}
+
 exit $ExitCode

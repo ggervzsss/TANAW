@@ -49,6 +49,13 @@ describe("desktop release configuration", () => {
     expect(result.modelBytes).toBe(REQUIRED_MODEL_ASSETS.length);
   });
 
+  it("requires the native tracker dependency in the bundled runtime", async () => {
+    const root = await createReleaseFixture();
+    await rm(path.join(root, "runtime", "_internal", "lap"), { recursive: true });
+
+    await expect(inspectMlReleaseResources(path.join(root, "runtime"), path.join(root, "models"))).rejects.toThrow(/native lap tracker dependency/);
+  });
+
   it("rejects development artifacts and unlisted models", async () => {
     const root = await createReleaseFixture();
     await mkdir(path.join(root, "runtime", "_internal", "torch", "test"), { recursive: true });
@@ -61,25 +68,32 @@ describe("desktop release configuration", () => {
     await expect(inspectMlReleaseResources(path.join(root, "runtime"), path.join(root, "models"))).rejects.toThrow(/Unexpected files/);
   });
 
-  it("writes SHA-256 checksums only for distributable Windows artifacts", async () => {
+  it("writes SHA-256 checksums for both large-app NSIS artifacts", async () => {
     const root = await temporaryDirectory();
+    await mkdir(path.join(root, "nsis-web"), { recursive: true });
     await mkdir(path.join(root, "win-unpacked"), { recursive: true });
-    await writeFile(path.join(root, "TANAW-Setup.exe"), "installer");
+    await writeFile(path.join(root, "nsis-web", "TANAW-Setup.exe"), "installer");
+    await writeFile(path.join(root, "nsis-web", "desktop-tanaw-0.1.0-x64.nsis.7z"), "payload");
     await writeFile(path.join(root, "win-unpacked", "TANAW.exe"), "application");
 
     const lines = await writeReleaseChecksums(root);
 
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^[a-f0-9]{64} {2}TANAW-Setup\.exe$/);
+    expect(lines).toHaveLength(2);
+    expect(lines).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64} {2}nsis-web\/TANAW-Setup\.exe$/),
+      expect.stringMatching(/^[a-f0-9]{64} {2}nsis-web\/desktop-tanaw-0\.1\.0-x64\.nsis\.7z$/),
+    ]);
   });
 });
 
 async function createReleaseFixture(): Promise<string> {
   const root = await temporaryDirectory();
   await mkdir(path.join(root, "runtime", "_internal"), { recursive: true });
+  await mkdir(path.join(root, "runtime", "_internal", "lap"), { recursive: true });
   await mkdir(path.join(root, "models"), { recursive: true });
   await writeFile(path.join(root, "runtime", "tanaw-ml-service.exe"), "runtime");
   await writeFile(path.join(root, "runtime", "_internal", "python.dll"), "dependency");
+  await writeFile(path.join(root, "runtime", "_internal", "lap", "_lapjv.cp314-win_amd64.pyd"), "dependency");
   for (const model of REQUIRED_MODEL_ASSETS) {
     const destination = path.join(root, "models", model);
     await mkdir(path.dirname(destination), { recursive: true });

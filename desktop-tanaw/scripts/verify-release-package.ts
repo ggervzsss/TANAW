@@ -75,7 +75,7 @@ function verifyBuilderConfiguration(configuration: BuilderConfiguration): void {
   }
   const target = configuration.win?.target;
   if (target?.length !== 1 || target[0]?.target !== DESKTOP_RELEASE_TARGET || JSON.stringify(target[0]?.arch) !== JSON.stringify([DESKTOP_RELEASE_ARCH])) {
-    throw new Error("Electron Builder must target only NSIS on Windows x64.");
+    throw new Error("Electron Builder must target only the large-app NSIS installer on Windows x64.");
   }
   if (configuration.win?.signAndEditExecutable !== true) {
     throw new Error("Windows executable metadata editing and signing must remain enabled.");

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const DESKTOP_RELEASE_PLATFORM = "win32" as const;
 export const DESKTOP_RELEASE_ARCH = "x64" as const;
-export const DESKTOP_RELEASE_TARGET = "nsis" as const;
+export const DESKTOP_RELEASE_TARGET = "nsis-web" as const;
 export const DESKTOP_RELEASE_EXECUTABLE = "tanaw-ml-service.exe";
 export const DESKTOP_RELEASE_LOCALES = ["en-US", "fil"] as const;
 
@@ -62,6 +63,9 @@ export async function inspectMlReleaseResources(runtimeDirectory: string, models
   if (!runtimeFiles.some((file) => file.startsWith("_internal/"))) {
     throw new Error("The packaged ML runtime is missing its _internal dependency directory.");
   }
+  if (!runtimeFiles.some((file) => /^_internal\/lap\/_lapjv.*\.pyd$/.test(file))) {
+    throw new Error("The packaged ML runtime is missing the native lap tracker dependency.");
+  }
 
   const expectedModels = new Set<string>(REQUIRED_MODEL_ASSETS);
   const missingModels = REQUIRED_MODEL_ASSETS.filter((file) => !modelFiles.includes(file));
@@ -86,18 +90,27 @@ export async function inspectMlReleaseResources(runtimeDirectory: string, models
 }
 
 export async function writeReleaseChecksums(releaseDirectory: string): Promise<string[]> {
-  const files = (await listRelativeFiles(releaseDirectory)).filter((file) => file.endsWith(".exe") && !file.includes("-unpacked/"));
+  const artifactDirectory = path.join(releaseDirectory, DESKTOP_RELEASE_TARGET);
+  const files = (await listRelativeFiles(artifactDirectory)).filter((file) => file.endsWith(".exe") || file.endsWith(".nsis.7z"));
   if (files.length === 0) {
-    throw new Error(`No Windows release artifacts were found under ${releaseDirectory}.`);
+    throw new Error(`No Windows release artifacts were found under ${artifactDirectory}.`);
   }
 
   const lines: string[] = [];
   for (const file of files.sort()) {
-    const contents = await readFile(path.join(releaseDirectory, file));
-    lines.push(`${createHash("sha256").update(contents).digest("hex")}  ${file}`);
+    const relativeArtifactPath = path.posix.join(DESKTOP_RELEASE_TARGET, file);
+    lines.push(`${await sha256File(path.join(artifactDirectory, file))}  ${relativeArtifactPath}`);
   }
   await writeFile(path.join(releaseDirectory, "SHA256SUMS.txt"), `${lines.join("\n")}\n`, "utf8");
   return lines;
+}
+
+async function sha256File(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
 }
 
 function isProhibitedReleasePath(file: string): boolean {

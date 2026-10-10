@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select
@@ -7,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.password_policy import validate_password_policy
 from app.core.security import hash_password
 from app.features.accounts.models import Account, AccountRole, AccountStatus, EnterpriseProfile
-from app.features.accounts.service import generate_enterprise_id
+from app.features.accounts.service import generate_enterprise_id, normalize_enterprise_id_seed
+from app.features.sample_data.dataset import SAMPLE_ACCOUNT_EMAILS
 from app.features.sample_data.definitions import (
     ENTERPRISES,
     LGU_ACCOUNTS,
@@ -96,30 +98,59 @@ def ensure_email_available(existing: Account | None, email: str) -> None:
         )
 
 
-async def resolve_target_enterprise(
-    db: AsyncSession, identifier: str | None, generated_enterprises: list[Account]
-) -> Account:
-    if not identifier:
-        if not generated_enterprises:
-            raise SystemExit("No generated enterprise is available as the default target.")
-        return generated_enterprises[0]
+async def resolve_target_enterprise(db: AsyncSession, identifier: str | None) -> Account:
+    if not identifier or not identifier.strip():
+        raise SystemExit("Choose a target enterprise using its account seed or enterprise ID.")
 
     normalized = identifier.strip().lower()
-    target = await db.scalar(
+    query = (
         select(Account)
         .join(Account.enterprise_profile)
         .where(
             Account.role == AccountRole.ENTERPRISE,
             Account.status == AccountStatus.ACTIVE,
             Account.activated_at.is_not(None),
-            or_(
-                func.lower(Account.id) == normalized,
-                func.lower(Account.email) == normalized,
-                func.lower(EnterpriseProfile.enterprise_id) == normalized,
-                func.lower(EnterpriseProfile.enterprise_name) == normalized,
-            ),
+            Account.email.not_in(SAMPLE_ACCOUNT_EMAILS),
+        )
+        .order_by(EnterpriseProfile.enterprise_id)
+    )
+    # Explicit identifiers take precedence over seed and name matches.
+    targets = list(
+        await db.scalars(
+            query.where(
+                or_(
+                    func.lower(Account.id) == normalized,
+                    func.lower(Account.email) == normalized,
+                    func.lower(EnterpriseProfile.enterprise_id) == normalized,
+                    func.lower(EnterpriseProfile.enterprise_id) == f"{normalized}@tanaw.sanpedro",
+                )
+            )
         )
     )
-    if target is None:
-        raise SystemExit(f"Target enterprise '{identifier}' was not found or is not active.")
-    return target
+    if not targets:
+        conditions = [func.lower(EnterpriseProfile.enterprise_name) == normalized]
+        if "@" not in normalized:
+            seed = normalize_enterprise_id_seed(normalized)
+            conditions.append(
+                func.lower(EnterpriseProfile.enterprise_id).regexp_match(
+                    rf"^{re.escape(seed)}_[0-9]{{3,}}@tanaw\.sanpedro$"
+                )
+            )
+        targets = list(await db.scalars(query.where(or_(*conditions))))
+
+    if not targets:
+        raise SystemExit(
+            f"Target enterprise '{identifier}' was not found. "
+            "Choose an existing active, activated enterprise account."
+        )
+    if len(targets) > 1:
+        enterprise_ids = ", ".join(
+            target.enterprise_profile.enterprise_id
+            for target in targets
+            if target.enterprise_profile is not None
+        )
+        raise SystemExit(
+            f"Target enterprise '{identifier}' is ambiguous. "
+            f"Use a numbered or full enterprise ID: {enterprise_ids}"
+        )
+    return targets[0]

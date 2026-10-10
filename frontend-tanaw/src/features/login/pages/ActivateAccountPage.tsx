@@ -1,25 +1,24 @@
 import { MapPin, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
-import { AccountActivationCard, AuthParticles, AuthThemeToggle, LoginBackground } from "../components";
+import { AccountActivationCard, AuthParticles, AuthStageGlow, AuthThemeToggle, LoginBackground } from "../components";
 import { useAccountActivation, useAuthStageGlow } from "../hooks";
 import { useState } from "react";
 
 export function ActivateAccountPage() {
   const activation = useAccountActivation();
-  const { stageGlowStyle, stageRef } = useAuthStageGlow<HTMLElement>();
+  const { cursorRef, stageRef } = useAuthStageGlow<HTMLElement>();
   const [isBackgroundReady, setIsBackgroundReady] = useState(false);
 
   return (
     <section
       ref={stageRef}
       className="tanaw-login-stage tanaw-auth-stage relative min-h-svh w-full bg-(--tanaw-bg) font-['Bai_Jamjuree'] text-(--tanaw-text)"
-      style={stageGlowStyle}
       data-auth-background-ready={isBackgroundReady}
     >
       <LoginBackground className="absolute inset-y-0 left-0 w-full lg:w-[82%]" onReady={() => setIsBackgroundReady(true)} />
       <div className="tanaw-login-color-grade absolute inset-0" aria-hidden="true" />
       <div className="tanaw-login-edge-blur absolute inset-0" aria-hidden="true" />
-      <div className="tanaw-stage-glow absolute inset-0" aria-hidden="true" />
+      <AuthStageGlow cursorRef={cursorRef} />
       <AuthParticles />
       <AuthThemeToggle />
       <div className="tanaw-auth-shell relative z-10 grid min-h-svh items-center gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.82fr)] lg:gap-10 lg:px-12 xl:px-20">

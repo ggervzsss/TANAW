@@ -44,4 +44,5 @@ if command -v lsof >/dev/null 2>&1; then
 fi
 
 cd "$DESKTOP_ROOT"
-exec npm run local-data -- clear --full-device --yes
+npm run local-data -- clear --full-device --yes
+echo "[SUCCESS] local-mockdata-off: All TANAW desktop data on this device cleared."

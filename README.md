@@ -515,32 +515,42 @@ canonical tables; the production schema has no mock-data table, provenance
 column, or compatibility model.
 
 Before loading the dataset, create and activate the persistent target account
-through **IT Portal > Enterprise Accounts**. The wrappers default to:
+through **IT Portal > Enterprise Accounts**. There is no default target account.
+For example, an account created with the Enterprise ID seed `lolouweng` might
+have this ID (the sequence depends on existing accounts):
 
 ```text
-Enterprise:    Archie's Event Place
-Email:         archies@email.com
-Enterprise ID: archies_001@tanaw.sanpedro
+Enterprise ID seed: lolouweng
+Enterprise ID:      lolouweng_001@tanaw.sanpedro
 ```
 
 Confirm the actual Enterprise ID in the account details or desktop Profile.
-Then, from the repository root:
+Then, from the repository root, pass your account seed or ID (`lolouweng` is
+only an example):
 
 ```shell
-./scripts/mockdata-on
+./scripts/mockdata-on lolouweng
 ```
 
 PowerShell:
 
 ```powershell
-.\scripts\mockdata-on.ps1
+.\scripts\mockdata-on.ps1 lolouweng
 ```
 
 The command creates three sample LGU accounts, five supporting enterprise
 accounts, telemetry, historical submissions, final reports, notifications, and
 activity logs. It also exposes deterministic previous-period and current-period
-count packages for the persistent target enterprise. Archie's account and
-enterprise profile are never generated or deleted by these commands.
+count packages for the persistent target enterprise. The selected account and
+enterprise profile are never generated or deleted by these commands. Sign in
+as that account in the desktop to import its prepared local counts.
+
+You can also pass `lolouweng_001`, the full `lolouweng_001@tanaw.sanpedro`, or
+`--target-enterprise` with an account ID, email, or exact enterprise name. A seed
+must identify exactly one active, activated enterprise. Ambiguous seeds stop
+with a list of matching IDs; use a numbered or full ID to select the account.
+The output confirms the resolved target. `--seed` controls repeatable random
+sample values and does not select an account.
 
 All generated accounts use:
 
@@ -561,8 +571,11 @@ Refresh the dataset by removing its reserved deterministic identifiers and
 inserting it again:
 
 ```shell
-./scripts/mockdata-reset
+./scripts/mockdata-reset lolouweng
 ```
+
+Only one central sample dataset is supported at a time. Reset replaces that
+dataset and validates the chosen target before cleanup.
 
 Remove the central sample dataset:
 
@@ -584,8 +597,11 @@ authentication state, preferences, Chromium storage, and Electron caches.
 To use a different target or range:
 
 ```shell
-TANAW_MOCK_TARGET_ENTERPRISE="actual_enterprise_id" TANAW_MOCK_RANGE=12m ./scripts/mockdata-on
+./scripts/mockdata-on lolouweng_001 --range 12m
+TANAW_MOCK_TARGET_ENTERPRISE="lolouweng" ./scripts/mockdata-on
 ```
+
+An explicit command-line target overrides `TANAW_MOCK_TARGET_ENTERPRISE`.
 
 Supported ranges are `30d`, `6m`, and `12m`. Supported datasets are
 `full-workflow`, `peak-traffic`, and `camera-health`.
@@ -767,13 +783,13 @@ npm run local-data -- inspect
 Inspect one enterprise:
 
 ```shell
-npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
+npm run local-data -- inspect --enterprise "lolouweng_001@tanaw.sanpedro"
 ```
 
 Completely recreate one enterprise database, including its camera profiles:
 
 ```shell
-npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
+npm run local-data -- clear --enterprise "lolouweng_001@tanaw.sanpedro" --yes
 ```
 
 The local-data CLI expects the Enterprise ID shown in the desktop Profile, not

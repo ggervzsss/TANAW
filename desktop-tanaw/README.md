@@ -191,8 +191,12 @@ before building when either credential is missing. Certificate files and
 passwords must never be committed. `npm run dist` remains available for local
 unsigned package testing and still applies executable metadata and icons.
 
-The resulting NSIS installer and `SHA256SUMS.txt` are written under
-`release/<version>/`. Before distribution,
+The resulting large-app NSIS installer, its adjacent `.nsis.7z` application
+payload, and update metadata are written under `release/<version>/nsis-web/`;
+`SHA256SUMS.txt` is written one level above them. Keep the installer and payload
+in the same directory for offline installation; the installer verifies the
+payload before extracting it. Published builds can use the configured GitHub
+release as a network fallback. Before distribution,
 install it on a clean Windows x64 computer without Node.js, Python, or `uv` and
 verify login, backend synchronization, camera startup, and local ML health.
 
@@ -394,13 +398,13 @@ npm run local-data -- inspect
 Inspect one enterprise:
 
 ```bash
-npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
+npm run local-data -- inspect --enterprise "lolouweng_001@tanaw.sanpedro"
 ```
 
 Show more recent events and reports:
 
 ```bash
-npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro" --limit 25
+npm run local-data -- inspect --enterprise "lolouweng_001@tanaw.sanpedro" --limit 25
 ```
 
 Produce JSON:
@@ -427,7 +431,7 @@ Sensitive embedding blobs and full event payloads are not printed.
 ### Clear One Enterprise Ledger
 
 ```bash
-npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
+npm run local-data -- clear --enterprise "lolouweng_001@tanaw.sanpedro" --yes
 ```
 
 This deletes that enterprise's complete SQLite database, including camera
@@ -495,11 +499,17 @@ unfinished package through the authenticated backend and inserts ordinary count
 events into the same enterprise-scoped SQLite ledger used by camera detections.
 No simulation mode, run identifier, or mock provenance column exists.
 
-For Archie's Event Place, prepare the default dataset from the project root:
+Prepare counts for your existing active, activated enterprise account from the
+project root. There is no default target; `lolouweng` is an example account ID
+seed that you should replace with your own:
 
 ```bash
-./scripts/mockdata-on
+./scripts/mockdata-on lolouweng
 ```
+
+You can also use a numbered ID such as `lolouweng_001` or the full enterprise
+ID. A seed matching several eligible accounts is rejected with a list of IDs.
+Sign in as the selected account to import its prepared counts.
 
 The report workspace exposes unfinished periods in the **Reporting Month**
 selector. Once the overdue report syncs, the current-period package becomes

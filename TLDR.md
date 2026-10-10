@@ -160,36 +160,39 @@ Password: staffstaff
 Sign in at <http://localhost:5173>. These startup-seeded passwords bypass
 first-login password-change onboarding.
 
-Create the persistent target account under **Enterprise Accounts** before
-loading sample data:
+Create and activate your persistent target account under **Enterprise Accounts**
+before loading sample data. Choose your own enterprise details and Enterprise
+ID seed. For example:
 
 ```text
-Enterprise:    Archie's Event Place
-Category:      Events Venue
-Manager:       Gervy Masbate
-Barangay:      San Antonio
-Address:       Narra Road, San Pedro, Laguna 4023
-Email:         archies@email.com
-Contact:       +639123456789
-Enterprise ID: archies_001@tanaw.sanpedro
+Enterprise ID seed: lolouweng
+Enterprise ID:      lolouweng_001@tanaw.sanpedro
 ```
 
 Complete its temporary-password onboarding and remember the password selected
-for desktop login. Confirm the generated Enterprise ID; use the actual value if
-it is not `archies_001@tanaw.sanpedro`.
+for desktop login. Confirm the generated Enterprise ID; its sequence depends on
+existing accounts. `lolouweng` is only an example, not a required account or
+default target.
 
 ## 6. Load the sample report workflow
 
 This command creates LGU accounts, enterprise accounts, six months of
 telemetry, historical submissions, closed-period final reports, activity logs,
-and prepared previous-period plus current-period desktop counts for Archie's
-Event Place:
+and prepared desktop counts for your selected enterprise:
 
 ```shell
-./scripts/mockdata-on
+./scripts/mockdata-on lolouweng
 ```
 
-PowerShell: `.\scripts\mockdata-on.ps1`
+PowerShell: `.\scripts\mockdata-on.ps1 lolouweng`
+
+Replace `lolouweng` with your account's ID seed. You can also pass the numbered
+ID (`lolouweng_001`), full ID (`lolouweng_001@tanaw.sanpedro`), or
+`--target-enterprise` with your account's email, ID, or exact enterprise name.
+An ambiguous seed lists matching active, activated enterprises and stops; use
+the numbered or full ID to select one. No target is selected automatically.
+`TANAW_MOCK_TARGET_ENTERPRISE` can supply a target when no command-line target
+is given. `--seed` controls random sample values, not account selection.
 
 All sample accounts use:
 
@@ -205,11 +208,11 @@ Useful generated accounts:
 | Admin portal            | `system.admin@tanaw.test`  |
 | IT portal               | `it.operations@tanaw.test` |
 
-Archie's is user-created, not generated:
+Your target account is user-created, not generated:
 
 ```text
-Desktop username: archies@email.com
-Desktop password: the password selected during Archie's onboarding
+Desktop username: your selected enterprise's registered email
+Desktop password: the password selected during that account's onboarding
 ```
 
 Check the sample dataset:
@@ -223,10 +226,13 @@ PowerShell: `.\scripts\mockdata-status.ps1`
 If a sample dataset already exists or needs fresh dates, replace it:
 
 ```shell
-./scripts/mockdata-reset
+./scripts/mockdata-reset lolouweng
 ```
 
-PowerShell: `.\scripts\mockdata-reset.ps1`
+PowerShell: `.\scripts\mockdata-reset.ps1 lolouweng`
+
+Only one central sample dataset exists at a time. Reset validates the target
+before replacing the dataset; it does not clear existing desktop data.
 
 Other ranges are `30d` and `12m`. Other scenarios are `peak-traffic` and
 `camera-health`.
@@ -273,8 +279,8 @@ npm.cmd run dev
 Sign in to the desktop:
 
 ```text
-Username: archies@email.com
-Password: the password selected during Archie's onboarding
+Username: your selected enterprise's registered email
+Password: the password selected during that account's onboarding
 ```
 
 A camera is not required for this test. The desktop downloads the target
@@ -346,7 +352,7 @@ npm run local-data -- inspect
 Inspect one enterprise by its Enterprise ID:
 
 ```shell
-npm run local-data -- inspect --enterprise "archies_001@tanaw.sanpedro"
+npm run local-data -- inspect --enterprise "lolouweng_001@tanaw.sanpedro"
 ```
 
 The Enterprise ID is shown in the desktop Profile and by the unfiltered
@@ -355,7 +361,7 @@ The Enterprise ID is shown in the desktop Profile and by the unfiltered
 Completely remove one enterprise's local database, including camera profiles:
 
 ```shell
-npm run local-data -- clear --enterprise "archies_001@tanaw.sanpedro" --yes
+npm run local-data -- clear --enterprise "lolouweng_001@tanaw.sanpedro" --yes
 ```
 
 Clear every enterprise's operational rows but preserve SQLite camera profiles and Electron
@@ -440,9 +446,9 @@ completely empty local database is intended.
 | Install ReID models          | From `desktop-tanaw`: `npm run models:setup:reid`                              |
 | Export OpenVINO models       | From `desktop-tanaw`: `npm run models:setup:openvino`                          |
 | Start desktop                | From `desktop-tanaw`: `npm run dev`                                            |
-| Generate sample data         | `./scripts/mockdata-on` or `.\scripts\mockdata-on.ps1`                         |
+| Generate sample data         | `./scripts/mockdata-on <target>` or `.\scripts\mockdata-on.ps1 <target>`       |
 | Show sample-data status      | `./scripts/mockdata-status` or `.\scripts\mockdata-status.ps1`                 |
-| Refresh sample data          | `./scripts/mockdata-reset` or `.\scripts\mockdata-reset.ps1`                   |
+| Refresh sample data          | `./scripts/mockdata-reset <target>` or `.\scripts\mockdata-reset.ps1 <target>` |
 | Remove sample data           | `./scripts/mockdata-off` or `.\scripts\mockdata-off.ps1`                       |
 | Inspect desktop data         | From `desktop-tanaw`: `npm run local-data -- inspect`                          |
 | Reset all desktop data       | `./scripts/local-mockdata-off` or `.\scripts\local-mockdata-off.ps1`           |

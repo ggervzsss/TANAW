@@ -10,6 +10,11 @@
   directories: {
     output: "release/${version}",
   },
+  publish: {
+    provider: "github",
+    owner: "ggervzsss",
+    repo: "TANAW",
+  },
   files: ["dist", "dist-electron"],
   extraResources: [
     {
@@ -49,7 +54,7 @@
     },
     target: [
       {
-        target: "nsis",
+        target: "nsis-web",
         arch: ["x64"],
       },
     ],
