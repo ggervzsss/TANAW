@@ -60,11 +60,11 @@ async def generate_sample_data(
 ) -> dict:
     rng = random.Random(seed)
     range_start, range_end = reporting_range(range_value)
-    accounts = await create_accounts(db)
-    target = await resolve_target_enterprise(db, target_identifier, accounts["enterprises"])
+    target = await resolve_target_enterprise(db, target_identifier)
     target_profile = target.enterprise_profile
     if target_profile is None:
         raise SystemExit("The selected target account has no enterprise profile.")
+    accounts = await create_accounts(db)
     enterprises = list(
         {enterprise.id: enterprise for enterprise in [target, *accounts["enterprises"]]}.values()
     )

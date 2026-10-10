@@ -65,4 +65,8 @@ try {
     Pop-Location
 }
 
+if ($ExitCode -eq 0) {
+    Write-Host "[SUCCESS] local-mockdata-off: All TANAW desktop data on this device cleared."
+}
+
 exit $ExitCode

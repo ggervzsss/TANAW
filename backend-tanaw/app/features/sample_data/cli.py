@@ -1,10 +1,12 @@
 import argparse
 import asyncio
 import json
+import os
 
 from app.core.config import get_settings
 from app.db.migrations import validate_database_migration_head
 from app.db.session import AsyncSessionLocal, engine
+from app.features.sample_data.accounts import resolve_target_enterprise
 from app.features.sample_data.definitions import DEFAULT_SCENARIO, DEFAULT_SEED
 from app.features.sample_data.lifecycle import (
     generate_sample_data,
@@ -15,6 +17,10 @@ from app.features.sample_data.lifecycle import (
 
 
 def main() -> None:
+    asyncio.run(run(parse_args()))
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Manage deterministic TANAW sample data.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -25,10 +31,7 @@ def main() -> None:
         default=DEFAULT_SCENARIO,
         choices=["full-workflow", "peak-traffic", "camera-health"],
     )
-    on_parser.add_argument("--seed", default=DEFAULT_SEED)
-    on_parser.add_argument(
-        "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
-    )
+    add_target_arguments(on_parser)
 
     subparsers.add_parser("off", help="Remove the deterministic sample dataset.")
 
@@ -43,13 +46,31 @@ def main() -> None:
         default=DEFAULT_SCENARIO,
         choices=["full-workflow", "peak-traffic", "camera-health"],
     )
-    reset_parser.add_argument("--seed", default=DEFAULT_SEED)
-    reset_parser.add_argument(
-        "--target-enterprise", help="Enterprise ID, email, account ID, or exact enterprise name."
-    )
+    add_target_arguments(reset_parser)
 
-    args = parser.parse_args()
-    asyncio.run(run(args))
+    args = parser.parse_args(argv)
+    if args.command in {"on", "reset"}:
+        if args.target is not None:
+            args.target_enterprise = args.target
+        if not args.target_enterprise or not args.target_enterprise.strip():
+            parser.error("Choose a target enterprise using its account seed or enterprise ID.")
+    return args
+
+
+def add_target_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--seed",
+        default=DEFAULT_SEED,
+        help="Random seed for repeatable sample values; does not select the target account.",
+    )
+    default_target = os.environ.get("TANAW_MOCK_TARGET_ENTERPRISE", "").strip() or None
+    targets = parser.add_mutually_exclusive_group(required=default_target is None)
+    target_help = (
+        "Existing account seed, numbered/full enterprise ID, email, account ID, "
+        "or exact enterprise name. No default account."
+    )
+    targets.add_argument("target", nargs="?", help=target_help)
+    targets.add_argument("--target-enterprise", default=default_target, help=target_help)
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -71,6 +92,8 @@ async def run(args: argparse.Namespace) -> None:
 
     if args.command == "reset":
         async with AsyncSessionLocal() as db:
+            # Cleanup commits independently, so reject invalid targets before deleting anything.
+            await resolve_target_enterprise(db, args.target_enterprise)
             removed = await remove_sample_data(db)
             created = await generate_sample_data(
                 db, args.range, args.scenario, args.seed, args.target_enterprise
