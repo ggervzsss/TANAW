@@ -14,6 +14,37 @@ from app.storage.migrations import LATEST_REVISION
 
 
 class LocalDataStoreTest(unittest.TestCase):
+    def test_mixed_camera_brands_round_trip_through_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalDataStore(directory, "enterprise@example.test")
+            tapo = _camera_profile()
+            tenda = {
+                **tapo,
+                "id": 102,
+                "cameraBrand": "tenda",
+                "connectionProfile": "profile",
+                "cameraHost": "192.168.1.21",
+                "rtsp": "rtsp://192.168.1.21:8554/profile0",
+            }
+            custom = {
+                **tapo,
+                "id": 103,
+                "cameraBrand": "custom",
+                "cameraHost": "192.168.1.22",
+                "rtsp": "rtsp://192.168.1.22:9554/live?channel=2&quality=high",
+            }
+            dahua = {
+                **tapo,
+                "id": 104,
+                "cameraBrand": "dahua",
+                "cameraHost": "192.168.1.23",
+                "rtsp": "rtsp://192.168.1.23:9554/cam/realmonitor?channel=1&subtype=0",
+            }
+            profiles = [tapo, tenda, custom, dahua]
+            self.assertEqual(store.replace_camera_profiles(profiles), profiles)
+            reopened = LocalDataStore(directory, "enterprise@example.test")
+            self.assertEqual(reopened.list_camera_profiles(), profiles)
+
     def test_canonical_schema_has_current_migration_and_expected_tables(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = LocalDataStore(str(Path(directory)), "enterprise@example.test")
@@ -969,6 +1000,8 @@ def _event(
 
 def _camera_profile() -> dict:
     return {
+        "cameraBrand": "tapo",
+        "connectionProfile": None,
         "id": 101,
         "name": "Main Entrance",
         "status": "untested",

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Address
 from math import hypot
 from typing import Any, Literal
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.config.rtsp_source import normalize_rtsp_source as _normalize_rtsp_source
+
+CameraBrand = Literal["tapo", "tenda", "dahua", "custom"]
+CameraConnectionProfile = Literal["channel", "channel_ampersand", "profile", "h264", "manual"]
 
 RtspStreamProfile = Literal["stream1", "stream2"]
 ProcessingProfile = Literal[
@@ -82,6 +85,8 @@ class CameraStartRequest(BaseModel):
     camera_zone: str | None = Field(default=None, max_length=120)
     camera_host: str | None = Field(default=None, max_length=15)
     rtsp_stream: RtspStreamProfile | None = None
+    camera_brand: CameraBrand = "tapo"
+    connection_profile: CameraConnectionProfile | None = None
     username: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, max_length=240)
     tripwire_position: float = Field(default=0.5, ge=0.1, le=0.9)
@@ -155,6 +160,8 @@ class CameraTestRequest(BaseModel):
     stream_url: str = Field(..., min_length=3)
     camera_host: str | None = Field(default=None, max_length=15)
     rtsp_stream: RtspStreamProfile | None = None
+    camera_brand: CameraBrand = "tapo"
+    connection_profile: CameraConnectionProfile | None = None
     username: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, max_length=240)
 
@@ -380,36 +387,6 @@ class CameraProfilesRequest(BaseModel):
             if camera.get("username") is not None or camera.get("password") is not None:
                 raise ValueError("Camera credentials must not be stored in SQLite.")
         return cameras
-
-
-def _normalize_rtsp_source(data: dict[str, Any]) -> None:
-    raw_stream_url = str(data.get("stream_url") or "").strip()
-    if not raw_stream_url.startswith("rtsp://"):
-        raise ValueError("Stream URL must start with rtsp://.")
-    raw_host = str(data.get("camera_host") or "").strip()
-    raw_profile = data.get("rtsp_stream")
-    parsed = urlsplit(raw_stream_url) if raw_stream_url else None
-
-    if not raw_host and parsed is not None and parsed.scheme.lower() == "rtsp":
-        raw_host = parsed.hostname or ""
-    try:
-        camera_host = str(IPv4Address(raw_host))
-    except ValueError as exc:
-        raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
-
-    if raw_profile is None and parsed is not None:
-        path = parsed.path.strip("/").split("/", maxsplit=1)[0]
-        raw_profile = path if path in {"stream1", "stream2"} else "stream2"
-    if raw_profile not in {"stream1", "stream2"}:
-        raise ValueError("RTSP Stream must be stream1 or stream2.")
-
-    canonical_url = f"rtsp://{camera_host}/{raw_profile}"
-    if raw_stream_url and raw_stream_url != canonical_url:
-        raise ValueError("Stream URL conflicts with Camera IP / Host and the selected RTSP Stream.")
-
-    data["camera_host"] = camera_host
-    data["rtsp_stream"] = raw_profile
-    data["stream_url"] = canonical_url
 
 
 def _path_points(line: TripwireLine) -> list[TripwirePoint]:

@@ -9,6 +9,43 @@ Electron, React, TypeScript, Vite, and local FastAPI ML service for
 enterprise-side camera monitoring, local counting, local report drafting, cloud
 sync, and offline-friendly operational workflows.
 
+## Connecting cameras
+
+In **Camera Setup → Add Camera**, choose a **Camera brand / type** for each
+camera. The same controls are available under **Edit configuration**:
+
+- **TP-Link Tapo** keeps the existing IP address and camera-account workflow.
+  Standard and high quality use `/stream2` and `/stream1`, respectively.
+- **Tenda** offers CH3 channel streams on port 554 and profile streams on port
+  8554, plus alternate channel and H.264 formats. Select the format verified for
+  your camera's hardware/firmware. **Advanced connection settings** allows an
+  exact port and stream-path override. A manual path determines its own quality.
+- **Dahua** generates `/cam/realmonitor?channel=1&subtype=1` for standard quality
+  (substream) and `subtype=0` for high quality (main stream). Enter the camera's
+  local IPv4 address and device credentials, rather than the DMSS account login.
+  The default RTSP port is 554; change it under **Advanced connection settings**
+  only if the camera uses a different port. This preset is intended for cameras
+  such as the DH-B200-I that expose Dahua's standard RTSP endpoint. The desktop
+  computer must be able to reach the camera on the local network. For an initial
+  test, use H.264 if available and leave the camera's RTSP TLS encryption off.
+  See [Dahua's RTSP connection instructions](https://dahuatech.zendesk.com/hc/en-gb/articles/16320900884754-How-to-add-IP-cameras-to-NVR-via-RTSP).
+- **Custom RTSP** accepts a complete local RTSP URL, including its port and query
+  string, for other compatible cameras. Use an IPv4 camera address.
+
+Enter the camera's local username and password in their separate fields; do not
+embed credentials in the URL. All connection types currently require
+camera credentials. Add Camera tests the connection before adding it. After
+editing an existing camera, use **Test** to check the saved settings. Connection
+changes restart a running camera using the updated endpoint.
+
+Tenda's published CH3 addresses vary across versions. Verify the stream in VLC
+or obtain the exact URI through an ONVIF client before selecting a preset.
+See [Tenda's RTSP playback instructions](https://www.tendacn.com/ke/faq/2003692)
+and [CH3 local credentials and stream formats](https://www.tendacn.com/ro/faq/2003715).
+Brand selection configures RTSP input; it does not add ONVIF discovery or PTZ
+controls. Profiles are saved locally; camera credentials stay in the existing
+secure credential store and are excluded from SQLite camera profiles.
+
 ## Full Setup After Cloning
 
 The backend, web portal, and PostgreSQL should be started with the root Docker

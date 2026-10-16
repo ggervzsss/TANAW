@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle } from "lucide-react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
+import { CAMERA_BRANDS } from "../utils/camera-connection";
 import { maskStreamCredentials } from "../utils/rtsp";
 
 type CameraReadOnlyDetailsProps = {
@@ -31,6 +32,7 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
       </div>
 
       <div className="space-y-2">
+        <DetailRow label="Camera Brand / Type" value={CAMERA_BRANDS.find(([brand]) => brand === (activeCam.cameraBrand ?? "tapo"))?.[1] ?? "Custom RTSP"} tooltip="The connection settings selected for this camera." />
         <DetailRow label="Camera Address" value={maskStreamCredentials(activeCam.rtsp)} tooltip="The connection address TANAW uses to access this camera." mono />
         <div className="grid grid-cols-2 gap-2">
           <DetailRow label="Counting Area" value={activeCam.zone} tooltip="The area monitored by this camera." />

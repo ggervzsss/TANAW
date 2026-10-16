@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { Camera, CameraStatus } from "../../../types/enterprise";
-import { getCameraStorageFingerprint, redactCameraForStorage } from "./camera-management";
+import { getCameraStorageFingerprint, normalizeCamera, redactCameraForStorage } from "./camera-management";
 
 describe("camera profile persistence", () => {
+  it.each(["tenda", "custom"] as const)("preserves %s endpoints and brand through storage and reload", (cameraBrand) => {
+    const rtsp = "rtsp://192.168.100.136:8554/H264?ch=1&subtype=0";
+    const original: Camera = { ...camera("stopped"), cameraBrand, connectionProfile: "manual", rtsp, username: "admin", password: "secret" };
+    const stored = redactCameraForStorage(original);
+    expect(stored.username).toBeUndefined();
+    expect(stored.password).toBeUndefined();
+    expect(normalizeCamera(stored)).toMatchObject({ cameraBrand, rtsp, connectionProfile: "manual" });
+  });
+
+  it("keeps Tapo as the default for existing camera profiles", () => {
+    expect(normalizeCamera(camera("stopped"))).toMatchObject({ cameraBrand: "tapo", rtsp: "rtsp://192.168.100.136/stream2" });
+  });
+
+  it("preserves a Dahua main stream and custom port through storage and reload", () => {
+    const original: Camera = { ...camera("stopped"), cameraBrand: "dahua", rtspStream: "stream1", rtsp: "rtsp://192.168.100.136:9554/cam/realmonitor?channel=1&subtype=0", username: "admin", password: "secret" };
+    const stored = redactCameraForStorage(original);
+    expect(stored.username).toBeUndefined();
+    expect(stored.password).toBeUndefined();
+    expect(normalizeCamera(stored)).toMatchObject({ cameraBrand: "dahua", rtspStream: "stream1", rtsp: original.rtsp });
+  });
   it.each<CameraStatus>(["untested", "online", "offline", "starting", "connecting", "running", "degraded", "reconnecting", "stopped", "failed", "error"])(
     "does not persist the %s runtime status",
     (status) => {

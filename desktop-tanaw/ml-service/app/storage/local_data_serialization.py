@@ -2,9 +2,10 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from ipaddress import IPv4Address
 from typing import Any
 from urllib.parse import urlparse
+
+from app.config.rtsp_source import normalize_rtsp_source
 
 
 @dataclass
@@ -77,27 +78,24 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     if parsed_stream_url.username is not None or parsed_stream_url.password is not None:
         raise ValueError("Camera stream credentials must not be stored in SQLite.")
 
-    raw_host = camera.get("cameraHost") or parsed_stream_url.hostname or ""
-    try:
-        camera_host = str(IPv4Address(str(raw_host).strip()))
-    except ValueError as exc:
-        raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
-    path_profile = parsed_stream_url.path.strip("/").split("/", maxsplit=1)[0]
-    raw_profile = camera.get("rtspStream") or path_profile or "stream2"
-    if raw_profile not in {"stream1", "stream2"}:
-        raise ValueError("RTSP Stream must be stream1 or stream2.")
-    rtsp_stream = str(raw_profile)
-    canonical_url = f"rtsp://{camera_host}/{rtsp_stream}"
-    if stream_url != canonical_url:
-        raise ValueError("Stream URL conflicts with Camera IP / Host and the selected RTSP Stream.")
+    source = {
+        "camera_host": camera.get("cameraHost"),
+        "camera_brand": camera.get("cameraBrand", "tapo"),
+        "connection_profile": camera.get("connectionProfile"),
+        "rtsp_stream": camera.get("rtspStream"),
+        "stream_url": stream_url,
+    }
+    normalize_rtsp_source(source)
 
     return {
         **camera,
         "id": int(camera["id"]),
         "status": status,
-        "cameraHost": camera_host,
-        "rtspStream": rtsp_stream,
-        "rtsp": stream_url,
+        "cameraHost": source["camera_host"],
+        "cameraBrand": source["camera_brand"],
+        "connectionProfile": source["connection_profile"],
+        "rtspStream": source["rtsp_stream"],
+        "rtsp": source["stream_url"],
         "confidence": float(camera.get("confidence") or 0.35),
         "trackingConfidence": (
             float(camera["trackingConfidence"])

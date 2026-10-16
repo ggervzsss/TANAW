@@ -138,6 +138,8 @@ def _event() -> dict:
 
 def _camera_profile() -> dict:
     return {
+        "cameraBrand": "tapo",
+        "connectionProfile": None,
         "id": 1,
         "name": "Test Camera",
         "status": "untested",

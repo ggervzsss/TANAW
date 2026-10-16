@@ -1,9 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import { getMlHealth, getMlServiceStatus, getStreamUrl, replaceLocalCameras, testCameraConnection, updateCameraCountingConfig } from "./ml-service";
+import { getMlHealth, getMlServiceStatus, getStreamUrl, replaceLocalCameras, startCameraProcessing, testCameraConnection, updateCameraCountingConfig } from "./ml-service";
 
 describe("secure camera service requests", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["tenda", "dahua", "custom"] as const)("passes the %s endpoint unchanged to secure test and start requests", async (cameraBrand) => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("window", { tanawCameraCredentials: { request } });
+    const device: Camera = { ...camera(), cameraBrand, connectionProfile: cameraBrand === "dahua" ? undefined : "manual", rtsp: cameraBrand === "dahua" ? "rtsp://192.168.1.9:554/cam/realmonitor?channel=1&subtype=0" : "rtsp://192.168.1.9:8554/live?channel=2&subtype=0" };
+    await testCameraConnection("http://127.0.0.1:8765", device, "enterprise:1");
+    await startCameraProcessing("http://127.0.0.1:8765", device, "enterprise:1");
+    expect(request.mock.calls.map((call) => call[1])).toEqual(["test", "start"]);
+    for (const call of request.mock.calls) {
+      expect(call[2]).toMatchObject({ camera_brand: cameraBrand, connection_profile: device.connectionProfile ?? null, stream_url: device.rtsp });
+      expect(call[2]).not.toHaveProperty("password");
+      expect(call[2]).not.toHaveProperty("username");
+    }
+  });
 
   it("delegates credential injection to Electron without sending a password from renderer state", async () => {
     const request = vi.fn().mockResolvedValue({ message: "Connected", ok: true });

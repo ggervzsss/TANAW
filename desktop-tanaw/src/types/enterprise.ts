@@ -56,6 +56,9 @@ export type TripwireLine = {
   sampledPoints?: TripwirePoint[];
 };
 
+export type CameraBrand = "tapo" | "tenda" | "dahua" | "custom";
+export type CameraConnectionProfile = "channel" | "channel_ampersand" | "profile" | "h264" | "manual";
+
 export type Camera = {
   id: number;
   name: string;
@@ -63,6 +66,8 @@ export type Camera = {
   zone: string;
   rtsp: string;
   cameraHost?: string;
+  cameraBrand?: CameraBrand;
+  connectionProfile?: CameraConnectionProfile;
   rtspStream?: "stream1" | "stream2";
   processingProfile: ProcessingProfile;
   confidence: number;

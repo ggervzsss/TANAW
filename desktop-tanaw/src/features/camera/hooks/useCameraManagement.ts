@@ -8,7 +8,6 @@ import {
 } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { cameraConfigurationLimitMessage, DEFAULT_ENTERPRISE_CAMERA_LIMIT, hasReachedCameraConfigurationLimit } from "../utils/camera-capacity";
-import { buildTapoRtspUrl } from "../utils/rtsp";
 import {
   createCameraUpdateGate,
   getCameraSaveRuntimeAction,
@@ -59,6 +58,7 @@ import {
 
 const emptyCameraForm: CameraFormValues = {
   cameraHost: "",
+  cameraBrand: "tapo",
   name: "",
   password: "",
   rtsp: "",
@@ -324,8 +324,10 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       id: Date.now(),
       name: newCam.name.trim(),
       password: undefined,
-      rtsp: buildTapoRtspUrl(newCam.cameraHost, "stream2"),
-      rtspStream: "stream2",
+      cameraBrand: newCam.cameraBrand ?? "tapo",
+      connectionProfile: newCam.connectionProfile,
+      rtsp: newCam.rtsp.trim(),
+      rtspStream: newCam.rtspStream,
       status: "untested",
       username: newCam.username.trim(),
       zone: newCam.zone.trim(),

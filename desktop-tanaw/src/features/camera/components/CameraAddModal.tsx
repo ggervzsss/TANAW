@@ -2,9 +2,8 @@ import { Check, RefreshCw, Video, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ModalPortal } from "../../../components/ModalPortal";
 import type { CameraFormValues } from "../types/camera";
-import { buildTapoRtspUrl, isValidIpv4 } from "../utils/rtsp";
 import { validateCameraForm } from "../utils/camera-form-validation";
-import { CameraIpAddressField } from "./CameraIpAddressField";
+import { CameraConnectionFields } from "./CameraConnectionFields";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
 
 type CameraAddModalProps = {
@@ -20,18 +19,10 @@ type CameraAddModalProps = {
 export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError, onClose, onSubmit, onChange }: CameraAddModalProps) {
   const [touchedCredentials, setTouchedCredentials] = useState({ password: false, username: false });
   const currentErrors = validateCameraForm(newCam);
-  const hostError = errors.cameraHost ?? duplicateIpError ?? (newCam.cameraHost && !isValidIpv4(newCam.cameraHost) ? "Enter a valid IPv4 address, such as 192.168.1.9." : undefined);
+  const hostError = errors.cameraHost ?? duplicateIpError;
   const usernameError = errors.username ?? (touchedCredentials.username ? currentErrors.username : undefined);
   const passwordError = errors.password ?? (touchedCredentials.password ? currentErrors.password : undefined);
   const canSave = Object.keys(currentErrors).length === 0 && !duplicateIpError;
-  const updateCameraHost = (cameraHost: string) => {
-    onChange({
-      ...newCam,
-      cameraHost,
-      rtsp: buildTapoRtspUrl(cameraHost, "stream2"),
-      rtspStream: "stream2",
-    });
-  };
 
   return (
     <ModalPortal>
@@ -87,12 +78,12 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
 
               <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">
                 <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">Camera Connection</h4>
-                <CameraIpAddressField host={newCam.cameraHost} error={hostError} onHostChange={updateCameraHost} />
-                {errors.rtsp ? (
-                  <p role="alert" className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
-                    {errors.rtsp}
-                  </p>
-                ) : null}
+                <CameraConnectionFields
+                  value={newCam}
+                  hostError={hostError}
+                  streamError={errors.rtsp}
+                  onChange={(connection) => onChange({ ...newCam, ...connection, cameraHost: connection.cameraHost ?? "", rtspStream: connection.rtspStream ?? "stream2" })}
+                />
               </section>
 
               <div className="grid gap-4 md:grid-cols-2">

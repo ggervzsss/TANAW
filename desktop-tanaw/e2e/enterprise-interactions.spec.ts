@@ -727,3 +727,142 @@ test("keeps pending business-email information readable in both themes", async (
   await expect(pendingCard.locator(".enterprise-profile-pending-email__title")).not.toHaveCSS("color", "rgb(255, 248, 232)");
   await expect(page.getByText("proposed-enterprise@example.test", { exact: false })).toBeVisible();
 });
+
+test("configures Tenda and custom RTSP endpoints alongside Tapo", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
+  await page.goto("/#/enterprise/cameras");
+  const writes: Array<{ cameras: Array<Record<string, unknown>> }> = [];
+  await mockMlRequest(page, "/cameras", (request) => {
+    if (request.method === "PUT") writes.push(JSON.parse(request.body ?? "{}"));
+    return mlResponse({ status: 200, body: JSON.stringify(writes.at(-1)?.cameras ?? []) });
+  });
+  const choose = async (name: string, option: string) => {
+    await page.getByRole("combobox", { name, exact: true }).click();
+    await page.getByRole("option", { name: option, exact: true }).click();
+  };
+  for (const [brand, name, ip] of [["TP-Link Tapo", "Existing Tapo", "192.168.1.20"], ["Tenda", "New Tenda CH3", "192.168.1.21"], ["Custom RTSP", "Custom Camera", "192.168.1.22"]]) {
+    await page.getByRole("button", { name: "Add Camera", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Add Camera" });
+    await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill(name);
+    await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Lobby");
+    if (brand !== "TP-Link Tapo") await choose("Camera brand / type", brand);
+    if (brand === "Tenda") {
+      // Select the profile before entering an IP to exercise setup in either order.
+      await choose("Tenda connection profile", "CH3 profile stream (port 8554)");
+    }
+    if (brand === "Custom RTSP") {
+      await dialog.getByRole("textbox", { name: "RTSP stream address", exact: true }).fill(`rtsp://${ip}:9554/live?channel=2&subtype=0`);
+    } else {
+      await dialog.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill(ip);
+    }
+    await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
+    await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("device-password");
+    if (brand === "Tenda") await page.screenshot({ path: test.info().outputPath("tenda-setup.png"), fullPage: true });
+    await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => writes.at(-1)?.cameras.length).toBe(brand === "TP-Link Tapo" ? 1 : brand === "Tenda" ? 2 : 3);
+  }
+  expect(writes.at(-1)?.cameras.map((camera) => camera.rtsp)).toEqual([
+    "rtsp://192.168.1.20/stream2", "rtsp://192.168.1.21:8554/profile1", "rtsp://192.168.1.22:9554/live?channel=2&subtype=0",
+  ]);
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(page.getByRole("textbox", { name: "RTSP stream address", exact: true })).toHaveValue("rtsp://192.168.1.22:9554/live?channel=2&subtype=0");
+  await page.getByRole("textbox", { name: "RTSP stream address", exact: true }).fill("rtsp://192.168.1.22:9554/live?channel=3&subtype=1");
+  await page.getByRole("button", { name: "Save Config", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(page.getByRole("textbox", { name: "RTSP stream address", exact: true })).toHaveValue("rtsp://192.168.1.22:9554/live?channel=3&subtype=1");
+  expect(writes.at(-1)?.cameras[0]?.rtsp).toBe("rtsp://192.168.1.20/stream2");
+  expect(JSON.stringify(writes)).not.toContain("device-password");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: /New Tenda CH3/ }).click();
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(page.getByRole("combobox", { name: "Tenda connection profile" })).toContainText("CH3 profile stream");
+  await page.getByText("Advanced connection settings", { exact: true }).click();
+  await page.getByRole("textbox", { name: "RTSP port", exact: true }).fill("9555");
+  await page.getByRole("textbox", { name: "Stream path and query", exact: true }).fill("/H264?ch=1&subtype=0");
+  await page.getByRole("button", { name: "Save Config", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
+  expect(writes.at(-1)?.cameras[1]?.rtsp).toBe("rtsp://192.168.1.21:9555/H264?ch=1&subtype=0");
+  await page.reload();
+  // This fixture uses a session that is not remembered across reloads.
+  await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
+  await page.getByPlaceholder("Enter your password").fill("Enterprise interaction password 2026");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
+  await page.goto("/#/enterprise/cameras");
+  await page.getByRole("button", { name: /New Tenda CH3/ }).click();
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(page.getByRole("textbox", { name: "RTSP port", exact: true })).toHaveValue("9555");
+  await expect(page.getByRole("textbox", { name: "Stream path and query", exact: true })).toHaveValue("/H264?ch=1&subtype=0");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await page.getByRole("button", { name: "Add Camera", exact: true }).click();
+  await choose("Camera brand / type", "Tenda");
+  await page.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.23");
+  await page.getByText("Advanced connection settings", { exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  const dialog = page.getByRole("dialog", { name: "Add Camera" });
+  await dialog.getByRole("textbox", { name: "RTSP port", exact: true }).scrollIntoViewIfNeeded();
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath("tenda-setup-small-light.png"), fullPage: true });
+});
+
+test("adds and edits a Dahua camera with generated streams and a custom port", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signIn(page, () => mockCameraSetup(page, enterpriseUser.enterpriseId));
+  await page.goto("/#/enterprise/cameras");
+  const writes: Array<{ cameras: Array<Record<string, unknown>> }> = [];
+  await mockMlRequest(page, "/cameras", (request) => {
+    if (request.method === "PUT") writes.push(JSON.parse(request.body ?? "{}"));
+    return mlResponse({ status: 200, body: JSON.stringify(writes.at(-1)?.cameras ?? []) });
+  });
+  const choose = async (name: string, option: string) => {
+    await page.getByRole("combobox", { name, exact: true }).click();
+    await page.getByRole("option", { name: option, exact: true }).click();
+  };
+  await page.getByRole("button", { name: "Add Camera", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add Camera" });
+  await choose("Camera brand / type", "Dahua");
+  await dialog.getByRole("textbox", { name: "Camera Name", exact: true }).fill("Dahua B200");
+  await dialog.getByRole("textbox", { name: "Assigned Zone", exact: true }).fill("Entrance");
+  await dialog.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.23");
+  await dialog.getByRole("textbox", { name: "Username", exact: true }).fill("admin");
+  await dialog.getByRole("textbox", { name: "Password", exact: true }).fill("device-password");
+  await dialog.getByText("Advanced connection settings", { exact: true }).click();
+  await expect(dialog.getByRole("combobox", { name: "Video quality" })).toContainText("Standard quality");
+  await expect(dialog.getByRole("textbox", { name: "RTSP port", exact: true })).toHaveValue("554");
+  await page.screenshot({ path: test.info().outputPath("dahua-setup.png"), fullPage: true });
+  await dialog.getByRole("button", { name: "Test & Add Camera", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => writes.at(-1)?.cameras[0]).toMatchObject({
+    cameraBrand: "dahua", rtspStream: "stream2", rtsp: "rtsp://192.168.1.23:554/cam/realmonitor?channel=1&subtype=1",
+  });
+
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(page.getByRole("combobox", { name: "Camera brand / type" })).toContainText("Dahua");
+  await page.getByText("Advanced connection settings", { exact: true }).click();
+  await page.getByRole("textbox", { name: "RTSP port", exact: true }).fill("9554");
+  await choose("Video quality", "High quality");
+  await page.getByRole("textbox", { name: "Camera IP Address", exact: true }).fill("192.168.1.24");
+  await page.getByRole("button", { name: "Save Config", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit configuration" })).toBeVisible();
+  await expect.poll(() => writes.at(-1)?.cameras[0]).toMatchObject({
+    cameraBrand: "dahua", cameraHost: "192.168.1.24", rtspStream: "stream1", rtsp: "rtsp://192.168.1.24:9554/cam/realmonitor?channel=1&subtype=0",
+  });
+  expect(JSON.stringify(writes)).not.toContain("device-password");
+  await page.reload();
+  await page.getByPlaceholder("Enter username or registered email").fill(enterpriseUser.email);
+  await page.getByPlaceholder("Enter your password").fill("Enterprise interaction password 2026");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
+  await page.goto("/#/enterprise/cameras");
+  await page.getByRole("button", { name: "Edit configuration" }).click();
+  await expect(page.getByRole("combobox", { name: "Camera brand / type" })).toContainText("Dahua");
+  await expect(page.getByRole("textbox", { name: "Camera IP Address", exact: true })).toHaveValue("192.168.1.24");
+  await page.getByText("Advanced connection settings", { exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "RTSP port", exact: true })).toHaveValue("9554");
+  await expect(page.getByRole("combobox", { name: "Video quality" })).toContainText("High quality");
+});

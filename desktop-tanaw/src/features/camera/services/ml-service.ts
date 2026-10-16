@@ -249,6 +249,8 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
     camera_name: camera.name,
     camera_host: camera.cameraHost || null,
     rtsp_stream: camera.rtspStream || null,
+    camera_brand: camera.cameraBrand ?? "tapo",
+    connection_profile: camera.connectionProfile ?? null,
     stream_url: camera.rtsp,
   };
   if (credentialScope && window.tanawCameraCredentials) {
@@ -290,6 +292,8 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     stream_fps: 24,
     stream_url: camera.rtsp,
     rtsp_stream: camera.rtspStream || null,
+    camera_brand: camera.cameraBrand ?? "tapo",
+    connection_profile: camera.connectionProfile ?? null,
     tracking_confidence: camera.trackingConfidence ?? 0.15,
     track_ttl_seconds: 9,
     tripwire_position: camera.config.tripwire / 100,

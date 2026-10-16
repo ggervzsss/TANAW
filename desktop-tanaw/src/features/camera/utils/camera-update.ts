@@ -24,6 +24,8 @@ export function hasCameraConnectionChange(
 ) {
   return (
     previous.rtsp !== next.rtsp ||
+    (previous.cameraBrand ?? "tapo") !== (next.cameraBrand ?? "tapo") ||
+    previous.connectionProfile !== next.connectionProfile ||
     previous.cameraHost !== next.cameraHost ||
     previous.rtspStream !== next.rtspStream ||
     previous.username !== next.username ||
