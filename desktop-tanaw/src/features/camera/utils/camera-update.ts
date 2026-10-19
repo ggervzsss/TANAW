@@ -56,6 +56,9 @@ export function hasCameraRestartRequiredChange(
   if (hasCameraConnectionChange(previous, next, passwordChanged)) return true;
 
   return (
+    (previous.analysisMode ?? "entrance_exit") !== (next.analysisMode ?? "entrance_exit") ||
+    JSON.stringify(previous.openSpace ?? null) !== JSON.stringify(next.openSpace ?? null) ||
+    (next.analysisMode === "open_space" && hasCameraCountingConfigChange(previous, next)) ||
     previous.processingProfile !== next.processingProfile ||
     previous.confidence !== next.confidence ||
     previous.trackingConfidence !== next.trackingConfidence ||

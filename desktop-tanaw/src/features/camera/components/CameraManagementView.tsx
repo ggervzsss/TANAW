@@ -24,6 +24,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
     configuredCameraLimit,
     confirmDeleteCamera,
     counts,
+    area,
     credentialMetadata,
     detections,
     editedCameraIpConflict,
@@ -133,6 +134,7 @@ export function CameraManagementView({ cameras, setCameras, storageKey }: Camera
         </div>
         <div className="min-h-0">
           <CameraPreviewPanel
+            area={area}
             activeCam={activeCam}
             cameraIpError={editedCameraIpConflict ? CAMERA_IP_CONFLICT_MESSAGE : undefined}
             counts={counts}

@@ -1,3 +1,5 @@
+import { createPageStateKey, readPageState, writePageState } from "../../../utils/page-state";
+import { useAuthStore } from "../../login/stores/auth-store";
 import { useCallback, useEffect, useState } from "react";
 import { DotFormModal } from "../../reports/components/DotFormModal";
 import { DashboardHeader } from "./DashboardHeader";
@@ -9,6 +11,8 @@ import type { TrendFilter } from "../types/dashboard";
 import { EMPTY_LOCAL_METRICS_HISTORY } from "../../../lib/operationalDefaults";
 import { DEFAULT_ML_SERVICE_BASE_URL, getLocalMetricsHistory, getLocalMetricsSummary, getMlServiceStatus, listLocalReportSubmissions } from "../../camera/services/ml-service";
 import type { LocalMetricsHistory, LocalMetricsSummary } from "../../camera/services/ml-service";
+import { OpenSpaceDashboard } from "../../open-space/OpenSpaceDashboard";
+import type { Camera } from "../../../types/enterprise";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { getDemographicAllocationStatus } from "../../reports/utils/demographics";
 import { emptyDemo, hasDemographics, metricsFromReport, reportFromLocalSubmission, sortReportsBySubmittedAt } from "../utils/reportLedger";
@@ -22,7 +26,14 @@ type DotPreviewState = {
   reportId: string;
 };
 
-export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
+export function DashboardView({ enterpriseName, cameras = [] }: { enterpriseName: string; cameras?: Camera[] }) {
+  const user = useAuthStore(state => state.user);
+  const modeKey = createPageStateKey({portal:"desktop",role:"enterprise",userId:user?.id ?? "anonymous"},"dashboard","analysis-mode");
+  const [mode, setMode] = useState<"entrance_exit"|"open_space">(() => readPageState(modeKey,1,(v):v is "entrance_exit"|"open_space"=>v==="entrance_exit"||v==="open_space") ?? "entrance_exit");
+  useEffect(() => { writePageState(modeKey,1,mode); },[mode,modeKey]);
+  const openCameras=cameras.filter(c=>c.analysisMode==="open_space");
+  const hasEntrance=cameras.some(c=>c.analysisMode!=="open_space");
+  const showOpen=openCameras.length>0 && (!hasEntrance||mode==="open_space");
   const [trendFilter, setTrendFilter] = useState<TrendFilter>("Week");
   const [summary, setSummary] = useState<LocalMetricsSummary | null>(null);
   const [history, setHistory] = useState<LocalMetricsHistory>(EMPTY_LOCAL_METRICS_HISTORY);
@@ -96,6 +107,8 @@ export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
 
   return (
     <div className="animate-in fade-in space-y-6 font-sans duration-500">
+      {openCameras.length>0 && <div className="flex gap-3"><button onClick={()=>setMode("entrance_exit")} disabled={!hasEntrance} aria-pressed={!showOpen}>Entrance / Exit</button><button onClick={()=>setMode("open_space")} aria-pressed={showOpen}>Open Space</button></div>}
+      {showOpen ? <OpenSpaceDashboard cameras={openCameras}/> : <>
       {previewReport && (
         <DotFormModal
           demo={previewReport.demo}
@@ -116,6 +129,7 @@ export function DashboardView({ enterpriseName }: { enterpriseName: string }) {
         <SubmissionLedgerPreview reports={ledgerReports} onPreviewReport={handlePreviewReport} />
         <DemographicsBreakdownChart report={demographicsReport} />
       </div>
+      </>}
     </div>
   );
 }

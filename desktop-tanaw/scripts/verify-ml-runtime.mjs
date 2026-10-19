@@ -40,7 +40,7 @@ try {
       });
       if (response.ok) {
         const payload = await response.json();
-        if (payload.api_contract_version !== 1) {
+        if (payload.api_contract_version !== 2) {
           throw new Error("The bundled ML runtime exposes an incompatible API contract.");
         }
         const capabilities = payload.runtime_capabilities;

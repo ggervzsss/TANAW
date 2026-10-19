@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 
 from app.config.camera_config import RegionOfInterest, TripwireLine
+from app.config.open_space_config import OpenSpaceConfig
 
 NormalizedPath = tuple[tuple[float, float], ...]
 
@@ -32,6 +33,27 @@ class DisplayTrack:
 
 
 class CameraFrameRenderer:
+    def render_area_frame(
+        self,
+        frame: np.ndarray,
+        tracks: list[DisplayTrack],
+        config: "OpenSpaceConfig",
+        state: dict | None,
+    ) -> np.ndarray:
+        height, width = frame.shape[:2]
+        points = np.array(
+            [(int(p.x * width), int(p.y * height)) for p in config.polygon], dtype=np.int32
+        )
+        cv2.polylines(frame, [points], True, (240, 190, 50), 2, cv2.LINE_AA)
+        active = {v["track_generation"]: v for v in (state or {}).get("active_visits", [])}
+        for track in tracks:
+            x1, y1, x2, y2 = track.bbox
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (240, 190, 50), 1)
+            visit = active.get(track.track_id)
+            label = f"{visit['estimated_dwell_ms'] / 1000:.0f}s in zone" if visit else "Observing"
+            self._draw_track_label(frame, x1, y1, label, (240, 190, 50))
+        return frame
+
     def render_display_frame(
         self,
         frame: np.ndarray,

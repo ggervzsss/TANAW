@@ -1,14 +1,19 @@
 import hashlib
 import sqlite3
 
+from app.storage.open_space_schema import OPEN_SPACE_SCHEMA
+
 REVISION = "001"
 NAME = "initial_schema"
 PREVIOUS_REVISION: str | None = None
 
 SCHEMA_STATEMENTS = (
+    *OPEN_SPACE_SCHEMA,
     """
     create table camera_profiles (
         camera_id integer primary key,
+        analysis_mode text not null default 'entrance_exit'
+            check(analysis_mode in ('entrance_exit','open_space')),
         name text not null,
         zone text not null,
         status text not null check (

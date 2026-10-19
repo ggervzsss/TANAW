@@ -116,7 +116,7 @@ function responseForPath(path: string): { body: unknown; status: number } {
     return {
       status: 200,
       body: {
-        api_contract_version: 1,
+        api_contract_version: 2,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
