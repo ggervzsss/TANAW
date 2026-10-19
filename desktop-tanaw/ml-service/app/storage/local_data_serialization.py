@@ -91,8 +91,20 @@ def _normalized_camera_profile(camera: dict[str, Any]) -> dict[str, Any]:
     if stream_url != canonical_url:
         raise ValueError("Stream URL conflicts with Camera IP / Host and the selected RTSP Stream.")
 
+    from app.config.open_space_config import OpenSpaceConfig
+
+    mode = camera.get("analysisMode", "entrance_exit")
+    if mode not in {"entrance_exit", "open_space"}:
+        raise ValueError("Unknown camera analysis mode.")
+    area = camera.get("openSpace")
+    if mode == "open_space" and area is not None:
+        area = OpenSpaceConfig.model_validate(area).model_dump(mode="json")
+    elif mode == "entrance_exit":
+        area = None
+
     return {
         **camera,
+        **({"analysisMode": mode, "openSpace": area} if "analysisMode" in camera else {}),
         "id": int(camera["id"]),
         "status": status,
         "cameraHost": camera_host,

@@ -8,10 +8,11 @@ import { CameraReadOnlyDetails } from "./CameraReadOnlyDetails";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
 import { NoCameraSelected } from "./NoCameraSelected";
-import type { MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
+import type { MlAreaState, MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
 
 type CameraPreviewPanelProps = {
   activeCam?: Camera;
+  area?: MlAreaState | null;
   cameraIpError?: string;
   counts: MlCounts;
   detections: MlDetections;
@@ -42,6 +43,7 @@ type CameraPreviewPanelProps = {
 
 export function CameraPreviewPanel({
   activeCam,
+  area,
   cameraIpError,
   counts,
   detections,
@@ -130,6 +132,7 @@ export function CameraPreviewPanel({
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(300px,340px)] gap-4 bg-slate-50/80 p-4 max-[1180px]:block max-[1180px]:overflow-y-auto max-[1180px]:p-3 dark:bg-[#0d1724]">
         <div className="min-h-0 max-[1180px]:h-80 max-[900px]:h-72">
           <CameraVideoPreview
+            area={area}
             activeCam={activeCam}
             counts={counts}
             detections={detections}
@@ -145,6 +148,7 @@ export function CameraPreviewPanel({
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 max-[1180px]:mt-3 max-[1180px]:overflow-visible max-[1180px]:pr-0">
           <CameraMonitoringPanel
+            area={area}
             activeCam={activeCam}
             counts={counts}
             error={error}

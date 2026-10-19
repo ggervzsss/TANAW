@@ -56,7 +56,19 @@ export type TripwireLine = {
   sampledPoints?: TripwirePoint[];
 };
 
-export type Camera = {
+export type AnalysisMode = "entrance_exit" | "open_space";
+export type OpenSpaceSettings = {
+  zone_id: string;
+  zone_name: string;
+  polygon: Array<{ x: number; y: number }>;
+  entry_confirmation_seconds?: number;
+  exit_confirmation_seconds?: number;
+  minimum_visit_seconds?: number;
+  gap_grace_seconds?: number;
+  boundary_tolerance?: number;
+};
+
+type CameraConnectionAndProcessing = {
   id: number;
   name: string;
   status: CameraStatus;
@@ -86,6 +98,13 @@ export type Camera = {
     reverse: boolean;
   };
 };
+// Existing entrance profiles may omit the discriminator at the construction boundary.
+// Public-area profiles always declare their mode and setup/zone state explicitly.
+export type Camera = CameraConnectionAndProcessing & (
+  | { analysisMode?: "entrance_exit"; openSpace?: null }
+  | { analysisMode: "open_space"; openSpace: OpenSpaceSettings | null }
+);
+
 export type ThemePreference = "light" | "dark" | "system";
 export type EnterpriseView = "dashboard" | "cameras" | "reports" | "profile" | "security" | "notifications" | "tickets" | "display-preferences" | "help";
 

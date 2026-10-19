@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.api.dependencies import registry as _registry
 from app.api.dependencies import settings as _settings
 from app.api.errors import CameraApiError, camera_api_error, local_database_reset_required
+from app.api.open_space import router as open_space_router
 from app.api.reporting import router as reporting_router
 from app.camera.auth import redact_stream_credentials
 from app.camera.contracts import CountingConfigResult
@@ -48,7 +49,7 @@ CAMERA_WS_FRAME_INTERVAL_SECONDS = 0.20
 CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.1.0"
-API_CONTRACT_VERSION = 1
+API_CONTRACT_VERSION = 2
 
 
 def has_valid_desktop_access_token(supplied_token: str, expected_token: str) -> bool:
@@ -107,6 +108,7 @@ def create_app(
     application.add_exception_handler(CameraApiError, camera_api_error)
     application.include_router(router)
     application.include_router(reporting_router)
+    application.include_router(open_space_router)
     return application
 
 

@@ -85,6 +85,14 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
                 </ModalField>
               </div>
 
+              <ModalField label="Camera Mode" id="camera-mode">
+                <select id="camera-mode" value={newCam.analysisMode ?? "entrance_exit"} onChange={event=>onChange({...newCam,analysisMode:event.target.value as CameraFormValues["analysisMode"]})} className={inputClass(false)}>
+                  <option value="entrance_exit">Entrance / Exit — establishment access</option>
+                  <option value="open_space">Open Space — presence and dwell time</option>
+                </select>
+                {newCam.analysisMode === "open_space" && <p className="mt-1 text-xs">After adding, start the preview and edit the monitored zone. Dwell time stays on this device.</p>}
+              </ModalField>
+
               <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">
                 <h4 className="mb-3 text-xs font-bold tracking-wider text-[#065f46] uppercase dark:text-emerald-300">Camera Connection</h4>
                 <CameraIpAddressField host={newCam.cameraHost} error={hostError} onHostChange={updateCameraHost} />

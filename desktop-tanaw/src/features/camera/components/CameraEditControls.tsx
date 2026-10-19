@@ -63,6 +63,19 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs font-semibold text-gray-800 transition outline-none focus:border-[#065f46]"
             />
           </CompactField>
+          <CompactField label="Camera Mode">
+            <select aria-label="Camera mode" value={editForm.analysisMode ?? "entrance_exit"}
+              onChange={event=>onEditFormChange({...editForm, analysisMode:event.target.value as Camera["analysisMode"], openSpace:null,
+                config:{...editForm.config,roi:{top:0,left:0,width:100,height:100}}})} className="w-full rounded-lg border p-2 text-xs dark:bg-slate-900">
+              <option value="entrance_exit">Entrance / Exit</option><option value="open_space">Open Space</option>
+            </select>
+            <p className="mt-1 text-xs">Changing mode or zone restarts this camera. Active observations end as incomplete.</p>
+          </CompactField>
+          {editForm.analysisMode === "open_space" && <div className="space-y-2 rounded-lg border p-2 text-xs">
+            <p>Start the preview, then draw 3–12 zone vertices on the image. Keep the camera fixed and disable automatic pan/tilt tracking.</p>
+            <CompactField label="Monitored Area Name"><input className="w-full rounded border p-2 dark:bg-slate-900" value={editForm.openSpace?.zone_name ?? ""}
+              onChange={event=>onEditFormChange({...editForm,openSpace:{zone_id:"main",polygon:[],...editForm.openSpace,zone_name:event.target.value}})} /></CompactField>
+          </div>}
           <CompactField label="Assigned Zone">
             <input
               type="text"
@@ -122,6 +135,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                   />
                 </CompactField>
               </div>
+              {editForm.analysisMode !== "open_space" && <>
               <div className="grid grid-cols-2 gap-2">
                 <CompactField label="ReID Mode">
                   <SelectDropdown
@@ -190,6 +204,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                   ))}
                 </div>
               </div>
+              </>}
             </div>
           </details>
           <div className="grid grid-cols-2 gap-2">

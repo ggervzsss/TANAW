@@ -114,9 +114,9 @@ export type MlHealth = {
 };
 
 export type MlCounts = {
-  entry: number;
-  exit: number;
-  occupancy: number;
+  entry: number | null;
+  exit: number | null;
+  occupancy: number | null;
   running: boolean;
   status: string;
   started_at: string | null;
@@ -164,7 +164,19 @@ export type MlSession = {
   updated_at: string | null;
 };
 
+export type MlAreaState = {
+  available: boolean;
+  presence: number | null;
+  temporarily_missing: number;
+  active_visits: Array<{ visit_id: string; track_generation: number; estimated_dwell_ms: number; arrival_observed: boolean }>;
+  last_observed_at: string | null;
+  zone_name: string;
+  revision_id: string;
+};
+
 export type MlCameraLiveState = {
+  analysis_mode?: "entrance_exit" | "open_space";
+  area?: MlAreaState | null;
   enterprise_id: string;
   camera_id: number;
   counts: MlCounts;

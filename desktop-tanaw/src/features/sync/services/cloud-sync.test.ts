@@ -1,12 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { staffApi } from "../../../lib/axios";
 import {
   getMlServiceStatus,
+  getMlCameraStates,
+  getMlHealth,
+  getMlSession,
+  markLocalEventsSynced,
+  listLocalCameras,
+  getLocalMetricsSummary,
   listLocalReportSubmissions,
   markLocalReportSynced,
   type LocalReportSubmissionRecord,
 } from "../../camera/services/ml-service";
-import { syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
+import { syncDesktopTelemetry, prepareDesktopSampleCounts, syncDesktopReportSubmission, syncDesktopReportSubmissions } from "./cloud-sync";
 
 vi.mock("../../../lib/axios", () => ({
   staffApi: {
@@ -51,9 +57,7 @@ describe("desktop report cloud idempotency", () => {
   it("reuses the persisted submission identity after a failed cloud attempt", async () => {
     const submission = localSubmission("11111111-1111-4111-8111-111111111111");
     vi.mocked(listLocalReportSubmissions).mockResolvedValue([submission]);
-    vi.mocked(staffApi.post)
-      .mockRejectedValueOnce(new Error("response lost"))
-      .mockResolvedValueOnce({ data: {} });
+    vi.mocked(staffApi.post).mockRejectedValueOnce(new Error("response lost")).mockResolvedValueOnce({ data: {} });
 
     await expect(syncDesktopReportSubmissions()).rejects.toThrow("response lost");
     await expect(syncDesktopReportSubmissions()).resolves.toBe(1);
@@ -63,11 +67,7 @@ describe("desktop report cloud idempotency", () => {
       expect.objectContaining({ submissionId: submission.submission_id }),
     ]);
     expect(markLocalReportSynced).toHaveBeenCalledTimes(1);
-    expect(markLocalReportSynced).toHaveBeenCalledWith(
-      "http://127.0.0.1:8765",
-      submission.report_id,
-      submission.submission_id,
-    );
+    expect(markLocalReportSynced).toHaveBeenCalledWith("http://127.0.0.1:8765", submission.report_id, submission.submission_id);
   });
 
   it("uses a new persisted identity for a genuine report revision", async () => {
@@ -86,10 +86,7 @@ describe("desktop report cloud idempotency", () => {
   });
 });
 
-function localSubmission(
-  submissionId: string,
-  status: "Submitted" | "Resubmitted" = "Submitted",
-): LocalReportSubmissionRecord {
+function localSubmission(submissionId: string, status: "Submitted" | "Resubmitted" = "Submitted"): LocalReportSubmissionRecord {
   return {
     report_id: "REP-001",
     submission_id: submissionId,
@@ -116,3 +113,45 @@ function localSubmission(
     camera_breakdown: [],
   };
 }
+
+describe("open-space cloud boundary", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("synchronizes only doorway monitoring and session details in a mixed installation", async () => {
+    vi.clearAllMocks();
+    vi.stubGlobal("window", { localStorage: { getItem: () => "test-device", setItem: vi.fn() } });
+    vi.mocked(getMlServiceStatus).mockResolvedValue({ baseUrl: "http://127.0.0.1:8765", running: true, desktopBuild: "test", desktopVersion: "test", error: null, packaged: false, pid: null });
+    vi.mocked(listLocalCameras).mockResolvedValue([
+      { id: 1, name: "Entrance", status: "stopped" },
+      { id: 2, name: "Plaza", status: "running", analysisMode: "open_space" },
+    ] as Awaited<ReturnType<typeof listLocalCameras>>);
+    vi.mocked(getLocalMetricsSummary).mockResolvedValue({ entries: 12, exits: 7, current_occupancy: 5 } as Awaited<ReturnType<typeof getLocalMetricsSummary>>);
+    const areaSession = { running: true, status: "running", error: null, camera_id: 2, camera_name: "Plaza", updated_at: null } as Awaited<ReturnType<typeof getMlSession>>;
+    vi.mocked(getMlSession).mockResolvedValue(areaSession);
+    vi.mocked(getMlHealth).mockResolvedValue({ running: true, model_ready: true } as Awaited<ReturnType<typeof getMlHealth>>);
+    vi.mocked(getMlCameraStates).mockResolvedValue({
+      cameras: [{ camera_id: 2, analysis_mode: "open_space", session: areaSession, counts: { running: true }, health: { running: true } }],
+      pending_camera_ids: [2],
+      max_concurrent_cameras: 6,
+    } as Awaited<ReturnType<typeof getMlCameraStates>>);
+    vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
+
+    const payload = await syncDesktopTelemetry();
+
+    expect(payload?.metrics.currentOccupancy).toBe(5);
+    expect(payload?.monitoring).toMatchObject({ configuredCameraCount: 1, activeCameraCount: 0, status: "stopped", cameras: [{ cameraId: 1, cameraName: "Entrance" }] });
+    expect(payload?.session).toMatchObject({ running: false, cameraId: null, cameraName: null });
+    expect(payload?.health?.modelReady).toBe(false);
+    expect(markLocalEventsSynced).toHaveBeenCalledOnce();
+  });
+
+  it("does not send area observations as establishment counts or prepare doorway samples", async () => {
+    vi.clearAllMocks();
+    vi.mocked(getMlServiceStatus).mockResolvedValue({ baseUrl: "http://127.0.0.1:8765", running: true, desktopBuild: "test", desktopVersion: "test", error: null, packaged: false, pid: null });
+    vi.mocked(listLocalCameras).mockResolvedValue([{ id: 1, analysisMode: "open_space" }] as Awaited<ReturnType<typeof listLocalCameras>>);
+    await expect(syncDesktopTelemetry()).resolves.toBeNull();
+    await expect(prepareDesktopSampleCounts()).resolves.toBeNull();
+    expect(staffApi.post).not.toHaveBeenCalled();
+    expect(getLocalMetricsSummary).not.toHaveBeenCalled();
+  });
+});

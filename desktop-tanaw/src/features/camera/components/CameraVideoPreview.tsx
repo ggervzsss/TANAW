@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Camera } from "../../../types/enterprise";
-import type { MlCounts, MlDetections, MlHealth } from "../services/ml-service";
+import { formatDwell } from "../utils/open-space";
+import type { MlAreaState, MlCounts, MlDetections, MlHealth } from "../services/ml-service";
 import { canRetryPreview, getPreviewRetryDelayMs, hasRenderablePreviewFrame, isCurrentPreviewRequest, withPreviewRetryVersion } from "../utils/camera-preview-recovery";
+import { OpenSpaceOverlay } from "./OpenSpaceOverlay";
 import { CameraOverlayConfig } from "./CameraOverlayConfig";
 import { CAMERA_PLACEHOLDER_CITY_HALL_IMAGE } from "../../../lib/assets";
 
 type CameraVideoPreviewProps = {
   activeCam: Camera;
+  area?: MlAreaState | null;
   counts: MlCounts;
   detections: MlDetections;
   editForm: Camera | null;
@@ -27,7 +30,7 @@ type ContentRect = {
   width: number;
 };
 
-export function CameraVideoPreview({ activeCam, counts, detections, editForm, health, isProcessing, isEditMode, onEditFormChange, onPreviewStateChange, streamUrl }: CameraVideoPreviewProps) {
+export function CameraVideoPreview({ area, activeCam, counts, detections, editForm, health, isProcessing, isEditMode, onEditFormChange, onPreviewStateChange, streamUrl }: CameraVideoPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previewImageRef = useRef<HTMLImageElement | null>(null);
   const previewSourceRef = useRef(streamUrl);
@@ -201,7 +204,11 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
 
       {shouldShowConfigOverlay && (
         <div className="absolute" style={contentRect ? { height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width } : { inset: 0 }}>
-          <CameraOverlayConfig
+          {(isEditMode && editForm ? editForm : activeCam).analysisMode === "open_space" ? (
+            <OpenSpaceOverlay value={(isEditMode && editForm ? editForm : activeCam).openSpace}
+              editable={isEditMode && Boolean(contentRect) && previewState === "live"}
+              onChange={openSpace=>onEditFormChange(current=>current?.analysisMode === "open_space" ? {...current,openSpace} : current)} />
+          ) : <CameraOverlayConfig
             config={overlayConfig}
             isEditMode={isEditMode}
             onConfigChange={
@@ -211,7 +218,7 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
                   }
                 : undefined
             }
-          />
+          />}
         </div>
       )}
       {streamIsAvailable && contentRect && frameWidth > 0 && frameHeight > 0 && (
@@ -230,7 +237,8 @@ export function CameraVideoPreview({ activeCam, counts, detections, editForm, he
             const isCrossing = track.direction === "entry" || track.direction === "exit";
             const isOutsideRoi = track.inside_roi === false;
             const sourceSuffix = track.source_track_id !== track.track_id ? ` | src ${track.source_track_id}` : "";
-            const label = track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "Person";
+            const visit = area?.active_visits.find(v => v.track_generation === track.track_id);
+            const label = activeCam.analysisMode === "open_space" ? (visit ? `${formatDwell(visit.estimated_dwell_ms)} in zone${visit.arrival_observed ? "" : " · arrival unknown"}` : "Observing") : track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "Person";
             const tone = getTrackTone(isOutsideRoi, isCrossing);
 
             return (

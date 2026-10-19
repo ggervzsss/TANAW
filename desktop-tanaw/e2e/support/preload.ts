@@ -61,7 +61,7 @@ export async function mockCameraSetup(page: Page, enterpriseId: string) {
   let cameras: Camera[] = [];
   // The idle camera editor needs service readiness, not simulated inference metrics.
   const health: Pick<MlHealth, "status" | "running" | "error" | "service_version" | "api_contract_version" | "tripwire_hot_update" | "active_camera_count" | "max_configured_cameras" | "max_concurrent_cameras"> = {
-    status: "ok", running: false, error: null, service_version: "e2e", api_contract_version: 1, tripwire_hot_update: true,
+    status: "ok", running: false, error: null, service_version: "e2e", api_contract_version: 2, tripwire_hot_update: true,
     active_camera_count: 0, max_configured_cameras: 4, max_concurrent_cameras: 2,
   };
   await mockMlRequest(page, "/health", () => mlResponse({ status: 200, body: JSON.stringify(health) }));

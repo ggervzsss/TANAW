@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any, cast
 
 from app.camera.camera_manager import CameraProcessingManager
-from app.camera.contracts import CountingConfigResult, EnterpriseBinding
+from app.camera.contracts import CameraCounts, CountingConfigResult, EnterpriseBinding
 from app.camera.local_operations_service import LocalOperationsService
 from app.config.camera_config import (
     CameraCountingConfigUpdate,
@@ -17,6 +17,8 @@ from app.config.camera_config import (
     TripwirePoint,
 )
 from app.runtime.hardware import get_runtime_capabilities
+from app.storage.local_database import LocalDatabase
+from app.storage.repositories.area_repository import AreaRepository
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +111,7 @@ class CameraPipelineRegistry:
                 self._enterprise_name = normalized_name
                 self._pipelines.clear()
                 self._config_fingerprints.clear()
+            self.area_repository().recover()
             logger.info("Bound camera registry to enterprise %s.", normalized_id)
             return cast(
                 EnterpriseBinding,
@@ -117,6 +120,11 @@ class CameraPipelineRegistry:
                     "session_restored": False,
                 },
             )
+
+    def area_repository(self) -> AreaRepository:
+        if self._enterprise_id is None:
+            raise ValueError("Select an enterprise before querying local analytics.")
+        return AreaRepository(LocalDatabase(self._app_data_dir, self._enterprise_id))
 
     def test_connection(self, payload: CameraTestRequest) -> tuple[bool, str]:
         logger.info(
@@ -396,12 +404,17 @@ class CameraPipelineRegistry:
     def _camera_state(self, camera_id: int, enterprise_occupancy: int) -> dict[str, Any]:
         pipeline = self.require_pipeline(camera_id)
         enterprise_id = self._enterprise_id or ""
-        counts = {**pipeline.counts(), "occupancy": enterprise_occupancy}
         session = pipeline.session()
-        session = {**session, "counts": {**session["counts"], "occupancy": enterprise_occupancy}}
+        mode = (session.get("camera_config") or {}).get("analysis_mode", "entrance_exit")
+        counts: CameraCounts = {**pipeline.counts()}
+        if mode == "entrance_exit":
+            counts["occupancy"] = enterprise_occupancy
+        session = {**session, "counts": counts}
         return {
             "enterprise_id": enterprise_id,
             "camera_id": camera_id,
+            "analysis_mode": mode,
+            "area": pipeline.area_state() if mode == "open_space" else None,
             "counts": counts,
             "detections": pipeline.detections(),
             "health": self._health_for_pipeline(pipeline),
@@ -467,9 +480,24 @@ class CameraPipelineRegistry:
                     "This Enterprise account can register up to "
                     f"{self._max_configured_cameras} cameras."
                 )
-            previous_ids = {int(camera["id"]) for camera in self._reporting.list_camera_profiles()}
+            previous_profiles = {
+                int(camera["id"]): camera for camera in self._reporting.list_camera_profiles()
+            }
+            previous_ids = set(previous_profiles)
             profiles = self._reporting.replace_camera_profiles(cameras)
             retained_ids = {int(camera["id"]) for camera in profiles}
+            for profile in profiles:
+                camera_id = int(profile["id"])
+                previous = previous_profiles.get(camera_id)
+                if previous is None:
+                    continue
+                changed = previous.get("analysisMode", "entrance_exit") != profile.get(
+                    "analysisMode", "entrance_exit"
+                ) or previous.get("openSpace") != profile.get("openSpace")
+                if changed:
+                    self.stop(camera_id)
+                    with self._lock:
+                        self._config_fingerprints.pop(camera_id, None)
             with self._lock:
                 removed_ids = [
                     camera_id for camera_id in self._pipelines if camera_id not in retained_ids

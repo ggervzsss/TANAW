@@ -1,4 +1,5 @@
 import type { Camera, CameraStatus } from "../../../types/enterprise";
+import { validateOpenSpace } from "../utils/open-space";
 import { validateRtspUrl } from "../../../utils/form-validation";
 import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnection, stripStreamCredentials } from "../utils/rtsp";
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
@@ -28,6 +29,7 @@ export function validateCamera(camera: Camera, hasStoredPassword: boolean) {
   if (!Number.isFinite(camera.confidence) || camera.confidence < 0.05 || camera.confidence > 0.95) return "Counting confidence must be between 0.05 and 0.95.";
   if (!Number.isFinite(camera.trackingConfidence ?? 0.15) || (camera.trackingConfidence ?? 0.15) < 0.01 || (camera.trackingConfidence ?? 0.15) > camera.confidence)
     return "Tracking confidence must be between 0.01 and the counting confidence.";
+  if (camera.analysisMode === "open_space" && camera.openSpace) return validateOpenSpace(camera.openSpace);
   return null;
 }
 

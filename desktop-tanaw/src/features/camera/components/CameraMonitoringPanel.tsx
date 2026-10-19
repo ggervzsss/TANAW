@@ -3,11 +3,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { InfoTooltip } from "../../../components/InfoTooltip";
 import type { Camera } from "../../../types/enterprise";
 import { getUserFacingIssueMessage } from "../../toasts/services/persistent-issue";
-import type { MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
+import type { MlAreaState, MlCounts, MlHealth, MlServiceStatus } from "../services/ml-service";
 import type { CameraPreviewState } from "./CameraVideoPreview";
 
 type CameraMonitoringPanelProps = {
   activeCam: Camera;
+  area?: MlAreaState | null;
   counts: MlCounts;
   health: MlHealth | null;
   serviceStatus: MlServiceStatus | null;
@@ -26,6 +27,7 @@ type CameraMonitoringPanelProps = {
 
 export function CameraMonitoringPanel({
   activeCam,
+  area,
   counts,
   health,
   serviceStatus,
@@ -84,10 +86,17 @@ export function CameraMonitoringPanel({
             {counts.status}
           </span>
         </div>
+        {activeCam.analysisMode === "open_space" ? <div className="space-y-2 text-sm">
+          <p className="font-semibold">People observed now: {area?.available ? area.presence : "Unavailable"}</p>
+          <p>Temporarily unobserved: {area?.temporarily_missing ?? 0}</p>
+          {!activeCam.openSpace && <p>Zone setup required. Start the preview, edit the configuration, and draw your monitored area.</p>}
+          {area?.active_visits.slice(0,6).map(visit=><p key={visit.visit_id}>{Math.floor(visit.estimated_dwell_ms/1000)}s in monitored area · {visit.arrival_observed?"arrival observed":"arrival unknown"}</p>)}
+          <p className="text-xs">Dwell estimates cover this camera zone. Completed visits are summarized in the Open Space dashboard.</p>
+        </div> : <>
         <div className="grid auto-rows-fr grid-cols-2 gap-2">
-          <MetricBox icon={LogIn} label="Entry" value={counts.entry} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
-          <MetricBox icon={LogOut} label="Exit" value={counts.exit} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
-          <MetricBox icon={Users} label="Occupancy" value={counts.occupancy} tone="occupancy" tooltip="Enterprise-wide live occupancy. This same authoritative value appears on every camera view." />
+          <MetricBox icon={LogIn} label="Entry" value={counts.entry ?? "—"} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
+          <MetricBox icon={LogOut} label="Exit" value={counts.exit ?? "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
+          <MetricBox icon={Users} label="Occupancy" value={counts.occupancy ?? "—"} tone="occupancy" tooltip="Enterprise-wide live occupancy. This same authoritative value appears on every camera view." />
           <MetricBox
             icon={Users}
             label="Estimated Visitors"
@@ -104,6 +113,7 @@ export function CameraMonitoringPanel({
             </span>
           </div>
         ) : null}
+        </>}
       </section>
 
       <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">

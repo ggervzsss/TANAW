@@ -9,7 +9,7 @@ describe("ML service compatibility contract", () => {
   it("requires both the contract version and collection runtime shape", () => {
     expect(
       hasCompatibleMlHealth({
-        api_contract_version: 1,
+        api_contract_version: 2,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -17,7 +17,7 @@ describe("ML service compatibility contract", () => {
     ).toBe(true);
     expect(
       hasCompatibleMlHealth({
-        api_contract_version: 2,
+        api_contract_version: 3,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -25,7 +25,7 @@ describe("ML service compatibility contract", () => {
     ).toBe(false);
     expect(
       hasCompatibleMlHealth({
-        api_contract_version: 1,
+        api_contract_version: 2,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
       }),

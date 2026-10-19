@@ -31,10 +31,11 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
       </div>
 
       <div className="space-y-2">
+        <DetailRow tooltip="The measurements collected by this camera." label="Camera Mode" value={activeCam.analysisMode === "open_space" ? "Open Space" : "Entrance / Exit"} />
         <DetailRow label="Camera Address" value={maskStreamCredentials(activeCam.rtsp)} tooltip="The connection address TANAW uses to access this camera." mono />
         <div className="grid grid-cols-2 gap-2">
           <DetailRow label="Counting Area" value={activeCam.zone} tooltip="The area monitored by this camera." />
-          <DetailRow label="Counting Direction" value="Entry / Exit Lines" tooltip="Lines used to count entering and exiting visitors." />
+          {activeCam.analysisMode === "open_space" ? <DetailRow label="Monitored Zone" value={activeCam.openSpace?.zone_name ?? "Setup required"} tooltip="Dwell time covers this polygon on the camera image." /> : <DetailRow label="Counting Direction" value="Entry / Exit Lines" tooltip="Lines used to count entering and exiting visitors." />}
           <DetailRow label="Counting Mode" value={formatProcessingProfile(activeCam.processingProfile)} tooltip="The visitor-counting mode selected for this camera." />
           {streamProtocol ? <DetailRow label="Stream Protocol" value={streamProtocol} tooltip="The protocol configured in this camera's stream address." /> : null}
         </div>

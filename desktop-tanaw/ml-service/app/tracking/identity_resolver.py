@@ -63,6 +63,7 @@ class TrackIdentityResolver:
     def __init__(
         self,
         lost_track_ttl_seconds: float = 2.5,
+        motion_match_margin: float = 0.0,
         max_spatial_distance_fraction: float = 0.18,
         max_jump_distance_fraction: float = 0.30,
         appearance_match_threshold: float = 0.76,
@@ -72,6 +73,7 @@ class TrackIdentityResolver:
         active_swap_confirmation_samples: int = 3,
         active_swap_confirmation_window_seconds: float = 5.0,
     ) -> None:
+        self.motion_match_margin = motion_match_margin
         self.lost_track_ttl_seconds = lost_track_ttl_seconds
         self.max_spatial_distance_fraction = max_spatial_distance_fraction
         self.max_jump_distance_fraction = max_jump_distance_fraction
@@ -306,6 +308,7 @@ class TrackIdentityResolver:
         matched_stable_ids: set[int],
     ) -> tuple[StableTrack | None, float | None]:
         best: StableTrack | None = None
+        second_score = -1.0
         best_score = -1.0
         for state in self._tracks.values():
             if state.track_id in matched_stable_ids:
@@ -323,9 +326,14 @@ class TrackIdentityResolver:
             distance_score = 1.0 - distance_fraction / self.max_spatial_distance_fraction
             score = distance_score * 0.72 + iou * 0.28
             if score > best_score:
+                second_score = best_score
                 best = state
                 best_score = score
+            elif score > second_score:
+                second_score = score
 
+        if best is not None and best_score - second_score < self.motion_match_margin:
+            return None, None
         return best, best_score if best is not None else None
 
     def _best_appearance_candidate(

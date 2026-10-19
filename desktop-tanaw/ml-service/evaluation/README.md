@@ -84,3 +84,40 @@ The quality variant measures quality-embedding extraction, but cross-session
 visitor-gallery decisions still need a live integration test. Use live health
 telemetry afterward to inspect gallery decisions, queue drops, frame age,
 skipped frames, and end-to-end resource use.
+
+## Open-space dwell replay
+
+First produce a detector cache with the existing `scripts.replay_tracking`
+workflow, using the intended camera angle, video, sampling, and profile. Save
+an `OpenSpaceConfig` JSON file containing the normalized polygon and policy.
+Replay from `desktop-tanaw/ml-service`:
+
+```shell
+uv run python -m scripts.replay_open_space --detections-cache evaluation/cache/park.jsonl --config evaluation/park-zone.json --ground-truth evaluation/ground-truth/park-visits.json --output evaluation/results/park-dwell.json
+```
+
+A minimal zone file is:
+
+```json
+{"zone_id":"seating","zone_name":"Seating area","polygon":[{"x":0.2,"y":0.2},{"x":0.8,"y":0.2},{"x":0.8,"y":0.8},{"x":0.2,"y":0.8}]}
+```
+
+Ground truth uses source-video seconds, with one labeled visit per row in the
+`visits` array. Set `complete` false when an endpoint was not observed:
+
+```json
+{"visits":[{"entered_at_seconds":10,"exited_at_seconds":40,"complete":true}]}
+```
+
+The replay validates cache metadata/fingerprints, uses recorded timestamps,
+reports its video hash/policy, and preserves incomplete end-of-recording visits.
+It reuses physical motion association without appearance-gallery timer merges.
+The optional evaluator uses conservative one-to-one temporal-overlap matching
+for controlled clips, reports unmatched/ambiguous visits and precision/recall,
+and calculates duration errors only for matched visits. It does not establish
+person-identity accuracy in crowded recordings. Use the existing frame/identity
+evaluator alongside it and label representative field recordings separately.
+
+No production videos, caches, or person annotations should be committed. Live
+RTSP delay, native thread scheduling, camera interruption, and resource use
+need live tests in addition to deterministic replay.

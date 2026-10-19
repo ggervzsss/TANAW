@@ -58,6 +58,7 @@ import {
 } from "../model/camera-management";
 
 const emptyCameraForm: CameraFormValues = {
+  analysisMode: "entrance_exit",
   cameraHost: "",
   name: "",
   password: "",
@@ -118,7 +119,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const isActiveCameraSaving = activeAction === "saving";
   const isActiveCameraStarting = Boolean(activeCam && (isStartAction(activeAction) || pendingCameraIds.has(activeCam.id)));
   const monitoringError = activeCam ? (activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError) : configurationError;
-  const warnings = isEditMode && editForm ? getValidationWarnings(editForm.config) : getValidationWarnings(activeCam?.config);
+  const warnings = isEditMode && editForm ? (editForm.analysisMode === "open_space" ? [] : getValidationWarnings(editForm.config)) : (activeCam?.analysisMode === "open_space" ? [] : getValidationWarnings(activeCam?.config));
   const streamVersion = activeCam ? (streamVersions[activeCam.id] ?? 0) : 0;
   const configuredCameraLimit = serviceHealth?.max_configured_cameras ?? DEFAULT_ENTERPRISE_CAMERA_LIMIT;
   const cameraStorageFingerprint = getCameraStorageFingerprint(cameras);
@@ -314,6 +315,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     }
     setIsValidating(true);
     const newCameraNode: Camera = canonicalizeCameraIp({
+      analysisMode: newCam.analysisMode ?? "entrance_exit",
+      openSpace: null,
       cameraHost: newCam.cameraHost || undefined,
       confidence: DEFAULT_COUNTING_CONFIDENCE,
       processingProfile: "auto",
@@ -414,6 +417,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     configuredCameraLimit,
     confirmDeleteCamera,
     counts,
+    area: activeState?.area ?? null,
     credentialMetadata,
     detections,
     editedCameraIpConflict,

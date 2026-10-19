@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.config.open_space_config import OpenSpaceConfig
+
 RtspStreamProfile = Literal["stream1", "stream2"]
 ProcessingProfile = Literal[
     "auto",
@@ -74,6 +76,9 @@ class CameraCountingConfigUpdate(BaseModel):
 
 
 class CameraStartRequest(BaseModel):
+    analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
+    preview_only: bool = False
+    open_space: OpenSpaceConfig | None = None
     stream_url: str = Field(..., min_length=3)
     tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
     counting_confidence: float = Field(default=0.35, ge=0.05, le=0.95)
@@ -126,10 +131,31 @@ class CameraStartRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_counting_geometry(self) -> CameraStartRequest:
+        if self.preview_only and self.analysis_mode != "open_space":
+            raise ValueError("Calibration preview is available only for Open Space mode.")
         if self.tracking_confidence > self.counting_confidence:
             raise ValueError(
                 "tracking_confidence must be less than or equal to counting_confidence."
             )
+        if self.analysis_mode == "open_space":
+            if self.open_space is None:
+                if self.preview_only:
+                    return self
+                raise ValueError("Configure a monitored zone before starting Open Space mode.")
+            if self.preview_only:
+                raise ValueError("Configured zones must start in analysis mode.")
+            if any(
+                not (
+                    self.roi.left <= p.x <= self.roi.left + self.roi.width
+                    and self.roi.top <= p.y <= self.roi.top + self.roi.height
+                )
+                for p in self.open_space.polygon
+            ):
+                raise ValueError("The monitored zone must fit inside the processing ROI.")
+        elif self.open_space is not None:
+            raise ValueError("Dwell configuration is available only in Open Space mode.")
+        if self.analysis_mode == "open_space":
+            return self
         if self.entry_line is None and self.exit_line is None:
             return self
 
@@ -184,7 +210,8 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.1.0"
-    api_contract_version: int = 1
+    api_contract_version: int = 2
+    analysis_modes: list[str] = Field(default_factory=lambda: ["entrance_exit", "open_space"])
     tripwire_hot_update: bool = True
     running: bool
     error: str | None = None
@@ -289,9 +316,9 @@ class HealthResponse(BaseModel):
 
 
 class CountResponse(BaseModel):
-    entry: int
-    exit: int
-    occupancy: int
+    entry: int | None
+    exit: int | None
+    occupancy: int | None
     running: bool
     status: str
     started_at: str | None = None
@@ -340,6 +367,8 @@ class SessionResponse(BaseModel):
 
 
 class CameraLiveStateResponse(BaseModel):
+    analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
+    area: dict[str, Any] | None = None
     enterprise_id: str
     camera_id: int
     counts: CountResponse

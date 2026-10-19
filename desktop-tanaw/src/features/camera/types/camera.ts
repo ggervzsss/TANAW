@@ -1,6 +1,7 @@
 import type { Camera } from "../../../types/enterprise";
 
 export type CameraFormValues = {
+  analysisMode?: Camera["analysisMode"];
   name: string;
   cameraHost: string;
   rtspStream: "stream1" | "stream2";

@@ -701,3 +701,75 @@ database. Authentication state and camera credentials remain in OS-protected
 Electron storage, while backend records remain in PostgreSQL. Use central
 sample-data cleanup for backend rows and desktop local-data cleanup for local
 device state.
+
+## Camera analysis modes and open-space dwell
+
+Each camera can use **Entrance / Exit** or **Open Space**. Entrance / Exit keeps
+the establishment counting and reporting workflow. Open Space measures people
+observed inside one polygon and estimates the duration of completed zone visits.
+
+To configure Open Space:
+
+1. Add a camera with Open Space selected, or change its mode in Camera Setup.
+2. Start its preview and open Edit Configuration. An unconfigured zone uses a
+   preview-only pipeline; drawing a zone does not require detector assets.
+3. Click 3–12 points on the actual decoded video, leaving visible space outside
+   the polygon. Drag vertices or use arrow keys; Delete removes a vertex.
+4. Name the monitored area and Save Config. Saving a configured zone while the
+   preview is running restarts the camera into analytics mode, which requires
+   the existing verified detector assets. If stopped, start it normally.
+5. Open Dashboard → Open Space to select the camera, monitored configuration,
+   and last 24 hours / 7 days / 30 days of local history.
+
+Keep the camera viewpoint fixed and disable automatic pan/tilt tracking.
+Changing the mode, polygon, or dwell policy ends active observations as
+incomplete and starts a new analysis run. History retains its original zone
+configuration; returning to older geometry creates a new revision.
+
+Dwell is estimated **time in the visible zone**, not a guaranteed entire park
+visit. A person first detected inside has an unknown arrival. Disappearance,
+stream loss, restart, or an ambiguous track match produces an incomplete
+observation. Dwell averages, medians, P90, and duration groups use completed
+visits with observed arrival/departure. Short tracking gaps have explicit
+uncertainty metadata. Visits are not unique people, and different cameras are
+not deduplicated.
+
+Live presence, temporary tracking gaps, observed visits, completion sample
+counts, incomplete observations, hourly activity, and observation coverage are
+shown separately. Healthy empty video produces zero presence; unavailable
+analytics produces an unavailable value. Visits use first-observation cohorts;
+completed dwell uses observed-end cohorts. Display time is Asia/Manila.
+
+Open-space analytics remain on the device. They are excluded from the doorway
+count ledger, official reports, sample-count preparation, and legacy cloud
+telemetry. Open-space-only configurations do not send legacy count telemetry;
+the existing LGU portal may therefore mark that gateway delayed/offline. Mixed
+configurations synchronize only their Entrance / Exit monitoring/count scope.
+Typed cloud support and LGU/AI presentation are separate follow-up work.
+
+Local API contract **2** is required in both Electron and the Python sidecar.
+The preproduction canonical SQLite `001` baseline includes the new tables.
+An older development ledger is rejected with the existing reset-required
+message; no database is automatically erased. Inspect existing data before
+using the supported enterprise-scoped reset command:
+
+```shell
+npm run local-data -- inspect
+npm run local-data -- clear --enterprise "your_enterprise_id" --yes
+```
+
+The second command deletes that enterprise's local database, including its
+camera profiles and operational history. Reconfigure the development cameras
+afterward. Do not run a reset when preservation is required; revise the
+migration policy and implementation first.
+
+Raw ended visits/presence intervals are retained for 30 days in bounded cleanup
+batches; active visits are protected. Hourly aggregate records are retained for
+180 days. The current detailed dashboard/API queries cover at most 30 days;
+no unsupported long-range median is reconstructed from hourly medians.
+
+For implementation boundaries and validation requirements, see the
+[implementation plan](../docs/plans/desktop-camera-modes-and-dwell-time.md).
+Physical-camera accuracy, representative crowded footage, sustained mixed
+workloads, and Windows release packaging require field validation before a
+broad rollout. Automated fixtures do not establish those outcomes.
