@@ -20,10 +20,12 @@ class VisitorGalleryStore:
         session_store: SessionStore,
         model_name: str,
         quality_model_name: str | None,
+        record_sightings: bool = True,
     ) -> None:
         self._session_store = session_store
         self._model_name = model_name
         self._quality_model_name = quality_model_name
+        self._record_sightings = record_sightings
 
     def cleanup_expired(self, now: datetime) -> int:
         return self._session_store.cleanup_expired_visitor_metadata(now.isoformat())
@@ -172,7 +174,7 @@ class VisitorGalleryStore:
         bbox: tuple[int, int, int, int] | None,
         now: datetime,
     ) -> None:
-        if decision.visitor_id is None:
+        if not self._record_sightings or decision.visitor_id is None:
             return
         self._session_store.append_visitor_sighting(
             {

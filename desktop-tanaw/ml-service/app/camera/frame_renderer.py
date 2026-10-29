@@ -50,7 +50,7 @@ class CameraFrameRenderer:
             x1, y1, x2, y2 = track.bbox
             cv2.rectangle(frame, (x1, y1), (x2, y2), (240, 190, 50), 1)
             visit = active.get(track.track_id)
-            label = f"{visit['estimated_dwell_ms'] / 1000:.0f}s in zone" if visit else "Observing"
+            label = "In monitored area" if visit else "Observing"
             self._draw_track_label(frame, x1, y1, label, (240, 190, 50))
         return frame
 

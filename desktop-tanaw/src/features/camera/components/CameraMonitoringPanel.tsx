@@ -81,39 +81,71 @@ export function CameraMonitoringPanel({
     <div className="space-y-3">
       <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase">Live Metrics</h4>
+          <h4 className="text-[11px] font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Live Metrics</h4>
           <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[9px] font-bold tracking-wide text-gray-500 uppercase dark:border-white/9 dark:bg-white/4 dark:text-slate-400">
             {counts.status}
           </span>
         </div>
-        {activeCam.analysisMode === "open_space" ? <div className="space-y-2 text-sm">
-          <p className="font-semibold">People observed now: {area?.available ? area.presence : "Unavailable"}</p>
-          <p>Temporarily unobserved: {area?.temporarily_missing ?? 0}</p>
-          {!activeCam.openSpace && <p>Zone setup required. Start the preview, edit the configuration, and draw your monitored area.</p>}
-          {area?.active_visits.slice(0,6).map(visit=><p key={visit.visit_id}>{Math.floor(visit.estimated_dwell_ms/1000)}s in monitored area · {visit.arrival_observed?"arrival observed":"arrival unknown"}</p>)}
-          <p className="text-xs">Dwell estimates cover this camera zone. Completed visits are summarized in the Open Space dashboard.</p>
-        </div> : <>
-        <div className="grid auto-rows-fr grid-cols-2 gap-2">
-          <MetricBox icon={LogIn} label="Entry" value={counts.entry ?? "—"} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
-          <MetricBox icon={LogOut} label="Exit" value={counts.exit ?? "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
-          <MetricBox icon={Users} label="Occupancy" value={counts.occupancy ?? "—"} tone="occupancy" tooltip="Enterprise-wide live occupancy. This same authoritative value appears on every camera view." />
-          <MetricBox
-            icon={Users}
-            label="Estimated Visitors"
-            value={estimatedUniqueCount}
-            tone="unique"
-            tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded until TANAW gets stronger evidence."
-          />
-        </div>
-        {pendingUniqueEntries > 0 ? (
-          <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/8 dark:text-amber-200">
-            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-            <span>
-              {pendingUniqueEntries} provisional {pendingUniqueEntries === 1 ? "identity is" : "identities are"} excluded from the visitor estimate pending a stronger match.
-            </span>
+        {activeCam.analysisMode === "open_space" ? (
+          <div className="space-y-3">
+            <div className="grid auto-rows-fr grid-cols-2 gap-2">
+              <MetricBox
+                icon={Users}
+                label="Live Occupancy"
+                value={area?.available ? (area.presence ?? "—") : "—"}
+                detail="Observed now in this zone"
+                tone="entry"
+                tooltip="People currently observed inside this camera's monitored zone. This is a live count, not a total of unique visitors."
+              />
+              <MetricBox
+                icon={Users}
+                label="Unique Visitors"
+                value={area?.unique_visitors_available ? (area.unique_visitors ?? "—") : "—"}
+                tone="unique"
+                detail={area?.unique_visitors_available ? "Estimated · today in this zone" : "Identification unavailable"}
+                tooltip="Estimated distinct visitors observed today in this camera zone, using appearance-based re-identification. Repeat matches count once, and uncertain identities are excluded. Requires an active visitor identification model."
+              />
+            </div>
+            <div className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-[11px] text-gray-600 dark:bg-white/4 dark:text-slate-300">
+              <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${area?.available ? "bg-emerald-500" : "bg-amber-500"}`} />
+              <span className="min-w-0 truncate">{area?.available ? area.zone_name || activeCam.openSpace?.zone_name || "Monitored area" : "Live observations unavailable"}</span>
+            </div>
+            {!activeCam.openSpace ? (
+              <p className="text-xs text-amber-700 dark:text-amber-200">Zone setup required. Start the preview, edit the configuration, and draw your monitored area.</p>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">Zone occupancy and count history are available in Enterprise Analytics.</p>
+            )}
           </div>
-        ) : null}
-        </>}
+        ) : (
+          <>
+            <div className="grid auto-rows-fr grid-cols-2 gap-2">
+              <MetricBox icon={LogIn} label="Entry" value={counts.entry ?? "—"} tone="entry" tooltip="Visitors counted after crossing the configured entry line." />
+              <MetricBox icon={LogOut} label="Exit" value={counts.exit ?? "—"} tone="exit" tooltip="Visitors counted after crossing the configured exit line." />
+              <MetricBox
+                icon={Users}
+                label="Occupancy"
+                value={counts.occupancy ?? "—"}
+                tone="occupancy"
+                tooltip="Occupancy calculated from Entrance / Exit activity. Enterprise Analytics adds people observed in separate Open Space zones to its combined live total."
+              />
+              <MetricBox
+                icon={Users}
+                label="Estimated Visitors"
+                value={estimatedUniqueCount}
+                tone="unique"
+                tooltip="Confirmed and degraded unique estimates attributed to this camera. Provisional identities are excluded until TANAW gets stronger evidence."
+              />
+            </div>
+            {pendingUniqueEntries > 0 ? (
+              <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/8 dark:text-amber-200">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  {pendingUniqueEntries} provisional {pendingUniqueEntries === 1 ? "identity is" : "identities are"} excluded from the visitor estimate pending a stronger match.
+                </span>
+              </div>
+            ) : null}
+          </>
+        )}
       </section>
 
       <section className="rounded-2xl border border-gray-200/90 bg-white/95 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.055)] dark:border-white/8 dark:bg-[#142130] dark:shadow-[0_14px_32px_rgba(1,8,17,0.22)]">
@@ -209,6 +241,7 @@ export function CameraMonitoringPanel({
 }
 
 type MetricBoxProps = {
+  detail?: string;
   icon: typeof LogIn;
   label: string;
   tone: "entry" | "exit" | "occupancy" | "unique";
@@ -216,7 +249,7 @@ type MetricBoxProps = {
   value: number | string;
 };
 
-function MetricBox({ icon: Icon, label, tone, tooltip, value }: MetricBoxProps) {
+function MetricBox({ icon: Icon, label, tone, tooltip, value, detail }: MetricBoxProps) {
   const toneClass = {
     entry: "border-emerald-200 bg-emerald-50 text-[#065f46] dark:border-emerald-400/25 dark:bg-emerald-400/12 dark:text-emerald-300",
     exit: "border-red-200 bg-red-50 text-red-700 dark:border-red-400/25 dark:bg-red-400/12 dark:text-red-200",
@@ -234,6 +267,7 @@ function MetricBox({ icon: Icon, label, tone, tooltip, value }: MetricBoxProps) 
           <Icon size={13} className="shrink-0" />
         </div>
         <div className="mt-auto pt-1.5 font-['Bai_Jamjuree'] text-2xl leading-none font-bold">{value}</div>
+        {detail && <p className="mt-2 min-h-6 text-[9px] leading-tight">{detail}</p>}
       </div>
     </InfoTooltip>
   );

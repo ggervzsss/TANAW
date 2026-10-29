@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Camera } from "../../../types/enterprise";
-import { formatDwell } from "../utils/open-space";
 import type { MlAreaState, MlCounts, MlDetections, MlHealth } from "../services/ml-service";
 import { canRetryPreview, getPreviewRetryDelayMs, hasRenderablePreviewFrame, isCurrentPreviewRequest, withPreviewRetryVersion } from "../utils/camera-preview-recovery";
 import { OpenSpaceOverlay } from "./OpenSpaceOverlay";
@@ -205,20 +204,24 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
       {shouldShowConfigOverlay && (
         <div className="absolute" style={contentRect ? { height: contentRect.height, left: contentRect.left, top: contentRect.top, width: contentRect.width } : { inset: 0 }}>
           {(isEditMode && editForm ? editForm : activeCam).analysisMode === "open_space" ? (
-            <OpenSpaceOverlay value={(isEditMode && editForm ? editForm : activeCam).openSpace}
+            <OpenSpaceOverlay
+              value={(isEditMode && editForm ? editForm : activeCam).openSpace}
               editable={isEditMode && Boolean(contentRect) && previewState === "live"}
-              onChange={openSpace=>onEditFormChange(current=>current?.analysisMode === "open_space" ? {...current,openSpace} : current)} />
-          ) : <CameraOverlayConfig
-            config={overlayConfig}
-            isEditMode={isEditMode}
-            onConfigChange={
-              isEditMode
-                ? (config) => {
-                    onEditFormChange((current) => (current ? { ...current, config } : current));
-                  }
-                : undefined
-            }
-          />}
+              onChange={(openSpace) => onEditFormChange((current) => (current?.analysisMode === "open_space" ? { ...current, openSpace } : current))}
+            />
+          ) : (
+            <CameraOverlayConfig
+              config={overlayConfig}
+              isEditMode={isEditMode}
+              onConfigChange={
+                isEditMode
+                  ? (config) => {
+                      onEditFormChange((current) => (current ? { ...current, config } : current));
+                    }
+                  : undefined
+              }
+            />
+          )}
         </div>
       )}
       {streamIsAvailable && contentRect && frameWidth > 0 && frameHeight > 0 && (
@@ -237,8 +240,8 @@ export function CameraVideoPreview({ area, activeCam, counts, detections, editFo
             const isCrossing = track.direction === "entry" || track.direction === "exit";
             const isOutsideRoi = track.inside_roi === false;
             const sourceSuffix = track.source_track_id !== track.track_id ? ` | src ${track.source_track_id}` : "";
-            const visit = area?.active_visits.find(v => v.track_generation === track.track_id);
-            const label = activeCam.analysisMode === "open_space" ? (visit ? `${formatDwell(visit.estimated_dwell_ms)} in zone${visit.arrival_observed ? "" : " · arrival unknown"}` : "Observing") : track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "Person";
+            const visit = area?.active_visits.find((v) => v.track_generation === track.track_id);
+            const label = activeCam.analysisMode === "open_space" ? (visit ? "In monitored area" : "Observing") : track.track_id > 0 ? `#${track.track_id}${sourceSuffix}` : "Person";
             const tone = getTrackTone(isOutsideRoi, isCrossing);
 
             return (

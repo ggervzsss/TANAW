@@ -77,11 +77,16 @@ export function CameraAddModal({ newCam, isValidating, errors, duplicateIpError,
               </div>
 
               <ModalField label="Camera Mode" id="camera-mode">
-                <select id="camera-mode" value={newCam.analysisMode ?? "entrance_exit"} onChange={event=>onChange({...newCam,analysisMode:event.target.value as CameraFormValues["analysisMode"]})} className={inputClass(false)}>
+                <select
+                  id="camera-mode"
+                  value={newCam.analysisMode ?? "entrance_exit"}
+                  onChange={(event) => onChange({ ...newCam, analysisMode: event.target.value as CameraFormValues["analysisMode"] })}
+                  className={inputClass(false)}
+                >
                   <option value="entrance_exit">Entrance / Exit — establishment access</option>
-                  <option value="open_space">Open Space — presence and dwell time</option>
+                  <option value="open_space">Open Space — people counts and activity</option>
                 </select>
-                {newCam.analysisMode === "open_space" && <p className="mt-1 text-xs">After adding, start the preview and edit the monitored zone. Dwell time stays on this device.</p>}
+                {newCam.analysisMode === "open_space" && <p className="mt-1 text-xs">After adding, start the preview and edit the monitored zone. Activity history stays on this device.</p>}
               </ModalField>
 
               <section className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-300/20 dark:bg-emerald-400/8">

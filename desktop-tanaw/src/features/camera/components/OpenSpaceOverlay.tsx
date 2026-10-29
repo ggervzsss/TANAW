@@ -1,6 +1,5 @@
 import { useState, type PointerEvent } from "react";
 import type { OpenSpaceSettings } from "../../../types/enterprise";
-import { validateOpenSpace } from "../utils/open-space";
 
 export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpaceSettings | null | undefined; editable: boolean; onChange: (next: OpenSpaceSettings) => void }) {
   const [dragging, setDragging] = useState<number | null>(null);
@@ -11,7 +10,6 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
     const r = event.currentTarget.getBoundingClientRect();
     return { x: Math.max(0, Math.min(1, (event.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (event.clientY - r.top) / r.height)) };
   };
-  const error = value ? validateOpenSpace(value) : "Draw a zone with at least three points.";
   return (
     <div className="absolute inset-0">
       <svg
@@ -67,20 +65,6 @@ export function OpenSpaceOverlay({ value, editable, onChange }: { value: OpenSpa
             />
           ))}
       </svg>
-      {editable && (
-        <div className="absolute inset-x-3 bottom-3 rounded-lg bg-slate-950/90 p-2 text-xs text-white">
-          <p>Click to add points. Drag or use arrow keys to move a vertex; Delete removes it. Leave visible space outside the zone.</p>
-          <p role={error ? "alert" : undefined} className="mt-1">
-            {error ?? "Zone ready. Save Config to apply. Active observations will end as incomplete."}
-          </p>
-          <button type="button" className="mt-1 mr-3 underline" onClick={() => update(points.slice(0, -1))}>
-            Undo point
-          </button>
-          <button type="button" className="underline" onClick={() => update([])}>
-            Clear zone
-          </button>
-        </div>
-      )}
     </div>
   );
 }

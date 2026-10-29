@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
@@ -144,6 +144,9 @@ class CameraProcessingManager:
         self._area_pending: list[dict[str, Any]] = []
         self._area_interrupt_requested = False
         self._area_last_signature: tuple[object, ...] | None = None
+        self._area_visitor_registry: UniqueVisitorRegistry | None = None
+        self._area_identity_camera_id: int | None = None
+        self._area_frame_index = 0
 
     @property
     def running(self) -> bool:
@@ -207,6 +210,11 @@ class CameraProcessingManager:
             )
             self._state = RuntimeState()
             self._config = None
+            self._area_tracker = None
+            self._area_snapshot = None
+            self._area_snapshot_at = None
+            self._area_visitor_registry = None
+            self._area_identity_camera_id = None
             self._session_updated_at = None
         restored = self.restore_last_session() if restore_session else False
         return {
@@ -254,10 +262,7 @@ class CameraProcessingManager:
             self._effective_profile = self._tracker.configure(
                 config.processing_profile, config.runtime_backend, config.tracker_profile
             )
-            if config.analysis_mode == "open_space":
-                self._effective_reid_mode = "off"
-            else:
-                self._configure_reid_locked(config)
+            self._configure_reid_locked(config)
             processing_fps = _processing_fps(
                 config.processing_fps, self._tracker.target_processing_fps
             )
@@ -1302,6 +1307,18 @@ class CameraProcessingManager:
         self._area_pending.clear()
         self._area_last_signature = None
         self._counting_track_resolver.reset()
+        self._area_frame_index = 0
+        self._appearance_buffer.reset()
+        self._quality_appearance_buffer.reset()
+        self._area_identity_camera_id = config.camera_id
+        self._area_visitor_registry = UniqueVisitorRegistry(
+            self._session_store,
+            model_name=self._reidentifier.model_name,
+            quality_model_name=self._quality_reidentifier.model_name,
+            identity_namespace=f"open_space:{self._area_revision_id}",
+            record_sightings=False,
+        )
+        self._area_visitor_registry.prepare(config.camera_id)
         self._publish_area_snapshot()
 
     def _publish_area_snapshot(self) -> None:
@@ -1313,6 +1330,25 @@ class CameraProcessingManager:
             "revision_id": self._area_revision_id,
             "run_id": self._area_run_id,
         }
+        registry = self._area_visitor_registry
+        now = datetime.now(UTC)
+        unique_available = bool(
+            registry is not None
+            and self._config is not None
+            and not self._config.preview_only
+            and self._config.unique_counting_mode == "estimated_reid"
+            and _fast_reid_enabled(self._effective_reid_mode)
+            and self._reidentifier.status()["reid_model_ready"]
+        )
+        snapshot.update(
+            unique_visitors_available=unique_available,
+            unique_visitors=(
+                registry.confirmed_visitor_count(self._area_identity_camera_id, now)
+                if registry is not None and unique_available
+                else None
+            ),
+            unique_visitors_date=registry.business_date_for(now) if registry else None,
+        )
         with self._lock:
             self._area_snapshot = snapshot
             self._area_snapshot_at = tracker.last_frame_at
@@ -1323,6 +1359,12 @@ class CameraProcessingManager:
             observed_at = self._area_snapshot_at
         if snapshot is not None and (observed_at is None or time.monotonic() - observed_at > 5):
             snapshot.update(available=False, presence=None)
+        registry = self._area_visitor_registry
+        if snapshot is not None and registry is not None:
+            if snapshot.get("unique_visitors_date") != registry.business_date_for(
+                datetime.now(UTC)
+            ):
+                snapshot.update(unique_visitors_available=False, unique_visitors=None)
         return snapshot
 
     def _save_area(self, now: float, force: bool = False) -> None:
@@ -1433,6 +1475,10 @@ class CameraProcessingManager:
         }
         if not tracker.update(observations, observed_at):
             return []
+        self._area_frame_index += 1
+        self._appearance_buffer.begin_frame(self._area_frame_index)
+        self._quality_appearance_buffer.begin_frame(self._area_frame_index)
+        self._update_area_visitors(session, frame, tracks, tracker, width, height, observed_at)
         self._save_area(observed_at)
         return [
             DisplayTrack(
@@ -1448,6 +1494,74 @@ class CameraProcessingManager:
             for t in tracks
         ]
 
+    def _update_area_visitors(
+        self,
+        session: ProcessingSession,
+        frame: np.ndarray,
+        tracks: list[ResolvedTrack],
+        tracker: AreaVisitTracker,
+        width: int,
+        height: int,
+        now: float,
+    ) -> None:
+        registry = self._area_visitor_registry
+        if registry is None or session.config.unique_counting_mode != "estimated_reid":
+            return
+        if not _fast_reid_enabled(self._effective_reid_mode):
+            return
+        observed_ids = tracker.observed_track_ids
+        inside = {t.track_id: t for t in tracks if t.track_id in observed_ids}
+        updated: set[int] = set()
+        for worker, buffer, max_age in (
+            (self._reid_worker, self._appearance_buffer, FAST_REID_RESULT_MAX_AGE_SECONDS),
+            (
+                self._quality_reid_worker,
+                self._quality_appearance_buffer,
+                QUALITY_REID_RESULT_MAX_AGE_SECONDS,
+            ),
+        ):
+            for result in worker.poll(session.session_id):
+                track = inside.get(result.track_id)
+                if (
+                    track is None
+                    or track.source_track_id != result.source_track_id
+                    or result.embedding is None
+                    or result.requested_at < tracker.anchor
+                    or self._reid_result_is_stale(result.requested_at, now, max_age)
+                ):
+                    continue
+                # Appearance matching never remaps the physical tracks that own dwell timers.
+                buffer.record_sample(
+                    track.track_id, result.embedding, result.quality, self._area_frame_index
+                )
+                updated.add(track.track_id)
+        for track in inside.values():
+            self._schedule_track_embedding(
+                session, frame, track, width, height, now, frame_index=self._area_frame_index
+            )
+            if track.track_id not in updated or not self._track_has_reid_consensus(track.track_id):
+                continue
+            embedding = self._appearance_buffer.embedding_for_track(track.track_id)
+            if embedding is None:
+                continue
+            registry.resolve_entry(
+                track_id=track.track_id,
+                camera_id=session.config.camera_id,
+                embedding=embedding,
+                quality_embedding=self._quality_appearance_buffer.embedding_for_track(
+                    track.track_id
+                ),
+                detection_confidence=track.confidence,
+                bbox=track.bbox,
+                now=tracker.wall_anchor + timedelta(seconds=now - tracker.anchor),
+                excluded_visitor_ids=frozenset(
+                    visitor_id
+                    for other in inside
+                    if other != track.track_id
+                    if (visitor_id := registry.visitor_id_for_track(other)) is not None
+                ),
+            )
+
     def _schedule_track_embedding(
         self,
         session: ProcessingSession,
@@ -1456,8 +1570,10 @@ class CameraProcessingManager:
         frame_width: int,
         frame_height: int,
         now: float,
+        *,
+        frame_index: int | None = None,
     ) -> None:
-        frame_index = self._counter.frame_index
+        frame_index = self._counter.frame_index if frame_index is None else frame_index
         sample_fast = _fast_reid_enabled(
             self._effective_reid_mode
         ) and self._appearance_buffer.should_sample(track, frame_width, frame_height, frame_index)
@@ -1815,7 +1931,15 @@ class CameraProcessingManager:
 
     def _configure_reid_locked(self, config: CameraStartRequest) -> None:
         processing_profile = getattr(self._tracker, "effective_profile", self._effective_profile)
-        self._effective_reid_mode = _resolve_reid_mode(config.reid_mode, processing_profile)
+        requested_reid_mode = config.reid_mode
+        if (
+            config.analysis_mode == "open_space"
+            and config.unique_counting_mode == "estimated_reid"
+            and requested_reid_mode == "auto"
+        ):
+            # The bounded async fast path supplies the zone's unique-visitor estimate.
+            requested_reid_mode = "fast"
+        self._effective_reid_mode = _resolve_reid_mode(requested_reid_mode, processing_profile)
         fast_profile = get_reid_model_profile("fast")
         quality_profile = get_reid_model_profile("quality")
         if (

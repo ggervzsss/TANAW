@@ -1,11 +1,34 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Camera } from "../../../types/enterprise";
-import { EMPTY_ML_COUNTS, type MlHealth, type MlServiceStatus } from "../services/ml-service";
+import { EMPTY_ML_COUNTS, type MlAreaState, type MlHealth, type MlServiceStatus } from "../services/ml-service";
 import { CameraMonitoringPanel } from "./CameraMonitoringPanel";
 import type { CameraPreviewState } from "./CameraVideoPreview";
 
 describe("CameraMonitoringPanel", () => {
+  it("uses the zone visitor estimate and keeps tracking gaps internal", () => {
+    const area: MlAreaState = {
+      available: true,
+      presence: 3,
+      temporarily_missing: 1,
+      active_visits: [],
+      last_observed_at: null,
+      zone_name: "Plaza",
+      revision_id: "r1",
+      unique_visitors: 7,
+      unique_visitors_available: true,
+    };
+    const activeCam: Camera = { ...camera, analysisMode: "open_space", openSpace: null };
+    const markup = renderPanel({ activeCam, area, health: { estimated_unique_count: 99 } as MlHealth });
+    expect(markup).toContain("Unique Visitors");
+    expect(markup).toContain(">7</div>");
+    expect(markup).not.toContain(">99</div>");
+    expect(markup).not.toContain("Tracking gaps");
+    expect(markup).toContain("today in this zone");
+    const unavailable = renderPanel({ activeCam, area: { ...area, unique_visitors: null, unique_visitors_available: false } });
+    expect(unavailable).toContain("Identification unavailable");
+    expect(unavailable).not.toContain(">0</div>");
+  });
   it("labels the status and control block below Live Metrics", () => {
     const markup = renderToStaticMarkup(
       <CameraMonitoringPanel
@@ -74,8 +97,7 @@ describe("CameraMonitoringPanel", () => {
   });
 
   it("does not describe cached camera health as a healthy service after a terminal error", () => {
-    const markup = renderPanel({ health: { status: "ok", running: true } as MlHealth,
-      serviceError: "Close TANAW and reset the local database." });
+    const markup = renderPanel({ health: { status: "ok", running: true } as MlHealth, serviceError: "Close TANAW and reset the local database." });
     expect(markup).toContain("ML Service Needs Attention");
     expect(markup).not.toContain("ML Service Running");
     expect(markup).toContain('aria-label="ML Service Needs Attention details"');
@@ -136,6 +158,7 @@ describe("CameraMonitoringPanel", () => {
 
 function renderPanel({
   activeCam = camera,
+  area = null,
   counts = EMPTY_ML_COUNTS,
   error = null,
   health = null,
@@ -145,6 +168,7 @@ function renderPanel({
   serviceStatus = null,
 }: {
   activeCam?: Camera;
+  area?: MlAreaState | null;
   counts?: typeof EMPTY_ML_COUNTS;
   error?: string | null;
   health?: MlHealth | null;
@@ -156,6 +180,7 @@ function renderPanel({
   return renderToStaticMarkup(
     <CameraMonitoringPanel
       activeCam={activeCam}
+      area={area}
       counts={counts}
       health={health}
       serviceStatus={serviceStatus}

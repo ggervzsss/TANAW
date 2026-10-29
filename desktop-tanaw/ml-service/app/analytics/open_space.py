@@ -173,6 +173,10 @@ class AreaVisitTracker:
     def active_records(self) -> list[dict[str, Any]]:
         return [self.record(v) for v in self.visits.values() if v.confirmed]
 
+    @property
+    def observed_track_ids(self) -> frozenset[int]:
+        return frozenset(self._fresh)
+
     def snapshot(self) -> dict[str, Any]:
         active = self.active_records()
         return {

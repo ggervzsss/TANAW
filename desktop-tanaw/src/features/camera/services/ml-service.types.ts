@@ -165,6 +165,9 @@ export type MlSession = {
 };
 
 export type MlAreaState = {
+  unique_visitors?: number | null;
+  unique_visitors_available?: boolean;
+  unique_visitors_date?: string | null;
   available: boolean;
   presence: number | null;
   temporarily_missing: number;

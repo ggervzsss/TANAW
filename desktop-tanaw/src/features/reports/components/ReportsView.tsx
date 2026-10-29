@@ -42,8 +42,16 @@ export function ReportsView({ cameras = [], enterpriseName, reportsHistory, setR
     validationError,
   } = useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory });
 
-  if(cameras.length>0 && cameras.every(c=>c.analysisMode==="open_space") && !ledgerRows.some(row => row.kind === "history" || row.kind === "pending")) {
-    return <section className="rounded-xl border bg-white p-6 dark:bg-slate-900"><h2 className="text-xl font-bold">Open Space Analytics</h2><p className="mt-3">Dwell time and area observations are available in the Open Space dashboard. Establishment reports require Entrance / Exit measurements; open-space observations are not submitted as establishment counts.</p></section>;
+  if (cameras.length > 0 && cameras.every((c) => c.analysisMode === "open_space") && !ledgerRows.some((row) => row.kind === "history" || row.kind === "pending")) {
+    return (
+      <section className="rounded-xl border bg-white p-6 dark:bg-slate-900">
+        <h2 className="text-xl font-bold">Establishment Reports</h2>
+        <p className="mt-3">
+          Zone occupancy and count history are available in Enterprise Analytics. Establishment reports require Entrance / Exit measurements; open-space observations are not submitted as establishment
+          counts.
+        </p>
+      </section>
+    );
   }
   return (
     <div className="tanaw-reports-workspace animate-in fade-in space-y-5 font-sans duration-500" data-reports-surface="camera-setup-generation">
