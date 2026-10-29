@@ -18,31 +18,29 @@ READ_TIMEOUT_MS = 5000
 def open_capture(stream_url: str) -> Any:
     source = stream_url.strip()
     capture = cv2.VideoCapture()
-    _configure_capture(capture)
-
-    capture.open(source, cv2.CAP_FFMPEG)
-    if not capture.isOpened():
+    try:
+        capture.open(
+            source,
+            cv2.CAP_FFMPEG,
+            [
+                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+                OPEN_TIMEOUT_MS,
+                cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+                READ_TIMEOUT_MS,
+            ],
+        )
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    except Exception:
         capture.release()
-        capture = cv2.VideoCapture()
-        _configure_capture(capture)
-        capture.open(source)
-
-    _configure_capture(capture)
-
+        raise
     return capture
 
 
-def _configure_capture(capture: Any) -> None:
-    capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-    if hasattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC"):
-        capture.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, OPEN_TIMEOUT_MS)
-    if hasattr(cv2, "CAP_PROP_READ_TIMEOUT_MSEC"):
-        capture.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, READ_TIMEOUT_MS)
-
-
 def validate_stream(stream_url: str, attempts: int = 8) -> tuple[bool, str]:
-    capture = open_capture(stream_url)
+    try:
+        capture = open_capture(stream_url)
+    except Exception:
+        return False, "Unable to open the camera stream. Check the camera connection and try again."
     try:
         if not capture.isOpened():
             return (

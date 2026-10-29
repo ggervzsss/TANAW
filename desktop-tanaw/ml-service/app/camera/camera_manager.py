@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 import time
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
@@ -48,7 +49,7 @@ from app.reid import (
     get_reid_model_availability,
     get_reid_model_profile,
 )
-from app.runtime.hardware import get_runtime_capabilities
+from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
 from app.storage.session_store import SessionStore
@@ -105,7 +106,7 @@ class CameraProcessingManager:
         # Counting follows physical motion only. ReID is allowed to remap appearance
         # identities without moving an in-progress paired-line crossing to another key.
         self._counting_track_resolver = TrackIdentityResolver(appearance_track_ttl_seconds=2.5)
-        self._pending_entry_events: dict[tuple[int, int], PendingEntryEvent] = {}
+        self._pending_entry_events: dict[tuple[int, str], PendingEntryEvent] = {}
         self._session_store = SessionStore(app_data_dir, camera_id=camera_id)
         self._visitor_registry = UniqueVisitorRegistry(
             self._session_store,
@@ -131,7 +132,10 @@ class CameraProcessingManager:
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
         self._closed = False
+        self._close_complete = False
         self._area_tracker: AreaVisitTracker | None = None
+        self._area_snapshot: dict[str, Any] | None = None
+        self._area_snapshot_at: float | None = None
         self._area_repo: AreaRepository | None = None
         self._area_run_id: str | None = None
         self._area_revision_id: str | None = None
@@ -220,8 +224,13 @@ class CameraProcessingManager:
         if self._camera_id_scope is not None and config.camera_id != self._camera_id_scope:
             raise ValueError("Camera configuration does not match this camera pipeline.")
         self.stop()
+        saved_snapshot = self._session_store.load_session()
+        if config.analysis_mode == "entrance_exit":
+            self._restore_saved_snapshot(saved_snapshot)
+            self._session_store.finalize_pending_entries()
         with self._raw_frame_condition:
             self._area_tracker = None
+            self._area_snapshot = None
             self._config = config
             self._state = RuntimeState(running=True, status="starting", error=None)
             self._latest_jpeg = self._frame_renderer.build_status_frame("Checking camera stream...")
@@ -240,8 +249,6 @@ class CameraProcessingManager:
                 self._persist_session_locked()
                 self._raw_frame_condition.notify_all()
             raise CameraStreamUnavailableError(message)
-
-        saved_snapshot = self._session_store.load_session()
 
         with self._lock:
             self._effective_profile = self._tracker.configure(
@@ -498,12 +505,18 @@ class CameraProcessingManager:
     def close(self) -> None:
         """Permanently dispose this pipeline and its background workers."""
         with self._lock:
-            if self._closed:
+            if self._close_complete:
                 return
             self._closed = True
-        self.stop()
-        self._reid_worker.close()
-        self._quality_reid_worker.close()
+        try:
+            self.stop()
+        finally:
+            try:
+                self._reid_worker.close()
+            finally:
+                self._quality_reid_worker.close()
+        with self._lock:
+            self._close_complete = True
 
     def counts(self) -> CameraCounts:
         with self._lock:
@@ -650,7 +663,7 @@ class CameraProcessingManager:
             }
             has_local_context = self._enterprise_id is not None or self._config is not None
         summary = (
-            self._session_store.metrics_summary(include_submitted=False)
+            self._session_store.runtime_metrics()
             if has_local_context
             else {
                 "estimated_unique_count": 0,
@@ -689,7 +702,7 @@ class CameraProcessingManager:
             "degraded_unique_count": summary["degraded_unique_count"],
             "repeat_entry_count": summary["repeat_entry_count"],
             "reid_model_availability": get_reid_model_availability(),
-            "runtime_capabilities": get_runtime_capabilities(),
+            "runtime_capabilities": cached_runtime_capabilities(),
         }
 
     def prepare_sample_counts(
@@ -947,7 +960,10 @@ class CameraProcessingManager:
             self._set_session_error(session, str(exc))
         finally:
             with self._counting_lock:
-                self._finish_area_safely("processing_stopped")
+                if self._is_current_session(session) or (
+                    self._active_session is None and self._config is config
+                ):
+                    self._finish_area_safely("processing_stopped")
             with self._lock:
                 if self._is_current_session_locked(session):
                     self._state.running = False
@@ -1174,15 +1190,34 @@ class CameraProcessingManager:
             visitor_id = self._visitor_registry.visitor_id_for_track(track.track_id)
             pending_unique_entry = False
             for direction in directions:
+                event_id = uuid4().hex
                 event_decision = None
                 if direction == "entry":
-                    event_decision = self._resolve_or_queue_unique_entry(session, track, now)
+                    event_decision = self._resolve_or_queue_unique_entry(
+                        session, track, now, event_id
+                    )
                     if event_decision is None:
                         pending_unique_entry = True
+                        self._persist_count_event(
+                            session,
+                            track,
+                            direction,
+                            VisitorDecision(
+                                None,
+                                False,
+                                None,
+                                "pending",
+                                "pending",
+                                self._visitor_registry.business_date_for(datetime.now(UTC)),
+                            ),
+                            event_id=event_id,
+                        )
                         continue
                     visitor_decision = event_decision
                     visitor_id = event_decision.visitor_id
-                self._persist_count_event(session, track, direction, event_decision)
+                self._persist_count_event(
+                    session, track, direction, event_decision, event_id=event_id
+                )
             display_tracks.append(
                 DisplayTrack(
                     track_id=track.track_id,
@@ -1267,23 +1302,34 @@ class CameraProcessingManager:
         self._area_pending.clear()
         self._area_last_signature = None
         self._counting_track_resolver.reset()
+        self._publish_area_snapshot()
+
+    def _publish_area_snapshot(self) -> None:
+        tracker = self._area_tracker
+        if tracker is None:
+            return
+        snapshot = {
+            **tracker.snapshot(),
+            "revision_id": self._area_revision_id,
+            "run_id": self._area_run_id,
+        }
+        with self._lock:
+            self._area_snapshot = snapshot
+            self._area_snapshot_at = tracker.last_frame_at
 
     def area_state(self) -> dict[str, Any] | None:
-        with self._counting_lock:
-            if self._area_tracker is None:
-                return None
-            snapshot = self._area_tracker.snapshot()
-            if (
-                snapshot["last_observed_at"] is None
-                or time.monotonic() - (self._area_tracker.last_frame_at or 0) > 5
-            ):
-                snapshot = {**snapshot, "available": False, "presence": None}
-            return {**snapshot, "revision_id": self._area_revision_id, "run_id": self._area_run_id}
+        with self._lock:
+            snapshot = deepcopy(self._area_snapshot)
+            observed_at = self._area_snapshot_at
+        if snapshot is not None and (observed_at is None or time.monotonic() - observed_at > 5):
+            snapshot.update(available=False, presence=None)
+        return snapshot
 
     def _save_area(self, now: float, force: bool = False) -> None:
         tracker, repo, run_id = self._area_tracker, self._area_repo, self._area_run_id
         if tracker is None or repo is None or run_id is None:
             return
+        self._publish_area_snapshot()
         self._area_pending.extend(tracker.drain())
         state = tracker.snapshot()
         signature = (
@@ -1483,7 +1529,7 @@ class CameraProcessingManager:
         )
 
     def _resolve_or_queue_unique_entry(
-        self, session: ProcessingSession, track: ResolvedTrack, now: float
+        self, session: ProcessingSession, track: ResolvedTrack, now: float, event_id: str
     ) -> VisitorDecision | None:
         if session.config.unique_counting_mode == "entry_only":
             return self._degraded_unique_entry_decision("entry_only")
@@ -1498,16 +1544,16 @@ class CameraProcessingManager:
             if not self._is_current_session_locked(session):
                 return self._resolve_unique_entry(session, track)
 
-            key = (session.session_id, track.track_id)
+            key = (session.session_id, event_id)
             if key not in self._pending_entry_events:
                 self._pending_entry_events[key] = PendingEntryEvent(
+                    event_id=event_id,
                     session_id=session.session_id,
                     track=track,
                     direction="entry",
                     created_at=now,
                     expires_at=now + session.config.pending_reid_wait_seconds,
                 )
-                self._persist_session_locked()
         return None
 
     def _degraded_unique_entry_decision(self, reason: str) -> VisitorDecision:
@@ -1541,7 +1587,9 @@ class CameraProcessingManager:
             if not self._is_current_session(session):
                 continue
             visitor_decision = self._resolve_unique_entry(session, event.track)
-            self._persist_count_event(session, event.track, event.direction, visitor_decision)
+            self._session_store.update_event_identity(
+                event.event_id, visitor_decision.as_event_fields()
+            )
 
     def _track_has_reid_consensus(self, track_id: int) -> bool:
         return (
@@ -1665,6 +1713,8 @@ class CameraProcessingManager:
         track: ResolvedTrack,
         direction: str,
         visitor_decision: VisitorDecision | None = None,
+        *,
+        event_id: str | None = None,
     ) -> None:
         with self._lock:
             if not self._is_current_session_locked(session):
@@ -1673,28 +1723,22 @@ class CameraProcessingManager:
             counts = self._counter.counts.as_dict()
             visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
             camera_id = self._config.camera_id if self._config else None
-            direction_count = counts.get(direction, 0)
-            try:
-                self._session_store.append_event(
-                    {
-                        "event_id": (
-                            f"{camera_id}:{session.event_scope}:{direction}:{direction_count}"
-                        ),
-                        "enterprise_id": self._enterprise_id,
-                        "camera_id": camera_id,
-                        "camera_name": self._config.camera_name if self._config else None,
-                        "direction": direction,
-                        "track_id": track.track_id,
-                        "source_track_id": track.source_track_id,
-                        "identity_state": track.identity_state,
-                        "identity_score": track.identity_score,
-                        "identity_source": track.identity_source,
-                        **visitor_fields,
-                        "counts": counts,
-                    }
-                )
-            except OSError:
-                pass
+            self._session_store.append_event(
+                {
+                    "event_id": event_id or uuid4().hex,
+                    "enterprise_id": self._enterprise_id,
+                    "camera_id": camera_id,
+                    "camera_name": self._config.camera_name if self._config else None,
+                    "direction": direction,
+                    "track_id": track.track_id,
+                    "source_track_id": track.source_track_id,
+                    "identity_state": track.identity_state,
+                    "identity_score": track.identity_score,
+                    "identity_source": track.identity_source,
+                    **visitor_fields,
+                    "counts": counts,
+                }
+            )
             self._persist_session_locked()
 
     def _persist_session_locked(self) -> None:

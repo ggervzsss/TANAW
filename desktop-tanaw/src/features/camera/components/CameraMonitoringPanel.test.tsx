@@ -73,6 +73,14 @@ describe("CameraMonitoringPanel", () => {
     expect(markup).not.toMatch(/> Service<\/button>/);
   });
 
+  it("does not describe cached camera health as a healthy service after a terminal error", () => {
+    const markup = renderPanel({ health: { status: "ok", running: true } as MlHealth,
+      serviceError: "Close TANAW and reset the local database." });
+    expect(markup).toContain("ML Service Needs Attention");
+    expect(markup).not.toContain("ML Service Running");
+    expect(markup).toContain('aria-label="ML Service Needs Attention details"');
+  });
+
   it("keeps the camera in a starting state while an accepted start initializes", () => {
     const markup = renderPanel({
       counts: { ...EMPTY_ML_COUNTS, status: "stopped" },

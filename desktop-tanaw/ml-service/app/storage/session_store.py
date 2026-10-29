@@ -40,6 +40,12 @@ class SessionStore:
         }
         self._data_store.append_count_event(event, event["recorded_at"])
 
+    def update_event_identity(self, event_id: str, fields: dict[str, Any]) -> bool:
+        return self._data_store.update_count_event_identity(event_id, fields)
+
+    def finalize_pending_entries(self) -> None:
+        self._data_store.finalize_pending_entries(self._camera_id)
+
     def upsert_visitor_identity(
         self,
         *,
@@ -170,6 +176,9 @@ class SessionStore:
         return self._data_store.metrics_summary(
             include_submitted=include_submitted, camera_id=self._camera_id
         )
+
+    def runtime_metrics(self) -> dict[str, Any]:
+        return self._data_store.runtime_metrics(self._camera_id)
 
     def enterprise_occupancy(self) -> int:
         return self._data_store.enterprise_occupancy()

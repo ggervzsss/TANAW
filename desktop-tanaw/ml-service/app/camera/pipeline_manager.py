@@ -16,7 +16,7 @@ from app.config.camera_config import (
     TripwireLine,
     TripwirePoint,
 )
-from app.runtime.hardware import get_runtime_capabilities
+from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
 
@@ -70,6 +70,8 @@ class CameraPipelineRegistry:
         self._pipelines: dict[int, CameraProcessingManager] = {}
         self._config_fingerprints: dict[int, str] = {}
         self._pending_starts: dict[int, str] = {}
+        self._context_generation = 0
+        self._switching_context = False
         self._enterprise_id: str | None = None
         self._enterprise_name: str | None = None
         self._pipeline_factory = pipeline_factory
@@ -104,14 +106,20 @@ class CameraPipelineRegistry:
                         "session_restored": False,
                     }
 
-            self._dispose_all_locked()
-            context = self._reporting.bind_enterprise(normalized_id, normalized_name)
             with self._lock:
-                self._enterprise_id = normalized_id
-                self._enterprise_name = normalized_name
-                self._pipelines.clear()
-                self._config_fingerprints.clear()
-            self.area_repository().recover()
+                self._switching_context = True
+                self._context_generation += 1
+                self._pending_starts.clear()
+            try:
+                self._dispose_all_locked()
+                context = self._reporting.bind_enterprise(normalized_id, normalized_name)
+                with self._lock:
+                    self._enterprise_id = normalized_id
+                    self._enterprise_name = normalized_name
+                self.area_repository().recover()
+            finally:
+                with self._lock:
+                    self._switching_context = False
             logger.info("Bound camera registry to enterprise %s.", normalized_id)
             return cast(
                 EnterpriseBinding,
@@ -161,6 +169,9 @@ class CameraPipelineRegistry:
 
         with self._lock:
             self._require_enterprise_locked()
+            if self._switching_context:
+                raise ValueError("Enterprise context is changing. Retry after sign-in completes.")
+            generation = self._context_generation
             existing = self._pipelines.get(camera_id)
             if (
                 existing is not None
@@ -178,7 +189,7 @@ class CameraPipelineRegistry:
 
         thread = threading.Thread(
             target=self._run_requested_start,
-            args=(config, fingerprint),
+            args=(config, fingerprint, generation),
             name=f"tanaw-camera-{camera_id}-startup",
             daemon=True,
         )
@@ -191,14 +202,19 @@ class CameraPipelineRegistry:
             raise
         return True
 
-    def _run_requested_start(self, config: CameraStartRequest, fingerprint: str) -> None:
+    def _run_requested_start(
+        self, config: CameraStartRequest, fingerprint: str, generation: int
+    ) -> None:
         camera_id = config.camera_id
         if camera_id is None:
             return
 
         with self._lifecycle_lock:
             with self._lock:
-                if self._pending_starts.get(camera_id) != fingerprint:
+                if (
+                    self._pending_starts.get(camera_id) != fingerprint
+                    or generation != self._context_generation
+                ):
                     return
             try:
                 self._start_locked(config)
@@ -296,34 +312,54 @@ class CameraPipelineRegistry:
             self._pending_starts.clear()
             pipelines = list(self._pipelines.items())
         stopped = 0
+        errors: list[Exception] = []
         for camera_id, pipeline in pipelines:
             if pipeline.running:
                 stopped += 1
-            pipeline.stop()
-            logger.info("Stopped processing pipeline for camera %s during cleanup.", camera_id)
+            try:
+                pipeline.stop()
+            except Exception as exc:
+                errors.append(exc)
+                logger.exception("Unable to stop camera %s during cleanup.", camera_id)
+            else:
+                logger.info("Stopped processing pipeline for camera %s during cleanup.", camera_id)
         with self._lock:
             self._config_fingerprints.clear()
+        if errors:
+            raise ExceptionGroup("Some camera pipelines could not be stopped.", errors)
         return stopped
 
     def _dispose_all_locked(self) -> int:
         with self._lock:
+            self._context_generation += 1
             self._pending_starts.clear()
             pipelines = list(self._pipelines.items())
-            self._pipelines.clear()
             self._config_fingerprints.clear()
         stopped = 0
+        errors: list[Exception] = []
         for camera_id, pipeline in pipelines:
             if pipeline.running:
                 stopped += 1
-            pipeline.close()
-            logger.info("Disposed processing pipeline for camera %s.", camera_id)
+            try:
+                pipeline.close()
+            except Exception as exc:
+                errors.append(exc)
+                logger.exception("Unable to dispose camera %s.", camera_id)
+            else:
+                with self._lock:
+                    self._pipelines.pop(camera_id, None)
+                logger.info("Disposed processing pipeline for camera %s.", camera_id)
+        if errors:
+            raise ExceptionGroup("Some camera pipelines could not be disposed.", errors)
         return stopped
 
     def close(self) -> None:
         """Dispose every camera and reporting worker during service shutdown."""
         with self._lifecycle_lock:
-            self._dispose_all_locked()
-            self._reporting.close()
+            try:
+                self._dispose_all_locked()
+            finally:
+                self._reporting.close()
 
     def pipeline(self, camera_id: int) -> CameraProcessingManager | None:
         with self._lock:
@@ -426,9 +462,7 @@ class CameraPipelineRegistry:
             camera_ids = sorted(self._pipelines)
             pending_camera_ids = sorted(self._pending_starts)
             enterprise_id = self._enterprise_id or ""
-        enterprise_occupancy = int(
-            self._reporting.metrics_summary(include_submitted=True)["current_occupancy"] or 0
-        )
+        enterprise_occupancy = self._reporting.enterprise_occupancy()
         cameras = [self._camera_state(camera_id, enterprise_occupancy) for camera_id in camera_ids]
         return {
             "enterprise_id": enterprise_id,
@@ -452,7 +486,7 @@ class CameraPipelineRegistry:
             "status": "ok",
             "running": states["active_camera_count"] > 0,
             "error": errors[0] if errors else None,
-            "runtime_capabilities": get_runtime_capabilities(),
+            "runtime_capabilities": cached_runtime_capabilities(),
             "active_camera_count": states["active_camera_count"],
             "max_configured_cameras": self._max_configured_cameras,
             "max_concurrent_cameras": self._max_concurrent_cameras,
@@ -502,13 +536,23 @@ class CameraPipelineRegistry:
                 removed_ids = [
                     camera_id for camera_id in self._pipelines if camera_id not in retained_ids
                 ]
+            errors: list[Exception] = []
             for camera_id in removed_ids:
                 with self._lock:
-                    pipeline = self._pipelines.pop(camera_id, None)
+                    pipeline = self._pipelines.get(camera_id)
                     self._pending_starts.pop(camera_id, None)
                     self._config_fingerprints.pop(camera_id, None)
                 if pipeline is not None:
-                    pipeline.close()
+                    try:
+                        pipeline.close()
+                    except Exception as exc:
+                        errors.append(exc)
+                        logger.exception("Unable to close removed camera %s.", camera_id)
+                    else:
+                        with self._lock:
+                            self._pipelines.pop(camera_id, None)
+            if errors:
+                raise ExceptionGroup("Some removed cameras could not be closed.", errors)
             for camera_id in sorted(retained_ids - previous_ids):
                 logger.info(
                     "Camera configuration created.",

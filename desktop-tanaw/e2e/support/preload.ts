@@ -37,6 +37,9 @@ export async function mockMlRequest(page: Page, path: string, handle: Handler) {
         },
       };
       window.addEventListener("unload", () => listeners.clear());
+      window.addEventListener("e2e-ml-live-event", (event) => {
+        for (const listener of listeners) listener((event as CustomEvent).detail);
+      });
     });
   }
   routes.push({ path, handle });

@@ -42,6 +42,61 @@ async function signIn(page: Page, configureMl?: () => Promise<void>) {
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
 }
 
+test("updates camera overlays from live IPC events and restores polling after disconnect", async ({ page }) => {
+  test.setTimeout(60_000);
+  let runtimeReads = 0;
+  const camera = {
+    id: 1, name: "Live camera", zone: "Entrance", status: "stopped", cameraBrand: "tapo", cameraHost: "192.168.1.20",
+    rtsp: "rtsp://192.168.1.20/stream2", rtspStream: "stream2", processingProfile: "auto", confidence: 0.35, trackingConfidence: 0.15,
+    config: { tripwire: 50, reverse: false, roi: { top: 0, left: 0, width: 100, height: 100 }, tripwires: {
+      entry: { start: { x: 42, y: 12 }, end: { x: 42, y: 88 } }, exit: { start: { x: 58, y: 12 }, end: { x: 58, y: 88 } },
+    } },
+  };
+  await signIn(page, async () => {
+    await mockCameraSetup(page, enterpriseUser.enterpriseId);
+    await mockMlRequest(page, "/cameras", () => mlResponse({ status: 200, body: JSON.stringify([camera]) }));
+    await mockMlRequest(page, "/cameras/runtime", () => {
+      runtimeReads += 1;
+      return mlResponse({ status: 200, body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_occupancy: 0,
+        active_camera_count: 0, max_configured_cameras: 4, max_concurrent_cameras: 2, pending_camera_ids: [], cameras: [] }) });
+    });
+  });
+  await page.goto("/#/enterprise/cameras");
+  await expect(page.getByRole("heading", { name: "Live camera", exact: true })).toBeVisible();
+  const counts = { entry: 3, exit: 1, occupancy: 2, running: true, status: "running", error: null, started_at: null };
+  const envelope = { type: "camera.states", data: { enterprise_id: enterpriseUser.enterpriseId, enterprise_occupancy: 2, active_camera_count: 1,
+    max_configured_cameras: 4, max_concurrent_cameras: 2, pending_camera_ids: [], cameras: [{ camera_id: 1, counts, area: null,
+      detections: { running: true, status: "running", error: null, frame_width: 640, frame_height: 360, tracks: [{ track_id: 7, source_track_id: 7,
+        confidence: 0.9, bbox: [60, 50, 160, 300], centroid: [110, 175], direction: null, counting_debug: null }] },
+      health: { status: "ok", running: true, error: null, model_ready: true, analytics_fps: 11.7, processed_frame_stale_ms: 10,
+        estimated_unique_count: 3, confirmed_unique_count: 3, degraded_unique_count: 0 }, session: { running: true, status: "running", error: null, counts },
+    }] } };
+  const emit = (payload: unknown) => page.evaluate((detail) => window.dispatchEvent(new CustomEvent("e2e-ml-live-event", { detail })), payload);
+  await emit(envelope);
+  await expect(page.getByText("11.7 AI FPS", { exact: true })).toBeVisible({ timeout: 1000 });
+  const box = page.getByText("#7 | 90%", { exact: true }).locator("..");
+  await expect(box).toBeVisible();
+  expect(await box.evaluate((element) => (element as HTMLElement).style.left)).toBe("9.375%");
+  envelope.data.cameras[0].detections.tracks[0].bbox = [300, 50, 400, 300];
+  await emit(envelope);
+  await expect.poll(() => box.evaluate((element) => (element as HTMLElement).style.left), { timeout: 1000 }).toBe("46.875%");
+  await page.waitForTimeout(1200); // Allow the separate cloud-telemetry reconciliation to finish.
+  const readsAfterLive = runtimeReads;
+  await page.waitForTimeout(2700);
+  expect(runtimeReads).toBe(readsAfterLive);
+  await emit({ type: "disconnected" });
+  await expect.poll(() => runtimeReads).toBeGreaterThan(readsAfterLive);
+  await emit({ type: "service.error", code: "local_database_reset_required", message: "Close TANAW and reset the local database.", retryable: false });
+  await page.getByRole("button", { name: "ML Service Needs Attention details", exact: true }).click();
+  await expect(page.getByText("Close TANAW and reset the local database.", { exact: false }).first()).toBeVisible();
+  const readsAfterReset = runtimeReads;
+  await page.waitForTimeout(2700);
+  expect(runtimeReads).toBe(readsAfterReset);
+  await emit({ type: "connected" });
+  await emit(envelope);
+  await expect(page.getByText("11.7 AI FPS", { exact: true })).toBeVisible();
+});
+
 async function readTopbarGlassFrame(page: Page) {
   return page.evaluate(() => {
     const material = document.querySelector<HTMLElement>("[data-topbar-glass-indicator='true']");

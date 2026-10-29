@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -50,6 +51,7 @@ CAMERA_WS_IDLE_INTERVAL_SECONDS = 1.00
 CAMERA_WS_HEARTBEAT_INTERVAL_SECONDS = 15.00
 SERVICE_VERSION = "0.1.0"
 API_CONTRACT_VERSION = 2
+logger = logging.getLogger(__name__)
 
 
 def has_valid_desktop_access_token(supplied_token: str, expected_token: str) -> bool:
@@ -276,8 +278,19 @@ async def camera_state_websocket(websocket: WebSocket) -> None:
                 return
     except WebSocketDisconnect:
         return
+    except LocalDatabaseResetRequiredError as exc:
+        await websocket.send_json(
+            {
+                "type": "service.error",
+                "code": "local_database_reset_required",
+                "message": str(exc),
+                "retryable": False,
+            }
+        )
+        await websocket.close(code=4009, reason="Local database reset required.")
     except RuntimeError:
-        return
+        logger.exception("Camera state stream failed.")
+        await websocket.close(code=1011, reason="Camera state stream unavailable.")
 
 
 @router.get("/camera/{camera_id}/stream")

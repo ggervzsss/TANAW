@@ -1,6 +1,7 @@
 import json
 import random
 import sqlite3
+import threading
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -40,6 +41,8 @@ class LocalDataStore:
         self._visitor_identities = VisitorIdentityRepository(self._database)
         self._root = self._database.root
         self._database_path = self._database.path
+        self._runtime_cache: dict[int | None, tuple[int, dict[str, Any]]] = {}
+        self._runtime_cache_lock = threading.Lock()
 
     def load_monitoring_state(self, camera_id: int | None = None) -> dict[str, Any] | None:
         return self._cameras.load_monitoring_state(camera_id)
@@ -60,6 +63,44 @@ class LocalDataStore:
 
     def append_count_event(self, payload: dict[str, Any], recorded_at: str | None = None) -> str:
         return self._occupancy_events.append(payload, recorded_at)
+
+    def update_count_event_identity(self, event_id: str, fields: dict[str, Any]) -> bool:
+        return self._occupancy_events.update_identity(event_id, fields)
+
+    def finalize_pending_entries(self, camera_id: int | None = None) -> None:
+        self._occupancy_events.finalize_pending(camera_id)
+
+    def runtime_metrics(self, camera_id: int | None = None) -> dict[str, Any]:
+        """Only identity totals are needed on the live path, never report/peak reconstruction."""
+        with self._runtime_cache_lock:
+            version = self._database.change_version
+            cached = self._runtime_cache.get(camera_id)
+            if cached is not None and cached[0] == version:
+                return dict(cached[1])
+            condition = "submitted_report_id is null"
+            parameters: tuple[Any, ...] = ()
+            if camera_id is not None:
+                condition += " and camera_id=?"
+                parameters = (camera_id,)
+            with self._connection() as connection:
+                row = connection.execute(
+                    "select count(*) entries, coalesce(sum(is_unique_entry),0) estimated, "
+                    "coalesce(sum(is_unique_entry and identity_confidence='high'),0) confirmed, "
+                    "coalesce(sum(is_unique_entry and coalesce(identity_confidence,'degraded')!='high'),0) degraded, "
+                    "coalesce(sum(is_unique_entry=0 and (reid_decision='pending' or "
+                    "(reid_decision='ambiguous_new' and exists(select 1 from visitor_identities v "
+                    "where v.visitor_id=count_events.visitor_id and v.identity_status='provisional')))),0) pending "
+                    "from count_events where direction='entry' and " + condition,
+                    parameters,
+                ).fetchone()
+            result = {
+                "estimated_unique_count": row["estimated"],
+                "confirmed_unique_count": row["confirmed"],
+                "degraded_unique_count": row["degraded"],
+                "repeat_entry_count": max(0, row["entries"] - row["estimated"] - row["pending"]),
+            }
+            self._runtime_cache[camera_id] = (version, result)
+            return dict(result)
 
     def upsert_visitor_identity(
         self,
@@ -235,13 +276,13 @@ class LocalDataStore:
                         case
                             when direction = 'entry'
                                 and is_unique_entry = 0
-                                and reid_decision = 'ambiguous_new'
+                                and (reid_decision = 'pending' or (reid_decision = 'ambiguous_new'
                                 and exists (
                                     select 1
                                     from visitor_identities
                                     where visitor_identities.visitor_id = count_events.visitor_id
                                         and visitor_identities.identity_status = 'provisional'
-                                )
+                                )))
                             then 1
                             else 0
                         end
@@ -425,6 +466,18 @@ class LocalDataStore:
         notes: str | None = None,
         payload: dict[str, Any] | None = None,
         metrics: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with self._database.transaction():
+            self.finalize_pending_entries()
+            return self._record_report_submission(report_id, period, notes, payload, metrics)
+
+    def _record_report_submission(
+        self,
+        report_id: str,
+        period: str,
+        notes: str | None,
+        payload: dict[str, Any] | None,
+        metrics: dict[str, Any] | None,
     ) -> dict[str, Any]:
         submitted_at = _utc_now()
         submission_id = str(uuid4())

@@ -2,6 +2,7 @@ import tempfile
 import threading
 import time
 import unittest
+from itertools import count
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
@@ -15,7 +16,7 @@ from app.counting.geometry import Centroid
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import TrackResult
 from app.identity import UniqueVisitorRegistry
-from app.reid import PersonReIdentifier, TrackAppearanceBuffer
+from app.reid import AsyncReIdWorker, PersonReIdentifier, TrackAppearanceBuffer
 from app.storage.session_store import SessionStore
 from app.tracking import ResolvedTrack
 
@@ -264,7 +265,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(len(manager._pending_entry_events), 0)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
-    def test_slow_entry_crossing_is_counted_through_detection_pipeline(self) -> None:
+    @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
+    def test_slow_entry_crossing_is_counted_through_detection_pipeline(self, _clock: Any) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             session = _session(1)
@@ -293,7 +295,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             _flush_pending(manager, session)
             self.assertEqual(manager.metrics_summary()["entries"], 1)
 
-    def test_configured_entry_to_exit_line_sequence_counts_exit(self) -> None:
+    @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
+    def test_configured_entry_to_exit_line_sequence_counts_exit(self, _clock: Any) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             session = _custom_tripwire_session(1)
@@ -323,8 +326,10 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(summary["entries"], 0)
             self.assertEqual(summary["exits"], 1)
 
+    @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
     def test_configured_entry_to_exit_sequence_waits_for_center_trigger_point(
         self,
+        _clock: Any,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
@@ -361,7 +366,8 @@ class CameraProcessingManagerSessionTest(unittest.TestCase):
             self.assertEqual(summary["entries"], 0)
             self.assertEqual(summary["exits"], 1)
 
-    def test_configured_exit_to_entry_line_sequence_counts_entry(self) -> None:
+    @patch("app.camera.camera_manager.time.monotonic", side_effect=count(1000, 0.1))
+    def test_configured_exit_to_entry_line_sequence_counts_entry(self, _clock: Any) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manager = _manager_with_store(directory)
             session = _custom_tripwire_session(1)
@@ -794,6 +800,14 @@ def _manager_with_store(directory: str) -> CameraProcessingManager:
     manager._session_store = SessionStore(str(Path(directory)))
     manager._visitor_registry = UniqueVisitorRegistry(manager._session_store, model_name="test")
     manager._reidentifier = PersonReIdentifier(model_path=str(Path(directory) / "missing.onnx"))
+    # Keep these deterministic counting tests independent of installed real ReID assets.
+    manager._reid_worker.close()
+    manager._quality_reid_worker.close()
+    manager._quality_reidentifier = PersonReIdentifier(
+        model_path=str(Path(directory) / "missing-quality.onnx")
+    )
+    manager._reid_worker = AsyncReIdWorker(manager._reidentifier)
+    manager._quality_reid_worker = AsyncReIdWorker(manager._quality_reidentifier)
     manager._appearance_buffer = TrackAppearanceBuffer()
     manager._counter = TripwireCounter(tripwire_position=0.5)
     manager._counter.reset()

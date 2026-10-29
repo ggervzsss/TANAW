@@ -206,6 +206,9 @@ export async function proxyMlServiceJsonRequest(requestInput: unknown) {
     method,
     signal: AbortSignal.timeout(timeoutMs),
   });
+  if (response.ok && method === "POST" && new URL(url).pathname === "/context/enterprise") {
+    reportLiveEvents.reconnectAfterServiceRestart();
+  }
   return {
     body: await response.text(),
     ok: response.ok,

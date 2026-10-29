@@ -115,7 +115,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
     const unsubscribeFromReportEvents = window.tanawMlService?.subscribeToReportEvents((event) => {
       if (event.type === "connected") {
         scheduleTelemetrySync();
-      } else {
+      } else if (event.type === "camera.states") {
         handleLiveCameraStates(event.data);
       }
     });

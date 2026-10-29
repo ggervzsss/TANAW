@@ -44,8 +44,9 @@ export function CameraMonitoringPanel({
   onTestConnection,
 }: CameraMonitoringPanelProps) {
   const isProcessingThisCamera = counts.running;
-  const serviceOnline = health?.status === "ok";
-  const serviceLabel = serviceOnline ? (health.running ? "ML Service Running" : "ML Service Ready") : "ML Service Offline";
+  const serviceIssueSource = serviceStatus?.error ?? serviceError;
+  const serviceOnline = !serviceIssueSource && health?.status === "ok";
+  const serviceLabel = serviceIssueSource ? "ML Service Needs Attention" : serviceOnline ? (health.running ? "ML Service Running" : "ML Service Ready") : "ML Service Offline";
   const cameraState = getCameraState(activeCam, counts, isStarting);
   const displayedFrameIsFresh = previewState === "live" && hasFreshPreviewFrame(health);
   const streamVerified = counts.running ? displayedFrameIsFresh : activeCam.status === "online";
@@ -70,7 +71,6 @@ export function CameraMonitoringPanel({
     ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60 dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-200 dark:hover:bg-red-500/20"
     : "bg-[#065f46] text-white shadow-sm hover:bg-[#044a36] disabled:bg-gray-400 dark:bg-emerald-500/80 dark:text-emerald-950 dark:hover:bg-emerald-400";
   const processButtonTooltip = isProcessRunning ? "Stops visitor counting for this camera." : "Starts visitor counting for this camera.";
-  const serviceIssueSource = serviceStatus?.error ?? serviceError;
   const serviceIssue = serviceIssueSource ? getUserFacingIssueMessage(serviceIssueSource) : null;
   const serviceNeedsRecovery = Boolean(!serviceOnline && (serviceStatus?.error || serviceError));
   const cameraIssueSource = error ?? health?.error ?? counts.error;

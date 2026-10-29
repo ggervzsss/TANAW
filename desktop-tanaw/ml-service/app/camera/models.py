@@ -44,6 +44,7 @@ class ProcessingSession:
 
 @dataclass(frozen=True, slots=True)
 class PendingEntryEvent:
+    event_id: str
     session_id: int
     track: ResolvedTrack
     direction: str
