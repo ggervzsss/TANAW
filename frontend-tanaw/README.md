@@ -78,6 +78,9 @@ production deployment template and contains only these compiled browser values.
 
 ## Deployment Origins And CSP
 
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the standalone hosting repository,
+Vercel build settings, and the current backend URL.
+
 The API URL is compiled into the browser bundle. Vite derives the Content
 Security Policy `connect-src` entries from that same value, including the
 matching `wss://` origin used by TANAW's operational and activity-log sockets.
@@ -102,20 +105,20 @@ leave this flag false and use `http://localhost:8000`.
 
 These values form one deployment unit and must change together:
 
-| Configuration                         | Current hosted deployment           | Future custom-domain example    |
-| ------------------------------------- | ----------------------------------- | ------------------------------- |
-| Portal URL                            | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
-| Frontend `VITE_API_BASE_URL`          | `https://tanaw.onrender.com`        | `https://api.tanaw-sanpedro.ph` |
-| Frontend `VITE_CARTO_BASEMAP_API_KEY` | CARTO-issued browser key            | CARTO-issued browser key        |
-| Backend `FRONTEND_PUBLIC_URL`         | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
-| Backend `CORS_ORIGINS`                | `https://tanaw-sanpedro.vercel.app` | `https://tanaw-sanpedro.ph`     |
-| Generated CSP sockets                 | `wss://tanaw.onrender.com`          | `wss://api.tanaw-sanpedro.ph`   |
+| Configuration                         | Current hosted deployment             | Future custom-domain example    |
+| ------------------------------------- | ------------------------------------- | ------------------------------- |
+| Portal URL                            | `https://tanaw-sanpedro.vercel.app`   | `https://tanaw-sanpedro.ph`     |
+| Frontend `VITE_API_BASE_URL`          | `https://tanaw-api-yked.onrender.com` | `https://api.tanaw-sanpedro.ph` |
+| Frontend `VITE_CARTO_BASEMAP_API_KEY` | CARTO-issued browser key              | CARTO-issued browser key        |
+| Backend `FRONTEND_PUBLIC_URL`         | `https://tanaw-sanpedro.vercel.app`   | `https://tanaw-sanpedro.ph`     |
+| Backend `CORS_ORIGINS`                | `https://tanaw-sanpedro.vercel.app`   | `https://tanaw-sanpedro.ph`     |
+| Generated CSP sockets                 | `wss://tanaw-api-yked.onrender.com`   | `wss://api.tanaw-sanpedro.ph`   |
 
 Before a deployment, validate the four operator-controlled values from this
 directory:
 
 ```shell
-VITE_API_BASE_URL=https://tanaw.onrender.com \
+VITE_API_BASE_URL=https://tanaw-api-yked.onrender.com \
 VITE_CARTO_BASEMAP_API_KEY=your-carto-basemap-key \
 FRONTEND_PUBLIC_URL=https://tanaw-sanpedro.vercel.app \
 CORS_ORIGINS=https://tanaw-sanpedro.vercel.app \
