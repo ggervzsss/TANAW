@@ -689,6 +689,17 @@ uv run python main.py
 The service listens on <http://127.0.0.1:8765> by default. Its health endpoint
 is <http://127.0.0.1:8765/health>.
 
+## Hosted web deployment
+
+The hosted portal is <https://tanaw-sanpedro.vercel.app> and its backend API is
+<https://tanaw-api-yked.onrender.com>. Hosting uses the separate frontend and
+backend repositories in `Deployed-TANAW`; this monorepo keeps the corresponding
+deployment source and configuration in each component directory.
+
+See the [frontend deployment guide](frontend-tanaw/DEPLOYMENT.md) and
+[backend deployment guide](backend-tanaw/DEPLOYMENT.md) for repository roots,
+build settings, environment configuration, and verification.
+
 ## Production-like Docker build
 
 Use the production Compose file for deployment-like local validation:
@@ -709,10 +720,12 @@ This configuration:
 The Electron desktop is not containerized and must still run on the host or be
 installed from a packaged desktop build.
 
-For non-Compose deployments, run `uv run alembic upgrade head` as the platform's
-pre-deploy or release command before replacing the backend process. TANAW refuses
-to start against an uninitialized database or one that does not match the
-canonical revision `0001`.
+The production backend image runs `scripts/start-production.sh`, which applies
+`alembic upgrade head` before starting Uvicorn. This also supports Render Free,
+which has no pre-deploy command. Compose additionally gates backend startup on
+its one-shot migration service. When starting Uvicorn directly, apply Alembic
+first. TANAW refuses to start against an uninitialized database or one that does
+not match the canonical revision `0001`.
 
 ## Environment configuration
 

@@ -140,6 +140,10 @@ The backend follows a feature-oriented layout. Shared infrastructure lives in
 
 ## Database Migrations
 
+Hosted configuration and the production startup script are documented in
+[DEPLOYMENT.md](DEPLOYMENT.md). The production image applies Alembic through
+`scripts/start-production.sh` before starting Uvicorn.
+
 Alembic is the only schema authority. Apply migrations before starting any API
 or sample-data process:
 

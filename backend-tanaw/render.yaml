@@ -1,0 +1,33 @@
+# Backend-only repository. Paths are relative to this repository's root.
+services:
+  - type: web
+    name: tanaw-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Free services have no pre-deploy command. Use one API process/instance.
+    dockerCommand: sh scripts/start-production.sh
+    healthCheckPath: /health
+    envVars:
+      - key: TANAW_ENV
+        value: production
+      - key: EMAIL_DELIVERY_MODE
+        value: brevo
+      - key: FRONTEND_PUBLIC_URL
+        value: https://tanaw-sanpedro.vercel.app
+      - key: CORS_ORIGINS
+        value: https://tanaw-sanpedro.vercel.app,tanaw-app://desktop
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: EMAIL_SECRET_DERIVATION_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM_ADDRESS
+        sync: false
+      - key: GEOAPIFY_API_KEY
+        sync: false
