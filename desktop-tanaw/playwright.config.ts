@@ -7,7 +7,7 @@ const web = new URL(webUrl);
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: "./tests/e2e/browser",
   fullyParallel: false,
   timeout: 30_000,
   expect: { timeout: 8_000 },
@@ -23,7 +23,7 @@ export default defineConfig({
     command: `npm run build && npm run preview:web -- --host ${web.hostname} --port ${web.port || "5175"}`,
     url: webUrl,
     reuseExistingServer: true,
-    timeout: 60_000,
+    timeout: 120_000,
     env: {
       ...process.env,
       TANAW_RENDERER_ONLY: "true",

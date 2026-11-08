@@ -87,7 +87,8 @@ Central records and local device records have separate lifecycles.
 - **src:** the enterprise interface and workflows.
 - **ml-service/app:** camera processing, visitor counting, and local storage.
 - **ml-service/scripts:** model setup and camera evaluation tools.
-- **e2e and e2e-electron:** browser and desktop integration tests.
+- **tests:** JavaScript/Electron unit tests, browser workflows, and desktop integration tests.
+- **ml-service/tests:** Python camera-processing and local-storage tests.
 
 ## Credits
 
