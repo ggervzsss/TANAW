@@ -57,7 +57,8 @@ excluded from the central entrance/exit monitoring and reporting flow.
 - **src/features:** account, monitoring, reporting, support, and other workflows.
 - **src/shared:** reusable interface elements, API helpers, and shared types.
 - **src/contracts:** generated types that describe the backend's API.
-- **e2e:** browser workflow tests.
+- **tests/unit:** checks for individual features, helpers, and configuration.
+- **tests/e2e:** browser workflow tests.
 
 The portal needs a reachable TANAW API and a CARTO browser key for map tiles.
 The API address comes from VITE_API_BASE_URL, and the map key comes from

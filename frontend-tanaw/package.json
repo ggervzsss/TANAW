@@ -15,7 +15,7 @@
     "lint:tailwind:fix": "node scripts/lint-tailwind-canonical.mjs --fix",
     "preview": "vite preview",
     "prettier": "prettier --write .",
-    "test": "vitest run --exclude=e2e/**",
+    "test": "vitest run",
     "test:e2e": "playwright test",
     "type": "tsc -b",
     "pp": "tsc -b && vite build && vite preview"

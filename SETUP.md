@@ -306,9 +306,10 @@ npm run type
 npm test
 ```
 
-Desktop JavaScript and Electron tests live in desktop-tanaw/tests. Python tests
-stay in desktop-tanaw/ml-service/tests. The default npm test command runs unit
-tests only.
+Frontend tests live in frontend-tanaw/tests, and desktop JavaScript and Electron
+tests live in desktop-tanaw/tests. Both use unit and e2e folders to separate
+individual checks from browser workflows. Python tests stay in
+desktop-tanaw/ml-service/tests. The default npm test command runs unit tests only.
 
 Use npm run test:e2e for browser workflows. From desktop-tanaw, npm run
 test:electron checks the real Electron bridge. Browser fixtures do not run

@@ -8,7 +8,7 @@ const web = new URL(webUrl);
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: "./tests/e2e",
   testMatch: developmentDevLog ? "dev-log.spec.ts" : undefined,
   fullyParallel: false,
   timeout: 30_000,
@@ -22,12 +22,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: developmentDevLog
-      ? `npm run dev -- --host ${web.hostname} --port ${web.port || "5177"}`
-      : `npm run build && npm run preview -- --host ${web.hostname} --port ${web.port || "5176"}`,
+    command: developmentDevLog ? `npm run dev -- --host ${web.hostname} --port ${web.port || "5177"}` : `npm run build && npm run preview -- --host ${web.hostname} --port ${web.port || "5176"}`,
     url: webUrl,
     reuseExistingServer: true,
-    timeout: 60_000,
+    timeout: 120_000,
     env: {
       ...process.env,
       VITE_API_BASE_URL: apiUrl,
