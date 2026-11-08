@@ -1,5 +1,6 @@
-import { validateRequiredText, validateRtspUrl } from "../../../utils/form-validation";
+import { validateRequiredText } from "../../../utils/form-validation";
 import type { CameraFormValues } from "../types/camera";
+import { validateCameraConnection } from "./camera-connection";
 import { isValidIpv4 } from "./rtsp";
 
 export type CameraFormErrors = Partial<Record<keyof CameraFormValues, string>>;
@@ -13,7 +14,7 @@ export function validateCameraForm(values: CameraFormValues): CameraFormErrors {
   if (!isValidIpv4(values.cameraHost)) errors.cameraHost = "Enter a valid IPv4 address, such as 192.168.1.9.";
   if (!values.username.trim()) errors.username = "Enter the camera username.";
   if (!values.password.trim()) errors.password = "Enter the camera password.";
-  const streamError = validateRtspUrl(values.rtsp);
+  const streamError = validateCameraConnection(values);
   if (streamError) errors.rtsp = streamError;
   return errors;
 }

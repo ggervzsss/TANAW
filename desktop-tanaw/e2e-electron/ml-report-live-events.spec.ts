@@ -1,18 +1,22 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import type { MlReportLiveEvent } from "../src/types/ml-report-live-events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { FakeMlSidecar } from "./support/fake-ml-sidecar";
 
 test.describe.configure({ mode: "serial" });
 
 test("mediates authenticated report events across preload and IPC", async () => {
+  const dataDirectory = await mkdtemp(path.join(tmpdir(), "tanaw-live-events-"));
   const sidecar = new FakeMlSidecar();
   await sidecar.start();
   let electronApp: ElectronApplication | undefined;
 
   try {
     electronApp = await electron.launch({
-      args: [".", "--headless", "--no-sandbox"],
-      env: { ...process.env, TANAW_ML_SERVICE_PORT: String(sidecar.port) },
+      args: [".", `--user-data-dir=${path.join(dataDirectory, "profile")}`, "--headless", "--no-sandbox"],
+      env: { ...process.env, XDG_CONFIG_HOME: dataDirectory, APPDATA: dataDirectory, LOCALAPPDATA: dataDirectory, TANAW_ML_SERVICE_PORT: String(sidecar.port) },
     });
     const page = await getMainWindow(electronApp);
     await expectBridge(page);
@@ -62,6 +66,19 @@ test("mediates authenticated report events across preload and IPC", async () => 
     sidecar.sendReportEvent();
     await expect.poll(() => cameraEventCount(page)).toBe(2);
 
+    sidecar.sendReportEvent({ type: "service.error", code: "local_database_reset_required", message: "Close TANAW and reset local data.", retryable: false });
+    sidecar.closeWebSockets(4009, "Local database reset required.");
+    await expect.poll(() => page.evaluate(() => window.__tanawReportEvents?.some((event) => event.type === "service.error"))).toBe(true);
+    await expect.poll(() => sidecar.activeWebSockets).toBe(0);
+    const pausedAttempts = sidecar.webSocketAttempts;
+    await page.waitForTimeout(1500);
+    expect(sidecar.webSocketAttempts).toBe(pausedAttempts);
+    await page.evaluate(async () => {
+      const status = await window.tanawMlService?.getStatus();
+      await window.tanawMlService?.request({ method: "POST", timeoutMs: 1000, url: `${status?.baseUrl}/context/enterprise`, body: JSON.stringify({ enterprise_id: "enterprise-1" }) });
+    });
+    await expect.poll(() => sidecar.activeWebSockets).toBe(1);
+
     await page.evaluate(() => window.__tanawReportUnsubscribe?.());
     await expect.poll(() => sidecar.activeWebSockets).toBe(0);
     sidecar.rejectWebSockets = true;
@@ -93,6 +110,7 @@ test("mediates authenticated report events across preload and IPC", async () => 
       await electronApp.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
     }
     await sidecar.stop();
+    await rm(dataDirectory, { recursive: true, force: true });
   }
 });
 

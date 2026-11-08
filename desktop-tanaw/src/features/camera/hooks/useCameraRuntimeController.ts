@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Camera, CameraStatus } from "../../../types/enterprise";
+import { useAuthStore } from "../../login/stores/auth-store";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
   getMlCameraStates,
@@ -35,6 +36,7 @@ type CameraRuntimeControllerOptions = {
 };
 
 export function useCameraRuntimeController({ activeCam, cameras, setCameras, storageKey }: CameraRuntimeControllerOptions) {
+  const enterpriseId = useAuthStore((state) => state.user?.enterpriseId || state.user?.id);
   const [cameraStates, setCameraStates] = useState<Record<number, MlCameraLiveState>>({});
   const [cameraErrors, setCameraErrors] = useState<Record<number, string | null>>({});
   const [cameraActions, setCameraActions] = useState<Record<number, CameraAction | undefined>>({});
@@ -46,6 +48,8 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
   const [serviceStatus, setServiceStatus] = useState<MlServiceStatus | null>(null);
   const [serviceHealth, setServiceHealth] = useState<MlHealth | null>(null);
   const [serviceError, setServiceError] = useState<string | null>(null);
+  const terminalServiceErrorRef = useRef<string | null>(null);
+  const runtimeEpochRef = useRef(0);
   const [isRestartingService, setIsRestartingService] = useState(false);
   const servicePidRef = useRef<number | null>(null);
   const activeCameraIds = useMemo(() => new Set(cameras.map((camera) => camera.id)), [cameras]);
@@ -111,6 +115,8 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
 
   const applyCameraStates = useCallback(
     (payload: MlCameraStates) => {
+      if (enterpriseId && payload.enterprise_id !== enterpriseId) return;
+      runtimeEpochRef.current += 1;
       const registeredCameraIds = activeCameraIdsRef.current;
       const nextStates = payload.cameras.filter((state) => registeredCameraIds.has(state.camera_id));
       const expiredStartIds = new Set<number>();
@@ -177,10 +183,12 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
         }),
       );
     },
-    [setCameras],
+    [enterpriseId, setCameras],
   );
 
   const resetRuntimeState = useCallback((clearCameraErrors = true) => {
+    runtimeEpochRef.current += 1;
+    terminalServiceErrorRef.current = null;
     setCameraStates({});
     if (clearCameraErrors) setCameraErrors({});
     setCameraActions({});
@@ -203,8 +211,9 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
     }
     adoptServiceStatus(nextStatus);
     try {
-      setServiceHealth(await getMlHealth(nextStatus.baseUrl));
-      setServiceError(null);
+      const health = await getMlHealth(nextStatus.baseUrl);
+      setServiceHealth(terminalServiceErrorRef.current ? null : health);
+      setServiceError(terminalServiceErrorRef.current);
     } catch (error) {
       if (isTransientCameraStartupPollError(error, Object.values(cameraActionsRef.current).some(isStartAction))) return;
       setServiceHealth(null);
@@ -213,16 +222,27 @@ export function useCameraRuntimeController({ activeCam, cameras, setCameras, sto
   }, [adoptServiceStatus, resetRuntimeState, setCameras]);
 
   const refreshCameraStates = useCallback(async () => {
+    const epoch = runtimeEpochRef.current;
     try {
-      applyCameraStates(await getMlCameraStates(mlBaseUrl));
+      const payload = await getMlCameraStates(mlBaseUrl);
+      if (epoch !== runtimeEpochRef.current || terminalServiceErrorRef.current) return;
+      applyCameraStates(payload);
       setServiceError(null);
     } catch (error) {
+      if (epoch !== runtimeEpochRef.current || terminalServiceErrorRef.current) return;
       if (!isTransientCameraStartupPollError(error, Object.values(cameraActionsRef.current).some(isStartAction))) setServiceError(toErrorMessage(error));
       throw error;
     }
   }, [applyCameraStates, mlBaseUrl]);
 
-  useCameraRuntimeUpdates({ applyCameraStates, baseUrl: mlBaseUrl, refreshCameraStates, refreshServiceStatus: refreshMlStatus });
+  const handleLiveServiceError = useCallback((message: string | null) => {
+    runtimeEpochRef.current += 1;
+    terminalServiceErrorRef.current = message;
+    setServiceError(message);
+    if (message) setServiceHealth(null);
+  }, []);
+
+  useCameraRuntimeUpdates({ applyCameraStates, baseUrl: mlBaseUrl, refreshCameraStates, refreshServiceStatus: refreshMlStatus, onServiceError: handleLiveServiceError });
   useCameraStartDeadlineMonitor({ cameraActionsRef, cameraStartDeadlinesRef, setCameraActions, setCameraErrors, setCameras });
 
   const handleTestConnection = useCallback(async () => {

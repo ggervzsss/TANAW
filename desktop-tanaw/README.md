@@ -9,6 +9,43 @@ Electron, React, TypeScript, Vite, and local FastAPI ML service for
 enterprise-side camera monitoring, local counting, local report drafting, cloud
 sync, and offline-friendly operational workflows.
 
+## Connecting cameras
+
+In **Camera Setup → Add Camera**, choose a **Camera brand / type** for each
+camera. The same controls are available under **Edit configuration**:
+
+- **TP-Link Tapo** keeps the existing IP address and camera-account workflow.
+  Standard and high quality use `/stream2` and `/stream1`, respectively.
+- **Tenda** offers CH3 channel streams on port 554 and profile streams on port
+  8554, plus alternate channel and H.264 formats. Select the format verified for
+  your camera's hardware/firmware. **Advanced connection settings** allows an
+  exact port and stream-path override. A manual path determines its own quality.
+- **Dahua** generates `/cam/realmonitor?channel=1&subtype=1` for standard quality
+  (substream) and `subtype=0` for high quality (main stream). Enter the camera's
+  local IPv4 address and device credentials, rather than the DMSS account login.
+  The default RTSP port is 554; change it under **Advanced connection settings**
+  only if the camera uses a different port. This preset is intended for cameras
+  such as the DH-B200-I that expose Dahua's standard RTSP endpoint. The desktop
+  computer must be able to reach the camera on the local network. For an initial
+  test, use H.264 if available and leave the camera's RTSP TLS encryption off.
+  See [Dahua's RTSP connection instructions](https://dahuatech.zendesk.com/hc/en-gb/articles/16320900884754-How-to-add-IP-cameras-to-NVR-via-RTSP).
+- **Custom RTSP** accepts a complete local RTSP URL, including its port and query
+  string, for other compatible cameras. Use an IPv4 camera address.
+
+Enter the camera's local username and password in their separate fields; do not
+embed credentials in the URL. All connection types currently require
+camera credentials. Add Camera tests the connection before adding it. After
+editing an existing camera, use **Test** to check the saved settings. Connection
+changes restart a running camera using the updated endpoint.
+
+Tenda's published CH3 addresses vary across versions. Verify the stream in VLC
+or obtain the exact URI through an ONVIF client before selecting a preset.
+See [Tenda's RTSP playback instructions](https://www.tendacn.com/ke/faq/2003692)
+and [CH3 local credentials and stream formats](https://www.tendacn.com/ro/faq/2003715).
+Brand selection configures RTSP input; it does not add ONVIF discovery or PTZ
+controls. Profiles are saved locally; camera credentials stay in the existing
+secure credential store and are excluded from SQLite camera profiles.
+
 ## Full Setup After Cloning
 
 The backend, web portal, and PostgreSQL should be started with the root Docker
@@ -701,3 +738,75 @@ database. Authentication state and camera credentials remain in OS-protected
 Electron storage, while backend records remain in PostgreSQL. Use central
 sample-data cleanup for backend rows and desktop local-data cleanup for local
 device state.
+
+## Camera analysis modes and open-space dwell
+
+Each camera can use **Entrance / Exit** or **Open Space**. Entrance / Exit keeps
+the establishment counting and reporting workflow. Open Space measures people
+observed inside one polygon and estimates the duration of completed zone visits.
+
+To configure Open Space:
+
+1. Add a camera with Open Space selected, or change its mode in Camera Setup.
+2. Start its preview and open Edit Configuration. An unconfigured zone uses a
+   preview-only pipeline; drawing a zone does not require detector assets.
+3. Click 3–12 points on the actual decoded video, leaving visible space outside
+   the polygon. Drag vertices or use arrow keys; Delete removes a vertex.
+4. Name the monitored area and Save Config. Saving a configured zone while the
+   preview is running restarts the camera into analytics mode, which requires
+   the existing verified detector assets. If stopped, start it normally.
+5. Open Dashboard → Open Space to select the camera, monitored configuration,
+   and last 24 hours / 7 days / 30 days of local history.
+
+Keep the camera viewpoint fixed and disable automatic pan/tilt tracking.
+Changing the mode, polygon, or dwell policy ends active observations as
+incomplete and starts a new analysis run. History retains its original zone
+configuration; returning to older geometry creates a new revision.
+
+Dwell is estimated **time in the visible zone**, not a guaranteed entire park
+visit. A person first detected inside has an unknown arrival. Disappearance,
+stream loss, restart, or an ambiguous track match produces an incomplete
+observation. Dwell averages, medians, P90, and duration groups use completed
+visits with observed arrival/departure. Short tracking gaps have explicit
+uncertainty metadata. Visits are not unique people, and different cameras are
+not deduplicated.
+
+Live presence, temporary tracking gaps, observed visits, completion sample
+counts, incomplete observations, hourly activity, and observation coverage are
+shown separately. Healthy empty video produces zero presence; unavailable
+analytics produces an unavailable value. Visits use first-observation cohorts;
+completed dwell uses observed-end cohorts. Display time is Asia/Manila.
+
+Open-space analytics remain on the device. They are excluded from the doorway
+count ledger, official reports, sample-count preparation, and legacy cloud
+telemetry. Open-space-only configurations do not send legacy count telemetry;
+the existing LGU portal may therefore mark that gateway delayed/offline. Mixed
+configurations synchronize only their Entrance / Exit monitoring/count scope.
+Typed cloud support and LGU/AI presentation are separate follow-up work.
+
+Local API contract **2** is required in both Electron and the Python sidecar.
+The preproduction canonical SQLite `001` baseline includes the new tables.
+An older development ledger is rejected with the existing reset-required
+message; no database is automatically erased. Inspect existing data before
+using the supported enterprise-scoped reset command:
+
+```shell
+npm run local-data -- inspect
+npm run local-data -- clear --enterprise "your_enterprise_id" --yes
+```
+
+The second command deletes that enterprise's local database, including its
+camera profiles and operational history. Reconfigure the development cameras
+afterward. Do not run a reset when preservation is required; revise the
+migration policy and implementation first.
+
+Raw ended visits/presence intervals are retained for 30 days in bounded cleanup
+batches; active visits are protected. Hourly aggregate records are retained for
+180 days. The current detailed dashboard/API queries cover at most 30 days;
+no unsupported long-range median is reconstructed from hourly medians.
+
+For implementation boundaries and validation requirements, see the
+[implementation plan](../docs/plans/desktop-camera-modes-and-dwell-time.md).
+Physical-camera accuracy, representative crowded footage, sustained mixed
+workloads, and Windows release packaging require field validation before a
+broad rollout. Automated fixtures do not establish those outcomes.

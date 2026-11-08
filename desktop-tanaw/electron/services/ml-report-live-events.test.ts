@@ -116,6 +116,30 @@ describe("ML report live-event stream", () => {
     expect(url.pathname).toBe("/camera/ws");
     expect(url.searchParams.get("access_token")).toBe("secret value");
   });
+
+  it("pauses after a reset-required error, informs new subscribers, and resumes explicitly", () => {
+    const sockets: FakeWebSocket[] = [];
+    const setTimer = vi.fn<typeof setTimeout>();
+    const subscriber = new FakeSubscriber();
+    const stream = new MlReportLiveEventStream({ accessToken: "token", baseUrl: "http://127.0.0.1:8765", setTimer,
+      createSocket: (url) => { const socket = new FakeWebSocket(url); sockets.push(socket); return socket as unknown as WebSocket; },
+    });
+    stream.subscribe(subscriber);
+    sockets[0].open();
+    const error = { type: "service.error", code: "local_database_reset_required", message: "Reset required", retryable: false };
+    sockets[0].message(JSON.stringify(error));
+    sockets[0].closeFromService(4009);
+    expect(subscriber.send).toHaveBeenCalledWith(ML_REPORT_LIVE_EVENT_CHANNELS.event, error);
+    expect(subscriber.send).toHaveBeenCalledWith(ML_REPORT_LIVE_EVENT_CHANNELS.event, { type: "disconnected" });
+    const nextSubscriber = new FakeSubscriber();
+    stream.subscribe(nextSubscriber);
+    expect(nextSubscriber.send).toHaveBeenCalledWith(ML_REPORT_LIVE_EVENT_CHANNELS.event, error);
+    expect(setTimer).not.toHaveBeenCalled();
+    expect(sockets).toHaveLength(1);
+    stream.reconnectAfterServiceRestart();
+    expect(sockets).toHaveLength(2);
+    stream.dispose();
+  });
 });
 
 function createStream(sockets: FakeWebSocket[]) {
@@ -194,7 +218,7 @@ function cameraStatesEvent() {
         {
           camera_id: 1,
           counts: { entry: 1, exit: 0, occupancy: 1, running: true, status: "running", error: null },
-          detections: {},
+          detections: { frame_width: 640, frame_height: 360, tracks: [] },
           health: {
             running: true,
             model_ready: true,

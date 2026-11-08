@@ -34,6 +34,7 @@ export class MlReportLiveEventStream {
   #reconnectAttempt = 0;
   #reconnectTimer: TimerHandle | undefined;
   #socket: WebSocket | null = null;
+  #lastError: Extract<MlReportLiveEvent, { type: "service.error" }> | null = null;
 
   constructor(options: MlReportLiveEventStreamOptions) {
     this.#accessToken = options.accessToken;
@@ -52,6 +53,7 @@ export class MlReportLiveEventStream {
     this.#subscribers.add(subscriber);
     this.#destroyListeners.set(subscriber, removeDestroyedSubscriber);
     subscriber.once("destroyed", removeDestroyedSubscriber);
+    if (this.#lastError) subscriber.send(ML_REPORT_LIVE_EVENT_CHANNELS.event, this.#lastError);
     this.#connect();
   }
 
@@ -98,12 +100,17 @@ export class MlReportLiveEventStream {
     candidate.addEventListener("message", (event) => {
       if (this.#socket !== candidate || typeof event.data !== "string") return;
       const reportEvent = parseMlReportLiveEvent(event.data);
+      if (reportEvent?.type === "service.error") {
+        this.#lastError = reportEvent;
+        this.#permanentFailure = true;
+      }
       if (reportEvent) this.#broadcast(reportEvent);
     });
     candidate.addEventListener("close", (event) => {
       if (this.#socket !== candidate) return;
       this.#socket = null;
-      if (event.code === 1008) {
+      this.#broadcast({ type: "disconnected" });
+      if (event.code === 1008 || event.code === 4009) {
         this.#permanentFailure = true;
         return;
       }
@@ -140,6 +147,7 @@ export class MlReportLiveEventStream {
     this.#socket = null;
     this.#reconnectAttempt = 0;
     this.#permanentFailure = false;
+    this.#lastError = null;
     if (!current) return;
     if (current.readyState === WebSocket.CONNECTING) {
       current.addEventListener("open", () => current.close(), { once: true });

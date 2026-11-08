@@ -8,7 +8,6 @@ import {
 } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { cameraConfigurationLimitMessage, DEFAULT_ENTERPRISE_CAMERA_LIMIT, hasReachedCameraConfigurationLimit } from "../utils/camera-capacity";
-import { buildTapoRtspUrl } from "../utils/rtsp";
 import {
   createCameraUpdateGate,
   getCameraSaveRuntimeAction,
@@ -58,7 +57,9 @@ import {
 } from "../model/camera-management";
 
 const emptyCameraForm: CameraFormValues = {
+  analysisMode: "entrance_exit",
   cameraHost: "",
+  cameraBrand: "tapo",
   name: "",
   password: "",
   rtsp: "",
@@ -118,7 +119,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const isActiveCameraSaving = activeAction === "saving";
   const isActiveCameraStarting = Boolean(activeCam && (isStartAction(activeAction) || pendingCameraIds.has(activeCam.id)));
   const monitoringError = activeCam ? (activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError) : configurationError;
-  const warnings = isEditMode && editForm ? getValidationWarnings(editForm.config) : getValidationWarnings(activeCam?.config);
+  const warnings = isEditMode && editForm ? (editForm.analysisMode === "open_space" ? [] : getValidationWarnings(editForm.config)) : (activeCam?.analysisMode === "open_space" ? [] : getValidationWarnings(activeCam?.config));
   const streamVersion = activeCam ? (streamVersions[activeCam.id] ?? 0) : 0;
   const configuredCameraLimit = serviceHealth?.max_configured_cameras ?? DEFAULT_ENTERPRISE_CAMERA_LIMIT;
   const cameraStorageFingerprint = getCameraStorageFingerprint(cameras);
@@ -314,6 +315,8 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     }
     setIsValidating(true);
     const newCameraNode: Camera = canonicalizeCameraIp({
+      analysisMode: newCam.analysisMode ?? "entrance_exit",
+      openSpace: null,
       cameraHost: newCam.cameraHost || undefined,
       confidence: DEFAULT_COUNTING_CONFIDENCE,
       processingProfile: "auto",
@@ -324,8 +327,10 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
       id: Date.now(),
       name: newCam.name.trim(),
       password: undefined,
-      rtsp: buildTapoRtspUrl(newCam.cameraHost, "stream2"),
-      rtspStream: "stream2",
+      cameraBrand: newCam.cameraBrand ?? "tapo",
+      connectionProfile: newCam.connectionProfile,
+      rtsp: newCam.rtsp.trim(),
+      rtspStream: newCam.rtspStream,
       status: "untested",
       username: newCam.username.trim(),
       zone: newCam.zone.trim(),
@@ -414,6 +419,7 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     configuredCameraLimit,
     confirmDeleteCamera,
     counts,
+    area: activeState?.area ?? null,
     credentialMetadata,
     detections,
     editedCameraIpConflict,

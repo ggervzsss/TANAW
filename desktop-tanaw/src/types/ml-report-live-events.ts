@@ -8,7 +8,11 @@ export const ML_REPORT_LIVE_EVENT_CHANNELS = {
 
 export const MAX_ML_REPORT_LIVE_EVENT_BYTES = 2_000_000;
 
-export type MlReportLiveEvent = { type: "connected" } | { type: "camera.states"; data: MlCameraStates };
+export type MlReportLiveEvent =
+  | { type: "connected" }
+  | { type: "disconnected" }
+  | { type: "service.error"; code: "local_database_reset_required"; message: string; retryable: false }
+  | { type: "camera.states"; data: MlCameraStates };
 
 export function parseMlReportLiveEvent(rawData: string): MlReportLiveEvent | null {
   if (new TextEncoder().encode(rawData).byteLength > MAX_ML_REPORT_LIVE_EVENT_BYTES) {
@@ -22,7 +26,11 @@ export function parseMlReportLiveEvent(rawData: string): MlReportLiveEvent | nul
     return null;
   }
 
-  if (!isRecord(value) || value.type !== "camera.states" || !isCameraStates(value.data)) {
+  if (!isRecord(value)) return null;
+  if (value.type === "service.error" && value.code === "local_database_reset_required" && typeof value.message === "string" && value.retryable === false) {
+    return { type: "service.error", code: value.code, message: value.message, retryable: false };
+  }
+  if (value.type !== "camera.states" || !isCameraStates(value.data)) {
     return null;
   }
 
@@ -45,19 +53,22 @@ function isCameraStates(value: unknown) {
 }
 
 function isCameraState(value: unknown) {
-  return isRecord(value) && isInteger(value.camera_id) && isCounts(value.counts) && isSession(value.session) && isHealth(value.health);
+  return isRecord(value) && isInteger(value.camera_id) && isCounts(value.counts, value.analysis_mode === "open_space") && isDetections(value.detections) && isSession(value.session) && isHealth(value.health);
 }
 
-function isCounts(value: unknown) {
+function isCounts(value: unknown, openSpace: boolean) {
   return (
     isRecord(value) &&
-    isFiniteNumber(value.entry) &&
-    isFiniteNumber(value.exit) &&
-    isFiniteNumber(value.occupancy) &&
+    (openSpace ? value.entry === null && value.exit === null && value.occupancy === null : isFiniteNumber(value.entry) && isFiniteNumber(value.exit) && isFiniteNumber(value.occupancy)) &&
     typeof value.running === "boolean" &&
     typeof value.status === "string" &&
     isNullableString(value.error)
   );
+}
+
+function isDetections(value: unknown) {
+  return isRecord(value) && isNullableFiniteNumber(value.frame_width) && isNullableFiniteNumber(value.frame_height) && Array.isArray(value.tracks) && value.tracks.every((track: unknown) =>
+    isRecord(track) && isInteger(track.track_id) && isInteger(track.source_track_id) && isFiniteNumber(track.confidence) && Array.isArray(track.bbox) && track.bbox.length === 4 && track.bbox.every(isFiniteNumber) && Array.isArray(track.centroid) && track.centroid.length === 2 && track.centroid.every(isFiniteNumber));
 }
 
 function isSession(value: unknown) {

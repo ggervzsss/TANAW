@@ -62,7 +62,11 @@ export class FakeMlSidecar {
     this.#connections.clear();
   }
 
-  sendReportEvent(payload = cameraStatesEvent()) {
+  closeWebSockets(code: number, reason: string) {
+    for (const socket of this.#connections) socket.end(encodeWebSocketCloseFrame(code, reason));
+  }
+
+  sendReportEvent(payload: unknown = cameraStatesEvent()) {
     const frame = encodeWebSocketFrame(JSON.stringify(payload));
     for (const socket of this.#connections) socket.write(frame);
   }
@@ -116,7 +120,7 @@ function responseForPath(path: string): { body: unknown; status: number } {
     return {
       status: 200,
       body: {
-        api_contract_version: 1,
+        api_contract_version: 2,
         max_configured_cameras: 6,
         max_concurrent_cameras: 6,
         tripwire_hot_update: true,
@@ -196,7 +200,7 @@ function cameraStatesEvent() {
         {
           camera_id: 1,
           counts: { entry: 1, exit: 0, occupancy: 1, running: true, status: "running", error: null },
-          detections: {},
+          detections: { frame_width: 640, frame_height: 360, tracks: [] },
           health: {
             running: true,
             model_ready: true,

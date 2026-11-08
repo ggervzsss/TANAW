@@ -17,6 +17,8 @@ type HistoricalTrendChartProps = {
   trendFilter: TrendFilter;
   unavailable?: boolean;
   onTrendFilterChange: (filter: TrendFilter) => void;
+  areaHistory?: Array<{ label: string; occupancy: number | null }>;
+  liveOccupancy?: number | null;
 };
 
 type TrendTooltipProps = {
@@ -25,12 +27,16 @@ type TrendTooltipProps = {
   payload?: ReadonlyArray<{ color?: string; name?: string; value?: number | string }>;
 };
 
-export function HistoricalTrendChart({ data, summary, trendFilter, unavailable = false, onTrendFilterChange }: HistoricalTrendChartProps) {
-  const chartData = buildHistoricalTrendChartData(data, summary?.entries ?? 0);
-  const hasSeriesData = hasHistoricalTrendData(chartData);
-  const peakReference = getPeriodPeakReference(data);
-  const currentOccupancy = summary?.current_occupancy ?? 0;
-  const utilizationRate = peakReference > 0 ? Math.round((currentOccupancy / peakReference) * 100) : 0;
+export function HistoricalTrendChart({ data, summary, trendFilter, unavailable = false, onTrendFilterChange, areaHistory, liveOccupancy }: HistoricalTrendChartProps) {
+  const isArea = areaHistory !== undefined;
+  const doorwayData = buildHistoricalTrendChartData(data, summary?.entries ?? 0);
+  const chartData: Array<{ label: string; live_occupancy: number | null; entry_flow: number | null }> = isArea
+    ? areaHistory.map((point) => ({ label: point.label, live_occupancy: point.occupancy, entry_flow: null }))
+    : doorwayData;
+  const hasSeriesData = isArea ? areaHistory.some((point) => point.occupancy !== null) : hasHistoricalTrendData(doorwayData);
+  const peakReference = isArea ? Math.max(0, ...areaHistory.map((point) => point.occupancy ?? 0)) : getPeriodPeakReference(data);
+  const currentOccupancy = isArea ? liveOccupancy : (summary?.current_occupancy ?? 0);
+  const utilizationRate = currentOccupancy == null ? "—" : `${peakReference > 0 ? Math.round((currentOccupancy / peakReference) * 100) : 0}%`;
 
   return (
     <Card className="tanaw-enterprise-chart-panel overflow-hidden rounded-3xl border border-gray-200 p-0 shadow-sm transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] dark:border-(--enterprise-border-soft)">
@@ -38,18 +44,22 @@ export function HistoricalTrendChart({ data, summary, trendFilter, unavailable =
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className="text-sm font-bold tracking-wider text-[#111827] uppercase dark:text-slate-100">Historical Visitor Trends</h3>
-            <InfoTooltip content="Shows occupancy and entry movement over the selected period.">
+            <InfoTooltip
+              content={isArea ? "Shows the highest observed zone occupancy each hour. Gaps indicate unavailable observations." : "Shows occupancy and entry movement over the selected period."}
+            >
               <Info size={14} className="text-gray-400 transition-colors hover:text-[#065f46] dark:text-slate-500 dark:hover:text-emerald-300" />
             </InfoTooltip>
           </div>
-          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Live occupancy and comparable entry-flow contribution over selected periods</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+            {isArea ? "Highest observed occupancy each hour · Asia/Manila" : "Live occupancy and comparable entry-flow contribution over selected periods"}
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="tanaw-trend-chip tanaw-trend-chip--peak rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-900 dark:border-amber-300/24 dark:bg-amber-300/12 dark:text-amber-200">
               Peak reference {peakReference.toLocaleString()}
             </span>
             <InfoTooltip content="Shows how current occupancy compares with the highest observed occupancy." focusable={false}>
               <span className="tanaw-trend-chip tanaw-trend-chip--utilization rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/12 dark:text-emerald-200">
-                Utilization {utilizationRate}%
+                Utilization {utilizationRate}
               </span>
             </InfoTooltip>
           </div>
@@ -71,11 +81,11 @@ export function HistoricalTrendChart({ data, summary, trendFilter, unavailable =
                     : "text-gray-500 hover:text-[#111827] dark:text-(--enterprise-muted-soft) dark:hover:text-(--enterprise-text)"
                 }`}
               >
-                {trend}
+                {isArea ? { Today: "24 hours", Week: "7 days", Month: "30 days" }[trend] : trend}
               </button>
             ))}
           </div>
-          <ChartLegend />
+          <ChartLegend isArea={isArea} />
         </div>
       </div>
 
@@ -89,7 +99,7 @@ export function HistoricalTrendChart({ data, summary, trendFilter, unavailable =
                 data={chartData}
                 margin={{ top: 16, right: 18, left: -10, bottom: 8 }}
                 role="img"
-                aria-label={`${trendFilter} historical visitor trends for Entry Flow and Live Occupancy`}
+                aria-label={`${trendFilter} historical visitor trends for ${isArea ? "Peak Occupancy" : "Entry Flow and Live Occupancy"}`}
               >
                 <CartesianGrid strokeDasharray="2 7" vertical={false} stroke="var(--enterprise-chart-grid)" />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--enterprise-chart-axis)", fontWeight: 600 }} dy={10} minTickGap={22} />
@@ -103,25 +113,27 @@ export function HistoricalTrendChart({ data, summary, trendFilter, unavailable =
                     label={{ value: `Peak ${peakReference.toLocaleString()}`, fill: peakReferenceColor, fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
                   />
                 )}
-                <Line
-                  type="linear"
-                  dataKey="entry_flow"
-                  name="Entry Flow"
-                  stroke={entrySeriesColor}
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 5, stroke: "var(--enterprise-chart-active-stroke)", strokeWidth: 2 }}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
+                {!isArea && (
+                  <Line
+                    type="linear"
+                    dataKey="entry_flow"
+                    name="Entry Flow"
+                    stroke={entrySeriesColor}
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 5, stroke: "var(--enterprise-chart-active-stroke)", strokeWidth: 2 }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                )}
                 <Line
                   type="linear"
                   dataKey="live_occupancy"
-                  name="Live Occupancy"
+                  name={isArea ? "Peak Occupancy" : "Live Occupancy"}
                   stroke={occupancySeriesColor}
                   strokeWidth={3}
                   strokeDasharray="8 4"
-                  dot={false}
+                  dot={isArea ? { r: 2 } : false}
                   activeDot={{ r: 5, stroke: "var(--enterprise-chart-active-stroke)", strokeWidth: 2 }}
                   connectNulls={false}
                   isAnimationActive={false}
@@ -137,16 +149,18 @@ export function HistoricalTrendChart({ data, summary, trendFilter, unavailable =
   );
 }
 
-function ChartLegend() {
+function ChartLegend({ isArea }: { isArea: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-4 text-[11px] font-black tracking-wide text-gray-500 uppercase dark:text-slate-300" aria-label="Chart legend">
-      <span className="inline-flex items-center gap-2">
-        <span className="h-0.75 w-7 rounded-full bg-(--enterprise-chart-entry)" aria-hidden="true" />
-        Entry Flow
-      </span>
+      {!isArea && (
+        <span className="inline-flex items-center gap-2">
+          <span className="h-0.75 w-7 rounded-full bg-(--enterprise-chart-entry)" aria-hidden="true" />
+          Entry Flow
+        </span>
+      )}
       <span className="inline-flex items-center gap-2">
         <span className="tanaw-trend-legend-dashed w-7" aria-hidden="true" />
-        Live Occupancy
+        {isArea ? "Peak Occupancy" : "Live Occupancy"}
       </span>
     </div>
   );

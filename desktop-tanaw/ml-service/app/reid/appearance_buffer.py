@@ -57,6 +57,9 @@ class TrackAppearanceBuffer:
         self.stop_when_full = stop_when_full
         self._tracks: dict[int, TrackAppearance] = {}
 
+    def reset(self) -> None:
+        self._tracks.clear()
+
     def begin_frame(self, frame_index: int) -> None:
         stale_before_frame = frame_index - self.track_ttl_frames
         for track_id, state in list(self._tracks.items()):

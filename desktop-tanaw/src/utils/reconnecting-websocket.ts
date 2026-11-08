@@ -63,11 +63,11 @@ export function createReconnectingWebSocket(options: ReconnectingWebSocketOption
       // Browsers follow errors with close. Calling close while CONNECTING creates
       // the noisy "closed before established" warning this controller prevents.
     };
-    candidate.onclose = () => {
+    candidate.onclose = (event) => {
       if (socket !== candidate) return;
       socket = null;
       options.onClose?.();
-      scheduleReconnect();
+      if (event.code !== 1008 && event.code !== 4009) scheduleReconnect();
     };
   };
 

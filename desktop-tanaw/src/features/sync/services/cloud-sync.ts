@@ -40,19 +40,15 @@ export async function getDesktopSamplePreparation() {
 export async function prepareDesktopSampleCounts(period?: string) {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+  const profiles = await listLocalCameras(baseUrl);
+  if (profiles?.length && profiles.every((camera) => camera.analysisMode === "open_space")) return null;
   const preparation = await getDesktopSamplePreparation();
   if (!preparation) return null;
 
   if (!period) {
     const currentMetrics = await getLocalMetricsSummary(baseUrl);
-    const pendingPeriods =
-      preparation.pendingCounts?.map((counts) => counts.period) ??
-      (preparation.counts ? [preparation.counts.period] : []);
-    if (
-      currentMetrics.period &&
-      pendingPeriods.includes(currentMetrics.period) &&
-      currentMetrics.unsubmitted_events > 0
-    ) {
+    const pendingPeriods = preparation.pendingCounts?.map((counts) => counts.period) ?? (preparation.counts ? [preparation.counts.period] : []);
+    if (currentMetrics.period && pendingPeriods.includes(currentMetrics.period) && currentMetrics.unsubmitted_events > 0) {
       return null;
     }
   }
@@ -84,14 +80,32 @@ function selectSamplePreparationCounts(preparation: BackendSamplePreparation, pe
 export async function syncDesktopTelemetry() {
   const serviceStatus = await getMlServiceStatus();
   const baseUrl = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-  const [metrics, session, health, cameraStates, cameras] = await Promise.all([
+  const profiles = await listLocalCameras(baseUrl);
+  if (profiles?.length && profiles.every((camera) => camera.analysisMode === "open_space")) return null;
+  const cameras = (profiles ?? []).filter((camera) => camera.analysisMode !== "open_space");
+  const [metrics, originalSession, originalHealth, allStates] = await Promise.all([
     getLocalMetricsSummary(baseUrl, { includeSubmitted: true }),
     resolveOptional(() => getMlSession(baseUrl)),
     resolveOptional(() => getMlHealth(baseUrl)),
     resolveOptional(() => getMlCameraStates(baseUrl)),
-    resolveOptional(() => listLocalCameras(baseUrl)),
   ]);
+  const ids = new Set(cameras.map((camera) => camera.id));
+  const doorwayStates = allStates?.cameras.filter((state) => ids.has(state.camera_id) && state.analysis_mode !== "open_space") ?? [];
+  const cameraStates = allStates ? { ...allStates, cameras: doorwayStates, pending_camera_ids: allStates.pending_camera_ids.filter((id) => ids.has(id)) } : null;
   const monitoring = buildCameraMonitoringSummary(cameras, cameraStates, serviceStatus);
+  const session = profiles?.some((camera) => camera.analysisMode === "open_space")
+    ? (doorwayStates[0]?.session ?? {
+        ...originalSession,
+        running: false,
+        status: "stopped",
+        error: null,
+        camera_id: null,
+        camera_name: null,
+        updated_at: null,
+        counts: { entry: 0, exit: 0, occupancy: 0, running: false, status: "stopped", started_at: null, error: null },
+      })
+    : originalSession;
+  const health = doorwayStates[0]?.health ?? (profiles?.some((camera) => camera.analysisMode === "open_space") ? null : originalHealth);
 
   const payload: DesktopTelemetryPayload = {
     deviceId: getDesktopDeviceId(),
@@ -216,9 +230,7 @@ function nonNegativeInteger(value: unknown) {
 
 async function purgeFinalizedLocalReportRawData(baseUrl: string) {
   const [localSubmissions, finalReports] = await Promise.all([listLocalReportSubmissions(baseUrl, 500), listEnterpriseFinalReports()]);
-  const finalizedSourceCodes = new Set(
-    finalReports.filter(isLockedFinalReport).flatMap((report) => report.sources.map((source) => source.code)),
-  );
+  const finalizedSourceCodes = new Set(finalReports.filter(isLockedFinalReport).flatMap((report) => report.sources.map((source) => source.code)));
   const purgeableSubmissions = localSubmissions.filter((submission) => finalizedSourceCodes.has(submission.report_id) && !submission.raw_purged_at);
 
   for (const submission of purgeableSubmissions) {

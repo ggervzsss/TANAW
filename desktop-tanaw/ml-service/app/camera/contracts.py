@@ -9,9 +9,9 @@ class EnterpriseBinding(TypedDict):
 
 
 class CameraCounts(TypedDict):
-    entry: int
-    exit: int
-    occupancy: int
+    entry: int | None
+    exit: int | None
+    occupancy: int | None
     running: bool
     status: str
     started_at: str | None

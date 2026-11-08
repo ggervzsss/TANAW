@@ -3,7 +3,19 @@ from __future__ import annotations
 import os
 import platform
 from collections.abc import Callable
+from copy import deepcopy
+from functools import lru_cache
 from typing import Any, cast
+
+
+@lru_cache(maxsize=1)
+def _cached_capabilities() -> dict[str, Any]:
+    return get_runtime_capabilities()
+
+
+def cached_runtime_capabilities() -> dict[str, Any]:
+    """Installed runtimes and hardware are stable for the lifetime of the service."""
+    return deepcopy(_cached_capabilities())
 
 
 def get_runtime_capabilities() -> dict[str, Any]:

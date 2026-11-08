@@ -129,9 +129,10 @@ class CameraRepository:
                            camera_id, name, zone, status, camera_host, rtsp_stream, stream_url,
                            processing_profile, tracking_confidence, counting_confidence,
                            reid_mode, unique_counting_mode, config_json, payload_json,
-                           created_at, updated_at
-                       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           created_at, updated_at, analysis_mode
+                       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                        on conflict(camera_id) do update set
+                           analysis_mode = excluded.analysis_mode,
                            name = excluded.name, zone = excluded.zone, status = excluded.status,
                            camera_host = excluded.camera_host, rtsp_stream = excluded.rtsp_stream,
                            stream_url = excluded.stream_url,
@@ -159,6 +160,7 @@ class CameraRepository:
                         json.dumps(camera, sort_keys=True),
                         updated_at,
                         updated_at,
+                        camera.get("analysisMode", "entrance_exit"),
                     ),
                 )
         return normalized

@@ -8,10 +8,12 @@ import { CameraReadOnlyDetails } from "./CameraReadOnlyDetails";
 import { CameraValidationWarnings } from "./CameraValidationWarnings";
 import { CameraVideoPreview, type CameraPreviewState } from "./CameraVideoPreview";
 import { NoCameraSelected } from "./NoCameraSelected";
-import type { MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
+import { OpenSpaceZoneControls } from "./OpenSpaceZoneControls";
+import type { MlAreaState, MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
 
 type CameraPreviewPanelProps = {
   activeCam?: Camera;
+  area?: MlAreaState | null;
   cameraIpError?: string;
   counts: MlCounts;
   detections: MlDetections;
@@ -42,6 +44,7 @@ type CameraPreviewPanelProps = {
 
 export function CameraPreviewPanel({
   activeCam,
+  area,
   cameraIpError,
   counts,
   detections,
@@ -128,23 +131,34 @@ export function CameraPreviewPanel({
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(300px,340px)] gap-4 bg-slate-50/80 p-4 max-[1180px]:block max-[1180px]:overflow-y-auto max-[1180px]:p-3 dark:bg-[#0d1724]">
-        <div className="min-h-0 max-[1180px]:h-80 max-[900px]:h-72">
-          <CameraVideoPreview
-            activeCam={activeCam}
-            counts={counts}
-            detections={detections}
-            editForm={editForm}
-            health={health}
-            isProcessing={isProcessing}
-            isEditMode={isEditMode}
-            onEditFormChange={onEditFormChange}
-            onPreviewStateChange={setPreviewState}
-            streamUrl={streamUrl}
-          />
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          <div className="min-h-72 flex-1 max-[1180px]:h-80 max-[1180px]:flex-none max-[900px]:h-72">
+            <CameraVideoPreview
+              area={area}
+              activeCam={activeCam}
+              counts={counts}
+              detections={detections}
+              editForm={editForm}
+              health={health}
+              isProcessing={isProcessing}
+              isEditMode={isEditMode}
+              onEditFormChange={onEditFormChange}
+              onPreviewStateChange={setPreviewState}
+              streamUrl={streamUrl}
+            />
+          </div>
+          {isEditMode && editForm?.analysisMode === "open_space" && (
+            <OpenSpaceZoneControls
+              value={editForm.openSpace}
+              previewReady={isProcessing && previewState === "live" && (detections.frame_width ?? 0) > 0 && (detections.frame_height ?? 0) > 0}
+              onChange={(openSpace) => onEditFormChange((current) => (current?.analysisMode === "open_space" ? { ...current, openSpace } : current))}
+            />
+          )}
         </div>
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 max-[1180px]:mt-3 max-[1180px]:overflow-visible max-[1180px]:pr-0">
           <CameraMonitoringPanel
+            area={area}
             activeCam={activeCam}
             counts={counts}
             error={error}

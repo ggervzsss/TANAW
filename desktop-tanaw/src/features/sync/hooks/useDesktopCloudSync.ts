@@ -115,7 +115,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
     const unsubscribeFromReportEvents = window.tanawMlService?.subscribeToReportEvents((event) => {
       if (event.type === "connected") {
         scheduleTelemetrySync();
-      } else {
+      } else if (event.type === "camera.states") {
         handleLiveCameraStates(event.data);
       }
     });
@@ -146,6 +146,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
 
 function liveCameraStatesSignature(states: MlCameraStates) {
   return [...states.cameras]
+    .filter(state => state.analysis_mode !== "open_space")
     .sort((left, right) => left.camera_id - right.camera_id)
     .map(({ camera_id: cameraId, counts, health, session }) =>
       [

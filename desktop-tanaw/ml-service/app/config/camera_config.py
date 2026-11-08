@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Address
 from math import hypot
 from typing import Any, Literal
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.config.open_space_config import OpenSpaceConfig
+from app.config.rtsp_source import normalize_rtsp_source as _normalize_rtsp_source
+
+CameraBrand = Literal["tapo", "tenda", "dahua", "custom"]
+CameraConnectionProfile = Literal["channel", "channel_ampersand", "profile", "h264", "manual"]
 
 RtspStreamProfile = Literal["stream1", "stream2"]
 ProcessingProfile = Literal[
@@ -74,6 +78,9 @@ class CameraCountingConfigUpdate(BaseModel):
 
 
 class CameraStartRequest(BaseModel):
+    analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
+    preview_only: bool = False
+    open_space: OpenSpaceConfig | None = None
     stream_url: str = Field(..., min_length=3)
     tracking_confidence: float = Field(default=0.15, ge=0.01, le=0.95)
     counting_confidence: float = Field(default=0.35, ge=0.05, le=0.95)
@@ -82,6 +89,8 @@ class CameraStartRequest(BaseModel):
     camera_zone: str | None = Field(default=None, max_length=120)
     camera_host: str | None = Field(default=None, max_length=15)
     rtsp_stream: RtspStreamProfile | None = None
+    camera_brand: CameraBrand = "tapo"
+    connection_profile: CameraConnectionProfile | None = None
     username: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, max_length=240)
     tripwire_position: float = Field(default=0.5, ge=0.1, le=0.9)
@@ -126,10 +135,31 @@ class CameraStartRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_counting_geometry(self) -> CameraStartRequest:
+        if self.preview_only and self.analysis_mode != "open_space":
+            raise ValueError("Calibration preview is available only for Open Space mode.")
         if self.tracking_confidence > self.counting_confidence:
             raise ValueError(
                 "tracking_confidence must be less than or equal to counting_confidence."
             )
+        if self.analysis_mode == "open_space":
+            if self.open_space is None:
+                if self.preview_only:
+                    return self
+                raise ValueError("Configure a monitored zone before starting Open Space mode.")
+            if self.preview_only:
+                raise ValueError("Configured zones must start in analysis mode.")
+            if any(
+                not (
+                    self.roi.left <= p.x <= self.roi.left + self.roi.width
+                    and self.roi.top <= p.y <= self.roi.top + self.roi.height
+                )
+                for p in self.open_space.polygon
+            ):
+                raise ValueError("The monitored zone must fit inside the processing ROI.")
+        elif self.open_space is not None:
+            raise ValueError("Dwell configuration is available only in Open Space mode.")
+        if self.analysis_mode == "open_space":
+            return self
         if self.entry_line is None and self.exit_line is None:
             return self
 
@@ -155,6 +185,8 @@ class CameraTestRequest(BaseModel):
     stream_url: str = Field(..., min_length=3)
     camera_host: str | None = Field(default=None, max_length=15)
     rtsp_stream: RtspStreamProfile | None = None
+    camera_brand: CameraBrand = "tapo"
+    connection_profile: CameraConnectionProfile | None = None
     username: str | None = Field(default=None, max_length=120)
     password: str | None = Field(default=None, max_length=240)
 
@@ -184,7 +216,8 @@ class CameraTestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
     service_version: str = "0.1.0"
-    api_contract_version: int = 1
+    api_contract_version: int = 2
+    analysis_modes: list[str] = Field(default_factory=lambda: ["entrance_exit", "open_space"])
     tripwire_hot_update: bool = True
     running: bool
     error: str | None = None
@@ -289,9 +322,9 @@ class HealthResponse(BaseModel):
 
 
 class CountResponse(BaseModel):
-    entry: int
-    exit: int
-    occupancy: int
+    entry: int | None
+    exit: int | None
+    occupancy: int | None
     running: bool
     status: str
     started_at: str | None = None
@@ -340,6 +373,8 @@ class SessionResponse(BaseModel):
 
 
 class CameraLiveStateResponse(BaseModel):
+    analysis_mode: Literal["entrance_exit", "open_space"] = "entrance_exit"
+    area: dict[str, Any] | None = None
     enterprise_id: str
     camera_id: int
     counts: CountResponse
@@ -380,36 +415,6 @@ class CameraProfilesRequest(BaseModel):
             if camera.get("username") is not None or camera.get("password") is not None:
                 raise ValueError("Camera credentials must not be stored in SQLite.")
         return cameras
-
-
-def _normalize_rtsp_source(data: dict[str, Any]) -> None:
-    raw_stream_url = str(data.get("stream_url") or "").strip()
-    if not raw_stream_url.startswith("rtsp://"):
-        raise ValueError("Stream URL must start with rtsp://.")
-    raw_host = str(data.get("camera_host") or "").strip()
-    raw_profile = data.get("rtsp_stream")
-    parsed = urlsplit(raw_stream_url) if raw_stream_url else None
-
-    if not raw_host and parsed is not None and parsed.scheme.lower() == "rtsp":
-        raw_host = parsed.hostname or ""
-    try:
-        camera_host = str(IPv4Address(raw_host))
-    except ValueError as exc:
-        raise ValueError("Camera IP / Host must be a valid IPv4 address.") from exc
-
-    if raw_profile is None and parsed is not None:
-        path = parsed.path.strip("/").split("/", maxsplit=1)[0]
-        raw_profile = path if path in {"stream1", "stream2"} else "stream2"
-    if raw_profile not in {"stream1", "stream2"}:
-        raise ValueError("RTSP Stream must be stream1 or stream2.")
-
-    canonical_url = f"rtsp://{camera_host}/{raw_profile}"
-    if raw_stream_url and raw_stream_url != canonical_url:
-        raise ValueError("Stream URL conflicts with Camera IP / Host and the selected RTSP Stream.")
-
-    data["camera_host"] = camera_host
-    data["rtsp_stream"] = raw_profile
-    data["stream_url"] = canonical_url
 
 
 def _path_points(line: TripwireLine) -> list[TripwirePoint]:

@@ -12,6 +12,11 @@ import {
 } from "./camera-update";
 
 describe("camera update classification", () => {
+  it("restarts a running camera when its connection brand or Tenda profile changes", () => {
+    expect(getCameraSaveRuntimeAction(camera, { ...camera, cameraBrand: "tenda" }, { isRunning: true })).toBe("restart");
+    expect(getCameraSaveRuntimeAction(camera, { ...camera, connectionProfile: "profile" }, { isRunning: true })).toBe("restart");
+    expect(hasCameraConnectionChange(camera, { ...camera, cameraBrand: "tapo" })).toBe(false);
+  });
   it("keeps camera name and zone edits on the active runtime", () => {
     expect(
       hasCameraRuntimeChange(camera, {

@@ -12,6 +12,11 @@ from app.storage.migrations import DEFAULT_MIGRATIONS, LATEST_REVISION, migratio
 APP_DIRECTORY_NAME = "desktop-tanaw"
 DATABASE_NAME = "tanaw_desktop.sqlite3"
 LEDGER_TABLES = (
+    "camera_analysis_revisions",
+    "analysis_runs",
+    "area_visits",
+    "area_presence_intervals",
+    "area_hourly_rollups",
     "schema_migrations",
     "camera_profiles",
     "camera_monitoring_states",
@@ -300,6 +305,11 @@ def _clear_operational_rows(database_path: Path) -> None:
         connection.execute("pragma busy_timeout = 5000")
         connection.execute("begin immediate")
         for table in (
+            "area_visits",
+            "area_presence_intervals",
+            "area_hourly_rollups",
+            "analysis_runs",
+            "camera_analysis_revisions",
             "visitor_sightings",
             "visitor_model_embeddings",
             "visitor_identities",

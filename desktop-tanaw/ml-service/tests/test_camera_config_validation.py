@@ -2,10 +2,65 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.config.camera_config import CameraCountingConfigUpdate, CameraStartRequest
+from app.config.camera_config import (
+    CameraCountingConfigUpdate,
+    CameraStartRequest,
+    CameraTestRequest,
+)
 
 
 class CameraConfigValidationTest(unittest.TestCase):
+    def test_test_and_start_requests_preserve_brand_endpoints(self) -> None:
+        endpoints = (
+            ("tenda", "rtsp://192.168.1.20:554/ch=1?subtype=0"),
+            ("tenda", "rtsp://192.168.1.20:8554/profile1"),
+            ("tenda", "rtsp://192.168.1.20:554/ch=1&subtype=1"),
+            ("tenda", "rtsp://192.168.1.20:554/H264?ch=1&subtype=0"),
+            ("dahua", "rtsp://192.168.1.20:554/cam/realmonitor?channel=1&subtype=1"),
+            ("dahua", "rtsp://192.168.1.20:9554/cam/realmonitor?channel=1&subtype=0"),
+            ("custom", "rtsp://192.168.1.20:9554/live?channel=2&quality=high"),
+        )
+        for request_type in (CameraTestRequest, CameraStartRequest):
+            for brand, endpoint in endpoints:
+                with self.subTest(request=request_type.__name__, endpoint=endpoint):
+                    request = request_type.model_validate(
+                        {
+                            "camera_id": 7,
+                            "camera_brand": brand,
+                            "stream_url": endpoint,
+                            "username": "admin",
+                            "password": "device-password",
+                        }
+                    )
+                    self.assertEqual(request.stream_url, endpoint)
+                    self.assertEqual(request.camera_host, "192.168.1.20")
+                    self.assertEqual(request.camera_brand, brand)
+
+    def test_custom_rtsp_validation_rejects_invalid_or_unsafe_endpoints(self) -> None:
+        for endpoint in (
+            "rtsp://camera.local/live",
+            "rtsp://192.168.1.21/live",
+            "rtsp://192.168.1.20:0/live",
+            "rtsp://192.168.1.20:99999/live",
+            "rtsp://192.168.1.20:/live",
+            "rtsp://192.168.1.20/live#fragment",
+            "rtsp://user:secret@192.168.1.20/live",
+            "rtsp://192.168.1.20/live path",
+        ):
+            with self.subTest(endpoint=endpoint), self.assertRaises(ValidationError):
+                CameraTestRequest.model_validate(
+                    {
+                        "camera_id": 7,
+                        "camera_brand": "custom",
+                        "camera_host": "192.168.1.20",
+                        "stream_url": endpoint,
+                    }
+                )
+
+    def test_tapo_default_does_not_accept_other_brands_stream_paths(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "conflicts"):
+            CameraStartRequest.model_validate({"stream_url": "rtsp://192.168.1.20:8554/profile0"})
+
     def test_counting_hot_update_rejects_invalid_geometry_without_a_stream_url(self) -> None:
         with self.assertRaisesRegex(ValidationError, "must not overlap"):
             CameraCountingConfigUpdate.model_validate(

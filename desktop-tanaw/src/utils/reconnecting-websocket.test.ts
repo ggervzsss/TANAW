@@ -7,7 +7,7 @@ class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onerror: (() => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
 
   close() {
     this.closeCalls += 1;
@@ -19,13 +19,24 @@ class FakeSocket {
     this.onopen?.();
   }
 
-  serverClose() {
+  serverClose(code = 1006) {
     this.readyState = 3;
-    this.onclose?.();
+    this.onclose?.({ code } as CloseEvent);
   }
 }
 
 describe("createReconnectingWebSocket", () => {
+  it.each([1008, 4009])("does not repeatedly reconnect after permanent close %s", (code) => {
+    const socket = new FakeSocket();
+    const timers: (() => void)[] = [];
+    const connection = createReconnectingWebSocket({ url: "ws://127.0.0.1/test", createSocket: () => socket as unknown as WebSocket,
+      setTimer: (callback) => { timers.push(callback); return timers.length; }, clearTimer: () => undefined,
+    });
+    socket.open();
+    socket.serverClose(code);
+    expect(timers).toHaveLength(0);
+    connection.dispose();
+  });
   it("defers close while a StrictMode cleanup socket is still connecting", () => {
     const socket = new FakeSocket();
     const connection = createReconnectingWebSocket({

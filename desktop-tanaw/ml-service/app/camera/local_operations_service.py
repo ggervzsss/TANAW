@@ -47,6 +47,9 @@ class LocalOperationsService:
     def metrics_summary(self, include_submitted: bool = False) -> dict[str, Any]:
         return self._store.metrics_summary(include_submitted=include_submitted)
 
+    def enterprise_occupancy(self) -> int:
+        return self._store.enterprise_occupancy()
+
     def metrics_history(self, include_submitted: bool = False) -> dict[str, Any]:
         return self._store.metrics_history(include_submitted=include_submitted)
 

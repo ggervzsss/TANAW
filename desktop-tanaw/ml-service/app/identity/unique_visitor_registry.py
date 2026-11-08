@@ -38,8 +38,18 @@ class UniqueVisitorRegistry:
         min_provisional_observations: int = 2,
         max_prototypes_per_identity: int = 3,
         prototype_update_threshold: float = 0.82,
+        identity_namespace: str | None = None,
+        record_sightings: bool = True,
     ) -> None:
-        self._gallery_store = VisitorGalleryStore(session_store, model_name, quality_model_name)
+        # A gallery signature includes its analysis scope as well as its model.
+        # Open-space identities must never match the entrance/exit gallery.
+        if identity_namespace is not None:
+            model_name = f"{model_name}@{identity_namespace}"
+            if quality_model_name is not None:
+                quality_model_name = f"{quality_model_name}@{identity_namespace}"
+        self._gallery_store = VisitorGalleryStore(
+            session_store, model_name, quality_model_name, record_sightings=record_sightings
+        )
         self.model_name = model_name
         self.timezone = ZoneInfo(timezone_name)
         self.retention_grace_hours = retention_grace_hours
@@ -93,6 +103,12 @@ class UniqueVisitorRegistry:
     def reset_session_tracks(self) -> None:
         self._track_visitors.clear()
 
+    def confirmed_visitor_count(self, camera_id: int | None, now: datetime | None = None) -> int:
+        now = now or datetime.now(UTC)
+        if self.business_date_for(now) != self._business_date or camera_id != self._camera_id:
+            self.prepare(camera_id, now)
+        return sum(identity.identity_status == "confirmed" for identity in self._gallery)
+
     def remap_session_track(self, previous_track_id: int, target_track_id: int) -> None:
         visitor_id = self._track_visitors.pop(previous_track_id, None)
         if visitor_id is not None and target_track_id not in self._track_visitors:
@@ -133,6 +149,7 @@ class UniqueVisitorRegistry:
         bbox: tuple[int, int, int, int] | None,
         quality_embedding: np.ndarray | None = None,
         now: datetime | None = None,
+        excluded_visitor_ids: frozenset[str] = frozenset(),
     ) -> VisitorDecision:
         now = now or datetime.now(UTC)
         self.prepare(camera_id, now)
@@ -142,6 +159,8 @@ class UniqueVisitorRegistry:
             _normalize_embedding(quality_embedding) if quality_embedding is not None else None
         )
 
+        if self._track_visitors.get(track_id) in excluded_visitor_ids:
+            self._track_visitors.pop(track_id)
         if track_id in self._track_visitors:
             visitor_id = self._track_visitors[track_id]
             identity = self._identity_for_visitor(visitor_id)
@@ -162,6 +181,7 @@ class UniqueVisitorRegistry:
                         detection_confidence=detection_confidence,
                         bbox=bbox,
                         now=now,
+                        excluded_visitor_ids=excluded_visitor_ids,
                     )
 
             decision = VisitorDecision(
@@ -199,8 +219,10 @@ class UniqueVisitorRegistry:
                 business_date=business_date,
             )
 
-        quality_match, quality_score, quality_margin = self._best_quality_match(quality_normalized)
-        fast_match, fast_score, fast_margin = self._best_match(normalized)
+        quality_match, quality_score, quality_margin = self._best_quality_match(
+            quality_normalized, excluded_visitor_ids
+        )
+        fast_match, fast_score, fast_margin = self._best_match(normalized, excluded_visitor_ids)
 
         match = None
         score = fast_score
@@ -247,6 +269,7 @@ class UniqueVisitorRegistry:
                     detection_confidence=detection_confidence,
                     bbox=bbox,
                     now=now,
+                    excluded_visitor_ids=excluded_visitor_ids,
                 )
 
             self._track_visitors[track_id] = match.visitor_id
@@ -424,6 +447,7 @@ class UniqueVisitorRegistry:
         detection_confidence: float | None,
         bbox: tuple[int, int, int, int] | None,
         now: datetime,
+        excluded_visitor_ids: frozenset[str] = frozenset(),
     ) -> VisitorDecision:
         business_date = self.business_date_for(now)
         if provisional.embedding_count < self.min_provisional_observations:
@@ -446,7 +470,9 @@ class UniqueVisitorRegistry:
             )
             return decision
 
-        canonical, reconciliation_score = self._best_reconciliation_match(provisional)
+        canonical, reconciliation_score = self._best_reconciliation_match(
+            provisional, excluded_visitor_ids
+        )
         if canonical is not None:
             self._merge_identity(provisional, canonical, now)
             self._track_visitors[track_id] = canonical.visitor_id
@@ -490,29 +516,41 @@ class UniqueVisitorRegistry:
         return decision
 
     def _best_match(
-        self, embedding: np.ndarray
+        self, embedding: np.ndarray, excluded_visitor_ids: frozenset[str] = frozenset()
     ) -> tuple[VisitorIdentity | None, float | None, float]:
-        if not self._gallery:
+        gallery = [
+            identity
+            for identity in self._gallery
+            if identity.visitor_id not in excluded_visitor_ids
+        ]
+        if not gallery:
             return None, None, 1.0
 
         scores = np.asarray(
-            [self._identity_score(identity, embedding) for identity in self._gallery],
+            [self._identity_score(identity, embedding) for identity in gallery],
             dtype=np.float32,
         )
         order = np.argsort(scores)[::-1]
         best_index = int(order[0])
         best_score = float(scores[best_index])
         second_score = float(scores[int(order[1])]) if len(order) > 1 else -1.0
-        return self._gallery[best_index], best_score, best_score - second_score
+        return gallery[best_index], best_score, best_score - second_score
 
     def _best_quality_match(
         self,
         embedding: np.ndarray | None,
+        excluded_visitor_ids: frozenset[str] = frozenset(),
     ) -> tuple[VisitorIdentity | None, float | None, float]:
         if embedding is None or not self._quality_gallery:
             return None, None, 1.0
 
-        quality_entries = list(self._quality_gallery.values())
+        quality_entries = [
+            entry
+            for entry in self._quality_gallery.values()
+            if entry.visitor_id not in excluded_visitor_ids
+        ]
+        if not quality_entries:
+            return None, None, 1.0
         gallery_embeddings = np.stack([entry.embedding for entry in quality_entries]).astype(
             np.float32
         )
@@ -587,13 +625,14 @@ class UniqueVisitorRegistry:
         self._persist_prototype(identity, prototype, now)
 
     def _best_reconciliation_match(
-        self, provisional: VisitorIdentity
+        self, provisional: VisitorIdentity, excluded_visitor_ids: frozenset[str] = frozenset()
     ) -> tuple[VisitorIdentity | None, float | None]:
         confirmed = [
             identity
             for identity in self._gallery
             if identity.visitor_id != provisional.visitor_id
             and identity.identity_status == "confirmed"
+            and identity.visitor_id not in excluded_visitor_ids
         ]
         if not confirmed:
             return None, None

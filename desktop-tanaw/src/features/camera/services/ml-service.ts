@@ -1,3 +1,4 @@
+import type { AreaMetrics } from "../../open-space/types";
 import type { Camera } from "../../../types/enterprise";
 import { getMemoryCameraCredential } from "./camera-credentials";
 import { getTripwireAnchors, getTripwireSampledPoints, normalizeTripwireLine } from "../utils/tripwire-path";
@@ -249,6 +250,8 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
     camera_name: camera.name,
     camera_host: camera.cameraHost || null,
     rtsp_stream: camera.rtspStream || null,
+    camera_brand: camera.cameraBrand ?? "tapo",
+    connection_profile: camera.connectionProfile ?? null,
     stream_url: camera.rtsp,
   };
   if (credentialScope && window.tanawCameraCredentials) {
@@ -271,6 +274,9 @@ export async function testCameraConnection(baseUrl: string, camera: Camera, cred
 export async function startCameraProcessing(baseUrl: string, camera: Camera, credentialScope?: string): Promise<{ message: string }> {
   const credential = credentialScope ? getMemoryCameraCredential(credentialScope, camera.id) : undefined;
   const payload = {
+    analysis_mode: camera.analysisMode ?? "entrance_exit",
+    open_space: camera.analysisMode === "open_space" ? camera.openSpace ?? null : null,
+    preview_only: camera.analysisMode === "open_space" && !camera.openSpace,
     camera_name: camera.name,
     camera_zone: camera.zone,
     camera_id: camera.id,
@@ -290,6 +296,8 @@ export async function startCameraProcessing(baseUrl: string, camera: Camera, cre
     stream_fps: 24,
     stream_url: camera.rtsp,
     rtsp_stream: camera.rtspStream || null,
+    camera_brand: camera.cameraBrand ?? "tapo",
+    connection_profile: camera.connectionProfile ?? null,
     tracking_confidence: camera.trackingConfidence ?? 0.15,
     track_ttl_seconds: 9,
     tripwire_position: camera.config.tripwire / 100,
@@ -510,4 +518,12 @@ function normalizeServiceErrorCode(value: string | undefined, fallback: MlServic
     "unknown",
   ];
   return supported.includes(value as MlServiceErrorCode) ? (value as MlServiceErrorCode) : fallback;
+}
+
+export function getOpenSpaceMetrics(baseUrl:string,cameraId:number,days:number,revisionId="",offset=0) {
+  const end=new Date();
+  const start=new Date(end.getTime()-days*86400000);
+  const query=new URLSearchParams({camera_id:String(cameraId),start:start.toISOString(),end:end.toISOString(),limit:"20",offset:String(offset)});
+  if(revisionId) query.set("revision_id",revisionId);
+  return requestJson<AreaMetrics>(`${baseUrl}/metrics/open-space/summary?${query}`, {}, 10000);
 }

@@ -1,9 +1,11 @@
+import { loadCameraCredentialMetadata } from "../../features/camera/services/camera-credentials";
+import { applyStoredCameraMetadata, normalizeCamera } from "../../features/camera/model/camera-management";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import { CriticalAlertToasts } from "../../features/alerts/components/CriticalAlertToasts";
-import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
+import { DEFAULT_ML_SERVICE_BASE_URL, getMlServiceStatus, listLocalCameras, setMlEnterpriseContext } from "../../features/camera/services/ml-service";
 import { getCurrentUser, logout as logoutRequest } from "../../features/login/api/login";
 import { useAuthStore } from "../../features/login/stores/auth-store";
 import { listNotifications, updateNotificationRead, type BackendNotification } from "../../features/notifications/services/notifications";
@@ -59,6 +61,8 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
   const { timeFormat } = useSystemDisplayPreferences();
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<EnterpriseView>(initialView);
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [reportsHistory, setReportsHistory] = useState<ReportRecord[]>(EMPTY_REPORTS);
   const [cameras, setCameras] = useState<EnterpriseCamera[]>(EMPTY_CAMERAS);
@@ -190,6 +194,25 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
     };
   }, [user?.displayName, user?.enterpriseId, user?.enterpriseName, user?.id, user?.name]);
 
+  useEffect(() => {
+    if (!mlContextReady) return;
+    let disposed = false;
+    void getMlServiceStatus()
+      .then((status) => Promise.all([
+        listLocalCameras(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL),
+        loadCameraCredentialMetadata(enterpriseCameraStorageKey),
+      ]))
+      .then(([profiles, metadata]) => {
+        if (!disposed && activeViewRef.current !== "cameras") {
+          setCameras(profiles.map((profile) => applyStoredCameraMetadata(normalizeCamera(profile), metadata)));
+        }
+      })
+      .catch(() => { /* Camera Setup provides the detailed connection recovery controls. */ });
+    return () => {
+      disposed = true;
+    };
+  }, [mlContextReady, enterpriseCameraStorageKey]);
+
   useLayoutEffect(() => {
     const container = contentScrollRef.current;
     const restored = readPageState(scrollStateKey, 1, isScrollPosition) ?? { top: 0 };
@@ -294,11 +317,11 @@ export function EnterpriseShell({ initialView = "dashboard" }: EnterpriseShellPr
         >
           <div className={`mx-auto max-w-470 ${activeView === "cameras" ? "h-full min-h-0" : ""}`}>
             <Suspense fallback={<EnterpriseViewLoadingFallback />}>
-              {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} />}
+              {activeView === "dashboard" && mlContextReady && <DashboardView enterpriseName={displayName} cameras={cameras} />}
               {activeView === "cameras" && mlContextReady && (
                 <CameraManagementView key={enterpriseCameraStorageKey} cameras={cameras} setCameras={setCameras} storageKey={enterpriseCameraStorageKey} />
               )}
-              {activeView === "reports" && mlContextReady && <ReportsView enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
+              {activeView === "reports" && mlContextReady && <ReportsView cameras={cameras} enterpriseName={displayName} reportsHistory={reportsHistory} setReportsHistory={setReportsHistory} />}
               {activeView === "profile" && <ProfileView />}
               {activeView === "security" && <SecurityView />}
               {activeView === "tickets" && <TicketsView />}

@@ -88,6 +88,50 @@ class OccupancyEventRepository:
                 )
         return event_id
 
+    def update_identity(self, event_id: str, fields: dict[str, Any]) -> bool:
+        """Enrich a crossing without replaying its occupancy delta or changing its time."""
+        with self._database.connection() as connection:
+            connection.execute("begin immediate")
+            row = connection.execute(
+                "select payload_json from count_events where event_id=? "
+                "and direction='entry' and reid_decision='pending' "
+                "and submitted_report_id is null",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            payload = {**json.loads(row["payload_json"]), **fields}
+            connection.execute(
+                "update count_events set visitor_id=?, is_unique_entry=?, reid_score=?, "
+                "reid_decision=?, identity_confidence=?, payload_json=? where event_id=?",
+                (
+                    fields.get("visitor_id"),
+                    int(bool(fields.get("is_unique_entry"))),
+                    fields.get("reid_score"),
+                    fields.get("reid_decision"),
+                    fields.get("identity_confidence"),
+                    json.dumps(payload, sort_keys=True),
+                    event_id,
+                ),
+            )
+        return True
+
+    def finalize_pending(self, camera_id: int | None = None) -> None:
+        """Keep interrupted or submitted entries as explicit degraded unique estimates."""
+        with self._database.connection() as connection:
+            where = "reid_decision='pending' and submitted_report_id is null"
+            parameters: tuple[Any, ...] = ()
+            if camera_id is not None:
+                where += " and camera_id=?"
+                parameters = (camera_id,)
+            connection.execute(
+                "update count_events set is_unique_entry=1, identity_confidence='degraded', "
+                "reid_decision='degraded_pending', payload_json=json_set(payload_json, "
+                "'$.is_unique_entry',json('true'),'$.identity_confidence','degraded', "
+                "'$.reid_decision','degraded_pending') where " + where,
+                parameters,
+            )
+
     def record_correction(
         self,
         *,

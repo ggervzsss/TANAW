@@ -8,6 +8,32 @@ vi.mock("../../../components/ModalPortal", () => ({
 }));
 
 describe("CameraAddModal", () => {
+  it("offers Dahua with IP, device credentials, quality and port controls", () => {
+    const markup = render(values({ cameraBrand: "dahua", rtsp: "rtsp://192.168.1.9:554/cam/realmonitor?channel=1&subtype=1", username: "admin", password: "device-password" }), {});
+    expect(markup).toContain("Dahua");
+    expect(markup).toContain("Camera IP Address");
+    expect(markup).toContain("device username and password");
+    expect(markup).toContain("Standard quality (Recommended)");
+    expect(markup).toContain("RTSP port");
+    expect(markup).not.toContain("Stream path and query");
+    expect(markup).not.toContain("RTSP stream address");
+    expect(markup).not.toContain("Tenda connection profile");
+  });
+
+  it("shows Tenda profiles and advanced port/path controls", () => {
+    const markup = render(values({ cameraBrand: "tenda", rtsp: "rtsp://192.168.1.9:8554/profile1", connectionProfile: "profile" }), {});
+    expect(markup).toContain("Tenda connection profile");
+    expect(markup).toContain("CH3 profile stream (port 8554)");
+    expect(markup).toContain("RTSP port");
+    expect(markup).toContain("Stream path and query");
+  });
+
+  it("shows the full stream address for Custom RTSP", () => {
+    const markup = render(values({ cameraBrand: "custom", rtsp: "rtsp://192.168.1.9:8554/live?channel=2" }), {});
+    expect(markup).toContain("RTSP stream address");
+    expect(markup).toContain("rtsp://192.168.1.9:8554/live?channel=2");
+    expect(markup).not.toContain("Tenda connection profile");
+  });
   it("renders a simple camera setup without exposing stream internals", () => {
     const markup = render(values(), {});
     const labels = ["Camera Name", "Assigned Zone", "Camera IP Address", "Username", "Password"];

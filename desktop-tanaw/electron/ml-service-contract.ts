@@ -1,4 +1,4 @@
-export const ML_API_CONTRACT_VERSION = 1;
+export const ML_API_CONTRACT_VERSION = 2;
 
 export function hasCompatibleMlHealth(value: unknown) {
   return (

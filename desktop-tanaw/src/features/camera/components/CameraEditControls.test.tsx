@@ -8,7 +8,7 @@ describe("CameraEditControls", () => {
   it("keeps friendly video quality choices inside advanced settings", () => {
     const markup = renderToStaticMarkup(<CameraEditControls editForm={camera} hasExistingPassword onEditFormChange={() => undefined} />);
 
-    expect(markup.indexOf("Advanced Settings")).toBeLessThan(markup.indexOf("Video Quality"));
+    expect(markup.indexOf("Advanced connection settings")).toBeLessThan(markup.indexOf("Video Quality"));
     expect(markup).toContain("Standard quality (Recommended)");
     expect(CAMERA_QUALITY_OPTIONS).toEqual([
       { label: "Standard quality (Recommended)", value: "stream2" },
