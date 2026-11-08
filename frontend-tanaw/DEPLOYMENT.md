@@ -1,10 +1,16 @@
 # Vercel demo deployment
 
-This directory contains the monorepo's frontend source. The hosted portal uses
-the standalone `ggervzsss/frontend-tanaw` repository, whose root matches this
-directory. Reuse the Vercel project `tanaw-sanpedro`, with its root directory set
-to that standalone repository's root. For a direct monorepo deployment, select
-`frontend-tanaw` as the Vercel root directory instead.
+This guide applies both to `frontend-tanaw/` in the TANAW monorepo and to the
+root of the standalone `ggervzsss/frontend-tanaw` repository. The monorepo app
+directory is the source of truth; keep its source files, configuration, and
+documentation identical in the standalone repository. Preserve the standalone
+repository's `.git` directory and keep private environment values and local
+hosting metadata separate from source-file replacement.
+
+The hosted portal uses the standalone repository. Reuse the Vercel project
+`tanaw-sanpedro`, with its root directory set to the standalone repository's
+root. For a direct monorepo deployment, select `frontend-tanaw` as the Vercel
+root directory instead.
 
 The tracked `vercel.json` declares Vite, `npm ci`, `npm run build`, `dist`, SPA
 routing, and security headers. Node 24 is configured on the existing project.

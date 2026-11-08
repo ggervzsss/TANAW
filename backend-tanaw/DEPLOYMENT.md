@@ -1,12 +1,18 @@
 # Render and Supabase demo deployment
 
-This directory contains the monorepo's backend source. The hosted API deploys
-from the standalone `ggervzsss/backend-tanaw` repository, whose root matches this
-directory. Its `render.yaml` uses paths relative to that standalone root and
-creates a Free Docker service in the TANAW Render workspace.
+This guide applies both to `backend-tanaw/` in the TANAW monorepo and to the
+root of the standalone `ggervzsss/backend-tanaw` repository. The monorepo app
+directory is the source of truth; keep its source files, configuration, and
+documentation identical in the standalone repository. Preserve the standalone
+repository's `.git` directory and keep private environment values separate
+from source-file replacement.
+
+The hosted API deploys from the standalone repository. Its `render.yaml` uses
+paths relative to that standalone root and creates a Free Docker service in
+the TANAW Render workspace.
 
 The API is `https://tanaw-api-yked.onrender.com`; the frontend is the separate
-Vercel project at `https://tanaw-sanpedro.vercel.app`. If deploying this monorepo
+Vercel project at `https://tanaw-sanpedro.vercel.app`. If deploying the monorepo
 directly, select Blueprint path `backend-tanaw/render.yaml` and add
 `rootDir: backend-tanaw` to the service definition first.
 
