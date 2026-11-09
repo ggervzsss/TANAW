@@ -45,6 +45,10 @@ export function useLogin(redirectTo?: string, options?: UseLoginOptions) {
         options?.onAuthMessage(detail?.message ?? "Account temporarily locked.");
         return;
       }
+      if (isAxiosError(error) && (!error.response || error.response.status >= 500)) {
+        options?.onAuthMessage("Unable to reach the TANAW server. Check your internet connection and try again.");
+        return;
+      }
       options?.onAuthMessage("Login failed. Please check your credentials.");
     },
   });

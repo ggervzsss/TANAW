@@ -34,6 +34,10 @@ let verified = false;
 let lastProbeError = null;
 try {
   while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      lastProbeError = new Error(`The bundled ML service exited with code ${child.exitCode}.`);
+      break;
+    }
     try {
       const response = await fetch(`http://127.0.0.1:${port}/health`, {
         headers: { "X-TANAW-ML-Token": token },
@@ -74,6 +78,29 @@ if (!verified) {
 
 console.log("Bundled ML runtime: health check passed.");
 console.log(`Bundled ML runtime: ${(bundleBytes / 1024 ** 2).toFixed(0)} MiB.`);
+
+// Health proves imports, not inference. Run the same packaged executable with
+// every model on CPU, including native tracker assignment and OpenVINO/ONNX.
+const modelProbeDirectory = await mkdtemp(path.join(tmpdir(), "tanaw-model-inference-"));
+try {
+  await new Promise((resolve, reject) => {
+    const probe = spawn(executable, ["--verify-models"], {
+      env: {
+        ...process.env,
+        TANAW_APP_DATA_DIR: modelProbeDirectory,
+        TANAW_ML_MODEL_DIR: path.resolve("ml-service", "models"),
+        CUDA_VISIBLE_DEVICES: "-1",
+      },
+      stdio: "inherit",
+      windowsHide: true,
+      timeout: 240_000,
+    });
+    probe.once("error", reject);
+    probe.once("exit", (code, signal) => (code === 0 ? resolve() : reject(new Error(`Bundled CPU model inference failed (${signal ?? code}).`))));
+  });
+} finally {
+  await rm(modelProbeDirectory, { force: true, recursive: true });
+}
 
 async function directorySize(directory) {
   let total = 0;

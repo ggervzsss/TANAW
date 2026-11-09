@@ -90,6 +90,29 @@ Central records and local device records have separate lifecycles.
 - **tests:** JavaScript/Electron unit tests, browser workflows, and desktop integration tests.
 - **ml-service/tests:** Python camera-processing and local-storage tests.
 
+## Building installers
+
+Run these commands from `desktop-tanaw` after installing npm dependencies and
+preparing the model assets. Distribution builds require a production
+`VITE_API_BASE_URL`, for example in `.env.production.local`.
+
+- `npm run dist`: build the Windows x64 offline installer on Windows.
+- `npm run dist:linux`: build an Ubuntu/Debian x64 `.deb`. On Windows this uses
+  Docker Desktop's Linux engine and an Ubuntu 22.04 builder. On Linux it uses
+  the local Node.js 22.12+ and uv toolchain; use Ubuntu 22.04 for the same
+  compatibility baseline.
+
+The Linux command bundles a native Python service and every supported model,
+checks CPU inference, and writes the package and `SHA256SUMS.txt` under
+`release/<version>/linux-deb/`. The Linux runtime uses CPU inference. Windows
+and Linux native dependencies and outputs remain separate. Build commands do
+not publish artifacts.
+
+Install the `.deb` with `sudo apt install ./TANAW-Enterprise-Desktop-<version>-linux-amd64.deb`.
+APT installs required system libraries and GNOME Keyring if missing. A desktop
+session with an unlocked supported keyring is required for protected credential
+storage; Python, Node.js, and model downloads are not required on the target PC.
+
 ## Credits
 
 - `public/images/san-pedro-seal.png` is the City of San Pedro seal published by the City Government of San Pedro and listed by Wikimedia Commons as a Philippine government public-domain work: <https://commons.wikimedia.org/wiki/File:Seal_of_San_Pedro,_Laguna.png>.

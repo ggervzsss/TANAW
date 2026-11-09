@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ import {
   DESKTOP_RELEASE_ARCH,
   DESKTOP_RELEASE_PLATFORM,
   inspectMlReleaseResources,
+  inspectOfflineInstaller,
   releaseBuilderArguments,
   REQUIRED_MODEL_ASSETS,
   writeReleaseChecksums,
@@ -20,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("desktop release configuration", () => {
-  it("supports Windows x64 releases only", () => {
+  it("keeps the Windows release entry point restricted to Windows x64", () => {
     expect(DESKTOP_RELEASE_PLATFORM).toBe("win32");
     expect(DESKTOP_RELEASE_ARCH).toBe("x64");
     expect(() => assertWindowsReleaseHost("win32", "x64")).not.toThrow();
@@ -56,6 +58,17 @@ describe("desktop release configuration", () => {
     await expect(inspectMlReleaseResources(path.join(root, "runtime"), path.join(root, "models"))).rejects.toThrow(/native lap tracker dependency/);
   });
 
+  it("requires Linux-native executable and tracker assets for Linux packages", async () => {
+    const root = await createReleaseFixture();
+    const runtime = path.join(root, "runtime");
+    const models = path.join(root, "models");
+    await expect(inspectMlReleaseResources(runtime, models, "linux")).rejects.toThrow(/missing tanaw-ml-service/);
+    await writeFile(path.join(runtime, "tanaw-ml-service"), "ELF runtime");
+    await expect(inspectMlReleaseResources(runtime, models, "linux")).rejects.toThrow(/native lap tracker/);
+    await writeFile(path.join(runtime, "_internal", "lap", "_lapjv.cpython-312-x86_64-linux-gnu.so"), "native tracker");
+    await expect(inspectMlReleaseResources(runtime, models, "linux")).resolves.toMatchObject({ modelBytes: REQUIRED_MODEL_ASSETS.length });
+  });
+
   it("rejects development artifacts and unlisted models", async () => {
     const root = await createReleaseFixture();
     await mkdir(path.join(root, "runtime", "_internal", "torch", "test"), { recursive: true });
@@ -68,18 +81,52 @@ describe("desktop release configuration", () => {
     await expect(inspectMlReleaseResources(path.join(root, "runtime"), path.join(root, "models"))).rejects.toThrow(/Unexpected files/);
   });
 
-  it("writes SHA-256 checksums for both large-app NSIS artifacts", async () => {
+  it("checksums only the complete offline installer for distribution", async () => {
     const root = await temporaryDirectory();
     await mkdir(path.join(root, "nsis-web"), { recursive: true });
     await mkdir(path.join(root, "win-unpacked"), { recursive: true });
+    await mkdir(path.join(root, "offline"), { recursive: true });
+    await writeFile(path.join(root, "offline", "TANAW-Offline-Setup.exe"), "complete installer");
     await writeFile(path.join(root, "nsis-web", "TANAW-Setup.exe"), "installer");
     await writeFile(path.join(root, "nsis-web", "desktop-tanaw-0.1.0-x64.nsis.7z"), "payload");
     await writeFile(path.join(root, "win-unpacked", "TANAW.exe"), "application");
 
     const lines = await writeReleaseChecksums(root);
 
-    expect(lines).toHaveLength(2);
-    expect(lines).toEqual([expect.stringMatching(/^[a-f0-9]{64} {2}nsis-web\/TANAW-Setup\.exe$/), expect.stringMatching(/^[a-f0-9]{64} {2}nsis-web\/desktop-tanaw-0\.1\.0-x64\.nsis\.7z$/)]);
+    expect(lines).toHaveLength(1);
+    expect(lines).toEqual([expect.stringMatching(/^[a-f0-9]{64} {2}offline\/TANAW-Offline-Setup\.exe$/)]);
+  });
+
+  it("rejects a changed installer or stale payload after the offline bundle is created", async () => {
+    const root = await temporaryDirectory();
+    await mkdir(path.join(root, "offline"));
+    await mkdir(path.join(root, "nsis-web"));
+    const installer = "TANAW Enterprise Desktop-Windows-0.1.0-Offline-Setup.exe";
+    const bootstrapper = "TANAW Enterprise Desktop-Windows-0.1.0-Setup.exe";
+    const payload = "desktop-tanaw-0.1.0-x64.nsis.7z";
+    const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+    await writeFile(path.join(root, "offline", installer), "installer");
+    await writeFile(path.join(root, "nsis-web", bootstrapper), "bootstrapper");
+    await writeFile(path.join(root, "nsis-web", payload), "payload");
+    await writeFile(
+      path.join(root, "offline", "installer-manifest.json"),
+      JSON.stringify({
+        version: "0.1.0",
+        installer,
+        bytes: 9,
+        sha256: hash("installer"),
+        offline: true,
+        bootstrapper,
+        bootstrapperSha256: hash("bootstrapper"),
+        payload,
+        payloadSha256: hash("payload"),
+      }),
+    );
+    await expect(inspectOfflineInstaller(root, "0.1.0")).resolves.toBe(9);
+    await writeFile(path.join(root, "nsis-web", payload), "different payload");
+    await expect(inspectOfflineInstaller(root, "0.1.0")).rejects.toThrow(/stale NSIS/);
+    await writeFile(path.join(root, "offline", installer), "damaged installer");
+    await expect(inspectOfflineInstaller(root, "0.1.0")).rejects.toThrow(/size or SHA-256/);
   });
 });
 

@@ -3,9 +3,7 @@ import type { Camera } from "../../../types/enterprise";
 import type { CameraFormValues } from "../types/camera";
 import { getValidationWarnings } from "../utils/camera-validation";
 import { validateCameraForm, type CameraFormErrors } from "../utils/camera-form-validation";
-import {
-  isCameraPreviewReady,
-} from "../utils/camera-live-state";
+import { isCameraPreviewReady } from "../utils/camera-live-state";
 import { CAMERA_IP_CONFLICT_MESSAGE, canonicalizeCameraIp, findCameraIpConflict } from "../utils/camera-ip-uniqueness";
 import { cameraConfigurationLimitMessage, DEFAULT_ENTERPRISE_CAMERA_LIMIT, hasReachedCameraConfigurationLimit } from "../utils/camera-capacity";
 import {
@@ -33,6 +31,7 @@ import { MlServiceRequestError } from "../services/ml-service";
 import { deleteCameraCredential, getCameraPasswordReplacement, loadCameraCredentialMetadata, saveCameraCredential, type CameraCredentialMetadataRecords } from "../services/camera-credentials";
 import { notifyError, notifySuccess } from "../../toasts/services/toast-service";
 import { useCameraRuntimeController } from "./useCameraRuntimeController";
+import { createBackoffPoller } from "../../../utils/backoff-poller";
 
 type CameraManagementOptions = {
   cameras: Camera[];
@@ -119,7 +118,14 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
   const isActiveCameraSaving = activeAction === "saving";
   const isActiveCameraStarting = Boolean(activeCam && (isStartAction(activeAction) || pendingCameraIds.has(activeCam.id)));
   const monitoringError = activeCam ? (activeState?.counts.error ?? cameraErrors[activeCam.id] ?? configurationError) : configurationError;
-  const warnings = isEditMode && editForm ? (editForm.analysisMode === "open_space" ? [] : getValidationWarnings(editForm.config)) : (activeCam?.analysisMode === "open_space" ? [] : getValidationWarnings(activeCam?.config));
+  const warnings =
+    isEditMode && editForm
+      ? editForm.analysisMode === "open_space"
+        ? []
+        : getValidationWarnings(editForm.config)
+      : activeCam?.analysisMode === "open_space"
+        ? []
+        : getValidationWarnings(activeCam?.config);
   const streamVersion = activeCam ? (streamVersions[activeCam.id] ?? 0) : 0;
   const configuredCameraLimit = serviceHealth?.max_configured_cameras ?? DEFAULT_ENTERPRISE_CAMERA_LIMIT;
   const cameraStorageFingerprint = getCameraStorageFingerprint(cameras);
@@ -141,38 +147,44 @@ export function useCameraManagement({ cameras, setCameras, storageKey }: CameraM
     setCredentialMetadata({});
     lastPersistedCameraFingerprintRef.current = null;
 
-    const hydrateCameras = async () => {
-      try {
-        const status = await getMlServiceStatus();
-        const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-        const [saved, credentials] = await Promise.all([listLocalCameras(baseUrl), loadCameraCredentialMetadata(storageKey)]);
-        const normalized = saved.map((camera) => applyStoredCameraMetadata(normalizeCamera(camera), credentials));
-        const normalizedFingerprint = getCameraStorageFingerprint(normalized);
-        const duplicateConflict = normalized.find((camera, index) => Boolean(findCameraIpConflict(normalized.slice(0, index), camera.cameraHost ?? "")));
-        if (!disposed) {
-          adoptServiceStatus(status);
-          setCredentialMetadata(credentials);
-          setCameras(normalized);
-          lastPersistedCameraFingerprintRef.current = normalizedFingerprint;
-          setActiveCamId(normalized[0]?.id ?? null);
-          setHydratedFromStorage(true);
-          if (duplicateConflict) {
-            setConfigurationError(`${CAMERA_IP_CONFLICT_MESSAGE} Existing entries were left unchanged for review.`);
+    const hydration = createBackoffPoller({
+      task: async () => {
+        try {
+          const status = await getMlServiceStatus();
+          const baseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+          const [saved, credentials] = await Promise.all([listLocalCameras(baseUrl), loadCameraCredentialMetadata(storageKey)]);
+          const normalized = saved.map((camera) => applyStoredCameraMetadata(normalizeCamera(camera), credentials));
+          const normalizedFingerprint = getCameraStorageFingerprint(normalized);
+          const duplicateConflict = normalized.find((camera, index) => Boolean(findCameraIpConflict(normalized.slice(0, index), camera.cameraHost ?? "")));
+          if (!disposed) {
+            adoptServiceStatus(status);
+            setCredentialMetadata(credentials);
+            setCameras(normalized);
+            lastPersistedCameraFingerprintRef.current = normalizedFingerprint;
+            setActiveCamId(normalized[0]?.id ?? null);
+            setHydratedFromStorage(true);
+            setServiceError(null);
+            hydration.dispose();
+            if (duplicateConflict) {
+              setConfigurationError(`${CAMERA_IP_CONFLICT_MESSAGE} Existing entries were left unchanged for review.`);
+            }
           }
+        } catch (error) {
+          if (!disposed) {
+            setCameras([]);
+            setCredentialMetadata({});
+            setActiveCamId(null);
+            setServiceError(toErrorMessage(error));
+          }
+          throw error;
         }
-      } catch (error) {
-        if (!disposed) {
-          setCameras([]);
-          setCredentialMetadata({});
-          setActiveCamId(null);
-          setServiceError(toErrorMessage(error));
-        }
-      }
-    };
-
-    void hydrateCameras();
+      },
+      successDelayMs: 1000,
+      maxFailureDelayMs: 5000,
+    });
     return () => {
       disposed = true;
+      hydration.dispose();
     };
   }, [adoptServiceStatus, resetRuntimeState, setCameras, setServiceError, storageKey]);
 

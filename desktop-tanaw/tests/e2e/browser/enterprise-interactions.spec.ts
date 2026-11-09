@@ -42,9 +42,10 @@ async function signIn(page: Page, configureMl?: () => Promise<void>) {
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
 }
 
-test("updates camera overlays from live IPC events and restores polling after disconnect", async ({ page }) => {
+test("recovers camera hydration after service startup and restores live updates after disconnect", async ({ page }) => {
   test.setTimeout(60_000);
   let runtimeReads = 0;
+  let profileReads = 0;
   const camera = {
     id: 1,
     name: "Live camera",
@@ -69,7 +70,11 @@ test("updates camera overlays from live IPC events and restores polling after di
   };
   await signIn(page, async () => {
     await mockCameraSetup(page, enterpriseUser.enterpriseId);
-    await mockMlRequest(page, "/cameras", () => mlResponse({ status: 200, body: JSON.stringify([camera]) }));
+    await mockMlRequest(page, "/cameras", () => {
+      profileReads += 1;
+      if (profileReads < 3) throw new Error("connect ECONNREFUSED: ML service still starting");
+      return mlResponse({ status: 200, body: JSON.stringify([camera]) });
+    });
     await mockMlRequest(page, "/cameras/runtime", () => {
       runtimeReads += 1;
       return mlResponse({
@@ -88,6 +93,7 @@ test("updates camera overlays from live IPC events and restores polling after di
   });
   await page.goto("/#/enterprise/cameras");
   await expect(page.getByRole("heading", { name: "Live camera", exact: true })).toBeVisible();
+  expect(profileReads).toBeGreaterThanOrEqual(3);
   const counts = { entry: 3, exit: 1, occupancy: 2, running: true, status: "running", error: null, started_at: null };
   const envelope = {
     type: "camera.states",
