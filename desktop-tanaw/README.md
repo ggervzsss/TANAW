@@ -1,812 +1,97 @@
 # TANAW Enterprise Desktop
 
-Cloud-backed tickets and notifications use the shared authenticated
-`/realtime/ws` provider. Camera and local ML-service transports remain
-independent. See the root
-[realtime architecture](../README.md#realtime-architecture).
-
-Electron, React, TypeScript, Vite, and local FastAPI ML service for
-enterprise-side camera monitoring, local counting, local report drafting, cloud
-sync, and offline-friendly operational workflows.
-
-## Connecting cameras
-
-In **Camera Setup → Add Camera**, choose a **Camera brand / type** for each
-camera. The same controls are available under **Edit configuration**:
-
-- **TP-Link Tapo** keeps the existing IP address and camera-account workflow.
-  Standard and high quality use `/stream2` and `/stream1`, respectively.
-- **Tenda** offers CH3 channel streams on port 554 and profile streams on port
-  8554, plus alternate channel and H.264 formats. Select the format verified for
-  your camera's hardware/firmware. **Advanced connection settings** allows an
-  exact port and stream-path override. A manual path determines its own quality.
-- **Dahua** generates `/cam/realmonitor?channel=1&subtype=1` for standard quality
-  (substream) and `subtype=0` for high quality (main stream). Enter the camera's
-  local IPv4 address and device credentials, rather than the DMSS account login.
-  The default RTSP port is 554; change it under **Advanced connection settings**
-  only if the camera uses a different port. This preset is intended for cameras
-  such as the DH-B200-I that expose Dahua's standard RTSP endpoint. The desktop
-  computer must be able to reach the camera on the local network. For an initial
-  test, use H.264 if available and leave the camera's RTSP TLS encryption off.
-  See [Dahua's RTSP connection instructions](https://dahuatech.zendesk.com/hc/en-gb/articles/16320900884754-How-to-add-IP-cameras-to-NVR-via-RTSP).
-- **Custom RTSP** accepts a complete local RTSP URL, including its port and query
-  string, for other compatible cameras. Use an IPv4 camera address.
-
-Enter the camera's local username and password in their separate fields; do not
-embed credentials in the URL. All connection types currently require
-camera credentials. Add Camera tests the connection before adding it. After
-editing an existing camera, use **Test** to check the saved settings. Connection
-changes restart a running camera using the updated endpoint.
-
-Tenda's published CH3 addresses vary across versions. Verify the stream in VLC
-or obtain the exact URI through an ONVIF client before selecting a preset.
-See [Tenda's RTSP playback instructions](https://www.tendacn.com/ke/faq/2003692)
-and [CH3 local credentials and stream formats](https://www.tendacn.com/ro/faq/2003715).
-Brand selection configures RTSP input; it does not add ONVIF discovery or PTZ
-controls. Profiles are saved locally; camera credentials stay in the existing
-secure credential store and are excluded from SQLite camera profiles.
-
-## Full Setup After Cloning
-
-The backend, web portal, and PostgreSQL should be started with the root Docker
-Compose stack. The desktop app itself runs locally on the host because it needs
-native Electron behavior, local storage, ML model files, and camera/network
-access.
-
-The desktop app requires Node.js 22.12 or newer, npm, Python 3.12 or newer for
-the local ML service, and `uv`. Camera AI requires detector model assets under
-`ml-service/models/`.
-
-The desktop renderer runs on port `5174` in development. The local ML service
-runs on `127.0.0.1:8765` by default and is started by Electron when needed.
-
-### Linux
-
-From the TANAW repository root:
-
-```bash
-test -f .env || cp .env.example .env
-docker compose up --build -d
-cd desktop-tanaw
-npm ci
-uv sync --directory ml-service --frozen
-npm run models:setup
-npm run models:setup:reid
-printf 'VITE_API_BASE_URL=http://localhost:8000\n' > .env.local
-npm run dev
-```
-
-If `.env` already exists, do not overwrite it. The desktop `.env.local` points
-the local Electron renderer at the Dockerized backend.
-
-### Windows PowerShell
-
-From the TANAW repository root:
-
-```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-docker compose up --build -d
-Set-Location desktop-tanaw
-npm ci
-uv sync --directory ml-service --frozen
-npm run models:setup
-npm run models:setup:reid
-Set-Content -Path .env.local -Value "VITE_API_BASE_URL=http://localhost:8000"
-npm run dev
-```
-
-If `.env` already exists, do not overwrite it. The desktop `.env.local` points
-the local Electron renderer at the Dockerized backend.
-
-### Expected Local Services
-
-- Dockerized web portal: `http://localhost:5173`
-- Dockerized backend API: `http://localhost:8000`
-- Desktop renderer: `http://127.0.0.1:5174`
-- Local ML service: `http://127.0.0.1:8765`
-
-Electron starts the ML service automatically from `ml-service/main.py`. If
-another service is already listening on the ML port, the desktop attempts to
-connect to it and reports conflicts in the camera panel.
-
-In development, Electron launches the service through `uv run --frozen` so an
-existing `.venv` is synchronized with `ml-service/uv.lock` before Python
-starts. Packaged builds require and launch the standalone PyInstaller runtime
-under the packaged ML service directory. Installed computers do not need
-Python or `uv`.
-
-Override the ML port only when needed:
-
-Linux:
-
-```bash
-TANAW_ML_SERVICE_PORT=8770 npm run dev
-```
-
-PowerShell:
-
-```powershell
-$env:TANAW_ML_SERVICE_PORT = "8770"
-npm run dev
-Remove-Item Env:TANAW_ML_SERVICE_PORT
-```
-
-The ML service allows two concurrent camera pipelines by default. Enterprise
-devices with validated additional capacity can set `TANAW_MAX_CONCURRENT_CAMERAS`
-to a whole number from 1 through 16 before launching Electron. Requests above
-the configured limit are rejected without stopping an existing camera.
-
-### Docker Boundary
-
-The desktop app is not containerized for normal development or production use.
-Dockerizing the Electron runtime would make camera access, native app storage,
-tray behavior, installer packaging, and Windows permissions harder for end
-users. Use Docker for the central backend/frontend/database stack, and run the
-desktop locally.
-
-Containerizing desktop internals can still be useful for CI or isolated
-ML-service checks, but it is not the supported way to run the enterprise app.
-
-## Development Commands
-
-Linux and PowerShell use the same commands from `desktop-tanaw`:
-
-```bash
-npm run dev
-npm run build
-npm run dist
-npm run lint
-npm run type
-npm run preview:web
-```
-
-`npm run dev` starts the Vite/Electron development flow. It retains the local
-API fallback and is unaffected by production packaging configuration.
-
-`npm run dist` is the guarded, unsigned local packaging workflow. It requires
-a public HTTPS `VITE_API_BASE_URL`, builds and verifies the renderer, creates
-and smoke tests the standalone ML runtime, then invokes Electron Builder for
-Windows x64 only. Do not use it for an ordinary local preview or publish its
-unsigned installer as a release.
-
-## Windows Distribution Build
-
-Build the Windows installer on a Windows 10 or 11 x64 computer. PyInstaller
-produces a runtime for the operating system on which it runs, so a Linux ML
-runtime cannot be reused in a Windows installer.
-
-Prepare a fresh Windows build machine:
-
-```powershell
-npm ci
-uv sync --directory ml-service --frozen
-npm run models:setup
-npm run models:setup:openvino
-npm run models:setup:reid
-```
-
-Set the public backend URL only for the distribution command:
-
-```powershell
-$env:VITE_API_BASE_URL = "https://api.your-domain.example"
-npm run deployment:validate
-npm run dist
-Remove-Item Env:VITE_API_BASE_URL
-```
-
-Alternatively, copy `.env.production.example` to the ignored
-`desktop-tanaw/.env.production.local` file and fill in the same value. Vite
-embeds this public API address in the renderer; it is not a secret and cannot be
-changed in an already-built installer.
-
-Packaged windows use the secure `tanaw-app://desktop` renderer origin. Add that
-exact origin to the backend together with the public web portal origin:
-
-```text
-CORS_ORIGINS=https://portal.your-domain.example,tanaw-app://desktop
-```
-
-Keep `FRONTEND_PUBLIC_URL` set to the web portal URL used in activation and
-email-verification links. Do not place database credentials, JWT secrets,
-Brevo credentials, or other backend secrets in a desktop Vite environment.
-
-TANAW currently supports distribution only on Windows 10/11 x64. The builder
-does not define macOS, Linux, Windows ARM, or 32-bit Windows artifacts because
-their native ML runtimes are not tested or supported.
-
-For a publishable signed release, provide the Authenticode certificate through
-the CI secret store and use the signing-required command:
-
-```powershell
-$env:WIN_CSC_LINK = "<CI-provided PFX path, URL, or base64 value>"
-$env:WIN_CSC_KEY_PASSWORD = "<CI-provided certificate password>"
-npm run release:win
-```
-
-`release:win` enables Electron Builder's `forceCodeSigning` check and fails
-before building when either credential is missing. Certificate files and
-passwords must never be committed. `npm run dist` remains available for local
-unsigned package testing and still applies executable metadata and icons.
-
-The resulting large-app NSIS installer, its adjacent `.nsis.7z` application
-payload, and update metadata are written under `release/<version>/nsis-web/`;
-`SHA256SUMS.txt` is written one level above them. Keep the installer and payload
-in the same directory for offline installation; the installer verifies the
-payload before extracting it. Published builds can use the configured GitHub
-release as a network fallback. Before distribution,
-install it on a clean Windows x64 computer without Node.js, Python, or `uv` and
-verify login, backend synchronization, camera startup, and local ML health.
-
-The release build keeps only Electron's `en-US` and Filipino (`fil`) locales.
-Its ML resource manifest contains all emergency, compatibility, balanced, and
-high-accuracy detector models, all corresponding OpenVINO exports, and both
-ReID models. Runtime type-checker, compiled test-suite, and cache files are excluded; native Torch,
-OpenVINO, ONNX Runtime, OpenCV, and fallback assets are retained unless a
-packaged inference test proves they are unnecessary. Run `npm run
-release:verify` to validate the target/signing/resource configuration and
-`npm run release:verify:inputs` on the Windows build host after `npm run
-ml:bundle` to validate the physical inputs.
-
-## Detector Model Setup
-
-Detector binaries are intentionally not committed to Git. Keep local assets under:
-
-```text
-ml-service/models/
-```
-
-Default setup:
-
-```bash
-npm run models:setup
-```
-
-This prepares:
-
-- `models/yolo11n.pt` for emergency and compatibility fallback profiles
-- `models/yolo11s.pt` for the default balanced profile
-- `models/yolo11m.pt` for the high-accuracy profile
-
-To download a smaller local subset for constrained testing, pass explicit model names:
-
-```bash
-npm run models:setup -- --models yolo11n yolo11s
-```
-
-Generate CPU/Intel OpenVINO exports:
-
-```bash
-npm run models:setup:openvino
-```
-
-Expected OpenVINO export folders:
-
-```text
-models/yolo11n_480_openvino_model/
-models/yolo11n_640_openvino_model/
-models/yolo11s_640_openvino_model/
-models/yolo11m_640_openvino_model/
-```
-
-PowerShell uses the same npm scripts.
-
-## ReID Model Setup
-
-The live `fast` and `quality` ReID modes use distinct, pinned OSNet ONNX assets.
-Export both before ReID testing:
-
-```bash
-npm run models:setup:reid
-```
-
-This prepares:
-
-- `models/person_reid_cpu.onnx`: OSNet x0.25 for low-latency track association
-- `models/person_reid.onnx`: OSNet-AIN x1.0 for higher-quality visitor confirmation
-
-Verify a proposed stress-test stack before recording results:
-
-```bash
-npm run models:verify -- --profile balanced --reid fast
-```
-
-The live app still degrades safely when an asset is unavailable. The replay
-tool intentionally refuses to run a requested ReID variant with missing assets,
-because silently substituting a model would invalidate the comparison.
-
-## ML Processing Profiles
-
-- `auto`: selects the best available stable profile for the device.
-- `emergency`: YOLO11n at 480px, ByteTrack, OpenVINO -> CPU -> CUDA, ReID off.
-- `compatibility`: YOLO11n at 640px, ByteTrack, CUDA -> OpenVINO -> CPU, ReID off by default.
-- `balanced`: YOLO11s at 640px, BoT-SORT, CUDA -> OpenVINO -> CPU, fast ReID.
-- `high_accuracy`: YOLO11m at 640px, BoT-SORT, CUDA -> OpenVINO -> CPU, fast ReID.
-
-Stable detector runtimes are `cpu`, `cuda`, and `openvino`. TensorRT and DirectML provider detection may appear in diagnostics, but they are not stable detector runtime choices.
-
-## Counting, Tripwires, And Unique Visitors
-
-Normal users should configure only the camera stream, start/stop processing, and adjust the entry/exit tripwires. Advanced AI tuning is kept behind the advanced settings area.
-
-Counting uses:
-
-- tracking confidence to keep person tracks alive;
-- stricter counting confidence before a track can be counted;
-- full-frame ROI by default;
-- entry and exit tripwire sequence;
-- cooldowns to avoid duplicate counts;
-- optional ReID for estimated daily unique visitors.
-
-Unique visitor fields are estimates:
-
-- `estimated_unique_count`: confirmed and degraded daily unique estimate used by the UI.
-- `confirmed_unique_count`: high-confidence entries linked to a confirmed ReID identity.
-- `degraded_unique_count`: entries counted as unique when ReID is off, unavailable, or timed out.
-- `pending_unique_entries`: ambiguous ReID identities excluded from the estimate until later evidence confirms or reconciles them.
-- `repeat_entry_count`: entry events linked to an existing visitor or otherwise not unique.
-
-Confirmed identities retain multiple appearance prototypes. When clothing or
-another appearance change creates an ambiguous identity, TANAW keeps it
-provisional. A later strong sighting either merges it into a confirmed identity
-or promotes it as a genuinely new visitor. This reduces immediate overcounting
-without silently rewriting submitted reports.
-
-## Local Data And Ledgers
-
-TANAW Enterprise Desktop stores structured enterprise data in one
-enterprise-scoped `tanaw_desktop.sqlite3` database. This includes camera
-profiles, active monitoring state, count events and snapshots, occupancy
-corrections, report drafts and submissions, and visitor identity metadata.
-
-Authentication tokens and camera credentials are intentionally excluded from
-SQLite. Electron protects those values with the operating system's secure
-storage. Theme, notification-read state, and other non-authoritative UI
-preferences remain in Chromium storage. Live camera frames remain in memory and
-are never stored as database rows.
-
-TANAW accepts RTSP cameras only. Camera creation requires both a non-blank
-device username and device password. These are device credentials and do not use TANAW account
-password-complexity rules. New cameras use the recommended standard-quality
-feed automatically and are connection-tested before being added; users can
-choose high quality later under Advanced Settings. Generated stream URLs
-remain internal and credential-free. Existing
-passwords are never populated into the edit form; a blank edit password keeps
-the encrypted value unchanged, while an entered value replaces it. Electron
-refuses plaintext credential persistence when OS secure storage is unavailable,
-returns only username/configured metadata to the renderer, and injects the
-stored secret into local camera test/start requests inside the main process.
-Renderer-only development falls back to memory rather than local or session
-storage.
-
-Enterprise Support Tickets provide Recommended, Newest first, Oldest first,
-Priority: Urgent to Low, Priority: Low to Urgent, Status, and Recently updated
-sorting. Recommended follows the central unresolved priority order and keeps
-resolved requests last. The selected sort and the serializable, non-sensitive
-ticket draft are user/route scoped for the authenticated session; photo drafts
-remain memory-only. Passwords and camera credentials are excluded. Logout
-clears the scoped page and draft state.
-
-Ticket and report-ledger cells measure rendered overflow with `ResizeObserver`.
-The keyboard-accessible horizontal ellipsis appears only when the current
-column width, wrapping, and font metrics actually clip content; expansion does
-not rely on a character threshold.
-
-RTSP camera IPs are canonicalized before persistence and must be
-unique within the current enterprise camera list. Adding or editing a duplicate
-keeps the form and credentials intact, focuses the IP field, and shows an inline
-conflict. The serialized local configuration write boundary repeats the same
-validation so concurrent renderer actions cannot persist a duplicate. Separate
-enterprise lists may reuse the same private IP, and duplicate entries are
-reported without automatic deletion or merging.
-
-The canonical local relationships are:
-
-```mermaid
-erDiagram
-    CAMERA_PROFILES
-    CAMERA_MONITORING_STATES
-    REPORT_SUBMISSIONS ||--o{ COUNT_EVENTS : groups
-    REPORT_DRAFTS
-    OCCUPANCY_CORRECTIONS
-    COUNT_SNAPSHOTS
-    VISITOR_IDENTITIES ||--o{ VISITOR_MODEL_EMBEDDINGS : has
-    VISITOR_IDENTITIES ||--o{ VISITOR_SIGHTINGS : records
-```
-
-Camera IDs and names on events, snapshots, corrections, identities, and active
-state are intentional historical snapshots. They remain usable after a camera
-profile is deleted and therefore are not foreign keys to `camera_profiles`.
-`report_drafts.report_id` can identify either a local or already-synchronized
-cloud report, so it is also intentionally unconstrained.
-
-Commands below run from `desktop-tanaw`. Before any clear command, quit TANAW
-from the system tray and stop `npm run dev` with `Ctrl+C`. The repository-level
-`local-mockdata-off` script refuses to clear data while the desktop is still
-open and removes a leftover workspace-owned ML listener before resetting.
-
-### Inspect Local Data
-
-Inspect every local ledger:
-
-```bash
-npm run local-data -- inspect
-```
-
-Inspect one enterprise:
-
-```bash
-npm run local-data -- inspect --enterprise "lolouweng_001@tanaw.sanpedro"
-```
-
-Show more recent events and reports:
-
-```bash
-npm run local-data -- inspect --enterprise "lolouweng_001@tanaw.sanpedro" --limit 25
-```
-
-Produce JSON:
-
-```bash
-npm run local-data -- inspect --json
-```
-
-PowerShell uses the same commands.
-
-Inspection output includes:
-
-- Electron app-data and SQLite ledger paths;
-- current/latest migration revisions, pending migration count, and row counts
-  for camera profiles, active state, events, snapshots, report drafts,
-  submitted reports, visitor identity tables, and occupancy corrections;
-- current unsubmitted draft event count;
-- first and last event timestamps;
-- recent events and reports;
-- Chromium local-storage size and location.
-
-Sensitive embedding blobs and full event payloads are not printed.
-
-### Clear One Enterprise Ledger
-
-```bash
-npm run local-data -- clear --enterprise "lolouweng_001@tanaw.sanpedro" --yes
-```
-
-This deletes that enterprise's complete SQLite database, including camera
-profiles, local count events, snapshots, occupancy correction audit records,
-demographic report drafts, report submissions, visitor identity metadata,
-active monitoring state, and raw event log.
-
-It preserves other enterprise databases, OS-protected credentials and
-authentication storage, device IDs, theme settings, and backend records.
-
-### Clear Every Local Ledger
-
-```bash
-npm run local-data -- clear --all-ledgers --yes
-```
-
-This clears operational rows from every canonical enterprise database,
-including demographic drafts, events, reports, monitoring state, and visitor
-metadata. SQLite camera profiles, OS-protected camera credentials,
-authentication storage, and Chromium preferences remain.
-
-Databases without supported migration history are not silently modified or
-deleted. Recreate one explicitly with:
-
-```bash
-npm run local-data -- clear --enterprise "<enterprise-id>" --yes
-```
-
-### Full Device Reset
-
-```bash
-npm run local-data -- clear --full-device --yes
-```
-
-This deletes the complete Electron user-data directory, including local ledgers,
-saved RTSP camera definitions and encrypted credential files, authentication and
-notification storage, device IDs, theme and application preferences, Chromium
-local storage, IndexedDB, session storage, cookies, and Electron caches.
-
-The next desktop launch behaves like a new installation on that device.
-
-### Custom App-Data Directory
-
-```bash
-npm run local-data -- --app-data-dir "/path/to/electron/user-data" inspect
-```
-
-PowerShell:
-
-```powershell
-npm run local-data -- --app-data-dir "C:\Path\To\Electron\User Data" inspect
-```
-
-Default Linux development path:
-
-```text
-~/.config/desktop-tanaw
-```
-
-## Using Backend-Prepared Sample Counts
-
-The development sample-data command exposes finite count packages for a target
-enterprise. After that enterprise signs in, the desktop retrieves the oldest
-unfinished package through the authenticated backend and inserts ordinary count
-events into the same enterprise-scoped SQLite ledger used by camera detections.
-No simulation mode, run identifier, or mock provenance column exists.
-
-Prepare counts for your existing active, activated enterprise account from the
-project root. There is no default target; `lolouweng` is an example account ID
-seed that you should replace with your own:
-
-```bash
-./scripts/mockdata-on lolouweng
-```
-
-You can also use a numbered ID such as `lolouweng_001` or the full enterprise
-ID. A seed matching several eligible accounts is rejected with a list of IDs.
-Sign in as the selected account to import its prepared counts.
-
-The report workspace exposes unfinished periods in the **Reporting Month**
-selector. Once the overdue report syncs, the current-period package becomes
-available. A deterministic report ID keeps retries idempotent.
-
-Inspect the current local metrics:
-
-```bash
-curl http://127.0.0.1:8765/metrics/summary
-```
-
-Removing the central sample dataset does not delete local desktop rows. Close
-the desktop and use `./scripts/local-mockdata-off` from the project root when
-all desktop state must also be cleared. This permanently removes the complete
-Electron user-data directory. The next launch behaves like a new installation.
-
-## Occupancy Corrections
-
-Manual corrections are stored separately from count events. Current occupancy is:
-
-```text
-entries - exits + sum(correction_delta)
-```
-
-Corrections include old/new occupancy, delta, reason, optional actor metadata,
-and timestamp.
-
-## Tracking Evaluation
-
-Use `ml-service/evaluation/` for representative clips and JSONL ground truth. Record walking, running, two-person crossings, short occlusions, temporary obstructions, re-entry, groups, and poor lighting.
-
-Ground-truth frame example:
-
-```json
-{ "frame_index": 12, "people": [{ "id": "person-1", "bbox": [10, 20, 80, 180] }], "events": [{ "person_id": "person-1", "direction": "entry" }] }
-```
-
-Prediction frame example:
-
-```json
-{
-  "frame_index": 12,
-  "tracks": [{ "track_id": 4, "source_track_id": 19, "bbox": [11, 20, 81, 180] }],
-  "events": [{ "track_id": 4, "direction": "entry" }],
-  "processing_ms": 220.0,
-  "frame_age_ms": 40.0,
-  "cpu_percent": 78.0
-}
-```
-
-Create the detector cache once. This captures identical YOLO and BoT-SORT
-source tracks for every ReID comparison:
-
-```bash
-uv run --directory ml-service python -m scripts.replay_tracking \
-  --video evaluation/crossing-01.mp4 \
-  --config evaluation/camera-config.json \
-  --profile balanced \
-  --runtime auto \
-  --tracker botsort \
-  --reid off \
-  --detections-cache evaluation/cache/crossing-01-balanced-botsort.jsonl \
-  --rebuild-cache \
-  --output evaluation/results/crossing-01-off.jsonl \
-  --summary-output evaluation/results/crossing-01-off-summary.json
-
-uv run --directory ml-service python -m scripts.replay_tracking \
-  --video evaluation/crossing-01.mp4 \
-  --config evaluation/camera-config.json \
-  --profile balanced \
-  --runtime auto \
-  --tracker botsort \
-  --reid fast \
-  --detections-cache evaluation/cache/crossing-01-balanced-botsort.jsonl \
-  --output evaluation/results/crossing-01-fast.jsonl \
-  --summary-output evaluation/results/crossing-01-fast-summary.json
-
-uv run --directory ml-service python -m scripts.evaluate_tracking \
-  --ground-truth evaluation/ground-truth.jsonl \
-  --predictions evaluation/results/crossing-01-fast.jsonl \
-  --report-output evaluation/results/crossing-01-fast-report.json
-```
-
-The `quality` replay runs fast association plus quality embedding extraction,
-matching the cost and sampling roles of the live pipeline. Track IDs should
-therefore be compared between `off` and `fast`; within-clip quality runs measure
-the additional extraction cost. Cross-session unique-visitor gallery decisions
-still require a live integration test. Detector time is retained from the cache
-while association/ReID time is measured for each run. Use `--rebuild-cache`
-whenever the clip, crop, detector profile, tracker, confidence, sampling rate,
-runtime, or model configuration changes.
-
-PowerShell uses the same arguments with backtick line continuation:
-
-```powershell
-uv run --directory ml-service python -m scripts.replay_tracking `
-  --video evaluation/crossing-01.mp4 `
-  --config evaluation/camera-config.json `
-  --profile balanced `
-  --runtime auto `
-  --tracker botsort `
-  --reid fast `
-  --detections-cache evaluation/cache/crossing-01-balanced-botsort.jsonl `
-  --output evaluation/results/crossing-01-fast.jsonl
-
-uv run --directory ml-service python -m scripts.evaluate_tracking `
-  --ground-truth evaluation/ground-truth.jsonl `
-  --predictions evaluation/results/crossing-01-fast.jsonl `
-  --report-output evaluation/results/crossing-01-fast-report.json
-```
-
-Useful profile checks:
-
-```bash
-uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-compatibility.jsonl --profile compatibility --tracker bytetrack
-uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-balanced.jsonl --profile balanced --tracker botsort
-uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-high-accuracy.jsonl --profile high_accuracy --tracker botsort
-uv run --directory ml-service python -m scripts.replay_tracking --video evaluation/crossing-01.mp4 --output evaluation/predictions-emergency.jsonl --profile emergency --tracker bytetrack
-```
-
-See [`ml-service/evaluation/README.md`](ml-service/evaluation/README.md) for
-scenario naming, raw-clip requirements, labeling, and the comparison matrix.
-For a copy-and-paste Linux and Windows walkthrough, use the
-[`Camera Stress-Test Guide`](ml-service/evaluation/CAMERA_STRESS_TEST_GUIDE.md).
-
-## Quality Checks
-
-Run these from `desktop-tanaw` for Electron/renderer changes:
-
-```bash
-npm run lint
-npm run type
-```
-
-Run these from `desktop-tanaw/ml-service` for ML-service changes:
-
-```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .
-UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check .
-UV_CACHE_DIR=/tmp/uv-cache uv run mypy .
-UV_CACHE_DIR=/tmp/uv-cache uv run pyright
-UV_CACHE_DIR=/tmp/uv-cache uv run python -m unittest discover tests
-```
-
-PowerShell:
-
-```powershell
-$env:UV_CACHE_DIR = "$env:TEMP\uv-cache"
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy .
-uv run pyright
-uv run python -m unittest discover tests
-Remove-Item Env:UV_CACHE_DIR
-```
-
-The normal desktop lint command also scans renderer files for Tailwind classes that should be written in canonical form:
-
-```bash
-npm run lint:tailwind
-npm run lint:tailwind:fix
-```
-
-## Project Structure
-
-```text
-electron/                 # Electron main and preload processes
-src/                      # React renderer application
-ml-service/               # Local FastAPI ML service and SQLite ledger logic
-ml-service/app/camera/    # Camera session manager and frame processing
-ml-service/app/counting/  # Tripwire counting and geometry
-ml-service/app/detection/ # YOLO detector and tracker configuration
-ml-service/app/storage/   # Local ledger persistence
-ml-service/scripts/       # Model setup, replay, and evaluation helpers
-```
-
-## Bundled Asset Sources
+This repository contains the enterprise desktop application for TANAW, a tourism
+monitoring and reporting system for the City of San Pedro, Laguna.
+It includes the desktop interface and the local camera-processing service.
+
+## Purpose
+
+Enterprise operators use the app to connect cameras, view visitor activity,
+keep local records, and prepare reports for LGU review. Camera processing takes
+place on the enterprise computer.
+
+## Main Features
+
+- **Camera setup:** save compatible camera connections, test access, and control processing.
+- **Entrance / Exit monitoring:** count crossings over configured entry and exit lines.
+- **Open-space monitoring:** observe people inside a selected area of the camera image.
+- **Dashboard:** view occupancy, estimated visitor figures, and activity history.
+- **Reports:** prepare submissions, follow their status, and retry pending synchronization.
+- **Support:** create tickets and follow replies.
+- **Account tools:** manage profile and security settings, notifications, display preferences, and help.
+
+## How It Works
+
+### Camera monitoring
+
+The computer connects to an RTSP camera using the camera's own credentials.
+Presets support Tapo, Tenda, Dahua, and custom RTSP connections. Camera access
+requires a working local network connection and valid device credentials.
+
+In Entrance / Exit mode, operators position counting lines across the intended
+passage. The app tracks people crossing those lines and uses the events for
+entry, exit, and occupancy figures.
+
+In Open Space mode, operators draw a monitored area on the preview.
+The dashboard can show that area's current occupancy, peak occupancy,
+estimated daily unique visitors when available, and activity history.
+Unavailable measurements are shown as unavailable rather than as zero.
+
+Counts depend on camera placement, lighting, visibility, and configuration.
+Unique visitors are estimates based on appearance matching, not facial recognition.
+Camera accuracy and sustained workloads need validation with representative footage.
+Combined occupancy assumes separate, non-overlapping monitored areas and does
+not deduplicate people between camera views.
+
+### Reports and synchronization
+
+Operators sign in with an activated enterprise account, review visitor figures,
+and complete the required report fields before submitting.
+
+Reports and detailed records are saved locally. Pending submissions retry while
+the app is open, signed in, and connected to the central API. Temporary internet
+interruptions do not discard saved local records. Sign-in and cloud features
+require access to the central service.
+
+Open-space analytics currently stay on the device. They are excluded from
+official entrance/exit reports and central monitoring updates. A desktop with
+only open-space cameras may therefore appear delayed or offline in LGU views.
+
+### Privacy and local storage
+
+Raw camera video is processed on the device and is not uploaded to the central
+database. Account tokens and camera passwords use operating-system-protected
+storage and are excluded from the local SQLite database.
+
+Clearing local app data can remove saved cameras and unsynchronized records.
+Central records and local device records have separate lifecycles.
+
+## Tech Stack
+
+| Technology                                   | Purpose                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------ |
+| Electron 42                                  | Provide desktop windows, native integration, and protected credential storage. |
+| React 18, TypeScript, and Vite 7             | Build and run the desktop interface.                                           |
+| Tailwind CSS 4                               | Style interface components.                                                    |
+| TanStack Query, Zustand, and Axios           | Manage application state and communicate with the central API.                 |
+| Recharts, Motion, and Lucide                 | Provide charts, animation, and icons.                                          |
+| Python 3.12+ and FastAPI                     | Run the local camera-processing service.                                       |
+| OpenCV and YOLO11                            | Read camera frames and detect people.                                          |
+| ByteTrack, BoT-SORT, and appearance matching | Track movement and estimate repeat visitors.                                   |
+| PyTorch, ONNX Runtime, and OpenVINO          | Run supported detection and identity models.                                   |
+| SQLite                                       | Store enterprise-scoped camera profiles, visitor records, and reports.         |
+
+## Code Organization
+
+- **electron:** desktop lifecycle, secure storage, and communication with the local service.
+- **src:** the enterprise interface and workflows.
+- **ml-service/app:** camera processing, visitor counting, and local storage.
+- **ml-service/scripts:** model setup and camera evaluation tools.
+- **tests:** JavaScript/Electron unit tests, browser workflows, and desktop integration tests.
+- **ml-service/tests:** Python camera-processing and local-storage tests.
+
+## Credits
 
 - `public/images/san-pedro-seal.png` is the City of San Pedro seal published by the City Government of San Pedro and listed by Wikimedia Commons as a Philippine government public-domain work: <https://commons.wikimedia.org/wiki/File:Seal_of_San_Pedro,_Laguna.png>.
 - `public/images/camera-placeholder-city-hall.jpg` is the San Pedro City Hall photograph by Wikimedia Commons user Judgefloro, dedicated to the public domain under CC0 1.0: <https://commons.wikimedia.org/wiki/File:6346Poblacion_City_Hall_San_Pedro_Laguna_27.jpg>.
 - `public/fonts/` contains the Latin webfont files used by the desktop renderer: Inter, Montserrat, and Bai Jamjuree from Google Fonts. They are bundled so typography remains unchanged when the desktop app is offline. Each family retains its SIL Open Font License file in the same directory: <https://fonts.google.com/>.
-
-## Important Boundaries
-
-Local data commands affect only the desktop computer. They do not delete backend accounts, backend reports, final LGU audit reports, or other cloud records.
-
-Camera profiles and operational desktop records share the enterprise SQLite
-database. Authentication state and camera credentials remain in OS-protected
-Electron storage, while backend records remain in PostgreSQL. Use central
-sample-data cleanup for backend rows and desktop local-data cleanup for local
-device state.
-
-## Camera analysis modes and open-space dwell
-
-Each camera can use **Entrance / Exit** or **Open Space**. Entrance / Exit keeps
-the establishment counting and reporting workflow. Open Space measures people
-observed inside one polygon and estimates the duration of completed zone visits.
-
-To configure Open Space:
-
-1. Add a camera with Open Space selected, or change its mode in Camera Setup.
-2. Start its preview and open Edit Configuration. An unconfigured zone uses a
-   preview-only pipeline; drawing a zone does not require detector assets.
-3. Click 3–12 points on the actual decoded video, leaving visible space outside
-   the polygon. Drag vertices or use arrow keys; Delete removes a vertex.
-4. Name the monitored area and Save Config. Saving a configured zone while the
-   preview is running restarts the camera into analytics mode, which requires
-   the existing verified detector assets. If stopped, start it normally.
-5. Open Dashboard → Open Space to select the camera, monitored configuration,
-   and last 24 hours / 7 days / 30 days of local history.
-
-Keep the camera viewpoint fixed and disable automatic pan/tilt tracking.
-Changing the mode, polygon, or dwell policy ends active observations as
-incomplete and starts a new analysis run. History retains its original zone
-configuration; returning to older geometry creates a new revision.
-
-Dwell is estimated **time in the visible zone**, not a guaranteed entire park
-visit. A person first detected inside has an unknown arrival. Disappearance,
-stream loss, restart, or an ambiguous track match produces an incomplete
-observation. Dwell averages, medians, P90, and duration groups use completed
-visits with observed arrival/departure. Short tracking gaps have explicit
-uncertainty metadata. Visits are not unique people, and different cameras are
-not deduplicated.
-
-Live presence, temporary tracking gaps, observed visits, completion sample
-counts, incomplete observations, hourly activity, and observation coverage are
-shown separately. Healthy empty video produces zero presence; unavailable
-analytics produces an unavailable value. Visits use first-observation cohorts;
-completed dwell uses observed-end cohorts. Display time is Asia/Manila.
-
-Open-space analytics remain on the device. They are excluded from the doorway
-count ledger, official reports, sample-count preparation, and legacy cloud
-telemetry. Open-space-only configurations do not send legacy count telemetry;
-the existing LGU portal may therefore mark that gateway delayed/offline. Mixed
-configurations synchronize only their Entrance / Exit monitoring/count scope.
-Typed cloud support and LGU/AI presentation are separate follow-up work.
-
-Local API contract **2** is required in both Electron and the Python sidecar.
-The preproduction canonical SQLite `001` baseline includes the new tables.
-An older development ledger is rejected with the existing reset-required
-message; no database is automatically erased. Inspect existing data before
-using the supported enterprise-scoped reset command:
-
-```shell
-npm run local-data -- inspect
-npm run local-data -- clear --enterprise "your_enterprise_id" --yes
-```
-
-The second command deletes that enterprise's local database, including its
-camera profiles and operational history. Reconfigure the development cameras
-afterward. Do not run a reset when preservation is required; revise the
-migration policy and implementation first.
-
-Raw ended visits/presence intervals are retained for 30 days in bounded cleanup
-batches; active visits are protected. Hourly aggregate records are retained for
-180 days. The current detailed dashboard/API queries cover at most 30 days;
-no unsupported long-range median is reconstructed from hourly medians.
-
-For implementation boundaries and validation requirements, see the
-[implementation plan](../docs/plans/desktop-camera-modes-and-dwell-time.md).
-Physical-camera accuracy, representative crowded footage, sustained mixed
-workloads, and Windows release packaging require field validation before a
-broad rollout. Automated fixtures do not establish those outcomes.

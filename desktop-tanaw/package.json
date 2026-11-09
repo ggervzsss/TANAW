@@ -35,10 +35,10 @@
     "preview": "node scripts/with-electron-env.cjs electron .",
     "preview:web": "vite preview",
     "prettier": "prettier --write .",
-    "test": "vitest run --exclude=e2e/** --exclude=e2e-electron/**",
+    "test": "vitest run",
     "test:e2e": "playwright test",
     "test:electron": "npm run build && playwright test --config=playwright.electron.config.ts",
-    "type": "tsc --noEmit"
+    "type": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.10",
