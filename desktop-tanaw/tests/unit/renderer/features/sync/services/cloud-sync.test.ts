@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { staffApi } from "../../../../../../src/lib/axios";
 import {
+  getEstablishmentLive,
+  getEstablishmentSummary,
   getMlServiceStatus,
   getMlCameraStates,
   getMlHealth,
@@ -22,6 +24,8 @@ vi.mock("../../../../../../src/lib/axios", () => ({
 
 vi.mock("../../../../../../src/features/camera/services/ml-service", () => ({
   DEFAULT_ML_SERVICE_BASE_URL: "http://127.0.0.1:8765",
+  getEstablishmentLive: vi.fn(),
+  getEstablishmentSummary: vi.fn(),
   getLocalMetricsSummary: vi.fn(),
   getMlCameraStates: vi.fn(),
   getMlHealth: vi.fn(),
@@ -114,42 +118,64 @@ function localSubmission(submissionId: string, status: "Submitted" | "Resubmitte
   };
 }
 
-describe("open-space cloud boundary", () => {
+describe("establishment telemetry", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("synchronizes only doorway monitoring and session details in a mixed installation", async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("window", { localStorage: { getItem: () => "test-device", setItem: vi.fn() } });
     vi.mocked(getMlServiceStatus).mockResolvedValue({ baseUrl: "http://127.0.0.1:8765", running: true, desktopBuild: "test", desktopVersion: "test", error: null, packaged: false, pid: null });
+    vi.mocked(getLocalMetricsSummary).mockResolvedValue({ entries: 12, exits: 7, current_occupancy: 5, unique_count: 3, unsynced_events: 0, unsubmitted_events: 0 } as Awaited<ReturnType<typeof getLocalMetricsSummary>>);
+    const areaSession = {
+      running: true, status: "running", error: null, camera_id: 2, camera_name: "Plaza", camera_config: null, updated_at: null,
+      counts: { entry: null, exit: null, occupancy: 8, running: true, status: "running", started_at: null, error: null },
+    };
+    const areaHealth = { running: true, model_ready: true, processed_frame_stale_ms: 100 } as Awaited<ReturnType<typeof getMlHealth>>;
+    vi.mocked(getMlSession).mockResolvedValue(areaSession);
+    vi.mocked(getMlHealth).mockResolvedValue(areaHealth);
+    vi.mocked(getMlCameraStates).mockResolvedValue({
+      enterprise_id: "test", enterprise_occupancy: 8, active_camera_count: 1, max_configured_cameras: 16,
+      cameras: [{
+        enterprise_id: "test", camera_id: 2, analysis_mode: "open_space", session: areaSession, counts: areaSession.counts, health: areaHealth,
+        detections: { running: true, status: "running", error: null, frame_width: null, frame_height: null, tracks: [] },
+      }],
+      pending_camera_ids: [],
+      max_concurrent_cameras: 6,
+    });
+    vi.mocked(getEstablishmentLive).mockResolvedValue({
+      enterprise_id: "test", occupancy: 8, partial_occupancy: 8, state: "estimated", contributions: [],
+      missing_camera_ids: [], excluded_camera_ids: [], movement_available: false, identification_available: true,
+    });
+    vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
+  });
+
+  it.each([false, true])("publishes reconciled figures and includes Open Space cameras (mixed: %s)", async (mixed) => {
     vi.mocked(listLocalCameras).mockResolvedValue([
-      { id: 1, name: "Entrance", status: "stopped" },
+      ...(mixed ? [{ id: 1, name: "Entrance", status: "stopped", analysisMode: "entrance_exit" }] : []),
       { id: 2, name: "Plaza", status: "running", analysisMode: "open_space" },
     ] as Awaited<ReturnType<typeof listLocalCameras>>);
-    vi.mocked(getLocalMetricsSummary).mockResolvedValue({ entries: 12, exits: 7, current_occupancy: 5 } as Awaited<ReturnType<typeof getLocalMetricsSummary>>);
-    const areaSession = { running: true, status: "running", error: null, camera_id: 2, camera_name: "Plaza", updated_at: null } as Awaited<ReturnType<typeof getMlSession>>;
-    vi.mocked(getMlSession).mockResolvedValue(areaSession);
-    vi.mocked(getMlHealth).mockResolvedValue({ running: true, model_ready: true } as Awaited<ReturnType<typeof getMlHealth>>);
-    vi.mocked(getMlCameraStates).mockResolvedValue({
-      cameras: [{ camera_id: 2, analysis_mode: "open_space", session: areaSession, counts: { running: true }, health: { running: true } }],
-      pending_camera_ids: [2],
-      max_concurrent_cameras: 6,
-    } as Awaited<ReturnType<typeof getMlCameraStates>>);
-    vi.mocked(staffApi.post).mockResolvedValue({ data: {} });
+    vi.mocked(getEstablishmentSummary).mockResolvedValue({
+      enterprise_id: "test", entries: mixed ? 6 : 0, exits: mixed ? 2 : 0, peak_occupancy: 10, unique_count: 11,
+      confirmed_unique_count: 11, qualified_observations: 12, identification_state: "available", reconciliation_state: "estimated",
+      movement_state: mixed ? "available" : "unavailable", repeat_entry_count: 0, unresolved_observations: 0,
+      from_at: "2026-11-11T16:00:00Z", to_at: "2026-11-12T16:00:00Z", timezone: "Asia/Manila", covered_ms: 60_000, coverage_ratio: 0.001,
+      counting_basis: "sum_of_daily_establishment_unique_visitors", policy_version: 1, snapshot_version: "test", days: [],
+      days_available: 1, days_requested: 1, source_breakdown: [],
+    });
 
     const payload = await syncDesktopTelemetry();
 
-    expect(payload?.metrics.currentOccupancy).toBe(5);
-    expect(payload?.monitoring).toMatchObject({ configuredCameraCount: 1, activeCameraCount: 0, status: "stopped", cameras: [{ cameraId: 1, cameraName: "Entrance" }] });
-    expect(payload?.session).toMatchObject({ running: false, cameraId: null, cameraName: null });
-    expect(payload?.health?.modelReady).toBe(false);
+    expect(staffApi.post).toHaveBeenCalledWith("/operational/desktop/telemetry", payload);
+    expect(payload.metrics).toMatchObject({ entries: mixed ? 6 : null, exits: mixed ? 2 : null, currentOccupancy: 8, peakOccupancy: 10, uniqueCount: 11 });
+    expect(payload.monitoring).toMatchObject({
+      configuredCameraCount: mixed ? 2 : 1, healthyCameraCount: 1, status: mixed ? "partial" : "running",
+      cameras: expect.arrayContaining([expect.objectContaining({ cameraId: 2, cameraName: "Plaza", status: "running" })]),
+    });
     expect(markLocalEventsSynced).toHaveBeenCalledOnce();
   });
 
-  it("does not send area observations as establishment counts or prepare doorway samples", async () => {
-    vi.clearAllMocks();
-    vi.mocked(getMlServiceStatus).mockResolvedValue({ baseUrl: "http://127.0.0.1:8765", running: true, desktopBuild: "test", desktopVersion: "test", error: null, packaged: false, pid: null });
+  it("does not prepare synthetic doorway samples for Open Space cameras", async () => {
     vi.mocked(listLocalCameras).mockResolvedValue([{ id: 1, analysisMode: "open_space" }] as Awaited<ReturnType<typeof listLocalCameras>>);
-    await expect(syncDesktopTelemetry()).resolves.toBeNull();
     await expect(prepareDesktopSampleCounts()).resolves.toBeNull();
     expect(staffApi.post).not.toHaveBeenCalled();
     expect(getLocalMetricsSummary).not.toHaveBeenCalled();

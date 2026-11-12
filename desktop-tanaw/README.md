@@ -53,9 +53,10 @@ the app is open, signed in, and connected to the central API. Temporary internet
 interruptions do not discard saved local records. Sign-in and cloud features
 require access to the central service.
 
-Open-space analytics currently stay on the device. They are excluded from
-official entrance/exit reports and central monitoring updates. A desktop with
-only open-space cameras may therefore appear delayed or offline in LGU views.
+Both camera modes contribute to the same establishment occupancy and estimated
+visitor totals. These totals appear on the desktop and in LGU monitoring,
+visitor history, and submitted reports. Open Space cameras measure presence.
+Only Entrance / Exit cameras at a configured boundary measure arrivals and departures.
 
 ### Privacy and local storage
 

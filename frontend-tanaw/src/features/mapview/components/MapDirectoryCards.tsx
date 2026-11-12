@@ -75,10 +75,10 @@ export function EnterpriseMapCard({
         <dt>Live Occupancy</dt>
         <dd className="flex items-center justify-end gap-1.5 font-mono font-bold tabular-nums">
           <Activity size={13} aria-hidden="true" />
-          {enterprise.totalLiveOccupancy.toLocaleString()}
+          {enterprise.totalLiveOccupancy?.toLocaleString() ?? "—"}
         </dd>
         <dt>Est. Unique</dt>
-        <dd className="text-right font-mono font-bold tabular-nums">{enterprise.estimatedUniqueCount.toLocaleString()}</dd>
+        <dd className="text-right font-mono font-bold tabular-nums">{enterprise.estimatedUniqueCount?.toLocaleString() ?? "—"}</dd>
       </dl>
     </button>
   );

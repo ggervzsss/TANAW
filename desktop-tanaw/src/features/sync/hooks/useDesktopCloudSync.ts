@@ -128,11 +128,14 @@ export function useDesktopCloudSync(contextReady: boolean) {
 
 function liveCameraStatesSignature(states: MlCameraStates) {
   return [...states.cameras]
-    .filter((state) => state.analysis_mode !== "open_space")
     .sort((left, right) => left.camera_id - right.camera_id)
-    .map(({ camera_id: cameraId, counts, health, session }) =>
+    .map(({ camera_id: cameraId, analysis_mode: mode, area, counts, health, session }) =>
       [
         cameraId,
+        mode,
+        area?.available,
+        area?.presence,
+        area?.unique_visitors,
         counts.entry,
         counts.exit,
         counts.occupancy,

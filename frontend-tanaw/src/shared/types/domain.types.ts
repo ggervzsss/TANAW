@@ -22,8 +22,8 @@ export type MapEnterprise = {
   fullAddress: string;
   lat: number;
   lng: number;
-  totalLiveOccupancy: number;
-  estimatedUniqueCount: number;
+  totalLiveOccupancy: number | null;
+  estimatedUniqueCount: number | null;
   monitoringStatus: MonitoringStatus;
   occupancyStatus: OccupancyStatus;
   cameraMonitoring: CameraMonitoringSummary | null;
@@ -40,8 +40,9 @@ export type VisitorActivityLevel = "Usual" | "Busier Than Usual" | "No Recent Ba
 export type VisitorInsightPoint = {
   startAt: string;
   label: string;
-  averageVisitors: number;
-  peakVisitors: number;
+  averageVisitors: number | null;
+  peakVisitors: number | null;
+  estimatedUniqueCount?: number | null;
 };
 
 export type VisitorInsightEnterprise = {
@@ -59,7 +60,7 @@ export type VisitorInsights = {
   scopeType: "city" | "barangay" | "enterprise";
   scopeId: string | null;
   scopeName: string;
-  currentVisitors: number;
+  currentVisitors: number | null;
   typicalVisitors: number | null;
   differencePercent: number | null;
   comparisonMessage: string;

@@ -501,7 +501,9 @@ class EstablishmentRepository:
                 ).fetchone()
                 source_movement = reconcile_movements(source_rows, business_date)
                 measured = source_movement["movement_state"] != "unavailable" or any(
-                    item["available"] and item["coverage"]["role"] == "external_boundary"
+                    item["available"]
+                    and item["analysis_mode"] == "entrance_exit"
+                    and item["coverage"]["role"] == "external_boundary"
                     for item in evidence
                 )
                 source_breakdown.append(

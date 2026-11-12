@@ -415,5 +415,7 @@ export function createTooltipHtml(enterprise: MapEnterprise, color: string) {
 
 export function createPopupHtml(enterprise: MapEnterprise, color: string) {
   const cameraCount = enterprise.cameraMonitoring ? `${enterprise.cameraMonitoring.healthyCameraCount}/${enterprise.cameraMonitoring.configuredCameraCount} cameras active` : "No camera telemetry";
-  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${escapeHtml(enterprise.name)}</h3><p class="tanaw-map-popup__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-popup__metric">${enterprise.totalLiveOccupancy.toLocaleString()} live occupancy | ${enterprise.estimatedUniqueCount.toLocaleString()} est. unique</p><p class="tanaw-map-popup__meta">${escapeHtml(cameraCount)} · Occupancy: ${escapeHtml(enterprise.occupancyStatus)}</p><span class="tanaw-map-popup__status" style="color:${color};border-color:${color};">${escapeHtml(enterprise.monitoringStatus)}</span></div>`;
+  const occupancy = enterprise.totalLiveOccupancy?.toLocaleString() ?? "—";
+  const unique = enterprise.estimatedUniqueCount?.toLocaleString() ?? "—";
+  return `<div class="tanaw-map-popup"><h3 class="tanaw-map-popup__title">${escapeHtml(enterprise.name)}</h3><p class="tanaw-map-popup__meta">${escapeHtml(enterprise.category)} - ${escapeHtml(enterprise.barangay)}</p><p class="tanaw-map-popup__metric">${occupancy} live occupancy | ${unique} est. unique</p><p class="tanaw-map-popup__meta">${escapeHtml(cameraCount)} · Occupancy: ${escapeHtml(enterprise.occupancyStatus)}</p><span class="tanaw-map-popup__status" style="color:${color};border-color:${color};">${escapeHtml(enterprise.monitoringStatus)}</span></div>`;
 }

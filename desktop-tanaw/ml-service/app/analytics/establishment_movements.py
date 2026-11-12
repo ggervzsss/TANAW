@@ -56,6 +56,8 @@ def reconcile_movements(
     boundary_sources: dict[str, set[int]] = {}
     unresolved: set[str] = set()
     for row in rows:
+        if row["analysis_mode"] != "entrance_exit":
+            continue
         coverage = CameraCoverage.model_validate_json(row["coverage_json"])
         if coverage.role == "unconfigured":
             continue

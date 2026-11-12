@@ -1,6 +1,6 @@
 import { Activity, BarChart3, Building2, CalendarDays, ChevronRight, Clock3, RefreshCw, TrendingDown, TrendingUp, Users, X } from "lucide-react";
 import { motion } from "motion/react";
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useVisitorInsights } from "@/app/hooks/useOperationalSync";
 import { useSystemDisplayPreferences } from "@/shared/providers/systemDisplayPreferences";
@@ -26,6 +26,8 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
   const { timeFormat } = useSystemDisplayPreferences();
   const insightsQuery = useVisitorInsights({ range, enterpriseId, barangay });
   const insights = insightsQuery.data;
+  const [historyMetric, setHistoryMetric] = useState<"averageVisitors" | "estimatedUniqueCount">("averageVisitors");
+  const showsUnique = historyMetric === "estimatedUniqueCount";
   const comparisonTone = comparisonToneFor(insights?.differencePercent ?? null);
 
   return (
@@ -104,7 +106,7 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
         ) : (
           <>
             <section className="tanaw-visitor-insights__summary mt-4 grid grid-cols-2 gap-3" aria-label="Current visitor summary">
-              <InsightMetric icon={<Users size={15} />} label="Visitors Right Now" value={insights.currentVisitors.toLocaleString()} />
+              <InsightMetric icon={<Users size={15} />} label="Visitors Right Now" value={insights.currentVisitors?.toLocaleString() ?? "Unavailable"} />
               <InsightMetric icon={<Activity size={15} />} label="Usual Around This Time" value={insights.typicalVisitors === null ? "Learning" : insights.typicalVisitors.toLocaleString()} />
             </section>
 
@@ -124,13 +126,22 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
                   <p className="tanaw-visitor-insights__section-title flex items-center gap-2 text-[11px] font-black tracking-[0.08em] uppercase">
                     <CalendarDays size={15} /> Activity Pattern
                   </p>
-                  <p className="tanaw-visitor-insights__muted mt-1 text-xs font-semibold">Average number of people present</p>
+                  <p className="tanaw-visitor-insights__muted mt-1 text-xs font-semibold">
+                    {showsUnique ? (range === "today" ? "Daily estimate at each hour’s last update" : "Last daily estimate for each establishment") : "Average number of people present"}
+                  </p>
                 </div>
-                {insights.busiestPeriodLabel && (
+                {!showsUnique && insights.busiestPeriodLabel && (
                   <span className="tanaw-visitor-insights__peak rounded-full border px-2.5 py-1 text-[10px] font-black uppercase">Peak: {insights.busiestPeriodLabel}</span>
                 )}
               </div>
-              {insights.series.length > 0 ? (
+              <label className="tanaw-visitor-insights__muted mt-3 flex items-center gap-2 text-xs font-semibold">
+                History metric
+                <select className="tanaw-visitor-insights__segment rounded-lg border px-2 py-1" value={historyMetric} onChange={(event) => setHistoryMetric(event.target.value === "estimatedUniqueCount" ? "estimatedUniqueCount" : "averageVisitors")}>
+                  <option value="averageVisitors">Occupancy</option>
+                  <option value="estimatedUniqueCount">Estimated Unique</option>
+                </select>
+              </label>
+              {insights.series.some((point) => point[historyMetric] != null) ? (
                 <div className="mt-4 h-44 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={insights.series} margin={{ top: 4, right: 2, left: -24, bottom: 0 }}>
@@ -140,9 +151,9 @@ export function VisitorInsightsDrawer({ range, enterpriseId, barangay, onRangeCh
                       <Tooltip
                         cursor={{ fill: "var(--tanaw-insights-chart-hover)" }}
                         contentStyle={{ borderRadius: 12, border: "1px solid var(--tanaw-border-subtle)", background: "var(--tanaw-insights-tooltip)", color: "var(--tanaw-text)", fontSize: 12 }}
-                        formatter={(value) => [Number(value).toLocaleString(), "Average visitors"]}
+                        formatter={(value) => [Number(value).toLocaleString(), showsUnique ? "Estimated unique visitors" : "Average occupancy"]}
                       />
-                      <Bar dataKey="averageVisitors" fill="#34d399" radius={[5, 5, 0, 0]} />
+                      <Bar dataKey={historyMetric} fill="#34d399" radius={[5, 5, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

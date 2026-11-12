@@ -17,7 +17,14 @@ OBSERVED = datetime(2026, 10, 10, 2, tzinfo=UTC)
 SUBMITTED = datetime(2026, 11, 2, 2, tzinfo=UTC)
 
 
-def observed(service: EstablishmentRegistry, key="first", *, internal=False, vector=None):
+def observed(
+    service: EstablishmentRegistry,
+    key="first",
+    *,
+    internal=False,
+    area_role="internal_observation",
+    vector=None,
+):
     service.observe(
         observation_id=key,
         camera_id=1,
@@ -25,12 +32,13 @@ def observed(service: EstablishmentRegistry, key="first", *, internal=False, vec
         analysis_mode="open_space" if internal else "entrance_exit",
         kind="area_visit" if internal else "entry",
         coverage=CameraCoverage(
-            role="internal_observation" if internal else "external_boundary",
+            role=area_role if internal else "external_boundary",
             relationship="independent",
         ),
         qualified=True,
         first_at=OBSERVED,
         observed_at=OBSERVED,
+        arrival_observed=internal,
         embedding=vector if vector is not None else np.array([1, 0, 0], dtype=np.float32),
     )
 
@@ -59,9 +67,12 @@ def request(repo, count=1, **changes):
     }
 
 
-def test_open_space_only_report_preserves_unmeasured_movement_and_frozen_counts(tmp_path: Path):
+@pytest.mark.parametrize("area_role", ["internal_observation", "external_boundary"])
+def test_open_space_only_report_preserves_unmeasured_movement_and_frozen_counts(
+    tmp_path: Path, area_role: str
+):
     service = EstablishmentRegistry(str(tmp_path), "park")
-    observed(service, internal=True)
+    observed(service, internal=True, area_role=area_role)
     repo = EstablishmentReportRepository(service.database)
     result = repo.submit(**request(repo))
     assert result["unique_count"] == 1
@@ -71,7 +82,10 @@ def test_open_space_only_report_preserves_unmeasured_movement_and_frozen_counts(
     assert (
         saved["payload"]["counting"]["snapshot_version"] == result["counting"]["snapshot_version"]
     )
-    assert result["counting"]["source_breakdown"][0]["additive"] is False
+    source = result["counting"]["source_breakdown"][0]
+    assert source["additive"] is False
+    assert source["entries"] is source["exits"] is None
+    assert service.repository.population_states() == {}
     assert "population_flows" not in result["counting"]["days"][0]
 
 

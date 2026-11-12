@@ -55,9 +55,10 @@ Appearance matching estimates unique visitors without facial recognition.
 
 Visitor figures depend on lighting, camera placement, visibility, and configuration.
 They need validation against representative footage before operational use.
-Open-space analytics currently stay on the device and are excluded from
-central entrance/exit telemetry and official reports. An open-space-only device
-may therefore appear delayed or offline in the LGU monitoring views.
+Both camera modes contribute live occupancy and estimated unique visitors to the
+LGU monitoring views, visitor history, and establishment reports. Open Space
+cameras measure people present in their configured areas. Entrance / Exit
+cameras at an establishment boundary also measure arrivals and departures.
 
 ## Tech Stack
 

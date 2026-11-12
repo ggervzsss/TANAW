@@ -514,7 +514,7 @@ class CameraPipelineRegistry:
                     population_key=key,
                 )
             )
-            movement_available |= available and coverage.role == "external_boundary"
+            movement_available |= available and not is_area and coverage.role == "external_boundary"
             if (
                 available
                 and profile.get("uniqueCountingMode", "estimated_reid") == "estimated_reid"
