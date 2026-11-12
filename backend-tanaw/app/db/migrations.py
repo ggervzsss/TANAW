@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-CANONICAL_DATABASE_REVISION = "0001"
+CANONICAL_DATABASE_REVISION = "0002"
 CANONICAL_BASELINE_PATH = (
     Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0001_initial_tanaw_schema.py"
 )
@@ -28,7 +28,7 @@ async def validate_database_migration_head(connection: AsyncConnection) -> None:
         raise DatabaseMigrationError(
             "The TANAW database migration is out of date "
             f"(database={revision or 'none'}, required={CANONICAL_DATABASE_REVISION}). "
-            "Recreate the database and run `uv run alembic upgrade head`."
+            "Run `uv run alembic upgrade head` before starting the API."
         )
 
     try:
@@ -38,7 +38,7 @@ async def validate_database_migration_head(connection: AsyncConnection) -> None:
     except SQLAlchemyError as exc:
         raise DatabaseMigrationError(
             "The TANAW database does not match the current canonical schema. "
-            "Recreate the database and run `uv run alembic upgrade head`."
+            "Run `uv run alembic upgrade head` before starting the API."
         ) from exc
 
     expected_fingerprint = canonical_schema_fingerprint()
@@ -46,7 +46,7 @@ async def validate_database_migration_head(connection: AsyncConnection) -> None:
         raise DatabaseMigrationError(
             "The TANAW database does not match the current canonical schema "
             f"(database={schema_fingerprint or 'none'}, required={expected_fingerprint}). "
-            "Recreate the database and run `uv run alembic upgrade head`."
+            "Run `uv run alembic upgrade head` before starting the API."
         )
 
 
