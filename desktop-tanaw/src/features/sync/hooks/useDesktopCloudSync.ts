@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { MlCameraStates } from "../../camera/services/ml-service";
 import { useAuthStore } from "../../login/stores/auth-store";
-import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
+import { DESKTOP_REPORT_SYNC_EVENT, syncDesktopReportSubmissions, syncDesktopTelemetry } from "../services/cloud-sync";
 import { CAMERA_FRAME_STALE_AFTER_MS } from "../services/camera-monitoring";
 
 const TELEMETRY_LIVE_MIN_INTERVAL_MS = 1_000;
@@ -18,7 +18,7 @@ type LiveTelemetryState = {
 export function useDesktopCloudSync(contextReady: boolean) {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.user?.role);
-  const syncStateRef = useRef({ preparation: false, reports: false, telemetry: false });
+  const syncStateRef = useRef({ reports: false, telemetry: false });
   const liveTelemetryRef = useRef<LiveTelemetryState>({
     lastSignature: null,
     lastSyncedAt: 0,
@@ -30,18 +30,6 @@ export function useDesktopCloudSync(contextReady: boolean) {
     if (!token || role !== "enterprise" || !contextReady) return undefined;
 
     let isDisposed = false;
-
-    const runPreparation = async () => {
-      if (syncStateRef.current.preparation || isDisposed) return;
-      syncStateRef.current.preparation = true;
-      try {
-        await prepareDesktopSampleCounts();
-      } catch {
-        // Preparation remains pending until the target camera session is running.
-      } finally {
-        syncStateRef.current.preparation = false;
-      }
-    };
 
     const clearLiveTelemetryTimer = () => {
       if (liveTelemetryRef.current.timerId !== undefined) {
@@ -93,10 +81,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
       if (syncStateRef.current.reports || isDisposed) return;
       syncStateRef.current.reports = true;
       try {
-        const syncedCount = await syncDesktopReportSubmissions();
-        if (syncedCount > 0) {
-          void runPreparation();
-        }
+        await syncDesktopReportSubmissions();
       } catch {
         // Report submissions are stored locally first, so transient cloud errors are retryable.
       } finally {
@@ -121,14 +106,12 @@ export function useDesktopCloudSync(contextReady: boolean) {
     });
 
     const runAllSync = () => {
-      void runPreparation();
       scheduleTelemetrySync();
       void runReportSync();
     };
 
     runAllSync();
     const telemetryIntervalId = window.setInterval(scheduleTelemetrySync, TELEMETRY_RECONCILE_INTERVAL_MS);
-    const preparationIntervalId = window.setInterval(runPreparation, TELEMETRY_RECONCILE_INTERVAL_MS);
     const reportIntervalId = window.setInterval(runReportSync, REPORT_SYNC_INTERVAL_MS);
     window.addEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
 
@@ -137,7 +120,6 @@ export function useDesktopCloudSync(contextReady: boolean) {
       clearLiveTelemetryTimer();
       unsubscribeFromReportEvents?.();
       window.clearInterval(telemetryIntervalId);
-      window.clearInterval(preparationIntervalId);
       window.clearInterval(reportIntervalId);
       window.removeEventListener(DESKTOP_REPORT_SYNC_EVENT, runReportSync);
     };
@@ -146,7 +128,7 @@ export function useDesktopCloudSync(contextReady: boolean) {
 
 function liveCameraStatesSignature(states: MlCameraStates) {
   return [...states.cameras]
-    .filter(state => state.analysis_mode !== "open_space")
+    .filter((state) => state.analysis_mode !== "open_space")
     .sort((left, right) => left.camera_id - right.camera_id)
     .map(({ camera_id: cameraId, counts, health, session }) =>
       [

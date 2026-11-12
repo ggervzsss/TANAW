@@ -27,6 +27,7 @@ type UnifiedMetricsHeaderProps = {
   metrics: UnifiedMetric[];
   ariaLabel?: string;
   className?: string;
+  layout?: "scroll" | "grid";
 };
 
 const toneClasses: Record<
@@ -82,7 +83,7 @@ const toneClasses: Record<
   },
 };
 
-export function UnifiedMetricsHeader({ metrics, ariaLabel = "Summary metrics", className = "" }: UnifiedMetricsHeaderProps) {
+export function UnifiedMetricsHeader({ metrics, ariaLabel = "Summary metrics", className = "", layout = "scroll" }: UnifiedMetricsHeaderProps) {
   const instanceId = useId();
 
   return (
@@ -97,11 +98,11 @@ export function UnifiedMetricsHeader({ metrics, ariaLabel = "Summary metrics", c
         tabIndex={0}
         aria-label={`${ariaLabel}; scroll horizontally for additional metrics when needed`}
       >
-        <ul className="flex min-w-max items-stretch" role="list">
+        <ul className={layout === "grid" ? "grid min-w-0 grid-cols-1 items-stretch sm:grid-cols-2 xl:grid-cols-4" : "flex min-w-max items-stretch"} role="list">
           {metrics.map((metric, index) => (
             <Fragment key={metric.id}>
-              {index > 0 && <MetricDivider />}
-              <MetricSegment metric={metric} labelId={`${instanceId}-${metric.id}-label`} />
+              {index > 0 && layout === "scroll" && <MetricDivider />}
+              <MetricSegment metric={metric} labelId={`${instanceId}-${metric.id}-label`} grid={layout === "grid"} />
             </Fragment>
           ))}
         </ul>
@@ -121,7 +122,7 @@ function MetricDivider() {
   );
 }
 
-function MetricSegment({ metric, labelId }: { metric: UnifiedMetric; labelId: string }) {
+function MetricSegment({ metric, labelId, grid }: { metric: UnifiedMetric; labelId: string; grid: boolean }) {
   const tone = toneClasses[metric.tone ?? "neutral"];
   const Icon = metric.icon;
   const value = normalizedMetricValue(metric.value);
@@ -163,10 +164,10 @@ function MetricSegment({ metric, labelId }: { metric: UnifiedMetric; labelId: st
       </div>
     </>
   );
-  const segmentClassName = `tanaw-unified-metrics__segment group relative flex min-h-40 w-full min-w-56 flex-1 basis-56 overflow-hidden px-7 py-7 text-left ${interactiveClassName}`;
+  const segmentClassName = `tanaw-unified-metrics__segment group relative flex min-h-40 w-full flex-1 overflow-hidden py-7 text-left ${grid ? "min-w-0 px-5" : "min-w-56 basis-56 px-7"} ${interactiveClassName}`;
 
   return (
-    <li className="flex min-w-56 flex-1 basis-56" data-metric-segment={metric.id} data-testid={metric.testId}>
+    <li className={grid ? "flex min-w-0 border-r border-b border-slate-100 dark:border-slate-800" : "flex min-w-56 flex-1 basis-56"} data-metric-segment={metric.id} data-testid={metric.testId}>
       {metric.href ? (
         <a href={metric.href} className={segmentClassName} aria-label={metric.ariaLabel}>
           {content}

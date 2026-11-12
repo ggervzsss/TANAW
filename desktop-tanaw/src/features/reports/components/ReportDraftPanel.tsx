@@ -9,6 +9,7 @@ import { ReportDraftHeader } from "./ReportDraftHeader";
 import { ReportingPeriodField } from "./ReportingPeriodField";
 import { SupplementaryNotes } from "./SupplementaryNotes";
 import { SystemLockedMetrics } from "./SystemLockedMetrics";
+import { CountingDetails } from "./CountingDetails";
 
 type ReportDraftPanelProps = {
   activeReport: ReportRecord | null;
@@ -23,6 +24,7 @@ type ReportDraftPanelProps = {
   previousDemo?: DemoBreakdown | null;
   validationError: string | null;
   onSubmitPrompt: () => void;
+  onRefreshCounts?: () => void;
   setDemo: React.Dispatch<React.SetStateAction<DemoBreakdown>>;
   setNotes: React.Dispatch<React.SetStateAction<string>>;
 };
@@ -40,6 +42,7 @@ export function ReportDraftPanel({
   previousDemo = null,
   validationError,
   onSubmitPrompt,
+  onRefreshCounts,
   setDemo,
   setNotes,
 }: ReportDraftPanelProps) {
@@ -60,6 +63,17 @@ export function ReportDraftPanel({
           period={period}
         />
         <SystemLockedMetrics demo={demo} metrics={metrics} />
+        <CountingDetails metrics={metrics} />
+        {activeReport?.status === "Returned for Revision" && onRefreshCounts && (
+          <button
+            type="button"
+            disabled={isPeriodChanging}
+            onClick={onRefreshCounts}
+            className="text-sm font-semibold text-emerald-800 underline underline-offset-2 disabled:opacity-50 dark:text-emerald-300"
+          >
+            Refresh reconciled counts for this revision
+          </button>
+        )}
         <DemographicsBreakdown demo={demo} isReadOnly={isReadOnly} previousDemo={previousDemo} setDemo={setDemo} uniqueCap={metrics.unique} />
         <SupplementaryNotes isReadOnly={isReadOnly} notes={notes} setNotes={setNotes} />
         <ReportDraftActions activeReport={activeReport} isReadOnly={isReadOnly} metricsError={metricsError} validationError={validationError} onSubmitPrompt={onSubmitPrompt} />

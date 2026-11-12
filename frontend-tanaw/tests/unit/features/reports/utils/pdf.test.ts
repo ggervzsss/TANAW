@@ -30,9 +30,9 @@ describe("web report PDF generation", () => {
     expect(pdf).toContain("Other Province");
     expect(pdf).toContain("Foreign Country Residence");
     expect(pdf).toContain("Grand Total Number of Visitors");
-    expect(pdf).toContain("Live Count Summary");
+    expect(pdf).toContain("Saved Establishment Summary");
     expect(pdf).toContain("May 31, 2026, 6:15 PM Philippine Time");
-    expect(pdf).toContain("Demographic splits and unique visitors are estimates");
+    expect(pdf).toContain("Demographic allocations are entered by the establishment");
     expect(pdf).not.toContain(intakeReport.id);
     expect(pdf).toContain("1 1 1 rg 0 0 842 595 re f");
     expect(pdf).not.toContain("0.043 0.071 0.125 rg");

@@ -4,8 +4,10 @@ import type { Camera } from "../../../types/enterprise";
 import { SelectDropdown } from "../../../components/SelectDropdown";
 import { CameraConnectionFields } from "./CameraConnectionFields";
 import { PasswordVisibilityInput } from "./PasswordVisibilityInput";
+import { CameraCoverageControls } from "./CameraCoverageControls";
 
 type CameraEditControlsProps = {
+  cameras?: Camera[];
   cameraIpError?: string;
   editForm: Camera;
   hasExistingPassword: boolean;
@@ -19,7 +21,7 @@ const roiFields = [
   { label: "Height", key: "height", min: 20, max: 100 },
 ] as const;
 
-export function CameraEditControls({ cameraIpError, editForm, hasExistingPassword, onEditFormChange }: CameraEditControlsProps) {
+export function CameraEditControls({ cameras = [], cameraIpError, editForm, hasExistingPassword, onEditFormChange }: CameraEditControlsProps) {
   const updateRoi = (key: keyof Camera["config"]["roi"], value: number) => {
     onEditFormChange({
       ...editForm,
@@ -52,18 +54,36 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
             />
           </CompactField>
           <CompactField label="Camera Mode">
-            <select aria-label="Camera mode" value={editForm.analysisMode ?? "entrance_exit"}
-              onChange={event=>onEditFormChange({...editForm, analysisMode:event.target.value as Camera["analysisMode"], openSpace:null,
-                config:{...editForm.config,roi:{top:0,left:0,width:100,height:100}}})} className="w-full rounded-lg border p-2 text-xs dark:bg-slate-900">
-              <option value="entrance_exit">Entrance / Exit</option><option value="open_space">Open Space</option>
+            <select
+              aria-label="Camera mode"
+              value={editForm.analysisMode ?? "entrance_exit"}
+              onChange={(event) =>
+                onEditFormChange({
+                  ...editForm,
+                  analysisMode: event.target.value as Camera["analysisMode"],
+                  openSpace: null,
+                  config: { ...editForm.config, roi: { top: 0, left: 0, width: 100, height: 100 } },
+                })
+              }
+              className="w-full rounded-lg border p-2 text-xs dark:bg-slate-900"
+            >
+              <option value="entrance_exit">Entrance / Exit</option>
+              <option value="open_space">Open Space</option>
             </select>
             <p className="mt-1 text-xs">Changing mode or zone restarts this camera. Active observations end as incomplete.</p>
           </CompactField>
-          {editForm.analysisMode === "open_space" && <div className="space-y-2 rounded-lg border p-2 text-xs">
-            <p>Start the preview, then draw 3–12 zone vertices on the image. Keep the camera fixed and disable automatic pan/tilt tracking.</p>
-            <CompactField label="Monitored Area Name"><input className="w-full rounded border p-2 dark:bg-slate-900" value={editForm.openSpace?.zone_name ?? ""}
-              onChange={event=>onEditFormChange({...editForm,openSpace:{zone_id:"main",polygon:[],...editForm.openSpace,zone_name:event.target.value}})} /></CompactField>
-          </div>}
+          {editForm.analysisMode === "open_space" && (
+            <div className="space-y-2 rounded-lg border p-2 text-xs">
+              <p>Start the preview, then draw 3–12 zone vertices on the image. Keep the camera fixed and disable automatic pan/tilt tracking.</p>
+              <CompactField label="Monitored Area Name">
+                <input
+                  className="w-full rounded border p-2 dark:bg-slate-900"
+                  value={editForm.openSpace?.zone_name ?? ""}
+                  onChange={(event) => onEditFormChange({ ...editForm, openSpace: { zone_id: "main", polygon: [], ...editForm.openSpace, zone_name: event.target.value } })}
+                />
+              </CompactField>
+            </div>
+          )}
           <CompactField label="Assigned Zone">
             <input
               type="text"
@@ -73,6 +93,7 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
             />
           </CompactField>
           <CameraConnectionFields value={editForm} hostError={cameraIpError} onChange={(connection) => onEditFormChange({ ...editForm, ...connection })} />
+          <CameraCoverageControls cameraId={editForm.id} cameras={cameras} value={editForm.coverage} onChange={(coverage) => onEditFormChange({ ...editForm, coverage })} />
           <details className="rounded-xl border border-gray-200 bg-gray-50 p-2.5">
             <summary className="cursor-pointer text-[9px] font-bold tracking-wider text-gray-500 uppercase">Advanced Settings</summary>
             <div className="mt-2 space-y-2">
@@ -115,76 +136,78 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
                   />
                 </CompactField>
               </div>
-              {editForm.analysisMode !== "open_space" && <>
-              <div className="grid grid-cols-2 gap-2">
-                <CompactField label="ReID Mode">
-                  <SelectDropdown
-                    value={editForm.reidMode ?? "auto"}
-                    onChange={(reidMode) => onEditFormChange({ ...editForm, reidMode: reidMode as Camera["reidMode"] })}
-                    options={[
-                      ["auto", "Auto"],
-                      ["off", "Off"],
-                      ["fast", "Fast"],
-                      ["quality", "Quality"],
-                    ]}
-                    ariaLabel="Re-identification mode"
-                    size="compact"
-                  />
-                </CompactField>
-                <CompactField label="Unique Mode">
-                  <SelectDropdown
-                    value={editForm.uniqueCountingMode ?? "estimated_reid"}
-                    onChange={(uniqueCountingMode) => onEditFormChange({ ...editForm, uniqueCountingMode: uniqueCountingMode as Camera["uniqueCountingMode"] })}
-                    options={[
-                      ["estimated_reid", "Estimated ReID"],
-                      ["entry_only", "Entry Only"],
-                    ]}
-                    ariaLabel="Unique counting mode"
-                    size="compact"
-                  />
-                </CompactField>
-              </div>
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <h5 className="flex items-center gap-1.5 text-[9px] font-bold tracking-wider text-gray-500 uppercase">
-                    <Maximize size={12} className="text-[#2d5eff]" /> Region Of Interest
-                  </h5>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onEditFormChange({
-                        ...editForm,
-                        config: {
-                          ...editForm.config,
-                          roi: { top: 0, left: 0, width: 100, height: 100 },
-                        },
-                      })
-                    }
-                    className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[9px] font-bold text-gray-600 transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
-                  >
-                    Full Frame
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  {roiFields.map(({ label, key, min, max }) => (
-                    <div key={key}>
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <label className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</label>
-                        <span className="text-[10px] font-bold text-gray-500">{editForm.config.roi[key]}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={min}
-                        max={max}
-                        value={editForm.config.roi[key]}
-                        onChange={(event) => updateRoi(key, parseInt(event.target.value, 10))}
-                        className="w-full accent-[#2d5eff]"
+              {editForm.analysisMode !== "open_space" && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <CompactField label="ReID Mode">
+                      <SelectDropdown
+                        value={editForm.reidMode ?? "auto"}
+                        onChange={(reidMode) => onEditFormChange({ ...editForm, reidMode: reidMode as Camera["reidMode"] })}
+                        options={[
+                          ["auto", "Auto"],
+                          ["off", "Off"],
+                          ["fast", "Fast"],
+                          ["quality", "Quality"],
+                        ]}
+                        ariaLabel="Re-identification mode"
+                        size="compact"
                       />
+                    </CompactField>
+                    <CompactField label="Unique Mode">
+                      <SelectDropdown
+                        value={editForm.uniqueCountingMode ?? "estimated_reid"}
+                        onChange={(uniqueCountingMode) => onEditFormChange({ ...editForm, uniqueCountingMode: uniqueCountingMode as Camera["uniqueCountingMode"] })}
+                        options={[
+                          ["estimated_reid", "Estimated ReID"],
+                          ["entry_only", "Entry Only"],
+                        ]}
+                        ariaLabel="Unique counting mode"
+                        size="compact"
+                      />
+                    </CompactField>
+                  </div>
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <h5 className="flex items-center gap-1.5 text-[9px] font-bold tracking-wider text-gray-500 uppercase">
+                        <Maximize size={12} className="text-[#2d5eff]" /> Region Of Interest
+                      </h5>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onEditFormChange({
+                            ...editForm,
+                            config: {
+                              ...editForm.config,
+                              roi: { top: 0, left: 0, width: 100, height: 100 },
+                            },
+                          })
+                        }
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[9px] font-bold text-gray-600 transition-colors hover:border-[#065f46]/40 hover:text-[#065f46]"
+                      >
+                        Full Frame
+                      </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-              </>}
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                      {roiFields.map(({ label, key, min, max }) => (
+                        <div key={key}>
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <label className="text-[9px] font-bold tracking-wider text-gray-500 uppercase">{label}</label>
+                            <span className="text-[10px] font-bold text-gray-500">{editForm.config.roi[key]}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={min}
+                            max={max}
+                            value={editForm.config.roi[key]}
+                            onChange={(event) => updateRoi(key, parseInt(event.target.value, 10))}
+                            className="w-full accent-[#2d5eff]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </details>
           <div className="grid grid-cols-2 gap-2">
@@ -204,7 +227,6 @@ export function CameraEditControls({ cameraIpError, editForm, hasExistingPasswor
               {hasExistingPassword && !editForm.password ? <span className="mt-1 block text-[9px] font-semibold text-gray-500">Password configured. Leave blank to keep it unchanged.</span> : null}
             </CompactField>
           </div>
-
         </div>
       </section>
     </div>

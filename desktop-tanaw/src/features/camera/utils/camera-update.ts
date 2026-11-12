@@ -17,11 +17,7 @@ export function createCameraUpdateGate() {
   };
 }
 
-export function hasCameraConnectionChange(
-  previous: Camera,
-  next: Camera,
-  passwordChanged = false,
-) {
+export function hasCameraConnectionChange(previous: Camera, next: Camera, passwordChanged = false) {
   return (
     previous.rtsp !== next.rtsp ||
     (previous.cameraBrand ?? "tapo") !== (next.cameraBrand ?? "tapo") ||
@@ -33,31 +29,21 @@ export function hasCameraConnectionChange(
   );
 }
 
-export function hasCameraRuntimeChange(
-  previous: Camera,
-  next: Camera,
-  passwordChanged = false,
-) {
-  return (
-    hasCameraRestartRequiredChange(previous, next, passwordChanged) ||
-    hasCameraCountingConfigChange(previous, next)
-  );
+export function hasCameraRuntimeChange(previous: Camera, next: Camera, passwordChanged = false) {
+  return hasCameraRestartRequiredChange(previous, next, passwordChanged) || hasCameraCountingConfigChange(previous, next);
 }
 
 export function hasCameraCountingConfigChange(previous: Camera, next: Camera) {
   return JSON.stringify(previous.config) !== JSON.stringify(next.config);
 }
 
-export function hasCameraRestartRequiredChange(
-  previous: Camera,
-  next: Camera,
-  passwordChanged = false,
-) {
+export function hasCameraRestartRequiredChange(previous: Camera, next: Camera, passwordChanged = false) {
   if (hasCameraConnectionChange(previous, next, passwordChanged)) return true;
 
   return (
     (previous.analysisMode ?? "entrance_exit") !== (next.analysisMode ?? "entrance_exit") ||
     JSON.stringify(previous.openSpace ?? null) !== JSON.stringify(next.openSpace ?? null) ||
+    JSON.stringify(previous.coverage ?? null) !== JSON.stringify(next.coverage ?? null) ||
     (next.analysisMode === "open_space" && hasCameraCountingConfigChange(previous, next)) ||
     previous.processingProfile !== next.processingProfile ||
     previous.confidence !== next.confidence ||
@@ -67,35 +53,15 @@ export function hasCameraRestartRequiredChange(
   );
 }
 
-export function shouldRestartCameraAfterSave(
-  previous: Camera,
-  next: Camera,
-  options: { isRunning: boolean; passwordChanged?: boolean },
-) {
-  return (
-    options.isRunning &&
-    hasCameraRestartRequiredChange(previous, next, options.passwordChanged)
-  );
+export function shouldRestartCameraAfterSave(previous: Camera, next: Camera, options: { isRunning: boolean; passwordChanged?: boolean }) {
+  return options.isRunning && hasCameraRestartRequiredChange(previous, next, options.passwordChanged);
 }
 
-export type CameraSaveRuntimeAction =
-  | "none"
-  | "hot-update-counting"
-  | "restart";
+export type CameraSaveRuntimeAction = "none" | "hot-update-counting" | "restart";
 
-export function getCameraSaveRuntimeAction(
-  previous: Camera,
-  next: Camera,
-  options: { isRunning: boolean; passwordChanged?: boolean },
-): CameraSaveRuntimeAction {
+export function getCameraSaveRuntimeAction(previous: Camera, next: Camera, options: { isRunning: boolean; passwordChanged?: boolean }): CameraSaveRuntimeAction {
   if (!options.isRunning) return "none";
-  if (
-    hasCameraRestartRequiredChange(
-      previous,
-      next,
-      options.passwordChanged,
-    )
-  ) {
+  if (hasCameraRestartRequiredChange(previous, next, options.passwordChanged)) {
     return "restart";
   }
   if (hasCameraCountingConfigChange(previous, next)) {
@@ -104,10 +70,7 @@ export function getCameraSaveRuntimeAction(
   return "none";
 }
 
-export function mergeConfirmedCameraCountingConfig(
-  current: Camera,
-  confirmed: Camera["config"],
-): Camera {
+export function mergeConfirmedCameraCountingConfig(current: Camera, confirmed: Camera["config"]): Camera {
   return {
     ...current,
     config: structuredClone(confirmed),

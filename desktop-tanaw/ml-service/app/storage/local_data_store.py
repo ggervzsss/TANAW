@@ -32,9 +32,17 @@ from app.storage.repositories.visitor_identity_repository import VisitorIdentity
 
 
 class LocalDataStore:
-    def __init__(self, app_data_dir: str | None = None, enterprise_id: str | None = None) -> None:
+    def __init__(
+        self,
+        app_data_dir: str | None = None,
+        enterprise_id: str | None = None,
+        *,
+        database: LocalDatabase | None = None,
+    ) -> None:
+        if database is not None and database.enterprise_id != enterprise_id:
+            raise ValueError("A store must use a database from the same enterprise.")
         self._enterprise_id = enterprise_id
-        self._database = LocalDatabase(app_data_dir, enterprise_id)
+        self._database = database or LocalDatabase(app_data_dir, enterprise_id)
         self._cameras = CameraRepository(self._database)
         self._occupancy_events = OccupancyEventRepository(self._database)
         self._report_drafts = ReportDraftRepository(self._database)

@@ -15,10 +15,10 @@ export type EnterpriseIntakeReport = {
   remarks: string | null;
   notes: string | null;
   metrics: {
-    entry: number;
-    exit: number;
+    entry: number | null;
+    exit: number | null;
     unique: number;
-    peak: string | number;
+    peak: string | number | null;
   };
   payload?: Record<string, unknown> | null;
 };

@@ -186,6 +186,7 @@ class AreaVisitTracker:
                 v.confirmed and v.missing_since is not None for v in self.visits.values()
             ),
             "active_visits": active,
+            "observed_track_ids": sorted(self._fresh) if self.available else [],
             "last_observed_at": self.timestamp(self.last_frame_at)
             if self.last_frame_at is not None
             else None,

@@ -4,44 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.features.reporting.counting import counting_metrics
 from app.features.reporting.periods import reporting_period_submission_error
-
-
-def _report_metrics_from_payload(
-    payload: dict | None,
-) -> tuple[int, int, int, int] | None:
-    metrics = payload.get("metrics") if isinstance(payload, dict) else None
-    if not isinstance(metrics, dict):
-        return None
-
-    entries = _non_negative_int(metrics.get("entries"))
-    exits = _non_negative_int(metrics.get("exits"))
-    peak_occupancy = _non_negative_int(
-        _first_present(metrics, "peak", "peakOccupancy", "peak_occupancy")
-    )
-    unique_count = _non_negative_int(
-        _first_present(metrics, "unique", "uniqueCount", "unique_count")
-    )
-    if entries is None or exits is None or peak_occupancy is None or unique_count is None:
-        return None
-    return entries, min(exits, entries), peak_occupancy, unique_count
-
-
-def _non_negative_int(value: object) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int) and value >= 0:
-        return value
-    if isinstance(value, str) and value.strip().isdigit():
-        return int(value)
-    return None
-
-
-def _first_present(values: dict, *keys: str) -> object:
-    for key in keys:
-        if key in values:
-            return values[key]
-    return None
 
 
 class DesktopReportSubmissionIngest(BaseModel):
@@ -49,24 +13,27 @@ class DesktopReportSubmissionIngest(BaseModel):
     reportId: str = Field(min_length=3, max_length=80)
     period: str = Field(min_length=1, max_length=120)
     submittedAt: datetime
-    entries: int = Field(default=0, ge=0)
-    exits: int = Field(default=0, ge=0)
-    peakOccupancy: int = Field(default=0, ge=0)
-    uniqueCount: int = Field(default=0, ge=0)
+    entries: int | None = Field(ge=0)
+    exits: int | None = Field(ge=0)
+    peakOccupancy: int | None = Field(ge=0)
+    uniqueCount: int = Field(ge=0)
     notes: str | None = Field(default=None, max_length=5000)
     syncStatus: str | None = Field(default=None, max_length=60)
-    payload: dict | None = None
+    payload: dict = Field(
+        description="Frozen establishment counting snapshot, matching metrics, and demographic allocation."
+    )
 
     @model_validator(mode="after")
     def validate_report_metrics(self) -> DesktopReportSubmissionIngest:
-        payload_metrics = _report_metrics_from_payload(self.payload)
-        if payload_metrics is not None:
-            self.entries, self.exits, self.peakOccupancy, self.uniqueCount = payload_metrics
-        if self.exits > self.entries:
-            raise ValueError("Total exits cannot exceed total entries.")
         period_submission_error = reporting_period_submission_error(self.period, self.submittedAt)
         if period_submission_error:
             raise ValueError(period_submission_error)
+        expected = counting_metrics((self.payload or {}).get("counting"), self.period)
+        if (self.entries, self.exits, self.peakOccupancy, self.uniqueCount) != expected:
+            raise ValueError("Report metrics must match the frozen establishment snapshot.")
+        metrics = (self.payload or {}).get("metrics")
+        if metrics != dict(zip(("entries", "exits", "peak", "unique"), expected, strict=True)):
+            raise ValueError("Payload metrics must match the frozen establishment snapshot.")
         demo = (self.payload or {}).get("demo")
         required_demo_fields = {
             "thisProvMale",
@@ -142,7 +109,7 @@ class IntakeReportSummary(BaseModel):
     code: str
     remarks: str | None = None
     notes: str | None = None
-    metrics: dict[str, int | str]
+    metrics: dict[str, int | str | None]
     payload: dict | None = None
     demographics: ReportDemographicsSummary | None = None
 
@@ -157,8 +124,9 @@ class FinalReportSourceSummary(BaseModel):
     enterprise: str
     code: str
     unique: int
-    entry: int
-    exit: int
+    entry: int | None
+    exit: int | None
+    counting: dict | None = None
     demographics: ReportDemographicsSummary | None = None
 
 
@@ -171,8 +139,8 @@ class FinalReportSummary(BaseModel):
     preparedRole: str
     status: FinalReportStatus
     archivedFromStatus: FinalReportArchivedFromStatus | None = None
-    totalEntry: int
-    totalExit: int
+    totalEntry: int | None
+    totalExit: int | None
     totalUnique: int
     enterpriseCount: int
     sources: list[FinalReportSourceSummary]

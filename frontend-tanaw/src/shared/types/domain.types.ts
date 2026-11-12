@@ -123,10 +123,10 @@ export type IntakeReport = Omit<ApiIntakeReport, "demographics" | "metrics" | "p
   demographics?: ReportDemographics | null;
   status: Exclude<ReportStatus, "Missing">;
   metrics: {
-    entry: number;
-    exit: number;
+    entry: number | null;
+    exit: number | null;
     unique: number;
-    peak: string;
+    peak: string | null;
   };
   payload?: ReportPayload | null;
   submittedAt?: string;

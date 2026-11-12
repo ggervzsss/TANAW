@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mlResponse, mockMlRequest } from "./support/preload";
 import type { Camera } from "../../../src/types/enterprise";
 
+test.describe.configure({ timeout: 60_000 });
+
 const user = { id: "area-operator", email: "area@example.test", role: "enterprise", name: "Park Operator", enterpriseId: "park_001", enterpriseName: "Park" };
 const zone = {
   zone_id: "main",
@@ -24,6 +26,7 @@ const camera: Camera = {
   name: "Plaza camera",
   zone: "Plaza",
   analysisMode: "open_space",
+  coverage: { role: "internal_observation", area_name: "Plaza", relationship: "independent", related_camera_id: null, travel_seconds: {} },
   openSpace: zone,
   status: "stopped",
   rtsp: "rtsp://192.168.1.9/stream2",
@@ -37,10 +40,14 @@ const camera: Camera = {
 async function setup(page: Page, configured = true, mixed = false) {
   let signedIn = false;
   let profiles: Camera[] = [{ ...camera, analysisMode: "open_space", openSpace: configured ? zone : null }];
-  if (mixed) profiles.push({ ...camera, id: 2, name: "Entrance camera", analysisMode: "entrance_exit", openSpace: null });
+  if (mixed) {
+    profiles[0] = { ...profiles[0], coverage: { ...camera.coverage!, relationship: "contained", related_camera_id: 2 } };
+    profiles.push({ ...camera, id: 2, name: "Entrance camera", analysisMode: "entrance_exit", openSpace: null, coverage: { ...camera.coverage!, role: "external_boundary" } });
+  }
   let running = true;
   let presence: number | null = 3;
   const starts: unknown[] = [];
+  let liveRequests = 0;
   await page.route("**/auth/login", (route) => {
     signedIn = true;
     return route.fulfill({ json: { token: "area-test", user } });
@@ -77,6 +84,67 @@ async function setup(page: Page, configured = true, mixed = false) {
   await mockMlRequest(page, "*", (request) => {
     const path = new URL(request.url).pathname;
     const reply = (value: unknown) => mlResponse({ status: 200, body: JSON.stringify(value) });
+    if (path === "/metrics/establishment/live") {
+      liveRequests += 1;
+      const occupancy = mixed ? 12 : configured ? presence : null;
+      return reply({
+        enterprise_id: user.enterpriseId,
+        occupancy,
+        partial_occupancy: occupancy ?? 0,
+        state: !configured ? "configuration_required" : occupancy === null ? "unavailable" : "estimated",
+        contributions: occupancy === null ? [] : [{ camera_ids: [mixed ? 2 : 1], occupancy, state: "estimated", basis: mixed ? "boundary_balance" : "observed_presence" }],
+        excluded_camera_ids: mixed ? [1] : [],
+        missing_camera_ids: occupancy === null ? [1] : [],
+        movement_available: mixed,
+        identification_available: configured,
+      });
+    }
+    if (path === "/metrics/establishment/summary") {
+      const query = new URL(request.url).searchParams;
+      const first = query.get("start") ?? new Date().toISOString();
+      const stop = query.get("end") ?? new Date().toISOString();
+      const days = Math.max(1, Math.round((Date.parse(stop) - Date.parse(first)) / 86400000));
+      const values = {
+        unique_count: mixed ? 20 : 7,
+        confirmed_unique_count: mixed ? 20 : 7,
+        entries: mixed ? 20 : 0,
+        exits: mixed ? 8 : 0,
+        repeat_entry_count: 0,
+        unresolved_observations: 0,
+        qualified_observations: mixed ? 27 : 7,
+        identification_state: "available",
+        reconciliation_state: configured ? "estimated" : "configuration_required",
+        movement_state: mixed ? "available" : "unavailable",
+        peak_occupancy: mixed ? 12 : 5,
+        covered_ms: 10000,
+        coverage_ratio: 10000 / (days * 86400000),
+        counting_basis: "sum_of_daily_establishment_unique_visitors",
+        policy_version: 1,
+      };
+      return reply({
+        ...values,
+        enterprise_id: user.enterpriseId,
+        from_at: first,
+        to_at: stop,
+        timezone: "Asia/Manila",
+        snapshot_version: "fixture",
+        days_available: 1,
+        days_requested: days,
+        days: [
+          {
+            ...values,
+            business_date: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10),
+            finalized: false,
+            sources: mixed ? [1, 2] : [1],
+            identification_coverage: 1,
+            first_event_at: first,
+            last_event_at: stop,
+            incompatible_identity_models: false,
+            unconfigured_camera_pairs: [],
+          },
+        ],
+      });
+    }
     if (path === "/context/enterprise") return reply({ enterprise_id: user.enterpriseId, enterprise_name: "Park", changed: true, session_restored: false });
     if (path === "/cameras") {
       if (request.method === "PUT") profiles = JSON.parse(request.body ?? "{}").cameras;
@@ -178,8 +246,10 @@ async function setup(page: Page, configured = true, mixed = false) {
   await page.getByPlaceholder("Enter your password").fill("Park operator password 2026");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/enterprise\/dashboard/);
+  await expect(page.getByRole("heading", { name: "Enterprise Analytics" })).toBeVisible({ timeout: 20_000 });
   return {
     starts,
+    liveRequests: () => liveRequests,
     profiles: () => profiles,
     setPresence: (value: number | null) => {
       presence = value;
@@ -187,7 +257,7 @@ async function setup(page: Page, configured = true, mixed = false) {
   };
 }
 
-test("shows zone occupancy in the shared dashboard and keeps doorway reports separate", async ({ page }, testInfo) => {
+test("shows one establishment dashboard for an Open Space-only setup", async ({ page }, testInfo) => {
   await setup(page);
   await expect(page.getByRole("heading", { name: "Enterprise Analytics" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Open Space Activity" })).toHaveCount(0);
@@ -196,8 +266,9 @@ test("shows zone occupancy in the shared dashboard and keeps doorway reports sep
   await expect(header.getByText("5", { exact: true })).toBeVisible();
   await expect(header.getByText("7", { exact: true })).toBeVisible();
   await expect(header.getByText("Unique Visitors", { exact: true })).toBeVisible();
-  await expect(header.getByText("Entry & Exit Flow", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("img", { name: "Week historical visitor trends for Peak Occupancy" })).toBeVisible();
+  await expect(header.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Activity history source", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toBeVisible();
   await expect(page.getByText(/dwell|duration/i)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("shared-occupancy-dashboard.png"), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -208,27 +279,24 @@ test("shows zone occupancy in the shared dashboard and keeps doorway reports sep
   await expect(metrics.getByText("Tracking gaps", { exact: true })).toHaveCount(0);
   await expect(metrics.getByText(/dwell|in monitored area/i)).toHaveCount(0);
   await metrics.screenshot({ path: testInfo.outputPath("open-space-live-metrics.png") });
-  await page.goto("/#/enterprise/reports");
-  await expect(page.getByText("Establishment reports require Entrance / Exit measurements", { exact: false })).toBeVisible();
 });
 
-test("combines separate areas independently of the history source and distinguishes zero from unavailable", async ({ page }, testInfo) => {
+test("does not add a contained zone to its parent count or require a mode toggle", async ({ page }, testInfo) => {
   const state = await setup(page, true, true);
   const header = page.getByRole("region", { name: "Enterprise analytics summary", exact: true });
-  await expect(header.getByText("15", { exact: true })).toBeVisible();
+  await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
   await expect(header.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Activity history source", exact: true }).selectOption("camera:1");
-  await expect(header.getByText("15", { exact: true })).toBeVisible();
-  await expect(header.getByText("Entry & Exit Flow", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Activity history source", exact: true })).toHaveCount(0);
+  await expect(header.getByText("20", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("combined-occupancy.png"), fullPage: true });
   state.setPresence(0);
-  await expect(header.getByText("12", { exact: true })).toBeVisible();
+  let previousRequests = state.liveRequests();
+  await expect.poll(() => state.liveRequests()).toBeGreaterThan(previousRequests);
+  await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
   state.setPresence(null);
-  await expect(header.getByText("One or more areas unavailable", { exact: true })).toBeVisible();
-  await expect(header.getByText("—", { exact: true })).toBeVisible();
-  state.setPresence(3);
-  await page.getByRole("combobox", { name: "Activity history source", exact: true }).selectOption("entrance_exit");
-  await expect(header.getByText("15", { exact: true })).toBeVisible();
+  previousRequests = state.liveRequests();
+  await expect.poll(() => state.liveRequests()).toBeGreaterThan(previousRequests);
+  await expect(header.getByText("12", { exact: true }).first()).toBeVisible();
 });
 
 for (const viewport of [

@@ -1,6 +1,7 @@
 import hashlib
 import sqlite3
 
+from app.storage.establishment_schema import ESTABLISHMENT_SCHEMA
 from app.storage.open_space_schema import OPEN_SPACE_SCHEMA
 
 REVISION = "001"
@@ -9,6 +10,7 @@ PREVIOUS_REVISION: str | None = None
 
 SCHEMA_STATEMENTS = (
     *OPEN_SPACE_SCHEMA,
+    *ESTABLISHMENT_SCHEMA,
     """
     create table camera_profiles (
         camera_id integer primary key,
@@ -68,9 +70,9 @@ SCHEMA_STATEMENTS = (
         submission_id text not null unique,
         period text not null unique,
         submitted_at text not null,
-        entries integer not null default 0,
-        exits integer not null default 0,
-        peak_occupancy integer not null default 0,
+        entries integer,
+        exits integer,
+        peak_occupancy integer,
         unique_count integer not null default 0,
         notes text,
         payload_json text not null,
@@ -79,6 +81,12 @@ SCHEMA_STATEMENTS = (
         raw_purged_at text
     )
     """,
+    """create table report_submission_snapshots (
+        submission_id text primary key,
+        report_id text not null references report_submissions(report_id),
+        request_digest text not null,
+        response_json text not null,
+        created_at text not null)""",
     """
     create table count_events (
         id integer primary key autoincrement,
@@ -147,6 +155,7 @@ SCHEMA_STATEMENTS = (
         correction_id text primary key,
         enterprise_id text,
         camera_id integer,
+        population_key text,
         old_occupancy integer not null default 0,
         new_occupancy integer not null default 0,
         delta integer not null default 0,

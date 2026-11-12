@@ -197,6 +197,13 @@ async function syncReportSubmission(baseUrl: string, submission: LocalReportSubm
 }
 
 function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {
+  if (submission.payload.counting)
+    return {
+      entries: submission.entries,
+      exits: submission.exits,
+      peakOccupancy: submission.peak_occupancy,
+      uniqueCount: submission.unique_count,
+    };
   const payloadMetrics = submission.payload.metrics;
   if (payloadMetrics && typeof payloadMetrics === "object") {
     const metrics = payloadMetrics as Record<string, unknown>;
@@ -207,7 +214,7 @@ function reportMetricsFromSubmission(submission: LocalReportSubmissionRecord) {
     if (entries !== null && exits !== null && peakOccupancy !== null && uniqueCount !== null) {
       return {
         entries,
-        exits: Math.min(exits, entries),
+        exits,
         peakOccupancy,
         uniqueCount,
       };

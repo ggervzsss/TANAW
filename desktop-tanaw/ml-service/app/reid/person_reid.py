@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+from hashlib import file_digest
 from pathlib import Path
 from threading import Lock
 from time import monotonic
@@ -36,6 +38,7 @@ class PersonReIdentifier:
         self._output_name: str | None = None
         self._providers: list[str] = []
         self._resolved_model_path: str | None = None
+        self._artifact_digest: str | None = None
         self._status = "not_loaded"
         self._error: str | None = None
         self._loading = False
@@ -51,6 +54,12 @@ class PersonReIdentifier:
             input_size=profile.input_size,
             model_name=profile.model_name,
         )
+
+    @property
+    def embedding_space(self) -> str:
+        """Only equal loaded weights and preprocessing share an identity gallery."""
+        version = self._artifact_digest or "unloaded"
+        return f"{self.model_name}@{version}:{self.input_size[0]}x{self.input_size[1]}:head_mask={int(self.mask_head_region)}"
 
     def status(self) -> dict[str, bool | int | float | str | list[str] | None]:
         if not self._lock.acquire(blocking=False):
@@ -85,7 +94,8 @@ class PersonReIdentifier:
             return
 
         blank = np.zeros((self.input_size[1], self.input_size[0], 3), dtype=np.uint8)
-        self.embed_crop(blank)
+        if self.embed_crop(blank) is None:
+            return
         with self._lock:
             self._ready = True
             self._status = "ready"
@@ -108,7 +118,11 @@ class PersonReIdentifier:
         inference_ms = (monotonic() - started_at) * 1000.0
         embedding = np.asarray(outputs[0]).reshape(-1).astype(np.float32)
         norm = float(np.linalg.norm(embedding))
-        if norm <= 1e-9:
+        if not np.all(np.isfinite(embedding)) or not np.isfinite(norm) or norm <= 1e-9:
+            with self._lock:
+                self._ready = False
+                self._status = "degraded"
+                self._error = "The visitor identification model returned an invalid embedding."
             return None
 
         embedding = embedding / norm
@@ -135,6 +149,7 @@ class PersonReIdentifier:
             import onnxruntime as ort
 
             model_source = self._resolve_model_path()
+            artifact_digest = model_artifact_digest(Path(model_source))
             available_providers = ort.get_available_providers()
             preferred_providers = [
                 provider
@@ -171,6 +186,7 @@ class PersonReIdentifier:
             self._output_name = output_name
             self._providers = list(session.get_providers())
             self._resolved_model_path = model_source
+            self._artifact_digest = artifact_digest
             self._status = "loaded"
             self._error = None
             self._loading = False
@@ -209,3 +225,17 @@ class PersonReIdentifier:
         if self._inference_count <= 0:
             return None
         return self._total_inference_ms / self._inference_count
+
+
+def model_artifact_digest(path: Path) -> str:
+    info = path.stat()
+    return _cached_artifact_digest(
+        str(path.resolve()), info.st_size, info.st_mtime_ns, info.st_ctime_ns
+    )
+
+
+@lru_cache(maxsize=16)
+def _cached_artifact_digest(path: str, size: int, modified_ns: int, changed_ns: int) -> str:
+    # Metadata invalidates the cache when a model is replaced under the same filename.
+    with Path(path).open("rb") as source:
+        return file_digest(source, "sha256").hexdigest()

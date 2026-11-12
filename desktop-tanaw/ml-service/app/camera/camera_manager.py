@@ -42,6 +42,7 @@ from app.config.camera_config import (
 from app.counting.tripwire_counter import TripwireCounter
 from app.detection.yolo_detector import YoloPersonTracker
 from app.identity import UniqueVisitorRegistry, VisitorDecision
+from app.identity.establishment_registry import EstablishmentRegistry
 from app.reid import (
     AsyncReIdWorker,
     PersonReIdentifier,
@@ -52,6 +53,7 @@ from app.reid import (
 from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
+from app.storage.repositories.area_repository import parse as parse_area_timestamp
 from app.storage.session_store import SessionStore
 from app.tracking import EmbeddingResolution, ResolvedTrack, TrackIdentityResolver
 
@@ -147,6 +149,13 @@ class CameraProcessingManager:
         self._area_visitor_registry: UniqueVisitorRegistry | None = None
         self._area_identity_camera_id: int | None = None
         self._area_frame_index = 0
+        self._establishment_registry: EstablishmentRegistry | None = None
+
+    def use_establishment_registry(self, registry: EstablishmentRegistry) -> None:
+        """Attach the enterprise's shared service before starting a camera worker."""
+        if self.running:
+            raise RuntimeError("Attach establishment counting before starting the camera.")
+        self._establishment_registry = registry
 
     @property
     def running(self) -> bool:
@@ -200,6 +209,7 @@ class CameraProcessingManager:
         with self._lock:
             self._enterprise_id = normalized_id
             self._enterprise_name = normalized_name
+            self._establishment_registry = EstablishmentRegistry(self._app_data_dir, normalized_id)
             self._session_store = SessionStore(
                 self._app_data_dir, normalized_id, self._camera_id_scope
             )
@@ -1152,6 +1162,12 @@ class CameraProcessingManager:
             source_tracks, now, frame_width, frame_height
         )
         counting_track_ids = {track.source_track_id: track.track_id for track in counting_tracks}
+        if self._establishment_registry is not None and session.config.camera_id is not None:
+            self._establishment_registry.update_present_tracks(
+                session.config.camera_id,
+                {f"{session.event_scope}:{track.source_track_id}" for track in tracks},
+                datetime.now(UTC),
+            )
 
         display_tracks: list[DisplayTrack] = []
         self._counter.begin_frame(now)
@@ -1180,6 +1196,25 @@ class CameraProcessingManager:
                 self._schedule_track_embedding(
                     session, frame, track, frame_width, frame_height, now
                 )
+                if (
+                    self._establishment_registry is not None
+                    and session.config.camera_id is not None
+                    and session.config.unique_counting_mode == "estimated_reid"
+                    and self._track_has_reid_consensus(track.track_id)
+                    and (embedding := self._appearance_buffer.embedding_for_track(track.track_id))
+                    is not None
+                ):
+                    self._establishment_registry.refresh_track(
+                        camera_id=session.config.camera_id,
+                        track_key=f"{session.event_scope}:{track.source_track_id}",
+                        observed_at=datetime.now(UTC),
+                        embedding=embedding,
+                        model_name=self._reidentifier.embedding_space,
+                        quality_embedding=self._quality_appearance_buffer.embedding_for_track(
+                            track.track_id
+                        ),
+                        quality_model_name=self._quality_reidentifier.embedding_space,
+                    )
             directions = (
                 self._counter.update_many(
                     counting_track_id,
@@ -1329,6 +1364,9 @@ class CameraProcessingManager:
             **tracker.snapshot(),
             "revision_id": self._area_revision_id,
             "run_id": self._area_run_id,
+            "observed_at": tracker.timestamp(tracker.last_frame_at)
+            if tracker.last_frame_at is not None
+            else None,
         }
         registry = self._area_visitor_registry
         now = datetime.now(UTC)
@@ -1389,6 +1427,7 @@ class CameraProcessingManager:
             return
         at = tracker.timestamp(tracker.last_frame_at if tracker.last_frame_at is not None else now)
         repo.checkpoint(run_id, tracker.active_records(), self._area_pending, state, at)
+        self._save_establishment_visits([*tracker.active_records(), *self._area_pending])
         self._area_pending.clear()
         self._area_last_signature = signature
         self._area_last_save = now
@@ -1475,6 +1514,12 @@ class CameraProcessingManager:
         }
         if not tracker.update(observations, observed_at):
             return []
+        if self._establishment_registry is not None and session.config.camera_id is not None:
+            self._establishment_registry.update_present_tracks(
+                session.config.camera_id,
+                {f"{self._area_run_id}:{track_id}" for track_id in tracker.observed_track_ids},
+                parse_area_timestamp(tracker.timestamp(observed_at)),
+            )
         self._area_frame_index += 1
         self._appearance_buffer.begin_frame(self._area_frame_index)
         self._quality_appearance_buffer.begin_frame(self._area_frame_index)
@@ -1539,7 +1584,11 @@ class CameraProcessingManager:
             self._schedule_track_embedding(
                 session, frame, track, width, height, now, frame_index=self._area_frame_index
             )
-            if track.track_id not in updated or not self._track_has_reid_consensus(track.track_id):
+            if (
+                track.track_id not in updated
+                or not self._track_has_reid_consensus(track.track_id)
+                or not tracker.record(tracker.visits[track.track_id])["qualified"]
+            ):
                 continue
             embedding = self._appearance_buffer.embedding_for_track(track.track_id)
             if embedding is None:
@@ -1706,6 +1755,7 @@ class CameraProcessingManager:
             self._session_store.update_event_identity(
                 event.event_id, visitor_decision.as_event_fields()
             )
+            self._observe_establishment_crossing(session, event.track, "entry", event.event_id)
 
     def _track_has_reid_consensus(self, track_id: int) -> bool:
         return (
@@ -1839,9 +1889,10 @@ class CameraProcessingManager:
             counts = self._counter.counts.as_dict()
             visitor_fields = visitor_decision.as_event_fields() if visitor_decision else {}
             camera_id = self._config.camera_id if self._config else None
+            stable_event_id = event_id or uuid4().hex
             self._session_store.append_event(
                 {
-                    "event_id": event_id or uuid4().hex,
+                    "event_id": stable_event_id,
                     "enterprise_id": self._enterprise_id,
                     "camera_id": camera_id,
                     "camera_name": self._config.camera_name if self._config else None,
@@ -1855,7 +1906,83 @@ class CameraProcessingManager:
                     "counts": counts,
                 }
             )
+            self._observe_establishment_crossing(session, track, direction, stable_event_id)
             self._persist_session_locked()
+
+    def _observe_establishment_crossing(
+        self,
+        session: ProcessingSession,
+        track: ResolvedTrack,
+        direction: str,
+        event_id: str,
+    ) -> None:
+        registry = self._establishment_registry
+        if registry is None or session.config.camera_id is None:
+            return
+        now = datetime.now(UTC)
+        identified = (
+            session.config.unique_counting_mode == "estimated_reid"
+            and _fast_reid_enabled(self._effective_reid_mode)
+            and self._track_has_reid_consensus(track.track_id)
+        )
+        registry.observe(
+            observation_id=event_id,
+            camera_id=session.config.camera_id,
+            track_key=f"{session.event_scope}:{track.source_track_id}",
+            analysis_mode="entrance_exit",
+            kind="entry" if direction == "entry" else "exit",
+            coverage=session.config.coverage,
+            qualified=True,
+            first_at=now,
+            observed_at=now,
+            ended_at=now if direction == "exit" else None,
+            embedding=self._appearance_buffer.embedding_for_track(track.track_id)
+            if identified
+            else None,
+            model_name=self._reidentifier.embedding_space,
+            quality_embedding=self._quality_appearance_buffer.embedding_for_track(track.track_id)
+            if identified
+            else None,
+            quality_model_name=self._quality_reidentifier.embedding_space,
+            detection_confidence=track.confidence,
+            bbox=track.bbox,
+        )
+
+    def _save_establishment_visits(self, records: list[dict[str, Any]]) -> None:
+        registry, config = self._establishment_registry, self._config
+        if registry is None or config is None or config.camera_id is None:
+            return
+        for record in records:
+            track_id = record["track_generation"]
+            identified = (
+                config.unique_counting_mode == "estimated_reid"
+                and _fast_reid_enabled(self._effective_reid_mode)
+                and self._track_has_reid_consensus(track_id)
+            )
+            registry.observe(
+                observation_id=record["visit_id"],
+                camera_id=config.camera_id,
+                track_key=f"{self._area_run_id}:{track_id}",
+                analysis_mode="open_space",
+                kind="area_visit",
+                coverage=config.coverage,
+                qualified=record["qualified"],
+                first_at=parse_area_timestamp(record["first_inside_at"]),
+                observed_at=parse_area_timestamp(record["last_observed_at"]),
+                embedding=self._appearance_buffer.embedding_for_track(track_id)
+                if identified
+                else None,
+                model_name=self._reidentifier.embedding_space,
+                quality_embedding=self._quality_appearance_buffer.embedding_for_track(track_id)
+                if identified
+                else None,
+                quality_model_name=self._quality_reidentifier.embedding_space,
+                revision_id=self._area_revision_id,
+                ended_at=parse_area_timestamp(record["ended_at"]) if record["ended_at"] else None,
+                arrival_observed=record["arrival_observed"],
+                departure_observed=record["departure_observed"],
+                payload=record,
+            )
 
     def _persist_session_locked(self) -> None:
         counts = self._counter.counts.as_dict()

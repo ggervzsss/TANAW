@@ -2,6 +2,7 @@ import tempfile
 import threading
 import unittest
 from typing import Any, cast
+from unittest.mock import patch
 
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.contracts import CameraCounts, CameraSessionState
@@ -100,6 +101,13 @@ class FakePipeline(CameraProcessingManager):
 
 
 class CameraPipelineRegistryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # These tests isolate lifecycle/capacity with fake workers. Background
+        # summary persistence has its own integration test and explicit cleanup.
+        summary_worker = patch.object(CameraPipelineRegistry, "_start_summary_worker")
+        summary_worker.start()
+        self.addCleanup(summary_worker.stop)
+
     def test_default_policy_supports_six_configured_and_active_cameras(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             registry = CameraPipelineRegistry(directory, pipeline_factory=FakePipeline)
@@ -549,6 +557,22 @@ class CameraPipelineRegistryTest(unittest.TestCase):
                 directory, max_concurrent_cameras=2, pipeline_factory=FakePipeline
             )
             registry.bind_enterprise("enterprise@example.test")
+            registry.replace_camera_profiles(
+                [
+                    {
+                        **_profile(1),
+                        "coverage": {"role": "external_boundary", "relationship": "independent"},
+                    },
+                    {
+                        **_profile(2),
+                        "coverage": {
+                            "role": "external_boundary",
+                            "relationship": "alternative",
+                            "related_camera_id": 1,
+                        },
+                    },
+                ]
+            )
             registry.start(_config(1))
             registry.start(_config(2))
             registry.record_occupancy_correction(

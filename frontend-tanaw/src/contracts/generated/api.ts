@@ -1594,27 +1594,21 @@ export interface components {
         };
         /** DesktopReportSubmissionIngest */
         DesktopReportSubmissionIngest: {
-            /**
-             * Entries
-             * @default 0
-             */
-            entries: number;
-            /**
-             * Exits
-             * @default 0
-             */
-            exits: number;
+            /** Entries */
+            entries: number | null;
+            /** Exits */
+            exits: number | null;
             /** Notes */
             notes?: string | null;
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            } | null;
             /**
-             * Peakoccupancy
-             * @default 0
+             * Payload
+             * @description Frozen establishment counting snapshot, matching metrics, and demographic allocation.
              */
-            peakOccupancy: number;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Peakoccupancy */
+            peakOccupancy: number | null;
             /** Period */
             period: string;
             /** Reportid */
@@ -1631,10 +1625,7 @@ export interface components {
             submittedAt: string;
             /** Syncstatus */
             syncStatus?: string | null;
-            /**
-             * Uniquecount
-             * @default 0
-             */
+            /** Uniquecount */
             uniqueCount: number;
         };
         /** DesktopSessionSummary */
@@ -1838,13 +1829,17 @@ export interface components {
         FinalReportSourceSummary: {
             /** Code */
             code: string;
+            /** Counting */
+            counting?: {
+                [key: string]: unknown;
+            } | null;
             demographics?: components["schemas"]["ReportDemographicsSummary"] | null;
             /** Enterprise */
             enterprise: string;
             /** Entry */
-            entry: number;
+            entry: number | null;
             /** Exit */
-            exit: number;
+            exit: number | null;
             /** Id */
             id: string;
             /** Unique */
@@ -1884,9 +1879,9 @@ export interface components {
             /** Title */
             title: string;
             /** Totalentry */
-            totalEntry: number;
+            totalEntry: number | null;
             /** Totalexit */
-            totalExit: number;
+            totalExit: number | null;
             /** Totalunique */
             totalUnique: number;
         };
@@ -1952,7 +1947,7 @@ export interface components {
             id: string;
             /** Metrics */
             metrics: {
-                [key: string]: number | string;
+                [key: string]: number | string | null;
             };
             /** Month */
             month: string;

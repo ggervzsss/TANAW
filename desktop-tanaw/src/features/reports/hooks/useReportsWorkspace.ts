@@ -1,16 +1,9 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
+import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
-import {
-  DEFAULT_ML_SERVICE_BASE_URL,
-  deleteLocalReportDraft,
-  getMlServiceStatus,
-  recordLocalReportSubmission,
-  type LocalReportSubmission,
-} from "../../camera/services/ml-service";
-import { DESKTOP_REPORT_SYNC_EVENT, prepareDesktopSampleCounts } from "../../sync/services/cloud-sync";
+import { DEFAULT_ML_SERVICE_BASE_URL, deleteLocalReportDraft, getEstablishmentSummary, getMlServiceStatus, recordLocalReportSubmission } from "../../camera/services/ml-service";
+import { DESKTOP_REPORT_SYNC_EVENT } from "../../sync/services/cloud-sync";
 import { downloadDotReportPdf } from "../utils/pdf";
-import { formatReportingPeriodLabel, isSameReportingMonth, shouldPrepareDraftPeriod } from "../utils/reporting-period";
+import { formatReportingPeriodLabel, isSameReportingMonth } from "../utils/reporting-period";
 import { notifyError } from "../../toasts/services/toast-service";
 import { useSystemDisplayPreferences } from "../../preferences/system-display-preferences";
 import { formatPhilippineDateTime } from "../../../utils/date-time";
@@ -21,339 +14,183 @@ import {
   findPreviousDemo,
   getDemographicDraftKey,
   historyLedgerKey,
-  isPreparedMetrics,
-  metricsFromPendingCounts,
   metricsFromReport,
-  metricsFromSummary,
   upsertReport,
   validateDemographicAllocation,
   validateReportDraft,
+  reportFromLocalSubmission,
 } from "../model/report-workspace";
 import { getCurrentReportingPeriod } from "../model/reporting-calendar";
-import { prepareNextWorkspaceMetrics, syncSubmittedReportToCloud } from "../services/report-workspace";
+import { syncSubmittedReportToCloud } from "../services/report-workspace";
 import type { ReportLedgerRow } from "../model/report-ledger";
 import { useCurrentReportingPeriod } from "./useCurrentReportingPeriod";
+import { useAuthStore } from "../../login/stores/auth-store";
 import { useDemographicDraft } from "./useDemographicDraft";
-import { useReportsWorkspaceData } from "./useReportsWorkspaceData";
+import { metricsFromEstablishment, reportBaselineError, useReportsWorkspaceData } from "./useReportsWorkspaceData";
 
-type ReportsWorkspaceOptions = {
-  enterpriseName: string;
-  reportsHistory: ReportRecord[];
-  setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>>;
-};
+type Options = { enterpriseName: string; reportsHistory: ReportRecord[]; setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>> };
+type Preview = { demo: DemoBreakdown; metrics: Metrics; notes: string; period: SystemLogPeriod; reportId: string };
 
-type DotPreviewState = {
-  demo: DemoBreakdown;
-  metrics: Metrics;
-  notes: string;
-  period: SystemLogPeriod;
-  reportId: string;
-};
-
-export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: ReportsWorkspaceOptions) {
+export function useReportsWorkspace({ enterpriseName, reportsHistory, setReportsHistory }: Options) {
   const { timeFormat } = useSystemDisplayPreferences();
   const currentReportingPeriod = useCurrentReportingPeriod();
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
-  const [period, setPeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
+  const [period, setPeriod] = useState(currentReportingPeriod);
   const [notes, setNotes] = useState("");
-  const [previewReport, setPreviewReport] = useState<DotPreviewState | null>(null);
+  const [previewReport, setPreviewReport] = useState<Preview | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPeriodChanging, setIsPeriodChanging] = useState(false);
-
-  const activeReport = activeReportId ? (reportsHistory.find((r) => r.id === activeReportId) ?? null) : null;
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [revisionMetrics, setRevisionMetrics] = useState<Metrics | null>(null);
+  const submitting = useRef(false);
+  const refreshSequence = useRef(0);
+  const pendingOperation = useRef<{ key: string; reportId: string; requestId: string; auditTrail: NonNullable<ReportRecord["auditTrail"]> } | null>(null);
+  const activeReport = activeReportId ? (reportsHistory.find((item) => item.id === activeReportId) ?? null) : null;
   const isReadOnly = activeReport ? !["Draft", "Returned for Revision"].includes(activeReport.status) : false;
   const demographicDraftKey = useMemo(() => getDemographicDraftKey(activeReportId, period), [activeReportId, period]);
   const { demo, setDemo } = useDemographicDraft({ activeReportId, demographicDraftKey, isReadOnly, period, reportsHistory });
-  const {
-    liveMetrics,
-    livePeriod,
-    metricsError,
-    pendingPeriodCounts,
-    refreshLocalMetrics,
-    refreshLocalReports,
-    refreshPendingPeriods,
-    setLiveMetrics,
-    setLivePeriod,
-    setMetricsError,
-    setPendingPeriodCounts,
-  } = useReportsWorkspaceData({ activeReportId, currentReportingPeriod, setPeriod, setReportsHistory, timeFormat });
-
-  const selectedPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, period)) ?? null;
-  const displayedMetrics = activeReport
-    ? metricsFromReport(activeReport)
-    : isSameReportingMonth(period, livePeriod)
-      ? liveMetrics
-      : selectedPeriodCounts
-        ? metricsFromPendingCounts(selectedPeriodCounts)
-        : liveMetrics;
-  const currentPeriodCounts = pendingPeriodCounts.find((counts) => isSameReportingMonth(counts.period, currentReportingPeriod)) ?? null;
-  const currentLedgerMetrics = isSameReportingMonth(livePeriod, currentReportingPeriod) ? liveMetrics : currentPeriodCounts ? metricsFromPendingCounts(currentPeriodCounts) : EMPTY_METRICS;
-  const currentLedgerDemo = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? demo : emptyDemo();
-  const currentLedgerNotes = !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "";
-
-  const blockingMetricsError = activeReport ? null : metricsError;
-  const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
-    checkDuplicatePeriod: !(activeReport && isReadOnly),
-    checkReportingPeriod: !isReadOnly,
-  });
-  const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
+  const data = useReportsWorkspaceData({ currentReportingPeriod, period, setReportsHistory, timeFormat });
+  const displayedMetrics = revisionMetrics ?? (activeReport ? metricsFromReport(activeReport) : data.liveMetrics);
+  const blockingMetricsError = revisionMetrics?.counting ? reportBaselineError(revisionMetrics.counting) : activeReport?.counting ? null : data.metricsError;
+  const validationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, { checkDuplicatePeriod: !isReadOnly, checkReportingPeriod: !isReadOnly });
   const ledgerRows = useMemo(
     () =>
       buildLedgerRows({
-        currentDemo: currentLedgerDemo,
-        currentMetrics: currentLedgerMetrics,
-        currentNotes: currentLedgerNotes,
+        currentDemo: !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? demo : emptyDemo(),
+        currentMetrics: data.currentMetrics,
+        currentNotes: !activeReport && isSameReportingMonth(period, currentReportingPeriod) ? notes : "",
         currentPeriod: currentReportingPeriod,
-        pendingCounts: pendingPeriodCounts,
+        pendingCounts: data.pendingPeriodCounts,
         reportsHistory,
       }),
-    [currentLedgerDemo, currentLedgerMetrics, currentLedgerNotes, currentReportingPeriod, pendingPeriodCounts, reportsHistory],
+    [activeReport, period, currentReportingPeriod, demo, data.currentMetrics, data.pendingPeriodCounts, notes, reportsHistory],
   );
-  const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [activeReportId, reportsHistory]);
-
-  const resetDraftWorkspace = (nextPeriod?: string) => {
-    setActiveReportId(null);
-    setPeriod(nextPeriod ?? currentReportingPeriod);
-    setNotes("");
-    setDemo(emptyDemo());
-    setPreviewReport(null);
-  };
-
-  const handleDraftPeriodSelect = async (nextPeriod: string) => {
-    if (isSameReportingMonth(nextPeriod, currentReportingPeriod)) {
-      if (pendingPeriodCounts.some((counts) => isSameReportingMonth(counts.period, nextPeriod))) {
-        setMetricsError(null);
-      }
-      if (!activeReportId && isSameReportingMonth(nextPeriod, period)) return;
-      resetDraftWorkspace(currentReportingPeriod);
-      return;
-    }
-
-    const requiresPreparation = shouldPrepareDraftPeriod(nextPeriod, currentReportingPeriod, livePeriod, pendingPeriodCounts);
-    if (!activeReportId && isSameReportingMonth(nextPeriod, period) && !requiresPreparation) return;
-
-    if (!requiresPreparation) {
-      if (isSameReportingMonth(nextPeriod, livePeriod)) {
-        setMetricsError(null);
-      }
-      resetDraftWorkspace(nextPeriod);
-      return;
-    }
-
-    setIsPeriodChanging(true);
-    try {
-      const prepared = await prepareDesktopSampleCounts(nextPeriod);
-      if (!isPreparedMetrics(prepared) || (prepared.prepared === false && prepared.period !== nextPeriod)) {
-        throw new Error(`No prepared count package is available for ${nextPeriod}.`);
-      }
-      setActiveReportId(null);
-      setLiveMetrics(metricsFromSummary(prepared));
-      setLivePeriod(prepared.period || nextPeriod);
-      setPeriod(prepared.period || nextPeriod);
-      setNotes("");
-      setDemo(emptyDemo());
-      setPreviewReport(null);
-      setMetricsError(null);
-      void refreshPendingPeriods();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load the selected reporting period.";
-      setMetricsError(message);
-      notifyError(message);
-    } finally {
-      setIsPeriodChanging(false);
-    }
-  };
-
-  const handleViewReport = (report: ReportRecord) => {
-    setActiveReportId(report.id);
-    setPeriod(report.period || report.date || getCurrentReportingPeriod());
-    setNotes(report.notes || "");
-    setDemo(report.demo || emptyDemo());
-  };
+  const activeLedgerKey = activeReport ? historyLedgerKey(activeReport.id) : draftLedgerKey(period);
+  const previousDemo = useMemo(() => findPreviousDemo(reportsHistory, activeReportId), [reportsHistory, activeReportId]);
 
   const handleSelectLedgerRow = (row: ReportLedgerRow) => {
-    if (row.kind === "history") {
-      handleViewReport(row.report);
-      return;
-    }
-
-    void handleDraftPeriodSelect(row.report.period ?? row.report.date);
+    if (submitting.current) return;
+    refreshSequence.current += 1;
+    pendingOperation.current = null;
+    setIsRefreshing(false);
+    setRevisionMetrics(null);
+    setPreviewReport(null);
+    setActiveReportId(row.kind === "history" ? row.report.id : null);
+    setPeriod(row.report.period ?? row.report.date ?? getCurrentReportingPeriod());
+    setNotes(row.kind === "history" ? (row.report.notes ?? "") : "");
+    setDemo(row.kind === "history" ? (row.report.demo ?? emptyDemo()) : emptyDemo());
   };
-
-  const handlePreviewReport = (report: ReportRecord) => {
-    setPreviewReport({
-      demo: report.demo ?? emptyDemo(),
-      metrics: metricsFromReport(report),
-      notes: report.notes ?? "",
-      period: report.period ?? report.date,
-      reportId: report.id,
-    });
-  };
-
+  const handlePreviewReport = (report: ReportRecord) =>
+    setPreviewReport({ demo: report.demo ?? emptyDemo(), metrics: metricsFromReport(report), notes: report.notes ?? "", period: report.period ?? report.date, reportId: report.id });
   const handleDownloadReport = (report: ReportRecord) => {
+    const metrics = metricsFromReport(report);
     const reportDemo = report.demo ?? emptyDemo();
-    const reportMetrics = metricsFromReport(report);
-    const exportError = validateDemographicAllocation(reportMetrics, reportDemo);
-    if (exportError) {
-      notifyError(exportError);
+    const error = validateDemographicAllocation(metrics, reportDemo);
+    if (error) {
+      notifyError(error);
       handlePreviewReport(report);
       return;
     }
-
-    downloadDotReportPdf({
-      enterpriseName,
-      reportId: report.id,
-      period: formatReportingPeriodLabel(report.period ?? report.date),
-      metrics: reportMetrics,
-      demo: reportDemo,
-      notes: report.notes ?? "",
-    });
+    downloadDotReportPdf({ enterpriseName, reportId: report.id, period: formatReportingPeriodLabel(report.period ?? report.date), metrics, demo: reportDemo, notes: report.notes ?? "" });
+  };
+  const refreshRevisionCounts = async () => {
+    if (isReadOnly || !activeReport) return;
+    const sequence = ++refreshSequence.current;
+    const enterpriseId = useAuthStore.getState().user?.enterpriseId;
+    setIsRefreshing(true);
+    try {
+      const status = await getMlServiceStatus();
+      const snapshot = await getEstablishmentSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL, { period });
+      if (sequence !== refreshSequence.current || useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      if (snapshot.enterprise_id !== enterpriseId) throw new Error("The report counts belong to another establishment.");
+      const error = reportBaselineError(snapshot);
+      if (error) throw new Error(error);
+      setRevisionMetrics(metricsFromEstablishment(snapshot));
+    } catch (error) {
+      notifyError(error instanceof Error ? error.message : "Unable to refresh reconciled counts.");
+    } finally {
+      if (sequence === refreshSequence.current) setIsRefreshing(false);
+    }
   };
 
   const executeSubmit = async () => {
-    setIsSubmitting(true);
-    const submitValidationError = validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, {
-      checkDuplicatePeriod: true,
-      checkReportingPeriod: true,
-    });
-    if (submitValidationError) {
-      notifyError(submitValidationError);
-      setIsSubmitting(false);
+    if (submitting.current || isReadOnly) return;
+    const error = blockingMetricsError ?? validateReportDraft(displayedMetrics, demo, period, reportsHistory, activeReportId, { checkDuplicatePeriod: true, checkReportingPeriod: true });
+    if (error) {
+      notifyError(error);
       return;
     }
-
-    const auditTime = formatPhilippineDateTime(new Date(), timeFormat);
-
-    const reportId = activeReportId ?? `REP-${new Date().getTime().toString().slice(-6)}`;
-    const reportMetrics = displayedMetrics;
-    const nextStatus = activeReportId ? "Resubmitted" : "Submitted";
-    const nextAuditTrail = activeReportId
-      ? [
-          ...(activeReport?.auditTrail || []),
-          {
-            time: auditTime,
-            action: "Report Resubmitted",
-            actor: "Enterprise User",
-          },
-        ]
-      : [
-          {
-            time: auditTime,
-            action: "Report Prepared",
-            actor: "Enterprise User",
-          },
-          {
-            time: auditTime,
-            action: "Report Submitted",
-            actor: "Enterprise User",
-          },
-        ];
-    const reportPayload = {
-      auditTrail: nextAuditTrail,
-      demo,
-      metrics: reportMetrics,
-      notes,
-      period,
-      status: nextStatus,
-    };
-
-    let submission: LocalReportSubmission;
-    let mlServiceBaseUrl = DEFAULT_ML_SERVICE_BASE_URL;
+    const counting = displayedMetrics.counting;
+    if (!counting) {
+      notifyError("Refresh the period to load its reconciled snapshot.");
+      return;
+    }
+    submitting.current = true;
+    setIsSubmitting(true);
+    const enterpriseId = useAuthStore.getState().user?.enterpriseId;
+    if (counting.enterprise_id !== enterpriseId) {
+      submitting.current = false;
+      setIsSubmitting(false);
+      notifyError("Reconnect this establishment before submitting.");
+      return;
+    }
+    const statusLabel = activeReportId ? "Resubmitted" : "Submitted";
+    const key = JSON.stringify({ enterpriseId, activeReportId, period, notes, demo, snapshot: counting.snapshot_version });
+    if (pendingOperation.current?.key !== key)
+      pendingOperation.current = {
+        key,
+        reportId: activeReportId ?? `REP-${crypto.randomUUID().slice(0, 12)}`,
+        requestId: crypto.randomUUID(),
+        auditTrail: [
+          ...(activeReport?.auditTrail ?? []),
+          { time: formatPhilippineDateTime(new Date(), timeFormat), action: activeReportId ? "Report Resubmitted" : "Report Submitted", actor: "Enterprise User" },
+        ],
+      };
+    const { reportId, requestId, auditTrail } = pendingOperation.current;
     try {
-      const status = await getMlServiceStatus();
-      mlServiceBaseUrl = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
-      submission = await recordLocalReportSubmission(mlServiceBaseUrl, {
-        metrics: {
-          entries: reportMetrics.entries,
-          exits: reportMetrics.exits,
-          peakOccupancy: reportMetrics.peak,
-          uniqueCount: reportMetrics.unique,
-        },
+      const serviceStatus = await getMlServiceStatus();
+      const base = serviceStatus.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+      if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      const submission = await recordLocalReportSubmission(base, {
+        requestId,
+        expectedSnapshotVersion: counting.snapshot_version,
+        metrics: { entries: displayedMetrics.entries, exits: displayedMetrics.exits, peakOccupancy: displayedMetrics.peak, uniqueCount: displayedMetrics.unique },
         notes,
         period,
         reportId,
-        reportPayload,
+        reportPayload: { auditTrail, demo, notes, period, status: statusLabel },
       });
-    } catch (error) {
-      setMetricsError(error instanceof Error ? error.message : "Unable to save report submission locally.");
+      if (useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      pendingOperation.current = null;
+      // Reflect the saved server snapshot immediately, including when upload fails.
+      let report = reportFromLocalSubmission({ ...submission, notes, sync_status: submission.sync_status, synced_at: null, camera_breakdown: submission.camera_breakdown }, timeFormat);
+      setReportsHistory((current) => upsertReport(current, report));
+      const cloudError = await syncSubmittedReportToCloud(reportId);
+      if (!cloudError) {
+        report = { ...report, syncStatus: "synced" };
+        setReportsHistory((current) => upsertReport(current, report));
+      } else {
+        notifyError(`Report saved on this device and waiting to upload: ${cloudError}`);
+        window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
+      }
+      try {
+        await deleteLocalReportDraft(base, demographicDraftKey);
+      } catch {
+        /* The submission is already durable. */
+      }
+      setShowConfirm(false);
+      setActiveReportId(reportId);
+      setRevisionMetrics(null);
+      void data.refreshLocalReports();
+      void data.refreshLocalMetrics();
+    } catch (issue) {
+      notifyError(issue instanceof Error ? issue.message : "Unable to save the report.");
+      void data.refreshLocalReports();
+      void data.refreshLocalMetrics();
+    } finally {
+      submitting.current = false;
       setIsSubmitting(false);
-      return;
     }
-    const cloudSyncError = await syncSubmittedReportToCloud(reportId);
-    const submittedSyncStatus = cloudSyncError ? submission.sync_status : "synced";
-    const restoredWorkspaceMetrics = !cloudSyncError && !activeReportId ? await prepareNextWorkspaceMetrics() : null;
-
-    const submittedMetrics: Metrics = {
-      entries: submission.entries,
-      exits: submission.exits,
-      peak: submission.peak_occupancy,
-      unique: submission.unique_count,
-    };
-
-    if (activeReportId) {
-      setReportsHistory((prev) =>
-        prev.map((r) => {
-          if (r.id === activeReportId) {
-            return {
-              ...r,
-              status: nextStatus,
-              entries: submittedMetrics.entries,
-              exits: submittedMetrics.exits,
-              peak: submittedMetrics.peak,
-              unique: submittedMetrics.unique,
-              period,
-              demo,
-              notes,
-              submittedAt: submission.submitted_at,
-              syncStatus: submittedSyncStatus,
-              remarks: null,
-              auditTrail: nextAuditTrail,
-            };
-          }
-          return r;
-        }),
-      );
-    } else {
-      const newReport: ReportRecord = {
-        id: reportId,
-        date: period,
-        status: nextStatus,
-        entries: submittedMetrics.entries,
-        exits: submittedMetrics.exits,
-        peak: submittedMetrics.peak,
-        unique: submittedMetrics.unique,
-        period,
-        demo,
-        notes,
-        submittedAt: submission.submitted_at,
-        syncStatus: submittedSyncStatus,
-        auditTrail: nextAuditTrail,
-        remarks: null,
-      };
-      setReportsHistory((prev) => upsertReport(prev, newReport));
-    }
-    setPendingPeriodCounts((prev) => prev.filter((counts) => counts.period !== period));
-    try {
-      await deleteLocalReportDraft(mlServiceBaseUrl, demographicDraftKey);
-    } catch {
-      // The submitted report is already durable; stale draft cleanup remains best-effort.
-    }
-    setShowConfirm(false);
-    setIsSubmitting(false);
-    if (restoredWorkspaceMetrics) {
-      setLiveMetrics(metricsFromSummary(restoredWorkspaceMetrics));
-      setLivePeriod(restoredWorkspaceMetrics.period || currentReportingPeriod);
-    } else {
-      void refreshLocalMetrics();
-    }
-    void refreshLocalReports();
-    void refreshPendingPeriods();
-    if (cloudSyncError) {
-      notifyError(`Report saved on this device, but it is still waiting to upload: ${cloudSyncError}`);
-      window.dispatchEvent(new Event(DESKTOP_REPORT_SYNC_EVENT));
-    }
-    resetDraftWorkspace();
   };
 
   return {
@@ -368,7 +205,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     handleDownloadReport,
     handlePreviewReport,
     handleSelectLedgerRow,
-    isPeriodChanging,
+    isPeriodChanging: (!activeReport && data.loading) || isRefreshing,
     isReadOnly,
     isSubmitting,
     ledgerRows,
@@ -376,6 +213,7 @@ export function useReportsWorkspace({ enterpriseName, reportsHistory, setReports
     period,
     previewReport,
     previousDemo,
+    refreshRevisionCounts,
     setDemo,
     setNotes,
     setPreviewReport,

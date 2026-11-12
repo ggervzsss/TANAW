@@ -1,4 +1,5 @@
 import type { DemoBreakdown, Metrics } from "../../../types/enterprise";
+import { countingNotes } from "./counting";
 import { demographicCount, getDemographicTotals } from "./demographics";
 
 export type DotReportPdf = {
@@ -121,7 +122,9 @@ export function createDotReportPdf(report: DotReportPdf) {
   });
 
   top -= rowHeight;
-  const noteLines = wrapText(sanitizePdfText(report.notes.trim() || "None recorded."), 112);
+  const noteLines = [countingNotes(report.metrics), `Operator notes: ${report.notes.trim() || "None recorded."}`]
+    .filter(Boolean)
+    .flatMap((paragraph) => paragraph.split("\n").flatMap((line) => wrapText(sanitizePdfText(line), 112)));
   const notePages: string[][] = [];
   const firstPageNoteCapacity = Math.max(0, Math.floor((top - 88) / 12) + 1);
   const firstPageNotes = noteLines.slice(0, firstPageNoteCapacity);
@@ -129,7 +132,7 @@ export function createDotReportPdf(report: DotReportPdf) {
   firstPageNotes.forEach((line, index) => {
     drawText(content, line, 50, top - 38 - index * 12, { size: 8 });
   });
-  drawText(content, "Demographic splits and unique visitors are estimates derived from TANAW local camera records.", 50, 28, { size: 7 });
+  drawText(content, "Visitor totals are camera estimates. Demographic allocations are entered by the establishment.", 50, 28, { size: 7 });
 
   for (let offset = firstPageNotes.length; offset < noteLines.length; offset += 40) {
     const continuation: string[] = [];

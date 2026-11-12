@@ -5,6 +5,7 @@ import type { DemoBreakdown, Metrics, SystemLogPeriod } from "../../../types/ent
 import { demographicCount, getDemographicTotals } from "../utils/demographics";
 import { downloadDotReportPdf } from "../utils/pdf";
 import { formatReportingPeriodLabel } from "../utils/reporting-period";
+import { CountingDetails } from "./CountingDetails";
 
 type DotFormModalProps = {
   demo: DemoBreakdown;
@@ -184,7 +185,8 @@ export function DotFormModal({ onClose, enterpriseName, period, metrics, demo, n
                 </table>
               </div>
 
-              <p className="text-[10px] text-slate-500">Demographic splits and unique visitors are estimates derived from TANAW local camera records.</p>
+              <p className="text-[10px] text-slate-500">Visitor totals are camera-based estimates. Demographic allocations are entered by the enterprise.</p>
+              <CountingDetails metrics={metrics} />
 
               {notes && (
                 <div className="mt-4 border border-black bg-gray-50/50 p-4">

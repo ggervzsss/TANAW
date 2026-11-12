@@ -404,86 +404,91 @@ test("keeps the modern Reports workspace dense, rounded, and fully interactive",
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 });
 
-test("presents accurate responsive historical trends and an intentional zero state", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+test("presents unified daily history and distinguishes observed zero from missing data", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1100, height: 760 });
   await signIn(page);
-  const summary = {
-    entries: 32,
-    exits: 12,
-    peak_occupancy: 18,
-    current_occupancy: 15,
-    unique_count: 24,
-    estimated_unique_count: 24,
-    confirmed_unique_count: 24,
-    degraded_unique_count: 0,
-    pending_unique_entries: 0,
-    repeat_entry_count: 8,
-    occupancy_correction_delta: 0,
-    total_events: 44,
-    unsubmitted_events: 44,
-    unsynced_events: 0,
-    first_event_at: "2026-08-11T01:00:00Z",
-    last_event_at: "2026-08-11T03:00:00Z",
-    period: "2026-08",
-  };
-  const populated = [
-    { label: "09:00", visitors: 8, entries: 12, exits: 2, peak_occupancy: 12, current_occupancy: 12 },
-    { label: "10:00", visitors: 14, entries: 20, exits: 4, peak_occupancy: 18, current_occupancy: 18 },
-    { label: "11:00", visitors: 20, entries: 32, exits: 12, peak_occupancy: 18, current_occupancy: 15 },
-  ];
-  const zero = [
-    { label: "Aug 1", visitors: 0, entries: 0, exits: 0, peak_occupancy: 0, current_occupancy: 0 },
-    { label: "Aug 2", visitors: 0, entries: 0, exits: 0, peak_occupancy: 0, current_occupancy: 0 },
-  ];
-
-  await mockMlRequest(page, "/metrics/summary", () => mlResponse({ status: 200, body: JSON.stringify(summary) }));
-  await mockMlRequest(page, "/metrics/history", () =>
+  await mockMlRequest(page, "/metrics/establishment/live", () =>
     mlResponse({
       status: 200,
-      body: JSON.stringify({ hourly_density: [], historical: { Today: populated, Week: populated, Month: zero } }),
+      body: JSON.stringify({
+        enterprise_id: enterpriseUser.enterpriseId,
+        occupancy: 15,
+        partial_occupancy: 15,
+        state: "estimated",
+        contributions: [],
+        excluded_camera_ids: [],
+        missing_camera_ids: [],
+      }),
     }),
   );
+  await mockMlRequest(page, "/metrics/establishment/summary", (request) => {
+    const query = new URL(request.url).searchParams;
+    const start = query.get("start")!;
+    const end = query.get("end")!;
+    const length = Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
+    const zero = length === 30;
+    const days = Array.from({ length }, (_, index) => ({
+      business_date: new Date(Date.parse(start) + index * 86400000 + 8 * 3600000).toISOString().slice(0, 10),
+      covered_ms: 86400000,
+      qualified_observations: zero ? 0 : 2,
+      identification_state: "available",
+      unique_count: zero ? 0 : 2,
+      peak_occupancy: zero ? 0 : 3,
+    }));
+    return mlResponse({
+      status: 200,
+      body: JSON.stringify({
+        enterprise_id: enterpriseUser.enterpriseId,
+        from_at: start,
+        to_at: end,
+        days,
+        days_available: length,
+        days_requested: length,
+        unique_count: zero ? 0 : length * 2,
+        entries: zero ? 0 : length * 3,
+        exits: zero ? 0 : length,
+        peak_occupancy: zero ? 0 : 3,
+        reconciliation_state: "estimated",
+        identification_state: "available",
+        movement_state: "available",
+        coverage_ratio: 1,
+        unresolved_observations: 0,
+        source_breakdown: [],
+      }),
+    });
+  });
   await mockMlRequest(page, "/reports/local", () => mlResponse({ status: 200, body: "[]" }));
   await page.goto("/#/enterprise/dashboard");
-
   await expect(page.getByText("Live Occupancy", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
-  await expect(page.getByText("Unique Entries", { exact: true })).toBeVisible();
-  const week = page.getByRole("button", { name: "Week", exact: true });
-  await expect(week).toHaveAttribute("aria-pressed", "true");
-  const chart = page.getByRole("img", { name: "Week historical visitor trends for Entry Flow and Live Occupancy" });
-  await expect(chart).toBeVisible();
-  await expect(page.locator(".tanaw-trend-plot .recharts-line")).toHaveCount(2);
-  const linePath = page.locator(".tanaw-trend-plot .recharts-line-curve").first();
-  await expect(linePath).toHaveAttribute("d", /^M[^C]+$/);
-
-  await page.getByRole("button", { name: "Month", exact: true }).click();
-  await expect(page.getByText("No visitor activity recorded for this period.", { exact: true })).toBeVisible();
-  await expect(page.locator(".tanaw-trend-plot")).toHaveCount(0);
-
+  await expect(page.getByText("Unique Visitors", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "7 days", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toBeVisible();
+  await page.getByRole("button", { name: "30 days", exact: true }).click();
+  await expect(page.getByText("Available observations recorded no visitor activity. Gaps remain unavailable.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Month establishment visitor and peak occupancy history" })).toBeVisible();
+  const header = page.locator("[data-unified-metrics-header]");
+  await expect(header.locator('[data-metric-segment="visitors"]').getByText("0", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.getByRole("img", { name: "Today historical visitor trends for Entry Flow and Live Occupancy" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Today establishment visitor and peak occupancy history" })).toBeVisible();
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(page.locator(".tanaw-trend-plot")).toBeVisible();
 });
 
 test("keeps the camera-service warning and explains unavailable historical data", async ({ page }) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1100, height: 760 });
   await signIn(page);
-  let historyRequests = 0;
-  await mockMlRequest(page, "/metrics/history", () => {
-    historyRequests += 1;
-    return mlResponse({ status: 503, body: JSON.stringify({ detail: "Historical metrics intentionally unavailable" }) });
+  let requests = 0;
+  await mockMlRequest(page, "/metrics/establishment/summary", () => {
+    requests += 1;
+    return mlResponse({ status: 503, body: JSON.stringify({ detail: "Establishment history intentionally unavailable" }) });
   });
   await page.goto("/#/enterprise/dashboard");
-
   await expect(page.getByRole("heading", { name: "Enterprise Analytics", exact: true })).toBeVisible();
-  await expect.poll(() => historyRequests).toBeGreaterThan(0);
-  await expect(page.getByText("Historical data is temporarily unavailable.", { exact: true })).toBeVisible();
-  await expect(page.getByText("TANAW will display visitor trends when the local camera service is ready.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Visitor counts unavailable", { exact: false })).toBeVisible();
-  await expect(page.locator(".tanaw-trend-plot")).toHaveCount(0);
+  await expect.poll(() => requests).toBeGreaterThan(0);
+  await expect(page.getByText("Establishment history is unavailable. Check the local camera service.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toHaveCount(0);
 });
 
 test("keeps Enterprise password inputs empty and reveals only manually entered text", async ({ page }) => {

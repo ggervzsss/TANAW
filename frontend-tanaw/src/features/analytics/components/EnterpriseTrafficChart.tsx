@@ -107,7 +107,7 @@ function TrafficTooltip({ active, payload }: TrafficTooltipProps) {
         <dt className="flex items-center gap-2 text-(--tanaw-secondary-text)">
           <span className="h-2.5 w-2.5 rounded-full bg-(--tanaw-chart-primary)" aria-hidden="true" /> Total Entries
         </dt>
-        <dd className="font-mono font-bold text-(--tanaw-chart-tooltip-text) tabular-nums">{row.entries.toLocaleString()}</dd>
+        <dd className="font-mono font-bold text-(--tanaw-chart-tooltip-text) tabular-nums">{row.entries?.toLocaleString() ?? "Not measured"}</dd>
         <dt className="flex items-center gap-2 text-(--tanaw-secondary-text)">
           <span className="tanaw-chart-legend-pattern h-2.5 w-2.5 rounded-sm" aria-hidden="true" /> Unique Pax
         </dt>
@@ -148,7 +148,7 @@ function TrafficDataTable({ rows }: { rows: TrafficDatum[] }) {
           {rows.map((row) => (
             <tr key={row.name}>
               <th>{row.name}</th>
-              <td>{row.entries}</td>
+              <td>{row.entries ?? "Not measured"}</td>
               <td>{row.unique}</td>
             </tr>
           ))}

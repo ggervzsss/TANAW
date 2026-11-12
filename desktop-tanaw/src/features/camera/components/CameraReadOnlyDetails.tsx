@@ -38,6 +38,11 @@ export function CameraReadOnlyDetails({ activeCam }: CameraReadOnlyDetailsProps)
           tooltip="The connection settings selected for this camera."
         />
         <DetailRow tooltip="The measurements collected by this camera." label="Camera Mode" value={activeCam.analysisMode === "open_space" ? "Open Space" : "Entrance / Exit"} />
+        <DetailRow
+          label="Counting role"
+          value={activeCam.coverage?.role === "external_boundary" ? "Establishment boundary" : activeCam.coverage?.role === "internal_observation" ? "Internal observation" : "Setup required"}
+          tooltip="Both modes contribute to one establishment tally. The role distinguishes arrivals and departures from movement inside."
+        />
         <DetailRow label="Camera Address" value={maskStreamCredentials(activeCam.rtsp)} tooltip="The connection address TANAW uses to access this camera." mono />
         <div className="grid grid-cols-2 gap-2">
           <DetailRow label="Counting Area" value={activeCam.zone} tooltip="The area monitored by this camera." />

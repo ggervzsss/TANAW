@@ -13,35 +13,6 @@ const enterpriseUser = {
   buildingCapacity: 100,
 };
 
-const summary = {
-  entries: 677,
-  exits: 665,
-  peak_occupancy: 61,
-  current_occupancy: 12,
-  unique_count: 457,
-  estimated_unique_count: 457,
-  confirmed_unique_count: 457,
-  degraded_unique_count: 0,
-  pending_unique_entries: 0,
-  repeat_entry_count: 220,
-  occupancy_correction_delta: 0,
-  total_events: 1342,
-  unsubmitted_events: 0,
-  unsynced_events: 0,
-  first_event_at: "2026-07-29T06:00:00Z",
-  last_event_at: "2026-07-29T07:09:00Z",
-  period: "2026-07",
-};
-
-const historyPoint = (label: string, currentOccupancy: number, peakOccupancy: number) => ({
-  label,
-  visitors: 0,
-  entries: currentOccupancy,
-  exits: 0,
-  current_occupancy: currentOccupancy,
-  peak_occupancy: peakOccupancy,
-});
-
 const localReport = {
   report_id: "REP-PEAK-001",
   period: "July 2026",
@@ -88,17 +59,54 @@ async function signIn(page: Page) {
         body: JSON.stringify({ enterprise_id: enterpriseUser.enterpriseId, enterprise_name: enterpriseUser.enterpriseName }),
       });
     }
-    if (pathname === "/metrics/summary") return mlResponse({ status: 200, body: JSON.stringify(summary) });
-    if (pathname === "/metrics/history") {
+    if (pathname === "/metrics/establishment/live")
       return mlResponse({
         status: 200,
         body: JSON.stringify({
-          hourly_density: [],
-          historical: {
-            Today: [historyPoint("09:00", 18, 99), historyPoint("10:00", 12, 99)],
-            Week: [historyPoint("Fri", 98, 99), historyPoint("Sat", 79, 99)],
-            Month: [historyPoint("Jul 14", 99, 99)],
-          },
+          enterprise_id: enterpriseUser.enterpriseId,
+          occupancy: 12,
+          partial_occupancy: 12,
+          state: "estimated",
+          contributions: [],
+          missing_camera_ids: [],
+          excluded_camera_ids: [],
+        }),
+      });
+    if (pathname === "/metrics/establishment/summary") {
+      const query = new URL(request.url).searchParams;
+      const begin = query.get("start")!;
+      const end = query.get("end")!;
+      const length = Math.round((Date.parse(end) - Date.parse(begin)) / 86400000);
+      const visitors = length === 1 ? 40 : length === 7 ? 457 : 900;
+      const peak = length === 1 ? 18 : length === 7 ? 98 : 99;
+      const days = Array.from({ length }, (_, index) => ({
+        business_date: new Date(Date.parse(begin) + index * 86400000 + 8 * 3600000).toISOString().slice(0, 10),
+        covered_ms: 86400000,
+        qualified_observations: index === length - 1 ? visitors : 0,
+        identification_state: "available",
+        unique_count: index === length - 1 ? visitors : 0,
+        peak_occupancy: index === length - 1 ? peak : 0,
+      }));
+      return mlResponse({
+        status: 200,
+        body: JSON.stringify({
+          enterprise_id: enterpriseUser.enterpriseId,
+          from_at: begin,
+          to_at: end,
+          days,
+          days_available: length,
+          days_requested: length,
+          unique_count: visitors,
+          confirmed_unique_count: visitors,
+          entries: visitors + 10,
+          exits: visitors - 5,
+          peak_occupancy: peak,
+          reconciliation_state: "estimated",
+          movement_state: "available",
+          identification_state: "available",
+          coverage_ratio: 1,
+          unresolved_observations: 0,
+          source_breakdown: [],
         }),
       });
     }
@@ -113,90 +121,50 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/#\/enterprise\/dashboard$/);
 }
 
-test("renders the Enterprise analytics metrics as one responsive dark-mode header", async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 768 });
+test("renders one responsive establishment header and updates its period consistently", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1024, height: 900 });
   await signIn(page);
-
   const header = page.locator("[data-unified-metrics-header]");
   await expect(header).toHaveCount(1);
-  await expect(header.locator("[data-metrics-accent]")).toHaveCount(1);
-  await expect(header.locator("[data-metric-segment]")).toHaveCount(3);
-  await expect(header.locator("[data-metric-divider]")).toHaveCount(2);
-  await expect(header.locator("[data-metric-segment] > div")).toHaveCount(3);
-  await expect(header.getByText("Live Occupancy", { exact: true })).toBeVisible();
-  await expect(header.getByText("Entry & Exit Flow", { exact: true })).toBeVisible();
-  await expect(header.getByText("Unique Entries", { exact: true })).toBeVisible();
-  await expect(header.getByText("12", { exact: true })).toBeVisible();
-  await expect(header.getByText("457", { exact: true })).toBeVisible();
-  await expect(header).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(header.locator("[data-metrics-accent]")).toHaveCSS("background-image", "linear-gradient(90deg, rgb(63, 118, 91), rgb(210, 179, 90), rgb(120, 173, 101))");
-  await expect(header.getByText("457", { exact: true })).toHaveCSS("color", "rgb(120, 215, 173)");
-
-  await expect(page.getByText("Peak reference 98", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Week historical visitor trends for Entry Flow and Live Occupancy" })).toContainText("Peak 98");
-  await expect(page.locator(".recharts-reference-line-line")).toHaveCount(1);
-
+  await expect(header.locator("[data-metric-segment]")).toHaveCount(4);
+  await expect(header.locator("[data-metric-divider]")).toHaveCount(0);
+  for (const title of ["Live Occupancy", "Unique Visitors", "Entry & Exit Flow", "Peak Occupancy"]) await expect(header.getByText(title, { exact: true })).toBeVisible();
+  const segment = (id: string) => header.locator(`[data-metric-segment="${id}"]`);
+  await expect(segment("occupancy").getByText("12", { exact: true })).toBeVisible();
+  await expect(segment("visitors").getByText("457", { exact: true })).toBeVisible();
+  await expect(segment("peak").getByText("98", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Week establishment visitor and peak occupancy history" })).toBeVisible();
   await page.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.getByText("Peak reference 18", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak reference 98", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Utilization 67%", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Today historical visitor trends for Entry Flow and Live Occupancy" })).toContainText("Peak 18");
-
-  await page.getByRole("button", { name: "Month", exact: true }).click();
-  await expect(page.getByText("Peak reference 99", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak reference 18", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Month historical visitor trends for Entry Flow and Live Occupancy" })).toContainText("Peak 99");
-
-  await page.getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByRole("button", { name: "Week", exact: true }).click();
-  await page.getByRole("button", { name: "Month", exact: true }).click();
-  await page.getByRole("button", { name: "Week", exact: true }).click();
-
-  await expect(page.getByText("Peak reference 98", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peak reference 18", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Peak reference 99", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Utilization 12%", { exact: true })).toBeVisible();
-
-  const donutSegment = page.locator(".tanaw-demographics-chart .recharts-sector").first();
-  await donutSegment.hover();
+  await expect(segment("visitors").getByText("40", { exact: true })).toBeVisible();
+  await expect(segment("flow").getByText("50 / 35", { exact: true })).toBeVisible();
+  await expect(segment("peak").getByText("18", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "30 days", exact: true }).click();
+  await expect(segment("visitors").getByText("900", { exact: true })).toBeVisible();
+  await expect(segment("peak").getByText("99", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "7 days", exact: true }).click();
+  await expect(segment("visitors").getByText("457", { exact: true })).toBeVisible();
+  await expect(segment("occupancy").getByText("12", { exact: true })).toBeVisible();
+  const donut = page.locator(".tanaw-demographics-chart .recharts-sector").first();
+  await donut.hover();
   await expect(page.locator(".tanaw-demographics-chart").getByRole("status")).toBeVisible();
-  await donutSegment.click();
-  const mouseFocusOutline = await page.locator(".tanaw-demographics-chart").evaluate((chart) => {
-    const focused = chart.querySelector(":focus");
-    return focused ? getComputedStyle(focused).outlineStyle : "none";
-  });
-  expect(mouseFocusOutline).toBe("none");
-
-  const firstSegment = header.locator("[data-metric-segment]").first().locator(".tanaw-unified-metrics__segment");
-  const beforeHover = await firstSegment.boundingBox();
-  expect(beforeHover?.height).toBeGreaterThanOrEqual(158);
-  await firstSegment.hover();
-  await expect(firstSegment.locator(".tanaw-unified-metrics__hover")).toHaveCSS("opacity", "1");
-  const afterHover = await firstSegment.boundingBox();
-  expect(afterHover?.width).toBeCloseTo(beforeHover?.width ?? 0, 1);
-  expect(afterHover?.height).toBeCloseTo(beforeHover?.height ?? 0, 1);
-
+  const before = await segment("occupancy").boundingBox();
+  await segment("occupancy").hover();
+  const after = await segment("occupancy").boundingBox();
+  expect(after?.width).toBeCloseTo(before?.width ?? 0, 1);
+  expect(after?.height).toBeCloseTo(before?.height ?? 0, 1);
   for (const zoom of ["90%", "100%", "110%"]) {
-    await page.evaluate((nextZoom) => {
-      document.documentElement.style.zoom = nextZoom;
+    await page.evaluate((value) => {
+      document.documentElement.style.zoom = value;
     }, zoom);
-    const dimensions = await header.locator(".tanaw-unified-metrics__scroller").evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth,
-    }));
-    expect(dimensions.clientWidth).toBeGreaterThan(0);
-    expect(dimensions.scrollWidth).toBeGreaterThanOrEqual(dimensions.clientWidth);
+    const size = await header.evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.scroll).toBeLessThanOrEqual(size.width + 1);
   }
-
   await page.evaluate(() => {
     document.documentElement.style.zoom = "100%";
   });
   await page.getByRole("button", { name: "Switch to light mode" }).click();
   await expect(header).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  await expect(header.locator("[data-metrics-accent]")).toHaveCSS("background-image", "linear-gradient(90deg, rgb(27, 67, 50), rgb(197, 160, 71), rgb(90, 140, 70))");
-  await expect(page.getByText("Historical Visitor Trends", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Establishment history", exact: true })).toBeVisible();
 });

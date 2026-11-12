@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.api.dependencies import registry as _registry
 from app.api.dependencies import settings as _settings
 from app.api.errors import CameraApiError, camera_api_error, local_database_reset_required
+from app.api.establishment import router as establishment_router
 from app.api.open_space import router as open_space_router
 from app.api.reporting import router as reporting_router
 from app.camera.auth import redact_stream_credentials
@@ -111,6 +112,7 @@ def create_app(
     application.include_router(router)
     application.include_router(reporting_router)
     application.include_router(open_space_router)
+    application.include_router(establishment_router)
     return application
 
 

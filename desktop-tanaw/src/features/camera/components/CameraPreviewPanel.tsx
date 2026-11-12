@@ -12,6 +12,7 @@ import { OpenSpaceZoneControls } from "./OpenSpaceZoneControls";
 import type { MlAreaState, MlCounts, MlDetections, MlHealth, MlServiceStatus } from "../services/ml-service";
 
 type CameraPreviewPanelProps = {
+  cameras?: Camera[];
   activeCam?: Camera;
   area?: MlAreaState | null;
   cameraIpError?: string;
@@ -43,6 +44,7 @@ type CameraPreviewPanelProps = {
 };
 
 export function CameraPreviewPanel({
+  cameras,
   activeCam,
   area,
   cameraIpError,
@@ -177,7 +179,7 @@ export function CameraPreviewPanel({
           />
           <CameraValidationWarnings warnings={warnings} />
           {isEditMode && editForm ? (
-            <CameraEditControls cameraIpError={cameraIpError} editForm={editForm} hasExistingPassword={hasStoredPassword} onEditFormChange={onEditFormChange} />
+            <CameraEditControls cameras={cameras} cameraIpError={cameraIpError} editForm={editForm} hasExistingPassword={hasStoredPassword} onEditFormChange={onEditFormChange} />
           ) : (
             <CameraReadOnlyDetails activeCam={activeCam} />
           )}

@@ -1,121 +1,152 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import { EMPTY_METRICS } from "../../../lib/operationalDefaults";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import type { SystemTimeFormat } from "../../../utils/date-time";
 import {
   DEFAULT_ML_SERVICE_BASE_URL,
-  getLocalMetricsSummary,
+  getEstablishmentReportPeriods,
+  getEstablishmentSummary,
   getMlServiceStatus,
   listLocalReportSubmissions,
+  type EstablishmentSummary,
 } from "../../camera/services/ml-service";
-import { getDesktopSamplePreparation, type BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
+import { useAuthStore } from "../../login/stores/auth-store";
 import { usePersistentIssue } from "../../toasts/services/persistent-issue";
-import {
-  mergeReportHistory,
-  metricsFromSummary,
-  reportFromCloudSubmission,
-  reportFromLocalSubmission,
-} from "../model/report-workspace";
+import { countingFromPayload, mergeReportHistory, reportFromCloudSubmission, reportFromLocalSubmission, type PreparedReportCounts } from "../model/report-workspace";
 import { listEnterpriseReportHistory } from "../services/report-history";
-import { isSameReportingMonth } from "../utils/reporting-period";
+import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
 
-type ReportsWorkspaceDataOptions = {
-  activeReportId: string | null;
+export function metricsFromEstablishment(summary: EstablishmentSummary): Metrics {
+  return {
+    entries: summary.movement_state === "unavailable" ? null : summary.entries,
+    exits: summary.movement_state === "unavailable" ? null : summary.exits,
+    peak: summary.peak_occupancy,
+    unique: summary.unique_count,
+    counting: summary,
+  };
+}
+
+export function reportBaselineError(summary: EstablishmentSummary | null): string | null {
+  if (!summary || summary.reconciliation_state === "not_collected") return "No observations have been collected for this reporting period.";
+  if (summary.reconciliation_state === "configuration_required") return "Complete camera counting roles and coverage relationships before submitting this period.";
+  if (summary.identification_state === "unavailable") return "The visitor estimate is unavailable for this reporting period.";
+  return null;
+}
+
+type Options = {
   currentReportingPeriod: SystemLogPeriod;
-  setPeriod: Dispatch<SetStateAction<SystemLogPeriod>>;
+  period: SystemLogPeriod;
   setReportsHistory: Dispatch<SetStateAction<ReportRecord[]>>;
   timeFormat: SystemTimeFormat;
 };
+type Packet = { enterpriseId: string | null | undefined; period: string; selected: EstablishmentSummary; current: EstablishmentSummary; periods: PreparedReportCounts[] };
+const EMPTY: Metrics = { entries: null, exits: null, peak: null, unique: 0 };
 
-export function useReportsWorkspaceData({
-  activeReportId,
-  currentReportingPeriod,
-  setPeriod,
-  setReportsHistory,
-  timeFormat,
-}: ReportsWorkspaceDataOptions) {
-  const [livePeriod, setLivePeriod] = useState<SystemLogPeriod>(currentReportingPeriod);
-  const [liveMetrics, setLiveMetrics] = useState<Metrics>(EMPTY_METRICS);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
+export function useReportsWorkspaceData({ currentReportingPeriod, period, setReportsHistory, timeFormat }: Options) {
+  const enterpriseId = useAuthStore((state) => state.user?.enterpriseId);
+  const [packet, setPacket] = useState<Packet | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
-  const [pendingPeriodCounts, setPendingPeriodCounts] = useState<BackendSamplePreparationCounts[]>([]);
+  const metricsSequence = useRef(0);
+  const ledgerSequence = useRef(0);
+  const current = packet && packet.enterpriseId === enterpriseId && isSameReportingMonth(packet.period, period) ? packet : null;
 
-  usePersistentIssue({ id: "reports-local-metrics", message: metricsError, title: "Local metrics unavailable", tone: "error" });
+  usePersistentIssue({ id: "reports-local-metrics", message: requestError, title: "Establishment report metrics unavailable", tone: "error" });
   usePersistentIssue({ id: "reports-submissions", message: ledgerError, title: "Report submissions unavailable", tone: "warning" });
 
   const refreshLocalMetrics = useCallback(async () => {
+    const sequence = ++metricsSequence.current;
     try {
       const status = await getMlServiceStatus();
-      const summary = await getLocalMetricsSummary(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      const summaryPeriod = summary.period || currentReportingPeriod;
-      setLiveMetrics(metricsFromSummary(summary));
-      setLivePeriod(summaryPeriod);
-      if (!activeReportId) {
-        setPeriod((currentPeriod) => (isSameReportingMonth(currentPeriod, summaryPeriod) ? summaryPeriod : currentPeriod));
-      }
-      setMetricsError(null);
+      const base = status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL;
+      const [selected, periods, currentSummary] = await Promise.all([
+        getEstablishmentSummary(base, { period }),
+        getEstablishmentReportPeriods(base),
+        isSameReportingMonth(period, currentReportingPeriod) ? Promise.resolve(null) : getEstablishmentSummary(base, { period: currentReportingPeriod }),
+      ]);
+      if (enterpriseId && [selected, currentSummary, ...periods.map((item) => item.counting)].some((item) => item && item.enterprise_id !== enterpriseId))
+        throw new Error("The report data belongs to another establishment. Reconnect the local service.");
+      if (sequence !== metricsSequence.current || useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      setPacket({
+        enterpriseId,
+        period,
+        selected,
+        current: currentSummary ?? selected,
+        periods: periods.map((item) => ({
+          period: item.period,
+          reportId: `PENDING-${reportingMonthKey(item.period)}`,
+          entries: item.metrics.entries,
+          exits: item.metrics.exits,
+          peakOccupancy: item.metrics.peak_occupancy,
+          uniqueCount: item.metrics.unique_count,
+          counting: item.counting,
+        })),
+      });
+      setRequestError(null);
     } catch (error) {
-      setMetricsError(error instanceof Error ? error.message : "Unable to load local edge metrics.");
+      if (sequence === metricsSequence.current && useAuthStore.getState().user?.enterpriseId === enterpriseId) {
+        setRequestError(error instanceof Error ? error.message : "Unable to load establishment summaries.");
+        setPacket(null);
+      }
     }
-  }, [activeReportId, currentReportingPeriod, setPeriod]);
+  }, [enterpriseId, period, currentReportingPeriod]);
 
   const refreshLocalReports = useCallback(async () => {
+    const sequence = ++ledgerSequence.current;
     try {
       const status = await getMlServiceStatus();
       const submissions = await listLocalReportSubmissions(status.baseUrl || DEFAULT_ML_SERVICE_BASE_URL);
-      let cloudHistory: Awaited<ReturnType<typeof listEnterpriseReportHistory>> = [];
+      if (
+        enterpriseId &&
+        submissions.some((item) => {
+          const snapshot = countingFromPayload(item.payload.counting);
+          return snapshot && snapshot.enterprise_id !== enterpriseId;
+        })
+      )
+        throw new Error("Saved report data belongs to another establishment.");
+      let cloud: Awaited<ReturnType<typeof listEnterpriseReportHistory>> = [];
       try {
-        cloudHistory = await listEnterpriseReportHistory();
+        cloud = await listEnterpriseReportHistory();
       } catch {
-        // Reports saved on this device remain available while the backend is offline.
+        /* Local snapshots remain available offline. */
       }
-      const localReports = submissions.map((submission) => reportFromLocalSubmission(submission, timeFormat));
-      const cloudReports = cloudHistory.map((report) => reportFromCloudSubmission(report, timeFormat));
-      setReportsHistory(mergeReportHistory(localReports, cloudReports));
+      if (sequence !== ledgerSequence.current || useAuthStore.getState().user?.enterpriseId !== enterpriseId) return;
+      setReportsHistory(
+        mergeReportHistory(
+          submissions.map((item) => reportFromLocalSubmission(item, timeFormat)),
+          cloud.filter((item) => !enterpriseId || item.enterpriseId === enterpriseId).map((item) => reportFromCloudSubmission(item, timeFormat)),
+        ),
+      );
       setLedgerError(null);
     } catch (error) {
-      setLedgerError(error instanceof Error ? error.message : "Unable to load reports saved on this device.");
+      if (sequence === ledgerSequence.current && useAuthStore.getState().user?.enterpriseId === enterpriseId) setLedgerError(error instanceof Error ? error.message : "Unable to load saved reports.");
     }
-  }, [setReportsHistory, timeFormat]);
-
-  const refreshPendingPeriods = useCallback(async () => {
-    try {
-      const preparation = await getDesktopSamplePreparation();
-      setPendingPeriodCounts(preparation ? (preparation.pendingCounts?.length ? preparation.pendingCounts : preparation.counts ? [preparation.counts] : []) : []);
-    } catch {
-      setPendingPeriodCounts([]);
-    }
-  }, []);
+  }, [enterpriseId, setReportsHistory, timeFormat]);
 
   useEffect(() => {
     void refreshLocalMetrics();
-    const intervalId = window.setInterval(() => void refreshLocalMetrics(), 5000);
-    return () => window.clearInterval(intervalId);
+    const timer = window.setInterval(() => void refreshLocalMetrics(), 5000);
+    return () => {
+      window.clearInterval(timer);
+      metricsSequence.current += 1;
+    };
   }, [refreshLocalMetrics]);
-
   useEffect(() => {
     void refreshLocalReports();
-    const intervalId = window.setInterval(() => void refreshLocalReports(), 15000);
-    return () => window.clearInterval(intervalId);
+    const timer = window.setInterval(() => void refreshLocalReports(), 15000);
+    return () => {
+      window.clearInterval(timer);
+      ledgerSequence.current += 1;
+    };
   }, [refreshLocalReports]);
 
-  useEffect(() => {
-    void refreshPendingPeriods();
-    const intervalId = window.setInterval(() => void refreshPendingPeriods(), 15000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshPendingPeriods]);
-
   return {
-    liveMetrics,
-    livePeriod,
-    metricsError,
-    pendingPeriodCounts,
+    liveMetrics: current ? metricsFromEstablishment(current.selected) : EMPTY,
+    currentMetrics: current ? metricsFromEstablishment(current.current) : EMPTY,
+    counting: current?.selected ?? null,
+    pendingPeriodCounts: current?.periods ?? [],
+    metricsError: requestError ?? (current ? reportBaselineError(current.selected) : "Loading establishment summaries…"),
+    loading: !current && !requestError,
     refreshLocalMetrics,
     refreshLocalReports,
-    refreshPendingPeriods,
-    setLiveMetrics,
-    setLivePeriod,
-    setMetricsError,
-    setPendingPeriodCounts,
   };
 }

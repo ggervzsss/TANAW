@@ -4,8 +4,11 @@ import logging
 import os
 import threading
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any, cast
 
+from app.analytics.establishment_occupancy import OccupancyMeasurement, reconcile_occupancy
+from app.analytics.establishment_populations import direct_population_anchors, population_contexts
 from app.camera.camera_manager import CameraProcessingManager
 from app.camera.contracts import CameraCounts, CountingConfigResult, EnterpriseBinding
 from app.camera.local_operations_service import LocalOperationsService
@@ -16,9 +19,14 @@ from app.config.camera_config import (
     TripwireLine,
     TripwirePoint,
 )
+from app.config.camera_coverage import CameraCoverage
+from app.identity.establishment_registry import EstablishmentRegistry
 from app.runtime.hardware import cached_runtime_capabilities
 from app.storage.local_database import LocalDatabase
 from app.storage.repositories.area_repository import AreaRepository
+from app.storage.repositories.establishment_report_repository import EstablishmentReportRepository
+from app.storage.repositories.establishment_repository import TIMEZONE as REPORTING_TIMEZONE
+from app.storage.repositories.establishment_repository import EstablishmentRepository
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +84,10 @@ class CameraPipelineRegistry:
         self._enterprise_name: str | None = None
         self._pipeline_factory = pipeline_factory
         self._reporting = reporting_manager or LocalOperationsService(app_data_dir)
+        self._establishment_registry: EstablishmentRegistry | None = None
+        self._summary_stop = threading.Event()
+        self._summary_thread: threading.Thread | None = None
+        self._summary_last_cleanup: datetime | None = None
 
     @property
     def max_concurrent_cameras(self) -> int:
@@ -117,6 +129,10 @@ class CameraPipelineRegistry:
                     self._enterprise_id = normalized_id
                     self._enterprise_name = normalized_name
                 self.area_repository().recover()
+                self._establishment_registry = EstablishmentRegistry(
+                    self._app_data_dir, normalized_id
+                )
+                self._establishment_registry.cleanup()
             finally:
                 with self._lock:
                     self._switching_context = False
@@ -133,6 +149,19 @@ class CameraPipelineRegistry:
         if self._enterprise_id is None:
             raise ValueError("Select an enterprise before querying local analytics.")
         return AreaRepository(LocalDatabase(self._app_data_dir, self._enterprise_id))
+
+    def establishment_repository(self) -> EstablishmentRepository:
+        if self._establishment_registry is None:
+            raise ValueError("Select an enterprise before querying establishment analytics.")
+        return self._establishment_registry.repository
+
+    def establishment_summary(self, start: datetime, end: datetime) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            return self.establishment_repository().summary(start, end)
+
+    def establishment_report_periods(self) -> list[dict[str, Any]]:
+        with self._lifecycle_lock:
+            return EstablishmentReportRepository(self.establishment_repository().database).periods()
 
     def test_connection(self, payload: CameraTestRequest) -> tuple[bool, str]:
         logger.info(
@@ -248,9 +277,15 @@ class CameraPipelineRegistry:
         if existing is None:
             existing = self._pipeline_factory(self._app_data_dir, camera_id=camera_id)
             existing.bind_enterprise(enterprise_id or "", enterprise_name, restore_session=False)
+            if (
+                isinstance(existing, CameraProcessingManager)
+                and self._establishment_registry is not None
+            ):
+                existing.use_establishment_registry(self._establishment_registry)
             with self._lock:
                 self._pipelines[camera_id] = existing
 
+        self._start_summary_worker()
         try:
             existing.start(config)
         except Exception:
@@ -355,11 +390,215 @@ class CameraPipelineRegistry:
 
     def close(self) -> None:
         """Dispose every camera and reporting worker during service shutdown."""
+        self._summary_stop.set()
         with self._lifecycle_lock:
             try:
                 self._dispose_all_locked()
             finally:
                 self._reporting.close()
+        if (
+            self._summary_thread is not None
+            and self._summary_thread is not threading.current_thread()
+            and self._summary_thread.is_alive()
+        ):
+            self._summary_thread.join(timeout=5)
+
+    def _start_summary_worker(self) -> None:
+        if self._summary_thread is not None:
+            return
+        self._summary_thread = threading.Thread(
+            target=self._summary_loop, name="tanaw-establishment-summaries", daemon=True
+        )
+        try:
+            self._summary_thread.start()
+        except Exception:
+            self._summary_thread = None
+            raise
+
+    def _summary_loop(self) -> None:
+        while not self._summary_stop.wait(1):
+            # Never hold up camera lifecycle operations or join behind their lock.
+            if not self._lifecycle_lock.acquire(blocking=False):
+                continue
+            try:
+                if self._establishment_registry is not None:
+                    snapshot = self.establishment_live()
+                    now = datetime.now(UTC)
+                    self.establishment_repository().checkpoint_occupancy(snapshot, now)
+                    if (
+                        self._summary_last_cleanup is None
+                        or (now - self._summary_last_cleanup).total_seconds() >= 60
+                    ):
+                        self._establishment_registry.cleanup(now)
+                        self._summary_last_cleanup = now
+            except Exception:
+                logger.exception("Unable to checkpoint establishment analytics.")
+            finally:
+                self._lifecycle_lock.release()
+
+    def establishment_live(self, now: datetime | None = None) -> dict[str, Any]:
+        with self._lifecycle_lock:
+            return self._establishment_live_locked(now)
+
+    def _establishment_live_locked(self, now: datetime | None = None) -> dict[str, Any]:
+        repository = self.establishment_repository()
+        profiles = self.list_camera_profiles()
+        states = {state["camera_id"]: state for state in self.camera_states()["cameras"]}
+        now = now or datetime.now(UTC)
+        coverages = {
+            int(profile["id"]): CameraCoverage.model_validate(profile.get("coverage") or {})
+            for profile in profiles
+        }
+        contexts = population_contexts(coverages)
+        balances = repository.population_states()
+        measurements: list[OccupancyMeasurement] = []
+        movement_available = False
+        ready_identities: set[int] = set()
+        for profile in profiles:
+            camera_id = int(profile["id"])
+            state = states.get(camera_id, {})
+            counts, health = state.get("counts") or {}, state.get("health") or {}
+            coverage = coverages[camera_id]
+            area = state.get("area") or {}
+            is_area = profile.get("analysisMode") == "open_space"
+            key = contexts[camera_id]["population_key"]
+            population = balances.get(key, {})
+            partial = bool(population.get("partial"))
+            if not population.get("anchored"):
+                partial |= any(
+                    other != key
+                    and other.split(":")[0] == key.split(":")[0]
+                    and value["occupancy"] > 0
+                    for other, value in balances.items()
+                )
+            observed_at = None
+            if is_area:
+                available = bool(area.get("available") and counts.get("running"))
+                if area.get("observed_at") is not None:
+                    try:
+                        observed_at = datetime.fromisoformat(area["observed_at"])
+                        available &= (
+                            observed_at.tzinfo is not None
+                            and 0 <= (now - observed_at).total_seconds() <= 5
+                        )
+                    except (ValueError, TypeError):
+                        available = False
+                occupancy = area.get("presence") if available else None
+                track_keys = {
+                    f"{camera_id}:{area.get('run_id')}:{track_id}"
+                    for track_id in area.get("observed_track_ids", [])
+                }
+                identities = repository.identities_for_tracks(
+                    track_keys, now.astimezone(REPORTING_TIMEZONE).date().isoformat()
+                )
+            else:
+                age = health.get("raw_frame_stale_ms")
+                available = bool(
+                    counts.get("running")
+                    and counts.get("status") in {"running", "degraded"}
+                    and isinstance(age, (int, float))
+                    and age <= 5000
+                )
+                occupancy = population.get("occupancy", 0) if available else None
+                identities = set()
+            measurements.append(
+                OccupancyMeasurement(
+                    camera_id,
+                    coverage,
+                    available,
+                    occupancy,
+                    frozenset(identities),
+                    not is_area,
+                    partial=partial if not is_area else False,
+                    observed_at=observed_at,
+                    population_key=key,
+                )
+            )
+            movement_available |= available and coverage.role == "external_boundary"
+            if (
+                available
+                and profile.get("uniqueCountingMode", "estimated_reid") == "estimated_reid"
+                and health.get("reid_model_ready")
+            ):
+                ready_identities.add(camera_id)
+        anchors = direct_population_anchors(measurements)
+        repository.record_population_anchors(anchors, now)
+        balances = repository.population_states()
+        # A direct frame is a headcount at that frame's timestamp. Later doorway
+        # transitions also apply while the next direct frame is still pending.
+        measurements = [
+            item
+            if not item.boundary_balance
+            else OccupancyMeasurement(
+                item.camera_id,
+                item.coverage,
+                item.available,
+                balances.get(item.population_key or "", {}).get("occupancy", 0)
+                if item.available
+                else None,
+                item.visitor_ids,
+                True,
+                bool(balances.get(item.population_key or "", {}).get("partial"))
+                or (
+                    item.partial and not balances.get(item.population_key or "", {}).get("anchored")
+                ),
+                population_key=item.population_key,
+            )
+            for item in measurements
+        ]
+        result = reconcile_occupancy(measurements)
+        for contribution in result["contributions"]:
+            keys = contribution["population_keys"]
+            if len(keys) == 1:
+                balance = balances.get(keys[0], {})
+                if (
+                    contribution["basis"] == "observed_presence"
+                    and contribution["state"] == "estimated"
+                    and balance.get("anchored")
+                ):
+                    if contribution["occupancy"] != balance["occupancy"]:
+                        contribution["occupancy"] = balance["occupancy"]
+                        contribution["basis"] = "observed_presence_and_later_movements"
+                    if balance.get("partial"):
+                        contribution["state"] = "partial"
+        result["partial_occupancy"] = sum(item["occupancy"] for item in result["contributions"])
+        if result["occupancy"] is not None:
+            result["occupancy"] = result["partial_occupancy"]
+        if result["state"] == "estimated" and any(
+            item["state"] == "partial" for item in result["contributions"]
+        ):
+            result["state"] = "partial"
+        result["enterprise_id"] = self._enterprise_id
+        result["movement_available"] = movement_available
+        result["identification_available"] = any(
+            source in ready_identities
+            for item in result["contributions"]
+            for source in item["camera_ids"]
+        )
+        result["population_anchors"] = anchors
+        by_id = {int(profile["id"]): profile for profile in profiles}
+        result["measurement_sources"] = [
+            dict(
+                camera_id=item.camera_id,
+                camera_name=by_id[item.camera_id]["name"],
+                analysis_mode=by_id[item.camera_id].get("analysisMode", "entrance_exit"),
+                coverage=item.coverage.model_dump(),
+                available=item.available,
+                population_key=item.population_key,
+                occupancy=item.occupancy if not item.boundary_balance else None,
+                observed_at=item.observed_at.isoformat() if item.observed_at is not None else None,
+                track_keys=sorted(
+                    {
+                        f"{item.camera_id}:{(states.get(item.camera_id, {}).get('area') or {}).get('run_id')}:{track}"
+                        for track in (states.get(item.camera_id, {}).get("area") or {}).get(
+                            "observed_track_ids", []
+                        )
+                    }
+                ),
+            )
+            for item in measurements
+        ]
+        return result
 
     def pipeline(self, camera_id: int) -> CameraProcessingManager | None:
         with self._lock:
@@ -462,7 +701,25 @@ class CameraPipelineRegistry:
             camera_ids = sorted(self._pipelines)
             pending_camera_ids = sorted(self._pending_starts)
             enterprise_id = self._enterprise_id or ""
-        enterprise_occupancy = self._reporting.enterprise_occupancy()
+        # Doorway diagnostics exclude contained internal and retired populations.
+        profiles = self.list_camera_profiles()
+        contexts = population_contexts(
+            {
+                int(profile["id"]): CameraCoverage.model_validate(profile.get("coverage") or {})
+                for profile in profiles
+            }
+        )
+        boundary_keys = {
+            context["population_key"]
+            for context in contexts.values()
+            if context["role"] == "external_boundary"
+        }
+        balances = (
+            self.establishment_repository().population_balances()
+            if self._establishment_registry is not None
+            else {}
+        )
+        enterprise_occupancy = sum(value for key, value in balances.items() if key in boundary_keys)
         cameras = [self._camera_state(camera_id, enterprise_occupancy) for camera_id in camera_ids]
         return {
             "enterprise_id": enterprise_id,
@@ -525,9 +782,12 @@ class CameraPipelineRegistry:
                 previous = previous_profiles.get(camera_id)
                 if previous is None:
                     continue
-                changed = previous.get("analysisMode", "entrance_exit") != profile.get(
-                    "analysisMode", "entrance_exit"
-                ) or previous.get("openSpace") != profile.get("openSpace")
+                changed = (
+                    previous.get("analysisMode", "entrance_exit")
+                    != profile.get("analysisMode", "entrance_exit")
+                    or previous.get("openSpace") != profile.get("openSpace")
+                    or previous.get("coverage") != profile.get("coverage")
+                )
                 if changed:
                     self.stop(camera_id)
                     with self._lock:
@@ -572,14 +832,41 @@ class CameraPipelineRegistry:
         return self._reporting.metrics_history(include_submitted=include_submitted)
 
     def record_occupancy_correction(self, **values: Any) -> dict[str, Any]:
-        return self._reporting.record_occupancy_correction(**values)
+        with self._lifecycle_lock:
+            profiles = self.list_camera_profiles()
+            coverages = {
+                int(profile["id"]): CameraCoverage.model_validate(profile.get("coverage") or {})
+                for profile in profiles
+            }
+            contexts = population_contexts(coverages)
+            candidates = {
+                int(profile["id"])
+                for profile in profiles
+                if profile.get("analysisMode") != "open_space"
+                and coverages[int(profile["id"])].role != "unconfigured"
+            }
+            requested = values.pop("camera_id", None)
+            if requested is None:
+                if len({contexts[source]["population_key"] for source in candidates}) != 1:
+                    raise ValueError("Select the camera population to correct.")
+                requested = min(candidates)
+            if requested not in candidates:
+                raise ValueError(
+                    "Manual corrections require a configured Entrance / Exit population balance."
+                )
+            return self.establishment_repository().record_population_correction(
+                population_key=contexts[requested]["population_key"], camera_id=requested, **values
+            )
 
     def occupancy_corrections(self, limit: int = 100) -> list[dict[str, Any]]:
         return self._reporting.occupancy_corrections(limit=limit)
 
     def record_report_submission(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
-            return self._reporting.record_report_submission(*args, **kwargs)
+            with self._lifecycle_lock:
+                return EstablishmentReportRepository(
+                    self.establishment_repository().database
+                ).submit(*args, **kwargs)
         except Exception:
             logger.exception(
                 "Enterprise report persistence failed.",
@@ -588,7 +875,8 @@ class CameraPipelineRegistry:
             raise
 
     def list_report_submissions(self, limit: int = 100) -> list[dict[str, Any]]:
-        return self._reporting.list_report_submissions(limit=limit)
+        with self._lifecycle_lock:
+            return self._reporting.list_report_submissions(limit=limit)
 
     def get_report_draft(self, draft_key: str) -> dict[str, Any] | None:
         return self._reporting.get_report_draft(draft_key)

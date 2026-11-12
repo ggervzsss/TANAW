@@ -1,19 +1,9 @@
 import type { FinalReport, IntakeReport } from "@/shared/types";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "@/shared/utils/dateTime";
+import { countingNotes, measuredCount } from "./counting";
 import { getDotDemographics } from "./dotDemographics";
 import { buildPdfDocument, downloadPdfDocument } from "./pdfDocument";
-import {
-  buildFinalReportSourceRow,
-  buildFinalReportTotalRow,
-  createTableRows,
-  DOT_COLUMNS,
-  DOT_HEADER_HEIGHT,
-  formatCell,
-  formatNumber,
-  paginateTableRows,
-  sumWidths,
-  type TableRow,
-} from "./pdfReportLayout";
+import { buildFinalReportSourceRow, buildFinalReportTotalRow, createTableRows, DOT_COLUMNS, DOT_HEADER_HEIGHT, formatCell, paginateTableRows, sumWidths, type TableRow } from "./pdfReportLayout";
 import { escapePdfText, sanitizePdfText, wrappedPdfLines } from "./pdfText";
 
 const PAGE_WIDTH = 842;
@@ -103,22 +93,17 @@ export function createIntakeReportPdf(report: IntakeReport, timeFormat: SystemTi
   ]);
   const tableBottom = drawDotTable(commands, Math.min(390, metadataBottom - 12), rows);
   let detailY = tableBottom - 22;
-  drawText(commands, "Live Count Summary", MARGIN, detailY, 11, true);
+  drawText(commands, "Saved Establishment Summary", MARGIN, detailY, 11, true);
   detailY -= 20;
-  drawText(commands, `Entries: ${formatNumber(report.metrics.entry)}   Exits: ${formatNumber(report.metrics.exit)}   Peak Occupancy: ${report.metrics.peak}`, MARGIN, detailY, 9);
+  drawText(commands, `Entries: ${measuredCount(report.metrics.entry)}   Exits: ${measuredCount(report.metrics.exit)}   Peak Occupancy: ${measuredCount(report.metrics.peak)}`, MARGIN, detailY, 9);
   detailY -= 20;
-  const remarkLines = wrappedPdfLines(`Remarks: ${report.remarks || report.notes || "None recorded."}`, PAGE_WIDTH - MARGIN * 2, 9);
+  const remarkLines = [...countingNotes(report.payload?.counting), `Operator notes: ${report.notes || "None recorded."}`, `Staff remarks: ${report.remarks || "None recorded."}`].flatMap((note) =>
+    wrappedPdfLines(note, PAGE_WIDTH - MARGIN * 2, 9),
+  );
   const firstPageRemarkCapacity = Math.max(1, Math.floor((detailY - 58) / 11) + 1);
   const firstPageRemarks = remarkLines.slice(0, firstPageRemarkCapacity);
   firstPageRemarks.forEach((line, index) => drawText(commands, line, MARGIN, detailY - index * 11, 9));
-  drawWrappedText(
-    commands,
-    "Note: Demographic splits and unique visitors are estimates derived from TANAW local camera records. Source counts remain read-only.",
-    MARGIN,
-    39,
-    PAGE_WIDTH - MARGIN * 2,
-    7,
-  );
+  drawWrappedText(commands, "Visitor totals are camera estimates. Demographic allocations are entered by the establishment. Source counts remain read-only.", MARGIN, 39, PAGE_WIDTH - MARGIN * 2, 7);
 
   const pages = [commands];
   for (let offset = firstPageRemarks.length; offset < remarkLines.length; offset += 42) {
@@ -156,12 +141,25 @@ export function createFinalReportPdf(report: FinalReport) {
   const tableTop = Math.min(350, measureWrappedBottom(estimationNote, estimationY, PAGE_WIDTH - MARGIN * 2, 7) - 8);
   const pageRows = paginateTableRows(sourceRows, totalRow, tableTop);
   const pages: string[] = [];
-  const pageCount = pageRows.length;
+  const includeCountingDetails = report.sources.some((source) => source.counting) || report.totalEntry === null || report.totalExit === null;
+  const supplement = (
+    includeCountingDetails
+      ? [
+          `Citywide arrivals: ${measuredCount(report.totalEntry)}. Citywide departures: ${measuredCount(report.totalExit)}. Missing source measurements make the citywide movement total unavailable. Each establishment total contributes once.`,
+          ...report.sources.flatMap((source) => {
+            const notes = countingNotes(source.counting);
+            return notes.length ? [`${source.enterprise} - ${source.code}`, ...notes] : [];
+          }),
+        ]
+      : []
+  ).flatMap((note) => wrappedPdfLines(note, PAGE_WIDTH - MARGIN * 2, 8));
+  const supplementPages = Math.ceil(supplement.length / 42);
+  const pageCount = pageRows.length + supplementPages;
 
-  for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+  for (let pageIndex = 0; pageIndex < pageRows.length; pageIndex += 1) {
     const commands: PdfCommand[] = [];
     initializePage(commands);
-    const isLastPage = pageIndex === pageCount - 1;
+    const isLastPage = pageIndex === pageRows.length - 1;
 
     drawTitle(commands, "City Government of San Pedro", report.id, "Tourism & Economic Development Office");
     drawText(commands, report.title, MARGIN, 486, 14, true, "center", PAGE_WIDTH - MARGIN * 2);
@@ -175,6 +173,14 @@ export function createFinalReportPdf(report: FinalReport) {
     pages.push(commands.join("\n"));
   }
 
+  for (let offset = 0; offset < supplement.length; offset += 42) {
+    const commands: PdfCommand[] = [];
+    initializePage(commands);
+    drawTitle(commands, "Establishment Counting Details", report.id, "Supporting evidence - not additional visitor totals");
+    supplement.slice(offset, offset + 42).forEach((line, index) => drawText(commands, line, MARGIN, 470 - index * 10, 8));
+    drawText(commands, `Page ${pages.length + 1} of ${pageCount}`, PAGE_WIDTH - MARGIN - 58, 18, 8, false, "right", 58);
+    pages.push(commands.join("\n"));
+  }
   return buildPdfDocument(pages);
 }
 

@@ -1,6 +1,6 @@
 import type { DemoBreakdown, Metrics, ReportRecord, SystemLogPeriod } from "../../../types/enterprise";
 import { type LocalMetricsSummary, type LocalReportSubmissionRecord } from "../../camera/services/ml-service";
-import type { BackendSamplePreparationCounts } from "../../sync/services/cloud-sync";
+import type { EstablishmentSummary } from "../../camera/services/establishment.types";
 import type { EnterpriseIntakeReport } from "../services/report-history";
 import { getDemographicAllocationStatus, getDemographicTotals } from "../utils/demographics";
 import { isSameReportingMonth, reportingMonthKey } from "../utils/reporting-period";
@@ -8,6 +8,24 @@ import { sortReportLedgerRows } from "../utils/report-ledger";
 import type { ReportLedgerRow } from "./report-ledger";
 import { formatPhilippineDateTime, type SystemTimeFormat } from "../../../utils/date-time";
 import { getCurrentReportingPeriod, getReportingPeriodSubmissionError } from "./reporting-calendar";
+
+export type PreparedReportCounts = {
+  period: string;
+  reportId: string;
+  entries: number | null;
+  exits: number | null;
+  peakOccupancy: number | null;
+  uniqueCount: number;
+  counting?: EstablishmentSummary;
+};
+
+export function countingFromPayload(value: unknown): EstablishmentSummary | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const data = value as Partial<EstablishmentSummary>;
+  return data.counting_basis === "sum_of_daily_establishment_unique_visitors" && typeof data.snapshot_version === "string" && typeof data.enterprise_id === "string" && Array.isArray(data.days)
+    ? (data as EstablishmentSummary)
+    : undefined;
+}
 
 export function validateReportDraft(
   metrics: Metrics,
@@ -36,9 +54,10 @@ export function validateDemographicAllocation(metrics: Metrics, demo: DemoBreakd
 export function metricsFromReport(report: ReportRecord): Metrics {
   return {
     entries: report.entries,
-    exits: report.exits ?? 0,
-    peak: report.peak ?? Math.max(0, report.entries - (report.exits ?? 0)),
+    exits: report.exits ?? null,
+    peak: report.peak ?? null,
     unique: report.unique,
+    ...(report.counting ? { counting: report.counting } : {}),
   };
 }
 
@@ -51,12 +70,13 @@ export function metricsFromSummary(summary: LocalMetricsSummary): Metrics {
   };
 }
 
-export function metricsFromPendingCounts(counts: BackendSamplePreparationCounts): Metrics {
+export function metricsFromPendingCounts(counts: PreparedReportCounts): Metrics {
   return {
     entries: counts.entries,
     exits: counts.exits,
     peak: counts.peakOccupancy,
     unique: counts.uniqueCount,
+    ...(counts.counting ? { counting: counts.counting } : {}),
   };
 }
 
@@ -80,7 +100,7 @@ export function buildLedgerRows({
   currentMetrics: Metrics;
   currentNotes: string;
   currentPeriod: SystemLogPeriod;
-  pendingCounts: BackendSamplePreparationCounts[];
+  pendingCounts: PreparedReportCounts[];
   reportsHistory: ReportRecord[];
 }): ReportLedgerRow[] {
   const reportedPeriods = new Set(reportsHistory.map((report) => reportingMonthKey(report.period ?? report.date)));
@@ -97,6 +117,7 @@ export function buildLedgerRows({
         exits: currentMetrics.exits,
         peak: currentMetrics.peak,
         unique: currentMetrics.unique,
+        counting: currentMetrics.counting,
         period: currentPeriod,
         demo: currentDemo,
         notes: currentNotes,
@@ -116,7 +137,7 @@ export function buildLedgerRows({
       kind: "pending",
       report: reportFromPendingCounts(counts),
       reportLabel: "Pending Submission",
-      reportDescription: "Prepared counts",
+      reportDescription: "Recorded establishment counts",
       statusLabel: "Pending Submission",
     });
   }
@@ -135,7 +156,7 @@ export function buildLedgerRows({
   return sortReportLedgerRows(rows);
 }
 
-function reportFromPendingCounts(counts: BackendSamplePreparationCounts): ReportRecord {
+function reportFromPendingCounts(counts: PreparedReportCounts): ReportRecord {
   return {
     id: counts.reportId,
     date: counts.period,
@@ -144,6 +165,7 @@ function reportFromPendingCounts(counts: BackendSamplePreparationCounts): Report
     exits: counts.exits,
     peak: counts.peakOccupancy,
     unique: counts.uniqueCount,
+    counting: counts.counting,
     period: counts.period,
     demo: emptyDemo(),
     notes: "",
@@ -172,6 +194,7 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
     exits: metrics.exits,
     peak: metrics.peak,
     unique: metrics.unique,
+    counting: countingFromPayload(payload.counting),
     period: periodFromValue(submission.period),
     demo: demoFromPayload(payload.demo),
     notes: payloadNotes ?? submission.notes ?? "",
@@ -189,6 +212,9 @@ export function reportFromLocalSubmission(submission: LocalReportSubmissionRecor
 }
 
 function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Metrics {
+  if (countingFromPayload(submission.payload.counting)) {
+    return { entries: submission.entries, exits: submission.exits, peak: submission.peak_occupancy, unique: submission.unique_count };
+  }
   const payloadMetrics = submission.payload.metrics;
   if (payloadMetrics && typeof payloadMetrics === "object") {
     const metrics = payloadMetrics as Record<string, unknown>;
@@ -197,7 +223,7 @@ function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Me
     const peak = nonNegativeInteger(metrics.peak ?? metrics.peakOccupancy ?? metrics.peak_occupancy);
     const unique = nonNegativeInteger(metrics.unique ?? metrics.uniqueCount ?? metrics.unique_count);
     if (entries !== null && exits !== null && peak !== null && unique !== null) {
-      return { entries, exits: Math.min(exits, entries), peak, unique };
+      return { entries, exits, peak, unique };
     }
   }
 
@@ -210,7 +236,7 @@ function metricsFromLocalSubmission(submission: LocalReportSubmissionRecord): Me
 }
 
 export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFormat: SystemTimeFormat): ReportRecord {
-  const peak = typeof report.metrics.peak === "number" ? report.metrics.peak : Number(report.metrics.peak) || 0;
+  const peak = report.metrics.peak == null ? null : nonNegativeInteger(report.metrics.peak);
   const payloadStatus = typeof report.payload?.status === "string" && isReportStatus(report.payload.status) ? report.payload.status : "Submitted";
   const status = report.status === "Returned" ? "Returned for Revision" : report.status === "Consolidated" ? "Consolidated" : report.status === "Pending Review" ? payloadStatus : "Submitted";
   return {
@@ -221,6 +247,7 @@ export function reportFromCloudSubmission(report: EnterpriseIntakeReport, timeFo
     exits: report.metrics.exit,
     peak,
     unique: report.metrics.unique,
+    counting: countingFromPayload(report.payload?.counting),
     period: report.period,
     demo: demoFromPayload(report.payload?.demo),
     notes: report.notes ?? "",

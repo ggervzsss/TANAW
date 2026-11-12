@@ -5,6 +5,7 @@ import { buildTapoRtspUrl, isValidIpv4, maskStreamCredentials, parseRtspConnecti
 import { createTripwireLine, normalizeTripwireLine } from "../utils/tripwire-path";
 import type { CameraCredentialMetadataRecords } from "../services/camera-credentials";
 import { MlServiceRequestError } from "../services/ml-service";
+import { validateCameraCoverage } from "../utils/camera-coverage";
 
 export type CameraAction = "requesting-start" | "saving" | "starting" | "stopping" | "testing";
 export const DEFAULT_COUNTING_CONFIDENCE = 0.35;
@@ -21,6 +22,8 @@ export function isStartAction(action: CameraAction | undefined) {
 }
 
 export function validateCamera(camera: Camera, hasStoredPassword: boolean) {
+  const coverageError = validateCameraCoverage(camera.coverage, camera.id);
+  if (coverageError) return coverageError;
   if (!isValidIpv4(camera.cameraHost ?? "")) return "Camera IP must be a valid IPv4 address.";
   if (!camera.username?.trim()) return "Enter the camera username.";
   if (!hasStoredPassword) return "Enter the camera password.";
@@ -48,9 +51,7 @@ export function normalizeCamera(camera: Camera): Camera {
   const parsedRtsp = parseRtspConnection(streamUrl);
   const cameraHost = camera.cameraHost ?? parsedRtsp.host;
   const rtspStream = camera.rtspStream ?? parsedRtsp.streamId;
-  const normalizedStreamUrl = (camera.cameraBrand ?? "tapo") === "tapo"
-    ? buildTapoRtspUrl(cameraHost, rtspStream) || stripStreamCredentials(streamUrl)
-    : stripStreamCredentials(streamUrl.trim());
+  const normalizedStreamUrl = (camera.cameraBrand ?? "tapo") === "tapo" ? buildTapoRtspUrl(cameraHost, rtspStream) || stripStreamCredentials(streamUrl) : stripStreamCredentials(streamUrl.trim());
   const tripwire = camera.config?.tripwire ?? 50;
   const confidence = camera.confidence ?? DEFAULT_COUNTING_CONFIDENCE;
   const rawTrackingConfidence = camera.trackingConfidence ?? DEFAULT_TRACKING_CONFIDENCE;
