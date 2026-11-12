@@ -14,7 +14,7 @@ from app.db.migrations import (
 )
 
 
-def test_migration_history_has_one_canonical_baseline() -> None:
+def test_migration_history_preserves_baseline_and_adds_forward_revisions() -> None:
     backend_root = next(
         parent
         for parent in Path(__file__).resolve().parents
@@ -25,7 +25,14 @@ def test_migration_history_has_one_canonical_baseline() -> None:
 
     assert migration_names == [
         "0001_initial_tanaw_schema.py",
+        "0002_establishment_counting_snapshots.py",
     ]
+
+
+def test_original_deployed_baseline_is_immutable() -> None:
+    assert canonical_schema_fingerprint() == (
+        "bac09dee66a980eb263b8f297d6e2c81a80596b33746d259b8a7c4aa02403d01"
+    )
 
 
 def test_canonical_schema_enforces_owned_record_relationships() -> None:
@@ -164,7 +171,7 @@ async def test_current_database_revision_is_accepted() -> None:
 @pytest.mark.asyncio
 async def test_outdated_database_revision_is_rejected() -> None:
     connection = MagicMock()
-    connection.scalar = AsyncMock(return_value="0002")
+    connection.scalar = AsyncMock(return_value="0001")
 
     with pytest.raises(DatabaseMigrationError, match="migration is out of date"):
         await validate_database_migration_head(connection)
